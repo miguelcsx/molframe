@@ -15,9 +15,15 @@ HARD_LIMIT=1000
 MAX_FILE_BYTES=$((1024 * 1024))
 
 # Lock files are generated wholesale and say nothing about the size of a change.
+# Test-fixture data files (PDB coordinates, SPHGEN inputs, etc.) are data, not
+# source — counting their lines as if they were code is the wrong axis. Exclude
+# them from the LOC budget and rely on the 1 MB file-size check below to keep a
+# single fixture from bloating the clone.
 is_counted() {
     case "$1" in
         *.lock|*.sum) return 1 ;;
+        tests/fixtures/*) return 1 ;;
+        *.pdb|*.sphgen|*.sph|*.dat|*.input) return 1 ;;
         *) return 0 ;;
     esac
 }
