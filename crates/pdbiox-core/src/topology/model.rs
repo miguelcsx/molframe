@@ -27,10 +27,13 @@ impl ModelTable {
     /// Appends a model covering a range of chains.
     pub fn push(&mut self, model_num: i32, chains: Range<u32>) -> ModelIndex {
         let position = self.model_num.len() as u32;
-        self.first_chain.push(chains.start);
-        self.chain_count
-            .push(chains.end.saturating_sub(chains.start));
+        let first_chain = chains.start;
+        let chain_count = chains.end.saturating_sub(first_chain);
+
+        self.first_chain.push(first_chain);
+        self.chain_count.push(chain_count);
         self.model_num.push(model_num);
+
         ModelIndex::new(position)
     }
 
@@ -47,13 +50,18 @@ impl ModelTable {
     /// The chains this model contains.
     #[must_use]
     pub fn chains(&self, model: ModelIndex) -> Option<Range<u32>> {
-        let first = *self.first_chain.get(model.as_usize())?;
-        let count = *self.chain_count.get(model.as_usize())?;
-        Some(first..first.saturating_add(count))
+        stored_range(&self.first_chain, &self.chain_count, model.as_usize())
     }
 
     /// Every model position.
     pub fn iter(&self) -> impl Iterator<Item = ModelIndex> + '_ {
         (0..self.model_num.len() as u32).map(ModelIndex::new)
     }
+}
+
+fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u32>> {
+    let start = *starts.get(index)?;
+    let count = *counts.get(index)?;
+
+    Some(start..start.saturating_add(count))
 }

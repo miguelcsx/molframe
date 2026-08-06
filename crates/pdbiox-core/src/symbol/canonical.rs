@@ -12,6 +12,7 @@
 //! end and nothing is ever removed or reordered.
 
 use hashbrown::HashTable;
+use std::convert::TryFrom;
 use std::hash::{BuildHasher, RandomState};
 use std::sync::OnceLock;
 
@@ -49,6 +50,44 @@ pub(super) static CANONICAL: &[&str] = &[
     "D", "E", "L", "M", "Q", "R", "X", "Z",
 ];
 
+/// A type-safe index into [`CANONICAL`].
+///
+/// The transparent representation preserves the compact four-byte table
+/// layout while preventing accidental mixing with unrelated `u32` values.
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+struct CanonicalOrdinal(u32);
+
+impl CanonicalOrdinal {
+    /// Converts a slice index into a canonical ordinal.
+    ///
+    /// Returns `None` when the index cannot be represented by the public
+    /// 32-bit identifier format.
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
+    #[inline]
+    fn from_index(index: usize) -> Option<Self> {
+        u32::try_from(index).ok().map(Self)
+    }
+
+    /// Returns the raw canonical identifier.
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
+    #[inline]
+    const fn get(self) -> u32 {
+        self.0
+    }
+
+    /// Returns the canonical text represented by this ordinal.
+    ///
+    /// Returns `None` for an ordinal outside the compiled-in dictionary.
+    /// Runs in `O(1)` time and allocates no memory.
+    #[inline]
+    fn text(self) -> Option<&'static str> {
+        text_of(self.0)
+    }
+}
+
 /// Lazily built lookup from string to canonical identifier.
 ///
 /// The table cannot be a sorted array searched by comparison, because that would
@@ -56,44 +95,88 @@ pub(super) static CANONICAL: &[&str] = &[
 /// declaration order to stay stable. It is built once for the process.
 static LOOKUP: OnceLock<Lookup> = OnceLock::new();
 
+/// Process-wide canonical lookup state.
 struct Lookup {
-    table: HashTable<u32>,
+    table: HashTable<CanonicalOrdinal>,
     hasher: RandomState,
 }
 
+/// Computes the hash of a canonical entry.
+///
+/// Invalid ordinals use the empty-string hash as a defensive fallback. Valid
+/// table entries always reference [`CANONICAL`].
+///
+/// Runs in `O(L)` time, where `L` is the string length, and allocates no memory.
+#[inline]
+fn hash_ordinal(hasher: &RandomState, ordinal: CanonicalOrdinal) -> u64 {
+    match ordinal.text() {
+        Some(text) => hasher.hash_one(text),
+        None => hasher.hash_one(""),
+    }
+}
+
+/// Returns the initialized process-wide canonical lookup.
+///
+/// The first invocation builds the table in expected `O(N)` insertions and
+/// `O(B)` hashing work, where `N` is the number of canonical strings and `B`
+/// is their total byte length. Subsequent invocations run in `O(1)` time.
 fn lookup() -> &'static Lookup {
     LOOKUP.get_or_init(|| {
         let hasher = RandomState::new();
         let mut table = HashTable::with_capacity(CANONICAL.len());
-        for (ordinal, text) in CANONICAL.iter().enumerate() {
+
+        for (index, text) in CANONICAL.iter().enumerate() {
+            let ordinal = match CanonicalOrdinal::from_index(index) {
+                Some(ordinal) => ordinal,
+                None => break,
+            };
+
             let hash = hasher.hash_one(*text);
+
             // A duplicate would make one of the two identifiers unreachable; the
             // test below proves there are none, so the later entry is dropped.
             table
                 .entry(
                     hash,
-                    |&other| CANONICAL[other as usize] == *text,
-                    |&other| hasher.hash_one(CANONICAL[other as usize]),
+                    |&other| other.text() == Some(*text),
+                    |&other| hash_ordinal(&hasher, other),
                 )
-                .or_insert(ordinal as u32);
+                .or_insert(ordinal);
         }
+
         Lookup { table, hasher }
     })
 }
 
 /// Returns the canonical identifier for `text`, if it has one.
+///
+/// The lookup runs in expected `O(L)` time, where `L` is `text.len()`, and uses
+/// `O(1)` auxiliary memory after the process-wide table has been initialized.
+#[inline]
 pub(super) fn ordinal_of(text: &str) -> Option<u32> {
     let lookup = lookup();
     let hash = lookup.hasher.hash_one(text);
-    lookup
+
+    match lookup
         .table
-        .find(hash, |&ordinal| CANONICAL[ordinal as usize] == text)
-        .copied()
+        .find(hash, |&ordinal| ordinal.text() == Some(text))
+    {
+        Some(&ordinal) => Some(ordinal.get()),
+        None => None,
+    }
 }
 
 /// Returns the string a canonical identifier names.
+///
+/// Runs in `O(1)` time and allocates no memory.
+#[inline]
 pub(super) fn text_of(ordinal: u32) -> Option<&'static str> {
-    CANONICAL.get(ordinal as usize).copied()
+    let index = match usize::try_from(ordinal) {
+        Ok(index) => index,
+        Err(_) => return None,
+    };
+
+    CANONICAL.get(index).copied()
 }
 
 #[cfg(test)]

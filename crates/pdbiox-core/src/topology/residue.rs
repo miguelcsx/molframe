@@ -57,14 +57,27 @@ impl ResidueTable {
     /// Appends a residue covering a range of atoms.
     pub fn push(&mut self, record: ResidueRecord, atoms: Range<u32>) -> ResidueIndex {
         let position = self.label_comp_id.len() as u32;
-        self.first_atom.push(atoms.start);
-        self.atom_count.push(atoms.end.saturating_sub(atoms.start));
-        self.label_comp_id.push(record.label_comp_id);
-        self.auth_comp_id.push(record.auth_comp_id);
-        self.label_seq_id.push(record.label_seq_id);
-        self.auth_seq_id.push(record.auth_seq_id);
-        self.ins_code.push(record.ins_code);
-        self.het.push(record.het);
+        let first_atom = atoms.start;
+        let atom_count = atoms.end.saturating_sub(first_atom);
+
+        let ResidueRecord {
+            label_comp_id,
+            auth_comp_id,
+            label_seq_id,
+            auth_seq_id,
+            ins_code,
+            het,
+        } = record;
+
+        self.first_atom.push(first_atom);
+        self.atom_count.push(atom_count);
+        self.label_comp_id.push(label_comp_id);
+        self.auth_comp_id.push(auth_comp_id);
+        self.label_seq_id.push(label_seq_id);
+        self.auth_seq_id.push(auth_seq_id);
+        self.ins_code.push(ins_code);
+        self.het.push(het);
+
         ResidueIndex::new(position)
     }
 
@@ -74,21 +87,26 @@ impl ResidueTable {
     /// atom needs this; nothing else should reach for it, because moving a
     /// residue's atoms without moving its neighbours' breaks the tiling.
     pub fn set_atoms(&mut self, residue: ResidueIndex, atoms: Range<u32>) {
-        let Some(first) = self.first_atom.get_mut(residue.as_usize()) else {
+        let index = residue.as_usize();
+        let first_atom = atoms.start;
+        let atom_count = atoms.end.saturating_sub(first_atom);
+
+        let Some(first_slot) = self.first_atom.get_mut(index) else {
             return;
         };
-        *first = atoms.start;
-        if let Some(count) = self.atom_count.get_mut(residue.as_usize()) {
-            *count = atoms.end.saturating_sub(atoms.start);
-        }
+
+        let Some(count_slot) = self.atom_count.get_mut(index) else {
+            return;
+        };
+
+        *first_slot = first_atom;
+        *count_slot = atom_count;
     }
 
     /// The atoms this residue contains.
     #[must_use]
     pub fn atoms(&self, residue: ResidueIndex) -> Option<Range<u32>> {
-        let first = *self.first_atom.get(residue.as_usize())?;
-        let count = *self.atom_count.get(residue.as_usize())?;
-        Some(first..first.saturating_add(count))
+        stored_range(&self.first_atom, &self.atom_count, residue.as_usize())
     }
 
     /// The normalised component code.
@@ -102,7 +120,8 @@ impl ResidueTable {
     pub fn auth_comp_id(&self, residue: ResidueIndex) -> Option<SymbolId> {
         self.auth_comp_id
             .get(residue.as_usize())
-            .and_then(|symbol| symbol.get())
+            .copied()
+            .and_then(OptionalSymbol::get)
     }
 
     /// The sequence position within the entity, absent for a non-polymer.
@@ -110,7 +129,8 @@ impl ResidueTable {
     pub fn label_seq_id(&self, residue: ResidueIndex) -> Option<i32> {
         self.label_seq_id
             .get(residue.as_usize())
-            .and_then(|value| value.get())
+            .copied()
+            .and_then(OptionalI32::get)
     }
 
     /// The depositor's residue number.
@@ -118,7 +138,8 @@ impl ResidueTable {
     pub fn auth_seq_id(&self, residue: ResidueIndex) -> Option<i32> {
         self.auth_seq_id
             .get(residue.as_usize())
-            .and_then(|value| value.get())
+            .copied()
+            .and_then(OptionalI32::get)
     }
 
     /// The insertion code.
@@ -129,7 +150,8 @@ impl ResidueTable {
     pub fn ins_code(&self, residue: ResidueIndex) -> Option<SymbolId> {
         self.ins_code
             .get(residue.as_usize())
-            .and_then(|symbol| symbol.get())
+            .copied()
+            .and_then(OptionalSymbol::get)
     }
 
     /// Whether the file recorded this residue as a heterogen.
@@ -144,9 +166,26 @@ impl ResidueTable {
     /// mapping for the case where this question is asked per atom.
     #[must_use]
     pub fn containing(&self, atom: u32) -> Option<ResidueIndex> {
-        let position = self.first_atom.partition_point(|first| *first <= atom);
-        let candidate = ResidueIndex::new(position.checked_sub(1)? as u32);
-        let range = self.atoms(candidate)?;
-        range.contains(&atom).then_some(candidate)
+        let insertion = self.first_atom.partition_point(|first| *first <= atom);
+
+        let candidate = insertion.checked_sub(1)?;
+        let first = *self.first_atom.get(candidate)?;
+        let count = *self.atom_count.get(candidate)?;
+        let end = first.saturating_add(count);
+
+        if atom < first || atom >= end {
+            return None;
+        }
+
+        let position = u32::try_from(candidate).ok()?;
+
+        Some(ResidueIndex::new(position))
     }
+}
+
+fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u32>> {
+    let start = *starts.get(index)?;
+    let count = *counts.get(index)?;
+
+    Some(start..start.saturating_add(count))
 }

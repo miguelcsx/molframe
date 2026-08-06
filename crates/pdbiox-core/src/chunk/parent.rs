@@ -17,6 +17,7 @@
 
 use crate::index::ResidueIndex;
 use crate::topology::ResidueTable;
+use std::mem::size_of_val;
 
 /// How an atom's residue is recovered.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
@@ -51,9 +52,10 @@ impl ParentMapping {
         let block = Self::DEFAULT_BLOCK;
         let parents = parents_in_order
             .iter()
-            .step_by(block as usize)
+            .step_by(usize::from(block))
             .copied()
             .collect();
+
         Self::BlockIndexed { block, parents }
     }
 
@@ -61,7 +63,7 @@ impl ParentMapping {
     /// looked up individually often enough to justify the memory.
     #[must_use]
     pub fn explicit(parents_in_order: &[u32]) -> Self {
-        Self::Explicit(parents_in_order.to_vec())
+        Self::Explicit(parents_in_order.iter().copied().collect())
     }
 
     /// The bytes this mapping costs for `atoms` atoms.
@@ -70,7 +72,7 @@ impl ParentMapping {
         match self {
             Self::OffsetsOnly => 0,
             Self::Explicit(parents) | Self::BlockIndexed { parents, .. } => {
-                parents.len() * size_of::<u32>()
+                size_of_val(parents.as_slice())
             }
         }
     }
@@ -87,15 +89,54 @@ impl ParentMapping {
         residues: &ResidueTable,
     ) -> Option<ResidueIndex> {
         match self {
-            Self::OffsetsOnly => residues.containing(first_atom.checked_add(local)?),
-            Self::Explicit(parents) => parents.get(local as usize).copied().map(ResidueIndex::new),
+            Self::OffsetsOnly => Self::resolve_from_offsets(local, first_atom, residues),
+            Self::Explicit(parents) => Self::resolve_explicit(local, parents),
             Self::BlockIndexed { block, parents } => {
-                let block = u32::from(*block).max(1);
-                let start = *parents.get((local / block) as usize)?;
-                let atom = first_atom.checked_add(local)?;
-                Self::scan_forward(start, atom, residues)
+                Self::resolve_block_indexed(local, first_atom, *block, parents, residues)
             }
         }
+    }
+
+    fn resolve_from_offsets(
+        local: u32,
+        first_atom: u32,
+        residues: &ResidueTable,
+    ) -> Option<ResidueIndex> {
+        first_atom
+            .checked_add(local)
+            .and_then(|atom| residues.containing(atom))
+    }
+
+    fn resolve_explicit(local: u32, parents: &[u32]) -> Option<ResidueIndex> {
+        usize::try_from(local)
+            .ok()
+            .and_then(|index| parents.get(index))
+            .copied()
+            .map(ResidueIndex::new)
+    }
+
+    fn resolve_block_indexed(
+        local: u32,
+        first_atom: u32,
+        block: u16,
+        parents: &[u32],
+        residues: &ResidueTable,
+    ) -> Option<ResidueIndex> {
+        let start = Self::block_parent(local, block, parents)?;
+
+        let atom = first_atom.checked_add(local)?;
+
+        Self::scan_forward(start, atom, residues)
+    }
+
+    fn block_parent(local: u32, block: u16, parents: &[u32]) -> Option<u32> {
+        let block = u32::from(block).max(1);
+        let block_index = local / block;
+
+        usize::try_from(block_index)
+            .ok()
+            .and_then(|index| parents.get(index))
+            .copied()
     }
 
     /// Walks forward from a known residue until the one containing `atom`.
@@ -104,18 +145,18 @@ impl ParentMapping {
     /// construction. Returns nothing rather than looping if the tables are
     /// inconsistent with each other.
     fn scan_forward(start: u32, atom: u32, residues: &ResidueTable) -> Option<ResidueIndex> {
-        let mut candidate = start;
-        while (candidate as usize) < residues.len() {
-            let range = residues.atoms(ResidueIndex::new(candidate))?;
-            if range.contains(&atom) {
-                return Some(ResidueIndex::new(candidate));
-            }
-            if atom < range.start {
-                return None;
-            }
-            candidate += 1;
-        }
-        None
+        let start = usize::try_from(start).ok()?;
+
+        (start..residues.len())
+            .map_while(|candidate| {
+                let candidate = u32::try_from(candidate).ok()?;
+
+                let residue = ResidueIndex::new(candidate);
+                let range = residues.atoms(residue)?;
+
+                (atom >= range.start).then(|| (residue, range))
+            })
+            .find_map(|(residue, range)| range.contains(&atom).then(|| residue))
     }
 }
 

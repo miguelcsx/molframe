@@ -85,8 +85,118 @@ impl Pending {
         self.element.len() as u32
     }
 
+    fn is_empty(&self) -> bool {
+        self.element.is_empty()
+    }
+
     fn last_residue(&self) -> Option<u32> {
         self.residue.last().copied()
+    }
+
+    fn starts_new_residue(&self, residue: u32) -> bool {
+        self.last_residue() != Some(residue)
+    }
+
+    fn should_close_before(&self, target: u32, residue: u32) -> bool {
+        self.len() >= target && self.starts_new_residue(residue)
+    }
+
+    fn begin(&mut self, first_atom: u32, model: u32) {
+        if !self.is_empty() {
+            return;
+        }
+
+        self.first_atom = first_atom;
+        self.stats.model = model;
+    }
+
+    fn push_record(&mut self, record: &AtomRecord) {
+        self.element.push(record.element.atomic_number());
+        self.atom_name.push(record.atom_name);
+        self.push_auth_atom_name(record);
+        self.alt_id.push(record.alt_id.get());
+        self.residue.push(record.residue.get());
+
+        push_with_presence(
+            &mut self.occupancy,
+            &mut self.occupancy_presence,
+            record.occupancy,
+        );
+
+        push_with_presence(
+            &mut self.b_factor,
+            &mut self.b_factor_presence,
+            record.b_factor,
+        );
+
+        push_with_presence(
+            &mut self.formal_charge,
+            &mut self.formal_charge_presence,
+            record.formal_charge,
+        );
+
+        self.atom_site_id.push(record.atom_site_id);
+        self.observe(record);
+    }
+
+    fn push_auth_atom_name(&mut self, record: &AtomRecord) {
+        match record.auth_atom_name.get() {
+            Some(name) => {
+                self.auth_atom_name.push(name);
+                self.has_auth_names = true;
+            }
+            None => {
+                self.auth_atom_name.push(record.atom_name);
+            }
+        }
+    }
+
+    fn observe(&mut self, record: &AtomRecord) {
+        self.stats.elements.insert(record.element);
+        self.stats.has_hydrogen |= record.element.is_hydrogen();
+        self.stats.has_altloc |= !record.alt_id.is_blank();
+
+        if record.occupancy.1.is_present() {
+            self.stats.occupancy.observe(record.occupancy.0);
+        }
+
+        if record.b_factor.1.is_present() {
+            self.stats.b_factor.observe(record.b_factor.0);
+        }
+
+        self.observe_residue(record.residue.get());
+    }
+
+    fn observe_residue(&mut self, residue: u32) {
+        if self.residue.len() == 1 {
+            self.stats.residue_min = residue;
+            self.stats.residue_max = residue;
+            return;
+        }
+
+        self.stats.residue_min = self.stats.residue_min.min(residue);
+        self.stats.residue_max = self.stats.residue_max.max(residue);
+    }
+
+    fn reset(&mut self) {
+        self.first_atom = 0;
+        self.has_auth_names = false;
+
+        self.element.clear();
+        self.atom_name.clear();
+        self.auth_atom_name.clear();
+        self.alt_id.clear();
+        self.residue.clear();
+        self.occupancy.clear();
+        self.occupancy_presence.clear();
+        self.b_factor.clear();
+        self.b_factor_presence.clear();
+        self.formal_charge.clear();
+        self.formal_charge_presence.clear();
+        self.atom_site_id.clear();
+        self.coord_presence.clear();
+
+        self.stats = AtomChunkStats::default();
     }
 }
 
@@ -128,113 +238,95 @@ impl ChunkBuilder {
 
     /// Appends an atom.
     pub fn push(&mut self, record: AtomRecord) {
-        let starts_new_residue = self.pending.last_residue() != Some(record.residue.get());
-        if self.pending.len() >= self.target && starts_new_residue {
-            self.close();
-        }
-        if self.pending.len() == 0 {
-            self.pending.first_atom = self.coords.len();
-        }
-
-        if let Some(position) = record.position {
-            self.coords.push(position);
-            self.pending.stats.bounds.extend(position);
-            self.pending.coord_presence.push(Presence::Present);
-        } else {
-            // The row still exists — an atom whose position was not recorded
-            // is not an atom that was never modelled — so the buffer keeps a
-            // slot and the validity mask carries the distinction.
-            self.coords.push([f32::NAN; 3]);
-            self.pending.coord_presence.push(Presence::Unknown);
-            self.pending.stats.has_missing_coords = true;
-        }
-
-        self.pending.element.push(record.element.atomic_number());
-        self.pending.atom_name.push(record.atom_name);
-        match record.auth_atom_name.get() {
-            Some(name) => {
-                self.pending.auth_atom_name.push(name);
-                self.pending.has_auth_names = true;
-            }
-            None => self.pending.auth_atom_name.push(record.atom_name),
-        }
-        self.pending.alt_id.push(record.alt_id.get());
-        self.pending.residue.push(record.residue.get());
-        self.pending.occupancy.push(record.occupancy.0);
-        self.pending.occupancy_presence.push(record.occupancy.1);
-        self.pending.b_factor.push(record.b_factor.0);
-        self.pending.b_factor_presence.push(record.b_factor.1);
-        self.pending.formal_charge.push(record.formal_charge.0);
-        self.pending
-            .formal_charge_presence
-            .push(record.formal_charge.1);
-        self.pending.atom_site_id.push(record.atom_site_id);
-
-        self.observe(&record);
+        self.close_before(&record);
+        self.pending.begin(self.coords.len(), self.model);
+        self.push_position(record.position);
+        self.pending.push_record(&record);
     }
 
-    fn observe(&mut self, record: &AtomRecord) {
-        let stats = &mut self.pending.stats;
-        stats.elements.insert(record.element);
-        stats.has_hydrogen |= record.element.is_hydrogen();
-        stats.has_altloc |= !record.alt_id.is_blank();
-        stats.model = self.model;
-        if record.occupancy.1.is_present() {
-            stats.occupancy.observe(record.occupancy.0);
+    fn close_before(&mut self, record: &AtomRecord) {
+        if self
+            .pending
+            .should_close_before(self.target, record.residue.get())
+        {
+            self.close();
         }
-        if record.b_factor.1.is_present() {
-            stats.b_factor.observe(record.b_factor.0);
-        }
-        let residue = record.residue.get();
-        if self.pending.residue.len() == 1 {
-            stats.residue_min = residue;
-            stats.residue_max = residue;
-        } else {
-            stats.residue_min = stats.residue_min.min(residue);
-            stats.residue_max = stats.residue_max.max(residue);
+    }
+
+    fn push_position(&mut self, position: Option<[f32; 3]>) {
+        match position {
+            Some(position) => {
+                self.coords.push(position);
+                self.pending.stats.bounds.extend(position);
+                self.pending.coord_presence.push(Presence::Present);
+            }
+            None => {
+                // The row still exists — an atom whose position was not recorded
+                // is not an atom that was never modelled — so the buffer keeps a
+                // slot and the validity mask carries the distinction.
+                self.coords.push([f32::NAN; 3]);
+                self.pending.coord_presence.push(Presence::Unknown);
+                self.pending.stats.has_missing_coords = true;
+            }
         }
     }
 
     /// Closes the chunk being filled, if it holds anything.
     fn close(&mut self) {
-        if self.pending.len() == 0 {
+        if self.pending.is_empty() {
             return;
         }
-        let pending = std::mem::take(&mut self.pending);
+
+        let chunk = self.build_chunk();
+        self.chunks.push(chunk);
+        self.pending.reset();
+    }
+
+    fn build_chunk(&mut self) -> AtomChunk {
+        let pending = &mut self.pending;
         let len = pending.len();
         let first = pending.first_atom;
 
-        let mut occupancy_validity: ValidityMask = pending.occupancy_presence.into_iter().collect();
-        occupancy_validity.compact();
-        let mut b_factor_validity: ValidityMask = pending.b_factor_presence.into_iter().collect();
-        b_factor_validity.compact();
-        let mut formal_charge_validity: ValidityMask =
-            pending.formal_charge_presence.into_iter().collect();
-        formal_charge_validity.compact();
-        let mut coord_validity: ValidityMask = pending.coord_presence.into_iter().collect();
-        coord_validity.compact();
+        let occupancy_validity = compact_validity(&pending.occupancy_presence);
+        let b_factor_validity = compact_validity(&pending.b_factor_presence);
+        let formal_charge_validity = compact_validity(&pending.formal_charge_presence);
+        let coord_validity = compact_validity(&pending.coord_presence);
 
-        self.chunks.push(AtomChunk {
+        let element = EncodedColumn::encode(&pending.element);
+
+        // Names are read by most selections, so they stay literal.
+        let atom_name = EncodedColumn::plain(&pending.atom_name);
+
+        let auth_atom_name = pending
+            .has_auth_names
+            .then(|| EncodedColumn::plain(&pending.auth_atom_name));
+
+        let alt_id = EncodedColumn::encode(&pending.alt_id);
+        let residue = ParentMapping::block_indexed(&pending.residue);
+        let occupancy = EncodedColumn::plain(&pending.occupancy);
+        let b_factor = EncodedColumn::plain(&pending.b_factor);
+        let formal_charge = EncodedColumn::encode(&pending.formal_charge);
+        let atom_site_id = EncodedColumn::encode(&pending.atom_site_id);
+        let stats = std::mem::take(&mut pending.stats);
+
+        AtomChunk {
             atoms: first..first + len,
             model: self.model,
-            element: EncodedColumn::encode(&pending.element),
-            // Names are read by most selections, so they stay literal.
-            atom_name: EncodedColumn::plain(&pending.atom_name),
-            auth_atom_name: pending
-                .has_auth_names
-                .then(|| EncodedColumn::plain(&pending.auth_atom_name)),
-            alt_id: EncodedColumn::encode(&pending.alt_id),
-            residue: ParentMapping::block_indexed(&pending.residue),
-            occupancy: EncodedColumn::plain(&pending.occupancy),
+            element,
+            atom_name,
+            auth_atom_name,
+            alt_id,
+            residue,
+            occupancy,
             occupancy_validity,
-            b_factor: EncodedColumn::plain(&pending.b_factor),
+            b_factor,
             b_factor_validity,
-            formal_charge: EncodedColumn::encode(&pending.formal_charge),
+            formal_charge,
             formal_charge_validity,
-            atom_site_id: EncodedColumn::encode(&pending.atom_site_id),
+            atom_site_id,
             coord_validity,
-            stats: pending.stats,
-        });
+            stats,
+        }
     }
 
     /// Closes the last chunk and returns everything built.
@@ -243,6 +335,19 @@ impl ChunkBuilder {
         self.close();
         (self.chunks, self.coords)
     }
+}
+
+fn push_with_presence<T>(values: &mut Vec<T>, presences: &mut Vec<Presence>, entry: (T, Presence)) {
+    let (value, presence) = entry;
+    values.push(value);
+    presences.push(presence);
+}
+
+fn compact_validity(presences: &[Presence]) -> ValidityMask {
+    let mut validity: ValidityMask = presences.iter().copied().collect();
+
+    validity.compact();
+    validity
 }
 
 #[cfg(test)]

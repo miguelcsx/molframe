@@ -69,14 +69,17 @@ impl EntityTable {
         canonical_sequence: &[SymbolId],
     ) -> EntityIndex {
         let start = self.sequence_pool.len() as u32;
-        self.sequence_pool.extend_from_slice(canonical_sequence);
-        let end = self.sequence_pool.len() as u32;
 
+        self.sequence_pool.extend_from_slice(canonical_sequence);
+
+        let end = self.sequence_pool.len() as u32;
         let position = self.kind.len() as u32;
+
         self.kind.push(kind);
         self.id.push(id);
         self.description.push(description);
         self.sequence_span.push(start..end);
+
         EntityIndex::new(position)
     }
 
@@ -97,7 +100,8 @@ impl EntityTable {
     pub fn description(&self, entity: EntityIndex) -> Option<SymbolId> {
         self.description
             .get(entity.as_usize())
-            .and_then(|symbol| symbol.get())
+            .copied()
+            .and_then(OptionalSymbol::get)
     }
 
     /// The sequence this entity should have, one component per position.
@@ -109,17 +113,26 @@ impl EntityTable {
         let Some(span) = self.sequence_span.get(entity.as_usize()) else {
             return &[];
         };
-        match self
-            .sequence_pool
-            .get(span.start as usize..span.end as usize)
-        {
-            Some(sequence) => sequence,
-            None => &[],
-        }
+
+        sequence_slice(&self.sequence_pool, span)
     }
 
     /// Every entity position.
     pub fn iter(&self) -> impl Iterator<Item = EntityIndex> + '_ {
         (0..self.kind.len() as u32).map(EntityIndex::new)
+    }
+}
+
+fn sequence_slice<'a>(pool: &'a [SymbolId], span: &Range<u32>) -> &'a [SymbolId] {
+    let Ok(start) = usize::try_from(span.start) else {
+        return &[];
+    };
+    let Ok(end) = usize::try_from(span.end) else {
+        return &[];
+    };
+
+    match pool.get(start..end) {
+        Some(sequence) => sequence,
+        None => &[],
     }
 }

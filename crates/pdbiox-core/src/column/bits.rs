@@ -35,8 +35,10 @@ impl BitVec {
     /// Creates a set of `len` bits, all equal to `value`.
     #[must_use]
     pub fn repeat(value: bool, len: u32) -> Self {
-        let words = vec![if value { u64::MAX } else { 0 }; len.div_ceil(BITS) as usize];
+        let word = if value { u64::MAX } else { 0 };
+        let words = vec![word; word_count(len)];
         let mut bits = Self { words, len };
+
         bits.clear_tail();
         bits
     }
@@ -45,7 +47,7 @@ impl BitVec {
     #[must_use]
     pub fn with_capacity(len: u32) -> Self {
         Self {
-            words: Vec::with_capacity(len.div_ceil(BITS) as usize),
+            words: Vec::with_capacity(word_count(len)),
             len: 0,
         }
     }
@@ -64,12 +66,21 @@ impl BitVec {
 
     /// Appends a bit.
     pub fn push(&mut self, value: bool) {
-        if self.len.is_multiple_of(BITS) {
+        let position = self.len;
+
+        if position.is_multiple_of(BITS) {
             self.words.push(0);
         }
-        let position = self.len;
+
         self.len += 1;
-        self.set(position, value);
+
+        if !value {
+            return;
+        }
+
+        if let Some(word) = self.words.last_mut() {
+            *word |= bit_mask(position);
+        }
     }
 
     /// Returns the bit at `position`, or `None` if it is past the end.
@@ -78,8 +89,10 @@ impl BitVec {
         if position >= self.len {
             return None;
         }
-        let word = self.words.get((position / BITS) as usize)?;
-        Some(word >> (position % BITS) & 1 == 1)
+
+        self.words
+            .get(word_index(position))
+            .map(|word| *word & bit_mask(position) != 0)
     }
 
     /// Returns the bit at `position`, treating a position past the end as unset.
@@ -93,13 +106,17 @@ impl BitVec {
         if position >= self.len {
             return;
         }
-        if let Some(word) = self.words.get_mut((position / BITS) as usize) {
-            let mask = 1u64 << (position % BITS);
-            if value {
-                *word |= mask;
-            } else {
-                *word &= !mask;
-            }
+
+        let Some(word) = self.words.get_mut(word_index(position)) else {
+            return;
+        };
+
+        let mask = bit_mask(position);
+
+        if value {
+            *word |= mask;
+        } else {
+            *word &= !mask;
         }
     }
 
@@ -112,7 +129,20 @@ impl BitVec {
     /// Returns true when every bit is set.
     #[must_use]
     pub fn all(&self) -> bool {
-        self.count_ones() == self.len
+        let complete_words = (self.len / BITS) as usize;
+
+        if !self
+            .words
+            .iter()
+            .take(complete_words)
+            .all(|word| *word == u64::MAX)
+        {
+            return false;
+        }
+
+        let tail_bits = self.len % BITS;
+
+        tail_bits == 0 || self.words.get(complete_words).copied() == Some(low_mask(tail_bits))
     }
 
     /// Returns true when no bit is set.
@@ -130,12 +160,15 @@ impl BitVec {
         self.words.iter().enumerate().flat_map(|(index, word)| {
             let base = index as u32 * BITS;
             let mut remaining = *word;
+
             std::iter::from_fn(move || {
                 if remaining == 0 {
                     return None;
                 }
+
                 let bit = remaining.trailing_zeros();
                 remaining &= remaining - 1;
+
                 Some(base + bit)
             })
         })
@@ -143,11 +176,14 @@ impl BitVec {
 
     /// Keeps only the bits also set in `other`.
     pub fn intersect_with(&mut self, other: &Self) {
-        for (index, word) in self.words.iter_mut().enumerate() {
-            *word &= match other.words.get(index) {
-                Some(other) => *other,
-                None => 0,
-            };
+        let shared = self.words.len().min(other.words.len());
+
+        for (word, other_word) in self.words[..shared].iter_mut().zip(&other.words[..shared]) {
+            *word &= *other_word;
+        }
+
+        for word in &mut self.words[shared..] {
+            *word = 0;
         }
     }
 
@@ -156,11 +192,10 @@ impl BitVec {
     /// Bits of `other` beyond this set's length are ignored; the length is a
     /// property of the structure, not of the operation.
     pub fn union_with(&mut self, other: &Self) {
-        for (index, word) in self.words.iter_mut().enumerate() {
-            if let Some(other) = other.words.get(index) {
-                *word |= *other;
-            }
+        for (word, other_word) in self.words.iter_mut().zip(&other.words) {
+            *word |= *other_word;
         }
+
         self.clear_tail();
     }
 
@@ -169,6 +204,7 @@ impl BitVec {
         for word in &mut self.words {
             *word = !*word;
         }
+
         self.clear_tail();
     }
 
@@ -176,11 +212,13 @@ impl BitVec {
     /// counting and comparison never see them.
     fn clear_tail(&mut self) {
         let used = self.len % BITS;
+
         if used == 0 {
             return;
         }
+
         if let Some(word) = self.words.last_mut() {
-            *word &= (1u64 << used) - 1;
+            *word &= low_mask(used);
         }
     }
 }
@@ -188,10 +226,16 @@ impl BitVec {
 impl FromIterator<bool> for BitVec {
     fn from_iter<T: IntoIterator<Item = bool>>(iter: T) -> Self {
         let iter = iter.into_iter();
-        let mut bits = Self::with_capacity(iter.size_hint().0 as u32);
+        let capacity = match u32::try_from(iter.size_hint().0) {
+            Ok(capacity) => capacity,
+            Err(_) => u32::MAX,
+        };
+        let mut bits = Self::with_capacity(capacity);
+
         for value in iter {
             bits.push(value);
         }
+
         bits
     }
 }
@@ -207,11 +251,27 @@ pub fn bit_width(max: u64) -> u8 {
 
 /// Mask covering the low `width` bits.
 const fn low_mask(width: u32) -> u64 {
-    if width >= 64 {
+    if width >= u64::BITS {
         u64::MAX
     } else {
         (1u64 << width) - 1
     }
+}
+
+fn word_count(len: u32) -> usize {
+    len.div_ceil(BITS) as usize
+}
+
+const fn word_index(position: u32) -> usize {
+    (position / BITS) as usize
+}
+
+const fn bit_offset(position: u32) -> u32 {
+    position % BITS
+}
+
+const fn bit_mask(position: u32) -> u64 {
+    1u64 << bit_offset(position)
 }
 
 /// Where a packed value sits: which byte it starts in, how far into that byte,
@@ -221,6 +281,7 @@ const fn placement(width: u32, index: u32) -> (usize, u32, usize) {
     let byte = (start_bit / 8) as usize;
     let offset = (start_bit % 8) as u32;
     let bytes = (offset as usize + width as usize).div_ceil(8);
+
     (byte, offset, bytes)
 }
 
@@ -231,19 +292,38 @@ const fn placement(width: u32, index: u32) -> (usize, u32, usize) {
 /// single shifted accumulation rather than a loop over its bits.
 #[must_use]
 pub fn pack(values: &[u64], width: u8) -> Vec<u8> {
+    pack_mapped(values, width, |value| *value)
+}
+
+pub(super) fn pack_mapped<T, F>(values: &[T], width: u8, to_bits: F) -> Vec<u8>
+where
+    F: Fn(&T) -> u64,
+{
     let width = u32::from(width.clamp(1, 64));
     let total_bits = values.len() as u64 * u64::from(width);
     let mut packed = vec![0u8; total_bits.div_ceil(8) as usize];
+
     for (index, value) in values.iter().enumerate() {
-        let (byte, offset, bytes) = placement(width, index as u32);
-        let shifted = u128::from(value & low_mask(width)) << offset;
-        for step in 0..bytes {
-            if let Some(target) = packed.get_mut(byte + step) {
-                *target |= (shifted >> (8 * step)) as u8;
-            }
-        }
+        write_packed_value(&mut packed, width, index as u32, to_bits(value));
     }
+
     packed
+}
+
+fn write_packed_value(packed: &mut [u8], width: u32, index: u32, value: u64) {
+    let (byte, offset, bytes) = placement(width, index);
+    let Some(end) = byte.checked_add(bytes) else {
+        return;
+    };
+    let Some(targets) = packed.get_mut(byte..end) else {
+        return;
+    };
+
+    let shifted = u128::from(value & low_mask(width)) << offset;
+
+    for (step, target) in targets.iter_mut().enumerate() {
+        *target |= (shifted >> (8 * step)) as u8;
+    }
 }
 
 /// Reads the value at `index` from a packed buffer.
@@ -254,11 +334,17 @@ pub fn pack(values: &[u64], width: u8) -> Vec<u8> {
 pub fn unpack_one(packed: &[u8], width: u8, index: u32) -> Option<u64> {
     let width = u32::from(width.clamp(1, 64));
     let (byte, offset, bytes) = placement(width, index);
-    let mut accumulator = 0u128;
-    for step in 0..bytes {
-        accumulator |= u128::from(*packed.get(byte + step)?) << (8 * step);
-    }
-    Some((accumulator >> offset) as u64 & low_mask(width))
+    let end = byte.checked_add(bytes)?;
+    let source = packed.get(byte..end)?;
+
+    let accumulator = source
+        .iter()
+        .enumerate()
+        .fold(0u128, |accumulator, (step, value)| {
+            accumulator | (u128::from(*value) << (8 * step))
+        });
+
+    Some(((accumulator >> offset) as u64) & low_mask(width))
 }
 
 #[cfg(test)]

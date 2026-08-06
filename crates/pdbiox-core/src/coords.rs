@@ -18,6 +18,7 @@
 
 use bytemuck::{Pod, Zeroable};
 use std::fmt;
+use std::mem::size_of;
 use std::ops::Range;
 
 /// Positions per lane. Sixteen triples is 192 bytes — three cache lines exactly,
@@ -78,7 +79,7 @@ impl Aabb {
     /// Returns true when no point has been added.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        (0..3).any(|axis| self.min[axis] > self.max[axis])
+        self.min.iter().zip(&self.max).any(|(min, max)| min > max)
     }
 
     /// Grows the box to contain `point`.
@@ -88,10 +89,12 @@ impl Aabb {
     /// would disable chunk skipping for the whole structure.
     pub fn extend(&mut self, point: [f32; 3]) {
         for ((min, max), value) in self.min.iter_mut().zip(&mut self.max).zip(point) {
-            if value.is_finite() {
-                *min = min.min(value);
-                *max = max.max(value);
+            if !value.is_finite() {
+                continue;
             }
+
+            *min = min.min(value);
+            *max = max.max(value);
         }
     }
 
@@ -100,6 +103,7 @@ impl Aabb {
         if other.is_empty() {
             return;
         }
+
         self.extend(other.min);
         self.extend(other.max);
     }
@@ -112,19 +116,26 @@ impl Aabb {
         if self.is_empty() || other.is_empty() {
             return false;
         }
+
+        let maximum_gap_squared = distance * distance;
         let mut gap_squared = 0.0f32;
-        let axes = self
-            .min
-            .iter()
-            .zip(&self.max)
-            .zip(other.min.iter().zip(&other.max));
-        for ((own_min, own_max), (other_min, other_max)) in axes {
-            let gap = (other_min - own_max).max(own_min - other_max);
-            if gap > 0.0 {
-                gap_squared += gap * gap;
+
+        for axis in 0..3 {
+            let gap = axis_gap(
+                self.min[axis],
+                self.max[axis],
+                other.min[axis],
+                other.max[axis],
+            );
+
+            gap_squared += gap * gap;
+
+            if gap_squared > maximum_gap_squared {
+                return false;
             }
         }
-        gap_squared <= distance * distance
+
+        gap_squared <= maximum_gap_squared
     }
 }
 
@@ -187,18 +198,24 @@ impl CoordinateBlock {
 
     /// Appends a position.
     pub fn push(&mut self, position: [f32; 3]) {
-        if self.len as usize == self.lanes.len() * LANE {
+        let index = self.len as usize;
+
+        if index == self.lanes.len() * LANE {
             self.lanes.push(CoordLane([[0.0; 3]; LANE]));
         }
-        let (lane, slot) = (self.len as usize / LANE, self.len as usize % LANE);
-        if let Some(target) = self
+
+        let (lane, slot) = lane_position(index);
+
+        let Some(target) = self
             .lanes
             .get_mut(lane)
             .and_then(|lane| lane.0.get_mut(slot))
-        {
-            *target = position;
-            self.len += 1;
-        }
+        else {
+            return;
+        };
+
+        *target = position;
+        self.len += 1;
     }
 
     /// All positions, contiguously.
@@ -208,10 +225,8 @@ impl CoordinateBlock {
     #[must_use]
     pub fn as_slice(&self) -> &[[f32; 3]] {
         let all: &[[f32; 3]] = bytemuck::cast_slice(&self.lanes);
-        match all.get(..self.len as usize) {
-            Some(slice) => slice,
-            None => &[],
-        }
+
+        visible_slice(all, self.len)
     }
 
     /// All positions, mutably.
@@ -221,31 +236,33 @@ impl CoordinateBlock {
     /// structure API.
     #[allow(dead_code, reason = "reached by the scoped coordinate edit")]
     pub(crate) fn as_mut_slice(&mut self) -> &mut [[f32; 3]] {
-        let len = self.len as usize;
         let all: &mut [[f32; 3]] = bytemuck::cast_slice_mut(&mut self.lanes);
-        match all.get_mut(..len) {
-            Some(slice) => slice,
-            None => &mut [],
-        }
+
+        visible_mut_slice(all, self.len)
     }
 
     /// The positions a chunk covers, or `None` if the range runs past the end.
     #[must_use]
     pub fn range(&self, range: Range<u32>) -> Option<&[[f32; 3]]> {
-        self.as_slice()
-            .get(range.start as usize..range.end as usize)
+        let range = usize_range(range)?;
+
+        self.as_slice().get(range)
     }
 
     /// The bounding box of a range of positions.
     #[must_use]
     pub fn bounds(&self, range: Range<u32>) -> Aabb {
-        let mut bounds = Aabb::EMPTY;
-        if let Some(positions) = self.range(range) {
-            for position in positions {
-                bounds.extend(*position);
-            }
-        }
-        bounds
+        let Some(positions) = self.range(range) else {
+            return Aabb::EMPTY;
+        };
+
+        positions
+            .iter()
+            .copied()
+            .fold(Aabb::EMPTY, |mut bounds, position| {
+                bounds.extend(position);
+                bounds
+            })
     }
 
     /// Bytes the block occupies, including the unused tail of the last lane.
@@ -267,11 +284,50 @@ impl FromIterator<[f32; 3]> for CoordinateBlock {
     fn from_iter<T: IntoIterator<Item = [f32; 3]>>(iter: T) -> Self {
         let iter = iter.into_iter();
         let mut block = Self::with_capacity(iter.size_hint().0);
+
         for position in iter {
             block.push(position);
         }
+
         block
     }
+}
+
+fn axis_gap(own_min: f32, own_max: f32, other_min: f32, other_max: f32) -> f32 {
+    (other_min - own_max).max(own_min - other_max).max(0.0)
+}
+
+const fn lane_position(position: usize) -> (usize, usize) {
+    (position / LANE, position % LANE)
+}
+
+fn visible_slice<T>(values: &[T], len: u32) -> &[T] {
+    let Ok(len) = usize::try_from(len) else {
+        return &[];
+    };
+
+    match values.get(..len) {
+        Some(values) => values,
+        None => &[],
+    }
+}
+
+fn visible_mut_slice<T>(values: &mut [T], len: u32) -> &mut [T] {
+    let Ok(len) = usize::try_from(len) else {
+        return &mut [];
+    };
+
+    match values.get_mut(..len) {
+        Some(values) => values,
+        None => &mut [],
+    }
+}
+
+fn usize_range(range: Range<u32>) -> Option<Range<usize>> {
+    let start = usize::try_from(range.start).ok()?;
+    let end = usize::try_from(range.end).ok()?;
+
+    Some(start..end)
 }
 
 #[cfg(test)]

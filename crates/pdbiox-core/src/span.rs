@@ -56,15 +56,17 @@ impl Position {
     /// CRLF file reports the column of the visible character.
     #[must_use]
     pub const fn advance(self, byte: u8) -> Self {
+        let byte_offset = self.byte_offset.saturating_add(1);
+
         if byte == b'\n' {
             Self {
-                byte_offset: self.byte_offset.saturating_add(1),
+                byte_offset,
                 line: self.line.saturating_add(1),
                 column: 1,
             }
         } else {
             Self {
-                byte_offset: self.byte_offset.saturating_add(1),
+                byte_offset,
                 line: self.line,
                 column: self.column.saturating_add(1),
             }
@@ -136,7 +138,10 @@ impl ByteSpan {
     /// silently truncating would hide that.
     #[must_use]
     pub fn slice(self, source: &[u8]) -> Option<&[u8]> {
-        source.get(self.start.byte_offset as usize..self.end as usize)
+        let start = usize::try_from(self.start.byte_offset).ok()?;
+        let end = usize::try_from(self.end).ok()?;
+
+        source.get(start..end)
     }
 }
 

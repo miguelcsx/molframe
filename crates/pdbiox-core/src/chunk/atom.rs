@@ -80,7 +80,7 @@ impl AtomChunk {
     /// This is also the range of the coordinate buffer that belongs to it.
     #[must_use]
     pub fn atoms(&self) -> Range<u32> {
-        self.atoms.clone()
+        self.atom_range()
     }
 
     /// What the chunk can say about itself without being read.
@@ -98,7 +98,7 @@ impl AtomChunk {
     /// The positions of this chunk's atoms, borrowed from the frame's buffer.
     #[must_use]
     pub fn positions<'a>(&self, coords: &'a CoordinateBlock) -> Option<&'a [[f32; 3]]> {
-        coords.range(self.atoms.clone())
+        coords.range(self.atom_range())
     }
 
     /// The element of the atom at `local`.
@@ -116,7 +116,9 @@ impl AtomChunk {
     /// The depositor's name for the atom at `local`, where the file carried one.
     #[must_use]
     pub fn auth_atom_name(&self, local: u32) -> Option<SymbolId> {
-        self.auth_atom_name.as_ref()?.get(local)
+        self.auth_atom_name
+            .as_ref()
+            .and_then(|column| column.get(local))
     }
 
     /// The alternate-location label of the atom at `local`.
@@ -134,25 +136,23 @@ impl AtomChunk {
     /// The occupancy of the atom at `local`, and whether it was recorded.
     #[must_use]
     pub fn occupancy(&self, local: u32) -> Option<(f32, Presence)> {
-        Some((
-            self.occupancy.get(local)?,
-            self.occupancy_validity.get(local),
-        ))
+        with_presence(self.occupancy.get(local), &self.occupancy_validity, local)
     }
 
     /// The temperature factor of the atom at `local`, and whether it was recorded.
     #[must_use]
     pub fn b_factor(&self, local: u32) -> Option<(f32, Presence)> {
-        Some((self.b_factor.get(local)?, self.b_factor_validity.get(local)))
+        with_presence(self.b_factor.get(local), &self.b_factor_validity, local)
     }
 
     /// The formal charge of the atom at `local`, and whether it was recorded.
     #[must_use]
     pub fn formal_charge(&self, local: u32) -> Option<(i8, Presence)> {
-        Some((
-            self.formal_charge.get(local)?,
-            self.formal_charge_validity.get(local),
-        ))
+        with_presence(
+            self.formal_charge.get(local),
+            &self.formal_charge_validity,
+            local,
+        )
     }
 
     /// The file-local serial number of the atom at `local`.
@@ -166,4 +166,16 @@ impl AtomChunk {
     pub fn has_position(&self, local: u32) -> bool {
         self.coord_validity.get(local).is_present()
     }
+
+    fn atom_range(&self) -> Range<u32> {
+        self.atoms.start..self.atoms.end
+    }
+}
+
+fn with_presence<T>(
+    value: Option<T>,
+    validity: &ValidityMask,
+    local: u32,
+) -> Option<(T, Presence)> {
+    value.map(|value| (value, validity.get(local)))
 }

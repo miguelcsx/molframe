@@ -31,6 +31,14 @@ impl Presence {
     pub const fn is_present(self) -> bool {
         matches!(self, Self::Present)
     }
+
+    const fn from_flags(present: bool, unknown: bool) -> Self {
+        match (present, unknown) {
+            (true, _) => Self::Present,
+            (false, true) => Self::Unknown,
+            (false, false) => Self::Inapplicable,
+        }
+    }
 }
 
 /// Which positions of a column carry a value, and why the others do not.
@@ -110,13 +118,7 @@ impl ValidityMask {
                 }
             }
             Self::Mixed { present, unknown } => {
-                if present.test(position) {
-                    Presence::Present
-                } else if unknown.test(position) {
-                    Presence::Unknown
-                } else {
-                    Presence::Inapplicable
-                }
+                Presence::from_flags(present.test(position), unknown.test(position))
             }
         }
     }
@@ -126,19 +128,33 @@ impl ValidityMask {
     /// Setting anything other than present on an all-present mask materialises
     /// the bit sets, which is the only point at which they are allocated.
     pub fn set(&mut self, position: u32, presence: Presence) {
-        if let Self::AllPresent(len) = *self {
-            if presence.is_present() || position >= len {
-                return;
-            }
-            *self = Self::Mixed {
-                present: BitVec::repeat(true, len),
-                unknown: BitVec::repeat(false, len),
-            };
+        if !self.materialise_for(position, presence) {
+            return;
         }
+
         if let Self::Mixed { present, unknown } = self {
             present.set(position, presence == Presence::Present);
             unknown.set(position, presence == Presence::Unknown);
         }
+    }
+
+    fn materialise_for(&mut self, position: u32, presence: Presence) -> bool {
+        let Self::AllPresent(len) = self else {
+            return true;
+        };
+
+        if presence.is_present() || position >= *len {
+            return false;
+        }
+
+        let len = *len;
+
+        *self = Self::Mixed {
+            present: BitVec::repeat(true, len),
+            unknown: BitVec::repeat(false, len),
+        };
+
+        true
     }
 
     /// The number of positions carrying a value.
@@ -155,26 +171,51 @@ impl ValidityMask {
     /// Worth calling once after building a column, so a file that happened to
     /// record everything does not carry two bit sets for the rest of its life.
     pub fn compact(&mut self) {
-        if let Self::Mixed { present, .. } = self
-            && present.all()
-        {
-            *self = Self::AllPresent(present.len());
+        let compact_len = match self {
+            Self::Mixed { present, .. } if present.all() => Some(present.len()),
+            _ => None,
+        };
+
+        if let Some(len) = compact_len {
+            *self = Self::AllPresent(len);
         }
     }
 }
 
 impl FromIterator<Presence> for ValidityMask {
     fn from_iter<T: IntoIterator<Item = Presence>>(iter: T) -> Self {
-        let mut present = BitVec::new();
-        let mut unknown = BitVec::new();
+        let mut len = 0u32;
+        let mut mixed: Option<(BitVec, BitVec)> = None;
+
         for presence in iter {
-            present.push(presence == Presence::Present);
-            unknown.push(presence == Presence::Unknown);
+            match mixed.as_mut() {
+                Some((present, unknown)) => {
+                    push_presence(present, unknown, presence);
+                }
+                None if presence.is_present() => {}
+                None => {
+                    let mut present = BitVec::repeat(true, len);
+                    let mut unknown = BitVec::repeat(false, len);
+
+                    push_presence(&mut present, &mut unknown, presence);
+
+                    mixed = Some((present, unknown));
+                }
+            }
+
+            len += 1;
         }
-        let mut mask = Self::Mixed { present, unknown };
-        mask.compact();
-        mask
+
+        match mixed {
+            Some((present, unknown)) => Self::Mixed { present, unknown },
+            None => Self::AllPresent(len),
+        }
     }
+}
+
+fn push_presence(present: &mut BitVec, unknown: &mut BitVec, presence: Presence) {
+    present.push(presence == Presence::Present);
+    unknown.push(presence == Presence::Unknown);
 }
 
 #[cfg(test)]

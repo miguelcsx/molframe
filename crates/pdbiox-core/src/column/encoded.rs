@@ -13,8 +13,9 @@
 //! > branch in the read path costs more than the bandwidth it saves and defeats
 //! > vectorisation outright.
 
-use super::bits::{bit_width, pack, unpack_one};
+use super::bits::{bit_width, pack_mapped, unpack_one};
 use crate::symbol::SymbolId;
+use std::mem::size_of;
 
 /// A value that can live in an encoded column.
 ///
@@ -43,10 +44,17 @@ macro_rules! column_value_via_cast {
             const IS_INTEGER: bool = true;
 
             #[allow(clippy::cast_lossless, reason = "one body over every width")]
-            fn to_bits(self) -> u64 { self as u64 }
+            fn to_bits(self) -> u64 {
+                self as u64
+            }
 
-            #[allow(clippy::cast_possible_wrap, reason = "reinterpretation, not conversion")]
-            fn from_bits(bits: u64) -> Self { bits as Self }
+            #[allow(
+                clippy::cast_possible_wrap,
+                reason = "reinterpretation, not conversion"
+            )]
+            fn from_bits(bits: u64) -> Self {
+                bits as Self
+            }
         })*
     };
 }
@@ -59,6 +67,7 @@ impl ColumnValue for f32 {
     fn to_bits(self) -> u64 {
         u64::from(self.to_bits())
     }
+
     fn from_bits(bits: u64) -> Self {
         Self::from_bits(bits as u32)
     }
@@ -70,6 +79,7 @@ impl ColumnValue for SymbolId {
     fn to_bits(self) -> u64 {
         u64::from(self.get())
     }
+
     fn from_bits(bits: u64) -> Self {
         Self::from_raw(bits as u32)
     }
@@ -176,23 +186,19 @@ impl<T: ColumnValue> EncodedColumn<T> {
         if position >= self.len() {
             return None;
         }
+
         match self {
-            Self::Plain(values) => values.get(position as usize).copied(),
+            Self::Plain(values) => copied_at(values, position),
             Self::Constant { value, .. } => Some(*value),
             Self::RunLength { values, run_ends } => {
                 let run = run_ends.partition_point(|end| *end <= position);
+
                 values.get(run).copied()
             }
             Self::BitPacked { data, width, .. } => {
                 unpack_one(data, *width, position).map(T::from_bits)
             }
-            Self::Delta { first, deltas } => {
-                let mut value = first.to_bits() as i64;
-                for delta in deltas.get(..position as usize)? {
-                    value += i64::from(*delta);
-                }
-                Some(T::from_bits(value as u64))
-            }
+            Self::Delta { first, deltas } => delta_at(*first, deltas, position),
         }
     }
 
@@ -220,22 +226,27 @@ impl<T: ColumnValue> EncodedColumn<T> {
         let Some(first) = values.first() else {
             return Self::Plain(Vec::new());
         };
-        if values.iter().all(|value| value == first) {
+
+        if values.iter().skip(1).all(|value| value == first) {
             return Self::Constant {
                 value: *first,
                 len: values.len() as u32,
             };
         }
+
         if let Some(column) = Self::try_run_length(values) {
             return column;
         }
+
         if let Some(column) = Self::try_bit_packed(values) {
             return column;
         }
+
         if let Some(column) = Self::try_delta(values) {
             return column;
         }
-        Self::Plain(values.to_vec())
+
+        Self::Plain(copy_values(values))
     }
 
     /// Stores values literally, whatever they are.
@@ -244,58 +255,57 @@ impl<T: ColumnValue> EncodedColumn<T> {
     /// letting the rules decide.
     #[must_use]
     pub fn plain(values: &[T]) -> Self {
-        Self::Plain(values.to_vec())
+        Self::Plain(copy_values(values))
     }
 
     fn try_run_length(values: &[T]) -> Option<Self> {
-        let mut runs = 1usize;
-        for pair in values.windows(2) {
-            if let [earlier, later] = pair
-                && earlier != later
-            {
-                runs += 1;
-            }
-        }
+        let runs = run_count(values);
+
         // Each run costs a value and an end position, so it must replace more
         // than two values' worth of storage to be worth the indirection.
-        if runs * 4 > values.len() {
+        if runs > values.len() / 4 {
             return None;
         }
-        let mut encoded = Self::RunLength {
-            values: Vec::with_capacity(runs),
-            run_ends: Vec::with_capacity(runs),
-        };
-        if let Self::RunLength {
+
+        let mut heads = Vec::with_capacity(runs);
+        let mut run_ends = Vec::with_capacity(runs);
+
+        for (position, value) in values.iter().enumerate() {
+            let end = position as u32 + 1;
+
+            if heads.last() == Some(value) {
+                if let Some(last_end) = run_ends.last_mut() {
+                    *last_end = end;
+                }
+
+                continue;
+            }
+
+            heads.push(*value);
+            run_ends.push(end);
+        }
+
+        Some(Self::RunLength {
             values: heads,
             run_ends,
-        } = &mut encoded
-        {
-            for (position, value) in values.iter().enumerate() {
-                if heads.last() == Some(value) {
-                    if let Some(end) = run_ends.last_mut() {
-                        *end = position as u32 + 1;
-                    }
-                } else {
-                    heads.push(*value);
-                    run_ends.push(position as u32 + 1);
-                }
-            }
-        }
-        Some(encoded)
+        })
     }
 
     fn try_bit_packed(values: &[T]) -> Option<Self> {
         if !T::IS_INTEGER {
             return None;
         }
+
         let max = values.iter().map(|value| value.to_bits()).max()?;
+
         let width = bit_width(max);
+
         if usize::from(width) >= size_of::<T>() * 8 {
             return None;
         }
-        let raw: Vec<u64> = values.iter().map(|value| value.to_bits()).collect();
+
         Some(Self::BitPacked {
-            data: pack(&raw, width),
+            data: pack_mapped(values, width, |value| value.to_bits()),
             width,
             len: values.len() as u32,
         })
@@ -309,15 +319,59 @@ impl<T: ColumnValue> EncodedColumn<T> {
         if !T::IS_INTEGER {
             return None;
         }
+
         let first = *values.first()?;
         let mut deltas = Vec::with_capacity(values.len().saturating_sub(1));
+
         for pair in values.windows(2) {
-            let [earlier, later] = pair else { return None };
+            let [earlier, later] = pair else {
+                return None;
+            };
+
             let step = (later.to_bits() as i64).checked_sub(earlier.to_bits() as i64)?;
+
             deltas.push(i32::try_from(step).ok()?);
         }
+
         Some(Self::Delta { first, deltas })
     }
+}
+
+fn run_count<T: PartialEq>(values: &[T]) -> usize {
+    if values.is_empty() {
+        return 0;
+    }
+
+    1 + values
+        .windows(2)
+        .filter(|pair| pair.first() != pair.get(1))
+        .count()
+}
+
+fn copy_values<T: Copy>(values: &[T]) -> Vec<T> {
+    values.iter().copied().collect()
+}
+
+fn copied_at<T: Copy>(values: &[T], position: u32) -> Option<T> {
+    usize::try_from(position)
+        .ok()
+        .and_then(|index| values.get(index))
+        .copied()
+}
+
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "delta arithmetic runs on bit patterns"
+)]
+fn delta_at<T: ColumnValue>(first: T, deltas: &[i32], position: u32) -> Option<T> {
+    let end = usize::try_from(position).ok()?;
+    let deltas = deltas.get(..end)?;
+
+    let value = deltas.iter().fold(first.to_bits() as i64, |value, delta| {
+        value + i64::from(*delta)
+    });
+
+    Some(T::from_bits(value as u64))
 }
 
 /// Sequential reader over an encoded column.
@@ -344,34 +398,66 @@ impl<T: ColumnValue> Iterator for ColumnIter<'_, T> {
         if self.position >= self.column.len() {
             return None;
         }
+
         let value = match self.column {
-            EncodedColumn::Delta { first, deltas } => {
-                if self.position == 0 {
-                    self.running = first.to_bits() as i64;
-                } else {
-                    self.running += i64::from(*deltas.get(self.position as usize - 1)?);
-                }
-                T::from_bits(self.running as u64)
-            }
+            EncodedColumn::Plain(values) => copied_at(values, self.position)?,
+            EncodedColumn::Constant { value, .. } => *value,
             EncodedColumn::RunLength { values, run_ends } => {
-                while run_ends
-                    .get(self.run)
-                    .is_some_and(|end| *end <= self.position)
-                {
-                    self.run += 1;
-                }
-                *values.get(self.run)?
+                next_run_length(values, run_ends, self.position, &mut self.run)?
             }
-            other => other.get(self.position)?,
+            EncodedColumn::BitPacked { data, width, .. } => {
+                T::from_bits(unpack_one(data, *width, self.position)?)
+            }
+            EncodedColumn::Delta { first, deltas } => {
+                next_delta(*first, deltas, self.position, &mut self.running)?
+            }
         };
+
         self.position += 1;
         Some(value)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.column.len().saturating_sub(self.position) as usize;
+
         (remaining, Some(remaining))
     }
+}
+
+fn next_run_length<T: Copy>(
+    values: &[T],
+    run_ends: &[u32],
+    position: u32,
+    run: &mut usize,
+) -> Option<T> {
+    while run_ends.get(*run).is_some_and(|end| *end <= position) {
+        *run += 1;
+    }
+
+    values.get(*run).copied()
+}
+
+#[allow(
+    clippy::cast_possible_wrap,
+    reason = "delta arithmetic runs on bit patterns"
+)]
+fn next_delta<T: ColumnValue>(
+    first: T,
+    deltas: &[i32],
+    position: u32,
+    running: &mut i64,
+) -> Option<T> {
+    if position == 0 {
+        *running = first.to_bits() as i64;
+    } else {
+        let previous = position.checked_sub(1)?;
+        let index = usize::try_from(previous).ok()?;
+        let delta = deltas.get(index)?;
+
+        *running += i64::from(*delta);
+    }
+
+    Some(T::from_bits(*running as u64))
 }
 
 impl<T: ColumnValue> ExactSizeIterator for ColumnIter<'_, T> {}

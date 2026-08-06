@@ -32,7 +32,10 @@ impl Rigid {
     };
 
     /// Creates a transform from its parts.
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
     #[must_use]
+    #[inline]
     pub const fn new(rotation: [[f64; 3]; 3], translation: [f64; 3]) -> Self {
         Self {
             rotation,
@@ -41,7 +44,10 @@ impl Rigid {
     }
 
     /// A pure translation.
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
     #[must_use]
+    #[inline]
     pub const fn translation(offset: [f64; 3]) -> Self {
         Self {
             rotation: Self::IDENTITY.rotation,
@@ -50,25 +56,30 @@ impl Rigid {
     }
 
     /// Applies the transform to one position.
+    ///
+    /// Runs in `O(1)` time with fixed-size arithmetic and no allocation.
     #[must_use]
+    #[inline]
     pub fn apply(&self, position: [f32; 3]) -> [f32; 3] {
-        let mut out = [0.0f32; 3];
-        for (slot, (row, shift)) in out
-            .iter_mut()
-            .zip(self.rotation.iter().zip(self.translation))
-        {
-            let mut value = shift;
-            for (coefficient, component) in row.iter().zip(position) {
-                value += coefficient * f64::from(component);
-            }
-            *slot = value as f32;
-        }
-        out
+        let point = [
+            f64::from(position[0]),
+            f64::from(position[1]),
+            f64::from(position[2]),
+        ];
+        let transformed = rotate_and_translate(&self.rotation, point, self.translation);
+
+        [
+            transformed[0] as f32,
+            transformed[1] as f32,
+            transformed[2] as f32,
+        ]
     }
 
     /// Applies the transform to every position in place.
     ///
     /// One pass, no allocation.
+    ///
+    /// Runs in `O(n)` time and `O(1)` auxiliary space.
     pub fn apply_all(&self, positions: &mut [[f32; 3]]) {
         for position in positions {
             *position = self.apply(*position);
@@ -79,17 +90,18 @@ impl Rigid {
     ///
     /// A rotation's inverse is its transpose, which is exact — so undoing a
     /// transform introduces no error beyond the rounding of the arithmetic.
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
     #[must_use]
     pub fn inverse(&self) -> Self {
         let rotation = transpose(&self.rotation);
-        let mut translation = [0.0f64; 3];
-        for (slot, row) in translation.iter_mut().zip(&rotation) {
-            let mut value = 0.0;
-            for (coefficient, component) in row.iter().zip(self.translation) {
-                value += coefficient * component;
-            }
-            *slot = -value;
-        }
+        let rotated_translation = rotate(&rotation, self.translation);
+        let translation = [
+            -rotated_translation[0],
+            -rotated_translation[1],
+            -rotated_translation[2],
+        ];
+
         Self {
             rotation,
             translation,
@@ -97,24 +109,13 @@ impl Rigid {
     }
 
     /// The transform that applies `self` and then `next`.
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
     #[must_use]
     pub fn then(&self, next: &Self) -> Self {
-        let mut rotation = [[0.0f64; 3]; 3];
-        for (out_row, next_row) in rotation.iter_mut().zip(&next.rotation) {
-            for (column, slot) in out_row.iter_mut().enumerate() {
-                let mut value = 0.0;
-                for (coefficient, own_row) in next_row.iter().zip(&self.rotation) {
-                    value += coefficient * at(own_row, column);
-                }
-                *slot = value;
-            }
-        }
-        let mut translation = next.translation;
-        for (slot, row) in translation.iter_mut().zip(&next.rotation) {
-            for (coefficient, component) in row.iter().zip(self.translation) {
-                *slot += coefficient * component;
-            }
-        }
+        let rotation = multiply(&next.rotation, &self.rotation);
+        let translation = rotate_and_translate(&next.rotation, self.translation, next.translation);
+
         Self {
             rotation,
             translation,
@@ -125,9 +126,13 @@ impl Rigid {
     ///
     /// One for a rotation, minus one for a reflection. Nothing in this crate
     /// produces a reflection, and checking is how that stays true.
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
     #[must_use]
+    #[inline]
     pub fn determinant(&self) -> f64 {
         let r = &self.rotation;
+
         r[0][0] * (r[1][1] * r[2][2] - r[1][2] * r[2][1])
             - r[0][1] * (r[1][0] * r[2][2] - r[1][2] * r[2][0])
             + r[0][2] * (r[1][0] * r[2][1] - r[1][1] * r[2][0])
@@ -135,19 +140,70 @@ impl Rigid {
 }
 
 /// The transpose of a three-by-three, which is a rotation's inverse.
+///
+/// Runs in `O(1)` time and returns a stack-allocated matrix.
+#[inline]
 fn transpose(matrix: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
-    let mut out = [[0.0f64; 3]; 3];
-    for (row, source) in matrix.iter().enumerate() {
-        for (column, value) in source.iter().enumerate() {
-            if let Some(slot) = out.get_mut(column).and_then(|out_row| out_row.get_mut(row)) {
-                *slot = *value;
-            }
+    [
+        [matrix[0][0], matrix[1][0], matrix[2][0]],
+        [matrix[0][1], matrix[1][1], matrix[2][1]],
+        [matrix[0][2], matrix[1][2], matrix[2][2]],
+    ]
+}
+
+/// Multiplies two three-by-three matrices as `left * right`.
+///
+/// Runs in `O(1)` time with a fixed 27 scalar products and allocates no memory.
+fn multiply(left: &[[f64; 3]; 3], right: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
+    let mut out = [[0.0; 3]; 3];
+
+    for (row_index, out_row) in out.iter_mut().enumerate() {
+        let left_row = &left[row_index];
+
+        for (column, slot) in out_row.iter_mut().enumerate() {
+            *slot = left_row[0] * at(&right[0], column)
+                + left_row[1] * at(&right[1], column)
+                + left_row[2] * at(&right[2], column);
         }
     }
+
     out
 }
 
+/// Applies a three-by-three rotation to a double-precision vector.
+///
+/// Runs in `O(1)` time and allocates no heap memory.
+#[inline]
+fn rotate(rotation: &[[f64; 3]; 3], vector: [f64; 3]) -> [f64; 3] {
+    [
+        rotation[0][0] * vector[0] + rotation[0][1] * vector[1] + rotation[0][2] * vector[2],
+        rotation[1][0] * vector[0] + rotation[1][1] * vector[1] + rotation[1][2] * vector[2],
+        rotation[2][0] * vector[0] + rotation[2][1] * vector[1] + rotation[2][2] * vector[2],
+    ]
+}
+
+/// Applies a rotation and then adds a translation.
+///
+/// Runs in `O(1)` time and allocates no heap memory.
+#[inline]
+fn rotate_and_translate(
+    rotation: &[[f64; 3]; 3],
+    vector: [f64; 3],
+    translation: [f64; 3],
+) -> [f64; 3] {
+    let rotated = rotate(rotation, vector);
+
+    [
+        rotated[0] + translation[0],
+        rotated[1] + translation[1],
+        rotated[2] + translation[2],
+    ]
+}
+
 /// One entry of a row, reading past the end as zero.
+///
+/// Runs in `O(1)` time and allocates no memory.
+#[inline]
 fn at(row: &[f64; 3], column: usize) -> f64 {
     match row.get(column) {
         Some(value) => *value,
@@ -156,6 +212,9 @@ fn at(row: &[f64; 3], column: usize) -> f64 {
 }
 
 impl Default for Rigid {
+    /// Returns [`Rigid::IDENTITY`].
+    ///
+    /// Runs in `O(1)` time and allocates no memory.
     fn default() -> Self {
         Self::IDENTITY
     }

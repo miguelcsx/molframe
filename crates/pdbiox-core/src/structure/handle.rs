@@ -10,10 +10,12 @@
 
 use super::data::StructureData;
 use crate::chunk::AtomChunk;
+use crate::column::Presence;
 use crate::element::Element;
 use crate::index::{AtomIndex, ChainIndex, EntityIndex, ModelIndex, ResidueIndex};
 use crate::symbol::{AltId, SymbolId};
 use crate::topology::PolymerKind;
+use std::ops::Range;
 
 /// One model of a structure.
 #[derive(Clone, Copy, Debug)]
@@ -44,6 +46,10 @@ pub struct AtomRef<'a> {
 }
 
 impl<'a> ModelRef<'a> {
+    const fn new(data: &'a StructureData, index: ModelIndex) -> Self {
+        Self { data, index }
+    }
+
     /// This model's position.
     #[must_use]
     pub const fn index(self) -> ModelIndex {
@@ -58,28 +64,26 @@ impl<'a> ModelRef<'a> {
 
     /// The chains of this model.
     pub fn chains(self) -> impl Iterator<Item = ChainRef<'a>> {
-        let range = match self.data.topology.models.chains(self.index) {
-            Some(range) => range,
-            None => 0..0,
-        };
         let data = self.data;
-        range.map(move |position| ChainRef {
-            data,
-            index: ChainIndex::new(position),
-        })
+        let range = range_or_empty(self.data.topology.models.chains(self.index));
+
+        range.map(move |position| ChainRef::new(data, ChainIndex::new(position)))
     }
 
     /// The chain with this label, in either namespace.
     #[must_use]
     pub fn chain(self, label: &str) -> Option<ChainRef<'a>> {
         let wanted = self.data.dictionary.get(label)?;
-        self.chains().find(|chain| {
-            chain.label_asym_id() == Some(wanted) || chain.auth_asym_id() == Some(wanted)
-        })
+
+        self.chains().find(|chain| chain.has_label(wanted))
     }
 }
 
 impl<'a> ChainRef<'a> {
+    const fn new(data: &'a StructureData, index: ChainIndex) -> Self {
+        Self { data, index }
+    }
+
     /// This chain's position.
     #[must_use]
     pub const fn index(self) -> ChainIndex {
@@ -115,27 +119,28 @@ impl<'a> ChainRef<'a> {
 
     /// The residues of this chain.
     pub fn residues(self) -> impl Iterator<Item = ResidueRef<'a>> {
-        let range = match self.data.topology.chains.residues(self.index) {
-            Some(range) => range,
-            None => 0..0,
-        };
         let data = self.data;
-        range.map(move |position| ResidueRef {
-            data,
-            index: ResidueIndex::new(position),
-        })
+        let range = range_or_empty(self.data.topology.chains.residues(self.index));
+
+        range.map(move |position| ResidueRef::new(data, ResidueIndex::new(position)))
     }
 
     /// The residue with this number, in whichever namespace carries it.
     #[must_use]
     pub fn residue(self, number: i32) -> Option<ResidueRef<'a>> {
-        self.residues().find(|residue| {
-            residue.auth_seq_id() == Some(number) || residue.label_seq_id() == Some(number)
-        })
+        self.residues().find(|residue| residue.has_number(number))
+    }
+
+    fn has_label(self, wanted: SymbolId) -> bool {
+        self.label_asym_id() == Some(wanted) || self.auth_asym_id() == Some(wanted)
     }
 }
 
 impl<'a> ResidueRef<'a> {
+    const fn new(data: &'a StructureData, index: ResidueIndex) -> Self {
+        Self { data, index }
+    }
+
     /// This residue's position.
     #[must_use]
     pub const fn index(self) -> ResidueIndex {
@@ -151,7 +156,8 @@ impl<'a> ResidueRef<'a> {
     /// The component code as a string.
     #[must_use]
     pub fn name(self) -> Option<&'a str> {
-        self.data.dictionary.resolve(self.label_comp_id()?)
+        self.label_comp_id()
+            .and_then(|symbol| self.data.dictionary.resolve(symbol))
     }
 
     /// The sequence position within the entity, absent for a non-polymer.
@@ -169,8 +175,11 @@ impl<'a> ResidueRef<'a> {
     /// The insertion code, which is part of this residue's identity.
     #[must_use]
     pub fn ins_code(self) -> Option<&'a str> {
-        let symbol = self.data.topology.residues.ins_code(self.index)?;
-        self.data.dictionary.resolve(symbol)
+        self.data
+            .topology
+            .residues
+            .ins_code(self.index)
+            .and_then(|symbol| self.data.dictionary.resolve(symbol))
     }
 
     /// Whether the file recorded this residue as a heterogen.
@@ -181,26 +190,30 @@ impl<'a> ResidueRef<'a> {
 
     /// The atoms of this residue.
     pub fn atoms(self) -> impl Iterator<Item = AtomRef<'a>> {
-        let range = match self.data.topology.residues.atoms(self.index) {
-            Some(range) => range,
-            None => 0..0,
-        };
         let data = self.data;
-        range.map(move |position| AtomRef {
-            data,
-            index: AtomIndex::new(position),
-        })
+        let range = range_or_empty(self.data.topology.residues.atoms(self.index));
+
+        range.map(move |position| AtomRef::new(data, AtomIndex::new(position)))
     }
 
     /// The atom with this name.
     #[must_use]
     pub fn atom(self, name: &str) -> Option<AtomRef<'a>> {
         let wanted = self.data.dictionary.get(name)?;
-        self.atoms().find(|atom| atom.name_symbol() == Some(wanted))
+
+        self.atoms().find(|atom| atom.has_name(wanted))
+    }
+
+    fn has_number(self, number: i32) -> bool {
+        self.auth_seq_id() == Some(number) || self.label_seq_id() == Some(number)
     }
 }
 
 impl<'a> AtomRef<'a> {
+    const fn new(data: &'a StructureData, index: AtomIndex) -> Self {
+        Self { data, index }
+    }
+
     /// This atom's position in the flat atom order.
     #[must_use]
     pub const fn index(self) -> AtomIndex {
@@ -219,11 +232,15 @@ impl<'a> AtomRef<'a> {
             .data
             .chunks
             .partition_point(|chunk| chunk.atoms().end <= position);
+
         let chunk = self.data.chunks.get(candidate)?;
-        chunk
-            .atoms()
-            .contains(&position)
-            .then(|| (chunk, position - chunk.atoms().start))
+        let atoms = chunk.atoms();
+
+        if !atoms.contains(&position) {
+            return None;
+        }
+
+        Some((chunk, position - atoms.start))
     }
 
     /// The interned atom name.
@@ -236,7 +253,8 @@ impl<'a> AtomRef<'a> {
     /// The atom name as a string.
     #[must_use]
     pub fn name(self) -> Option<&'a str> {
-        self.data.dictionary.resolve(self.name_symbol()?)
+        self.name_symbol()
+            .and_then(|symbol| self.data.dictionary.resolve(symbol))
     }
 
     /// The element.
@@ -257,27 +275,33 @@ impl<'a> AtomRef<'a> {
     #[must_use]
     pub fn b_factor(self) -> Option<f32> {
         let (chunk, local) = self.located()?;
-        let (value, presence) = chunk.b_factor(local)?;
-        presence.is_present().then_some(value)
+
+        chunk.b_factor(local).and_then(recorded_value)
     }
 
     /// The occupancy, where the file recorded one.
     #[must_use]
     pub fn occupancy(self) -> Option<f32> {
         let (chunk, local) = self.located()?;
-        let (value, presence) = chunk.occupancy(local)?;
-        presence.is_present().then_some(value)
+
+        chunk.occupancy(local).and_then(recorded_value)
     }
 
     /// The position in the first model, where one was recorded.
     #[must_use]
     pub fn position(self) -> Option<[f32; 3]> {
         let (chunk, local) = self.located()?;
+
         if !chunk.has_position(local) {
             return None;
         }
-        let block = self.data.coords.block(ModelIndex::new(0))?;
-        block.as_slice().get(self.index.as_usize()).copied()
+
+        self.data
+            .coords
+            .block(ModelIndex::new(0))?
+            .as_slice()
+            .get(self.index.as_usize())
+            .copied()
     }
 
     /// The residue this atom belongs to.
@@ -285,10 +309,12 @@ impl<'a> AtomRef<'a> {
     pub fn residue(self) -> Option<ResidueRef<'a>> {
         let (chunk, local) = self.located()?;
         let index = chunk.residue(local, &self.data.topology.residues)?;
-        Some(ResidueRef {
-            data: self.data,
-            index,
-        })
+
+        Some(ResidueRef::new(self.data, index))
+    }
+
+    fn has_name(self, wanted: SymbolId) -> bool {
+        self.name_symbol() == Some(wanted)
     }
 }
 
@@ -296,10 +322,7 @@ impl StructureData {
     /// A handle on one model.
     #[must_use]
     pub fn model(&self, model: ModelIndex) -> Option<ModelRef<'_>> {
-        (model.as_usize() < self.topology.models.len()).then_some(ModelRef {
-            data: self,
-            index: model,
-        })
+        (model.as_usize() < self.topology.models.len()).then_some(ModelRef::new(self, model))
     }
 
     /// Every model.
@@ -307,7 +330,7 @@ impl StructureData {
         self.topology
             .models
             .iter()
-            .map(move |index| ModelRef { data: self, index })
+            .map(move |index| ModelRef::new(self, index))
     }
 
     /// Every chain, across every model.
@@ -315,24 +338,39 @@ impl StructureData {
         self.topology
             .chains
             .iter()
-            .map(move |index| ChainRef { data: self, index })
+            .map(move |index| ChainRef::new(self, index))
     }
 
     /// Every residue, across every chain.
     pub fn residues(&self) -> impl Iterator<Item = ResidueRef<'_>> {
-        (0..self.topology.residues.len() as u32).map(move |position| ResidueRef {
-            data: self,
-            index: ResidueIndex::new(position),
-        })
+        let count = residue_count_as_u32(self.topology.residues.len());
+
+        (0..count).map(move |position| ResidueRef::new(self, ResidueIndex::new(position)))
     }
 
     /// Every atom, in file order.
     pub fn atoms(&self) -> impl Iterator<Item = AtomRef<'_>> {
-        let count = self.chunks.last().map_or(0, |chunk| chunk.atoms().end);
-        (0..count).map(move |position| AtomRef {
-            data: self,
-            index: AtomIndex::new(position),
-        })
+        (0..self.atom_count()).map(move |position| AtomRef::new(self, AtomIndex::new(position)))
+    }
+}
+
+fn range_or_empty(range: Option<Range<u32>>) -> Range<u32> {
+    match range {
+        Some(range) => range,
+        None => 0..0,
+    }
+}
+
+fn recorded_value<T>(entry: (T, Presence)) -> Option<T> {
+    let (value, presence) = entry;
+
+    presence.is_present().then_some(value)
+}
+
+fn residue_count_as_u32(count: usize) -> u32 {
+    match u32::try_from(count) {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
     }
 }
 

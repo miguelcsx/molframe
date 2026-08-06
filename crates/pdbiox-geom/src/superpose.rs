@@ -17,6 +17,12 @@
 use crate::eigen;
 use crate::transform::Rigid;
 
+/// Relative rank threshold used to classify a point set as collinear.
+const COLLINEAR_RELATIVE_TOLERANCE: f64 = 1e-12;
+
+/// Squared threshold below which a quaternion has no usable magnitude.
+const QUATERNION_EPSILON_SQUARED: f64 = f64::EPSILON * f64::EPSILON;
+
 /// Why a superposition could not be computed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SuperposeError {
@@ -36,6 +42,8 @@ pub enum SuperposeError {
 /// No fitting happens: this measures the sets where they are. Use
 /// [`superpose`] first if the sets need aligning.
 ///
+/// Runs in `O(n)` time and `O(1)` auxiliary space.
+///
 /// # Errors
 ///
 /// Returns [`SuperposeError::LengthMismatch`] when the sets differ in size.
@@ -43,13 +51,17 @@ pub fn rmsd(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Superpos
     if mobile.len() != reference.len() {
         return Err(SuperposeError::LengthMismatch);
     }
+
     if mobile.is_empty() {
         return Ok(0.0);
     }
-    let mut total = 0.0f64;
-    for (a, b) in mobile.iter().zip(reference) {
-        total += crate::measure::distance_squared(*a, *b);
+
+    let mut total = 0.0;
+
+    for (&a, &b) in mobile.iter().zip(reference) {
+        total += crate::measure::distance_squared(a, b);
     }
+
     Ok((total / mobile.len() as f64).sqrt())
 }
 
@@ -66,6 +78,9 @@ pub struct Superposition {
 ///
 /// The two sets must already correspond position by position; deciding *which*
 /// atom matches which is a separate question and not one geometry can answer.
+///
+/// Runs in one `O(n)` pass plus a fixed-size decomposition and allocates no heap
+/// memory.
 ///
 /// # Errors
 ///
@@ -91,19 +106,21 @@ pub fn superpose(
     if mobile.len() != reference.len() {
         return Err(SuperposeError::LengthMismatch);
     }
+
     if mobile.len() < 3 {
         return Err(SuperposeError::TooFewPoints);
     }
-    let Some(mobile_centre) = crate::moments::centroid(mobile) else {
-        return Err(SuperposeError::TooFewPoints);
-    };
-    let Some(reference_centre) = crate::moments::centroid(reference) else {
-        return Err(SuperposeError::TooFewPoints);
-    };
 
-    let covariance = cross_covariance(mobile, reference, mobile_centre, reference_centre);
-    let decomposition = eigen::symmetric(key_matrix(&covariance));
+    let statistics = fit_statistics(mobile, reference);
+
+    if is_collinear(&statistics.mobile_scatter) || is_collinear(&statistics.reference_scatter) {
+        return Err(SuperposeError::Degenerate);
+    }
+
+    let decomposition = eigen::symmetric(key_matrix(&statistics.covariance));
+    let maximum_correlation = decomposition.values[0];
     let quaternion = decomposition.dominant();
+
     let Some(rotation) = rotation_from(quaternion) else {
         return Err(SuperposeError::Degenerate);
     };
@@ -111,37 +128,144 @@ pub fn superpose(
     // Rotate about the mobile centre, then move that centre onto the reference's.
     let transform = Rigid::new(
         rotation,
-        translation(rotation, mobile_centre, reference_centre),
+        translation(
+            rotation,
+            statistics.mobile_centre,
+            statistics.reference_centre,
+        ),
     );
-    let fitted: Vec<[f32; 3]> = mobile.iter().map(|p| transform.apply(*p)).collect();
-    let rmsd = rmsd(&fitted, reference)?;
+    let rmsd = optimal_rmsd(&statistics, maximum_correlation, mobile.len());
+
     Ok(Superposition { transform, rmsd })
 }
 
-/// The three-by-three cross-covariance of the two centred sets.
-fn cross_covariance(
-    mobile: &[[f32; 3]],
-    reference: &[[f32; 3]],
+/// Statistics required to solve and validate a rigid fit.
+#[derive(Clone, Copy)]
+struct FitStatistics {
     mobile_centre: [f64; 3],
     reference_centre: [f64; 3],
-) -> [[f64; 3]; 3] {
-    let mut covariance = [[0.0f64; 3]; 3];
-    for (a, b) in mobile.iter().zip(reference) {
-        for row in 0..3 {
-            for column in 0..3 {
-                let left = f64::from(a[row]) - mobile_centre[row];
-                let right = f64::from(b[column]) - reference_centre[column];
-                let Some(slot) = covariance.get_mut(row).and_then(|r| r.get_mut(column)) else {
-                    continue;
-                };
-                *slot += left * right;
-            }
-        }
+    covariance: [[f64; 3]; 3],
+    mobile_scatter: [[f64; 3]; 3],
+    reference_scatter: [[f64; 3]; 3],
+}
+
+/// Computes paired centres, scatter tensors and cross-covariance in one pass.
+///
+/// The online update is the multivariate Welford recurrence, avoiding the
+/// cancellation of raw second moments. Runs in `O(n)` time and `O(1)` space.
+fn fit_statistics(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> FitStatistics {
+    let mut mobile_centre = [0.0; 3];
+    let mut reference_centre = [0.0; 3];
+    let mut covariance = [[0.0; 3]; 3];
+    let mut mobile_scatter = [[0.0; 3]; 3];
+    let mut reference_scatter = [[0.0; 3]; 3];
+    let mut count = 0usize;
+
+    for (&mobile_position, &reference_position) in mobile.iter().zip(reference) {
+        count += 1;
+
+        let inverse_count = (count as f64).recip();
+        let mobile_point = to_f64(mobile_position);
+        let reference_point = to_f64(reference_position);
+        let mobile_delta = subtract(mobile_point, mobile_centre);
+        let reference_delta = subtract(reference_point, reference_centre);
+
+        add_scaled(&mut mobile_centre, mobile_delta, inverse_count);
+        add_scaled(&mut reference_centre, reference_delta, inverse_count);
+
+        let mobile_after = subtract(mobile_point, mobile_centre);
+        let reference_after = subtract(reference_point, reference_centre);
+
+        accumulate_symmetric_outer(&mut mobile_scatter, mobile_delta, mobile_after);
+        accumulate_symmetric_outer(&mut reference_scatter, reference_delta, reference_after);
+        accumulate_cross_covariance(&mut covariance, mobile_delta, reference_after);
     }
-    covariance
+
+    mirror_upper_triangle(&mut mobile_scatter);
+    mirror_upper_triangle(&mut reference_scatter);
+
+    FitStatistics {
+        mobile_centre,
+        reference_centre,
+        covariance,
+        mobile_scatter,
+        reference_scatter,
+    }
+}
+
+/// The three-by-three cross-covariance of the two centred sets.
+///
+/// Adds one online co-moment outer product. Runs in `O(1)` time and allocates no
+/// memory.
+#[inline]
+fn accumulate_cross_covariance(
+    covariance: &mut [[f64; 3]; 3],
+    mobile_delta: [f64; 3],
+    reference_after: [f64; 3],
+) {
+    covariance[0][0] += mobile_delta[0] * reference_after[0];
+    covariance[0][1] += mobile_delta[0] * reference_after[1];
+    covariance[0][2] += mobile_delta[0] * reference_after[2];
+
+    covariance[1][0] += mobile_delta[1] * reference_after[0];
+    covariance[1][1] += mobile_delta[1] * reference_after[1];
+    covariance[1][2] += mobile_delta[1] * reference_after[2];
+
+    covariance[2][0] += mobile_delta[2] * reference_after[0];
+    covariance[2][1] += mobile_delta[2] * reference_after[1];
+    covariance[2][2] += mobile_delta[2] * reference_after[2];
+}
+
+/// Adds the six independent components of an outer product.
+///
+/// For Welford updates the result is symmetric up to rounding. Only the upper
+/// triangle is accumulated, reducing memory traffic. Runs in `O(1)` time.
+#[inline]
+fn accumulate_symmetric_outer(scatter: &mut [[f64; 3]; 3], left: [f64; 3], right: [f64; 3]) {
+    scatter[0][0] += left[0] * right[0];
+    scatter[0][1] += left[0] * right[1];
+    scatter[0][2] += left[0] * right[2];
+    scatter[1][1] += left[1] * right[1];
+    scatter[1][2] += left[1] * right[2];
+    scatter[2][2] += left[2] * right[2];
+}
+
+/// Copies the upper triangle of a three-by-three matrix into the lower one.
+///
+/// Runs in `O(1)` time and allocates no memory.
+#[inline]
+fn mirror_upper_triangle(matrix: &mut [[f64; 3]; 3]) {
+    matrix[1][0] = matrix[0][1];
+    matrix[2][0] = matrix[0][2];
+    matrix[2][1] = matrix[1][2];
+}
+
+/// Returns whether a centred scatter tensor has rank below two.
+///
+/// A rank-zero or rank-one scatter represents coincident or collinear points,
+/// for which rotation about one axis is unconstrained. Runs in `O(1)` time.
+fn is_collinear(scatter: &[[f64; 3]; 3]) -> bool {
+    let xx = scatter[0][0];
+    let xy = scatter[0][1];
+    let xz = scatter[0][2];
+    let yy = scatter[1][1];
+    let yz = scatter[1][2];
+    let zz = scatter[2][2];
+    let trace = xx + yy + zz;
+
+    if !trace.is_finite() || trace <= f64::EPSILON {
+        return true;
+    }
+
+    let second_invariant = xx * yy + xx * zz + yy * zz - xy * xy - xz * xz - yz * yz;
+
+    !second_invariant.is_finite()
+        || second_invariant <= COLLINEAR_RELATIVE_TOLERANCE * trace * trace
 }
 
 /// The symmetric four-by-four whose dominant eigenvector is the best rotation.
+///
+/// Runs in `O(1)` time and returns a stack-allocated matrix.
 fn key_matrix(c: &[[f64; 3]; 3]) -> [[f64; 4]; 4] {
     let (xx, xy, xz) = (c[0][0], c[0][1], c[0][2]);
     let (yx, yy, yz) = (c[1][0], c[1][1], c[1][2]);
@@ -156,12 +280,24 @@ fn key_matrix(c: &[[f64; 3]; 3]) -> [[f64; 4]; 4] {
 }
 
 /// The rotation matrix a unit quaternion describes.
+///
+/// Returns `None` for a zero-length or non-finite quaternion. Runs in `O(1)`
+/// time and allocates no memory.
 fn rotation_from(q: [f64; 4]) -> Option<[[f64; 3]; 3]> {
-    let length = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt();
-    if length <= f64::EPSILON {
+    let squared = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+
+    if !squared.is_finite() || squared <= QUATERNION_EPSILON_SQUARED {
         return None;
     }
-    let (w, x, y, z) = (q[0] / length, q[1] / length, q[2] / length, q[3] / length);
+
+    let inverse_length = squared.sqrt().recip();
+    let (w, x, y, z) = (
+        q[0] * inverse_length,
+        q[1] * inverse_length,
+        q[2] * inverse_length,
+        q[3] * inverse_length,
+    );
+
     Some([
         [
             w * w + x * x - y * y - z * z,
@@ -182,20 +318,83 @@ fn rotation_from(q: [f64; 4]) -> Option<[[f64; 3]; 3]> {
 }
 
 /// The offset that puts the rotated mobile centre onto the reference centre.
+///
+/// Runs in `O(1)` time and allocates no memory.
 fn translation(
     rotation: [[f64; 3]; 3],
     mobile_centre: [f64; 3],
     reference_centre: [f64; 3],
 ) -> [f64; 3] {
-    let mut shift = [0.0f64; 3];
-    for (row, slot) in shift.iter_mut().enumerate() {
-        let mut rotated = 0.0;
-        for column in 0..3 {
-            rotated += rotation[row][column] * mobile_centre[column];
-        }
-        *slot = reference_centre[row] - rotated;
+    [
+        reference_centre[0]
+            - (rotation[0][0] * mobile_centre[0]
+                + rotation[0][1] * mobile_centre[1]
+                + rotation[0][2] * mobile_centre[2]),
+        reference_centre[1]
+            - (rotation[1][0] * mobile_centre[0]
+                + rotation[1][1] * mobile_centre[1]
+                + rotation[1][2] * mobile_centre[2]),
+        reference_centre[2]
+            - (rotation[2][0] * mobile_centre[0]
+                + rotation[2][1] * mobile_centre[1]
+                + rotation[2][2] * mobile_centre[2]),
+    ]
+}
+
+/// Computes the minimum RMSD from the accumulated quadratic objective.
+///
+/// The dominant quaternion eigenvalue is the maximum rotational correlation,
+/// so no transformed point buffer or additional traversal is required. Runs in
+/// `O(1)` time and allocates no memory.
+fn optimal_rmsd(statistics: &FitStatistics, maximum_correlation: f64, count: usize) -> f64 {
+    let mobile_squared = trace(&statistics.mobile_scatter);
+    let reference_squared = trace(&statistics.reference_scatter);
+    let mean_squared =
+        (mobile_squared + reference_squared - 2.0 * maximum_correlation) / count as f64;
+
+    if mean_squared <= 0.0 {
+        0.0
+    } else {
+        mean_squared.sqrt()
     }
-    shift
+}
+
+/// Returns the trace of a three-by-three matrix.
+///
+/// Runs in `O(1)` time and allocates no memory.
+#[inline]
+fn trace(matrix: &[[f64; 3]; 3]) -> f64 {
+    matrix[0][0] + matrix[1][1] + matrix[2][2]
+}
+
+/// Converts one stored position to double precision.
+///
+/// Runs in `O(1)` time and allocates no heap memory.
+#[inline]
+fn to_f64(position: [f32; 3]) -> [f64; 3] {
+    [
+        f64::from(position[0]),
+        f64::from(position[1]),
+        f64::from(position[2]),
+    ]
+}
+
+/// Subtracts two three-dimensional vectors.
+///
+/// Runs in `O(1)` time and allocates no heap memory.
+#[inline]
+fn subtract(left: [f64; 3], right: [f64; 3]) -> [f64; 3] {
+    [left[0] - right[0], left[1] - right[1], left[2] - right[2]]
+}
+
+/// Adds `scale * delta` to a three-dimensional accumulator.
+///
+/// Runs in `O(1)` time and allocates no memory.
+#[inline]
+fn add_scaled(accumulator: &mut [f64; 3], delta: [f64; 3], scale: f64) {
+    accumulator[0] += delta[0] * scale;
+    accumulator[1] += delta[1] * scale;
+    accumulator[2] += delta[2] * scale;
 }
 
 #[cfg(test)]

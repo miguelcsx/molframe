@@ -29,7 +29,8 @@ pub struct AtomBuilder<'a> {
     frames: Vec<CoordinateBlock>,
     /// The residue being filled, and the atom names already in it.
     current: Option<ResidueKey>,
-    names_in_residue: Vec<SymbolId>,
+    atom_name_epochs: Vec<u32>,
+    residue_epoch: u32,
     /// The chain being filled.
     chain: Option<u32>,
     chain_first_residue: u32,
@@ -54,7 +55,8 @@ impl<'a> AtomBuilder<'a> {
             builder: ChunkBuilder::new(),
             frames: Vec::new(),
             current: None,
-            names_in_residue: Vec::new(),
+            atom_name_epochs: Vec::new(),
+            residue_epoch: 0,
             chain: None,
             chain_first_residue: 0,
             residue_position: 0,
@@ -68,49 +70,77 @@ impl<'a> AtomBuilder<'a> {
     /// Reads every row of the coordinate category.
     pub fn read(mut self, category: &Category) -> CoordinateStore {
         let mut rows = Rows::new(category);
-        if category.row_count() > 0 {
-            loop {
-                self.row(&rows);
-                if !rows.advance() {
-                    break;
-                }
+
+        for _ in 0..category.row_count() {
+            self.row(&rows);
+
+            if !rows.advance() {
+                break;
             }
         }
+
         self.finish()
     }
 
     fn row(&mut self, rows: &Rows<'_>) {
-        // A file that does not number its models has exactly one.
-        let model = match rows.integer("pdbx_PDB_model_num") {
-            Some(model) => model,
-            None => self.model.max(1),
-        };
-        if model != self.model {
-            self.start_model(model);
-        }
-        if self.options.only_first_model && !self.frames.is_empty() {
+        let model = self.model_of(rows);
+
+        if !self.activate_model(model) {
             return;
         }
 
         let name_text = rows
             .identifier("label_atom_id")
             .or_else(|| rows.identifier("auth_atom_id"));
+
         let element = self.element_of(rows, name_text.as_deref());
+
         if self.options.discard_hydrogens && element.is_hydrogen() {
             return;
         }
 
-        let atom_name = self.intern(match name_text.as_deref() {
-            Some(name) => name,
-            None => "",
-        });
+        let atom_name = self.intern(or_empty(name_text.as_deref()));
         let key = self.key_of(rows, model);
         let residue = self.place(rows, &key, atom_name);
 
+        self.push_atom(rows, name_text.as_deref(), element, atom_name, residue);
+    }
+
+    fn model_of(&self, rows: &Rows<'_>) -> i64 {
+        // A file that does not number its models has exactly one.
+        match rows.integer("pdbx_PDB_model_num") {
+            Some(model) => model,
+            None => self.model.max(1),
+        }
+    }
+
+    fn activate_model(&mut self, model: i64) -> bool {
+        if model == self.model {
+            return !self.options.only_first_model || self.frames.is_empty();
+        }
+
+        if self.options.only_first_model && !self.frames.is_empty() {
+            return false;
+        }
+
+        self.start_model(model);
+
+        !self.options.only_first_model || self.frames.is_empty()
+    }
+
+    fn push_atom(
+        &mut self,
+        rows: &Rows<'_>,
+        label: Option<&str>,
+        element: Element,
+        atom_name: SymbolId,
+        residue: ResidueIndex,
+    ) {
         let position = self.position_of(rows);
-        let auth_atom_name = self.auth_name_of(rows, name_text.as_deref());
+        let auth_atom_name = self.auth_name_of(rows, label);
         let alt_id = self.alt_of(rows);
-        self.builder.push(AtomRecord {
+
+        let record = AtomRecord {
             position,
             element,
             atom_name,
@@ -119,53 +149,106 @@ impl<'a> AtomBuilder<'a> {
             residue,
             occupancy: optional(rows.float("occupancy"), 1.0),
             b_factor: optional(rows.float("B_iso_or_equiv"), 0.0),
-            formal_charge: match rows.integer("pdbx_formal_charge") {
-                // A charge outside a signed byte is not a formal charge; it is
-                // a misread column, and is recorded as unstated rather than
-                // clamped to something that looks deliberate.
-                Some(charge) => match i8::try_from(charge) {
-                    Ok(charge) => (charge, Presence::Present),
-                    Err(_) => (0, Presence::Unknown),
-                },
-                None => (0, Presence::Inapplicable),
-            },
-            atom_site_id: match rows.integer("id").and_then(|id| u32::try_from(id).ok()) {
-                Some(id) => id,
-                None => 0,
-            },
-        });
+            formal_charge: formal_charge_of(rows),
+            atom_site_id: atom_site_id_of(rows),
+        };
+
+        self.builder.push(record);
         self.atom_position += 1;
     }
 
     /// Where this atom's residue sits, opening a new one if the row starts one.
     fn place(&mut self, rows: &Rows<'_>, key: &ResidueKey, atom_name: SymbolId) -> ResidueIndex {
         if self.topology_locked {
-            return match self.data.topology.residues.containing(self.atom_position) {
-                Some(residue) => residue,
-                None => ResidueIndex::new(self.residue_position.saturating_sub(1)),
-            };
+            return self.locked_residue();
         }
 
-        let repeats = self.names_in_residue.contains(&atom_name);
-        let decision = match &self.current {
-            None => Boundary::New,
+        let repeats = self.atom_name_seen(atom_name);
+        let decision = self.boundary_of(key, repeats);
+
+        self.apply_boundary(rows, key, decision);
+        self.remember_atom_name(atom_name);
+
+        self.current_residue()
+    }
+
+    fn locked_residue(&self) -> ResidueIndex {
+        match self.data.topology.residues.containing(self.atom_position) {
+            Some(residue) => residue,
+            None => self.current_residue(),
+        }
+    }
+
+    fn boundary_of(&self, key: &ResidueKey, repeats: bool) -> Boundary {
+        match self.current.as_ref() {
             Some(current) => boundary(current, key, repeats),
+            None => Boundary::New,
+        }
+    }
+
+    fn apply_boundary(&mut self, rows: &Rows<'_>, key: &ResidueKey, decision: Boundary) {
+        match decision {
+            Boundary::New => self.open_residue(rows, key),
+            Boundary::NewByFileOrder => {
+                self.report_file_order_fallback(rows);
+                self.open_residue(rows, key);
+            }
+            _ => self.check_component_identity(rows),
+        }
+    }
+
+    fn report_file_order_fallback(&mut self, rows: &Rows<'_>) {
+        if self.reported_fallback {
+            return;
+        }
+
+        self.reported_fallback = true;
+        self.findings.push(
+            Diagnostic::new(Code::W3011)
+                .in_category("atom_site")
+                .at_row(rows.row() as u32),
+        );
+    }
+
+    fn atom_name_seen(&self, atom_name: SymbolId) -> bool {
+        let Some(index) = atom_name_index(atom_name) else {
+            return false;
         };
 
-        if matches!(decision, Boundary::New | Boundary::NewByFileOrder) {
-            if decision == Boundary::NewByFileOrder && !self.reported_fallback {
-                self.reported_fallback = true;
-                self.findings.push(
-                    Diagnostic::new(Code::W3011)
-                        .in_category("atom_site")
-                        .at_row(rows.row() as u32),
-                );
-            }
-            self.open_residue(rows, key);
-        } else {
-            self.check_component_identity(rows);
+        self.atom_name_epochs.get(index).copied() == Some(self.residue_epoch)
+    }
+
+    fn remember_atom_name(&mut self, atom_name: SymbolId) {
+        let Some(index) = atom_name_index(atom_name) else {
+            return;
+        };
+
+        let Some(required_len) = index.checked_add(1) else {
+            return;
+        };
+
+        if self.atom_name_epochs.len() < required_len {
+            self.atom_name_epochs.resize(required_len, 0);
         }
-        self.names_in_residue.push(atom_name);
+
+        if let Some(epoch) = self.atom_name_epochs.get_mut(index) {
+            *epoch = self.residue_epoch;
+        }
+    }
+
+    fn begin_residue_epoch(&mut self) {
+        match self.residue_epoch.checked_add(1) {
+            Some(epoch) => {
+                self.residue_epoch = epoch;
+            }
+            None => {
+                self.atom_name_epochs.fill(0);
+                self.residue_epoch = 1;
+            }
+        }
+    }
+
+    fn current_residue(&self) -> ResidueIndex {
         ResidueIndex::new(self.residue_position.saturating_sub(1))
     }
 
@@ -178,72 +261,92 @@ impl<'a> AtomBuilder<'a> {
         let Some(comp) = rows.identifier("label_comp_id") else {
             return;
         };
+
         let Some(existing) = self
             .data
             .topology
             .residues
-            .label_comp_id(ResidueIndex::new(self.residue_position.saturating_sub(1)))
+            .label_comp_id(self.current_residue())
         else {
             return;
         };
+
         let Some(existing) = self.data.dictionary.resolve(existing) else {
             return;
         };
-        if existing != comp.as_ref() {
-            self.findings.push(
-                Diagnostic::new(Code::W3012)
-                    .in_category("atom_site")
-                    .at_row(rows.row() as u32)
-                    .with_context("component", existing.to_owned())
-                    .with_context("alternate component", comp.to_string()),
-            );
+
+        if existing == comp.as_ref() {
+            return;
         }
+
+        let diagnostic = Diagnostic::new(Code::W3012)
+            .in_category("atom_site")
+            .at_row(rows.row() as u32)
+            .with_context("component", existing)
+            .with_context("alternate component", comp.as_ref());
+
+        self.findings.push(diagnostic);
     }
 
     fn open_residue(&mut self, rows: &Rows<'_>, key: &ResidueKey) {
         self.close_residue();
-        if self.chain != Some(key.chain) {
-            self.close_chain(key.chain);
-        }
+        self.open_chain_if_needed(key.chain);
+
         self.current = Some(*key);
-        self.names_in_residue.clear();
+        self.begin_residue_epoch();
 
-        let comp = self.intern(match rows.identifier("label_comp_id").as_deref() {
-            Some(name) => name,
-            None => "",
-        });
-        let auth_comp = match rows.identifier("auth_comp_id") {
-            Some(text) => OptionalSymbol::some(self.intern(&text)),
-            None => OptionalSymbol::NONE,
-        };
-        let ins_code = match rows.identifier("pdbx_PDB_ins_code") {
-            Some(text) => OptionalSymbol::some(self.intern(&text)),
-            None => OptionalSymbol::NONE,
-        };
-        let het = rows.text("group_PDB") == Some("HETATM");
+        let record = self.residue_record(rows, key);
 
-        self.data.topology.residues.push(
-            ResidueRecord {
-                label_comp_id: comp,
-                auth_comp_id: auth_comp,
-                label_seq_id: key.label_seq,
-                auth_seq_id: key.auth_seq,
-                ins_code,
-                het,
-            },
-            self.atom_position..self.atom_position,
-        );
+        self.data
+            .topology
+            .residues
+            .push(record, self.atom_position..self.atom_position);
+
         self.residue_position += 1;
     }
 
-    fn close_residue(&mut self) {
-        if self.residue_position == 0 {
-            return;
+    fn open_chain_if_needed(&mut self, chain: u32) {
+        if self.chain != Some(chain) {
+            self.close_chain(chain);
         }
-        let residue = ResidueIndex::new(self.residue_position - 1);
+    }
+
+    fn residue_record(&mut self, rows: &Rows<'_>, key: &ResidueKey) -> ResidueRecord {
+        ResidueRecord {
+            label_comp_id: self.required_symbol_of(rows, "label_comp_id"),
+            auth_comp_id: self.optional_symbol_of(rows, "auth_comp_id"),
+            label_seq_id: key.label_seq,
+            auth_seq_id: key.auth_seq,
+            ins_code: self.optional_symbol_of(rows, "pdbx_PDB_ins_code"),
+            het: rows.text("group_PDB") == Some("HETATM"),
+        }
+    }
+
+    fn required_symbol_of(&mut self, rows: &Rows<'_>, column: &str) -> SymbolId {
+        match rows.identifier(column) {
+            Some(text) => self.intern(text.as_ref()),
+            None => self.intern(""),
+        }
+    }
+
+    fn optional_symbol_of(&mut self, rows: &Rows<'_>, column: &str) -> OptionalSymbol {
+        match rows.identifier(column) {
+            Some(text) => OptionalSymbol::some(self.intern(text.as_ref())),
+            None => OptionalSymbol::NONE,
+        }
+    }
+
+    fn close_residue(&mut self) {
+        let Some(position) = self.residue_position.checked_sub(1) else {
+            return;
+        };
+
+        let residue = ResidueIndex::new(position);
+
         let Some(range) = self.data.topology.residues.atoms(residue) else {
             return;
         };
+
         self.data
             .topology
             .residues
@@ -254,25 +357,32 @@ impl<'a> AtomBuilder<'a> {
         if let Some(label) = self.chain
             && self.residue_position > self.chain_first_residue
         {
-            let entity = self.entity();
-            self.data.topology.chains.push(
-                ChainRecord {
-                    label_asym_id: SymbolId::from_raw(label),
-                    auth_asym_id: OptionalSymbol::some(SymbolId::from_raw(label)),
-                    entity,
-                    polymer_kind: PolymerKind::Other,
-                },
-                self.chain_first_residue..self.residue_position,
-            );
+            self.push_chain(label);
         }
+
         self.chain = Some(next);
         self.chain_first_residue = self.residue_position;
+    }
+
+    fn push_chain(&mut self, label: u32) {
+        let entity = self.entity();
+
+        self.data.topology.chains.push(
+            ChainRecord {
+                label_asym_id: SymbolId::from_raw(label),
+                auth_asym_id: OptionalSymbol::some(SymbolId::from_raw(label)),
+                entity,
+                polymer_kind: PolymerKind::Other,
+            },
+            self.chain_first_residue..self.residue_position,
+        );
     }
 
     /// The entity a chain belongs to, or the single fallback one.
     fn entity(&mut self) -> EntityIndex {
         if self.data.topology.entities.is_empty() {
             let id = self.intern("1");
+
             return self.data.topology.entities.push(
                 id,
                 pdbiox_core::topology::EntityKind::Unknown,
@@ -280,51 +390,61 @@ impl<'a> AtomBuilder<'a> {
                 &[],
             );
         }
+
         EntityIndex::new(0)
     }
 
     fn start_model(&mut self, model: i64) {
         if self.model != i64::MIN {
-            self.close_chain(u32::MAX);
-            self.close_residue();
-            let builder = std::mem::replace(&mut self.builder, ChunkBuilder::new());
-            let (chunks, coords) = builder.finish();
-            if self.data.chunks.is_empty() {
-                self.data.chunks = chunks;
-            }
-            self.frames.push(coords);
-            self.topology_locked = true;
-            self.atom_position = 0;
-            self.current = None;
-            self.chain = None;
+            self.finish_model();
         }
+
         self.model = model;
     }
 
+    fn finish_model(&mut self) {
+        self.close_chain(u32::MAX);
+        self.close_residue();
+
+        let builder = std::mem::replace(&mut self.builder, ChunkBuilder::new());
+
+        let (chunks, coords) = builder.finish();
+
+        if self.data.chunks.is_empty() {
+            self.data.chunks = chunks;
+        }
+
+        self.frames.push(coords);
+        self.topology_locked = true;
+        self.atom_position = 0;
+        self.current = None;
+        self.chain = None;
+    }
+
     fn key_of(&mut self, rows: &Rows<'_>, model: i64) -> ResidueKey {
-        let chain = match rows
+        ResidueKey {
+            model,
+            chain: self.chain_of(rows),
+            label_seq: optional_i32(rows.integer("label_seq_id")),
+            auth_seq: optional_i32(rows.integer("auth_seq_id")),
+            ins_code: self.interned_raw_or_absent(rows, "pdbx_PDB_ins_code"),
+        }
+    }
+
+    fn chain_of(&mut self, rows: &Rows<'_>) -> u32 {
+        match rows
             .identifier("label_asym_id")
             .or_else(|| rows.identifier("auth_asym_id"))
         {
-            Some(text) => self.intern(&text).get(),
+            Some(text) => self.intern(text.as_ref()).get(),
             None => ResidueKey::ABSENT,
-        };
-        let ins_code = match rows.identifier("pdbx_PDB_ins_code") {
-            Some(text) => self.intern(&text).get(),
+        }
+    }
+
+    fn interned_raw_or_absent(&mut self, rows: &Rows<'_>, column: &str) -> u32 {
+        match rows.identifier(column) {
+            Some(text) => self.intern(text.as_ref()).get(),
             None => ResidueKey::ABSENT,
-        };
-        ResidueKey {
-            model,
-            chain,
-            label_seq: OptionalI32::from(
-                rows.integer("label_seq_id")
-                    .and_then(|seq| i32::try_from(seq).ok()),
-            ),
-            auth_seq: OptionalI32::from(
-                rows.integer("auth_seq_id")
-                    .and_then(|seq| i32::try_from(seq).ok()),
-            ),
-            ins_code,
         }
     }
 
@@ -340,8 +460,10 @@ impl<'a> AtomBuilder<'a> {
                     .in_category("atom_site")
                     .at_row(rows.row() as u32),
             );
+
             return None;
         };
+
         Some([x as f32, y as f32, z as f32])
     }
 
@@ -349,53 +471,59 @@ impl<'a> AtomBuilder<'a> {
         if let Some(element) = rows.text("type_symbol").and_then(Element::from_symbol) {
             return element;
         }
+
         let inferred = match name {
             Some(name) => Element::infer_from_name(name),
             None => Element::UNKNOWN,
         };
+
         self.findings.push(
             Diagnostic::new(Code::W3203)
                 .in_category("atom_site")
                 .at_row(rows.row() as u32)
                 .with_context("inferred", inferred.symbol()),
         );
+
         inferred
     }
 
     fn auth_name_of(&mut self, rows: &Rows<'_>, label: Option<&str>) -> OptionalSymbol {
-        if let Some(text) = rows.identifier("auth_atom_id")
-            && Some(text.as_ref()) != label
-        {
-            return OptionalSymbol::some(self.intern(&text));
+        match rows.identifier("auth_atom_id") {
+            Some(text) if Some(text.as_ref()) != label => {
+                OptionalSymbol::some(self.intern(text.as_ref()))
+            }
+            _ => OptionalSymbol::NONE,
         }
-        OptionalSymbol::NONE
     }
 
     fn alt_of(&mut self, rows: &Rows<'_>) -> AltId {
-        if let Some(text) = rows.identifier("label_alt_id")
-            && !text.is_empty()
-        {
-            return AltId::labelled(self.intern(&text));
+        match rows.identifier("label_alt_id") {
+            Some(text) if !text.is_empty() => AltId::labelled(self.intern(text.as_ref())),
+            _ => AltId::BLANK,
         }
-        AltId::BLANK
     }
 
     fn intern(&mut self, text: &str) -> SymbolId {
         let Ok(symbol) = self.data.dictionary.intern(text) else {
             self.findings
                 .push(Diagnostic::new(Code::E1901).with_message("the dictionary is full"));
+
             return SymbolId::from_raw(0);
         };
+
         symbol
     }
 
     fn finish(mut self) -> CoordinateStore {
         self.close_residue();
         self.close_chain(u32::MAX);
+
         let (chunks, coords) = self.builder.finish();
+
         if self.data.chunks.is_empty() {
             self.data.chunks = chunks;
         }
+
         self.frames.push(coords);
 
         self.data
@@ -403,15 +531,52 @@ impl<'a> AtomBuilder<'a> {
             .models
             .push(1, 0..self.data.topology.chains.len() as u32);
 
-        match self.frames.len() {
-            1 => match self.frames.pop() {
-                Some(block) => CoordinateStore::Single(block),
-                None => CoordinateStore::Single(CoordinateBlock::new()),
-            },
-            _ => CoordinateStore::Dense {
-                frames: self.frames,
-            },
-        }
+        coordinate_store(self.frames)
+    }
+}
+
+fn atom_name_index(atom_name: SymbolId) -> Option<usize> {
+    usize::try_from(atom_name.get()).ok()
+}
+
+fn formal_charge_of(rows: &Rows<'_>) -> (i8, Presence) {
+    match rows.integer("pdbx_formal_charge") {
+        // A charge outside a signed byte is not a formal charge; it is
+        // a misread column, and is recorded as unstated rather than
+        // clamped to something that looks deliberate.
+        Some(charge) => match i8::try_from(charge) {
+            Ok(charge) => (charge, Presence::Present),
+            Err(_) => (0, Presence::Unknown),
+        },
+        None => (0, Presence::Inapplicable),
+    }
+}
+
+fn atom_site_id_of(rows: &Rows<'_>) -> u32 {
+    rows.integer("id")
+        .and_then(|id| u32::try_from(id).ok())
+        .map_or(0, |id| id)
+}
+
+fn optional_i32(value: Option<i64>) -> OptionalI32 {
+    OptionalI32::from(value.and_then(|number| i32::try_from(number).ok()))
+}
+
+fn coordinate_store(mut frames: Vec<CoordinateBlock>) -> CoordinateStore {
+    if frames.len() != 1 {
+        return CoordinateStore::Dense { frames };
+    }
+
+    match frames.pop() {
+        Some(block) => CoordinateStore::Single(block),
+        None => CoordinateStore::Single(CoordinateBlock::new()),
+    }
+}
+
+fn or_empty(value: Option<&str>) -> &str {
+    match value {
+        Some(value) => value,
+        None => "",
     }
 }
 

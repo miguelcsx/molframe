@@ -12,9 +12,11 @@
 use crate::chunk::AtomChunk;
 use crate::coords::{CoordinateBlock, CoordinateGeneration};
 use crate::index::ModelIndex;
-use crate::symbol::Interner;
+use crate::symbol::{Interner, SymbolId};
 use crate::topology::Topology;
 use std::sync::Arc;
+
+const PLACEHOLDER_TOLERANCE: f64 = 1e-6;
 
 /// What the entry as a whole says about itself.
 ///
@@ -51,10 +53,7 @@ impl UnitCell {
     /// periodic images of a molecule that was never in a crystal.
     #[must_use]
     pub fn is_placeholder(&self) -> bool {
-        self.lengths
-            .iter()
-            .all(|length| (length - 1.0).abs() < 1e-6)
-            && self.angles.iter().all(|angle| (angle - 90.0).abs() < 1e-6)
+        values_are_near(&self.lengths, 1.0) && values_are_near(&self.angles, 90.0)
     }
 }
 
@@ -100,11 +99,11 @@ impl CoordinateStore {
     #[must_use]
     pub fn block(&self, model: ModelIndex) -> Option<&CoordinateBlock> {
         match self {
-            Self::Single(block) if model.get() == 0 => Some(block),
+            Self::Single(block) => (model.get() == 0).then_some(block),
             Self::Dense { frames } => frames.get(model.as_usize()),
             // A ragged ensemble's models are structures in their own right, and
             // a single-model store has no second model to offer.
-            Self::Single(_) | Self::Ragged { .. } => None,
+            Self::Ragged { .. } => None,
         }
     }
 
@@ -165,6 +164,13 @@ impl StructureData {
             generation: CoordinateGeneration::INITIAL,
         }
     }
+
+    pub(crate) fn atom_count(&self) -> u32 {
+        match self.chunks.last() {
+            Some(chunk) => chunk.atoms().end,
+            None => 0,
+        }
+    }
 }
 
 impl Structure {
@@ -189,7 +195,7 @@ impl Structure {
     /// The number of atoms in one model.
     #[must_use]
     pub fn atom_count(&self) -> u32 {
-        self.0.chunks.last().map_or(0, |chunk| chunk.atoms().end)
+        self.0.atom_count()
     }
 
     /// The number of models.
@@ -222,8 +228,8 @@ impl Structure {
     /// handing coordinates to a numeric array free.
     #[must_use]
     pub fn positions(&self) -> &[[f32; 3]] {
-        match self.0.coords.block(ModelIndex::new(0)) {
-            Some(block) => block.as_slice(),
+        match self.model_positions(ModelIndex::new(0)) {
+            Some(positions) => positions,
             None => &[],
         }
     }
@@ -242,7 +248,7 @@ impl Structure {
 
     /// The string an interned identifier names.
     #[must_use]
-    pub fn resolve(&self, symbol: crate::symbol::SymbolId) -> Option<&str> {
+    pub fn resolve(&self, symbol: SymbolId) -> Option<&str> {
         self.0.dictionary.resolve(symbol)
     }
 }
@@ -251,6 +257,12 @@ impl From<StructureData> for Structure {
     fn from(data: StructureData) -> Self {
         Self::new(data)
     }
+}
+
+fn values_are_near(values: &[f64], expected: f64) -> bool {
+    values
+        .iter()
+        .all(|value| (value - expected).abs() < PLACEHOLDER_TOLERANCE)
 }
 
 #[cfg(test)]

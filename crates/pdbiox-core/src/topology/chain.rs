@@ -86,22 +86,30 @@ impl ChainTable {
     /// Appends a chain covering a range of residues.
     pub fn push(&mut self, record: ChainRecord, residues: Range<u32>) -> ChainIndex {
         let position = self.label_asym_id.len() as u32;
-        self.first_residue.push(residues.start);
-        self.residue_count
-            .push(residues.end.saturating_sub(residues.start));
-        self.label_asym_id.push(record.label_asym_id);
-        self.auth_asym_id.push(record.auth_asym_id);
-        self.entity.push(record.entity);
-        self.polymer_kind.push(record.polymer_kind);
+        let first_residue = residues.start;
+        let residue_count = residues.end.saturating_sub(first_residue);
+
+        let ChainRecord {
+            label_asym_id,
+            auth_asym_id,
+            entity,
+            polymer_kind,
+        } = record;
+
+        self.first_residue.push(first_residue);
+        self.residue_count.push(residue_count);
+        self.label_asym_id.push(label_asym_id);
+        self.auth_asym_id.push(auth_asym_id);
+        self.entity.push(entity);
+        self.polymer_kind.push(polymer_kind);
+
         ChainIndex::new(position)
     }
 
     /// The residues this chain contains.
     #[must_use]
     pub fn residues(&self, chain: ChainIndex) -> Option<Range<u32>> {
-        let first = *self.first_residue.get(chain.as_usize())?;
-        let count = *self.residue_count.get(chain.as_usize())?;
-        Some(first..first.saturating_add(count))
+        stored_range(&self.first_residue, &self.residue_count, chain.as_usize())
     }
 
     /// The normalised chain label.
@@ -115,7 +123,8 @@ impl ChainTable {
     pub fn auth_asym_id(&self, chain: ChainIndex) -> Option<SymbolId> {
         self.auth_asym_id
             .get(chain.as_usize())
-            .and_then(|symbol| symbol.get())
+            .copied()
+            .and_then(OptionalSymbol::get)
     }
 
     /// The species this chain instantiates.
@@ -146,4 +155,11 @@ impl ChainTable {
     pub fn iter(&self) -> impl Iterator<Item = ChainIndex> + '_ {
         (0..self.label_asym_id.len() as u32).map(ChainIndex::new)
     }
+}
+
+fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u32>> {
+    let start = *starts.get(index)?;
+    let count = *counts.get(index)?;
+
+    Some(start..start.saturating_add(count))
 }

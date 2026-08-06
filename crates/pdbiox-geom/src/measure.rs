@@ -14,8 +14,15 @@
 //! in ångström — while summation precision is set by how many terms are summed,
 //! and a centroid over a million atoms needs the wider type.
 
+/// Squared threshold below which a vector is considered directionless.
+const DIRECTION_EPSILON_SQUARED: f64 = f64::EPSILON * f64::EPSILON;
+
 /// The vector from `from` to `to`.
+///
+/// Runs in `O(1)` time, performs all subtraction in `f64`, and allocates no
+/// heap memory.
 #[must_use]
+#[inline]
 pub fn displacement(from: [f32; 3], to: [f32; 3]) -> [f64; 3] {
     [
         f64::from(to[0]) - f64::from(from[0]),
@@ -29,10 +36,16 @@ pub fn displacement(from: [f32; 3], to: [f32; 3]) -> [f64; 3] {
 /// Prefer this wherever the result is only compared: comparing squared
 /// distances against a squared cutoff answers the same question without a
 /// square root.
+///
+/// Runs in `O(1)` time and allocates no memory.
 #[must_use]
+#[inline]
 pub fn distance_squared(a: [f32; 3], b: [f32; 3]) -> f64 {
-    let d = displacement(a, b);
-    d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+    let dx = f64::from(b[0]) - f64::from(a[0]);
+    let dy = f64::from(b[1]) - f64::from(a[1]);
+    let dz = f64::from(b[2]) - f64::from(a[2]);
+
+    dx * dx + dy * dy + dz * dz
 }
 
 /// The distance between two positions.
@@ -45,19 +58,28 @@ pub fn distance_squared(a: [f32; 3], b: [f32; 3]) -> f64 {
 /// let separation = distance([0.0, 0.0, 0.0], [3.0, 4.0, 0.0]);
 /// assert!((separation - 5.0).abs() < 1e-12);
 /// ```
+///
+/// Runs in `O(1)` time and performs exactly one square root.
 #[must_use]
+#[inline]
 pub fn distance(a: [f32; 3], b: [f32; 3]) -> f64 {
     distance_squared(a, b).sqrt()
 }
 
 /// The dot product of two vectors.
+///
+/// Runs in `O(1)` time and allocates no memory.
 #[must_use]
+#[inline]
 pub fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
 /// The cross product of two vectors.
+///
+/// Runs in `O(1)` time and allocates no heap memory.
 #[must_use]
+#[inline]
 pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [
         a[1] * b[2] - a[2] * b[1],
@@ -67,22 +89,35 @@ pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 }
 
 /// The length of a vector.
+///
+/// Runs in `O(1)` time and performs exactly one square root.
 #[must_use]
+#[inline]
 pub fn norm(vector: [f64; 3]) -> f64 {
-    dot(vector, vector).sqrt()
+    norm_squared(vector).sqrt()
 }
 
 /// The vector scaled to unit length, or `None` when it has no direction.
 ///
 /// A zero-length vector has no direction to report, and returning one anyway is
 /// how a degenerate frame turns into a plausible-looking wrong angle.
+///
+/// Runs in `O(1)` time, performs one square root and one division, and allocates
+/// no heap memory.
 #[must_use]
+#[inline]
 pub fn normalise(vector: [f64; 3]) -> Option<[f64; 3]> {
-    let length = norm(vector);
-    if length <= f64::EPSILON {
+    let squared = norm_squared(vector);
+    if squared <= DIRECTION_EPSILON_SQUARED {
         return None;
     }
-    Some([vector[0] / length, vector[1] / length, vector[2] / length])
+
+    let inverse_length = squared.sqrt().recip();
+    Some([
+        vector[0] * inverse_length,
+        vector[1] * inverse_length,
+        vector[2] * inverse_length,
+    ])
 }
 
 /// The angle at `vertex` between `a` and `c`, in radians.
@@ -98,13 +133,28 @@ pub fn normalise(vector: [f64; 3]) -> Option<[f64; 3]> {
 /// let right = angle([1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
 /// assert!(right.is_some_and(|value| (value - std::f64::consts::FRAC_PI_2).abs() < 1e-12));
 /// ```
+///
+/// Runs in `O(1)` time and allocates no heap memory.
 #[must_use]
 pub fn angle(a: [f32; 3], vertex: [f32; 3], c: [f32; 3]) -> Option<f64> {
-    let first = normalise(displacement(vertex, a))?;
-    let second = normalise(displacement(vertex, c))?;
+    let first = displacement(vertex, a);
+    let second = displacement(vertex, c);
+    let first_squared = norm_squared(first);
+    let second_squared = norm_squared(second);
+
+    if first_squared <= DIRECTION_EPSILON_SQUARED || second_squared <= DIRECTION_EPSILON_SQUARED {
+        return None;
+    }
+
+    let inverse_lengths = (first_squared * second_squared).sqrt().recip();
+
     // Clamped because rounding can push the cosine a hair outside its range,
     // and the inverse cosine of 1.0000000001 is not a number.
-    Some(dot(first, second).clamp(-1.0, 1.0).acos())
+    Some(
+        (dot(first, second) * inverse_lengths)
+            .clamp(-1.0, 1.0)
+            .acos(),
+    )
 }
 
 /// The torsion about the `b`–`c` bond, in radians, on the interval `(-π, π]`.
@@ -122,6 +172,8 @@ pub fn angle(a: [f32; 3], vertex: [f32; 3], c: [f32; 3]) -> Option<f64> {
 /// );
 /// assert!(planar.is_some_and(|value| value.abs() < 1e-9), "cis is zero");
 /// ```
+///
+/// Runs in `O(1)` time and allocates no heap memory.
 #[must_use]
 pub fn dihedral(a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3]) -> Option<f64> {
     let first = displacement(a, b);
@@ -130,22 +182,44 @@ pub fn dihedral(a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3]) -> Option<f6
 
     let left = cross(first, second);
     let right = cross(second, third);
-    let axis = normalise(second)?;
+    let second_squared = norm_squared(second);
+
+    if second_squared <= DIRECTION_EPSILON_SQUARED
+        || norm_squared(left) <= DIRECTION_EPSILON_SQUARED
+        || norm_squared(right) <= DIRECTION_EPSILON_SQUARED
+    {
+        return None;
+    }
 
     // The signed angle between the two plane normals, taken about the central
     // bond so that the sign means the same thing on every torsion.
-    let y = dot(cross(left, right), axis);
+    let inverse_axis_length = second_squared.sqrt().recip();
+    let y = dot(cross(left, right), second) * inverse_axis_length;
     let x = dot(left, right);
+
     if y == 0.0 && x == 0.0 {
         return None;
     }
+
     Some(y.atan2(x))
 }
 
 /// Converts radians to degrees, which is what torsions are reported in.
+///
+/// Runs in `O(1)` time and allocates no memory.
 #[must_use]
+#[inline]
 pub fn degrees(radians: f64) -> f64 {
     radians.to_degrees()
+}
+
+/// Returns the squared length of a vector.
+///
+/// This is the internal primitive used when only a zero test or a later single
+/// square root is required. Runs in `O(1)` time and allocates no memory.
+#[inline]
+fn norm_squared(vector: [f64; 3]) -> f64 {
+    dot(vector, vector)
 }
 
 #[cfg(test)]
