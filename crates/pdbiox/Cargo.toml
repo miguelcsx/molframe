@@ -1,0 +1,34 @@
+[package]
+name = "pdbiox"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A batteries-included structural bioinformatics engine"
+
+[dependencies]
+pdbiox-core.workspace = true
+pdbiox-cif = { workspace = true, optional = true }
+pdbiox-geom = { workspace = true, optional = true }
+pdbiox-pdb = { workspace = true, optional = true }
+
+[features]
+default = ["mmcif", "pdb", "geom", "gzip", "zstd"]
+
+# One format per feature, so a caller that reads one does not link the others.
+mmcif = ["dep:pdbiox-cif"]
+pdb = ["dep:pdbiox-pdb"]
+
+# Geometric kernels.
+geom = ["dep:pdbiox-geom"]
+
+# Ways of getting bytes in.
+gzip = ["pdbiox-core/gzip"]
+zstd = ["pdbiox-core/zstd"]
+mmap = ["pdbiox-core/mmap"]
+
+full = ["mmcif", "pdb", "geom", "gzip", "zstd", "mmap"]
+
+[lints]
+workspace = true
