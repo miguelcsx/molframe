@@ -1,0 +1,13 @@
+[package]
+name = "pdbiox-geom"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Geometric kernels for pdbiox"
+
+[dependencies]
+
+[lints]
+workspace = true
