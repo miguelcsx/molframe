@@ -1,0 +1,31 @@
+[package]
+name = "pdbiox-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core types, storage and analysis contracts for pdbiox"
+
+# 02-architecture.md §3 layer 0: `pdbiox-core` has almost no dependencies, so that
+# a downstream project wanting only the types pays for only the types. Memory
+# mapping and decompression (FR-209, FR-210) are feature-gated rather than
+# default, which keeps the default dependency list to the four named there.
+[dependencies]
+bytemuck.workspace = true
+hashbrown.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+flate2 = { workspace = true, optional = true }
+memmap2 = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
+[features]
+default = []
+mmap = ["dep:memmap2"]
+gzip = ["dep:flate2"]
+zstd = ["dep:zstd"]
+
+[lints]
+workspace = true
