@@ -1,0 +1,49 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+# `inspo/` holds clones of the reference libraries; two of them (pdbtbx, biotite)
+# carry their own Cargo.toml and must not be absorbed into this workspace.
+exclude = ["inspo"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pdbiox/pdbiox"
+description = "A batteries-included structural bioinformatics engine"
+
+[workspace.dependencies]
+pdbiox-core = { path = "crates/pdbiox-core", version = "0.1.0" }
+pdbiox-cif = { path = "crates/pdbiox-cif", version = "0.1.0" }
+pdbiox-geom = { path = "crates/pdbiox-geom", version = "0.1.0" }
+pdbiox-pdb = { path = "crates/pdbiox-pdb", version = "0.1.0" }
+pdbiox = { path = "crates/pdbiox", version = "0.1.0" }
+
+bytemuck = { version = "1", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+hashbrown = "0.16"
+indexmap = "2"
+memchr = "2"
+memmap2 = "0.9"
+smallvec = { version = "1", features = ["union"] }
+thiserror = "2"
+zstd = "0.13"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Positions are `u32` by design; conversions to and from `usize` are pervasive
+# and are checked where a position is created rather than at every use.
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+module_name_repetitions = "allow"
+# Absence is always handled with an explicit match, so that what happens when a
+# value is missing is written down at the site rather than implied by a default.
+manual_unwrap_or_default = "allow"
+manual_unwrap_or = "allow"
