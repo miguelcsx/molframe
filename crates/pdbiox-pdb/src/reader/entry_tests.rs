@@ -78,6 +78,17 @@ fn residues_carry_the_numbers_the_depositor_gave_them() {
 }
 
 #[test]
+fn conect_records_become_deduplicated_file_provenance_edges() {
+    let source = format!("{DIPEPTIDE}CONECT    1    2    3\nCONECT    2    1\n");
+    let (structure, _) = parse(&source);
+    let bonds: Vec<_> = structure.data().bonds.iter().collect();
+    assert_eq!(bonds.len(), 2);
+    assert_eq!((bonds[0].atom_a.get(), bonds[0].atom_b.get()), (0, 1));
+    assert_eq!(bonds[0].provenance, pdbiox_core::BondProvenance::File);
+    assert_eq!(bonds[0].order, pdbiox_core::BondOrder::Unknown);
+}
+
+#[test]
 fn an_insertion_code_starts_a_new_residue_rather_than_extending_one() {
     let text = "\
 ATOM      1  N   HIS L 163      1.000   1.000   1.000  1.00  0.00           N
@@ -141,6 +152,107 @@ END
         .model_positions(ModelIndex::new(1))
         .map(<[[f32; 3]]>::len);
     assert_eq!((first, second), (Some(2), Some(2)));
+    let numbers: Vec<_> = structure
+        .data()
+        .models()
+        .filter_map(pdbiox_core::structure::ModelRef::number)
+        .collect();
+    assert_eq!(numbers, [1, 2]);
+}
+
+#[test]
+fn reading_only_the_first_pdb_model_does_not_append_an_empty_frame() {
+    let text = "\
+MODEL        4
+ATOM      1  N   GLY A   1      1.000   1.000   1.000  1.00  0.00           N
+ENDMDL
+MODEL        8
+ATOM      1  N   GLY A   1      2.000   2.000   2.000  1.00  0.00           N
+ENDMDL
+END
+";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options = ReadOptions::new().only_first_model(true);
+    let (structure, _) = match read(&input, &options) {
+        Ok(result) => result,
+        Err(findings) => panic!("read failed: {findings:?}"),
+    };
+    assert_eq!(structure.model_count(), 1);
+    let number = structure
+        .data()
+        .models()
+        .next()
+        .and_then(pdbiox_core::structure::ModelRef::number);
+    assert_eq!(number, Some(4));
+}
+
+#[test]
+fn a_later_pdb_model_with_different_atom_identity_is_ragged() {
+    let text = "\
+MODEL        1
+ATOM      1  N   GLY A   1      1.000   1.000   1.000  1.00  0.00           N
+ATOM      2  CA  GLY A   1      2.000   2.000   2.000  1.00  0.00           C
+ENDMDL
+MODEL        2
+ATOM      1  N   GLY A   1      1.500   1.500   1.500  1.00  0.00           N
+ATOM      2  O   GLY A   1      2.500   2.500   2.500  1.00  0.00           O
+ENDMDL
+END
+";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options = ReadOptions::new().mode(pdbiox_core::io::ParseMode::Recover);
+    let (structure, _) = match read(&input, &options) {
+        Ok(result) => result,
+        Err(findings) => panic!("ragged read failed: {findings:?}"),
+    };
+    let Some(models) = structure.ragged_models() else {
+        panic!("identity-changing models must be ragged")
+    };
+    let names: Vec<Vec<_>> = models
+        .iter()
+        .map(|model| model.data().atoms().filter_map(AtomRef::name).collect())
+        .collect();
+    assert_eq!(names, [["N", "CA"], ["N", "O"]]);
+    let numbers: Vec<_> = structure
+        .data()
+        .models()
+        .filter_map(pdbiox_core::structure::ModelRef::number)
+        .collect();
+    assert_eq!(numbers, [1, 2]);
+}
+
+#[test]
+fn pdb_models_with_different_atom_counts_are_ragged() {
+    let text = "MODEL        1\nATOM      1  N   GLY A   1      1.000   1.000   1.000  1.00  0.00           N\nATOM      2  CA  GLY A   1      2.000   2.000   2.000  1.00  0.00           C\nENDMDL\nMODEL        2\nATOM      1  N   GLY A   1      1.500   1.500   1.500  1.00  0.00           N\nENDMDL\nEND\n";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let (structure, _) = match read(&input, &ReadOptions::new()) {
+        Ok(result) => result,
+        Err(findings) => panic!("ragged read failed: {findings:?}"),
+    };
+    let counts: Vec<_> = structure
+        .ragged_models()
+        .into_iter()
+        .flatten()
+        .map(Structure::atom_count)
+        .collect();
+    assert_eq!(counts, [2, 1]);
+}
+
+#[test]
+fn a_pdb_altloc_component_identity_is_kept_per_atom() {
+    let text = "\
+ATOM      1  N  AGLY A   1      1.000   1.000   1.000  0.50  0.00           N
+ATOM      2  CA BALA A   1      2.000   2.000   2.000  0.50  0.00           C
+END
+";
+    let (structure, findings) = parse(text);
+    let components: Vec<_> = structure
+        .data()
+        .atoms()
+        .filter_map(AtomRef::component_name)
+        .collect();
+    assert_eq!(components, ["GLY", "ALA"]);
+    assert!(findings.iter().any(|finding| finding.code() == Code::W3012));
 }
 
 #[test]
@@ -188,7 +300,12 @@ ATOM      1  N   GLY A   1       abcd   1.000   1.000  1.00  0.00           N
 ATOM      2  CA  GLY A   1      2.000   2.000   2.000  1.00  0.00           C
 END
 ";
-    let (structure, findings) = parse(text);
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options = ReadOptions::new().mode(pdbiox_core::io::ParseMode::Recover);
+    let (structure, findings) = match read(&input, &options) {
+        Ok(result) => result,
+        Err(findings) => panic!("recover mode refused: {findings:?}"),
+    };
     assert_eq!(
         structure.atom_count(),
         2,
@@ -199,6 +316,17 @@ END
     let positions: Vec<_> = structure.data().atoms().map(AtomRef::position).collect();
     assert_eq!(positions.first().copied(), Some(None));
     assert!(positions.get(1).copied().flatten().is_some());
+}
+
+#[test]
+fn an_invalidating_coordinate_refuses_permissive_mode() {
+    let text = "\
+ATOM      1  N   GLY A   1       abcd   1.000   1.000  1.00  0.00           N
+END
+";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let refused = read(&input, &ReadOptions::new());
+    assert!(refused.is_err());
 }
 
 #[test]
