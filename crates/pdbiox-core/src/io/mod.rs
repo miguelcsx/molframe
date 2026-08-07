@@ -2,6 +2,8 @@
 
 mod format;
 mod input;
+mod output;
 
 pub use format::{Format, ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll};
-pub use input::{Compression, InputBuffer, Limits};
+pub use input::{Compression, InputBuffer, InputKind, Limits};
+pub use output::write_output;
