@@ -1,12 +1,8 @@
 # Contributing to pdbiox
 
-pdbiox is **specification-first**. `docs/` is normative: it is what gets built, and it is written before the code. If you are about to write code that `docs/` does not describe, the specification change comes first.
+pdbiox is **specification-first**: the specification is written before the code, and it is normative. If you are about to write code that the specification does not describe, the specification change comes first.
 
-Read these three before your first contribution:
-
-1. [`docs/00-vision-and-scope.md`](docs/00-vision-and-scope.md) — what pdbiox is and, importantly, is not
-2. [`docs/02-architecture.md`](docs/02-architecture.md) — the crate graph and the inward-dependency rule
-3. [`docs/01-requirements.md`](docs/01-requirements.md) — the contract every change is traceable to
+Before your first contribution, read the vision-and-scope (what pdbiox is and, importantly, is not), the architecture (the crate graph and the inward-dependency rule) and the requirements (the contract every change is traceable to).
 
 ---
 
@@ -16,23 +12,23 @@ Every pull request passes all eight. They are listed in the order they are usual
 
 ### 1. Traceable to a requirement
 
-Your change implements an `FR-nnn` or `NFR-nnn` from `docs/01-requirements.md`, or it adds one. Cite it in the PR description.
+Your change implements an `FR-nnn` or `NFR-nnn` from the requirements, or it adds one. Cite it in the PR description.
 
 A change that is not traceable is either scope creep or a missing requirement, and both need discussion before code.
 
 ### 2. `PARITY.md` updated in the same change
 
-**NFR-608.** Adding or removing a capability updates its row in `docs/PARITY.md` — status, owning crate, phase. Not in a follow-up.
+**NFR-608.** Adding or removing a capability updates its row in `PARITY.md` — status, owning crate, phase. Not in a follow-up.
 
 A `✓` requires a golden workflow (gate 3). A `≈` requires a phase for going native. A `–` requires a written argument.
 
 ### 3. A golden workflow
 
-New capabilities get an entry in `docs/21-benchmarks.md` — executable, measured, doubling as a correctness fixture. This is what makes a `✓` in `PARITY.md` mean something.
+New capabilities get an entry in the benchmarks catalogue — executable, measured, doubling as a correctness fixture. This is what makes a `✓` in `PARITY.md` mean something.
 
 ### 4. A differential test
 
-If a reference library does this, compare against it under matched policies (`docs/20-testing.md` §5). Classify every divergence:
+If a reference library does this, compare against it under matched policies (testing conventions §5). Classify every divergence:
 
 - **pdbiox is wrong** — fix it, add a regression test
 - **the reference is wrong** — document it, report upstream, assert pdbiox's behaviour
@@ -61,11 +57,11 @@ CI enforces this with a dependency allowlist and a Python-source check.
 
 pdbtbx (MIT), Biopython and Biotite (BSD) are adaptable with attribution.
 
-Full table in `docs/23-governance.md` §1.1.
+Full table in the governance document §1.1.
 
 ### 8. An ADR for architectural decisions
 
-**NFR-606.** Changing how something fundamental works? Write an ADR first, using `docs/adr/0000-template.md`.
+**NFR-606.** Changing how something fundamental works? Write an ADR first, using the ADR template.
 
 ADRs are immutable once accepted — a change of mind is a *new* ADR that supersedes the old one. And they must include **rejected alternatives with reasons**; an ADR listing only benefits is incomplete and will be sent back.
 
@@ -75,9 +71,6 @@ ADRs are immutable once accepted — a change of mind is a *new* ADR that supers
 
 ```bash
 git clone <repo> && cd pdbiox
-
-# corpus (not vendored — inspo/ is 737 MB of third-party history)
-./corpus/fetch.sh
 
 cargo build --workspace
 cargo test  --workspace
@@ -92,7 +85,7 @@ mypy --strict python/
 # benchmarks (dedicated machine; shared runners give noise, not data)
 cargo bench
 
-# specification checks
+# specification checks (requires the spec tree)
 ./scripts/check-docs.sh
 ```
 
@@ -119,7 +112,7 @@ A test name should make a CI failure readable without opening the file.
 
 **Kernels:** no string comparison (dictionary ids), no `sqrt` (compare squared distances), no unconditional parallelism (threshold-gate it).
 
-Full anti-pattern list: `docs/19-performance.md` §9.
+Full anti-pattern list: see the performance notes before writing kernels.
 
 ## Where things go
 
@@ -140,7 +133,7 @@ Full anti-pattern list: `docs/19-performance.md` §9.
 | Tensor or graph export | `pdbiox-ml` |
 | A library bridge | `pdbiox-adapters` |
 
-Unsure? The layering rules in `docs/02-architecture.md` §2 usually answer it: put it in the lowest layer that can hold it without adding a dependency.
+Unsure? The layering rules usually answer it: put it in the lowest layer that can hold it without adding a dependency.
 
 ## Reporting bugs
 
@@ -150,8 +143,8 @@ Include: pdbiox version, platform, a minimal input file (or its PDB ID), the exa
 
 ## Proposing capabilities
 
-1. Check `docs/PARITY.md` — it may already have a row and a phase.
-2. Check `docs/00-vision-and-scope.md` §4.2 — it may be deliberately another domain.
+1. Check `PARITY.md` — it may already have a row and a phase.
+2. Check the scope — it may be deliberately another domain.
 3. Open a discussion with: the requirement it satisfies, the crate it belongs in, the prior art, and the golden workflow that would demonstrate it.
 
 Under ADR-0014 the default answer to "should pdbiox do this?" is **yes, if it is structural bioinformatics**. The scope boundary is domain, not effort.
@@ -160,7 +153,7 @@ Under ADR-0014 the default answer to "should pdbiox do this?" is **yes, if it is
 
 Reviewers check the eight gates, and then:
 
-- Does it hold the complexity budget (`docs/09-spatial-and-geometry.md` §1)?
+- Does it hold the complexity budget?
 - Is it deterministic — independent of thread count, hash order and allocator?
 - Does it compute `Coverage` honestly?
 - Does it record what it decided on the user's behalf?

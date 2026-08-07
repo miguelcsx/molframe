@@ -16,10 +16,10 @@ numbers. Not `FR-306`, not `04-storage-layout.md §7`, not `ADR-0009`.
 Explain the reasoning in its own terms instead. Docstrings should still be
 thorough — the rule removes a pointer, not the explanation it pointed at.
 
-**Why.** `docs/` is a separate artefact with its own lifecycle. It will be
-renumbered, split and rewritten, and every citation in the code becomes a lie the
-moment it is. A comment that says *why* stays true; a comment that says *where it
-was decided* does not.
+**Why.** The specification is a separate artefact with its own lifecycle. It
+will be renumbered, split and rewritten, and every citation in the code becomes
+a lie the moment it is. A comment that says *why* stays true; a comment that
+says *where it was decided* does not.
 
 **In practice.**
 
@@ -109,9 +109,9 @@ correct the result is.
   per-residue — see `crates/pdbiox-core/src/optional.rs`.
 - Compare squared distances against a squared cutoff; take the square root only
   when a caller wants a length.
-- Read the data-design reasoning in `docs/` before inventing a new layout. The
-  chunked columnar store, the dictionary encoding and late materialisation are
-  there for reasons that are written down.
+- Read the data-design reasoning in the specification before inventing a new
+  layout. The chunked columnar store, the dictionary encoding and late
+  materialisation are there for reasons that are written down.
 
 ---
 
