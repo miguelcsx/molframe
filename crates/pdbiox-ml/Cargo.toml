@@ -1,0 +1,18 @@
+[package]
+name = "pdbiox-ml"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Arrow and machine-learning interoperability for pdbiox"
+
+[dependencies]
+arrow.workspace = true
+pdbiox-core.workspace = true
+
+[dev-dependencies]
+pdbiox-cif.workspace = true
+
+[lints]
+workspace = true
