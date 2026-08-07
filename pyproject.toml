@@ -1,0 +1,15 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pdbiox"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["numpy>=2"]
+
+[tool.maturin]
+manifest-path = "crates/pdbiox-py/Cargo.toml"
+python-source = "python"
+module-name = "pdbiox._native"
+features = ["pyo3/extension-module"]
