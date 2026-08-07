@@ -1,0 +1,36 @@
+use pdbiox_core::io::{InputBuffer, ReadOptions};
+
+const SOURCE: &str = "data_bond\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 C CA GLY A 1 0 0 0\nATOM 2 N N GLY A 1 1 0 0\n\
+loop_\n_struct_conn.id\n_struct_conn.conn_type_id\n\
+_struct_conn.ptnr1_label_asym_id\n_struct_conn.ptnr1_label_seq_id\n\
+_struct_conn.ptnr1_label_comp_id\n_struct_conn.ptnr1_label_atom_id\n\
+_struct_conn.ptnr2_label_asym_id\n_struct_conn.ptnr2_label_seq_id\n\
+_struct_conn.ptnr2_label_comp_id\n_struct_conn.ptnr2_label_atom_id\n\
+_struct_conn.pdbx_value_order\n1 covale A 1 GLY CA A 1 GLY N SING\n";
+
+#[test]
+fn struct_conn_resolves_label_endpoints_order_and_file_provenance() {
+    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
+    let (structure, _) = crate::read(&input, &ReadOptions::new()).expect("fixture reads");
+    let bond = structure.data().bonds.iter().next().expect("bond exists");
+    assert_eq!((bond.atom_a.get(), bond.atom_b.get()), (0, 1));
+    assert_eq!(bond.order, pdbiox_core::BondOrder::Single);
+    assert_eq!(bond.provenance, pdbiox_core::BondProvenance::File);
+}
+
+#[test]
+fn canonical_round_trip_keeps_connectivity_order_and_provenance() {
+    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
+    let (structure, _) = crate::read(&input, &ReadOptions::new()).expect("fixture reads");
+    let written = crate::write_canonical(&structure);
+    let input = InputBuffer::from_bytes(written.into_bytes());
+    let (round_trip, _) = crate::read(&input, &ReadOptions::new()).expect("output reads");
+    assert_eq!(
+        structure.data().bonds.iter().collect::<Vec<_>>(),
+        round_trip.data().bonds.iter().collect::<Vec<_>>()
+    );
+}
