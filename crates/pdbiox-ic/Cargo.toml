@@ -1,0 +1,18 @@
+[package]
+name = "pdbiox-ic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Internal-coordinate conversion and rebuilding for pdbiox"
+
+[dependencies]
+pdbiox-core.workspace = true
+pdbiox-geom.workspace = true
+
+[dev-dependencies]
+pdbiox-cif.workspace = true
+
+[lints]
+workspace = true
