@@ -1,0 +1,21 @@
+[package]
+name = "pdbiox-spatial"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deterministic spatial indices and neighbour search for pdbiox"
+
+[dependencies]
+pdbiox-core.workspace = true
+pdbiox-query.workspace = true
+thiserror.workspace = true
+wide.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+pdbiox-cif.workspace = true
+
+[lints]
+workspace = true
