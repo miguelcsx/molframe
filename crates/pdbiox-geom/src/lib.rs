@@ -15,11 +15,15 @@
 #![allow(clippy::many_single_char_names, clippy::similar_names)]
 
 pub mod eigen;
+pub mod matrix;
 pub mod measure;
 pub mod moments;
+pub mod path;
+pub mod polymer;
 pub mod superpose;
 pub mod transform;
 
+pub use matrix::{DistanceMatrix, distance_matrix, distance_matrix_between};
 pub use measure::{
     angle, cross, degrees, dihedral, displacement, distance, distance_squared, dot, norm, normalise,
 };
@@ -27,5 +31,7 @@ pub use moments::{
     asphericity, centre_of_mass, centroid, gyration_axes, inertia_tensor, principal_axes,
     radius_of_gyration,
 };
+pub use path::path_torsions;
+pub use polymer::{BackboneResidue, BackboneTorsions, backbone_torsions};
 pub use superpose::{SuperposeError, Superposition, rmsd, superpose};
 pub use transform::Rigid;
