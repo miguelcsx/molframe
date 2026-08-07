@@ -118,9 +118,33 @@ registry! {
     E3010 = Error 3010, Invalidating,
         "models share a coordinate set but not an atom count",
         "the models differ in composition and must be held as a ragged ensemble rather than as frames";
+    E3011 = Error 3011, Invalidating,
+        "custom annotation length disagrees with the atom count",
+        "supply exactly one annotation row for every atom row";
+    E3012 = Error 3012, Invalidating,
+        "structures cannot share one merged model axis",
+        "merge structures with equal dense model counts, or keep unlike models as a ragged ensemble";
+    E3013 = Error 3013, Invalidating,
+        "custom annotation types disagree across structures",
+        "convert same-named annotation columns to one physical type before merging";
+    E3014 = Error 3014, Invalidating,
+        "domain extensions would be invalidated by a topology change",
+        "explicitly clear extensions before editing topology or merging structures";
+    E3201 = Error 3201, Invalidating,
+        "bundled chemistry reference data is invalid",
+        "reinstall pdbiox from a verified distribution";
     E3401 = Error 3401, Invalidating,
         "topology and coordinate atom counts disagree",
         "check that the coordinate source and the topology source describe the same system";
+    E4001 = Error 4001, Invalidating,
+        "selection syntax is invalid",
+        "correct the selection at the reported token";
+    E4002 = Error 4002, Invalidating,
+        "selection value is incompatible with its column",
+        "use a value of the column's declared type";
+    E4003 = Error 4003, Invalidating,
+        "selection requires data this structure does not carry",
+        "provide the required annotations or choose a selector available for this structure";
     E4004 = Error 4004, Invalidating,
         "unknown selection keyword",
         "check the spelling against the keyword list; an annotation column can also be selected by its own name";
@@ -169,6 +193,48 @@ registry! {
     E6005 = Error 6005, Invalidating,
         "verdict profile not found",
         "list the registered profiles; profile names carry a version";
+    E6006 = Error 6006, Invalidating,
+        "requested chain does not exist",
+        "check the chain count or resolve the chain label before editing";
+    E6007 = Error 6007, Invalidating,
+        "identifier is empty",
+        "supply a non-empty identifier";
+    E6008 = Error 6008, Invalidating,
+        "a whole-ensemble coordinate edit requires shared topology",
+        "edit each ragged model snapshot independently";
+    E6009 = Error 6009, Invalidating,
+        "an atom selected for editing does not exist",
+        "restrict the selection to the structure atom range";
+    E6010 = Error 6010, Invalidating,
+        "assembly operator expression is malformed",
+        "use comma-separated identifiers and integer ranges, with each product factor in parentheses";
+    E6011 = Error 6011, Invalidating,
+        "assembly operator expression exceeds the instance limit",
+        "reduce the operator product or raise the explicit assembly limit";
+    E6012 = Error 6012, Invalidating,
+        "assembly category contains a malformed required value",
+        "correct the named assembly category item and row";
+    E6013 = Error 6013, Invalidating,
+        "assembly generator references an unknown definition",
+        "correct the referenced assembly, operator, or label-asym identifier";
+    E6014 = Error 6014, Invalidating,
+        "non-crystallographic symmetry operator is malformed",
+        "correct the NCS identifier, given/generate code, matrix, or translation vector";
+    E6015 = Error 6015, Invalidating,
+        "crystallographic symmetry metadata or algebraic operation is malformed",
+        "correct the space-group number, operation identifier, or fractional xyz expression";
+    E6016 = Error 6016, Invalidating,
+        "crystal neighbour search configuration is incomplete or invalid",
+        "supply explicit symmetry operators, a valid model, and a positive finite cutoff";
+    E6017 = Error 6017, Invalidating,
+        "crystal neighbour search exceeds its candidate-image limit",
+        "reduce the cutoff or raise the explicit search limit after reviewing the expected cost";
+    E6018 = Error 6018, Invalidating,
+        "space-group setting is unknown or the bundled catalogue is invalid",
+        "supply a valid Hall symbol or International Tables number, or reinstall pdbiox";
+    E7901 = Error 7901, Invalidating,
+        "output could not be written",
+        "check the destination, permissions and available storage, then retry";
     E9001 = Error 9001, Breaking,
         "internal invariant violated",
         "report this as a pdbiox bug with the input that produced it; no input should be able to cause this";
