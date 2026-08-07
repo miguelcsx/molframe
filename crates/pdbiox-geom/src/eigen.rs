@@ -137,8 +137,10 @@ fn rotate<const N: usize>(
     let cos = 1.0 / t.hypot(1.0);
     let sin = t * cos;
 
-    for k in 0..N {
+    let mut k = 0;
+    while k < N {
         if k == p || k == q {
+            k += 1;
             continue;
         }
 
@@ -151,6 +153,7 @@ fn rotate<const N: usize>(
         work[p][k] = rotated_p;
         work[k][q] = rotated_q;
         work[q][k] = rotated_q;
+        k += 1;
     }
 
     work[p][p] = app - t * apq;
@@ -225,9 +228,8 @@ fn symmetric_from_upper<const N: usize>(matrix: &[[f64; N]; N]) -> [[f64; N]; N]
 fn off_diagonal_squared_norm<const N: usize>(matrix: &[[f64; N]; N]) -> f64 {
     let mut total = 0.0;
 
-    for p in 0..N {
-        for q in (p + 1)..N {
-            let value = matrix[p][q];
+    for (p, row) in matrix.iter().enumerate() {
+        for value in row.iter().skip(p + 1) {
             total += value * value;
         }
     }
