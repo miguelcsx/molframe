@@ -2,6 +2,7 @@ hooks
 build
 core
 cif
+bcif
 pdb
 geom
 cli
@@ -10,6 +11,9 @@ query
 spatial
 chem
 xtal
+ic
+ml
+mmap
 surface
 traj
 compare
