@@ -10,17 +10,18 @@ use crate::index::ResidueIndex;
 use crate::optional::{OptionalI32, OptionalSymbol};
 use crate::symbol::SymbolId;
 use std::ops::Range;
+use std::sync::Arc;
 
 /// The residues of a structure.
 #[derive(Clone, Debug, Default)]
 pub struct ResidueTable {
-    first_atom: Vec<u32>,
-    atom_count: Vec<u32>,
-    label_comp_id: Vec<SymbolId>,
-    auth_comp_id: Vec<OptionalSymbol>,
-    label_seq_id: Vec<OptionalI32>,
-    auth_seq_id: Vec<OptionalI32>,
-    ins_code: Vec<OptionalSymbol>,
+    first_atom: Arc<Vec<u32>>,
+    atom_count: Arc<Vec<u32>>,
+    label_comp_id: Arc<Vec<SymbolId>>,
+    auth_comp_id: Arc<Vec<OptionalSymbol>>,
+    label_seq_id: Arc<Vec<OptionalI32>>,
+    auth_seq_id: Arc<Vec<OptionalI32>>,
+    ins_code: Arc<Vec<OptionalSymbol>>,
     het: BitVec,
 }
 
@@ -57,27 +58,14 @@ impl ResidueTable {
     /// Appends a residue covering a range of atoms.
     pub fn push(&mut self, record: ResidueRecord, atoms: Range<u32>) -> ResidueIndex {
         let position = self.label_comp_id.len() as u32;
-        let first_atom = atoms.start;
-        let atom_count = atoms.end.saturating_sub(first_atom);
-
-        let ResidueRecord {
-            label_comp_id,
-            auth_comp_id,
-            label_seq_id,
-            auth_seq_id,
-            ins_code,
-            het,
-        } = record;
-
-        self.first_atom.push(first_atom);
-        self.atom_count.push(atom_count);
-        self.label_comp_id.push(label_comp_id);
-        self.auth_comp_id.push(auth_comp_id);
-        self.label_seq_id.push(label_seq_id);
-        self.auth_seq_id.push(auth_seq_id);
-        self.ins_code.push(ins_code);
-        self.het.push(het);
-
+        Arc::make_mut(&mut self.first_atom).push(atoms.start);
+        Arc::make_mut(&mut self.atom_count).push(atoms.end.saturating_sub(atoms.start));
+        Arc::make_mut(&mut self.label_comp_id).push(record.label_comp_id);
+        Arc::make_mut(&mut self.auth_comp_id).push(record.auth_comp_id);
+        Arc::make_mut(&mut self.label_seq_id).push(record.label_seq_id);
+        Arc::make_mut(&mut self.auth_seq_id).push(record.auth_seq_id);
+        Arc::make_mut(&mut self.ins_code).push(record.ins_code);
+        self.het.push(record.het);
         ResidueIndex::new(position)
     }
 
@@ -87,20 +75,13 @@ impl ResidueTable {
     /// atom needs this; nothing else should reach for it, because moving a
     /// residue's atoms without moving its neighbours' breaks the tiling.
     pub fn set_atoms(&mut self, residue: ResidueIndex, atoms: Range<u32>) {
-        let index = residue.as_usize();
-        let first_atom = atoms.start;
-        let atom_count = atoms.end.saturating_sub(first_atom);
-
-        let Some(first_slot) = self.first_atom.get_mut(index) else {
+        let Some(first) = Arc::make_mut(&mut self.first_atom).get_mut(residue.as_usize()) else {
             return;
         };
-
-        let Some(count_slot) = self.atom_count.get_mut(index) else {
-            return;
-        };
-
-        *first_slot = first_atom;
-        *count_slot = atom_count;
+        *first = atoms.start;
+        if let Some(count) = Arc::make_mut(&mut self.atom_count).get_mut(residue.as_usize()) {
+            *count = atoms.end.saturating_sub(atoms.start);
+        }
     }
 
     /// The atoms this residue contains.

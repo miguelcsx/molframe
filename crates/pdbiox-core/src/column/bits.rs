@@ -10,13 +10,15 @@
 //! which is worth paying for a column read once per atom and not worth paying
 //! for one a kernel reads on every iteration.
 
+use std::sync::Arc;
+
 /// A compact set of bits.
 ///
 /// Iteration yields set positions rather than every position, so walking a
 /// sparse mask costs one step per member instead of one per candidate.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct BitVec {
-    words: Vec<u64>,
+    words: Arc<Vec<u64>>,
     len: u32,
 }
 
@@ -25,9 +27,9 @@ const BITS: u32 = u64::BITS;
 impl BitVec {
     /// Creates an empty set.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            words: Vec::new(),
+            words: Arc::new(Vec::new()),
             len: 0,
         }
     }
@@ -36,7 +38,7 @@ impl BitVec {
     #[must_use]
     pub fn repeat(value: bool, len: u32) -> Self {
         let word = if value { u64::MAX } else { 0 };
-        let words = vec![word; word_count(len)];
+        let words = Arc::new(vec![word; word_count(len)]);
         let mut bits = Self { words, len };
 
         bits.clear_tail();
@@ -47,7 +49,7 @@ impl BitVec {
     #[must_use]
     pub fn with_capacity(len: u32) -> Self {
         Self {
-            words: Vec::with_capacity(word_count(len)),
+            words: Arc::new(Vec::with_capacity(word_count(len))),
             len: 0,
         }
     }
@@ -69,7 +71,7 @@ impl BitVec {
         let position = self.len;
 
         if position.is_multiple_of(BITS) {
-            self.words.push(0);
+            Arc::make_mut(&mut self.words).push(0);
         }
 
         self.len += 1;
@@ -78,7 +80,7 @@ impl BitVec {
             return;
         }
 
-        if let Some(word) = self.words.last_mut() {
+        if let Some(word) = Arc::make_mut(&mut self.words).last_mut() {
             *word |= bit_mask(position);
         }
     }
@@ -106,8 +108,7 @@ impl BitVec {
         if position >= self.len {
             return;
         }
-
-        let Some(word) = self.words.get_mut(word_index(position)) else {
+        let Some(word) = Arc::make_mut(&mut self.words).get_mut(word_index(position)) else {
             return;
         };
 
@@ -177,12 +178,13 @@ impl BitVec {
     /// Keeps only the bits also set in `other`.
     pub fn intersect_with(&mut self, other: &Self) {
         let shared = self.words.len().min(other.words.len());
+        let words = Arc::make_mut(&mut self.words);
 
-        for (word, other_word) in self.words[..shared].iter_mut().zip(&other.words[..shared]) {
+        for (word, other_word) in words[..shared].iter_mut().zip(&other.words[..shared]) {
             *word &= *other_word;
         }
 
-        for word in &mut self.words[shared..] {
+        for word in &mut words[shared..] {
             *word = 0;
         }
     }
@@ -192,7 +194,10 @@ impl BitVec {
     /// Bits of `other` beyond this set's length are ignored; the length is a
     /// property of the structure, not of the operation.
     pub fn union_with(&mut self, other: &Self) {
-        for (word, other_word) in self.words.iter_mut().zip(&other.words) {
+        for (word, other_word) in Arc::make_mut(&mut self.words)
+            .iter_mut()
+            .zip(other.words.iter())
+        {
             *word |= *other_word;
         }
 
@@ -201,7 +206,7 @@ impl BitVec {
 
     /// Inverts every bit.
     pub fn invert(&mut self) {
-        for word in &mut self.words {
+        for word in Arc::make_mut(&mut self.words) {
             *word = !*word;
         }
 
@@ -216,8 +221,7 @@ impl BitVec {
         if used == 0 {
             return;
         }
-
-        if let Some(word) = self.words.last_mut() {
+        if let Some(word) = Arc::make_mut(&mut self.words).last_mut() {
             *word &= low_mask(used);
         }
     }

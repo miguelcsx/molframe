@@ -10,6 +10,7 @@ use crate::index::{ChainIndex, EntityIndex};
 use crate::optional::OptionalSymbol;
 use crate::symbol::SymbolId;
 use std::ops::Range;
+use std::sync::Arc;
 
 /// What kind of polymer a chain is, where it is one.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -62,12 +63,12 @@ pub struct ChainRecord {
 /// The chain table.
 #[derive(Clone, Debug, Default)]
 pub struct ChainTable {
-    first_residue: Vec<u32>,
-    residue_count: Vec<u32>,
-    label_asym_id: Vec<SymbolId>,
-    auth_asym_id: Vec<OptionalSymbol>,
-    entity: Vec<EntityIndex>,
-    polymer_kind: Vec<PolymerKind>,
+    first_residue: Arc<Vec<u32>>,
+    residue_count: Arc<Vec<u32>>,
+    label_asym_id: Arc<Vec<SymbolId>>,
+    auth_asym_id: Arc<Vec<OptionalSymbol>>,
+    entity: Arc<Vec<EntityIndex>>,
+    polymer_kind: Arc<Vec<PolymerKind>>,
 }
 
 impl ChainTable {
@@ -86,23 +87,12 @@ impl ChainTable {
     /// Appends a chain covering a range of residues.
     pub fn push(&mut self, record: ChainRecord, residues: Range<u32>) -> ChainIndex {
         let position = self.label_asym_id.len() as u32;
-        let first_residue = residues.start;
-        let residue_count = residues.end.saturating_sub(first_residue);
-
-        let ChainRecord {
-            label_asym_id,
-            auth_asym_id,
-            entity,
-            polymer_kind,
-        } = record;
-
-        self.first_residue.push(first_residue);
-        self.residue_count.push(residue_count);
-        self.label_asym_id.push(label_asym_id);
-        self.auth_asym_id.push(auth_asym_id);
-        self.entity.push(entity);
-        self.polymer_kind.push(polymer_kind);
-
+        Arc::make_mut(&mut self.first_residue).push(residues.start);
+        Arc::make_mut(&mut self.residue_count).push(residues.end.saturating_sub(residues.start));
+        Arc::make_mut(&mut self.label_asym_id).push(record.label_asym_id);
+        Arc::make_mut(&mut self.auth_asym_id).push(record.auth_asym_id);
+        Arc::make_mut(&mut self.entity).push(record.entity);
+        Arc::make_mut(&mut self.polymer_kind).push(record.polymer_kind);
         ChainIndex::new(position)
     }
 
@@ -110,6 +100,19 @@ impl ChainTable {
     #[must_use]
     pub fn residues(&self, chain: ChainIndex) -> Option<Range<u32>> {
         stored_range(&self.first_residue, &self.residue_count, chain.as_usize())
+    }
+
+    /// Finds the chain whose contiguous range contains `residue`.
+    ///
+    /// Chain ranges are ordered, so this is logarithmic in the chain count.
+    #[must_use]
+    pub fn containing(&self, residue: u32) -> Option<ChainIndex> {
+        let candidate = self
+            .first_residue
+            .partition_point(|first| *first <= residue)
+            .checked_sub(1)?;
+        let chain = ChainIndex::new(candidate as u32);
+        self.residues(chain)?.contains(&residue).then_some(chain)
     }
 
     /// The normalised chain label.
@@ -127,6 +130,26 @@ impl ChainTable {
             .and_then(OptionalSymbol::get)
     }
 
+    /// Replaces both chain namespaces with one explicit label.
+    ///
+    /// Renaming both prevents a writer from silently preferring the old
+    /// depositor label over the requested new normalised label.
+    pub fn rename(&mut self, chain: ChainIndex, label: SymbolId) -> bool {
+        let position = chain.as_usize();
+        if position >= self.label_asym_id.len() || position >= self.auth_asym_id.len() {
+            return false;
+        }
+        let Some(normalised) = Arc::make_mut(&mut self.label_asym_id).get_mut(position) else {
+            return false;
+        };
+        *normalised = label;
+        let Some(depositor) = Arc::make_mut(&mut self.auth_asym_id).get_mut(position) else {
+            return false;
+        };
+        *depositor = OptionalSymbol::some(label);
+        true
+    }
+
     /// The species this chain instantiates.
     #[must_use]
     pub fn entity(&self, chain: ChainIndex) -> Option<EntityIndex> {
@@ -137,6 +160,15 @@ impl ChainTable {
     #[must_use]
     pub fn polymer_kind(&self, chain: ChainIndex) -> Option<PolymerKind> {
         self.polymer_kind.get(chain.as_usize()).copied()
+    }
+
+    /// Reclassifies a chain after component chemistry has been resolved.
+    pub fn set_polymer_kind(&mut self, chain: ChainIndex, kind: PolymerKind) -> bool {
+        let Some(value) = Arc::make_mut(&mut self.polymer_kind).get_mut(chain.as_usize()) else {
+            return false;
+        };
+        *value = kind;
+        true
     }
 
     /// Every chain that instantiates `entity`.

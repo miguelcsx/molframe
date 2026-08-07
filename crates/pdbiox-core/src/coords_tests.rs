@@ -31,6 +31,24 @@ fn the_slice_stops_at_the_position_count_not_at_the_lane_boundary() {
 }
 
 #[test]
+fn a_cloned_block_shares_storage_until_one_copy_is_edited() {
+    let original: CoordinateBlock = [[1.0, 2.0, 3.0]].into_iter().collect();
+    let mut edited = original.clone();
+    assert!(std::ptr::eq(
+        original.as_slice().as_ptr(),
+        edited.as_slice().as_ptr()
+    ));
+
+    edited.as_mut_slice()[0][0] = 9.0;
+    assert!(!std::ptr::eq(
+        original.as_slice().as_ptr(),
+        edited.as_slice().as_ptr()
+    ));
+    assert_eq!(original.as_slice()[0][0], 1.0);
+    assert_eq!(edited.as_slice()[0][0], 9.0);
+}
+
+#[test]
 fn a_range_past_the_end_yields_nothing_rather_than_a_short_slice() {
     let block: CoordinateBlock = (0..5).map(|_| [0.0; 3]).collect();
     assert!(block.range(0..5).is_some());

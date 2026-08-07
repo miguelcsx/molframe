@@ -2,13 +2,14 @@
 
 use crate::index::ModelIndex;
 use std::ops::Range;
+use std::sync::Arc;
 
 /// The models of a structure, in deposition order.
 #[derive(Clone, Debug, Default)]
 pub struct ModelTable {
-    first_chain: Vec<u32>,
-    chain_count: Vec<u32>,
-    model_num: Vec<i32>,
+    first_chain: Arc<Vec<u32>>,
+    chain_count: Arc<Vec<u32>>,
+    model_num: Arc<Vec<i32>>,
 }
 
 impl ModelTable {
@@ -27,13 +28,9 @@ impl ModelTable {
     /// Appends a model covering a range of chains.
     pub fn push(&mut self, model_num: i32, chains: Range<u32>) -> ModelIndex {
         let position = self.model_num.len() as u32;
-        let first_chain = chains.start;
-        let chain_count = chains.end.saturating_sub(first_chain);
-
-        self.first_chain.push(first_chain);
-        self.chain_count.push(chain_count);
-        self.model_num.push(model_num);
-
+        Arc::make_mut(&mut self.first_chain).push(chains.start);
+        Arc::make_mut(&mut self.chain_count).push(chains.end.saturating_sub(chains.start));
+        Arc::make_mut(&mut self.model_num).push(model_num);
         ModelIndex::new(position)
     }
 

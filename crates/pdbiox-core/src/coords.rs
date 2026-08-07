@@ -20,6 +20,7 @@ use bytemuck::{Pod, Zeroable};
 use std::fmt;
 use std::mem::size_of;
 use std::ops::Range;
+use std::sync::Arc;
 
 /// Positions per lane. Sixteen triples is 192 bytes — three cache lines exactly,
 /// which is what lets the lane demand 64-byte alignment without padding.
@@ -161,16 +162,16 @@ impl Default for Aabb {
 /// ```
 #[derive(Clone, Default)]
 pub struct CoordinateBlock {
-    lanes: Vec<CoordLane>,
+    lanes: Arc<Vec<CoordLane>>,
     len: u32,
 }
 
 impl CoordinateBlock {
     /// Creates an empty block.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            lanes: Vec::new(),
+            lanes: Arc::new(Vec::new()),
             len: 0,
         }
     }
@@ -179,7 +180,7 @@ impl CoordinateBlock {
     #[must_use]
     pub fn with_capacity(positions: usize) -> Self {
         Self {
-            lanes: Vec::with_capacity(positions.div_ceil(LANE)),
+            lanes: Arc::new(Vec::with_capacity(positions.div_ceil(LANE))),
             len: 0,
         }
     }
@@ -201,13 +202,12 @@ impl CoordinateBlock {
         let index = self.len as usize;
 
         if index == self.lanes.len() * LANE {
-            self.lanes.push(CoordLane([[0.0; 3]; LANE]));
+            Arc::make_mut(&mut self.lanes).push(CoordLane([[0.0; 3]; LANE]));
         }
 
         let (lane, slot) = lane_position(index);
 
-        let Some(target) = self
-            .lanes
+        let Some(target) = Arc::make_mut(&mut self.lanes)
             .get_mut(lane)
             .and_then(|lane| lane.0.get_mut(slot))
         else {
@@ -224,7 +224,7 @@ impl CoordinateBlock {
     /// interface receives without a copy.
     #[must_use]
     pub fn as_slice(&self) -> &[[f32; 3]] {
-        let all: &[[f32; 3]] = bytemuck::cast_slice(&self.lanes);
+        let all: &[[f32; 3]] = bytemuck::cast_slice(self.lanes.as_slice());
 
         visible_slice(all, self.len)
     }
@@ -236,7 +236,8 @@ impl CoordinateBlock {
     /// structure API.
     #[allow(dead_code, reason = "reached by the scoped coordinate edit")]
     pub(crate) fn as_mut_slice(&mut self) -> &mut [[f32; 3]] {
-        let all: &mut [[f32; 3]] = bytemuck::cast_slice_mut(&mut self.lanes);
+        let all: &mut [[f32; 3]] =
+            bytemuck::cast_slice_mut(Arc::make_mut(&mut self.lanes).as_mut_slice());
 
         visible_mut_slice(all, self.len)
     }

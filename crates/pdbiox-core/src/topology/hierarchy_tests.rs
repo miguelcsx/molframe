@@ -117,6 +117,16 @@ fn an_entitys_canonical_sequence_is_what_should_be_there_not_what_was_modelled()
 }
 
 #[test]
+fn an_entity_is_found_by_the_identifier_the_file_declared() {
+    let topology = sample();
+    assert_eq!(
+        topology.entities.find_by_id(SymbolId::from_raw(1)),
+        Some(EntityIndex::new(0))
+    );
+    assert_eq!(topology.entities.find_by_id(SymbolId::from_raw(99)), None);
+}
+
+#[test]
 fn an_absent_depositor_label_is_distinguishable_from_one_equal_to_the_label() {
     let mut chains = ChainTable::default();
     chains.push(

@@ -15,6 +15,7 @@ use crate::index::EntityIndex;
 use crate::optional::OptionalSymbol;
 use crate::symbol::SymbolId;
 use std::ops::Range;
+use std::sync::Arc;
 
 /// What kind of chemical species an entity is.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -40,11 +41,11 @@ pub enum EntityKind {
 /// sequences instead of three hundred.
 #[derive(Clone, Debug, Default)]
 pub struct EntityTable {
-    kind: Vec<EntityKind>,
-    id: Vec<SymbolId>,
-    description: Vec<OptionalSymbol>,
-    sequence_span: Vec<Range<u32>>,
-    sequence_pool: Vec<SymbolId>,
+    kind: Arc<Vec<EntityKind>>,
+    id: Arc<Vec<SymbolId>>,
+    description: Arc<Vec<OptionalSymbol>>,
+    sequence_span: Arc<Vec<Range<u32>>>,
+    sequence_pool: Arc<Vec<SymbolId>>,
 }
 
 impl EntityTable {
@@ -69,17 +70,13 @@ impl EntityTable {
         canonical_sequence: &[SymbolId],
     ) -> EntityIndex {
         let start = self.sequence_pool.len() as u32;
-
-        self.sequence_pool.extend_from_slice(canonical_sequence);
-
+        Arc::make_mut(&mut self.sequence_pool).extend_from_slice(canonical_sequence);
         let end = self.sequence_pool.len() as u32;
         let position = self.kind.len() as u32;
-
-        self.kind.push(kind);
-        self.id.push(id);
-        self.description.push(description);
-        self.sequence_span.push(start..end);
-
+        Arc::make_mut(&mut self.kind).push(kind);
+        Arc::make_mut(&mut self.id).push(id);
+        Arc::make_mut(&mut self.description).push(description);
+        Arc::make_mut(&mut self.sequence_span).push(start..end);
         EntityIndex::new(position)
     }
 
@@ -93,6 +90,19 @@ impl EntityTable {
     #[must_use]
     pub fn id(&self, entity: EntityIndex) -> Option<SymbolId> {
         self.id.get(entity.as_usize()).copied()
+    }
+
+    /// The entity carrying `id`, where the file declared one.
+    ///
+    /// Entity tables are normally small and this is used while building one
+    /// chain at a time, not in an atom loop. Keeping the lookup here avoids a
+    /// second index whose lifetime and invalidation would duplicate the table.
+    #[must_use]
+    pub fn find_by_id(&self, id: SymbolId) -> Option<EntityIndex> {
+        self.id
+            .iter()
+            .position(|candidate| *candidate == id)
+            .map(|position| EntityIndex::new(position as u32))
     }
 
     /// The entity's description, if the file carried one.

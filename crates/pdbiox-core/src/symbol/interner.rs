@@ -11,6 +11,7 @@ use hashbrown::hash_table::Entry;
 use std::convert::TryFrom;
 use std::fmt;
 use std::hash::{BuildHasher, RandomState};
+use std::sync::Arc;
 
 /// An interned identifier.
 ///
@@ -112,6 +113,14 @@ struct Extent {
 #[repr(transparent)]
 struct LocalOrdinal(u32);
 
+/// Copy-on-write storage for the local dictionary.
+#[derive(Clone)]
+struct Storage {
+    arena: String,
+    extents: Vec<Extent>,
+    table: HashTable<LocalOrdinal>,
+}
+
 /// A structure's identifier dictionary.
 ///
 /// Interning is idempotent: the same string always yields the same identifier
@@ -119,9 +128,7 @@ struct LocalOrdinal(u32);
 /// runs over the same file produce the same numbering.
 #[derive(Clone)]
 pub struct Interner {
-    arena: String,
-    extents: Vec<Extent>,
-    table: HashTable<LocalOrdinal>,
+    storage: Arc<Storage>,
     hasher: RandomState,
     limit: u32,
 }
@@ -140,9 +147,11 @@ impl Interner {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            arena: String::new(),
-            extents: Vec::new(),
-            table: HashTable::new(),
+            storage: Arc::new(Storage {
+                arena: String::new(),
+                extents: Vec::new(),
+                table: HashTable::new(),
+            }),
             hasher: RandomState::new(),
             limit: Self::DEFAULT_LIMIT,
         }
@@ -157,13 +166,11 @@ impl Interner {
     /// Uses `O(identifiers)` reserved memory.
     #[must_use]
     pub fn with_capacity(identifiers: usize) -> Self {
-        Self {
-            arena: String::new(),
-            extents: Vec::with_capacity(identifiers),
-            table: HashTable::with_capacity(identifiers),
-            hasher: RandomState::new(),
-            limit: Self::DEFAULT_LIMIT,
-        }
+        let mut interner = Self::new();
+        let storage = Arc::make_mut(&mut interner.storage);
+        storage.extents.reserve(identifiers);
+        storage.table.reserve(identifiers, |_| 0u64);
+        interner
     }
 
     /// Sets the limit on local identifiers.
@@ -193,13 +200,15 @@ impl Interner {
         }
 
         let Self {
-            arena,
-            extents,
-            table,
+            storage,
             hasher,
             limit,
         } = self;
-
+        let Storage {
+            arena,
+            extents,
+            table,
+        } = Arc::make_mut(storage);
         let hash = hasher.hash_one(text);
 
         let pending = pending_local(extents.len(), *limit, arena.len(), text.len());
@@ -253,8 +262,14 @@ impl Interner {
         }
 
         let hash = self.hasher.hash_one(text);
-
-        find_local(&self.table, hash, &self.arena, &self.extents, text).and_then(local_to_id)
+        find_local(
+            &self.storage.table,
+            hash,
+            &self.storage.arena,
+            &self.storage.extents,
+            text,
+        )
+        .and_then(local_to_id)
     }
 
     /// Returns the string an identifier names.
@@ -268,7 +283,7 @@ impl Interner {
         }
 
         let local = id_to_local(id)?;
-        extent_text(&self.arena, &self.extents, local)
+        extent_text(&self.storage.arena, &self.storage.extents, local)
     }
 
     /// The number of local identifiers issued.
@@ -277,7 +292,7 @@ impl Interner {
     #[must_use]
     #[inline]
     pub fn len(&self) -> usize {
-        self.extents.len()
+        self.storage.extents.len()
     }
 
     /// Returns true when no local identifier has been issued.
@@ -286,7 +301,7 @@ impl Interner {
     #[must_use]
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.extents.is_empty()
+        self.storage.extents.is_empty()
     }
 
     /// The bytes the local strings occupy.
@@ -295,7 +310,35 @@ impl Interner {
     #[must_use]
     #[inline]
     pub fn arena_len(&self) -> usize {
-        self.arena.len()
+        self.storage.arena.len()
+    }
+
+    /// Walks canonical and structure-local identifiers in stable id order.
+    ///
+    /// This is the dictionary-side half of compiling glob predicates: pattern
+    /// work is proportional to distinct identifiers and the atom loop remains
+    /// integer membership. Iteration allocates nothing.
+    pub fn iter(&self) -> impl Iterator<Item = (SymbolId, &str)> {
+        let canonical = canonical::CANONICAL
+            .iter()
+            .enumerate()
+            .filter_map(|(position, text)| {
+                u32::try_from(position)
+                    .ok()
+                    .map(|position| (SymbolId(position), *text))
+            });
+        let local = self
+            .storage
+            .extents
+            .iter()
+            .enumerate()
+            .filter_map(|(position, _extent)| {
+                let local = u32::try_from(position).ok().map(LocalOrdinal)?;
+                let symbol = local_to_id(local)?;
+                extent_text(&self.storage.arena, &self.storage.extents, local)
+                    .map(|text| (symbol, text))
+            });
+        canonical.chain(local)
     }
 }
 
@@ -314,8 +357,8 @@ impl fmt::Debug for Interner {
     /// Runs in `O(1)` time and does not traverse or copy interned strings.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Interner")
-            .field("local", &self.extents.len())
-            .field("arena_bytes", &self.arena.len())
+            .field("local", &self.storage.extents.len())
+            .field("arena_bytes", &self.storage.arena.len())
             .finish_non_exhaustive()
     }
 }
