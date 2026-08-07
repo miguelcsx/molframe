@@ -20,6 +20,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod annotation;
+pub mod bond;
 pub mod chunk;
 pub mod column;
 pub mod contract;
@@ -35,6 +37,12 @@ pub mod structure;
 pub mod symbol;
 pub mod topology;
 
+pub use annotation::{
+    ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn, AtomAnnotation,
+    AtomAnnotations, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION, PLDDT_ANNOTATION,
+    SEGMENT_ID_ANNOTATION,
+};
+pub use bond::{BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder};
 pub use chunk::{AtomChunk, AtomChunkStats, ChunkBuilder, ElementMask, ParentMapping};
 pub use column::{BitVec, EncodedColumn, Presence, ValidityMask};
 pub use contract::{Analysis, AnalysisPolicy, Coverage, Provenance, Status};
@@ -46,10 +54,10 @@ pub use element::Element;
 pub use index::{
     AtomIndex, BondIndex, ChainIndex, ChunkId, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
 };
-pub use io::{Format, InputBuffer, ParseMode, ReadOptions, ReadResult};
+pub use io::{Format, InputBuffer, InputKind, ParseMode, ReadOptions, ReadResult, write_output};
 pub use optional::{OptionalI32, OptionalSymbol};
 pub use selection::AtomSelection;
 pub use span::{ByteSpan, Position};
-pub use structure::{Structure, StructureData, StructureView};
+pub use structure::{ExtensionStore, Structure, StructureData, StructureView};
 pub use symbol::{AltId, DictionaryFull, Interner, SymbolId};
 pub use topology::{EntityKind, PolymerKind, Topology};

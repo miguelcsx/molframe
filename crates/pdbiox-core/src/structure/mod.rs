@@ -9,11 +9,28 @@
 mod fixture;
 
 mod data;
+mod disorder;
+mod edit;
+mod extensions;
+#[cfg(test)]
+mod extensions_tests;
 mod handle;
+mod handle_helpers;
+mod merge;
+mod merge_annotations;
+mod overlay;
+mod sequence;
 mod validate;
 mod view;
 
 pub use data::{CoordinateStore, EntryMetadata, Structure, StructureData, UnitCell};
+pub use edit::CoordinateEditor;
+pub use extensions::ExtensionStore;
 pub use handle::{AtomRef, ChainRef, ModelRef, ResidueRef};
+pub use overlay::StructureEditor;
+pub use sequence::{
+    ChainSequenceExt, MissingResidue, ReferenceAlignment, ReferenceSequence,
+    SEQUENCE_REFERENCES_EXTENSION, SequenceMapping, SequenceReferences,
+};
 pub use validate::validate;
 pub use view::StructureView;
