@@ -6,11 +6,14 @@
 //! being invented.
 
 use super::atoms::AtomBuilder;
+use super::ensemble::ragged_model_numbers;
 use crate::document::{CifValue, Document};
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
+use pdbiox_core::index::EntityIndex;
 use pdbiox_core::io::{ReadOptions, ReadResult};
 use pdbiox_core::optional::OptionalSymbol;
-use pdbiox_core::structure::{Structure, StructureData, UnitCell};
+use pdbiox_core::structure::{CoordinateStore, Structure, StructureData, UnitCell};
+use pdbiox_core::symbol::SymbolId;
 use pdbiox_core::topology::EntityKind;
 
 /// The category coordinates live in.
@@ -23,7 +26,6 @@ const ATOM_SITE: &str = "atom_site";
 /// Returns the findings that stopped it: a document with no block, or a block
 /// with no coordinates.
 pub fn lower(document: &Document, options: &ReadOptions) -> ReadResult {
-    let mut findings = Diagnostics::new();
     let Some(block) = document.first_block() else {
         return Err(vec![Diagnostic::new(Code::E1106)]);
     };
@@ -35,20 +37,134 @@ pub fn lower(document: &Document, options: &ReadOptions) -> ReadResult {
         ]);
     };
 
+    let ragged = ragged_model_numbers(atom_site, options.only_first_model);
+    if !ragged.is_empty() {
+        return Ok(lower_ragged(block, atom_site, options, &ragged));
+    }
+
+    let (structure, findings) = lower_model(block, atom_site, options, None);
+    Ok((structure, findings))
+}
+
+fn lower_model(
+    block: &crate::document::DataBlock,
+    atom_site: &crate::document::Category,
+    options: &ReadOptions,
+    model: Option<i64>,
+) -> (Structure, Vec<Diagnostic>) {
+    let mut findings = Diagnostics::new();
     let mut data = StructureData::empty();
     if !options.only_atomic_coords {
         read_entry(block, &mut data);
         read_cell(block, &mut data);
-        read_entities(block, &mut data);
     }
+    // Entity identity is part of topology rather than optional metadata. It is
+    // needed even for a coordinate-only read so chains never become detached
+    // from the chemical species declared by the file.
+    read_entities(block, &mut data);
+    let asym_entities = read_asym_entities(block, &mut data);
 
-    let coords = AtomBuilder::new(&mut data, &mut findings, options).read(atom_site);
+    let builder = AtomBuilder::new(&mut data, &mut findings, options, &asym_entities);
+    let coords = match model {
+        Some(model) => builder.only_model(model).read(atom_site),
+        None => builder.read(atom_site),
+    };
     data.coords = coords;
+    super::bonds::read(block, &mut data, &mut findings);
 
     for finding in pdbiox_core::structure::validate(&data) {
         findings.push(finding);
     }
-    Ok((Structure::new(data), findings.finish()))
+    let references = super::references::read(block, &mut findings);
+    let structure = Structure::new(data);
+    let structure = if references.sequences.is_empty() && references.alignments.is_empty() {
+        structure
+    } else {
+        structure.with_extension(
+            pdbiox_core::structure::SEQUENCE_REFERENCES_EXTENSION,
+            references,
+        )
+    };
+    (structure, findings.finish())
+}
+
+fn lower_ragged(
+    block: &crate::document::DataBlock,
+    atom_site: &crate::document::Category,
+    options: &ReadOptions,
+    model_numbers: &[i64],
+) -> (Structure, Vec<Diagnostic>) {
+    let mut findings = Diagnostics::new();
+    let mut models = Vec::with_capacity(model_numbers.len());
+    for number in model_numbers {
+        let (model, model_findings) = lower_model(block, atom_site, options, Some(*number));
+        findings.extend(model_findings);
+        models.push(model);
+    }
+
+    let mut data = StructureData::empty();
+    if !options.only_atomic_coords {
+        read_entry(block, &mut data);
+        read_cell(block, &mut data);
+    }
+    for number in model_numbers {
+        let deposited = if let Ok(number) = i32::try_from(*number) {
+            number
+        } else {
+            findings.push(
+                Diagnostic::new(Code::E1202)
+                    .with_message("model number is outside the supported integer range")
+                    .in_category(ATOM_SITE),
+            );
+            i32::MAX
+        };
+        data.topology.models.push(deposited, 0..0);
+    }
+    data.coords = CoordinateStore::Ragged { models };
+    (Structure::new(data), findings.finish())
+}
+
+/// The entity assigned to one normalised chain identifier.
+#[derive(Clone, Copy)]
+pub(super) struct AsymEntity {
+    pub(super) asym_id: SymbolId,
+    pub(super) entity: EntityIndex,
+}
+
+/// Reads the explicit chain-to-entity relation.
+fn read_asym_entities(
+    block: &crate::document::DataBlock,
+    data: &mut StructureData,
+) -> Vec<AsymEntity> {
+    let Some(asym) = block.category("struct_asym") else {
+        return Vec::new();
+    };
+    let mut mappings = Vec::with_capacity(asym.row_count());
+    for row in 0..asym.row_count() {
+        let (Some(asym_id), Some(entity_id)) = (
+            asym.identifier("id", row),
+            asym.identifier("entity_id", row),
+        ) else {
+            continue;
+        };
+        let (Ok(asym_id), Ok(entity_id)) = (
+            data.dictionary.intern(&asym_id),
+            data.dictionary.intern(&entity_id),
+        ) else {
+            continue;
+        };
+        let entity = match data.topology.entities.find_by_id(entity_id) {
+            Some(entity) => entity,
+            None => data.topology.entities.push(
+                entity_id,
+                EntityKind::Unknown,
+                OptionalSymbol::NONE,
+                &[],
+            ),
+        };
+        mappings.push(AsymEntity { asym_id, entity });
+    }
+    mappings
 }
 
 /// Reads what the entry says about itself.

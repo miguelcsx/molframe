@@ -5,7 +5,10 @@
 //! that the data did not force is reported.
 
 mod atoms;
+mod bonds;
+mod ensemble;
 mod entry;
 mod keys;
+mod references;
 
 pub use entry::lower;
