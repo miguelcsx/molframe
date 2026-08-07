@@ -20,6 +20,14 @@ fn fixed_column_files_are_recognised_by_their_record_names() {
 }
 
 #[test]
+fn variant_names_and_autodock_markers_select_their_formats() {
+    assert_eq!(Format::from_name("ligand.pqr"), Some(Format::Pqr));
+    assert_eq!(Format::from_name("ligand.pdbqt.gz"), Some(Format::Pdbqt));
+    assert!(Format::Pdbqt.recognises(b"ROOT\nTORSDOF 0\n"));
+    assert_eq!(Format::Pqr.name(), "pqr");
+}
+
+#[test]
 fn content_decides_before_the_file_name_does() {
     let mislabelled = buffer("data_1ABC\n_entry.id 1ABC\n");
     let detected = Format::detect(Format::Auto, &mislabelled, Some("entry.pdb"));

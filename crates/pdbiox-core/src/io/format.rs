@@ -11,7 +11,7 @@
 //! makes their problems invisible.
 
 use super::input::{InputBuffer, Limits};
-use crate::diagnostic::{Code, Diagnostic, Strictness};
+use crate::diagnostic::{Code, Diagnostic, Diagnostics, Strictness};
 use crate::structure::Structure;
 
 /// A format pdbiox can read or write.
@@ -23,13 +23,25 @@ pub enum Format {
     Auto,
     /// The archive's structured text format.
     Mmcif,
+    /// The archive's MessagePack-based binary format.
+    BinaryCif,
     /// The legacy fixed-column format.
     Pdb,
+    /// PDB-shaped coordinates carrying partial charge and radius.
+    Pqr,
+    /// `AutoDock`'s PDB-shaped coordinates carrying charge and atom type.
+    Pdbqt,
 }
 
 impl Format {
     /// The formats a caller may name, excluding automatic detection.
-    pub const NAMED: [Self; 2] = [Self::Mmcif, Self::Pdb];
+    pub const NAMED: [Self; 5] = [
+        Self::Mmcif,
+        Self::BinaryCif,
+        Self::Pdbqt,
+        Self::Pqr,
+        Self::Pdb,
+    ];
 
     /// The format's short name.
     #[must_use]
@@ -37,7 +49,10 @@ impl Format {
         match self {
             Self::Auto => "auto",
             Self::Mmcif => "mmcif",
+            Self::BinaryCif => "bcif",
             Self::Pdb => "pdb",
+            Self::Pqr => "pqr",
+            Self::Pdbqt => "pdbqt",
         }
     }
 
@@ -47,7 +62,10 @@ impl Format {
         match self {
             Self::Auto => &[],
             Self::Mmcif => &["cif", "mmcif"],
+            Self::BinaryCif => &["bcif"],
             Self::Pdb => &["pdb", "ent"],
+            Self::Pqr => &["pqr"],
+            Self::Pdbqt => &["pdbqt"],
         }
     }
 
@@ -57,7 +75,10 @@ impl Format {
         match name.to_ascii_lowercase().as_str() {
             "auto" => Some(Self::Auto),
             "mmcif" | "cif" => Some(Self::Mmcif),
+            "bcif" | "binarycif" => Some(Self::BinaryCif),
             "pdb" | "ent" => Some(Self::Pdb),
+            "pqr" => Some(Self::Pqr),
+            "pdbqt" => Some(Self::Pdbqt),
             _ => None,
         }
     }
@@ -70,8 +91,12 @@ impl Format {
     #[must_use]
     pub fn recognises(self, bytes: &[u8]) -> bool {
         match self {
-            Self::Auto => false,
+            // PQR falls back to its suffix: bytes alone cannot distinguish it
+            // from a PDB record whose optional element columns are absent.
+            Self::Auto | Self::Pqr => false,
             Self::Mmcif => first_lines(bytes, 8).any(|line| line.starts_with(b"data_")),
+            Self::BinaryCif => recognises_binary_cif(bytes),
+            Self::Pdbqt => recognises_pdbqt(bytes),
             Self::Pdb => first_lines(bytes, 64).any(|line| {
                 [&b"ATOM  "[..], b"HETATM", b"HEADER", b"CRYST1", b"MODEL "]
                     .iter()
@@ -95,13 +120,22 @@ impl Format {
         if requested != Self::Auto {
             return Ok(requested);
         }
-        if let Some(format) = Self::NAMED
+        if let Some(format) = [Self::Mmcif, Self::BinaryCif, Self::Pdbqt]
             .into_iter()
             .find(|f| f.recognises(input.as_bytes()))
         {
             return Ok(format);
         }
-        if let Some(format) = name.and_then(Self::from_name) {
+        let named = name.and_then(Self::from_name);
+        if let Some(format @ (Self::Pqr | Self::Pdbqt)) = named
+            && Self::Pdb.recognises(input.as_bytes())
+        {
+            return Ok(format);
+        }
+        if Self::Pdb.recognises(input.as_bytes()) {
+            return Ok(Self::Pdb);
+        }
+        if let Some(format) = named {
             return Ok(format);
         }
         Err(Diagnostic::new(Code::E1001)
@@ -128,6 +162,35 @@ impl Format {
             .into_iter()
             .find(|format| format.extensions().contains(&lowered.as_str()))
     }
+}
+
+fn recognises_binary_cif(bytes: &[u8]) -> bool {
+    let Some(first) = bytes.first() else {
+        return false;
+    };
+    let is_map = (0x80..=0x8f).contains(first) || matches!(*first, 0xde | 0xdf);
+    is_map
+        && bytes
+            .windows(b"dataBlocks".len())
+            .take(512)
+            .any(|window| window == b"dataBlocks")
+}
+
+fn recognises_pdbqt(bytes: &[u8]) -> bool {
+    first_lines(bytes, 64).any(|line| {
+        if matches!(line, b"ROOT" | b"ENDROOT") || line.starts_with(b"TORSDOF") {
+            return true;
+        }
+        if !(line.starts_with(b"ATOM  ") || line.starts_with(b"HETATM")) {
+            return false;
+        }
+        let charge = line
+            .get(70..76)
+            .and_then(|field| str::from_utf8(field).ok());
+        let atom_type = line.get(77..).and_then(|field| str::from_utf8(field).ok());
+        charge.is_some_and(|field| field.trim().parse::<f64>().is_ok())
+            && atom_type.is_some_and(|field| !field.trim().is_empty())
+    })
 }
 
 fn first_lines(bytes: &[u8], count: usize) -> impl Iterator<Item = &[u8]> {
@@ -242,6 +305,32 @@ impl ReadOptions {
     pub const fn limits(mut self, limits: Limits) -> Self {
         self.limits = limits;
         self
+    }
+
+    /// Finishes a read under this option set.
+    ///
+    /// Findings remain available on success, but a finding whose severity is an
+    /// error at the selected mode turns the read into a refusal. Keeping this
+    /// decision here gives every format exactly the same strictness behaviour.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordered findings when at least one is an error under the
+    /// selected parse mode.
+    pub fn finish(
+        &self,
+        structure: Structure,
+        findings: impl IntoIterator<Item = Diagnostic>,
+    ) -> ReadResult {
+        let mut ordered = Diagnostics::new();
+        ordered.extend(findings);
+        let is_error = ordered.has_error(self.mode.strictness());
+        let findings = ordered.finish();
+        if is_error {
+            Err(findings)
+        } else {
+            Ok((structure, findings))
+        }
     }
 }
 
