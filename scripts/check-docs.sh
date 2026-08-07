@@ -68,16 +68,36 @@ STRAY=$(grep -rnoE '\b(pdbio|pbiox)\b' README.md CONTRIBUTING.md docs/*.md docs/
                || { fail "stray retired name:"; note "$STRAY"; }
 
 echo "== 7. reference paths =="
-MISS=0
+rm -f /tmp/pdbiox_missing_paths /tmp/pdbiox_skipped_roots
 grep -rhoE '(inspo|bio)/[A-Za-z0-9_./-]+' "${DOCS[@]}" | sed 's/[.,;:)`]*$//' | sort -u \
 | while read -r p; do
-    case "$p" in bio/*) full="../${p#bio/}" ;; *) full="$p" ;; esac
-    [ -e "$full" ] || [ -e "../$p" ] || echo "$p"
+    case "$p" in
+      inspo/*)
+        if [ ! -d inspo ]; then
+          echo "inspo/" >> /tmp/pdbiox_skipped_roots
+          continue
+        fi
+        full="$p"
+        ;;
+      bio/*)
+        relative="${p#bio/}"
+        project="${relative%%/*}"
+        if [ ! -d "../$project" ]; then
+          echo "bio/$project/" >> /tmp/pdbiox_skipped_roots
+          continue
+        fi
+        full="../$relative"
+        ;;
+    esac
+    [ -e "$full" ] || echo "$p"
   done > /tmp/pdbiox_missing_paths
 if [ -s /tmp/pdbiox_missing_paths ]; then
   fail "cited reference paths do not exist:"; note "$(cat /tmp/pdbiox_missing_paths)"
 else
-  pass "every cited reference path exists"
+  pass "every cited path in an installed external reference root exists"
+fi
+if [ -s /tmp/pdbiox_skipped_roots ]; then
+  note "external reference roots not installed: $(sort -u /tmp/pdbiox_skipped_roots | tr '\n' ' ')"
 fi
 
 echo "== 8. internal links =="
