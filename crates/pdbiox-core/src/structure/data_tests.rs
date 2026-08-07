@@ -18,6 +18,13 @@ fn cloning_a_structure_shares_it_rather_than_copying_it() {
 }
 
 #[test]
+fn a_data_snapshot_clone_shares_atom_chunks() {
+    let original = crate::structure::fixture::sample();
+    let cloned = original.data().clone();
+    assert!(Arc::ptr_eq(&original.data().chunks, &cloned.chunks));
+}
+
+#[test]
 fn dense_models_report_one_block_each_and_ragged_ones_report_none() {
     let frames: Vec<CoordinateBlock> = (0..3).map(|_| (0..4).map(|_| [0.0; 3]).collect()).collect();
     let dense = CoordinateStore::Dense { frames };
@@ -35,6 +42,24 @@ fn dense_models_report_one_block_each_and_ragged_ones_report_none() {
     assert_eq!(ragged.model_count(), 2);
     assert!(!ragged.is_dense());
     assert!(ragged.block(ModelIndex::new(0)).is_none());
+    assert_eq!(ragged.ragged_models().map(<[Structure]>::len), Some(2));
+}
+
+#[test]
+fn a_ragged_model_snapshot_is_its_own_single_model_structure() {
+    let child = crate::structure::fixture::sample();
+    let mut data = StructureData::empty();
+    data.coords = CoordinateStore::Ragged {
+        models: vec![child.clone()],
+    };
+    let ensemble = Structure::new(data);
+
+    let Some((snapshot, local)) = ensemble.model_snapshot(ModelIndex::new(0)) else {
+        panic!("ragged model missing")
+    };
+    assert!(std::ptr::eq(snapshot.data(), child.data()));
+    assert_eq!(local, ModelIndex::new(0));
+    assert!(ensemble.model_snapshot(ModelIndex::new(1)).is_none());
 }
 
 #[test]

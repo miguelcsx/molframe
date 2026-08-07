@@ -9,11 +9,14 @@
 //! Formatting is not preserved here. Reproducing whitespace, column widths and
 //! quoting is the document's job; this layer preserves meaning.
 
+use super::ExtensionStore;
+use crate::annotation::AtomAnnotations;
 use crate::chunk::AtomChunk;
 use crate::coords::{CoordinateBlock, CoordinateGeneration};
 use crate::index::ModelIndex;
 use crate::symbol::{Interner, SymbolId};
 use crate::topology::Topology;
+use std::fmt;
 use std::sync::Arc;
 
 const PLACEHOLDER_TOLERANCE: f64 = 1e-6;
@@ -112,6 +115,15 @@ impl CoordinateStore {
     pub const fn is_dense(&self) -> bool {
         matches!(self, Self::Single(_) | Self::Dense { .. })
     }
+
+    /// The independent structures of a ragged ensemble.
+    #[must_use]
+    pub fn ragged_models(&self) -> Option<&[Structure]> {
+        match self {
+            Self::Ragged { models } => Some(models),
+            Self::Single(_) | Self::Dense { .. } => None,
+        }
+    }
 }
 
 /// Everything a structure holds.
@@ -122,7 +134,13 @@ pub struct StructureData {
     /// The hierarchy.
     pub topology: Topology,
     /// The atoms, in chunks.
-    pub chunks: Vec<AtomChunk>,
+    pub chunks: Arc<Vec<AtomChunk>>,
+    /// Chemical connectivity as compact edge columns.
+    pub bonds: crate::bond::BondTable,
+    /// Structure-local typed columns aligned exactly to atom rows.
+    pub annotations: AtomAnnotations,
+    /// Cold, typed domain metadata attached to this snapshot.
+    pub extensions: ExtensionStore,
     /// The positions.
     pub coords: CoordinateStore,
     /// The identifiers this structure interned.
@@ -157,7 +175,10 @@ impl StructureData {
         Self {
             entry: EntryMetadata::default(),
             topology: Topology::default(),
-            chunks: Vec::new(),
+            chunks: Arc::new(Vec::new()),
+            bonds: crate::bond::BondTable::default(),
+            annotations: AtomAnnotations::default(),
+            extensions: ExtensionStore::new(),
             coords: CoordinateStore::Single(CoordinateBlock::new()),
             dictionary: Interner::new(),
             cell: None,
@@ -198,10 +219,61 @@ impl Structure {
         self.0.atom_count()
     }
 
+    /// A lightweight handle on one atom.
+    #[must_use]
+    pub fn atom(&self, atom: crate::index::AtomIndex) -> Option<super::AtomRef<'_>> {
+        self.0.atom(atom)
+    }
+
+    /// A lightweight handle on one model.
+    #[must_use]
+    pub fn model(&self, model: ModelIndex) -> Option<super::ModelRef<'_>> {
+        self.0.model(model)
+    }
+
+    /// The structure and local model position that represent one model.
+    ///
+    /// Dense models share this structure and retain their position. Ragged
+    /// models are independent single-model structures, so their local position
+    /// is zero. This keeps callers from padding unlike topologies.
+    #[must_use]
+    pub fn model_snapshot(&self, model: ModelIndex) -> Option<(Self, ModelIndex)> {
+        match &self.0.coords {
+            CoordinateStore::Ragged { models } => models
+                .get(model.as_usize())
+                .cloned()
+                .map(|structure| (structure, ModelIndex::new(0))),
+            CoordinateStore::Single(_) | CoordinateStore::Dense { .. } => self
+                .model(model)
+                .map(|_| (self.clone(), model))
+                .or_else(|| {
+                    (model.get() == 0 && self.model_count() == 1).then(|| (self.clone(), model))
+                }),
+        }
+    }
+
+    /// A lightweight handle on one chain.
+    #[must_use]
+    pub fn chain(&self, chain: crate::index::ChainIndex) -> Option<super::ChainRef<'_>> {
+        self.0.chain(chain)
+    }
+
+    /// A lightweight handle on one residue.
+    #[must_use]
+    pub fn residue(&self, residue: crate::index::ResidueIndex) -> Option<super::ResidueRef<'_>> {
+        self.0.residue(residue)
+    }
+
     /// The number of models.
     #[must_use]
     pub fn model_count(&self) -> usize {
         self.0.coords.model_count()
+    }
+
+    /// The independent model structures when topology differs between models.
+    #[must_use]
+    pub fn ragged_models(&self) -> Option<&[Self]> {
+        self.0.coords.ragged_models()
     }
 
     /// The number of chains.
@@ -246,6 +318,40 @@ impl Structure {
         self.0.generation
     }
 
+    /// Structure-local typed columns aligned to atom rows.
+    #[must_use]
+    pub fn annotations(&self) -> &AtomAnnotations {
+        &self.0.annotations
+    }
+
+    /// Cold, typed domain metadata attached to this snapshot.
+    #[must_use]
+    pub fn extensions(&self) -> &ExtensionStore {
+        &self.0.extensions
+    }
+
+    /// Returns a new snapshot with one typed domain extension attached.
+    #[must_use]
+    pub fn with_extension<T>(&self, key: &'static str, value: T) -> Self
+    where
+        T: std::any::Any + Send + Sync + std::panic::RefUnwindSafe,
+    {
+        let mut data = self.data().clone();
+        data.extensions.insert(key, value);
+        Self::new(data)
+    }
+
+    /// Returns a new snapshot without domain extensions.
+    #[must_use]
+    pub fn without_extensions(&self) -> Self {
+        if self.0.extensions.is_empty() {
+            return self.clone();
+        }
+        let mut data = self.data().clone();
+        data.extensions.clear();
+        Self::new(data)
+    }
+
     /// The string an interned identifier names.
     #[must_use]
     pub fn resolve(&self, symbol: SymbolId) -> Option<&str> {
@@ -263,6 +369,19 @@ fn values_are_near(values: &[f64], expected: f64) -> bool {
     values
         .iter()
         .all(|value| (value - expected).abs() < PLACEHOLDER_TOLERANCE)
+}
+
+impl fmt::Display for Structure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Structure(models={}, chains={}, residues={}, atoms={})",
+            self.model_count(),
+            self.chain_count(),
+            self.residue_count(),
+            self.atom_count(),
+        )
+    }
 }
 
 #[cfg(test)]

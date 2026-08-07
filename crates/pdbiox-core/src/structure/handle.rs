@@ -9,13 +9,12 @@
 //! handles are how it is computed.
 
 use super::data::StructureData;
+use super::handle_helpers::{range_or_empty, recorded_value, residue_count_as_u32};
 use crate::chunk::AtomChunk;
-use crate::column::Presence;
 use crate::element::Element;
 use crate::index::{AtomIndex, ChainIndex, EntityIndex, ModelIndex, ResidueIndex};
 use crate::symbol::{AltId, SymbolId};
 use crate::topology::PolymerKind;
-use std::ops::Range;
 
 /// One model of a structure.
 #[derive(Clone, Copy, Debug)]
@@ -27,8 +26,8 @@ pub struct ModelRef<'a> {
 /// One chain.
 #[derive(Clone, Copy, Debug)]
 pub struct ChainRef<'a> {
-    data: &'a StructureData,
-    index: ChainIndex,
+    pub(crate) data: &'a StructureData,
+    pub(crate) index: ChainIndex,
 }
 
 /// One residue.
@@ -77,6 +76,12 @@ impl<'a> ModelRef<'a> {
 
         self.chains().find(|chain| chain.has_label(wanted))
     }
+
+    /// The chain at one position within this model.
+    #[must_use]
+    pub fn chain_at(self, position: usize) -> Option<ChainRef<'a>> {
+        self.chains().nth(position)
+    }
 }
 
 impl<'a> ChainRef<'a> {
@@ -96,10 +101,22 @@ impl<'a> ChainRef<'a> {
         self.data.topology.chains.label_asym_id(self.index)
     }
 
+    /// The normalised chain label as text.
+    #[must_use]
+    pub fn label(self) -> Option<&'a str> {
+        self.data.dictionary.resolve(self.label_asym_id()?)
+    }
+
     /// The depositor's chain label, where the file carried one.
     #[must_use]
     pub fn auth_asym_id(self) -> Option<SymbolId> {
         self.data.topology.chains.auth_asym_id(self.index)
+    }
+
+    /// The depositor's chain label as text.
+    #[must_use]
+    pub fn auth_label(self) -> Option<&'a str> {
+        self.data.dictionary.resolve(self.auth_asym_id()?)
     }
 
     /// The species this chain instantiates.
@@ -134,6 +151,12 @@ impl<'a> ChainRef<'a> {
     fn has_label(self, wanted: SymbolId) -> bool {
         self.label_asym_id() == Some(wanted) || self.auth_asym_id() == Some(wanted)
     }
+
+    /// The residue at one position within this chain.
+    #[must_use]
+    pub fn residue_at(self, position: usize) -> Option<ResidueRef<'a>> {
+        self.residues().nth(position)
+    }
 }
 
 impl<'a> ResidueRef<'a> {
@@ -158,6 +181,18 @@ impl<'a> ResidueRef<'a> {
     pub fn name(self) -> Option<&'a str> {
         self.label_comp_id()
             .and_then(|symbol| self.data.dictionary.resolve(symbol))
+    }
+
+    /// The depositor's component code, where it differs or was recorded.
+    #[must_use]
+    pub fn auth_comp_id(self) -> Option<SymbolId> {
+        self.data.topology.residues.auth_comp_id(self.index)
+    }
+
+    /// The depositor's component code as text.
+    #[must_use]
+    pub fn auth_name(self) -> Option<&'a str> {
+        self.data.dictionary.resolve(self.auth_comp_id()?)
     }
 
     /// The sequence position within the entity, absent for a non-polymer.
@@ -206,6 +241,12 @@ impl<'a> ResidueRef<'a> {
 
     fn has_number(self, number: i32) -> bool {
         self.auth_seq_id() == Some(number) || self.label_seq_id() == Some(number)
+    }
+
+    /// The atom at one position within this residue.
+    #[must_use]
+    pub fn atom_at(self, position: usize) -> Option<AtomRef<'a>> {
+        self.atoms().nth(position)
     }
 }
 
@@ -257,6 +298,19 @@ impl<'a> AtomRef<'a> {
             .and_then(|symbol| self.data.dictionary.resolve(symbol))
     }
 
+    /// The depositor's atom name, where it differs or was recorded.
+    #[must_use]
+    pub fn auth_name_symbol(self) -> Option<SymbolId> {
+        let (chunk, local) = self.located()?;
+        chunk.auth_atom_name(local)
+    }
+
+    /// The depositor's atom name as text.
+    #[must_use]
+    pub fn auth_name(self) -> Option<&'a str> {
+        self.data.dictionary.resolve(self.auth_name_symbol()?)
+    }
+
     /// The element.
     #[must_use]
     pub fn element(self) -> Option<Element> {
@@ -269,6 +323,31 @@ impl<'a> AtomRef<'a> {
     pub fn alt_id(self) -> Option<AltId> {
         let (chunk, local) = self.located()?;
         chunk.alt_id(local)
+    }
+
+    /// The alternate-location label as text, absent for the shared blank form.
+    #[must_use]
+    pub fn alt_label(self) -> Option<&'a str> {
+        self.data.dictionary.resolve(self.alt_id()?.symbol()?)
+    }
+
+    /// The component identity this atom carries.
+    ///
+    /// Most atoms inherit the residue's primary component. An alternate
+    /// conformation may carry a different identity, which takes precedence.
+    #[must_use]
+    pub fn component_id(self) -> Option<SymbolId> {
+        let (chunk, local) = self.located()?;
+        if let Some(component) = chunk.alternate_component_id(local) {
+            return Some(component);
+        }
+        self.residue()?.label_comp_id()
+    }
+
+    /// The atom's effective component identity as text.
+    #[must_use]
+    pub fn component_name(self) -> Option<&'a str> {
+        self.data.dictionary.resolve(self.component_id()?)
     }
 
     /// The temperature factor, where the file recorded one.
@@ -285,6 +364,21 @@ impl<'a> AtomRef<'a> {
         let (chunk, local) = self.located()?;
 
         chunk.occupancy(local).and_then(recorded_value)
+    }
+
+    /// The formal charge, where the file recorded one.
+    #[must_use]
+    pub fn formal_charge(self) -> Option<i8> {
+        let (chunk, local) = self.located()?;
+        let (value, presence) = chunk.formal_charge(local)?;
+        presence.is_present().then_some(value)
+    }
+
+    /// The file-local atom-site identifier.
+    #[must_use]
+    pub fn atom_site_id(self) -> Option<u32> {
+        let (chunk, local) = self.located()?;
+        chunk.atom_site_id(local)
     }
 
     /// The position in the first model, where one was recorded.
@@ -333,12 +427,39 @@ impl StructureData {
             .map(move |index| ModelRef::new(self, index))
     }
 
+    /// A handle on one chain.
+    #[must_use]
+    pub fn chain(&self, chain: ChainIndex) -> Option<ChainRef<'_>> {
+        (chain.as_usize() < self.topology.chains.len()).then_some(ChainRef {
+            data: self,
+            index: chain,
+        })
+    }
+
+    /// A handle on one residue.
+    #[must_use]
+    pub fn residue(&self, residue: ResidueIndex) -> Option<ResidueRef<'_>> {
+        (residue.as_usize() < self.topology.residues.len()).then_some(ResidueRef {
+            data: self,
+            index: residue,
+        })
+    }
+
     /// Every chain, across every model.
     pub fn chains(&self) -> impl Iterator<Item = ChainRef<'_>> {
         self.topology
             .chains
             .iter()
             .map(move |index| ChainRef::new(self, index))
+    }
+
+    /// The chain with this label, in either namespace.
+    #[must_use]
+    pub fn chain_named(&self, label: &str) -> Option<ChainRef<'_>> {
+        let wanted = self.dictionary.get(label)?;
+        self.chains().find(|chain| {
+            chain.label_asym_id() == Some(wanted) || chain.auth_asym_id() == Some(wanted)
+        })
     }
 
     /// Every residue, across every chain.
@@ -352,25 +473,15 @@ impl StructureData {
     pub fn atoms(&self) -> impl Iterator<Item = AtomRef<'_>> {
         (0..self.atom_count()).map(move |position| AtomRef::new(self, AtomIndex::new(position)))
     }
-}
 
-fn range_or_empty(range: Option<Range<u32>>) -> Range<u32> {
-    match range {
-        Some(range) => range,
-        None => 0..0,
-    }
-}
-
-fn recorded_value<T>(entry: (T, Presence)) -> Option<T> {
-    let (value, presence) = entry;
-
-    presence.is_present().then_some(value)
-}
-
-fn residue_count_as_u32(count: usize) -> u32 {
-    match u32::try_from(count) {
-        Ok(count) => count,
-        Err(_) => u32::MAX,
+    /// A handle on one atom.
+    #[must_use]
+    pub fn atom(&self, atom: AtomIndex) -> Option<AtomRef<'_>> {
+        let count = self.chunks.last().map_or(0, |chunk| chunk.atoms().end);
+        (atom.get() < count).then_some(AtomRef {
+            data: self,
+            index: atom,
+        })
     }
 }
 
