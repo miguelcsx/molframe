@@ -9,6 +9,7 @@
 mod analysis;
 mod policy;
 mod provenance;
+mod serialise;
 
 pub use analysis::{Analysis, Assumption, AssumptionSource, Coverage, ImpactEstimate, Status};
 pub use policy::{
