@@ -3,6 +3,7 @@ use crate::document::{Category, DataBlock};
 use crate::lexer::Quoting;
 use crate::{Document, parse, read};
 use pdbiox_core::io::{InputBuffer, ReadOptions};
+use proptest::prelude::*;
 
 const SOURCE: &str = "\
 data_TEST
@@ -75,6 +76,52 @@ fn positions_survive_a_canonical_round_trip_to_the_precision_written() {
 }
 
 #[test]
+fn canonical_writing_preserves_metadata_entities_and_both_name_spaces() {
+    let source = "data_X\n\
+        _entry.id X\n_struct.title 'A title'\n_exptl.method 'X-RAY DIFFRACTION'\n\
+        _refine.ls_d_res_high 1.25\n\
+        loop_\n_entity.id\n_entity.type\n_entity.pdbx_description\n7 polymer 'test entity'\n\
+        loop_\n_entity_poly_seq.entity_id\n_entity_poly_seq.num\n_entity_poly_seq.mon_id\n\
+        7 1 GLY\n\
+        loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+        _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+        _atom_site.label_entity_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n\
+        _atom_site.Cartn_y\n_atom_site.Cartn_z\n_atom_site.auth_atom_id\n\
+        _atom_site.auth_comp_id\n_atom_site.auth_asym_id\n_atom_site.auth_seq_id\n\
+        ATOM 1 C CA GLY LABEL 7 1 1 2 3 CAX GLYX AUTH 42\n";
+    let original = structure(source);
+    let round_tripped = structure(&write_canonical(&original));
+    let entry = &round_tripped.data().entry;
+    assert_eq!(entry.title.as_deref(), Some("A title"));
+    assert_eq!(entry.method.as_deref(), Some("X-RAY DIFFRACTION"));
+    assert!(
+        entry
+            .resolution
+            .is_some_and(|value| (value - 1.25).abs() < f32::EPSILON)
+    );
+    let chain = round_tripped.chain(pdbiox_core::index::ChainIndex::new(0));
+    assert_eq!(
+        chain.and_then(pdbiox_core::structure::ChainRef::label),
+        Some("LABEL")
+    );
+    assert_eq!(
+        chain.and_then(pdbiox_core::structure::ChainRef::auth_label),
+        Some("AUTH")
+    );
+    let residue = round_tripped.residue(pdbiox_core::index::ResidueIndex::new(0));
+    assert_eq!(
+        residue.and_then(pdbiox_core::structure::ResidueRef::auth_name),
+        Some("GLYX")
+    );
+    let atom = round_tripped.atom(pdbiox_core::index::AtomIndex::new(0));
+    assert_eq!(
+        atom.and_then(pdbiox_core::structure::AtomRef::auth_name),
+        Some("CAX")
+    );
+    assert_eq!(round_tripped.entity_count(), 1);
+}
+
+#[test]
 fn a_preserving_write_keeps_a_category_the_library_does_not_interpret() {
     let written = write_preserving(&document(SOURCE));
     assert!(written.contains("_my_lab.note"), "{written}");
@@ -139,4 +186,61 @@ fn a_sentinel_survives_a_preserving_round_trip_as_a_sentinel() {
         category.and_then(|c| c.value("unknown", 0)),
         Some(&CifValue::Unknown)
     );
+}
+
+proptest! {
+    #[test]
+    fn generated_canonical_coordinates_survive_a_round_trip(
+        positions in prop::collection::vec(
+            (-9_000.0_f32..9_000.0, -9_000.0_f32..9_000.0, -9_000.0_f32..9_000.0),
+            1..64,
+        )
+    ) {
+        let source = generated_cif(&positions);
+        let original = structure(&source);
+        let round_tripped = structure(&write_canonical(&original));
+        prop_assert_eq!(round_tripped.atom_count(), original.atom_count());
+        prop_assert_eq!(round_tripped.residue_count(), original.residue_count());
+        for (before, after) in original.positions().iter().zip(round_tripped.positions()) {
+            for axis in 0..3 {
+                // Canonical text records three decimal places, so half one unit
+                // in the last place plus binary conversion error is the bound.
+                prop_assert!((before[axis] - after[axis]).abs() <= 5.1e-4);
+            }
+        }
+    }
+
+    #[test]
+    fn generated_document_values_survive_a_preserving_round_trip(
+        value in "[A-Za-z][A-Za-z0-9_-]{0,40}"
+    ) {
+        let source = format!("data_generated\n_custom.value {value}\n");
+        let original = document(&source);
+        let round_tripped = document(&write_preserving(&original));
+        let actual = round_tripped
+            .first_block()
+            .and_then(|block| block.category("custom"))
+            .and_then(|category| category.text("value", 0));
+        prop_assert_eq!(actual, Some(value.as_str()));
+    }
+}
+
+fn generated_cif(positions: &[(f32, f32, f32)]) -> String {
+    let mut source = String::from(
+        "data_generated\nloop_\n\
+         _atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+         _atom_site.label_atom_id\n_atom_site.label_comp_id\n\
+         _atom_site.label_asym_id\n_atom_site.label_seq_id\n\
+         _atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n",
+    );
+    for (index, (x, y, z)) in positions.iter().enumerate() {
+        let _written = writeln!(
+            source,
+            "ATOM {} C C{} GLY A 1 {x:.3} {y:.3} {z:.3}",
+            index + 1,
+            index + 1,
+        );
+    }
+    source.push_str("#\n");
+    source
 }
