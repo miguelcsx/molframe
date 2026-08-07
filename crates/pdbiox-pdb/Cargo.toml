@@ -10,5 +10,8 @@ description = "Legacy PDB reading and writing for pdbiox"
 [dependencies]
 pdbiox-core.workspace = true
 
+[dev-dependencies]
+proptest.workspace = true
+
 [lints]
 workspace = true

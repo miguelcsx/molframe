@@ -17,9 +17,10 @@ use pdbiox_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-/// The largest magnitude an eight-column coordinate field can hold to three
-/// decimal places.
-const COORDINATE_LIMIT: f64 = 10_000.0;
+/// Bounds whose rounding would overflow an eight-column, three-decimal field.
+/// The negative side loses one digit to the sign, so the limits are asymmetric.
+const MIN_COORDINATE: f64 = -999.999_5;
+const MAX_COORDINATE: f64 = 9_999.999_5;
 
 /// How to write, and what to do about a structure that does not fit.
 #[derive(Clone, Debug, Default)]
@@ -56,7 +57,7 @@ impl PdbOptions {
     }
 
     /// The label a chain is written under.
-    fn label_for<'a>(&'a self, label: &'a str) -> &'a str {
+    pub(crate) fn label_for<'a>(&'a self, label: &'a str) -> &'a str {
         match self.chain_map.get(label) {
             Some(replacement) => replacement,
             None => label,
@@ -171,7 +172,7 @@ fn write_atom(
         serial = serial_field(serial, options),
         name = atom_name_field(name),
         alt = alt_field(structure, atom),
-        comp = match residue.name() {
+        comp = match atom.component_name() {
             Some(comp) => comp,
             None => "",
         },
@@ -198,7 +199,7 @@ fn write_atom(
 ///
 /// A name shorter than four characters starts in the second column, which is the
 /// convention that lets a reader tell a one-letter element from a two-letter one.
-fn atom_name_field(name: &str) -> String {
+pub(crate) fn atom_name_field(name: &str) -> String {
     if name.len() >= 4 {
         name.to_owned()
     } else {
@@ -210,7 +211,7 @@ fn atom_name_field(name: &str) -> String {
 ///
 /// A label longer than one character has already been refused by the capacity
 /// check, so anything reaching here fits.
-fn alt_field<'a>(structure: &'a Structure, atom: &AtomRef<'a>) -> &'a str {
+pub(crate) fn alt_field<'a>(structure: &'a Structure, atom: &AtomRef<'a>) -> &'a str {
     let Some(alt) = atom.alt_id() else { return " " };
     let Some(symbol) = alt.symbol() else {
         return " ";
@@ -221,7 +222,7 @@ fn alt_field<'a>(structure: &'a Structure, atom: &AtomRef<'a>) -> &'a str {
     }
 }
 
-fn serial_field(serial: i64, options: &PdbOptions) -> String {
+pub(crate) fn serial_field(serial: i64, options: &PdbOptions) -> String {
     match options
         .hybrid36
         .then(|| hybrid36::encode(serial, 5))
@@ -232,14 +233,14 @@ fn serial_field(serial: i64, options: &PdbOptions) -> String {
     }
 }
 
-fn residue_field(seq: i64, options: &PdbOptions) -> String {
+pub(crate) fn residue_field(seq: i64, options: &PdbOptions) -> String {
     match options.hybrid36.then(|| hybrid36::encode(seq, 4)).flatten() {
         Some(field) => field,
         None => format!("{seq:>4}"),
     }
 }
 
-fn chain_label(structure: &Structure, chain: &ChainRef<'_>) -> Box<str> {
+pub(crate) fn chain_label(structure: &Structure, chain: &ChainRef<'_>) -> Box<str> {
     let symbol = chain.auth_asym_id().or_else(|| chain.label_asym_id());
     match symbol.and_then(|symbol| structure.resolve(symbol)) {
         Some(label) => label.into(),
@@ -248,7 +249,7 @@ fn chain_label(structure: &Structure, chain: &ChainRef<'_>) -> Box<str> {
 }
 
 /// Everything about the structure that the format cannot hold.
-fn check_capacity(
+pub(crate) fn check_capacity(
     structure: &Structure,
     options: &PdbOptions,
     select: &impl Select,
@@ -303,10 +304,10 @@ fn check_residue(residue: &ResidueRef<'_>, options: &PdbOptions, refusals: &mut 
         let Some(position) = atom.position() else {
             continue;
         };
-        if position
-            .iter()
-            .any(|value| f64::from(*value).abs() >= COORDINATE_LIMIT)
-        {
+        if position.iter().any(|value| {
+            let value = f64::from(*value);
+            !value.is_finite() || !(MIN_COORDINATE..MAX_COORDINATE).contains(&value)
+        }) {
             refusals.push(
                 Diagnostic::new(Code::E4104)
                     .with_context("atom", atom.index().to_string())

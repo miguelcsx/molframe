@@ -2,6 +2,7 @@ use super::*;
 use crate::read;
 use pdbiox_core::index::AtomIndex;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
+use proptest::prelude::*;
 
 const DIPEPTIDE: &str = "\
 ATOM      1  N   GLY A   1      27.340  24.430   2.614  1.00 10.00           N
@@ -144,6 +145,69 @@ fn a_filter_writes_only_what_it_accepts() {
 #[test]
 fn a_written_file_ends_with_the_record_that_says_so() {
     assert!(written(DIPEPTIDE).ends_with("END\n"));
+}
+
+proptest! {
+    #[test]
+    fn generated_representable_structures_survive_a_pdb_round_trip(
+        positions in prop::collection::vec(
+            (-999.0_f32..9_999.0, -999.0_f32..9_999.0, -999.0_f32..9_999.0),
+            1..64,
+        )
+    ) {
+        let source = generated_pdb(&positions);
+        let original = parse(&source);
+        let round_tripped = parse(&written(&source));
+        prop_assert_eq!(round_tripped.atom_count(), original.atom_count());
+        prop_assert_eq!(round_tripped.residue_count(), original.residue_count());
+        for (before, after) in original.positions().iter().zip(round_tripped.positions()) {
+            for axis in 0..3 {
+                // PDB coordinates carry three decimals. Half one unit in the
+                // last place plus f32 conversion error bounds the round trip.
+                prop_assert!((before[axis] - after[axis]).abs() <= 5.1e-4);
+            }
+        }
+    }
+}
+
+#[test]
+fn a_negative_coordinate_that_loses_a_digit_to_the_sign_is_refused() {
+    let original = parse(DIPEPTIDE);
+    let mut editor = original.edit_coordinates();
+    let Some(positions) = editor.positions_mut(pdbiox_core::index::ModelIndex::new(0)) else {
+        panic!("first model missing")
+    };
+    positions[0][0] = -1_226.086;
+    let edited = match editor.commit() {
+        Ok(structure) => structure,
+        Err(findings) => panic!("coordinate edit failed: {findings:?}"),
+    };
+    let codes: Vec<_> = write(&edited, &PdbOptions::new())
+        .err()
+        .unwrap_or_default()
+        .iter()
+        .map(pdbiox_core::diagnostic::Diagnostic::code)
+        .collect();
+    assert!(
+        codes.contains(&Code::E4104),
+        "expected E4104, got {codes:?}"
+    );
+}
+
+fn generated_pdb(positions: &[(f32, f32, f32)]) -> String {
+    let mut source = String::new();
+    for (index, (x, y, z)) in positions.iter().enumerate() {
+        let serial = index + 1;
+        let _written = writeln!(
+            source,
+            "ATOM  {serial:>5} C{serial:<3} GLY A   1    \
+             {x:>8.3}{y:>8.3}{z:>8.3}{occ:>6.2}{b:>6.2}           C  ",
+            occ = 1.0,
+            b = 10.0,
+        );
+    }
+    source.push_str("END\n");
+    source
 }
 
 /// Rebuilds a chain table with the first chain relabelled.
