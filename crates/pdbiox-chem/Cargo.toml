@@ -1,0 +1,15 @@
+[package]
+name = "pdbiox-chem"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deposited-component chemistry and versioned element data for pdbiox"
+
+[dependencies]
+pdbiox-cif.workspace = true
+pdbiox-core.workspace = true
+
+[lints]
+workspace = true
