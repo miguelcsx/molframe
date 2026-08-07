@@ -9,11 +9,24 @@ use pdbiox::{Diagnostic, ParseMode, Rendered};
 use std::fmt::Write as _;
 use std::io::Write as _;
 
+/// Machine or human result representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputKind {
+    /// Human-readable prose.
+    Text,
+    /// One structured JSON object.
+    Json,
+    /// Comma-separated rows.
+    Csv,
+    /// Tab-separated rows.
+    Tsv,
+}
+
 /// What the caller asked for that every command needs to know.
 #[derive(Clone, Copy, Debug)]
 pub struct Context {
     /// Print results as structured data rather than prose.
-    pub format: bool,
+    pub format: OutputKind,
     /// Suppress findings.
     pub quiet: bool,
     /// Colour the findings.
@@ -23,6 +36,22 @@ pub struct Context {
 }
 
 impl Context {
+    /// Whether structured JSON was requested.
+    #[must_use]
+    pub const fn is_json(self) -> bool {
+        matches!(self.format, OutputKind::Json)
+    }
+
+    /// Delimiter for a requested tabular format.
+    #[must_use]
+    pub const fn delimiter(self) -> Option<char> {
+        match self.format {
+            OutputKind::Csv => Some(','),
+            OutputKind::Tsv => Some('\t'),
+            OutputKind::Text | OutputKind::Json => None,
+        }
+    }
+
     /// Prints findings to standard error.
     pub fn findings(self, findings: &[Diagnostic], origin: &str) {
         if self.quiet {
@@ -46,6 +75,62 @@ impl Context {
         let mut out = std::io::stdout().lock();
         let _ = writeln!(out, "{text}");
     }
+}
+
+/// A deterministic delimited table.
+#[derive(Debug)]
+pub struct Table {
+    delimiter: char,
+    output: String,
+}
+
+impl Table {
+    /// Starts a table and writes its header.
+    #[must_use]
+    pub fn new(delimiter: char, header: &[&str]) -> Self {
+        let mut table = Self {
+            delimiter,
+            output: String::new(),
+        };
+        table.row(header.iter().copied());
+        table
+    }
+
+    /// Appends one row, quoting fields according to the selected delimiter.
+    pub fn row<'a>(&mut self, values: impl IntoIterator<Item = &'a str>) {
+        for (position, value) in values.into_iter().enumerate() {
+            if position != 0 {
+                self.output.push(self.delimiter);
+            }
+            delimited_field(&mut self.output, value, self.delimiter);
+        }
+        self.output.push('\n');
+    }
+
+    /// Returns the complete table without an extra trailing newline.
+    #[must_use]
+    pub fn finish(mut self) -> String {
+        if self.output.ends_with('\n') {
+            self.output.pop();
+        }
+        self.output
+    }
+}
+
+fn delimited_field(output: &mut String, value: &str, delimiter: char) {
+    if !value.contains([delimiter, '"', '\n', '\r']) {
+        output.push_str(value);
+        return;
+    }
+    output.push('"');
+    for character in value.chars() {
+        if character == '"' {
+            output.push_str("\"\"");
+        } else {
+            output.push(character);
+        }
+    }
+    output.push('"');
 }
 
 /// Builds a structured object, one field at a time.

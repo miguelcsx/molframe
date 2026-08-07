@@ -48,6 +48,10 @@ enum OutputFormat {
     Text,
     /// Structured, for another program to consume.
     Json,
+    /// Comma-separated table.
+    Csv,
+    /// Tab-separated table.
+    Tsv,
 }
 
 /// How much irregularity a read tolerates.
@@ -122,7 +126,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let color = !cli.no_color && std::env::var_os("NO_COLOR").is_none();
     let context = report::Context {
-        format: matches!(cli.format, OutputFormat::Json),
+        format: cli.format.into(),
         quiet: cli.quiet,
         color,
         mode: cli.tolerance.into(),
@@ -149,5 +153,16 @@ fn main() -> ExitCode {
     match u8::try_from(exit.code()) {
         Ok(code) => ExitCode::from(code),
         Err(_) => ExitCode::FAILURE,
+    }
+}
+
+impl From<OutputFormat> for report::OutputKind {
+    fn from(format: OutputFormat) -> Self {
+        match format {
+            OutputFormat::Text => Self::Text,
+            OutputFormat::Json => Self::Json,
+            OutputFormat::Csv => Self::Csv,
+            OutputFormat::Tsv => Self::Tsv,
+        }
     }
 }

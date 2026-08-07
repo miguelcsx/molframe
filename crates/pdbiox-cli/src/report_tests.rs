@@ -41,3 +41,21 @@ fn a_list_of_objects_renders_as_an_array() {
         r#"[{"chain":"A"},{"chain":"B"}]"#
     );
 }
+
+#[test]
+fn csv_quotes_delimiters_quotes_and_newlines_without_changing_row_order() {
+    let mut table = Table::new(',', &["id", "title"]);
+    table.row(["1ABC", "a, \"quoted\" title"]);
+    table.row(["2DEF", "two\nlines"]);
+    assert_eq!(
+        table.finish(),
+        "id,title\n1ABC,\"a, \"\"quoted\"\" title\"\n2DEF,\"two\nlines\""
+    );
+}
+
+#[test]
+fn tsv_only_quotes_fields_that_need_it() {
+    let mut table = Table::new('\t', &["chain", "atoms"]);
+    table.row(["A\tB", "42"]);
+    assert_eq!(table.finish(), "chain\tatoms\n\"A\tB\"\t42");
+}

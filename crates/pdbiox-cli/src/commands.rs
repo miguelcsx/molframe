@@ -5,7 +5,7 @@
 //! having belongs in the library, where the Rust callers get it too.
 
 use crate::exit::Exit;
-use crate::report::{Context, Json, json_array};
+use crate::report::{Context, Json, Table, json_array};
 use pdbiox::{
     AnalysisPolicy, ChainRef, Format, PdbOptions, ReadOptions, Structure, validate as check,
 };
@@ -36,7 +36,7 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
     };
     let data = structure.data();
 
-    if context.format {
+    if context.is_json() {
         let mut object = Json::new();
         if let Some(id) = &data.entry.id {
             object.text("id", id);
@@ -51,6 +51,10 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
             object.raw("chain_detail", &chain_detail_json(&structure));
         }
         context.result(&object.finish());
+        return Exit::Success;
+    }
+    if let Some(delimiter) = context.delimiter() {
+        context.result(&info_table(&structure, detail, delimiter));
         return Exit::Success;
     }
 
@@ -94,6 +98,44 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
     }
     context.result(&text);
     Exit::Success
+}
+
+fn info_table(structure: &Structure, detail: bool, delimiter: char) -> String {
+    let id = match &structure.data().entry.id {
+        Some(id) => id.as_ref(),
+        None => "",
+    };
+    if detail {
+        let mut table = Table::new(delimiter, &["entry", "chain", "residues", "atoms"]);
+        for chain in structure.data().chains() {
+            let values = [
+                id.to_owned(),
+                label_of(structure, chain),
+                chain.residues().count().to_string(),
+                chain
+                    .residues()
+                    .map(|residue| residue.atoms().count())
+                    .sum::<usize>()
+                    .to_string(),
+            ];
+            table.row(values.iter().map(String::as_str));
+        }
+        return table.finish();
+    }
+    let mut table = Table::new(
+        delimiter,
+        &["entry", "models", "chains", "entities", "residues", "atoms"],
+    );
+    let values = [
+        id.to_owned(),
+        structure.model_count().to_string(),
+        structure.chain_count().to_string(),
+        structure.entity_count().to_string(),
+        structure.residue_count().to_string(),
+        structure.atom_count().to_string(),
+    ];
+    table.row(values.iter().map(String::as_str));
+    table.finish()
 }
 
 fn chain_detail_json(structure: &Structure) -> String {
@@ -153,32 +195,67 @@ pub fn convert(
         return Exit::Usage;
     };
 
-    let text = if target == Format::Mmcif {
-        pdbiox::write_mmcif(&structure)
-    } else {
-        let mut options = PdbOptions::new().hybrid36(hybrid36);
-        for mapping in chain_map {
-            let Some((from, to)) = mapping.split_once('=') else {
-                eprintln!("a chain mapping must be written FROM=TO, not {mapping:?}");
-                return Exit::Usage;
-            };
-            options = options.chain_map(from, to);
-        }
-        match pdbiox::write_pdb(&structure, &options) {
-            Ok(text) => text,
+    let bytes = match target {
+        Format::Mmcif => pdbiox::write_mmcif(&structure).into_bytes(),
+        Format::BinaryCif => match pdbiox::write_bcif(&structure) {
+            Ok(bytes) => bytes,
             Err(refusals) => {
                 context.findings(&refusals, &input.display().to_string());
                 return Exit::of(&refusals);
             }
+        },
+        Format::Pdb => {
+            let options = match pdb_options(chain_map, hybrid36) {
+                Ok(options) => options,
+                Err(exit) => return exit,
+            };
+            match pdbiox::write_pdb(&structure, &options) {
+                Ok(text) => text.into_bytes(),
+                Err(refusals) => {
+                    context.findings(&refusals, &input.display().to_string());
+                    return Exit::of(&refusals);
+                }
+            }
         }
+        Format::Pqr | Format::Pdbqt => {
+            let options = match pdb_options(chain_map, hybrid36) {
+                Ok(options) => options,
+                Err(exit) => return exit,
+            };
+            let rendered = match target {
+                Format::Pqr => pdbiox::write_pqr(&structure, &options),
+                Format::Pdbqt => pdbiox::write_pdbqt(&structure, &options),
+                _ => return Exit::Usage,
+            };
+            match rendered {
+                Ok(text) => text.into_bytes(),
+                Err(refusals) => {
+                    context.findings(&refusals, &input.display().to_string());
+                    return Exit::of(&refusals);
+                }
+            }
+        }
+        _ => return Exit::Usage,
     };
-    match std::fs::write(output, text) {
+    match std::fs::write(output, bytes) {
         Ok(()) => Exit::Success,
         Err(error) => {
             eprintln!("could not write {}: {error}", output.display());
             Exit::Failure
         }
     }
+}
+
+fn pdb_options(chain_map: &[String], hybrid36: bool) -> Result<PdbOptions, Exit> {
+    let mut options = PdbOptions::new().hybrid36(hybrid36);
+    for mapping in chain_map {
+        let Some((from, to)) = mapping.split_once('=') else {
+            eprintln!("a chain mapping must be written FROM=TO, not {mapping:?}");
+            return Err(Exit::Usage);
+        };
+        options = options.chain_map(from, to);
+    }
+    Ok(options)
 }
 
 /// Checks a structure against the invariants it must satisfy.
@@ -189,7 +266,7 @@ pub fn validate(path: &Path, context: Context) -> Exit {
     };
     let violations = check(structure.data());
 
-    if context.format {
+    if context.is_json() {
         let mut object = Json::new();
         object.number("violations", violations.len()).text(
             "status",
@@ -200,6 +277,16 @@ pub fn validate(path: &Path, context: Context) -> Exit {
             },
         );
         context.result(&object.finish());
+    } else if let Some(delimiter) = context.delimiter() {
+        let values = [
+            violations.len().to_string(),
+            if violations.is_empty() {
+                "sound".to_owned()
+            } else {
+                "inconsistent".to_owned()
+            },
+        ];
+        context.result(&one_row(delimiter, &["violations", "status"], &values));
     } else if violations.is_empty() {
         context.result("sound: every structural invariant holds");
     } else {
@@ -228,7 +315,7 @@ pub fn measure(path: &Path, context: Context) -> Exit {
     };
     let radius = pdbiox::radius_of_gyration(positions, &[]);
 
-    if context.format {
+    if context.is_json() {
         let mut object = Json::new();
         object.number("atoms", positions.len());
         for (axis, value) in ["x", "y", "z"].into_iter().zip(centre) {
@@ -238,6 +325,28 @@ pub fn measure(path: &Path, context: Context) -> Exit {
             object.number("radius_of_gyration", format!("{radius:.4}"));
         }
         context.result(&object.finish());
+    } else if let Some(delimiter) = context.delimiter() {
+        let values = [
+            positions.len().to_string(),
+            format!("{:.4}", centre[0]),
+            format!("{:.4}", centre[1]),
+            format!("{:.4}", centre[2]),
+            match radius {
+                Some(radius) => format!("{radius:.4}"),
+                None => String::new(),
+            },
+        ];
+        context.result(&one_row(
+            delimiter,
+            &[
+                "atoms",
+                "centre_x",
+                "centre_y",
+                "centre_z",
+                "radius_of_gyration",
+            ],
+            &values,
+        ));
     } else {
         let mut text = format!("atoms     {}\n", positions.len());
         let _ = write!(
@@ -282,12 +391,19 @@ pub fn rmsd(mobile: &Path, reference: &Path, no_fit: bool, context: Context) -> 
         return Exit::Consistency;
     };
 
-    if context.format {
+    if context.is_json() {
         let mut object = Json::new();
         object.number("rmsd", format!("{value:.4}"));
         object.number("atoms", moving.len());
         object.text("fitted", if fitted { "yes" } else { "no" });
         context.result(&object.finish());
+    } else if let Some(delimiter) = context.delimiter() {
+        let values = [
+            format!("{value:.4}"),
+            moving.len().to_string(),
+            fitted.to_string(),
+        ];
+        context.result(&one_row(delimiter, &["rmsd", "atoms", "fitted"], &values));
     } else {
         let how = if fitted {
             "after fitting"
@@ -305,7 +421,7 @@ pub fn rmsd(mobile: &Path, reference: &Path, no_fit: bool, context: Context) -> 
 /// Prints the policy an analysis runs under by default.
 pub fn policy(context: Context) -> Exit {
     let policy = AnalysisPolicy::default();
-    if context.format {
+    if context.is_json() {
         let mut object = Json::new();
         object.text(
             "profile",
@@ -316,6 +432,15 @@ pub fn policy(context: Context) -> Exit {
         );
         object.text("fingerprint", &policy.fingerprint().to_string());
         context.result(&object.finish());
+    } else if let Some(delimiter) = context.delimiter() {
+        let values = [
+            match policy.profile() {
+                Some(profile) => profile.to_string(),
+                None => "(modified)".to_owned(),
+            },
+            policy.fingerprint().to_string(),
+        ];
+        context.result(&one_row(delimiter, &["profile", "fingerprint"], &values));
     } else {
         context.result(&format!(
             "{policy}\n\nfingerprint      {}",
@@ -323,4 +448,10 @@ pub fn policy(context: Context) -> Exit {
         ));
     }
     Exit::Success
+}
+
+fn one_row(delimiter: char, header: &[&str], values: &[String]) -> String {
+    let mut table = Table::new(delimiter, header);
+    table.row(values.iter().map(String::as_str));
+    table.finish()
 }
