@@ -16,8 +16,16 @@ description = "A batteries-included structural bioinformatics engine"
 [workspace.dependencies]
 pdbiox-core = { path = "crates/pdbiox-core", version = "0.1.0" }
 pdbiox-cif = { path = "crates/pdbiox-cif", version = "0.1.0" }
+pdbiox-bcif = { path = "crates/pdbiox-bcif", version = "0.1.0" }
+pdbiox-chem = { path = "crates/pdbiox-chem", version = "0.1.0" }
 pdbiox-geom = { path = "crates/pdbiox-geom", version = "0.1.0" }
+pdbiox-ic = { path = "crates/pdbiox-ic", version = "0.1.0" }
 pdbiox-pdb = { path = "crates/pdbiox-pdb", version = "0.1.0" }
+pdbiox-mmap = { path = "crates/pdbiox-mmap", version = "0.1.0" }
+pdbiox-ml = { path = "crates/pdbiox-ml", version = "0.1.0" }
+pdbiox-query = { path = "crates/pdbiox-query", version = "0.1.0" }
+pdbiox-spatial = { path = "crates/pdbiox-spatial", version = "0.1.0" }
+pdbiox-xtal = { path = "crates/pdbiox-xtal", version = "0.1.0" }
 pdbiox = { path = "crates/pdbiox", version = "0.1.0" }
 
 bytemuck = { version = "1", features = ["derive"] }
@@ -27,9 +35,18 @@ hashbrown = "0.16"
 indexmap = "2"
 memchr = "2"
 memmap2 = "0.9"
+numpy = "0.29"
+pyo3 = "0.29"
 smallvec = { version = "1", features = ["union"] }
 thiserror = "2"
+wide = "1.6"
 zstd = "0.13"
+arrow = { version = "59", default-features = false, features = ["ffi"] }
+proptest = "1"
+rmp-serde = "1"
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+serde_repr = "0.1"
 
 [workspace.lints.rust]
 missing_docs = "warn"
