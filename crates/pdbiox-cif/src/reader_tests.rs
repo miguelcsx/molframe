@@ -1,5 +1,7 @@
 use super::*;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
+use pdbiox_core::index::EntityIndex;
+use pdbiox_core::io::ParseMode;
 use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
 
 const DIPEPTIDE: &str = "\
@@ -71,6 +73,247 @@ fn both_namespaces_are_kept_rather_than_one_being_derived_from_the_other() {
     };
     assert_eq!(residue.label_seq_id(), Some(1));
     assert_eq!(residue.auth_seq_id(), Some(1));
+}
+
+#[test]
+fn distinct_chain_namespaces_and_entity_relations_survive_lowering() {
+    let text = "\
+data_x
+loop_
+_entity.id
+_entity.type
+1 polymer
+2 non-polymer
+#
+loop_
+_struct_asym.id
+_struct_asym.entity_id
+A 1
+B 2
+#
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.auth_seq_id
+_atom_site.auth_asym_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+ATOM 1 N N GLY A 1 10 X 0 0 0
+HETATM 2 C C1 LIG B . 20 Y 1 1 1
+#
+";
+    let (structure, _) = parse_structure(text);
+    let chains: Vec<_> = structure.data().chains().collect();
+    assert_eq!(chains.len(), 2);
+    assert_eq!(
+        chains[0]
+            .label_asym_id()
+            .and_then(|symbol| structure.resolve(symbol)),
+        Some("A")
+    );
+    assert_eq!(
+        chains[0]
+            .auth_asym_id()
+            .and_then(|symbol| structure.resolve(symbol)),
+        Some("X")
+    );
+    assert_eq!(chains[0].entity(), Some(EntityIndex::new(0)));
+    assert_eq!(chains[1].entity(), Some(EntityIndex::new(1)));
+}
+
+#[test]
+fn coordinate_only_reads_keep_entity_identity_because_it_is_topology() {
+    let text = "\
+data_x
+loop_
+_entity.id
+_entity.type
+7 polymer
+#
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+1 N N GLY A 7 1 0 0 0
+#
+";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options = ReadOptions::new().only_atomic_coords(true);
+    let (structure, _) = match read(&input, &options) {
+        Ok(result) => result,
+        Err(findings) => panic!("read failed: {findings:?}"),
+    };
+    let entity = structure
+        .data()
+        .chains()
+        .next()
+        .and_then(pdbiox_core::structure::ChainRef::entity);
+    assert_eq!(entity, Some(EntityIndex::new(0)));
+}
+
+#[test]
+fn strict_mode_refuses_an_ambiguous_residue_boundary_that_permissive_mode_reports() {
+    let text = "\
+data_x
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+1 N N GLY A 1 0 0 0
+2 C CA GLY A 1 1 0 0
+3 N N GLY A 1 2 0 0
+#
+";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let strict = read(&input, &ReadOptions::new().mode(ParseMode::Strict));
+    assert!(strict.is_err());
+
+    let permissive = read(&input, &ReadOptions::new());
+    assert!(permissive.is_ok());
+}
+
+#[test]
+fn a_component_identity_carried_by_an_altloc_survives_structure_and_write() {
+    let text = "\
+data_x
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+1 N N A GLY A 1 0 0 0
+2 C CA B ALA A 1 1 0 0
+#
+";
+    let (structure, findings) = parse_structure(text);
+    let components: Vec<_> = structure
+        .data()
+        .atoms()
+        .filter_map(AtomRef::component_name)
+        .collect();
+    assert_eq!(components, ["GLY", "ALA"]);
+    assert!(findings.iter().any(|finding| finding.code() == Code::W3012));
+
+    let written = crate::write_canonical(&structure);
+    let (reread, _) = parse_structure(&written);
+    let reread_components: Vec<_> = reread
+        .data()
+        .atoms()
+        .filter_map(AtomRef::component_name)
+        .collect();
+    assert_eq!(reread_components, ["GLY", "ALA"]);
+}
+
+#[test]
+fn dense_models_keep_numbers_and_identity_changes_become_ragged() {
+    let text = "\
+data_x
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.pdbx_PDB_model_num
+1 N N GLY A 1 0 0 0 5
+2 C CA GLY A 1 1 0 0 5
+1 N N GLY A 1 0 1 0 9
+2 C CA GLY A 1 1 1 0 9
+#
+";
+    let (structure, _) = parse_structure(text);
+    let numbers: Vec<_> = structure
+        .data()
+        .models()
+        .filter_map(pdbiox_core::structure::ModelRef::number)
+        .collect();
+    assert_eq!(numbers, [5, 9]);
+    assert_eq!(structure.model_count(), 2);
+
+    let mismatched = text.replacen("2 C CA GLY A 1 1 1 0 9", "2 O O GLY A 1 1 1 0 9", 1);
+    let input = InputBuffer::from_bytes(mismatched.into_bytes());
+    let (ragged, _) = match read(&input, &ReadOptions::new().mode(ParseMode::Recover)) {
+        Ok(result) => result,
+        Err(findings) => panic!("ragged read failed: {findings:?}"),
+    };
+    let Some(models) = ragged.ragged_models() else {
+        panic!("identity-changing models must be ragged")
+    };
+    assert_eq!(models.len(), 2);
+    let names: Vec<Vec<_>> = models
+        .iter()
+        .map(|model| model.data().atoms().filter_map(AtomRef::name).collect())
+        .collect();
+    assert_eq!(names, [["N", "CA"], ["N", "O"]]);
+    let numbers: Vec<_> = ragged
+        .data()
+        .models()
+        .filter_map(pdbiox_core::structure::ModelRef::number)
+        .collect();
+    assert_eq!(numbers, [5, 9]);
+}
+
+#[test]
+fn reading_only_the_first_cif_model_does_not_append_an_empty_frame() {
+    let text = "\
+data_x
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.pdbx_PDB_model_num
+1 N N GLY A 1 0 0 0 4
+1 N N GLY A 1 1 1 1 8
+#
+";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options = ReadOptions::new().only_first_model(true);
+    let (structure, _) = match read(&input, &options) {
+        Ok(result) => result,
+        Err(findings) => panic!("read failed: {findings:?}"),
+    };
+    assert_eq!(structure.model_count(), 1);
+    let number = structure
+        .data()
+        .models()
+        .next()
+        .and_then(pdbiox_core::structure::ModelRef::number);
+    assert_eq!(number, Some(4));
 }
 
 #[test]

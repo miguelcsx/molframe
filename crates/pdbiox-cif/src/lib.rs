@@ -15,9 +15,11 @@ mod lower;
 mod parser;
 mod reader;
 mod write;
+mod write_bonds;
+mod write_references;
 
 pub use document::{Category, CifValue, Column, DataBlock, Document};
 pub use lower::lower;
 pub use parser::{ParseResult, Rows, parse, split_tag};
-pub use reader::{CifReader, read};
+pub use reader::{CifReader, read, read_with_document};
 pub use write::{write_canonical, write_preserving};
