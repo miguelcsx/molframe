@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Miguel Cárdenas
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+cff-version: 1.2.0
+message: "If you use pdbiox in your work, please cite this software."
+title: "pdbiox"
+abstract: "A batteries-included structural bioinformatics engine: semantics-preserving molecular data, high-performance analysis, and reproducible scientific evaluation."
+authors:
+  - family-names: "Cárdenas"
+    given-names: "Miguel"
+    email: "miguelecsx@gmail.com"
+keywords:
+  - "structural bioinformatics"
+  - "PDB"
+  - "mmCIF"
+  - "BinaryCIF"
+  - "Rust"
+  - "NumPy"
+license: "MIT OR Apache-2.0"
+repository-code: "https://github.com/miguelcsx/pdbiox"
+date-released: "2026-08-06"

@@ -54,14 +54,27 @@ else
     printf '\033[33mnote\033[0m:  docs/ not present — skipping scripts/check-docs.sh\n'
 fi
 
-# 5. The Python boundary is mechanical and fully typed.
+# 5. REUSE compliance. `reuse` is optional Python tooling — when it is not
+#    installed the check is skipped with a note rather than blocking the Rust
+#    loop. Compliance itself is defined by LICENSES/ + REUSE.toml.
+if command -v reuse >/dev/null 2>&1; then
+    if scripts/check-reuse.sh; then
+        pass "scripts/check-reuse.sh"
+    else
+        die "scripts/check-reuse.sh"
+    fi
+else
+    printf '\033[33mnote\033[0m:  `reuse` not installed — skipping scripts/check-reuse.sh\n'
+fi
+
+# 6. The Python boundary is mechanical and fully typed.
 if scripts/check-python.py; then
     pass "scripts/check-python.py"
 else
     die "scripts/check-python.py"
 fi
 
-# 6. No panic-on-absence helpers outside tests. The whole point of the rule in
+# 7. No panic-on-absence helpers outside tests. The whole point of the rule in
 #    Rules.md is that every absent case remains visible at its call site.
 if grep -rnE "\.(unwrap|expect)(_[A-Za-z0-9_]+)?\(" crates/ 2>/dev/null \
     | grep -v "_tests.rs" > /tmp/pdbiox_unwrap; then
@@ -73,7 +86,7 @@ else
     pass "no unwrap outside tests"
 fi
 
-# 7. File size ceiling. `wc` emits an aggregate row when it receives multiple
+# 8. File size ceiling. `wc` emits an aggregate row when it receives multiple
 #    files; that row is not a source file and must never make a large workspace
 #    fail this per-file gate.
 oversize="$(find crates -name "*.rs" -exec wc -l {} + | awk '$2 != "total" && $1 > 500 {print}')"
