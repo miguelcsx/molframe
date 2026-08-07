@@ -70,6 +70,7 @@ pub fn sample() -> Structure {
                     element: element_of(slot),
                     atom_name,
                     auth_atom_name: OptionalSymbol::NONE,
+                    alternate_component_id: OptionalSymbol::NONE,
                     alt_id: AltId::BLANK,
                     residue: ResidueIndex::new(residue.get()),
                     occupancy: (1.0, Presence::Present),
@@ -94,7 +95,7 @@ pub fn sample() -> Structure {
 
     data.topology.models.push(1, 0..2);
     let (chunks, coords) = builder.finish();
-    data.chunks = chunks;
+    data.chunks = chunks.into();
     data.coords = CoordinateStore::Single(coords);
     Structure::new(data)
 }

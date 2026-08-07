@@ -27,6 +27,11 @@ pub struct AtomRecord {
     pub atom_name: SymbolId,
     /// The depositor's atom name, where it differs or where the file carried it.
     pub auth_atom_name: OptionalSymbol,
+    /// A component identity differing from the residue's primary identity.
+    ///
+    /// This occurs when alternate conformations model different residue types.
+    /// Absence means the residue table supplies the component identity.
+    pub alternate_component_id: OptionalSymbol,
     /// The alternate-location label.
     pub alt_id: AltId,
     /// The residue this atom belongs to.
@@ -48,7 +53,8 @@ pub struct AtomChunk {
     pub(super) model: u32,
     pub(super) element: EncodedColumn<u8>,
     pub(super) atom_name: EncodedColumn<SymbolId>,
-    pub(super) auth_atom_name: Option<EncodedColumn<SymbolId>>,
+    pub(super) auth_atom_name: Option<EncodedColumn<u32>>,
+    pub(super) alternate_component_id: Option<EncodedColumn<u32>>,
     pub(super) alt_id: EncodedColumn<u32>,
     pub(super) residue: ParentMapping,
     pub(super) occupancy: EncodedColumn<f32>,
@@ -113,12 +119,22 @@ impl AtomChunk {
         self.atom_name.get(local)
     }
 
+    /// Plain backing storage for atom names, when no decode is required.
+    #[must_use]
+    pub fn atom_names_plain(&self) -> Option<&[SymbolId]> {
+        self.atom_name.as_slice()
+    }
+
     /// The depositor's name for the atom at `local`, where the file carried one.
     #[must_use]
     pub fn auth_atom_name(&self, local: u32) -> Option<SymbolId> {
-        self.auth_atom_name
-            .as_ref()
-            .and_then(|column| column.get(local))
+        optional_symbol(self.auth_atom_name.as_ref()?.get(local)?)
+    }
+
+    /// The atom-specific component identity, where it differs from its residue.
+    #[must_use]
+    pub fn alternate_component_id(&self, local: u32) -> Option<SymbolId> {
+        optional_symbol(self.alternate_component_id.as_ref()?.get(local)?)
     }
 
     /// The alternate-location label of the atom at `local`.
@@ -139,10 +155,22 @@ impl AtomChunk {
         with_presence(self.occupancy.get(local), &self.occupancy_validity, local)
     }
 
+    /// Plain backing storage for occupancies, when no decode is required.
+    #[must_use]
+    pub fn occupancies_plain(&self) -> Option<&[f32]> {
+        self.occupancy.as_slice()
+    }
+
     /// The temperature factor of the atom at `local`, and whether it was recorded.
     #[must_use]
     pub fn b_factor(&self, local: u32) -> Option<(f32, Presence)> {
         with_presence(self.b_factor.get(local), &self.b_factor_validity, local)
+    }
+
+    /// Plain backing storage for temperature factors, when no decode is required.
+    #[must_use]
+    pub fn b_factors_plain(&self) -> Option<&[f32]> {
+        self.b_factor.as_slice()
     }
 
     /// The formal charge of the atom at `local`, and whether it was recorded.
@@ -167,6 +195,37 @@ impl AtomChunk {
         self.coord_validity.get(local).is_present()
     }
 
+    /// Reconstructs one logical row without changing its encoded storage.
+    ///
+    /// Editors use this only when a structural change requires rebuilding atom
+    /// ordinals. Ordinary reads stay columnar and never materialise records.
+    #[must_use]
+    pub fn record(
+        &self,
+        local: u32,
+        residues: &ResidueTable,
+        position: Option<[f32; 3]>,
+    ) -> Option<AtomRecord> {
+        let position = if self.has_position(local) {
+            Some(position?)
+        } else {
+            None
+        };
+        Some(AtomRecord {
+            position,
+            element: self.element(local)?,
+            atom_name: self.atom_name(local)?,
+            auth_atom_name: optional(self.auth_atom_name(local)),
+            alternate_component_id: optional(self.alternate_component_id(local)),
+            alt_id: self.alt_id(local)?,
+            residue: self.residue(local, residues)?,
+            occupancy: self.occupancy(local)?,
+            b_factor: self.b_factor(local)?,
+            formal_charge: self.formal_charge(local)?,
+            atom_site_id: self.atom_site_id(local)?,
+        })
+    }
+
     fn atom_range(&self) -> Range<u32> {
         self.atoms.start..self.atoms.end
     }
@@ -178,4 +237,15 @@ fn with_presence<T>(
     local: u32,
 ) -> Option<(T, Presence)> {
     value.map(|value| (value, validity.get(local)))
+}
+
+fn optional_symbol(raw: u32) -> Option<SymbolId> {
+    (raw != u32::MAX).then(|| SymbolId::from_raw(raw))
+}
+
+fn optional(symbol: Option<SymbolId>) -> OptionalSymbol {
+    match symbol {
+        Some(symbol) => OptionalSymbol::some(symbol),
+        None => OptionalSymbol::NONE,
+    }
 }

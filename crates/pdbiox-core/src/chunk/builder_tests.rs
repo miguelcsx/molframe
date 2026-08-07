@@ -10,6 +10,7 @@ fn atom(residue: u32, element: Element, serial: u32) -> AtomRecord {
         element,
         atom_name: SymbolId::from_raw(0),
         auth_atom_name: OptionalSymbol::NONE,
+        alternate_component_id: OptionalSymbol::NONE,
         alt_id: AltId::BLANK,
         residue: ResidueIndex::new(residue),
         occupancy: (1.0, Presence::Present),
@@ -162,4 +163,19 @@ fn the_depositor_atom_name_column_is_absent_when_no_file_carried_one() {
         chunks.first().and_then(|chunk| chunk.auth_atom_name(0)),
         None
     );
+}
+
+#[test]
+fn an_optional_atom_name_stays_absent_beside_a_present_one() {
+    let mut builder = ChunkBuilder::new();
+    let mut named = atom(0, Element::CARBON, 0);
+    named.auth_atom_name = OptionalSymbol::some(SymbolId::from_raw(7));
+    builder.push(named);
+    builder.push(atom(0, Element::CARBON, 1));
+    let (chunks, _) = builder.finish();
+    let Some(chunk) = chunks.first() else {
+        panic!("expected one chunk")
+    };
+    assert_eq!(chunk.auth_atom_name(0), Some(SymbolId::from_raw(7)));
+    assert_eq!(chunk.auth_atom_name(1), None);
 }

@@ -37,6 +37,7 @@ pub const TARGET_CHUNK_ATOMS: u32 = 4096;
 ///     element: Element::CARBON,
 ///     atom_name: SymbolId::from_raw(0),
 ///     auth_atom_name: OptionalSymbol::NONE,
+///     alternate_component_id: OptionalSymbol::NONE,
 ///     alt_id: AltId::BLANK,
 ///     residue: ResidueIndex::new(0),
 ///     occupancy: (1.0, Presence::Present),
@@ -65,8 +66,10 @@ struct Pending {
     first_atom: u32,
     element: Vec<u8>,
     atom_name: Vec<SymbolId>,
-    auth_atom_name: Vec<SymbolId>,
+    auth_atom_name: Vec<u32>,
     has_auth_names: bool,
+    alternate_component_id: Vec<u32>,
+    has_alternate_components: bool,
     alt_id: Vec<u32>,
     residue: Vec<u32>,
     occupancy: Vec<f32>,
@@ -114,6 +117,7 @@ impl Pending {
         self.element.push(record.element.atomic_number());
         self.atom_name.push(record.atom_name);
         self.push_auth_atom_name(record);
+        self.push_alternate_component(record);
         self.alt_id.push(record.alt_id.get());
         self.residue.push(record.residue.get());
 
@@ -142,12 +146,20 @@ impl Pending {
     fn push_auth_atom_name(&mut self, record: &AtomRecord) {
         match record.auth_atom_name.get() {
             Some(name) => {
-                self.auth_atom_name.push(name);
+                self.auth_atom_name.push(name.get());
                 self.has_auth_names = true;
             }
-            None => {
-                self.auth_atom_name.push(record.atom_name);
+            None => self.auth_atom_name.push(u32::MAX),
+        }
+    }
+
+    fn push_alternate_component(&mut self, record: &AtomRecord) {
+        match record.alternate_component_id.get() {
+            Some(component) => {
+                self.alternate_component_id.push(component.get());
+                self.has_alternate_components = true;
             }
+            None => self.alternate_component_id.push(u32::MAX),
         }
     }
 
@@ -181,10 +193,12 @@ impl Pending {
     fn reset(&mut self) {
         self.first_atom = 0;
         self.has_auth_names = false;
+        self.has_alternate_components = false;
 
         self.element.clear();
         self.atom_name.clear();
         self.auth_atom_name.clear();
+        self.alternate_component_id.clear();
         self.alt_id.clear();
         self.residue.clear();
         self.occupancy.clear();
@@ -254,20 +268,17 @@ impl ChunkBuilder {
     }
 
     fn push_position(&mut self, position: Option<[f32; 3]>) {
-        match position {
-            Some(position) => {
-                self.coords.push(position);
-                self.pending.stats.bounds.extend(position);
-                self.pending.coord_presence.push(Presence::Present);
-            }
-            None => {
-                // The row still exists — an atom whose position was not recorded
-                // is not an atom that was never modelled — so the buffer keeps a
-                // slot and the validity mask carries the distinction.
-                self.coords.push([f32::NAN; 3]);
-                self.pending.coord_presence.push(Presence::Unknown);
-                self.pending.stats.has_missing_coords = true;
-            }
+        if let Some(position) = position {
+            self.coords.push(position);
+            self.pending.stats.bounds.extend(position);
+            self.pending.coord_presence.push(Presence::Present);
+        } else {
+            // The row still exists — an atom whose position was not recorded
+            // is not an atom that was never modelled — so the buffer keeps a
+            // slot and the validity mask carries the distinction.
+            self.coords.push([f32::NAN; 3]);
+            self.pending.coord_presence.push(Presence::Unknown);
+            self.pending.stats.has_missing_coords = true;
         }
     }
 
@@ -300,6 +311,9 @@ impl ChunkBuilder {
         let auth_atom_name = pending
             .has_auth_names
             .then(|| EncodedColumn::plain(&pending.auth_atom_name));
+        let alternate_component_id = pending
+            .has_alternate_components
+            .then(|| EncodedColumn::encode(&pending.alternate_component_id));
 
         let alt_id = EncodedColumn::encode(&pending.alt_id);
         let residue = ParentMapping::block_indexed(&pending.residue);
@@ -315,6 +329,7 @@ impl ChunkBuilder {
             element,
             atom_name,
             auth_atom_name,
+            alternate_component_id,
             alt_id,
             residue,
             occupancy,
