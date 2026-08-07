@@ -14,7 +14,9 @@
 
 use crate::document::{CifValue, Document};
 use crate::lexer::Quoting;
+use pdbiox_core::index::ModelIndex;
 use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
+use pdbiox_core::topology::EntityKind;
 use std::fmt::Write as _;
 
 /// Writes a document back out, preserving what it held.
@@ -118,9 +120,7 @@ pub fn write_canonical(structure: &Structure) -> String {
     let _ = writeln!(out, "data_{name}");
     out.push_str("#\n");
 
-    if let Some(id) = &data.entry.id {
-        let _ = writeln!(out, "_entry.id   {id}\n#");
-    }
+    write_entry_metadata(&mut out, structure);
     if let Some(cell) = data.cell {
         let _ = writeln!(
             out,
@@ -135,31 +135,85 @@ pub fn write_canonical(structure: &Structure) -> String {
         );
     }
 
+    write_entities(&mut out, structure);
+    crate::write_references::write(&mut out, structure);
+
     out.push_str(ATOM_SITE_HEADER);
-    let mut serial = 1u32;
-    for (position, chain) in data.chains().enumerate() {
-        let chain_label = normalised_label(position);
-        let auth_label = label(
-            structure,
-            chain.auth_asym_id().or_else(|| chain.label_asym_id()),
-        );
-        for residue in chain.residues() {
-            for atom in residue.atoms() {
-                write_atom(
-                    &mut out,
-                    structure,
-                    &atom,
-                    &residue,
-                    &chain_label,
-                    &auth_label,
-                    serial,
-                );
-                serial += 1;
-            }
+    for ordinal in 0..structure.model_count() {
+        let model = ModelIndex::new(ordinal as u32);
+        let Some((snapshot, local_model)) = structure.model_snapshot(model) else {
+            continue;
+        };
+        let model_number = match snapshot
+            .model(local_model)
+            .and_then(pdbiox_core::structure::ModelRef::number)
+        {
+            Some(number) => number,
+            None => match i32::try_from(ordinal.saturating_add(1)) {
+                Ok(number) => number,
+                Err(_) => i32::MAX,
+            },
+        };
+        write_model(&mut out, &snapshot, local_model, model_number);
+    }
+    out.push_str("#\n");
+    crate::write_bonds::write(&mut out, structure);
+    out
+}
+
+fn write_entry_metadata(out: &mut String, structure: &Structure) {
+    let entry = &structure.data().entry;
+    if let Some(id) = &entry.id {
+        let _ = writeln!(out, "_entry.id   {}\n#", quote(id));
+    }
+    if let Some(title) = &entry.title {
+        let _ = writeln!(out, "_struct.title   {}\n#", quote(title));
+    }
+    if let Some(method) = &entry.method {
+        let _ = writeln!(out, "_exptl.method   {}\n#", quote(method));
+    }
+    if let Some(resolution) = entry.resolution {
+        let _ = writeln!(out, "_refine.ls_d_res_high   {resolution:.4}\n#");
+    }
+}
+
+fn write_entities(out: &mut String, structure: &Structure) {
+    let entities = &structure.data().topology.entities;
+    if entities.is_empty() {
+        return;
+    }
+    out.push_str("loop_\n_entity.id\n_entity.type\n_entity.pdbx_description\n");
+    for entity in entities.iter() {
+        let id = label(structure, entities.id(entity));
+        let kind = match entities.kind(entity) {
+            Some(EntityKind::Polymer) => "polymer",
+            Some(EntityKind::NonPolymer) => "non-polymer",
+            Some(EntityKind::Water) => "water",
+            Some(EntityKind::Branched) => "branched",
+            _ => "?",
+        };
+        let description = label(structure, entities.description(entity));
+        let _ = writeln!(out, "{id} {kind} {description}");
+    }
+    out.push_str("#\n");
+
+    let has_sequence = entities
+        .iter()
+        .any(|entity| !entities.canonical_sequence(entity).is_empty());
+    if !has_sequence {
+        return;
+    }
+    out.push_str(
+        "loop_\n_entity_poly_seq.entity_id\n_entity_poly_seq.num\n_entity_poly_seq.mon_id\n",
+    );
+    for entity in entities.iter() {
+        let id = label(structure, entities.id(entity));
+        for (position, component) in entities.canonical_sequence(entity).iter().enumerate() {
+            let component = label(structure, Some(*component));
+            let _ = writeln!(out, "{id} {} {component}", position + 1);
         }
     }
     out.push_str("#\n");
-    out
 }
 
 /// The item names of the coordinate category, in the order they are written.
@@ -171,6 +225,7 @@ _atom_site.label_atom_id\n\
 _atom_site.label_alt_id\n\
 _atom_site.label_comp_id\n\
 _atom_site.label_asym_id\n\
+_atom_site.label_entity_id\n\
 _atom_site.label_seq_id\n\
 _atom_site.pdbx_PDB_ins_code\n\
 _atom_site.Cartn_x\n\
@@ -179,16 +234,62 @@ _atom_site.Cartn_z\n\
 _atom_site.occupancy\n\
 _atom_site.B_iso_or_equiv\n\
 _atom_site.auth_seq_id\n\
+_atom_site.auth_comp_id\n\
 _atom_site.auth_asym_id\n\
+_atom_site.auth_atom_id\n\
 _atom_site.pdbx_PDB_model_num\n";
+
+fn write_model(out: &mut String, structure: &Structure, model: ModelIndex, model_number: i32) {
+    let data = structure.data();
+    let mut serial = 1u32;
+    for (position, chain) in data.chains().enumerate() {
+        let chain_label = match chain.label() {
+            Some(label) => quote(label),
+            None => normalised_label(position),
+        };
+        let auth_label = label(
+            structure,
+            chain.auth_asym_id().or_else(|| chain.label_asym_id()),
+        );
+        let entity = chain
+            .entity()
+            .and_then(|entity| data.topology.entities.id(entity))
+            .and_then(|symbol| structure.resolve(symbol))
+            .map_or_else(|| ".".to_owned(), quote);
+        let context = AtomSiteContext {
+            chain: &chain_label,
+            entity: &entity,
+            auth_chain: &auth_label,
+            model_number,
+        };
+        for residue in chain.residues() {
+            for atom in residue.atoms() {
+                let position = atom.position().and_then(|_| {
+                    structure
+                        .model_positions(model)
+                        .and_then(|positions| positions.get(atom.index().as_usize()).copied())
+                });
+                write_atom(out, structure, &atom, &residue, position, &context, serial);
+                serial += 1;
+            }
+        }
+    }
+}
+
+struct AtomSiteContext<'a> {
+    chain: &'a str,
+    entity: &'a str,
+    auth_chain: &'a str,
+    model_number: i32,
+}
 
 fn write_atom(
     out: &mut String,
     structure: &Structure,
     atom: &AtomRef<'_>,
     residue: &ResidueRef<'_>,
-    chain: &str,
-    auth_chain: &str,
+    position: Option<[f32; 3]>,
+    context: &AtomSiteContext<'_>,
     serial: u32,
 ) {
     let group = if residue.is_het() { "HETATM" } else { "ATOM" };
@@ -200,27 +301,41 @@ fn write_atom(
         Some(name) => name,
         None => "?",
     };
-    let comp = match residue.name() {
+    let comp = match atom.component_name() {
         Some(comp) => comp,
+        None => "?",
+    };
+    let auth_comp = match residue.auth_name().or_else(|| residue.name()) {
+        Some(comp) => comp,
+        None => "?",
+    };
+    let auth_name = match atom.auth_name().or_else(|| atom.name()) {
+        Some(name) => name,
         None => "?",
     };
     // An atom whose position was never recorded is written as unrecorded rather
     // than as an origin the experiment never observed.
-    let [x, y, z] = match atom.position() {
+    let [x, y, z] = match position {
         Some(position) => position.map(|axis| format!("{:.3}", f64::from(axis))),
         None => ["?".to_owned(), "?".to_owned(), "?".to_owned()],
     };
 
     let _ = writeln!(
         out,
-        "{group} {serial} {element} {} {} {comp} {chain} {} {} {x} {y} {z} {} {} {} {auth_chain} 1",
+        "{group} {serial} {element} {} {} {comp} {} {} {} {} {x} {y} {z} {} {} {} {} {} {} {}",
         quote(name),
         alt(structure, atom),
+        context.chain,
+        context.entity,
         seq(residue.label_seq_id()),
         ins(residue),
         occupancy(atom),
         b_factor(atom),
         seq(residue.auth_seq_id()),
+        quote(auth_comp),
+        context.auth_chain,
+        quote(auth_name),
+        context.model_number,
     );
 }
 
@@ -300,7 +415,7 @@ fn b_factor(atom: &AtomRef<'_>) -> String {
     }
 }
 
-fn quote(text: &str) -> String {
+pub(crate) fn quote(text: &str) -> String {
     if needs_quoting(text) {
         format!("'{text}'")
     } else {
