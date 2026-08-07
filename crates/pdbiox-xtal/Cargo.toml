@@ -1,0 +1,17 @@
+[package]
+name = "pdbiox-xtal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Assemblies, symmetry and crystallographic transforms for pdbiox"
+
+[dependencies]
+pdbiox-core.workspace = true
+pdbiox-cif.workspace = true
+pdbiox-geom.workspace = true
+pdbiox-spatial.workspace = true
+
+[lints]
+workspace = true
