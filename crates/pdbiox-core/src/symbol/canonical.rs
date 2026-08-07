@@ -123,12 +123,11 @@ fn hash_ordinal(hasher: &RandomState, ordinal: CanonicalOrdinal) -> u64 {
 fn lookup() -> &'static Lookup {
     LOOKUP.get_or_init(|| {
         let hasher = RandomState::new();
-        let mut table = HashTable::with_capacity(CANONICAL.len());
+        let mut table: HashTable<CanonicalOrdinal> = HashTable::with_capacity(CANONICAL.len());
 
         for (index, text) in CANONICAL.iter().enumerate() {
-            let ordinal = match CanonicalOrdinal::from_index(index) {
-                Some(ordinal) => ordinal,
-                None => break,
+            let Some(ordinal) = CanonicalOrdinal::from_index(index) else {
+                break;
             };
 
             let hash = hasher.hash_one(*text);
@@ -157,13 +156,10 @@ pub(super) fn ordinal_of(text: &str) -> Option<u32> {
     let lookup = lookup();
     let hash = lookup.hasher.hash_one(text);
 
-    match lookup
+    lookup
         .table
         .find(hash, |&ordinal| ordinal.text() == Some(text))
-    {
-        Some(&ordinal) => Some(ordinal.get()),
-        None => None,
-    }
+        .map(|&ordinal| ordinal.get())
 }
 
 /// Returns the string a canonical identifier names.
@@ -171,9 +167,8 @@ pub(super) fn ordinal_of(text: &str) -> Option<u32> {
 /// Runs in `O(1)` time and allocates no memory.
 #[inline]
 pub(super) fn text_of(ordinal: u32) -> Option<&'static str> {
-    let index = match usize::try_from(ordinal) {
-        Ok(index) => index,
-        Err(_) => return None,
+    let Ok(index) = usize::try_from(ordinal) else {
+        return None;
     };
 
     CANONICAL.get(index).copied()

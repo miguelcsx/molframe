@@ -63,7 +63,7 @@ impl ParentMapping {
     /// looked up individually often enough to justify the memory.
     #[must_use]
     pub fn explicit(parents_in_order: &[u32]) -> Self {
-        Self::Explicit(parents_in_order.iter().copied().collect())
+        Self::Explicit(parents_in_order.to_vec())
     }
 
     /// The bytes this mapping costs for `atoms` atoms.
@@ -154,9 +154,9 @@ impl ParentMapping {
                 let residue = ResidueIndex::new(candidate);
                 let range = residues.atoms(residue)?;
 
-                (atom >= range.start).then(|| (residue, range))
+                (atom >= range.start).then_some((residue, range))
             })
-            .find_map(|(residue, range)| range.contains(&atom).then(|| residue))
+            .find_map(|(residue, range)| range.contains(&atom).then_some(residue))
     }
 }
 

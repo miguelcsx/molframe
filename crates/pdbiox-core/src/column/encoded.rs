@@ -349,7 +349,7 @@ fn run_count<T: PartialEq>(values: &[T]) -> usize {
 }
 
 fn copy_values<T: Copy>(values: &[T]) -> Vec<T> {
-    values.iter().copied().collect()
+    values.to_vec()
 }
 
 fn copied_at<T: Copy>(values: &[T], position: u32) -> Option<T> {
