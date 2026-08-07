@@ -4,6 +4,12 @@
 //! the next line names a different one. Reading it is therefore a walk with
 //! memory, and this is the memory.
 
+mod connectivity;
+mod models;
+mod variants;
+
+use models::{AtomSignature, ModelRead};
+
 use super::lines::Line;
 use crate::fixed;
 use crate::hybrid36;
@@ -12,20 +18,21 @@ use pdbiox_core::column::Presence;
 use pdbiox_core::coords::CoordinateBlock;
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use pdbiox_core::element::Element;
-use pdbiox_core::index::{EntityIndex, ResidueIndex};
-use pdbiox_core::io::{ReadOptions, ReadResult};
+use pdbiox_core::index::{AtomIndex, EntityIndex, ResidueIndex};
+use pdbiox_core::io::{Format, ReadOptions, ReadResult};
 use pdbiox_core::optional::{OptionalI32, OptionalSymbol};
-use pdbiox_core::span::ByteSpan;
+use pdbiox_core::span::{ByteSpan, Position};
 use pdbiox_core::structure::{CoordinateStore, Structure, StructureData, UnitCell};
 use pdbiox_core::symbol::{AltId, SymbolId};
 use pdbiox_core::topology::{ChainRecord, EntityKind, PolymerKind, ResidueRecord};
+use std::collections::BTreeMap;
 
 /// What a residue is identified by, for deciding where one ends.
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct ResidueKey {
-    chain: Box<str>,
+    chain: SymbolId,
     seq: i64,
-    ins_code: Box<str>,
+    ins_code: OptionalSymbol,
 }
 
 /// Everything carried between lines while reading.
@@ -36,8 +43,10 @@ pub(super) struct ReadState<'a> {
     findings: Diagnostics,
     frames: Vec<CoordinateBlock>,
     model_number: i32,
-    model_started: bool,
-    chain_label: Option<Box<str>>,
+    model_numbers: Vec<i32>,
+    model_read: ModelRead,
+    signatures: Vec<AtomSignature>,
+    chain_label: Option<SymbolId>,
     chain_first_residue: u32,
     residue_key: Option<ResidueKey>,
     residue_position: u32,
@@ -45,10 +54,16 @@ pub(super) struct ReadState<'a> {
     entity: Option<EntityIndex>,
     saw_atoms: bool,
     topology_locked: bool,
+    serial_to_atom: BTreeMap<u32, AtomIndex>,
+    conect: Vec<(u32, u32, Position)>,
+    variant: Format,
+    partial_charges: Vec<(f64, Presence)>,
+    radii: Vec<(f64, Presence)>,
+    autodock_types: Vec<(SymbolId, Presence)>,
 }
 
 impl<'a> ReadState<'a> {
-    pub(super) fn new(options: &'a ReadOptions) -> Self {
+    pub(super) fn new(options: &'a ReadOptions, variant: Format) -> Self {
         Self {
             options,
             data: StructureData::empty(),
@@ -56,7 +71,9 @@ impl<'a> ReadState<'a> {
             findings: Diagnostics::new(),
             frames: Vec::new(),
             model_number: 1,
-            model_started: false,
+            model_numbers: Vec::new(),
+            model_read: ModelRead::Before,
+            signatures: Vec::new(),
             chain_label: None,
             chain_first_residue: 0,
             residue_key: None,
@@ -65,6 +82,12 @@ impl<'a> ReadState<'a> {
             entity: None,
             saw_atoms: false,
             topology_locked: false,
+            serial_to_atom: BTreeMap::new(),
+            conect: Vec::new(),
+            variant,
+            partial_charges: Vec::new(),
+            radii: Vec::new(),
+            autodock_types: Vec::new(),
         }
     }
 
@@ -77,45 +100,13 @@ impl<'a> ReadState<'a> {
             "CRYST1" => self.cell(line),
             "HEADER" => self.header(line),
             "TITLE" => self.title(line),
+            "CONECT" => self.conect(line),
             _ => {}
         }
     }
 
-    fn model(&mut self, line: &Line<'_>) {
-        if let Some(number) = fixed::integer(line.text, 11, 14)
-            && let Ok(number) = i32::try_from(number)
-        {
-            self.model_number = number;
-        }
-        // A second model repeats the same atoms with new positions, so the
-        // topology is built once and the frames accumulate beside it.
-        if self.model_started {
-            self.start_next_frame();
-        }
-        self.model_started = true;
-    }
-
     fn end_model(&mut self) {
         self.close_chain();
-    }
-
-    /// Closes the frame just read and prepares for the next model's positions.
-    ///
-    /// The first model settles the topology. A later model that disagreed with
-    /// it would not be a frame of the same system, and is reported rather than
-    /// quietly reshaping the tables.
-    fn start_next_frame(&mut self) {
-        self.close_chain();
-        let builder = std::mem::replace(&mut self.builder, ChunkBuilder::new());
-        let (chunks, coords) = builder.finish();
-        if self.data.chunks.is_empty() {
-            self.data.chunks = chunks;
-        }
-        self.frames.push(coords);
-        self.topology_locked = true;
-        self.residue_key = None;
-        self.chain_label = None;
-        self.atom_position = 0;
     }
 
     fn cell(&mut self, line: &Line<'_>) {
@@ -167,8 +158,12 @@ impl<'a> ReadState<'a> {
     fn atom(&mut self, line: &Line<'_>) {
         // Only the first model's atoms build topology; later models contribute
         // positions to the frames beside it.
-        if self.options.only_first_model && !self.frames.is_empty() {
+        if matches!(self.model_read, ModelRead::Ignoring) {
             return;
+        }
+        if matches!(self.model_read, ModelRead::Before) {
+            self.model_read = ModelRead::Reading;
+            self.model_numbers.push(self.model_number);
         }
 
         let raw_name = fixed::raw(line.text, 13, 16);
@@ -177,7 +172,7 @@ impl<'a> ReadState<'a> {
             return;
         }
 
-        let chain = fixed::text(line.text, 22, 22);
+        let chain = self.intern(fixed::text(line.text, 22, 22));
         let Some(seq) = hybrid36::decode(fixed::raw(line.text, 23, 26), 4) else {
             self.findings.push(
                 Diagnostic::new(Code::E1202)
@@ -186,7 +181,37 @@ impl<'a> ReadState<'a> {
             );
             return;
         };
-        let ins_code = fixed::text(line.text, 27, 27);
+        let ins_text = fixed::text(line.text, 27, 27);
+        let ins_code = if ins_text.is_empty() {
+            OptionalSymbol::NONE
+        } else {
+            OptionalSymbol::some(self.intern(ins_text))
+        };
+        let atom_name = self.intern(raw_name.trim());
+        let component_id = self.intern(fixed::text(line.text, 18, 20));
+        let alt = fixed::text(line.text, 17, 17);
+        let alt_id = if alt.is_empty() {
+            AltId::BLANK
+        } else {
+            AltId::labelled(self.intern(alt))
+        };
+
+        if !self.topology_locked {
+            self.variant_atom(line);
+        }
+
+        self.observe_signature(
+            line,
+            AtomSignature {
+                chain,
+                seq,
+                ins_code,
+                atom_name,
+                component_id,
+                alt_id,
+                element,
+            },
+        );
 
         let residue = if self.topology_locked {
             if let Some(residue) = self.data.topology.residues.containing(self.atom_position) {
@@ -201,46 +226,25 @@ impl<'a> ReadState<'a> {
             }
         } else {
             self.begin_chain_if_new(chain);
-            self.begin_residue_if_new(line, chain, seq, ins_code);
+            self.begin_residue_if_new(line, chain, seq, ins_code, component_id);
             ResidueIndex::new(self.residue_position.saturating_sub(1))
         };
 
-        let position = if let (Some(x), Some(y), Some(z)) = (
-            fixed::real(line.text, 31, 38),
-            fixed::real(line.text, 39, 46),
-            fixed::real(line.text, 47, 54),
-        ) {
-            Some([x as f32, y as f32, z as f32])
-        } else {
-            self.findings.push(
-                Diagnostic::new(Code::E1202)
-                    .with_message("a coordinate could not be read")
-                    .at(ByteSpan::empty(line.at)),
-            );
-            None
-        };
-
-        let atom_name = self.intern(raw_name.trim());
-        let alt = fixed::text(line.text, 17, 17);
-        let alt_id = if alt.is_empty() {
-            AltId::BLANK
-        } else {
-            AltId::labelled(self.intern(alt))
-        };
-        let serial = match hybrid36::decode(fixed::raw(line.text, 7, 11), 5)
-            .and_then(|serial| u32::try_from(serial).ok())
-        {
-            Some(serial) => serial,
-            // A serial is a file-local label, not identity; a row whose label
-            // cannot be read is still a row, and loses only its label.
-            None => 0,
-        };
+        let position = self.position_of(line);
+        let alternate_component_id = self.alternate_component_of(line, residue, component_id);
+        let serial = serial_of(line);
+        if !self.topology_locked && serial != 0 {
+            self.serial_to_atom
+                .entry(serial)
+                .or_insert(AtomIndex::new(self.atom_position));
+        }
 
         self.builder.push(AtomRecord {
             position,
             element,
             atom_name,
             auth_atom_name: OptionalSymbol::NONE,
+            alternate_component_id,
             alt_id,
             residue,
             occupancy: optional_real(fixed::real(line.text, 55, 60), 1.0),
@@ -268,20 +272,64 @@ impl<'a> ReadState<'a> {
         inferred
     }
 
-    fn begin_chain_if_new(&mut self, chain: &str) {
-        if self.chain_label.as_deref() == Some(chain) {
+    fn position_of(&mut self, line: &Line<'_>) -> Option<[f32; 3]> {
+        if let (Some(x), Some(y), Some(z)) = (
+            fixed::real(line.text, 31, 38),
+            fixed::real(line.text, 39, 46),
+            fixed::real(line.text, 47, 54),
+        ) {
+            return Some([x as f32, y as f32, z as f32]);
+        }
+        self.findings.push(
+            Diagnostic::new(Code::E1202)
+                .with_message("a coordinate could not be read")
+                .at(ByteSpan::empty(line.at)),
+        );
+        None
+    }
+
+    fn alternate_component_of(
+        &mut self,
+        line: &Line<'_>,
+        residue: ResidueIndex,
+        component_id: SymbolId,
+    ) -> OptionalSymbol {
+        let Some(primary) = self.data.topology.residues.label_comp_id(residue) else {
+            return OptionalSymbol::NONE;
+        };
+        if primary == component_id {
+            return OptionalSymbol::NONE;
+        }
+        self.findings.push(
+            Diagnostic::new(Code::W3012)
+                .at(ByteSpan::empty(line.at))
+                .with_context("component", self.component_text(primary))
+                .with_context("alternate component", self.component_text(component_id)),
+        );
+        OptionalSymbol::some(component_id)
+    }
+
+    fn begin_chain_if_new(&mut self, chain: SymbolId) {
+        if self.chain_label == Some(chain) {
             return;
         }
         self.close_chain();
-        self.chain_label = Some(chain.into());
+        self.chain_label = Some(chain);
         self.chain_first_residue = self.residue_position;
     }
 
-    fn begin_residue_if_new(&mut self, line: &Line<'_>, chain: &str, seq: i64, ins: &str) {
+    fn begin_residue_if_new(
+        &mut self,
+        line: &Line<'_>,
+        chain: SymbolId,
+        seq: i64,
+        ins_code: OptionalSymbol,
+        component_id: SymbolId,
+    ) {
         let key = ResidueKey {
-            chain: chain.into(),
+            chain,
             seq,
-            ins_code: ins.into(),
+            ins_code,
         };
         if self.residue_key.as_ref() == Some(&key) {
             return;
@@ -290,19 +338,12 @@ impl<'a> ReadState<'a> {
         self.close_residue();
         self.residue_key = Some(key);
 
-        let comp = fixed::text(line.text, 18, 20);
-        let label_comp_id = self.intern(comp);
-        let ins_code = if ins.is_empty() {
-            OptionalSymbol::NONE
-        } else {
-            OptionalSymbol::some(self.intern(ins))
-        };
         let het = fixed::record(line.text) == "HETATM";
 
         self.data.topology.residues.push(
             ResidueRecord {
-                label_comp_id,
-                auth_comp_id: OptionalSymbol::some(label_comp_id),
+                label_comp_id: component_id,
+                auth_comp_id: OptionalSymbol::some(component_id),
                 label_seq_id: OptionalI32::NONE,
                 auth_seq_id: match i32::try_from(seq) {
                     Ok(seq) => OptionalI32::some(seq),
@@ -319,13 +360,12 @@ impl<'a> ReadState<'a> {
     /// Closes the residue and chain being built, fixing their atom ranges.
     fn close_chain(&mut self) {
         self.close_residue();
-        let Some(label) = self.chain_label.take() else {
+        let Some(label_asym_id) = self.chain_label.take() else {
             return;
         };
         if self.residue_position == self.chain_first_residue {
             return;
         }
-        let label_asym_id = self.intern(&label);
         let entity = self.entity_for_polymer();
         self.data.topology.chains.push(
             ChainRecord {
@@ -384,8 +424,16 @@ impl<'a> ReadState<'a> {
         }
     }
 
+    fn component_text(&self, component: SymbolId) -> Box<str> {
+        match self.data.dictionary.resolve(component) {
+            Some(text) => text.into(),
+            None => "".into(),
+        }
+    }
+
     pub(super) fn finish(mut self) -> ReadResult {
         self.close_chain();
+        self.verify_frame_len();
         if !self.saw_atoms {
             self.findings.push(
                 Diagnostic::new(Code::E1001)
@@ -394,16 +442,17 @@ impl<'a> ReadState<'a> {
             return Err(self.findings.finish());
         }
 
+        self.finish_bonds();
+        self.finish_variant_annotations();
         let (chunks, coords) = self.builder.finish();
         if self.data.chunks.is_empty() {
-            self.data.chunks = chunks;
+            self.data.chunks = chunks.into();
         }
         self.frames.push(coords);
-
-        self.data
-            .topology
-            .models
-            .push(self.model_number, 0..self.data.topology.chains.len() as u32);
+        let chains = 0..self.data.topology.chains.len() as u32;
+        for number in self.model_numbers {
+            self.data.topology.models.push(number, chains.clone());
+        }
         self.data.coords = match self.frames.len() {
             1 => match self.frames.pop() {
                 Some(block) => CoordinateStore::Single(block),
@@ -413,10 +462,8 @@ impl<'a> ReadState<'a> {
                 frames: self.frames,
             },
         };
-
         let structure = Structure::new(self.data);
-        let findings = self.findings.finish();
-        Ok((structure, findings))
+        self.options.finish(structure, self.findings.finish())
     }
 }
 
@@ -425,5 +472,15 @@ fn optional_real(value: Option<f64>, when_absent: f32) -> (f32, Presence) {
     match value {
         Some(value) => (value as f32, Presence::Present),
         None => (when_absent, Presence::Unknown),
+    }
+}
+
+/// The file-local atom label, or the reserved unlabeled value.
+fn serial_of(line: &Line<'_>) -> u32 {
+    match hybrid36::decode(fixed::raw(line.text, 7, 11), 5)
+        .and_then(|serial| u32::try_from(serial).ok())
+    {
+        Some(serial) => serial,
+        None => 0,
     }
 }

@@ -10,8 +10,9 @@
 //! code changes — the insertion code included, because 163, 163A and 163B are
 //! three residues and an antibody numbering scheme depends on it.
 
+mod ensemble;
 mod entry;
 mod lines;
 mod state;
 
-pub use entry::{PdbReader, read};
+pub use entry::{PdbReader, read, read_pdbqt, read_pqr};
