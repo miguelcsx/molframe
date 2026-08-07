@@ -24,9 +24,82 @@ pub fn validate(data: &StructureData) -> Vec<Diagnostic> {
     check_child_ranges(data, &mut findings);
     check_atom_coverage(data, &mut findings);
     check_entity_references(data, &mut findings);
+    check_bonds(data, &mut findings);
+    check_annotations(data, &mut findings);
     check_coordinate_counts(data, &mut findings);
+    check_coordinates(data, &mut findings);
     check_occupancies(data, &mut findings);
     findings.finish()
+}
+
+fn check_annotations(data: &StructureData, findings: &mut Diagnostics) {
+    let atoms = data.atom_count();
+    for (name, column) in data.annotations.iter() {
+        if column.len() != atoms {
+            findings.push(
+                Diagnostic::new(Code::E3011)
+                    .with_context("annotation", name)
+                    .with_context("column rows", column.len().to_string())
+                    .with_context("atoms", atoms.to_string()),
+            );
+        }
+    }
+}
+
+fn check_bonds(data: &StructureData, findings: &mut Diagnostics) {
+    let atom_count = data.chunks.last().map_or(0, |chunk| chunk.atoms().end);
+    for (position, bond) in data.bonds.iter().enumerate() {
+        if bond.atom_a == bond.atom_b {
+            findings.push(Diagnostic::new(Code::E3007).with_context("bond", position.to_string()));
+        }
+        for endpoint in [bond.atom_a, bond.atom_b] {
+            if endpoint.get() >= atom_count {
+                findings.push(
+                    Diagnostic::new(Code::E3006)
+                        .with_context("bond", position.to_string())
+                        .with_context("atom", endpoint.to_string()),
+                );
+            }
+        }
+    }
+}
+
+fn check_coordinates(data: &StructureData, findings: &mut Diagnostics) {
+    if let CoordinateStore::Ragged { models } = &data.coords {
+        for (model, structure) in models.iter().enumerate() {
+            for finding in validate(structure.data()) {
+                findings.push(finding.with_context("ragged model", model.to_string()));
+            }
+        }
+        return;
+    }
+    for model in 0..data.coords.model_count() {
+        let Some(block) = data
+            .coords
+            .block(crate::index::ModelIndex::new(model as u32))
+        else {
+            continue;
+        };
+        for chunk in data.chunks.iter() {
+            for local in 0..chunk.len() {
+                if !chunk.has_position(local) {
+                    continue;
+                }
+                let atom = chunk.atoms().start + local;
+                if block
+                    .as_slice()
+                    .get(atom as usize)
+                    .is_some_and(|position| position.iter().any(|value| !value.is_finite()))
+                {
+                    findings.push(
+                        Diagnostic::new(Code::E3008)
+                            .with_context("model", model.to_string())
+                            .with_context("atom", atom.to_string()),
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// Every parent's children must lie inside the child table, and siblings must
@@ -35,6 +108,8 @@ fn check_child_ranges(data: &StructureData, findings: &mut Diagnostics) {
     let topology = &data.topology;
 
     let mut expected_chain = 0u32;
+    let shared_topology = matches!(&data.coords, CoordinateStore::Dense { .. });
+    let mut shared_range = None;
     for model in topology.models.iter() {
         let Some(range) = topology.models.chains(model) else {
             continue;
@@ -46,14 +121,28 @@ fn check_child_ranges(data: &StructureData, findings: &mut Diagnostics) {
                     .with_context("model", model.to_string()),
             );
         }
-        if range.start < expected_chain {
+        if shared_topology {
+            if let Some(expected) = &shared_range {
+                if expected != &range {
+                    findings.push(
+                        Diagnostic::new(Code::E3003)
+                            .with_message("dense models do not share one chain range")
+                            .with_context("model", model.to_string()),
+                    );
+                }
+            } else {
+                shared_range = Some(range.clone());
+            }
+        } else if range.start < expected_chain {
             findings.push(
                 Diagnostic::new(Code::E3003)
                     .with_message("models share chains")
                     .with_context("model", model.to_string()),
             );
         }
-        expected_chain = range.end;
+        if !shared_topology {
+            expected_chain = range.end;
+        }
     }
 
     let mut expected_residue = 0u32;
@@ -156,7 +245,7 @@ fn check_coordinate_counts(data: &StructureData, findings: &mut Diagnostics) {
 
 /// Occupancy, where it was recorded, must lie between zero and one.
 fn check_occupancies(data: &StructureData, findings: &mut Diagnostics) {
-    for chunk in &data.chunks {
+    for chunk in data.chunks.iter() {
         for local in 0..chunk.len() {
             let Some((occupancy, presence)) = chunk.occupancy(local) else {
                 continue;

@@ -77,6 +77,7 @@ fn models_with_different_atom_counts_cannot_share_a_coordinate_set() {
             element: Element::CARBON,
             atom_name: SymbolId::from_raw(0),
             auth_atom_name: OptionalSymbol::NONE,
+            alternate_component_id: OptionalSymbol::NONE,
             alt_id: AltId::BLANK,
             residue: ResidueIndex::new(0),
             occupancy: (1.0, Presence::Present),
@@ -86,7 +87,7 @@ fn models_with_different_atom_counts_cannot_share_a_coordinate_set() {
         });
     }
     let (chunks, first) = builder.finish();
-    data.chunks = chunks;
+    data.chunks = chunks.into();
     let short = (0..1).map(|_| [0.0; 3]).collect();
     data.coords = CoordinateStore::Dense {
         frames: vec![first, short],
@@ -115,6 +116,7 @@ fn an_occupancy_outside_the_permitted_range_is_reported() {
         element: Element::CARBON,
         atom_name: SymbolId::from_raw(0),
         auth_atom_name: OptionalSymbol::NONE,
+        alternate_component_id: OptionalSymbol::NONE,
         alt_id: AltId::BLANK,
         residue: ResidueIndex::new(0),
         occupancy: (1.5, Presence::Present),
@@ -123,7 +125,7 @@ fn an_occupancy_outside_the_permitted_range_is_reported() {
         atom_site_id: 1,
     });
     let (chunks, coords) = builder.finish();
-    data.chunks = chunks;
+    data.chunks = chunks.into();
     data.coords = CoordinateStore::Single(coords);
 
     assert!(codes(&data).contains(&Code::E3009));
