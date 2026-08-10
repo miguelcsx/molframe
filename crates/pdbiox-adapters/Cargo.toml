@@ -1,0 +1,21 @@
+[package]
+name = "pdbiox-adapters"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Typed projections for external structural-bioinformatics adapters"
+
+[dependencies]
+pdbiox-chem.workspace = true
+pdbiox-core.workspace = true
+reqwest.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pdbiox-pdb.workspace = true
+
+[lints]
+workspace = true
