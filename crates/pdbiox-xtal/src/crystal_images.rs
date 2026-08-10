@@ -1,5 +1,6 @@
 //! Bounded generation of atom images relevant to one crystal cutoff.
 
+use crate::numeric::{f64_to_f32, f64_to_i32};
 use crate::{CellTransform, SymmetrySet};
 use pdbiox_core::structure::AtomRef;
 use pdbiox_core::{AtomIndex, Code, Diagnostic, ModelIndex, Structure};
@@ -63,7 +64,7 @@ pub(crate) fn relevant_images(
                             atom: source.atom,
                             operation: operation_index,
                             lattice,
-                            cartesian: transform.to_cartesian(fractional).map(|value| value as f32),
+                            cartesian: transform.to_cartesian(fractional).map(f64_to_f32),
                         });
                     }
                 }
@@ -149,7 +150,7 @@ fn image_ranges(
         if start < f64::from(i32::MIN) || end > f64::from(i32::MAX) {
             return Err(search_limit());
         }
-        ranges[axis] = start as i32..=end as i32;
+        ranges[axis] = f64_to_i32(start)..=f64_to_i32(end);
     }
     Ok(ranges)
 }

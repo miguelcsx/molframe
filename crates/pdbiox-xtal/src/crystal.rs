@@ -2,6 +2,7 @@
 
 use crate::SymmetrySet;
 use crate::crystal_images::relevant_images;
+use crate::numeric::f64_to_f32;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::{AtomIndex, Code, Diagnostic, ModelIndex, Structure};
 use pdbiox_spatial::{SpatialBackend, pairs_within};
@@ -94,7 +95,7 @@ pub fn crystal_neighbors_with_backend(
     positions.extend(images.iter().map(|image| image.cartesian));
     let left = AtomSelection::from_sorted((0..source_count).collect());
     let right = AtomSelection::from_sorted((source_count..total_count).collect());
-    let pairs = pairs_within(&positions, &left, &right, cutoff as f32, backend, None)
+    let pairs = pairs_within(&positions, &left, &right, f64_to_f32(cutoff), backend, None)
         .map_err(pdbiox_spatial::SpatialError::into_diagnostic)?;
     let mut seen = BTreeSet::new();
     let mut neighbors = Vec::new();

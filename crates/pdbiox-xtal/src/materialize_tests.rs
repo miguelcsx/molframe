@@ -69,9 +69,11 @@ fn with_bond_and_annotation(structure: &Structure) -> Structure {
         provenance: BondProvenance::File,
     });
     data.bonds = bonds.finish();
-    let _ = data.annotations.insert(
-        "score",
-        AtomAnnotation::Integer(AnnotationColumn::from_values(vec![7, 8])),
-    );
+    let Ok(scores) = AnnotationColumn::from_values(vec![7, 8]) else {
+        panic!("two annotation values fit the column index domain");
+    };
+    let _ = data
+        .annotations
+        .insert("score", AtomAnnotation::Integer(scores));
     Structure::new(data)
 }

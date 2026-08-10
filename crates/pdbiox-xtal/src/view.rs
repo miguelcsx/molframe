@@ -1,5 +1,6 @@
 //! Lazy biological-assembly instances over an immutable structure snapshot.
 
+use crate::numeric::usize_to_u32;
 use crate::{ASSEMBLIES_EXTENSION, AssemblySet, DEFAULT_INSTANCE_LIMIT};
 use pdbiox_core::{AtomIndex, ChainIndex, Code, Diagnostic, InstanceId, ModelIndex, Structure};
 use pdbiox_geom::Rigid;
@@ -93,7 +94,15 @@ impl AssemblyView {
                 .and_then(|count| instances.len().checked_add(count))
                 .filter(|count| *count <= limit)
                 .ok_or_else(|| instance_limit(id, limit))?;
-            instances.reserve(generated.saturating_sub(instances.len()));
+            let additional = generated
+                .checked_sub(instances.len())
+                .ok_or_else(|| instance_limit(id, limit))?;
+            instances
+                .try_reserve(additional)
+                .map_err(|_| instance_limit(id, limit))?;
+            transforms
+                .try_reserve(additional)
+                .map_err(|_| instance_limit(id, limit))?;
             generator
                 .oper_expression
                 .for_each_combination(|identifiers| {
@@ -110,7 +119,7 @@ impl AssemblyView {
                         instances.push(InstanceRecord {
                             source_chain: *chain,
                             transform: transform_index,
-                            instance_id: InstanceId::new(instances.len() as u32),
+                            instance_id: InstanceId::new(usize_to_u32(instances.len())),
                             atoms: atoms.clone(),
                         });
                     }

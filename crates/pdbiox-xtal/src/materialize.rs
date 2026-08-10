@@ -117,7 +117,7 @@ impl<'a> Materializer<'a> {
             .label_asym_id(instance.source_chain)
             .and_then(|symbol| source.resolve(symbol))
             .ok_or_else(invariant)?;
-        let generated = self.unique_label(label);
+        let generated = self.unique_label(label)?;
         let symbol = self
             .data
             .dictionary
@@ -129,15 +129,19 @@ impl<'a> Materializer<'a> {
         let polymer_kind = source_chains
             .polymer_kind(instance.source_chain)
             .ok_or_else(invariant)?;
-        let _ = self.data.topology.chains.push(
-            ChainRecord {
-                label_asym_id: symbol,
-                auth_asym_id: OptionalSymbol::some(symbol),
-                entity,
-                polymer_kind,
-            },
-            output_residue_start..output_residue_end,
-        );
+        self.data
+            .topology
+            .chains
+            .push(
+                ChainRecord {
+                    label_asym_id: symbol,
+                    auth_asym_id: OptionalSymbol::some(symbol),
+                    entity,
+                    polymer_kind,
+                },
+                output_residue_start..output_residue_end,
+            )
+            .map_err(|error| capacity("chains").with_context("cause", error.to_string()))?;
         let output_atom_end =
             u32::try_from(self.source_atoms.len()).map_err(|_| capacity("atoms"))?;
         self.copies.push(CopySpan {
@@ -146,7 +150,13 @@ impl<'a> Materializer<'a> {
             source_atoms: instance.atoms.clone(),
             output_start: output_atom_start,
         });
-        if output_atom_end.saturating_sub(output_atom_start) != instance.atoms.len() as u32 {
+        let instance_atom_count =
+            u32::try_from(instance.atoms.len()).map_err(|_| capacity("atoms"))?;
+        if output_atom_end
+            .checked_sub(output_atom_start)
+            .ok_or_else(invariant)?
+            != instance_atom_count
+        {
             return Err(invariant());
         }
         Ok(())
@@ -156,7 +166,9 @@ impl<'a> Materializer<'a> {
         let source = self.view.source();
         let table = &source.data().topology.residues;
         let source_atoms = table.atoms(source_residue).ok_or_else(invariant)?;
-        let output_residue = ResidueIndex::new(self.data.topology.residues.len() as u32);
+        let output_residue = ResidueIndex::new(
+            u32::try_from(self.data.topology.residues.len()).map_err(|_| capacity("residues"))?,
+        );
         let output_start = u32::try_from(self.source_atoms.len()).map_err(|_| capacity("atoms"))?;
         for source_atom in source_atoms.clone() {
             let mut record = atom_record(source, AtomIndex::new(source_atom))?;
@@ -164,8 +176,11 @@ impl<'a> Materializer<'a> {
                 .position
                 .map(|position| self.current_transform().apply(position));
             record.residue = output_residue;
+            let local = source_atom
+                .checked_sub(source_atoms.start)
+                .ok_or_else(invariant)?;
             record.atom_site_id = output_start
-                .checked_add(source_atom.saturating_sub(source_atoms.start))
+                .checked_add(local)
                 .and_then(|value| value.checked_add(1))
                 .ok_or_else(|| capacity("atoms"))?;
             self.chunks.push(record);
@@ -181,11 +196,11 @@ impl<'a> Materializer<'a> {
             ins_code: optional(table.ins_code(source_residue)),
             het: table.is_het(source_residue),
         };
-        let _ = self
-            .data
+        self.data
             .topology
             .residues
-            .push(record, output_start..output_end);
+            .push(record, output_start..output_end)
+            .map_err(|error| capacity("residues").with_context("cause", error.to_string()))?;
         Ok(())
     }
 
@@ -199,17 +214,19 @@ impl<'a> Materializer<'a> {
         i64::from(self.view.instances[self.copies.len()].instance_id.get())
     }
 
-    fn unique_label(&mut self, source: &str) -> Box<str> {
+    fn unique_label(&mut self, source: &str) -> Result<Box<str>, Diagnostic> {
         let count = self.label_counts.entry(source.into()).or_insert(0);
         loop {
-            *count = count.saturating_add(1);
+            *count = count
+                .checked_add(1)
+                .ok_or_else(|| capacity("chain identifiers"))?;
             let candidate: Box<str> = if *count == 1 {
                 source.into()
             } else {
                 format!("{source}-{count}").into_boxed_str()
             };
             if self.used_labels.insert(candidate.clone()) {
-                return candidate;
+                return Ok(candidate);
             }
         }
     }
@@ -225,7 +242,9 @@ impl<'a> Materializer<'a> {
             let source = self
                 .view
                 .source()
-                .model_positions(ModelIndex::new(model as u32))
+                .model_positions(ModelIndex::new(
+                    u32::try_from(model).map_err(|_| capacity("models"))?,
+                ))
                 .ok_or_else(invariant)?;
             let mut frame = CoordinateBlock::with_capacity(self.source_atoms.len());
             for copy in &self.copies {
@@ -245,9 +264,11 @@ impl<'a> Materializer<'a> {
             let copied = copy_annotation(annotation, &self.source_atoms)?;
             let _ = output.insert(name, copied);
         }
+        let instance_ids = AnnotationColumn::from_values(self.instance_ids.clone())
+            .map_err(|error| invariant().with_context("cause", error.to_string()))?;
         let _ = output.insert(
             INSTANCE_ID_ANNOTATION,
-            AtomAnnotation::Integer(AnnotationColumn::from_values(self.instance_ids.clone())),
+            AtomAnnotation::Integer(instance_ids),
         );
         Ok(output)
     }
@@ -290,7 +311,7 @@ impl<'a> Materializer<'a> {
         let chains =
             u32::try_from(self.data.topology.chains.len()).map_err(|_| capacity("chains"))?;
         for model in 0..self.view.source().model_count() {
-            let index = ModelIndex::new(model as u32);
+            let index = ModelIndex::new(u32::try_from(model).map_err(|_| capacity("models"))?);
             let number = self
                 .view
                 .source()
@@ -298,12 +319,21 @@ impl<'a> Materializer<'a> {
                 .topology
                 .models
                 .model_num(index)
-                .or_else(|| i32::try_from(model + 1).ok())
-                .ok_or_else(|| capacity("models"))?;
-            let _ = self.data.topology.models.push(number, 0..chains);
+                .ok_or_else(|| missing_model_number(model))?;
+            self.data
+                .topology
+                .models
+                .push(number, 0..chains)
+                .map_err(|error| capacity("models").with_context("cause", error.to_string()))?;
         }
         Ok(())
     }
+}
+
+fn missing_model_number(model: usize) -> Diagnostic {
+    Diagnostic::new(Code::E4105)
+        .with_context("model", model.to_string())
+        .with_context("required", "explicit source model number")
 }
 
 fn atom_record(source: &Structure, atom: AtomIndex) -> Result<AtomRecord, Diagnostic> {
@@ -312,7 +342,10 @@ fn atom_record(source: &Structure, atom: AtomIndex) -> Result<AtomRecord, Diagno
         .chunks
         .partition_point(|chunk| chunk.atoms().end <= atom.get());
     let chunk = source.data().chunks.get(candidate).ok_or_else(invariant)?;
-    let local = atom.get().saturating_sub(chunk.atoms().start);
+    let local = atom
+        .get()
+        .checked_sub(chunk.atoms().start)
+        .ok_or_else(invariant)?;
     let position = source.positions().get(atom.as_usize()).copied();
     chunk
         .record(local, &source.data().topology.residues, position)
@@ -349,7 +382,8 @@ fn copy_column<T: Copy>(
         .iter()
         .map(|atom| column.get(*atom).ok_or_else(invariant))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(AnnotationColumn::from_entries(entries))
+    AnnotationColumn::from_entries(entries)
+        .map_err(|error| invariant().with_context("cause", error.to_string()))
 }
 
 type TransformKey = [u64; 12];
@@ -409,7 +443,10 @@ fn remap_atom(atom: AtomIndex, copy: &CopySpan) -> Result<AtomIndex, Diagnostic>
     if !copy.source_atoms.contains(&atom.get()) {
         return Err(invariant());
     }
-    let local = atom.get().saturating_sub(copy.source_atoms.start);
+    let local = atom
+        .get()
+        .checked_sub(copy.source_atoms.start)
+        .ok_or_else(invariant)?;
     copy.output_start
         .checked_add(local)
         .map(AtomIndex::new)

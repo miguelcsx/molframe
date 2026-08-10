@@ -1,5 +1,7 @@
 //! General Cartesian affine transforms.
 
+use crate::numeric::f64_to_f32;
+
 /// A three-by-three linear map followed by a translation.
 ///
 /// Unlike a rigid transform, an NCS operator is not required by the `PDBx`
@@ -42,10 +44,12 @@ impl AffineTransform {
         let point = position.map(f64::from);
         let mut output = [0.0_f32; 3];
         for (row, value) in output.iter_mut().enumerate() {
-            *value = (self.matrix[row][0] * point[0]
-                + self.matrix[row][1] * point[1]
-                + self.matrix[row][2] * point[2]
-                + self.translation[row]) as f32;
+            *value = f64_to_f32(
+                self.matrix[row][0] * point[0]
+                    + self.matrix[row][1] * point[1]
+                    + self.matrix[row][2] * point[2]
+                    + self.translation[row],
+            );
         }
         output
     }

@@ -4,6 +4,8 @@ use pdbiox_cif::{Category, DataBlock, Document};
 use pdbiox_core::{Code, Diagnostic, ModelIndex, Structure};
 use std::collections::BTreeSet;
 
+use crate::numeric::usize_to_u32;
+
 /// Stable extension key for crystallographic space-group metadata.
 pub const SYMMETRY_EXTENSION: &str = "pdbiox.xtal.symmetry.v1";
 
@@ -411,9 +413,7 @@ fn variable_term(term: &str) -> Result<Option<(usize, i32)>, Diagnostic> {
         'z' => 2,
         _ => return Ok(None),
     };
-    let coefficient = term
-        .get(..term.len().saturating_sub(variable.len_utf8()))
-        .ok_or_else(symmetry_capacity)?;
+    let coefficient = term.strip_suffix(variable).ok_or_else(symmetry_capacity)?;
     let coefficient = if coefficient.is_empty() {
         1
     } else {
@@ -439,7 +439,7 @@ fn parse_rational(term: &str) -> Result<Rational, Diagnostic> {
             return Err(symmetry_error(term));
         }
         let denominator = 10_u32
-            .checked_pow(fractional.len() as u32)
+            .checked_pow(usize_to_u32(fractional.len()))
             .ok_or_else(symmetry_capacity)?;
         let whole: i32 = if whole.is_empty() {
             0
