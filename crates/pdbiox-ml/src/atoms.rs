@@ -142,6 +142,8 @@ fn coordinates_array(
         .len()
         .checked_mul(3)
         .ok_or_else(|| ArrowError::MemoryError("coordinate length overflow".to_owned()))?;
+    // SAFETY: `[f32; 3]` is three contiguous, equally aligned `f32` values with
+    // no padding. `count` is the checked scalar length of the live input slice.
     let values = unsafe { std::slice::from_raw_parts(positions.as_ptr().cast::<f32>(), count) };
     let values: ArrayRef = Arc::new(Float32Array::new(f32_buffer(values, owner)?, None));
     FixedSizeListArray::try_new(

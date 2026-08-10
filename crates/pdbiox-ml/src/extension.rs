@@ -14,6 +14,8 @@ pub enum ExportCost {
     ZeroCopy,
     /// An encoded or derived column was decoded in one pass.
     Decode,
+    /// A complete materialised copy because layouts differ.
+    Copy,
 }
 
 /// Domain extension types published by the Arrow adapter.
@@ -84,6 +86,7 @@ impl ExportCost {
         match self {
             Self::ZeroCopy => "zero-copy",
             Self::Decode => "decode",
+            Self::Copy => "copy",
         }
     }
 }

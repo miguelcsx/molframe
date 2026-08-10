@@ -4,10 +4,12 @@ use crate::extension::{ExportCost, field};
 use crate::stream::{ArrowStream, ArrowTableExport};
 use arrow::array::{ArrayRef, Int32Array, UInt8Array, UInt32Array};
 use arrow::datatypes::{DataType, Schema, SchemaRef};
-use arrow::error::Result;
+use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
 use pdbiox_core::{BondOrder, BondProvenance, ChainIndex, ResidueIndex, Structure};
 use std::sync::Arc;
+
+use crate::numeric::usize_to_u32;
 
 macro_rules! table_type {
     ($name:ident, $schema:ident, $batch:ident, $description:literal) => {
@@ -86,7 +88,7 @@ table_type!(
 
 fn residue_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> {
     let residues = &structure.data().topology.residues;
-    let positions = 0..residues.len() as u32;
+    let positions = 0..usize_to_u32(residues.len());
     let index = UInt32Array::from_iter_values(positions.clone());
     let chain = UInt32Array::from_iter_values(
         positions
@@ -100,12 +102,12 @@ fn residue_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch
             .filter_map(|position| residues.atoms(ResidueIndex::new(position)))
             .map(|range| range.start),
     );
-    let atom_count = UInt32Array::from_iter_values(
-        positions
-            .clone()
-            .filter_map(|position| residues.atoms(ResidueIndex::new(position)))
-            .map(|range| range.end.saturating_sub(range.start)),
-    );
+    let atom_count = positions
+        .clone()
+        .filter_map(|position| residues.atoms(ResidueIndex::new(position)))
+        .map(range_width)
+        .collect::<Result<Vec<_>>>()?;
+    let atom_count = UInt32Array::from(atom_count);
     let component = UInt32Array::from_iter_values(positions.clone().filter_map(|position| {
         residues
             .label_comp_id(ResidueIndex::new(position))
@@ -134,7 +136,7 @@ fn residue_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch
 
 fn chain_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> {
     let chains = &structure.data().topology.chains;
-    let positions = 0..chains.len() as u32;
+    let positions = 0..usize_to_u32(chains.len());
     let index = UInt32Array::from_iter_values(positions.clone());
     let label = UInt32Array::from_iter_values(positions.clone().filter_map(|position| {
         chains
@@ -152,11 +154,11 @@ fn chain_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> 
             .filter_map(|position| chains.residues(ChainIndex::new(position)))
             .map(|range| range.start),
     );
-    let residue_count = UInt32Array::from_iter_values(
-        positions
-            .filter_map(|position| chains.residues(ChainIndex::new(position)))
-            .map(|range| range.end.saturating_sub(range.start)),
-    );
+    let residue_count = positions
+        .filter_map(|position| chains.residues(ChainIndex::new(position)))
+        .map(range_width)
+        .collect::<Result<Vec<_>>>()?;
+    let residue_count = UInt32Array::from(residue_count);
     RecordBatch::try_new(
         schema,
         vec![
@@ -169,9 +171,15 @@ fn chain_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> 
     )
 }
 
+fn range_width(range: std::ops::Range<u32>) -> Result<u32> {
+    range.end.checked_sub(range.start).ok_or_else(|| {
+        ArrowError::InvalidArgumentError("topology range ends before it starts".to_owned())
+    })
+}
+
 fn bond_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> {
     let bonds = &structure.data().bonds;
-    let index = UInt32Array::from_iter_values(0..bonds.len() as u32);
+    let index = UInt32Array::from_iter_values(0..usize_to_u32(bonds.len()));
     let atom_a = UInt32Array::from_iter_values(bonds.iter().map(|bond| bond.atom_a.get()));
     let atom_b = UInt32Array::from_iter_values(bonds.iter().map(|bond| bond.atom_b.get()));
     let order = UInt8Array::from_iter_values(bonds.iter().map(|bond| order_code(bond.order)));

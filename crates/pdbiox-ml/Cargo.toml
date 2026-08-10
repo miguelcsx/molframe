@@ -9,10 +9,18 @@ description = "Arrow and machine-learning interoperability for pdbiox"
 
 [dependencies]
 arrow.workspace = true
+num-traits.workspace = true
+parquet.workspace = true
 pdbiox-core.workspace = true
+pdbiox-seq.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+pdbiox-spatial.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 pdbiox-cif.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
