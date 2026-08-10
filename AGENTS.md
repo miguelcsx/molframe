@@ -98,12 +98,11 @@ returns zero. That runs (in order):
 
 ---
 
-## 5. State on 2026-08-07
+## 5. Current state
 
-Phases 1–3 are implemented at `β` across the crates above; phase-4/6 native
-analysis has begun. Every implemented capability sits at `β` (native + tested)
-rather than `✓`, because a `✓` needs a row-specific golden workflow and
-differential evidence against an external corpus that is not in this checkout.
+Every implemented capability sits at `β` (native + tested) rather than `✓`,
+because a `✓` needs a row-specific golden workflow and differential evidence
+against an external corpus that is not in this checkout.
 
 Recently landed native, deterministic capabilities (all `β`, all with unit and
 property tests): RMSF (`pdbiox-geom`); solvent-accessible surface and buried
@@ -120,7 +119,3 @@ matrices; chain/atom mapping, DockQ/CAD/QS, CE alignment); `pdbiox-query`
 altloc/entity/assembly and chirality selectors; PEOE charges in `pdbiox-chem`;
 and the format breadth (trajectories, density maps, remaining structural
 formats). Track B (`pdbiox-audit`, `pdbiox-fx`) and adapters are separate.
-
-`docs/PARITY.md` is the row-by-row source of truth; update a capability's row in
-the same change that adds it. `docs/ROADMAP.md` §Phase 1 carries the dated
-met/not-met table — keep it truthful.
