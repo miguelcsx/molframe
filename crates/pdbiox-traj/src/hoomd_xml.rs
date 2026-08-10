@@ -35,7 +35,7 @@ pub struct HoomdConfiguration {
     pub cell: Option<HoomdBox>,
     /// Particle coordinates.
     pub positions: Vec<[f64; 3]>,
-    /// Periodic image counters for unwrapping coordinates.
+    /// Periodic image counters for un-wrapping coordinates.
     pub images: Vec<[i64; 3]>,
     /// Particle velocities.
     pub velocities: Vec<[f64; 3]>,

@@ -1,4 +1,4 @@
-//! Window-averaged mean-squared displacement over caller-unwrapped coordinates.
+//! Window-averaged mean-squared displacement over caller-un-wrapped coordinates.
 
 use crate::numeric::f64_from_u64;
 
@@ -39,7 +39,7 @@ pub enum MsdError {
 /// Computes window-averaged MSD for explicit atom indices and lags `0..=maximum_lag`.
 ///
 /// Coordinates are used exactly as supplied. Periodic trajectories must be
-/// unwrapped through an explicit trajectory transform before this kernel is
+/// un-wrapped through an explicit trajectory transform before this kernel is
 /// called; the function never guesses molecular images.
 ///
 /// # Errors

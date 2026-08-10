@@ -1,4 +1,4 @@
-//! Periodic wrapping and bond-connected molecule unwrapping.
+//! Periodic wrapping and bond-connected molecule un-wrapping.
 
 use crate::numeric::{f32_triplet, f64_from_usize};
 use crate::{FrameTransform, Timestep, TrajectoryError};
@@ -96,7 +96,7 @@ pub struct Unwrap {
 }
 
 impl Unwrap {
-    /// Creates a molecule-unwrapping transform from topology bonds.
+    /// Creates a molecule-un-wrapping transform from topology bonds.
     #[must_use]
     pub fn molecules(bonds: impl Into<Box<[(usize, usize)]>>) -> Self {
         Self {

@@ -49,7 +49,7 @@ pub struct PeriodicBox {
 pub struct PeriodicImage {
     /// Cartesian displacement from the left point to the chosen right image.
     pub displacement: [f32; 3],
-    /// Lattice translation subtracted from the unwrapped right point.
+    /// Lattice translation subtracted from the un-wrapped right point.
     pub lattice_shift: [i64; 3],
 }
 

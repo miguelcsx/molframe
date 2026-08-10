@@ -46,7 +46,7 @@ pub enum LammpsError {
 ///
 /// Atom columns are discovered from `ITEM: ATOMS`. Rows are sorted by `id` when
 /// present, preventing processor-dependent dump order from changing topology.
-/// Wrapped, unwrapped and scaled coordinate triplets are supported; velocity
+/// Wrapped, un-wrapped and scaled coordinate triplets are supported; velocity
 /// and force triplets populate the typed auxiliary buffers.
 ///
 /// # Errors
