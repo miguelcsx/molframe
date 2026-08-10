@@ -47,3 +47,37 @@ fn a_bonded_model_round_trips_through_internal_coordinates() {
         );
     }
 }
+
+#[test]
+fn bat_topology_measures_multiple_frames_and_rebuilds_them() {
+    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
+    let structure = match pdbiox_cif::read(&input, &ReadOptions::new()) {
+        Ok((structure, _)) => structure,
+        Err(findings) => panic!("fixture failed: {findings:?}"),
+    };
+    let internal = internal_coordinates(&structure, ModelIndex::new(0))
+        .unwrap_or_else(|error| panic!("internal coordinates failed: {error}"));
+    let shifted = structure
+        .model_positions(ModelIndex::new(0))
+        .unwrap_or_else(|| panic!("model absent"))
+        .iter()
+        .map(|position| Some([position[0] + 7.0, position[1] - 2.0, position[2] + 1.0]))
+        .collect::<Vec<_>>();
+    let bat = internal
+        .measure_bat(&shifted)
+        .unwrap_or_else(|error| panic!("BAT measurement failed: {error}"));
+    assert_eq!(bat.coordinates().len(), internal.atoms().len());
+    let rebuilt = internal
+        .rebuild_bat(&bat)
+        .unwrap_or_else(|error| panic!("BAT rebuild failed: {error}"));
+    for (observed, expected) in rebuilt.iter().zip(shifted) {
+        let observed = observed.unwrap_or_else(|| panic!("rebuilt atom absent"));
+        let expected = expected.unwrap_or_else(|| panic!("source atom absent"));
+        assert!(
+            observed
+                .iter()
+                .zip(expected)
+                .all(|(left, right)| (left - right).abs() < 1.0e-5)
+        );
+    }
+}

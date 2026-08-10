@@ -1,5 +1,6 @@
 //! CHARMM CARTCV-style placement from three reference atoms.
 
+use num_traits::ToPrimitive;
 use pdbiox_geom::{cross, normalise};
 
 /// Places `L` from references `I`, `J`, `K` and `K–L` geometry.
@@ -33,9 +34,11 @@ pub fn place_atom(
             + radial * torsion.cos() * plane[2]
             + radial * torsion.sin() * normal[2],
     ];
-    Some(std::array::from_fn(|axis| {
-        (f64::from(k[axis]) + vector[axis]) as f32
-    }))
+    Some([
+        (f64::from(k[0]) + vector[0]).to_f32()?,
+        (f64::from(k[1]) + vector[1]).to_f32()?,
+        (f64::from(k[2]) + vector[2]).to_f32()?,
+    ])
 }
 
 fn subtract(left: [f32; 3], right: [f32; 3]) -> [f64; 3] {

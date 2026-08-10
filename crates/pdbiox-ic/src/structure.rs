@@ -20,13 +20,15 @@ pub fn internal_coordinates(
     let positions = structure
         .model_positions(model)
         .ok_or_else(|| Diagnostic::new(Code::E6003).with_context("model", model.to_string()))?;
-    let atom_count = structure.atom_count() as usize;
+    let atom_count = usize::try_from(structure.atom_count()).map_err(|error| {
+        Diagnostic::new(Code::E5002).with_context("atom_count", error.to_string())
+    })?;
     let adjacency = structure.data().bonds.adjacency(structure.atom_count());
-    let (parents, order) = spanning_forest(atom_count, adjacency);
+    let (parents, order) = spanning_forest(atom_count, adjacency)?;
     let mut seeds = Vec::new();
     let mut atoms = Vec::new();
     for atom in order {
-        let index = AtomIndex::new(atom as u32);
+        let index = atom_index(atom)?;
         let Some(position) = positions.get(atom).copied().filter(finite) else {
             continue;
         };
@@ -56,7 +58,7 @@ pub fn internal_coordinates(
 fn spanning_forest(
     atom_count: usize,
     adjacency: &pdbiox_core::BondAdjacency,
-) -> (Vec<Option<AtomIndex>>, Vec<usize>) {
+) -> Result<(Vec<Option<AtomIndex>>, Vec<usize>), Diagnostic> {
     let mut parents = vec![None; atom_count];
     let mut visited = vec![false; atom_count];
     let mut order = Vec::with_capacity(atom_count);
@@ -65,7 +67,7 @@ fn spanning_forest(
             continue;
         }
         visited[root] = true;
-        let mut queue = VecDeque::from([AtomIndex::new(root as u32)]);
+        let mut queue = VecDeque::from([atom_index(root)?]);
         while let Some(atom) = queue.pop_front() {
             order.push(atom.as_usize());
             for neighbor in adjacency.neighbours(atom) {
@@ -79,7 +81,14 @@ fn spanning_forest(
             }
         }
     }
-    (parents, order)
+    Ok((parents, order))
+}
+
+fn atom_index(position: usize) -> Result<AtomIndex, Diagnostic> {
+    let raw = u32::try_from(position).map_err(|error| {
+        Diagnostic::new(Code::E5002).with_context("atom_index", error.to_string())
+    })?;
+    Ok(AtomIndex::new(raw))
 }
 
 fn ancestor_triplet(atom: AtomIndex, parents: &[Option<AtomIndex>]) -> Option<[AtomIndex; 3]> {

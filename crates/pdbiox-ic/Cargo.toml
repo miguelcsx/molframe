@@ -10,6 +10,7 @@ description = "Internal-coordinate conversion and rebuilding for pdbiox"
 [dependencies]
 pdbiox-core.workspace = true
 pdbiox-geom.workspace = true
+num-traits.workspace = true
 
 [dev-dependencies]
 pdbiox-cif.workspace = true

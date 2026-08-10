@@ -64,6 +64,31 @@ pub struct InternalAtom {
     pub coordinate: Dihedron,
 }
 
+/// One frame in bond-angle-torsion representation.
+///
+/// Cartesian seed positions retain the global pose of every connected
+/// component. Each remaining row is `[bond length, bond angle, torsion]` in the
+/// deterministic order of [`InternalCoordinates::atoms`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct BatFrame {
+    seed_positions: Box<[[f32; 3]]>,
+    coordinates: Box<[[f64; 3]]>,
+}
+
+impl BatFrame {
+    /// Cartesian positions of the reference seeds.
+    #[must_use]
+    pub fn seed_positions(&self) -> &[[f32; 3]] {
+        &self.seed_positions
+    }
+
+    /// Bond length, angle and torsion rows.
+    #[must_use]
+    pub fn coordinates(&self) -> &[[f64; 3]] {
+        &self.coordinates
+    }
+}
+
 /// A deterministic internal-coordinate forest.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InternalCoordinates {
@@ -95,6 +120,80 @@ impl InternalCoordinates {
     #[must_use]
     pub fn atoms(&self) -> &[InternalAtom] {
         &self.atoms
+    }
+
+    /// Measures one Cartesian frame using this forest's stable BAT ordering.
+    ///
+    /// This makes the topology reusable across trajectory frames without
+    /// rebuilding the bond-graph traversal.
+    ///
+    /// # Errors
+    ///
+    /// Returns a diagnostic when a required atom is absent, the frame length
+    /// differs, or four reference points are degenerate.
+    pub fn measure_bat(&self, positions: &[Option<[f32; 3]>]) -> Result<BatFrame, Diagnostic> {
+        if positions.len() != self.atom_count {
+            return Err(invariant());
+        }
+        let seed_positions = self
+            .seeds
+            .iter()
+            .map(|(atom, _)| positions.get(atom.as_usize()).copied().flatten())
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(invariant)?
+            .into_boxed_slice();
+        let coordinates = self
+            .atoms
+            .iter()
+            .map(|atom| {
+                let [i, j, k] = atom.references.map(AtomIndex::as_usize);
+                let [Some(i), Some(j), Some(k), Some(l)] = [i, j, k, atom.atom.as_usize()]
+                    .map(|index| positions.get(index).copied().flatten())
+                else {
+                    return None;
+                };
+                let coordinate = Dihedron::from_points(i, j, k, l)?;
+                Some([coordinate.length, coordinate.angle, coordinate.torsion])
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(invariant)?
+            .into_boxed_slice();
+        Ok(BatFrame {
+            seed_positions,
+            coordinates,
+        })
+    }
+
+    /// Rebuilds a Cartesian frame from BAT values using this forest's topology.
+    ///
+    /// # Errors
+    ///
+    /// Returns a diagnostic for mismatched row counts or degenerate references.
+    pub fn rebuild_bat(&self, frame: &BatFrame) -> Result<Vec<Option<[f32; 3]>>, Diagnostic> {
+        if frame.seed_positions.len() != self.seeds.len()
+            || frame.coordinates.len() != self.atoms.len()
+        {
+            return Err(invariant());
+        }
+        let mut positions = vec![None; self.atom_count];
+        for ((atom, _), position) in self.seeds.iter().zip(&frame.seed_positions) {
+            *positions.get_mut(atom.as_usize()).ok_or_else(invariant)? = Some(*position);
+        }
+        for (atom, values) in self.atoms.iter().zip(&frame.coordinates) {
+            let [i, j, k] = atom.references.map(AtomIndex::as_usize);
+            let [Some(i), Some(j), Some(k)] =
+                [i, j, k].map(|index| positions.get(index).copied().flatten())
+            else {
+                return Err(invariant());
+            };
+            let [length, angle, torsion] = *values;
+            let position = place_atom(i, j, k, length, angle, torsion)
+                .ok_or_else(|| Diagnostic::new(Code::E5002))?;
+            *positions
+                .get_mut(atom.atom.as_usize())
+                .ok_or_else(invariant)? = Some(position);
+        }
+        Ok(positions)
     }
 
     /// Rebuilds all recorded atoms; originally absent coordinates remain absent.
