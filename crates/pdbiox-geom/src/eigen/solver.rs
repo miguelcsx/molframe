@@ -12,20 +12,59 @@
 //! reached. A superposition whose sign flipped between runs would make every
 //! coordinate downstream of it irreproducible.
 //!
-//! Cost is fixed by the dimension, not by the data: at most `SWEEPS` passes over
-//! the off-diagonal entries.
+//! Cost is bounded by the caller-selected sweep limit.
 
-/// The most sweeps a decomposition performs.
-///
-/// Cyclic Jacobi on a matrix this small converges well inside this; the cap
-/// exists so that a pathological input costs bounded time rather than looping.
-const SWEEPS: usize = 24;
+use std::num::FpCategory;
 
-/// Below this, an off-diagonal entry is treated as already zero.
-const TOLERANCE: f64 = 1e-14;
+/// Convergence controls for the cyclic-Jacobi eigensolver.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EigenOptions {
+    /// Relative Frobenius-norm tolerance for the off-diagonal entries.
+    pub relative_tolerance: f64,
+    /// Maximum complete cyclic sweeps.
+    pub maximum_sweeps: usize,
+}
 
-/// Squared convergence threshold, used to avoid a square root per sweep.
-const TOLERANCE_SQUARED: f64 = TOLERANCE * TOLERANCE;
+impl EigenOptions {
+    /// Relative tolerance in the named standard small-matrix profile.
+    pub const STANDARD_RELATIVE_TOLERANCE: f64 = 1e-14;
+    /// Sweep ceiling in the named standard small-matrix profile.
+    pub const STANDARD_MAXIMUM_SWEEPS: usize = 24;
+
+    /// Deterministic bounded profile for three- and four-dimensional matrices.
+    #[must_use]
+    pub const fn standard() -> Self {
+        Self {
+            relative_tolerance: Self::STANDARD_RELATIVE_TOLERANCE,
+            maximum_sweeps: Self::STANDARD_MAXIMUM_SWEEPS,
+        }
+    }
+
+    fn validate(self) -> Result<Self, EigenError> {
+        if self.relative_tolerance.is_finite()
+            && self.relative_tolerance > 0.0
+            && self.relative_tolerance < 1.0
+            && self.maximum_sweeps > 0
+        {
+            Ok(self)
+        } else {
+            Err(EigenError::InvalidOptions)
+        }
+    }
+}
+
+/// Why a symmetric eigendecomposition was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EigenError {
+    /// The tolerance or sweep ceiling was invalid.
+    InvalidOptions,
+    /// At least one matrix entry was NaN or infinite.
+    NonFiniteMatrix,
+    /// The requested convergence was not reached before the sweep ceiling.
+    DidNotConverge,
+    /// An input collection was too large to count exactly in the calculation.
+    InputTooLarge,
+}
 
 /// The eigenvalues and eigenvectors of a symmetric matrix.
 ///
@@ -78,15 +117,42 @@ impl<const N: usize> Decomposition<N> {
 /// Only the upper triangle is read; the matrix is assumed symmetric, which every
 /// caller here constructs it to be.
 ///
-/// Performs at most `SWEEPS * N * (N - 1) / 2` Jacobi rotations. Space usage is
+/// Uses the named [`EigenOptions::standard`] profile. Performs at most
+/// `maximum_sweeps * N * (N - 1) / 2` Jacobi rotations. Space usage is
 /// `O(N²)` in fixed-size stack arrays, with no heap allocation.
-#[must_use]
-pub fn symmetric<const N: usize>(matrix: [[f64; N]; N]) -> Decomposition<N> {
+///
+/// # Errors
+///
+/// Returns [`EigenError`] for non-finite input or failed convergence.
+pub fn symmetric<const N: usize>(matrix: [[f64; N]; N]) -> Result<Decomposition<N>, EigenError> {
+    symmetric_with_options(matrix, EigenOptions::standard())
+}
+
+/// Decomposes a symmetric matrix with explicit convergence controls.
+///
+/// # Errors
+///
+/// Returns [`EigenError`] for invalid controls, non-finite input, or failed
+/// convergence.
+pub fn symmetric_with_options<const N: usize>(
+    matrix: [[f64; N]; N],
+    options: EigenOptions,
+) -> Result<Decomposition<N>, EigenError> {
+    let options = options.validate()?;
+    if !upper_triangle_is_finite(&matrix) {
+        return Err(EigenError::NonFiniteMatrix);
+    }
     let mut work = symmetric_from_upper(&matrix);
     let mut vectors = identity::<N>();
+    let scale_squared = frobenius_squared_norm(&work);
+    if !scale_squared.is_finite() {
+        return Err(EigenError::NonFiniteMatrix);
+    }
+    let threshold_squared = options.relative_tolerance * options.relative_tolerance * scale_squared;
+    let mut converged = off_diagonal_squared_norm(&work) <= threshold_squared;
 
-    for _ in 0..SWEEPS {
-        if off_diagonal_squared_norm(&work) <= TOLERANCE_SQUARED {
+    for _ in 0..options.maximum_sweeps {
+        if converged {
             break;
         }
 
@@ -95,6 +161,10 @@ pub fn symmetric<const N: usize>(matrix: [[f64; N]; N]) -> Decomposition<N> {
                 rotate(&mut work, &mut vectors, p, q);
             }
         }
+        converged = off_diagonal_squared_norm(&work) <= threshold_squared;
+    }
+    if !converged {
+        return Err(EigenError::DidNotConverge);
     }
 
     let mut values = [0.0; N];
@@ -103,7 +173,7 @@ pub fn symmetric<const N: usize>(matrix: [[f64; N]; N]) -> Decomposition<N> {
     }
 
     sort_descending(&mut values, &mut vectors);
-    Decomposition { values, vectors }
+    Ok(Decomposition { values, vectors })
 }
 
 /// Zeroes the `(p, q)` entry with a rotation, accumulating it into `vectors`.
@@ -118,7 +188,7 @@ fn rotate<const N: usize>(
     q: usize,
 ) {
     let apq = work[p][q];
-    if apq.abs() <= TOLERANCE {
+    if matches!(apq.classify(), FpCategory::Zero) {
         return;
     }
 
@@ -237,6 +307,18 @@ fn off_diagonal_squared_norm<const N: usize>(matrix: &[[f64; N]; N]) -> f64 {
     total
 }
 
+/// Squared Frobenius norm used to make convergence scale-relative.
+fn frobenius_squared_norm<const N: usize>(matrix: &[[f64; N]; N]) -> f64 {
+    matrix.iter().flatten().map(|value| value * value).sum()
+}
+
+fn upper_triangle_is_finite<const N: usize>(matrix: &[[f64; N]; N]) -> bool {
+    matrix
+        .iter()
+        .enumerate()
+        .all(|(row, values)| values.iter().skip(row).all(|value| value.is_finite()))
+}
+
 /// One entry, reading a position outside the matrix as zero.
 ///
 /// Every index here is derived from the dimension and cannot be out of range;
@@ -279,5 +361,5 @@ fn set<const N: usize>(matrix: &mut [[f64; N]; N], row: usize, column: usize, va
 }
 
 #[cfg(test)]
-#[path = "eigen_tests.rs"]
+#[path = "solver_tests.rs"]
 mod tests;
