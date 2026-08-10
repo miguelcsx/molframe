@@ -5,6 +5,8 @@
 //! centre. Composition and inversion are exact rather than approximate, so a
 //! transform applied and then undone returns the original positions.
 
+use num_traits::AsPrimitive;
+
 /// A rotation followed by a translation.
 ///
 /// # Examples
@@ -68,11 +70,7 @@ impl Rigid {
         ];
         let transformed = rotate_and_translate(&self.rotation, point, self.translation);
 
-        [
-            transformed[0] as f32,
-            transformed[1] as f32,
-            transformed[2] as f32,
-        ]
+        transformed.map(AsPrimitive::as_)
     }
 
     /// Applies the transform to every position in place.

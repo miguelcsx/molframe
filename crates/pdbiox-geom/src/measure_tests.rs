@@ -1,8 +1,3 @@
-#![allow(
-    clippy::float_cmp,
-    reason = "exact identities on exactly-representable inputs"
-)]
-
 use super::*;
 use std::f64::consts::{FRAC_PI_2, PI};
 
@@ -39,7 +34,11 @@ fn a_right_angle_measures_a_quarter_turn_and_reads_the_same_from_either_arm() {
     let forward = angle(a, vertex, c);
     let backward = angle(c, vertex, a);
     assert!(forward.is_some_and(|value| close(value, FRAC_PI_2)));
-    assert_eq!(forward, backward);
+    assert!(
+        forward
+            .zip(backward)
+            .is_some_and(|(left, right)| close(left, right))
+    );
 }
 
 #[test]
@@ -101,7 +100,13 @@ fn a_torsion_over_collinear_points_is_undefined() {
 #[test]
 fn vector_helpers_agree_with_their_definitions() {
     assert!(close(dot([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]), 32.0));
-    assert_eq!(cross([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]), [0.0, 0.0, 1.0]);
+    let product = cross([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
+    assert!(
+        product
+            .into_iter()
+            .zip([0.0, 0.0, 1.0])
+            .all(|(left, right)| close(left, right))
+    );
     assert!(close(norm([3.0, 4.0, 0.0]), 5.0));
     assert_eq!(normalise([0.0, 0.0, 0.0]), None);
     assert!(normalise([0.0, 5.0, 0.0]).is_some_and(|unit| close(unit[1], 1.0)));

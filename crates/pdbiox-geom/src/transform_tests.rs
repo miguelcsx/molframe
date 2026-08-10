@@ -1,12 +1,16 @@
-#![allow(clippy::float_cmp, reason = "the identity is exact by construction")]
-
 use super::*;
+
+fn exact(left: [f32; 3], right: [f32; 3]) -> bool {
+    left.into_iter()
+        .zip(right)
+        .all(|(left, right)| left.to_bits() == right.to_bits())
+}
 
 #[test]
 fn the_identity_leaves_a_position_where_it_was() {
     let point = [1.5, -2.0, 0.25];
-    assert_eq!(Rigid::IDENTITY.apply(point), point);
-    assert_eq!(Rigid::default().apply(point), point);
+    assert!(exact(Rigid::IDENTITY.apply(point), point));
+    assert!(exact(Rigid::default().apply(point), point));
 }
 
 #[test]
@@ -73,6 +77,6 @@ fn applying_to_a_whole_set_matches_applying_one_at_a_time() {
     let mut batch = original;
     turn.apply_all(&mut batch);
     for (index, point) in original.iter().enumerate() {
-        assert_eq!(batch[index], turn.apply(*point));
+        assert!(exact(batch[index], turn.apply(*point)));
     }
 }

@@ -14,9 +14,6 @@
 //! in ångström — while summation precision is set by how many terms are summed,
 //! and a centroid over a million atoms needs the wider type.
 
-/// Squared threshold below which a vector is considered directionless.
-const DIRECTION_EPSILON_SQUARED: f64 = f64::EPSILON * f64::EPSILON;
-
 /// The vector from `from` to `to`.
 ///
 /// Runs in `O(1)` time, performs all subtraction in `f64`, and allocates no
@@ -108,7 +105,7 @@ pub fn norm(vector: [f64; 3]) -> f64 {
 #[inline]
 pub fn normalise(vector: [f64; 3]) -> Option<[f64; 3]> {
     let squared = norm_squared(vector);
-    if squared <= DIRECTION_EPSILON_SQUARED {
+    if squared <= 0.0 {
         return None;
     }
 
@@ -142,7 +139,7 @@ pub fn angle(a: [f32; 3], vertex: [f32; 3], c: [f32; 3]) -> Option<f64> {
     let first_squared = norm_squared(first);
     let second_squared = norm_squared(second);
 
-    if first_squared <= DIRECTION_EPSILON_SQUARED || second_squared <= DIRECTION_EPSILON_SQUARED {
+    if first_squared <= 0.0 || second_squared <= 0.0 {
         return None;
     }
 
@@ -175,33 +172,37 @@ pub fn angle(a: [f32; 3], vertex: [f32; 3], c: [f32; 3]) -> Option<f64> {
 ///
 /// Runs in `O(1)` time and allocates no heap memory.
 #[must_use]
-pub fn dihedral(a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3]) -> Option<f64> {
-    let first = displacement(a, b);
-    let second = displacement(b, c);
-    let third = displacement(c, d);
+pub fn dihedral(
+    first_point: [f32; 3],
+    second_point: [f32; 3],
+    third_point: [f32; 3],
+    fourth_point: [f32; 3],
+) -> Option<f64> {
+    let first = displacement(first_point, second_point);
+    let second = displacement(second_point, third_point);
+    let third = displacement(third_point, fourth_point);
 
     let left = cross(first, second);
     let right = cross(second, third);
     let second_squared = norm_squared(second);
 
-    if second_squared <= DIRECTION_EPSILON_SQUARED
-        || norm_squared(left) <= DIRECTION_EPSILON_SQUARED
-        || norm_squared(right) <= DIRECTION_EPSILON_SQUARED
-    {
+    if second_squared <= 0.0 || norm_squared(left) <= 0.0 || norm_squared(right) <= 0.0 {
         return None;
     }
 
     // The signed angle between the two plane normals, taken about the central
     // bond so that the sign means the same thing on every torsion.
     let inverse_axis_length = second_squared.sqrt().recip();
-    let y = dot(cross(left, right), second) * inverse_axis_length;
-    let x = dot(left, right);
+    let signed_component = dot(cross(left, right), second) * inverse_axis_length;
+    let cosine_component = dot(left, right);
 
-    if y == 0.0 && x == 0.0 {
+    if matches!(signed_component.classify(), std::num::FpCategory::Zero)
+        && matches!(cosine_component.classify(), std::num::FpCategory::Zero)
+    {
         return None;
     }
 
-    Some(y.atan2(x))
+    Some(signed_component.atan2(cosine_component))
 }
 
 /// Converts radians to degrees, which is what torsions are reported in.

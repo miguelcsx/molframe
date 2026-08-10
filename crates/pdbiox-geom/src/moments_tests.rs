@@ -76,8 +76,10 @@ fn the_inertia_tensor_is_symmetric_by_construction() {
 
 #[test]
 fn the_long_axis_of_an_elongated_set_points_along_its_length() {
-    let rod: Vec<[f32; 3]> = (0..21).map(|i| [(i as f32) - 10.0, 0.0, 0.0]).collect();
-    let Some(axes) = gyration_axes(&rod) else {
+    let rod: Vec<[f32; 3]> = (-10_i16..=10)
+        .map(|coordinate| [f32::from(coordinate), 0.0, 0.0])
+        .collect();
+    let Ok(Some(axes)) = gyration_axes(&rod) else {
         panic!("expected axes")
     };
     let long = axes.dominant();
@@ -89,8 +91,10 @@ fn the_long_axis_of_an_elongated_set_points_along_its_length() {
 
 #[test]
 fn a_line_is_maximally_aspherical_and_a_symmetric_cloud_is_not() {
-    let rod: Vec<[f32; 3]> = (0..21).map(|i| [(i as f32) - 10.0, 0.0, 0.0]).collect();
-    let Some(elongated) = asphericity(&rod) else {
+    let rod: Vec<[f32; 3]> = (-10_i16..=10)
+        .map(|coordinate| [f32::from(coordinate), 0.0, 0.0])
+        .collect();
+    let Ok(Some(elongated)) = asphericity(&rod) else {
         panic!("expected a value")
     };
     assert!(elongated > 0.9, "a rod should be near one, got {elongated}");
@@ -105,7 +109,7 @@ fn a_line_is_maximally_aspherical_and_a_symmetric_cloud_is_not() {
         [-1.0, 1.0, 1.0],
         [1.0, 1.0, 1.0],
     ];
-    let Some(round) = asphericity(&cube) else {
+    let Ok(Some(round)) = asphericity(&cube) else {
         panic!("expected a value")
     };
     assert!(
@@ -122,7 +126,7 @@ fn principal_axes_come_back_ordered_by_their_moments() {
         [0.0, -1.0, 0.0],
         [0.0, 1.0, 0.0],
     ];
-    let Some(axes) = principal_axes(&points, &[]) else {
+    let Ok(Some(axes)) = principal_axes(&points, &[]) else {
         panic!("expected axes")
     };
     assert!(axes.values[0] >= axes.values[1]);

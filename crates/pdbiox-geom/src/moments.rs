@@ -11,6 +11,7 @@
 
 use crate::eigen;
 use crate::measure::dot;
+use crate::numeric::exact_count;
 
 /// The unweighted centre of a set of positions.
 ///
@@ -77,7 +78,7 @@ fn uniform_centre_and_total(positions: &[[f32; 3]]) -> Option<([f64; 3], f64)> {
         sum_z += f64::from(position[2]);
     }
 
-    let total = positions.len() as f64;
+    let total = exact_count(positions.len())?;
     if !total.is_finite() || total <= 0.0 {
         return None;
     }
@@ -253,9 +254,32 @@ fn mirror_upper_triangle(matrix: &mut [[f64; 3]; 3]) {
 /// happened to produce first.
 ///
 /// Runs in `O(n)` time plus a fixed-cost three-by-three decomposition.
-#[must_use]
-pub fn principal_axes(positions: &[[f32; 3]], masses: &[f64]) -> Option<eigen::Decomposition<3>> {
-    inertia_tensor(positions, masses).map(eigen::symmetric)
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the tensor cannot be decomposed with the
+/// named standard profile.
+pub fn principal_axes(
+    positions: &[[f32; 3]],
+    masses: &[f64],
+) -> Result<Option<eigen::Decomposition<3>>, eigen::EigenError> {
+    principal_axes_with_options(positions, masses, eigen::EigenOptions::standard())
+}
+
+/// Returns principal axes with explicit eigensolver convergence controls.
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the tensor cannot be decomposed.
+pub fn principal_axes_with_options(
+    positions: &[[f32; 3]],
+    masses: &[f64],
+    options: eigen::EigenOptions,
+) -> Result<Option<eigen::Decomposition<3>>, eigen::EigenError> {
+    let Some(tensor) = inertia_tensor(positions, masses) else {
+        return Ok(None);
+    };
+    eigen::symmetric_with_options(tensor, options).map(Some)
 }
 
 /// How far the shape departs from a sphere, on `[0, 1]`.
@@ -264,28 +288,66 @@ pub fn principal_axes(positions: &[[f32; 3]], masses: &[f64]) -> Option<eigen::D
 /// tensor's eigenvalues, so it says nothing about handedness — only elongation.
 ///
 /// Runs in `O(n)` time plus a fixed-cost three-by-three decomposition.
-#[must_use]
-pub fn asphericity(positions: &[[f32; 3]]) -> Option<f64> {
-    let decomposition = gyration_axes(positions)?;
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the gyration tensor cannot be decomposed
+/// with the named standard profile.
+pub fn asphericity(positions: &[[f32; 3]]) -> Result<Option<f64>, eigen::EigenError> {
+    asphericity_with_options(positions, eigen::EigenOptions::standard())
+}
+
+/// Computes asphericity with explicit eigensolver convergence controls.
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the gyration tensor cannot be decomposed.
+pub fn asphericity_with_options(
+    positions: &[[f32; 3]],
+    options: eigen::EigenOptions,
+) -> Result<Option<f64>, eigen::EigenError> {
+    let Some(decomposition) = gyration_axes_with_options(positions, options)? else {
+        return Ok(None);
+    };
     let [a, b, c] = decomposition.values;
     let trace = a + b + c;
 
-    if trace <= f64::EPSILON {
-        return Some(0.0);
+    if trace <= 0.0 {
+        return Ok(Some(0.0));
     }
 
     // The standard combination: the largest eigenvalue against the mean of the
     // other two, normalised by the trace so the result is scale-free.
-    Some(((a - 0.5 * (b + c)) / trace).clamp(0.0, 1.0))
+    Ok(Some(((a - 0.5 * (b + c)) / trace).clamp(0.0, 1.0)))
 }
 
 /// The gyration tensor's eigen-decomposition, largest extent first.
 ///
 /// Runs in `O(n)` time using two passes, followed by a fixed-cost decomposition,
 /// and uses `O(1)` auxiliary space.
-#[must_use]
-pub fn gyration_axes(positions: &[[f32; 3]]) -> Option<eigen::Decomposition<3>> {
-    let (centre, count) = centre_and_total(positions, None)?;
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the tensor cannot be decomposed with the
+/// named standard profile.
+pub fn gyration_axes(
+    positions: &[[f32; 3]],
+) -> Result<Option<eigen::Decomposition<3>>, eigen::EigenError> {
+    gyration_axes_with_options(positions, eigen::EigenOptions::standard())
+}
+
+/// Returns gyration axes with explicit eigensolver convergence controls.
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the tensor cannot be decomposed.
+pub fn gyration_axes_with_options(
+    positions: &[[f32; 3]],
+    options: eigen::EigenOptions,
+) -> Result<Option<eigen::Decomposition<3>>, eigen::EigenError> {
+    let Some((centre, count)) = centre_and_total(positions, None) else {
+        return Ok(None);
+    };
 
     let mut tensor = [[0.0; 3]; 3];
 
@@ -310,7 +372,7 @@ pub fn gyration_axes(positions: &[[f32; 3]]) -> Option<eigen::Decomposition<3>> 
     tensor[2][2] *= inverse_count;
 
     mirror_upper_triangle(&mut tensor);
-    Some(eigen::symmetric(tensor))
+    eigen::symmetric_with_options(tensor, options).map(Some)
 }
 
 /// The offset of a position from a centre.
