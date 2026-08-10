@@ -19,5 +19,5 @@ pub fn path_torsions(atoms: &[Option<[f32; 3]>], maximum: usize) -> Vec<Option<f
 }
 
 #[cfg(test)]
-#[path = "path_tests.rs"]
+#[path = "torsion_tests.rs"]
 mod tests;
