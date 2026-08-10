@@ -12,19 +12,19 @@ Every pull request passes all eight. They are listed in the order they are usual
 
 ### 1. Traceable to a requirement
 
-Your change implements an `FR-nnn` or `NFR-nnn` from the requirements, or it adds one. Cite it in the PR description.
+Your change implements a stated requirement, or it adds one. Cite it in the PR description.
 
 A change that is not traceable is either scope creep or a missing requirement, and both need discussion before code.
 
-### 2. `PARITY.md` updated in the same change
+### 2. Capability inventory updated in the same change
 
-**NFR-608.** Adding or removing a capability updates its row in `PARITY.md` — status, owning crate, phase. Not in a follow-up.
+Adding or removing a capability updates its row in the capability inventory — status, owning crate, maturity. Not in a follow-up.
 
-A `✓` requires a golden workflow (gate 3). A `≈` requires a phase for going native. A `–` requires a written argument.
+A `✓` requires a golden workflow (gate 3). A `≈` requires a path to a native implementation. A `–` requires a written argument.
 
 ### 3. A golden workflow
 
-New capabilities get an entry in the benchmarks catalogue — executable, measured, doubling as a correctness fixture. This is what makes a `✓` in `PARITY.md` mean something.
+New capabilities get an entry in the benchmarks catalogue — executable, measured, doubling as a correctness fixture. This is what makes a `✓` in the capability inventory mean something.
 
 ### 4. A differential test
 
@@ -32,18 +32,18 @@ If a reference library does this, compare against it under matched policies (tes
 
 - **pdbiox is wrong** — fix it, add a regression test
 - **the reference is wrong** — document it, report upstream, assert pdbiox's behaviour
-- **a legitimate policy difference** — document in `PARITY.md`, verify pdbiox reproduces the reference under the matching policy
+- **a legitimate policy difference** — document it, verify pdbiox reproduces the reference under the matching policy
 - **numerical tolerance** — document the tolerance and why it is acceptable
 
 **An unexplained divergence blocks the merge.** This is the gate that turns "we're different" into either a fix or a finding.
 
 ### 5. Documentation with a runnable example
 
-**NFR-503, NFR-504.** Every public item is documented and carries an example that compiles and runs. `missing_docs` is a CI error.
+Every public item is documented and carries an example that compiles and runs. `missing_docs` is a CI error.
 
 ### 6. No logic in the binding layer
 
-**ADR-0013.** `pdbiox-py` bodies are argument conversion, one call into a `pdbiox-*` crate, result conversion. Nothing else. `python/pdbiox/` contains only stubs and re-exports.
+**Binding-layer rule.** `pdbiox-py` bodies are argument conversion, one call into a `pdbiox-*` crate, result conversion. Nothing else. `python/pdbiox/` contains only stubs and re-exports.
 
 If a Python convenience is worth having, put it in Rust, where the CLI and Rust users get it too.
 
@@ -51,19 +51,19 @@ CI enforces this with a dependency allowlist and a Python-source check.
 
 ### 7. Licence check on adapted code
 
-**NFR-607.** Adapting third-party code? Name the source, its licence and the attribution in the PR.
+Adapting third-party code? Name the source, its licence and the attribution in the PR.
 
 **MDAnalysis is GPL-2.0-or-later. Its code must not enter pdbiox.** Read it for design, cite it, write your own. The same applies to MDTraj (LGPL) and OpenStructure (LGPL); gemmi is MPL-2.0 and file-level copyleft, so reimplement rather than adapt.
 
 pdbtbx (MIT), Biopython and Biotite (BSD) are adaptable with attribution.
 
-Full table in the governance document §1.1.
+Full table in the governance notes.
 
-### 8. An ADR for architectural decisions
+### 8. An architectural decision record
 
-**NFR-606.** Changing how something fundamental works? Write an ADR first, using the ADR template.
+Changing how something fundamental works? Write an architectural decision record first, using the template.
 
-ADRs are immutable once accepted — a change of mind is a *new* ADR that supersedes the old one. And they must include **rejected alternatives with reasons**; an ADR listing only benefits is incomplete and will be sent back.
+Records are immutable once accepted — a change of mind is a *new* record that supersedes the old one. And they must include **rejected alternatives with reasons**; a record listing only benefits is incomplete and will be sent back.
 
 ---
 
@@ -143,12 +143,12 @@ Include: pdbiox version, platform, a minimal input file (or its PDB ID), the exa
 
 ## Proposing capabilities
 
-1. Check `PARITY.md` — it may already have a row and a phase.
+1. Check the capability inventory — it may already have a row and a maturity level.
 2. Check the scope — it may be deliberately another domain.
 3. Check the library/workflow boundary — a laboratory pipeline belongs downstream when public primitives already suffice.
 4. Open a discussion with: the requirement it satisfies, the crate it belongs in, the prior art, and the golden workflow that would demonstrate it.
 
-Under ADR-0014 the default answer to "should pdbiox do this?" is **yes, if it is structural bioinformatics**. The scope boundary is domain, not effort.
+As a rule of thumb the default answer to "should pdbiox do this?" is **yes, if it is structural bioinformatics**. The scope boundary is domain, not effort.
 
 That answer applies to reusable capabilities, not named use cases. A proposal
 derived from a laboratory script must identify the smallest general operation
