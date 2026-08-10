@@ -12,38 +12,69 @@ description = "A batteries-included structural bioinformatics engine"
 
 [workspace.dependencies]
 pdbiox-core = { path = "crates/pdbiox-core", version = "0.1.0" }
+pdbiox-audit = { path = "crates/pdbiox-audit", version = "0.1.0" }
+pdbiox-analysis = { path = "crates/pdbiox-analysis", version = "0.1.0" }
+pdbiox-adapters = { path = "crates/pdbiox-adapters", version = "0.1.0" }
 pdbiox-cif = { path = "crates/pdbiox-cif", version = "0.1.0" }
 pdbiox-bcif = { path = "crates/pdbiox-bcif", version = "0.1.0" }
 pdbiox-chem = { path = "crates/pdbiox-chem", version = "0.1.0" }
+pdbiox-compare = { path = "crates/pdbiox-compare", version = "0.1.0" }
 pdbiox-geom = { path = "crates/pdbiox-geom", version = "0.1.0" }
+pdbiox-fx = { path = "crates/pdbiox-fx", version = "0.1.0" }
 pdbiox-ic = { path = "crates/pdbiox-ic", version = "0.1.0" }
 pdbiox-pdb = { path = "crates/pdbiox-pdb", version = "0.1.0" }
 pdbiox-mmap = { path = "crates/pdbiox-mmap", version = "0.1.0" }
 pdbiox-ml = { path = "crates/pdbiox-ml", version = "0.1.0" }
+pdbiox-modelcif = { path = "crates/pdbiox-modelcif", version = "0.1.0" }
 pdbiox-query = { path = "crates/pdbiox-query", version = "0.1.0" }
+pdbiox-seq = { path = "crates/pdbiox-seq", version = "0.1.0" }
 pdbiox-spatial = { path = "crates/pdbiox-spatial", version = "0.1.0" }
+pdbiox-surface = { path = "crates/pdbiox-surface", version = "0.1.0" }
+pdbiox-traj = { path = "crates/pdbiox-traj", version = "0.1.0" }
+pdbiox-validate = { path = "crates/pdbiox-validate", version = "0.1.0" }
 pdbiox-xtal = { path = "crates/pdbiox-xtal", version = "0.1.0" }
 pdbiox = { path = "crates/pdbiox", version = "0.1.0" }
 
 bytemuck = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+clap_mangen = "0.2"
 flate2 = "1"
+glob = "0.3"
 hashbrown = "0.16"
+hoomd-gsd = "1.1"
+hdf5-reader = { version = "0.9.1", default-features = false }
+hdf5-writer = { version = "0.9.1", default-features = false }
 indexmap = "2"
 memchr = "2"
 memmap2 = "0.9"
+molly = "0.6.1"
+nalgebra = { version = "0.35", default-features = false, features = ["std"] }
+netcdf-reader = { version = "0.9.1", default-features = false }
+netcdf-writer = { version = "0.9.1", default-features = false }
+num-traits = "0.2"
 numpy = "0.29"
 pyo3 = "0.29"
 smallvec = { version = "1", features = ["union"] }
 thiserror = "2"
+toml = "0.9"
+tempfile = "3"
 wide = "1.6"
 zstd = "0.13"
-arrow = { version = "59", default-features = false, features = ["ffi"] }
+arrow = { version = "59", default-features = false, features = ["ffi", "ipc"] }
+parquet = { version = "59", default-features = false, features = ["arrow", "zstd"] }
 proptest = "1"
+quick-xml = "0.38"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+rayon = "1"
 rmp-serde = "1"
+rusqlite = { version = "0.38", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 serde_bytes = "0.11"
 serde_repr = "0.1"
+sha2 = "0.10"
+tng-rs = { git = "https://github.com/miguelcsx/tng-rs", rev = "5fecdcc66934bd5718545b2fa6efc2f344d1cfb1" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -51,12 +82,7 @@ missing_debug_implementations = "warn"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
-# Positions are `u32` by design; conversions to and from `usize` are pervasive
-# and are checked where a position is created rather than at every use.
-cast_possible_truncation = "allow"
-cast_precision_loss = "allow"
-cast_sign_loss = "allow"
-module_name_repetitions = "allow"
+cognitive_complexity = "warn"
 # Absence is always handled with an explicit match, so that what happens when a
 # value is missing is written down at the site rather than implied by a default.
 manual_unwrap_or_default = "allow"
