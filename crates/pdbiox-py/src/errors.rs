@@ -78,10 +78,10 @@ fn instantiate_standard(
 }
 
 pub(crate) fn read_error(py: Python<'_>, findings: &[Diagnostic]) -> PyErr {
-    let fallback = Diagnostic::new(Code::E9001);
+    let internal_invariant = Diagnostic::new(Code::E9001);
     let finding = match findings.first() {
         Some(finding) => finding,
-        None => &fallback,
+        None => &internal_invariant,
     };
     let error = match finding.code().class() {
         Class::Syntax => ParseError::new_err(finding.message().to_owned()),
@@ -93,6 +93,10 @@ pub(crate) fn read_error(py: Python<'_>, findings: &[Diagnostic]) -> PyErr {
         _ => PdbioxError::new_err(finding.message().to_owned()),
     };
     attach_diagnostic(py, error, finding)
+}
+
+pub(crate) fn cif_write_error(error: &pdbiox::CifWriteError) -> PyErr {
+    ConversionError::new_err(error.to_string())
 }
 
 fn attach_diagnostic(py: Python<'_>, error: PyErr, finding: &Diagnostic) -> PyErr {
