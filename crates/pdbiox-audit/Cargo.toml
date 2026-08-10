@@ -1,0 +1,15 @@
+[package]
+name = "pdbiox-audit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Bounded policy-sensitivity audits for pdbiox analyses"
+
+[dependencies]
+num-traits.workspace = true
+pdbiox-core.workspace = true
+
+[lints]
+workspace = true
