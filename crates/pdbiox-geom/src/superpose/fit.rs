@@ -15,13 +15,42 @@
 //! is linear in the number of atoms.
 
 use crate::eigen;
+use crate::numeric::exact_count;
 use crate::transform::Rigid;
 
-/// Relative rank threshold used to classify a point set as collinear.
-const COLLINEAR_RELATIVE_TOLERANCE: f64 = 1e-12;
+/// Numerical controls for quaternion rigid superposition.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SuperposeOptions {
+    /// Relative second-invariant threshold used to classify collinearity.
+    pub collinear_relative_tolerance: f64,
+    /// Convergence controls for the quaternion eigendecomposition.
+    pub eigen: eigen::EigenOptions,
+}
 
-/// Squared threshold below which a quaternion has no usable magnitude.
-const QUATERNION_EPSILON_SQUARED: f64 = f64::EPSILON * f64::EPSILON;
+impl SuperposeOptions {
+    /// Collinearity threshold in the named double-precision profile.
+    pub const STANDARD_COLLINEAR_RELATIVE_TOLERANCE: f64 = 1e-12;
+
+    /// Named double-precision quaternion-fit profile.
+    #[must_use]
+    pub const fn standard() -> Self {
+        Self {
+            collinear_relative_tolerance: Self::STANDARD_COLLINEAR_RELATIVE_TOLERANCE,
+            eigen: eigen::EigenOptions::standard(),
+        }
+    }
+
+    fn validate(self) -> Result<Self, SuperposeError> {
+        if self.collinear_relative_tolerance.is_finite()
+            && self.collinear_relative_tolerance > 0.0
+            && self.collinear_relative_tolerance < 1.0
+        {
+            Ok(self)
+        } else {
+            Err(SuperposeError::InvalidOptions)
+        }
+    }
+}
 
 /// Why a superposition could not be computed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -35,6 +64,12 @@ pub enum SuperposeError {
     TooFewPoints,
     /// The positions are collinear, so a rotation about their axis is free.
     Degenerate,
+    /// A numerical tolerance was invalid.
+    InvalidOptions,
+    /// The quaternion eigensolver refused the matrix or did not converge.
+    Eigen(eigen::EigenError),
+    /// The point count cannot be represented exactly by the numeric kernel.
+    TooManyPoints,
 }
 
 /// The deviation between two sets already in correspondence.
@@ -62,7 +97,8 @@ pub fn rmsd(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Superpos
         total += crate::measure::distance_squared(a, b);
     }
 
-    Ok((total / mobile.len() as f64).sqrt())
+    let count = exact_count(mobile.len()).ok_or(SuperposeError::TooManyPoints)?;
+    Ok((total / count).sqrt())
 }
 
 /// A fit, and what it achieved.
@@ -103,6 +139,20 @@ pub fn superpose(
     mobile: &[[f32; 3]],
     reference: &[[f32; 3]],
 ) -> Result<Superposition, SuperposeError> {
+    superpose_with_options(mobile, reference, SuperposeOptions::standard())
+}
+
+/// Finds the best rigid transform with explicit numerical controls.
+///
+/// # Errors
+///
+/// Returns why no single converged transform exists.
+pub fn superpose_with_options(
+    mobile: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    options: SuperposeOptions,
+) -> Result<Superposition, SuperposeError> {
+    let options = options.validate()?;
     if mobile.len() != reference.len() {
         return Err(SuperposeError::LengthMismatch);
     }
@@ -111,13 +161,22 @@ pub fn superpose(
         return Err(SuperposeError::TooFewPoints);
     }
 
+    let count = exact_count(mobile.len()).ok_or(SuperposeError::TooManyPoints)?;
     let statistics = fit_statistics(mobile, reference);
 
-    if is_collinear(&statistics.mobile_scatter) || is_collinear(&statistics.reference_scatter) {
+    if is_collinear(
+        &statistics.mobile_scatter,
+        options.collinear_relative_tolerance,
+    ) || is_collinear(
+        &statistics.reference_scatter,
+        options.collinear_relative_tolerance,
+    ) {
         return Err(SuperposeError::Degenerate);
     }
 
-    let decomposition = eigen::symmetric(key_matrix(&statistics.covariance));
+    let decomposition =
+        eigen::symmetric_with_options(key_matrix(&statistics.covariance), options.eigen)
+            .map_err(SuperposeError::Eigen)?;
     let maximum_correlation = decomposition.values[0];
     let quaternion = decomposition.dominant();
 
@@ -134,7 +193,7 @@ pub fn superpose(
             statistics.reference_centre,
         ),
     );
-    let rmsd = optimal_rmsd(&statistics, maximum_correlation, mobile.len());
+    let rmsd = optimal_rmsd(&statistics, maximum_correlation, count);
 
     Ok(Superposition { transform, rmsd })
 }
@@ -159,12 +218,12 @@ fn fit_statistics(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> FitStatistics 
     let mut covariance = [[0.0; 3]; 3];
     let mut mobile_scatter = [[0.0; 3]; 3];
     let mut reference_scatter = [[0.0; 3]; 3];
-    let mut count = 0usize;
+    let mut count = 0.0f64;
 
     for (&mobile_position, &reference_position) in mobile.iter().zip(reference) {
-        count += 1;
+        count += 1.0;
 
-        let inverse_count = (count as f64).recip();
+        let inverse_count = count.recip();
         let mobile_point = to_f64(mobile_position);
         let reference_point = to_f64(reference_position);
         let mobile_delta = subtract(mobile_point, mobile_centre);
@@ -244,7 +303,7 @@ fn mirror_upper_triangle(matrix: &mut [[f64; 3]; 3]) {
 ///
 /// A rank-zero or rank-one scatter represents coincident or collinear points,
 /// for which rotation about one axis is unconstrained. Runs in `O(1)` time.
-fn is_collinear(scatter: &[[f64; 3]; 3]) -> bool {
+fn is_collinear(scatter: &[[f64; 3]; 3], relative_tolerance: f64) -> bool {
     let xx = scatter[0][0];
     let xy = scatter[0][1];
     let xz = scatter[0][2];
@@ -253,14 +312,13 @@ fn is_collinear(scatter: &[[f64; 3]; 3]) -> bool {
     let zz = scatter[2][2];
     let trace = xx + yy + zz;
 
-    if !trace.is_finite() || trace <= f64::EPSILON {
+    if !trace.is_finite() || trace <= 0.0 {
         return true;
     }
 
     let second_invariant = xx * yy + xx * zz + yy * zz - xy * xy - xz * xz - yz * yz;
 
-    !second_invariant.is_finite()
-        || second_invariant <= COLLINEAR_RELATIVE_TOLERANCE * trace * trace
+    !second_invariant.is_finite() || second_invariant <= relative_tolerance * trace * trace
 }
 
 /// The symmetric four-by-four whose dominant eigenvector is the best rotation.
@@ -283,36 +341,36 @@ fn key_matrix(c: &[[f64; 3]; 3]) -> [[f64; 4]; 4] {
 ///
 /// Returns `None` for a zero-length or non-finite quaternion. Runs in `O(1)`
 /// time and allocates no memory.
-fn rotation_from(q: [f64; 4]) -> Option<[[f64; 3]; 3]> {
-    let squared = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3];
+fn rotation_from(quaternion: [f64; 4]) -> Option<[[f64; 3]; 3]> {
+    let squared = quaternion.iter().map(|value| value * value).sum::<f64>();
 
-    if !squared.is_finite() || squared <= QUATERNION_EPSILON_SQUARED {
+    if !squared.is_finite() || squared <= 0.0 {
         return None;
     }
 
     let inverse_length = squared.sqrt().recip();
-    let (w, x, y, z) = (
-        q[0] * inverse_length,
-        q[1] * inverse_length,
-        q[2] * inverse_length,
-        q[3] * inverse_length,
+    let (scalar, first, second, third) = (
+        quaternion[0] * inverse_length,
+        quaternion[1] * inverse_length,
+        quaternion[2] * inverse_length,
+        quaternion[3] * inverse_length,
     );
 
     Some([
         [
-            w * w + x * x - y * y - z * z,
-            2.0 * (x * y - w * z),
-            2.0 * (x * z + w * y),
+            scalar * scalar + first * first - second * second - third * third,
+            2.0 * (first * second - scalar * third),
+            2.0 * (first * third + scalar * second),
         ],
         [
-            2.0 * (x * y + w * z),
-            w * w - x * x + y * y - z * z,
-            2.0 * (y * z - w * x),
+            2.0 * (first * second + scalar * third),
+            scalar * scalar - first * first + second * second - third * third,
+            2.0 * (second * third - scalar * first),
         ],
         [
-            2.0 * (x * z - w * y),
-            2.0 * (y * z + w * x),
-            w * w - x * x - y * y + z * z,
+            2.0 * (first * third - scalar * second),
+            2.0 * (second * third + scalar * first),
+            scalar * scalar - first * first - second * second + third * third,
         ],
     ])
 }
@@ -346,11 +404,10 @@ fn translation(
 /// The dominant quaternion eigenvalue is the maximum rotational correlation,
 /// so no transformed point buffer or additional traversal is required. Runs in
 /// `O(1)` time and allocates no memory.
-fn optimal_rmsd(statistics: &FitStatistics, maximum_correlation: f64, count: usize) -> f64 {
+fn optimal_rmsd(statistics: &FitStatistics, maximum_correlation: f64, count: f64) -> f64 {
     let mobile_squared = trace(&statistics.mobile_scatter);
     let reference_squared = trace(&statistics.reference_scatter);
-    let mean_squared =
-        (mobile_squared + reference_squared - 2.0 * maximum_correlation) / count as f64;
+    let mean_squared = (mobile_squared + reference_squared - 2.0 * maximum_correlation) / count;
 
     if mean_squared <= 0.0 {
         0.0
@@ -398,5 +455,5 @@ fn add_scaled(accumulator: &mut [f64; 3], delta: [f64; 3], scale: f64) {
 }
 
 #[cfg(test)]
-#[path = "superpose_tests.rs"]
+#[path = "fit_tests.rs"]
 mod tests;

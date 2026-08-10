@@ -1,8 +1,3 @@
-#![allow(
-    clippy::float_cmp,
-    reason = "exact identities on exactly-representable inputs"
-)]
-
 use super::*;
 
 const TRIANGLE: [[f32; 3]; 4] = [
@@ -108,6 +103,51 @@ fn the_same_pair_of_sets_always_fits_the_same_way() {
     else {
         panic!("expected both")
     };
-    assert_eq!(first.transform, second.transform);
-    assert_eq!(first.rmsd, second.rmsd);
+    assert!(
+        first
+            .transform
+            .rotation
+            .iter()
+            .flatten()
+            .zip(second.transform.rotation.iter().flatten())
+            .all(|(left, right)| left.to_bits() == right.to_bits())
+    );
+    assert!(
+        first
+            .transform
+            .translation
+            .iter()
+            .zip(second.transform.translation)
+            .all(|(left, right)| left.to_bits() == right.to_bits())
+    );
+    assert_eq!(first.rmsd.to_bits(), second.rmsd.to_bits());
+}
+
+#[test]
+fn caller_selected_fit_controls_are_validated_and_enforced() {
+    assert_eq!(
+        superpose_with_options(
+            &TRIANGLE,
+            &TRIANGLE,
+            SuperposeOptions {
+                collinear_relative_tolerance: 0.0,
+                eigen: eigen::EigenOptions::standard(),
+            },
+        ),
+        Err(SuperposeError::InvalidOptions)
+    );
+    assert_eq!(
+        superpose_with_options(
+            &TRIANGLE,
+            &TRIANGLE,
+            SuperposeOptions {
+                collinear_relative_tolerance: 1e-12,
+                eigen: eigen::EigenOptions {
+                    relative_tolerance: 1e-14,
+                    maximum_sweeps: 0,
+                },
+            },
+        ),
+        Err(SuperposeError::Eigen(eigen::EigenError::InvalidOptions))
+    );
 }
