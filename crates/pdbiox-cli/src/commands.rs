@@ -7,14 +7,17 @@
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table, json_array};
 use pdbiox::{
-    AnalysisPolicy, ChainRef, Format, PdbOptions, ReadOptions, Structure, validate as check,
+    ChainRef, Format, Namespace, PdbIdentifierNamespace, PdbOptions, ReadOptions, Structure,
 };
 use std::fmt::Write as _;
 use std::path::Path;
 
 /// Reads a file, printing whatever was wrong with it.
-fn open(path: &Path, context: Context) -> Result<Structure, Exit> {
-    let options = ReadOptions::new().mode(context.mode);
+pub(super) fn open(path: &Path, context: Context) -> Result<Structure, Exit> {
+    let options = ReadOptions::new()
+        .mode(context.mode)
+        .missing_element_policy(context.missing_element_policy)
+        .ambiguous_residue_boundary_policy(context.residue_boundary_policy);
     let origin = path.display().to_string();
     match pdbiox::read_with_options(path, &options) {
         Ok((structure, findings)) => {
@@ -34,6 +37,20 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
+    let namespace = match context.policy.identifiers {
+        Namespace::Label => Namespace::Label,
+        Namespace::Auth => Namespace::Auth,
+        Namespace::Explicit => {
+            eprintln!(
+                "info requires label or auth identifiers; explicit mappings are not available"
+            );
+            return Exit::Usage;
+        }
+        _ => {
+            eprintln!("info does not support the requested identifier namespace");
+            return Exit::Usage;
+        }
+    };
     let data = structure.data();
 
     if context.is_json() {
@@ -48,13 +65,13 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
             .number("residues", structure.residue_count())
             .number("atoms", structure.atom_count());
         if detail {
-            object.raw("chain_detail", &chain_detail_json(&structure));
+            object.raw("chain_detail", &chain_detail_json(&structure, namespace));
         }
         context.result(&object.finish());
         return Exit::Success;
     }
     if let Some(delimiter) = context.delimiter() {
-        context.result(&info_table(&structure, detail, delimiter));
+        context.result(&info_table(&structure, detail, delimiter, namespace));
         return Exit::Success;
     }
 
@@ -87,7 +104,7 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
             let _ = write!(
                 text,
                 "\n  chain {:<4} residues {:>6}  atoms {:>7}",
-                label_of(&structure, chain),
+                label_of(&structure, chain, namespace),
                 chain.residues().count(),
                 chain
                     .residues()
@@ -100,7 +117,12 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
     Exit::Success
 }
 
-fn info_table(structure: &Structure, detail: bool, delimiter: char) -> String {
+fn info_table(
+    structure: &Structure,
+    detail: bool,
+    delimiter: char,
+    namespace: Namespace,
+) -> String {
     let id = match &structure.data().entry.id {
         Some(id) => id.as_ref(),
         None => "",
@@ -110,7 +132,7 @@ fn info_table(structure: &Structure, detail: bool, delimiter: char) -> String {
         for chain in structure.data().chains() {
             let values = [
                 id.to_owned(),
-                label_of(structure, chain),
+                label_of(structure, chain, namespace),
                 chain.residues().count().to_string(),
                 chain
                     .residues()
@@ -138,14 +160,14 @@ fn info_table(structure: &Structure, detail: bool, delimiter: char) -> String {
     table.finish()
 }
 
-fn chain_detail_json(structure: &Structure) -> String {
+fn chain_detail_json(structure: &Structure, namespace: Namespace) -> String {
     let entries: Vec<String> = structure
         .data()
         .chains()
         .map(|chain| {
             let mut object = Json::new();
             object
-                .text("chain", &label_of(structure, chain))
+                .text("chain", &label_of(structure, chain, namespace))
                 .number("residues", chain.residues().count())
                 .number(
                     "atoms",
@@ -160,8 +182,12 @@ fn chain_detail_json(structure: &Structure) -> String {
     json_array(&entries)
 }
 
-fn label_of(structure: &Structure, chain: ChainRef<'_>) -> String {
-    let symbol = chain.auth_asym_id().or_else(|| chain.label_asym_id());
+fn label_of(structure: &Structure, chain: ChainRef<'_>, namespace: Namespace) -> String {
+    let symbol = match namespace {
+        Namespace::Label => chain.label_asym_id(),
+        Namespace::Auth => chain.auth_asym_id(),
+        _ => None,
+    };
     match symbol.and_then(|symbol| structure.resolve(symbol)) {
         Some(label) => label.to_owned(),
         None => "?".to_owned(),
@@ -174,8 +200,13 @@ pub fn convert(
     output: &Path,
     chain_map: &[String],
     hybrid36: bool,
+    preserve: bool,
+    cif_options: &pdbiox::CifWriteOptions,
     context: Context,
 ) -> Exit {
+    if preserve {
+        return preserving_convert(input, output, context);
+    }
     let structure = match open(input, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,
@@ -196,8 +227,21 @@ pub fn convert(
     };
 
     let bytes = match target {
-        Format::Mmcif => pdbiox::write_mmcif(&structure).into_bytes(),
-        Format::BinaryCif => match pdbiox::write_bcif(&structure) {
+        Format::Mmcif => match pdbiox::write_mmcif_with_options(&structure, cif_options) {
+            Ok(text) => text.into_bytes(),
+            Err(error) => {
+                eprintln!("canonical CIF write refused: {error}");
+                return Exit::Refused;
+            }
+        },
+        Format::BinaryCif => match pdbiox::write_bcif_with_options(&structure, cif_options) {
+            Ok(bytes) => bytes,
+            Err(refusals) => {
+                context.findings(&refusals, &input.display().to_string());
+                return Exit::of(&refusals);
+            }
+        },
+        Format::Mmtf => match pdbiox::write_mmtf(&structure) {
             Ok(bytes) => bytes,
             Err(refusals) => {
                 context.findings(&refusals, &input.display().to_string());
@@ -205,7 +249,7 @@ pub fn convert(
             }
         },
         Format::Pdb => {
-            let options = match pdb_options(chain_map, hybrid36) {
+            let options = match pdb_options(chain_map, hybrid36, context.policy.identifiers) {
                 Ok(options) => options,
                 Err(exit) => return exit,
             };
@@ -218,7 +262,7 @@ pub fn convert(
             }
         }
         Format::Pqr | Format::Pdbqt => {
-            let options = match pdb_options(chain_map, hybrid36) {
+            let options = match pdb_options(chain_map, hybrid36, context.policy.identifiers) {
                 Ok(options) => options,
                 Err(exit) => return exit,
             };
@@ -246,9 +290,25 @@ pub fn convert(
     }
 }
 
-fn pdb_options(chain_map: &[String], hybrid36: bool) -> Result<PdbOptions, Exit> {
-    let mut options = PdbOptions::new().hybrid36(hybrid36);
-    for mapping in chain_map {
+fn pdb_options(
+    chain_map: &[String],
+    hybrid36: bool,
+    namespace: Namespace,
+) -> Result<PdbOptions, Exit> {
+    let namespace = match namespace {
+        Namespace::Label => PdbIdentifierNamespace::Label,
+        Namespace::Auth => PdbIdentifierNamespace::Auth,
+        Namespace::Explicit => {
+            eprintln!("PDB output requires label or auth identifiers, not explicit namespace");
+            return Err(Exit::Usage);
+        }
+        _ => {
+            eprintln!("PDB output does not support the requested identifier namespace");
+            return Err(Exit::Usage);
+        }
+    };
+    let mut options = PdbOptions::new().hybrid36(hybrid36).namespace(namespace);
+    for mapping in chain_map.iter().flat_map(|value| value.split(',')) {
         let Some((from, to)) = mapping.split_once('=') else {
             eprintln!("a chain mapping must be written FROM=TO, not {mapping:?}");
             return Err(Exit::Usage);
@@ -258,46 +318,29 @@ fn pdb_options(chain_map: &[String], hybrid36: bool) -> Result<PdbOptions, Exit>
     Ok(options)
 }
 
-/// Checks a structure against the invariants it must satisfy.
-pub fn validate(path: &Path, context: Context) -> Exit {
-    let structure = match open(path, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let violations = check(structure.data());
-
-    if context.is_json() {
-        let mut object = Json::new();
-        object.number("violations", violations.len()).text(
-            "status",
-            if violations.is_empty() {
-                "sound"
-            } else {
-                "inconsistent"
-            },
-        );
-        context.result(&object.finish());
-    } else if let Some(delimiter) = context.delimiter() {
-        let values = [
-            violations.len().to_string(),
-            if violations.is_empty() {
-                "sound".to_owned()
-            } else {
-                "inconsistent".to_owned()
-            },
-        ];
-        context.result(&one_row(delimiter, &["violations", "status"], &values));
-    } else if violations.is_empty() {
-        context.result("sound: every structural invariant holds");
-    } else {
-        context.result(&format!("inconsistent: {} violations", violations.len()));
+fn preserving_convert(input: &Path, output: &Path, context: Context) -> Exit {
+    if output
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(Format::from_name)
+        != Some(Format::Mmcif)
+    {
+        eprintln!("--preserve requires an mmCIF destination");
+        return Exit::Usage;
     }
-
-    context.findings(&violations, &path.display().to_string());
-    if violations.is_empty() {
-        Exit::Success
-    } else {
-        Exit::Consistency
+    let document = match pdbiox::read_document(input) {
+        Ok(document) => document,
+        Err(findings) => {
+            context.findings(&findings, &input.display().to_string());
+            return Exit::of(&findings);
+        }
+    };
+    match std::fs::write(output, pdbiox::write_preserving(&document)) {
+        Ok(()) => Exit::Success,
+        Err(error) => {
+            eprintln!("could not write {}: {error}", output.display());
+            Exit::Failure
+        }
     }
 }
 
@@ -362,65 +405,9 @@ pub fn measure(path: &Path, context: Context) -> Exit {
     Exit::Success
 }
 
-/// Compares two structures, fitting one onto the other unless told not to.
-pub fn rmsd(mobile: &Path, reference: &Path, no_fit: bool, context: Context) -> Exit {
-    let (Ok(mobile), Ok(reference)) = (open(mobile, context), open(reference, context)) else {
-        return Exit::Input;
-    };
-    let (moving, fixed) = (mobile.positions(), reference.positions());
-
-    // Fitting needs the two sets to correspond atom by atom. Deciding which
-    // atom matches which is a mapping question, and answering it by position is
-    // only right when the two files describe the same atoms in the same order.
-    if moving.len() != fixed.len() {
-        eprintln!(
-            "the structures hold {} and {} atoms; they must correspond one to one",
-            moving.len(),
-            fixed.len()
-        );
-        return Exit::Consistency;
-    }
-
-    let measured = if no_fit {
-        pdbiox::rmsd(moving, fixed).map(|value| (value, false))
-    } else {
-        pdbiox::superpose(moving, fixed).map(|fit| (fit.rmsd, true))
-    };
-    let Ok((value, fitted)) = measured else {
-        eprintln!("the structures cannot be compared: too few points, or they disagree in size");
-        return Exit::Consistency;
-    };
-
-    if context.is_json() {
-        let mut object = Json::new();
-        object.number("rmsd", format!("{value:.4}"));
-        object.number("atoms", moving.len());
-        object.text("fitted", if fitted { "yes" } else { "no" });
-        context.result(&object.finish());
-    } else if let Some(delimiter) = context.delimiter() {
-        let values = [
-            format!("{value:.4}"),
-            moving.len().to_string(),
-            fitted.to_string(),
-        ];
-        context.result(&one_row(delimiter, &["rmsd", "atoms", "fitted"], &values));
-    } else {
-        let how = if fitted {
-            "after fitting"
-        } else {
-            "as they sit"
-        };
-        context.result(&format!(
-            "rmsd {value:.3} over {} atoms, {how}",
-            moving.len()
-        ));
-    }
-    Exit::Success
-}
-
-/// Prints the policy an analysis runs under by default.
+/// Prints the effective policy after configuration and command-line overrides.
 pub fn policy(context: Context) -> Exit {
-    let policy = AnalysisPolicy::default();
+    let policy = context.policy;
     if context.is_json() {
         let mut object = Json::new();
         object.text(

@@ -13,10 +13,6 @@ use pdbiox::{Code, Diagnostic};
 /// produces, because the numbers are a published contract: a script branches on
 /// them, and a code that appears later must not shift the ones already in use.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[allow(
-    dead_code,
-    reason = "the numbering is a contract, not a list of reachable states"
-)]
 #[repr(i32)]
 pub enum Exit {
     /// Everything worked.

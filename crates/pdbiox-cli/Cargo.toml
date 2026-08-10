@@ -12,8 +12,14 @@ name = "pdbiox"
 path = "src/main.rs"
 
 [dependencies]
-pdbiox.workspace = true
+pdbiox = { workspace = true, features = ["ml"] }
+pdbiox-adapters.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
+clap_mangen.workspace = true
+glob.workspace = true
+rayon.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
