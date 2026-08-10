@@ -1,6 +1,9 @@
 //! Pluggable deterministic component providers and CCD lowering.
 
+mod validation;
+
 use crate::model::{Component, ComponentAtom, ComponentBond, ComponentKind, StereoConfiguration};
+use num_traits::ToPrimitive;
 use pdbiox_cif::{CifValue, DataBlock, Document};
 use pdbiox_core::contract::DictionaryVersion;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
@@ -8,6 +11,10 @@ use pdbiox_core::io::InputBuffer;
 use pdbiox_core::{BondOrder, Element};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use validation::validate_component_topology;
+
+type ComponentCoordinates = Arc<[[f32; 3]]>;
+type LoweringResult<T> = Result<T, Vec<Diagnostic>>;
 
 /// A source of chemical component definitions.
 pub trait ComponentProvider: Send + Sync {
@@ -30,20 +37,28 @@ pub struct MemoryProvider {
 }
 
 impl MemoryProvider {
-    /// Builds an index. Later duplicate identifiers replace earlier ones.
-    #[must_use]
+    /// Builds an index without replacing duplicate component definitions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a diagnostic when two supplied components share an identifier.
     pub fn new(
         version: DictionaryVersion,
         components: impl IntoIterator<Item = Component>,
-    ) -> Self {
-        let components = components
-            .into_iter()
-            .map(|component| (component.id.clone(), Arc::new(component)))
-            .collect();
-        Self {
-            version,
-            components,
+    ) -> Result<Self, Diagnostic> {
+        let mut indexed = BTreeMap::new();
+        for component in components {
+            let id = component.id.clone();
+            if indexed.insert(id.clone(), Arc::new(component)).is_some() {
+                return Err(Diagnostic::new(Code::E2005)
+                    .in_category("chem_comp")
+                    .with_context("id", id.to_string()));
+            }
         }
+        Ok(Self {
+            version,
+            components: indexed,
+        })
     }
 }
 
@@ -66,25 +81,33 @@ impl CifProvider {
     ///
     /// # Errors
     ///
-    /// Returns one diagnostic per block missing its component definition.
+    /// Returns every missing, malformed, or duplicate component field without
+    /// constructing a partial dictionary.
     pub fn from_document(
         document: &Document,
         version: DictionaryVersion,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut components = Vec::new();
         let mut findings = Vec::new();
+        let mut identifiers = std::collections::BTreeSet::new();
         for block in document.blocks() {
             match component(block) {
-                Some(component) => components.push(component),
-                None => findings.push(
-                    Diagnostic::new(Code::E2001)
-                        .with_context("block", block.name())
-                        .in_category("chem_comp"),
+                Ok(component) if identifiers.insert(component.id.clone()) => {
+                    components.push(component);
+                }
+                Ok(component) => findings.push(
+                    Diagnostic::new(Code::E2005)
+                        .in_category("chem_comp")
+                        .with_context("id", component.id.to_string())
+                        .with_context("block", block.name()),
                 ),
+                Err(block_findings) => findings.extend(block_findings),
             }
         }
         if findings.is_empty() {
-            Ok(Self(MemoryProvider::new(version, components)))
+            MemoryProvider::new(version, components)
+                .map(Self)
+                .map_err(one_finding)
         } else {
             Err(findings)
         }
@@ -115,151 +138,345 @@ pub fn read_ccd(
     CifProvider::from_document(&document, version).map(|provider| (provider, findings))
 }
 
-fn component(block: &DataBlock) -> Option<Component> {
-    let metadata = block.category("chem_comp")?;
-    let id = metadata.identifier("id", 0)?.into_owned().into();
-    let name = match metadata.identifier("name", 0) {
-        Some(name) => name.into_owned().into(),
-        None => block.name().into(),
+fn component(block: &DataBlock) -> LoweringResult<Component> {
+    let Some(metadata) = block.category("chem_comp") else {
+        return Err(vec![
+            Diagnostic::new(Code::E2001)
+                .with_context("block", block.name())
+                .in_category("chem_comp"),
+        ]);
     };
-    let atoms = atoms(block);
-    Some(Component {
+    let id = required_identifier(metadata, "id", 0).map_err(one_finding)?;
+    let name = required_identifier(metadata, "name", 0).map_err(one_finding)?;
+    let component_type = required_text(metadata, "type", 0).map_err(one_finding)?;
+    let atoms = atoms(block)?;
+    let bonds = bonds(block)?;
+    validate_component_topology(&atoms, &bonds)?;
+    let component_kind = classify_component(&component_type, &atoms, &bonds);
+    let ideal_coordinates = coordinates(block, true, atoms.len())?;
+    let model_coordinates = coordinates(block, false, atoms.len())?;
+    Ok(Component {
         id,
         name,
-        kind: kind(metadata.text("type", 0)),
+        kind: component_kind,
         parent: metadata
             .identifier("mon_nstd_parent_comp_id", 0)
             .map(|value| value.into_owned().into()),
+        one_letter_code: metadata
+            .identifier("one_letter_code", 0)
+            .and_then(|value| one_letter_code(value.as_ref())),
         formula: metadata
             .identifier("formula", 0)
             .map(|value| value.into_owned().into()),
-        ideal_coordinates: coordinates(block, true, atoms.len()),
-        model_coordinates: coordinates(block, false, atoms.len()),
+        ideal_coordinates,
+        model_coordinates,
         atoms: atoms.into(),
-        bonds: bonds(block).into(),
+        bonds: bonds.into(),
     })
 }
 
-fn atoms(block: &DataBlock) -> Vec<ComponentAtom> {
+fn classify_component(
+    component_type: &str,
+    atoms: &[ComponentAtom],
+    bonds: &[ComponentBond],
+) -> ComponentKind {
+    let broad = kind(Some(component_type));
+    if broad == ComponentKind::NonPolymer
+        && atoms.len() == 1
+        && bonds.is_empty()
+        && atoms[0].charge != 0
+    {
+        ComponentKind::Ion
+    } else {
+        broad
+    }
+}
+
+fn one_letter_code(value: &str) -> Option<u8> {
+    let bytes = value.as_bytes();
+    (bytes.len() == 1 && bytes[0].is_ascii()).then_some(bytes[0])
+}
+
+fn atoms(block: &DataBlock) -> LoweringResult<Vec<ComponentAtom>> {
     let Some(category) = block.category("chem_comp_atom") else {
-        return Vec::new();
+        return Err(vec![
+            Diagnostic::new(Code::E2001)
+                .with_context("block", block.name())
+                .in_category("chem_comp_atom"),
+        ]);
     };
-    (0..category.row_count())
-        .filter_map(|row| {
-            let element = category
-                .text("type_symbol", row)
-                .and_then(Element::from_symbol);
-            let charge = category
-                .value("charge", row)
-                .and_then(CifValue::as_integer)
-                .and_then(|value| i8::try_from(value).ok());
-            Some(ComponentAtom {
-                name: category.identifier("atom_id", row)?.into_owned().into(),
-                alternate_name: category
-                    .identifier("alt_atom_id", row)
-                    .map(|value| value.into_owned().into()),
-                element: match element {
-                    Some(element) => element,
-                    None => Element::UNKNOWN,
-                },
-                charge: match charge {
-                    Some(charge) => charge,
-                    None => 0,
-                },
-                aromatic: yes(category.text("pdbx_aromatic_flag", row)),
-                leaving: yes(category.text("pdbx_leaving_atom_flag", row)),
-                stereo: stereo(category.text("pdbx_stereo_config", row)),
-            })
+    if category.row_count() == 0 {
+        return Err(vec![
+            Diagnostic::new(Code::E2002)
+                .with_context("item", "atom_id")
+                .with_context("row", "0")
+                .in_category(category.name()),
+        ]);
+    }
+    collect_rows(category, |row| {
+        let symbol = required_text(category, "type_symbol", row)?;
+        let element = Element::from_symbol(&symbol)
+            .ok_or_else(|| invalid_value(category, "type_symbol", row))?;
+        let charge_value = required_integer(category, "charge", row)?;
+        let charge =
+            i8::try_from(charge_value).map_err(|_| invalid_value(category, "charge", row))?;
+        Ok(ComponentAtom {
+            name: required_identifier(category, "atom_id", row)?,
+            alternate_name: category
+                .identifier("alt_atom_id", row)
+                .map(|value| value.into_owned().into()),
+            element,
+            charge,
+            aromatic: required_flag(category, "pdbx_aromatic_flag", row)?,
+            leaving: required_flag(category, "pdbx_leaving_atom_flag", row)?,
+            stereo: optional_stereo(category, row)?,
         })
-        .collect()
+    })
 }
 
-fn bonds(block: &DataBlock) -> Vec<ComponentBond> {
+fn bonds(block: &DataBlock) -> LoweringResult<Vec<ComponentBond>> {
     let Some(category) = block.category("chem_comp_bond") else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    (0..category.row_count())
-        .filter_map(|row| {
-            let aromatic = yes(category.text("pdbx_aromatic_flag", row));
-            Some(ComponentBond {
-                atom_a: category.identifier("atom_id_1", row)?.into_owned().into(),
-                atom_b: category.identifier("atom_id_2", row)?.into_owned().into(),
-                order: bond_order(category.text("value_order", row), aromatic),
-                aromatic,
-                stereo: stereo(category.text("pdbx_stereo_config", row)),
-            })
+    collect_rows(category, |row| {
+        let aromatic = required_flag(category, "pdbx_aromatic_flag", row)?;
+        Ok(ComponentBond {
+            atom_a: required_identifier(category, "atom_id_1", row)?,
+            atom_b: required_identifier(category, "atom_id_2", row)?,
+            order: bond_order(category, row, aromatic)?,
+            aromatic,
+            stereo: optional_stereo(category, row)?,
         })
-        .collect()
+    })
 }
 
-fn coordinates(block: &DataBlock, ideal: bool, expected: usize) -> Option<Arc<[[f32; 3]]>> {
-    let category = block.category("chem_comp_atom")?;
+fn coordinates(
+    block: &DataBlock,
+    ideal: bool,
+    expected: usize,
+) -> LoweringResult<Option<ComponentCoordinates>> {
+    let Some(category) = block.category("chem_comp_atom") else {
+        return Ok(None);
+    };
+    let items = if ideal {
+        [
+            "pdbx_model_Cartn_x_ideal",
+            "pdbx_model_Cartn_y_ideal",
+            "pdbx_model_Cartn_z_ideal",
+        ]
+    } else {
+        ["model_Cartn_x", "model_Cartn_y", "model_Cartn_z"]
+    };
+    if items.iter().all(|item| category.column(item).is_none()) {
+        return Ok(None);
+    }
     let mut positions = Vec::with_capacity(expected);
     for row in 0..category.row_count() {
-        let items = if ideal {
-            [
-                "pdbx_model_Cartn_x_ideal",
-                "pdbx_model_Cartn_y_ideal",
-                "pdbx_model_Cartn_z_ideal",
-            ]
-        } else {
-            ["model_Cartn_x", "model_Cartn_y", "model_Cartn_z"]
-        };
-        let read = |item: &str| {
-            category
-                .value(item, row)
-                .and_then(CifValue::as_float)
-                .map(|value| value as f32)
-        };
-        positions.push([read(items[0])?, read(items[1])?, read(items[2])?]);
+        let mut position = [0.0; 3];
+        for (axis, item) in items.iter().enumerate() {
+            let value = required_number(category, item, row).map_err(one_finding)?;
+            if value < f64::from(f32::MIN) || value > f64::from(f32::MAX) {
+                return Err(vec![invalid_value(category, item, row)]);
+            }
+            let Some(value) = value.to_f32() else {
+                return Err(vec![invalid_value(category, item, row)]);
+            };
+            position[axis] = value;
+        }
+        positions.push(position);
     }
-    (positions.len() == expected).then(|| positions.into())
+    if positions.len() == expected {
+        Ok(Some(positions.into()))
+    } else {
+        Err(vec![
+            Diagnostic::new(Code::E3001)
+                .in_category(category.name())
+                .with_context("expected", expected.to_string())
+                .with_context("observed", positions.len().to_string()),
+        ])
+    }
 }
 
 fn kind(value: Option<&str>) -> ComponentKind {
-    let lower = value.map(str::to_ascii_lowercase);
-    let Some(text) = lower.as_deref() else {
+    const PEPTIDE: &str = "PEPTIDE";
+    const DNA: &str = "DNA";
+    const RNA: &str = "RNA";
+    const SACCHARIDE: &str = "SACCHARIDE";
+    const LIPID: &str = "LIPID";
+    const WATER: &str = "WATER";
+    const NON_POLYMER: &str = "NON-POLYMER";
+
+    let Some(text) = value else {
         return ComponentKind::Unknown;
     };
-    if text.contains("peptide") {
+    let normalized = text.trim().to_ascii_uppercase();
+    let has_word = |word: &str| {
+        normalized
+            .split(|character: char| !character.is_ascii_alphanumeric())
+            .any(|token| token == word)
+    };
+    if has_word(PEPTIDE) {
         ComponentKind::AminoAcid
-    } else if text.contains("dna") || text.contains("rna") {
+    } else if has_word(DNA) || has_word(RNA) {
         ComponentKind::Nucleotide
-    } else if text.contains("saccharide") {
+    } else if has_word(SACCHARIDE) {
         ComponentKind::Saccharide
-    } else if text.contains("water") {
+    } else if has_word(LIPID) {
+        ComponentKind::Lipid
+    } else if normalized == WATER {
         ComponentKind::Solvent
-    } else if text.contains("non-polymer") {
+    } else if normalized == NON_POLYMER {
         ComponentKind::NonPolymer
     } else {
         ComponentKind::Unknown
     }
 }
 
-fn bond_order(value: Option<&str>, aromatic: bool) -> BondOrder {
+fn bond_order(
+    category: &pdbiox_cif::Category,
+    row: usize,
+    aromatic: bool,
+) -> Result<BondOrder, Diagnostic> {
     if aromatic {
-        return BondOrder::Aromatic;
+        return Ok(BondOrder::Aromatic);
     }
-    match value.map(str::to_ascii_uppercase).as_deref() {
-        Some("SING") => BondOrder::Single,
-        Some("DOUB") => BondOrder::Double,
-        Some("TRIP") => BondOrder::Triple,
-        Some("QUAD") => BondOrder::Quadruple,
-        _ => BondOrder::Unknown,
-    }
-}
-
-fn stereo(value: Option<&str>) -> Option<StereoConfiguration> {
-    match value.map(str::to_ascii_uppercase).as_deref() {
-        Some("R") => Some(StereoConfiguration::R),
-        Some("S") => Some(StereoConfiguration::S),
-        Some("MIXED") => Some(StereoConfiguration::Mixed),
-        _ => None,
+    match required_text(category, "value_order", row)?
+        .to_ascii_uppercase()
+        .as_str()
+    {
+        "SING" => Ok(BondOrder::Single),
+        "DOUB" => Ok(BondOrder::Double),
+        "TRIP" => Ok(BondOrder::Triple),
+        "QUAD" => Ok(BondOrder::Quadruple),
+        _ => Err(invalid_value(category, "value_order", row)),
     }
 }
 
-fn yes(value: Option<&str>) -> bool {
-    value.is_some_and(|value| value.eq_ignore_ascii_case("Y"))
+fn optional_stereo(
+    category: &pdbiox_cif::Category,
+    row: usize,
+) -> Result<Option<StereoConfiguration>, Diagnostic> {
+    let item = "pdbx_stereo_config";
+    match category.text(item, row) {
+        None => Ok(None),
+        Some(value) if value.eq_ignore_ascii_case("N") => Ok(None),
+        Some(value) if value.eq_ignore_ascii_case("R") => Ok(Some(StereoConfiguration::R)),
+        Some(value) if value.eq_ignore_ascii_case("S") => Ok(Some(StereoConfiguration::S)),
+        Some(value) if value.eq_ignore_ascii_case("MIXED") => Ok(Some(StereoConfiguration::Mixed)),
+        Some(_) => Err(invalid_value(category, item, row)),
+    }
+}
+
+fn collect_rows<T>(
+    category: &pdbiox_cif::Category,
+    parse: impl Fn(usize) -> Result<T, Diagnostic>,
+) -> LoweringResult<Vec<T>> {
+    let mut values = Vec::with_capacity(category.row_count());
+    let mut findings = Vec::new();
+    for row in 0..category.row_count() {
+        match parse(row) {
+            Ok(value) => values.push(value),
+            Err(finding) => findings.push(finding),
+        }
+    }
+    if findings.is_empty() {
+        Ok(values)
+    } else {
+        Err(findings)
+    }
+}
+
+fn required_identifier(
+    category: &pdbiox_cif::Category,
+    item: &str,
+    row: usize,
+) -> Result<Box<str>, Diagnostic> {
+    category
+        .identifier(item, row)
+        .map(|value| value.into_owned().into())
+        .ok_or_else(|| missing_item(category, item, row))
+}
+
+fn required_text(
+    category: &pdbiox_cif::Category,
+    item: &str,
+    row: usize,
+) -> Result<Box<str>, Diagnostic> {
+    category
+        .text(item, row)
+        .map(Into::into)
+        .ok_or_else(|| missing_item(category, item, row))
+}
+
+fn required_integer(
+    category: &pdbiox_cif::Category,
+    item: &str,
+    row: usize,
+) -> Result<i64, Diagnostic> {
+    let value = category
+        .value(item, row)
+        .ok_or_else(|| missing_item(category, item, row))?;
+    if matches!(value, CifValue::Unknown | CifValue::Inapplicable) {
+        return Err(missing_item(category, item, row));
+    }
+    value
+        .as_integer()
+        .ok_or_else(|| wrong_type(category, item, row))
+}
+
+fn required_number(
+    category: &pdbiox_cif::Category,
+    item: &str,
+    row: usize,
+) -> Result<f64, Diagnostic> {
+    let value = category
+        .value(item, row)
+        .ok_or_else(|| missing_item(category, item, row))?;
+    if matches!(value, CifValue::Unknown | CifValue::Inapplicable) {
+        return Err(missing_item(category, item, row));
+    }
+    value
+        .as_float()
+        .filter(|number| number.is_finite())
+        .ok_or_else(|| wrong_type(category, item, row))
+}
+
+fn one_finding(finding: Diagnostic) -> Vec<Diagnostic> {
+    vec![finding]
+}
+
+fn required_flag(
+    category: &pdbiox_cif::Category,
+    item: &str,
+    row: usize,
+) -> Result<bool, Diagnostic> {
+    match category.text(item, row) {
+        Some(value) if value.eq_ignore_ascii_case("Y") => Ok(true),
+        Some(value) if value.eq_ignore_ascii_case("N") => Ok(false),
+        Some(_) => Err(invalid_value(category, item, row)),
+        None => Err(missing_item(category, item, row)),
+    }
+}
+
+fn missing_item(category: &pdbiox_cif::Category, item: &str, row: usize) -> Diagnostic {
+    Diagnostic::new(Code::E2002)
+        .in_category(category.name())
+        .with_context("item", item)
+        .with_context("row", row.to_string())
+}
+
+fn wrong_type(category: &pdbiox_cif::Category, item: &str, row: usize) -> Diagnostic {
+    Diagnostic::new(Code::E2004)
+        .in_category(category.name())
+        .with_context("item", item)
+        .with_context("row", row.to_string())
+}
+
+fn invalid_value(category: &pdbiox_cif::Category, item: &str, row: usize) -> Diagnostic {
+    Diagnostic::new(Code::E2003)
+        .in_category(category.name())
+        .with_context("item", item)
+        .with_context("row", row.to_string())
 }
 
 #[cfg(test)]
