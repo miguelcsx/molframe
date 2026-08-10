@@ -1,0 +1,26 @@
+{
+  "entries": [
+    {
+      "id": "basic-a",
+      "path": "basic.pdb",
+      "atom_count": 2,
+      "resolution": 1.8,
+      "method": "X-RAY",
+      "deposition_date": "2020-01-01",
+      "sequence": "AG",
+      "structure_cluster": "basic",
+      "tags": ["fixture"]
+    },
+    {
+      "id": "basic-b",
+      "path": "basic.pdb",
+      "atom_count": 2,
+      "resolution": 2.4,
+      "method": "X-RAY",
+      "deposition_date": "2021-01-01",
+      "sequence": "AA",
+      "structure_cluster": "basic",
+      "tags": ["fixture"]
+    }
+  ]
+}
