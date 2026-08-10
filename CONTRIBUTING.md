@@ -145,9 +145,15 @@ Include: pdbiox version, platform, a minimal input file (or its PDB ID), the exa
 
 1. Check `PARITY.md` — it may already have a row and a phase.
 2. Check the scope — it may be deliberately another domain.
-3. Open a discussion with: the requirement it satisfies, the crate it belongs in, the prior art, and the golden workflow that would demonstrate it.
+3. Check the library/workflow boundary — a laboratory pipeline belongs downstream when public primitives already suffice.
+4. Open a discussion with: the requirement it satisfies, the crate it belongs in, the prior art, and the golden workflow that would demonstrate it.
 
 Under ADR-0014 the default answer to "should pdbiox do this?" is **yes, if it is structural bioinformatics**. The scope boundary is domain, not effort.
+
+That answer applies to reusable capabilities, not named use cases. A proposal
+derived from a laboratory script must identify the smallest general operation
+that is absent from the public API. Adding the script's templates, thresholds,
+classification policy, output schema or command name to pdbiox is scope creep.
 
 ## Reviewing
 
