@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn a_bit_set_reports_the_values_that_were_pushed_into_it() {
-    let bits: BitVec = [true, false, true, true].into_iter().collect();
+    let bits = BitVec::try_from_iter([true, false, true, true]).expect("small bit vector");
     assert_eq!(bits.len(), 4);
     assert_eq!(bits.get(0), Some(true));
     assert_eq!(bits.get(1), Some(false));
@@ -67,9 +67,9 @@ fn width_is_the_smallest_that_represents_the_largest_value() {
 fn packed_values_survive_a_round_trip_at_every_width_they_fit() {
     let values: Vec<u64> = (0u64..37).map(|i| i * 3 % 100).collect();
     for width in [7, 8, 13, 32, 64] {
-        let packed = pack(&values, width);
+        let packed = pack(&values, width).expect("small packed buffer");
         for (index, expected) in values.iter().enumerate() {
-            let read = unpack_one(&packed, width, index as u32);
+            let read = unpack_one(&packed, width, u32::try_from(index).expect("small index"));
             assert_eq!(read, Some(*expected), "width {width} index {index}");
         }
     }
@@ -77,7 +77,7 @@ fn packed_values_survive_a_round_trip_at_every_width_they_fit() {
 
 #[test]
 fn reading_past_the_end_of_a_packed_buffer_yields_nothing() {
-    let packed = pack(&[1, 2, 3], 8);
+    let packed = pack(&[1, 2, 3], 8).expect("small packed buffer");
     assert_eq!(unpack_one(&packed, 8, 2), Some(3));
     assert_eq!(unpack_one(&packed, 8, 3), None);
 }

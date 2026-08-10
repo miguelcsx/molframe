@@ -10,6 +10,7 @@
 //! which is worth paying for a column read once per atom and not worth paying
 //! for one a kernel reads on every iteration.
 
+use crate::limits::CapacityError;
 use std::sync::Arc;
 
 /// A compact set of bits.
@@ -67,22 +68,30 @@ impl BitVec {
     }
 
     /// Appends a bit.
-    pub fn push(&mut self, value: bool) {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError`] without mutation when the `u32` position space is full.
+    pub fn try_push(&mut self, value: bool) -> Result<(), CapacityError> {
         let position = self.len;
+        let Some(next_len) = self.len.checked_add(1) else {
+            return Err(CapacityError::new("bit vector"));
+        };
 
         if position.is_multiple_of(BITS) {
             Arc::make_mut(&mut self.words).push(0);
         }
 
-        self.len += 1;
+        self.len = next_len;
 
         if !value {
-            return;
+            return Ok(());
         }
 
         if let Some(word) = Arc::make_mut(&mut self.words).last_mut() {
             *word |= bit_mask(position);
         }
+        Ok(())
     }
 
     /// Returns the bit at `position`, or `None` if it is past the end.
@@ -157,12 +166,18 @@ impl BitVec {
     /// Skips whole words that hold nothing, so a mask with one member in a
     /// million bits costs a scan of sixteen thousand words rather than a
     /// million tests.
+    ///
+    /// # Panics
+    /// Panics if the bit-vector position space exceeds `u32`.
     pub fn ones(&self) -> impl Iterator<Item = u32> + '_ {
         self.words.iter().enumerate().flat_map(|(index, word)| {
-            let base = index as u32 * BITS;
+            let base = u32::try_from(index)
+                .ok()
+                .and_then(|index| index.checked_mul(BITS));
             let mut remaining = *word;
 
             std::iter::from_fn(move || {
+                let base = base?;
                 if remaining == 0 {
                     return None;
                 }
@@ -227,29 +242,30 @@ impl BitVec {
     }
 }
 
-impl FromIterator<bool> for BitVec {
-    fn from_iter<T: IntoIterator<Item = bool>>(iter: T) -> Self {
+impl BitVec {
+    /// Builds a bit vector, returning `None` if its position space is exhausted.
+    pub fn try_from_iter<T: IntoIterator<Item = bool>>(iter: T) -> Option<Self> {
         let iter = iter.into_iter();
-        let capacity = match u32::try_from(iter.size_hint().0) {
-            Ok(capacity) => capacity,
-            Err(_) => u32::MAX,
-        };
+        let capacity = u32::try_from(iter.size_hint().0).ok()?;
         let mut bits = Self::with_capacity(capacity);
 
         for value in iter {
-            bits.push(value);
+            bits.try_push(value).ok()?;
         }
 
-        bits
+        Some(bits)
     }
 }
 
 /// The number of bits needed to represent every value up to `max`.
+///
+/// # Panics
+/// The checked conversion is mathematically bounded to 64 bits.
 #[must_use]
 pub fn bit_width(max: u64) -> u8 {
     match max {
         0 => 1,
-        _ => (u64::BITS - max.leading_zeros()) as u8,
+        _ => narrow_width(u64::BITS - max.leading_zeros()),
     }
 }
 
@@ -295,23 +311,31 @@ const fn placement(width: u32, index: u32) -> (usize, u32, usize) {
 /// width from the data rather than choosing one. Each value is written with a
 /// single shifted accumulation rather than a loop over its bits.
 #[must_use]
-pub fn pack(values: &[u64], width: u8) -> Vec<u8> {
+pub fn pack(values: &[u64], width: u8) -> Option<Vec<u8>> {
     pack_mapped(values, width, |value| *value)
 }
 
-pub(super) fn pack_mapped<T, F>(values: &[T], width: u8, to_bits: F) -> Vec<u8>
+pub(super) fn pack_mapped<T, F>(values: &[T], width: u8, to_bits: F) -> Option<Vec<u8>>
 where
     F: Fn(&T) -> u64,
 {
     let width = u32::from(width.clamp(1, 64));
-    let total_bits = values.len() as u64 * u64::from(width);
-    let mut packed = vec![0u8; total_bits.div_ceil(8) as usize];
+    let total_bits = u64::try_from(values.len())
+        .ok()?
+        .checked_mul(u64::from(width))?;
+    let packed_len = usize::try_from(total_bits.div_ceil(8)).ok()?;
+    let mut packed = vec![0u8; packed_len];
 
     for (index, value) in values.iter().enumerate() {
-        write_packed_value(&mut packed, width, index as u32, to_bits(value));
+        write_packed_value(
+            &mut packed,
+            width,
+            u32::try_from(index).ok()?,
+            to_bits(value),
+        );
     }
 
-    packed
+    Some(packed)
 }
 
 fn write_packed_value(packed: &mut [u8], width: u32, index: u32, value: u64) {
@@ -326,7 +350,7 @@ fn write_packed_value(packed: &mut [u8], width: u32, index: u32, value: u64) {
     let shifted = u128::from(value & low_mask(width)) << offset;
 
     for (step, target) in targets.iter_mut().enumerate() {
-        *target |= (shifted >> (8 * step)) as u8;
+        *target |= ((shifted >> (8 * step)) & u128::from(u8::MAX)).to_le_bytes()[0];
     }
 }
 
@@ -334,6 +358,9 @@ fn write_packed_value(packed: &mut [u8], width: u32, index: u32, value: u64) {
 ///
 /// Returns `None` when the value would run past the end of the buffer, which is
 /// the only way a malformed input can reach this code.
+///
+/// # Panics
+/// The checked conversion receives a value masked to 64 bits.
 #[must_use]
 pub fn unpack_one(packed: &[u8], width: u8, index: u32) -> Option<u64> {
     let width = u32::from(width.clamp(1, 64));
@@ -348,7 +375,12 @@ pub fn unpack_one(packed: &[u8], width: u8, index: u32) -> Option<u64> {
             accumulator | (u128::from(*value) << (8 * step))
         });
 
-    Some(((accumulator >> offset) as u64) & low_mask(width))
+    let word = u64::try_from((accumulator >> offset) & u128::from(u64::MAX)).ok()?;
+    Some(word & low_mask(width))
+}
+
+fn narrow_width(width: u32) -> u8 {
+    width.to_le_bytes()[0]
 }
 
 #[cfg(test)]

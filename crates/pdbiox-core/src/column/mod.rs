@@ -4,6 +4,6 @@ mod bits;
 mod encoded;
 mod validity;
 
-pub use bits::{BitVec, bit_width, pack, unpack_one};
-pub use encoded::{ColumnIter, ColumnValue, EncodedColumn};
-pub use validity::{Presence, ValidityMask};
+pub use bits::*;
+pub use encoded::*;
+pub use validity::*;

@@ -182,40 +182,54 @@ impl ValidityMask {
     }
 }
 
-impl FromIterator<Presence> for ValidityMask {
-    fn from_iter<T: IntoIterator<Item = Presence>>(iter: T) -> Self {
+impl ValidityMask {
+    /// Builds a validity mask, returning `None` if `u32` row capacity is exceeded.
+    pub fn try_from_iter<T: IntoIterator<Item = Presence>>(iter: T) -> Option<Self> {
         let mut len = 0u32;
         let mut mixed: Option<(BitVec, BitVec)> = None;
 
         for presence in iter {
+            let next_len = len.checked_add(1)?;
             match mixed.as_mut() {
                 Some((present, unknown)) => {
-                    push_presence(present, unknown, presence);
+                    push_presence(present, unknown, presence)?;
                 }
                 None if presence.is_present() => {}
                 None => {
                     let mut present = BitVec::repeat(true, len);
                     let mut unknown = BitVec::repeat(false, len);
 
-                    push_presence(&mut present, &mut unknown, presence);
+                    push_presence(&mut present, &mut unknown, presence)?;
 
                     mixed = Some((present, unknown));
                 }
             }
 
-            len += 1;
+            len = next_len;
         }
 
         match mixed {
-            Some((present, unknown)) => Self::Mixed { present, unknown },
-            None => Self::AllPresent(len),
+            Some((present, unknown)) => Some(Self::Mixed { present, unknown }),
+            None => Some(Self::AllPresent(len)),
         }
+    }
+
+    pub(crate) fn from_bounded_iter<T: IntoIterator<Item = Presence>>(iter: T, len: u32) -> Self {
+        let mut present = BitVec::repeat(false, len);
+        let mut unknown = BitVec::repeat(false, len);
+        for (position, presence) in (0..len).zip(iter) {
+            present.set(position, presence == Presence::Present);
+            unknown.set(position, presence == Presence::Unknown);
+        }
+        let mut validity = Self::Mixed { present, unknown };
+        validity.compact();
+        validity
     }
 }
 
-fn push_presence(present: &mut BitVec, unknown: &mut BitVec, presence: Presence) {
-    present.push(presence == Presence::Present);
-    unknown.push(presence == Presence::Unknown);
+fn push_presence(present: &mut BitVec, unknown: &mut BitVec, presence: Presence) -> Option<()> {
+    present.try_push(presence == Presence::Present).ok()?;
+    unknown.try_push(presence == Presence::Unknown).ok()
 }
 
 #[cfg(test)]

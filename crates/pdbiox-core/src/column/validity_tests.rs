@@ -10,9 +10,9 @@ fn an_all_present_mask_costs_a_length_rather_than_two_bit_sets() {
 
 #[test]
 fn unrecorded_and_inapplicable_are_distinguishable_after_a_round_trip() {
-    let mask: ValidityMask = [Presence::Present, Presence::Unknown, Presence::Inapplicable]
-        .into_iter()
-        .collect();
+    let mask =
+        ValidityMask::try_from_iter([Presence::Present, Presence::Unknown, Presence::Inapplicable])
+            .expect("small validity mask");
     assert_eq!(mask.get(0), Presence::Present);
     assert_eq!(mask.get(1), Presence::Unknown);
     assert_eq!(mask.get(2), Presence::Inapplicable);

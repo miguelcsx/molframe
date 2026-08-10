@@ -2,10 +2,10 @@ use super::*;
 
 fn round_trips<T: ColumnValue + std::fmt::Debug>(values: &[T]) {
     let column = EncodedColumn::encode(values);
-    assert_eq!(column.len() as usize, values.len(), "length for {column:?}");
+    assert_eq!(column.len(), values.len(), "length for {column:?}");
     for (position, expected) in values.iter().enumerate() {
         assert_eq!(
-            column.get(position as u32),
+            column.get(u32::try_from(position).expect("small position")),
             Some(*expected),
             "position {position} of {column:?}"
         );
@@ -15,7 +15,10 @@ fn round_trips<T: ColumnValue + std::fmt::Debug>(values: &[T]) {
     for (read, expected) in sequential.iter().zip(values) {
         assert_eq!(read, expected);
     }
-    assert_eq!(column.get(values.len() as u32), None);
+    assert_eq!(
+        column.get(u32::try_from(values.len()).expect("small length")),
+        None
+    );
 }
 
 #[test]
