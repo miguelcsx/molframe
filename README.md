@@ -9,7 +9,7 @@
 pdbiox reads structural and simulation data into a single columnar data model
 and runs selections, geometry, surfaces, contacts, assemblies, trajectories,
 structural comparison, validation and machine-learning export over that model.
-The live format inventory is tracked row by row in `docs/PARITY.md`; formats not
+The live format inventory is tracked row by row; formats not
 yet marked `β` there are commitments, not shipped claims.
 
 ## Why pdbiox
@@ -96,11 +96,11 @@ every public analysis entry point is wired to the enriched result.
 
 ## Status
 
-All 302 deterministic product rows in `docs/PARITY.md` have native
-implementations and tests at `β`. The only phased `·` is the external PDB-scale
+All 302 deterministic product rows in the capability inventory have native
+implementations and tests at `β`. The only `·` is the external PDB-scale
 audit study, which is evidence work rather than a library capability. Promotion
-to `✓` still requires the row-specific golden and differential evidence defined
-by the specification; `β` is not a claim that this evidence already exists.
+to `✓` still requires the row-specific golden and differential evidence;
+`β` is not a claim that this evidence already exists.
 
 ## Repository layout
 
