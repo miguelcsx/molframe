@@ -2,9 +2,10 @@
 
 use crate::errors::read_error;
 use crate::structure::PyStructure;
-use numpy::ndarray::ArrayView2;
+use numpy::ndarray::Array2;
 use numpy::{PyArray2, PyArrayMethods};
 use pdbiox::{CoordinateEditor, ModelIndex};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 #[pyclass(name = "CoordinateEdit", skip_from_py_object)]
@@ -40,22 +41,26 @@ impl PyCoordinateEdit {
         if let Some(existing) = &slf.borrow().array {
             return Ok(existing.bind(slf.py()).clone());
         }
-        let (position_count, pointer) = {
+        let (position_count, flattened) = {
             let mut context = slf.borrow_mut();
             let positions = context
                 .editor
                 .try_positions_mut(ModelIndex::new(0))
                 .map_err(|finding| read_error(slf.py(), std::slice::from_ref(&finding)))?;
-            (positions.len(), positions.as_ptr().cast::<f32>())
+            let Some(scalar_count) = positions.len().checked_mul(3) else {
+                return Err(PyValueError::new_err(
+                    "coordinate array shape overflows usize",
+                ));
+            };
+            let mut flattened = Vec::with_capacity(scalar_count);
+            for position in positions.iter() {
+                flattened.extend_from_slice(position);
+            }
+            (positions.len(), flattened)
         };
-        let shape = (position_count, 3);
-        // SAFETY: the editor owns a fixed-size contiguous f32 triple buffer and
-        // `slf` becomes the NumPy base object. The editor is retained after the
-        // scope, so the pointer remains valid even if the array escapes.
-        let view = unsafe { ArrayView2::from_shape_ptr(shape, pointer) };
-        // SAFETY: the view points into the editor retained by the base object;
-        // its allocation cannot move while the NumPy array exists.
-        let array = unsafe { PyArray2::borrow_from_array(&view, slf.clone().into_any()) };
+        let owned = Array2::from_shape_vec((position_count, 3), flattened)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let array = PyArray2::from_owned_array(slf.py(), owned);
         slf.borrow_mut().array = Some(array.clone().unbind());
         Ok(array)
     }
@@ -73,6 +78,19 @@ impl PyCoordinateEdit {
         }
         if exc_type.is_some() {
             return Ok(false);
+        }
+        if let Some(array) = &self.array {
+            let array = array.bind(py).readonly();
+            let values = array
+                .as_slice()
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            let positions = self
+                .editor
+                .try_positions_mut(ModelIndex::new(0))
+                .map_err(|finding| read_error(py, std::slice::from_ref(&finding)))?;
+            for (target, source) in positions.iter_mut().zip(values.chunks_exact(3)) {
+                target.copy_from_slice(source);
+            }
         }
         let edited = self
             .editor

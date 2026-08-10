@@ -73,6 +73,30 @@ impl PyAtom {
     }
 
     #[getter]
+    fn auth_name(&self) -> Option<String> {
+        self.inner
+            .atom(self.index)
+            .and_then(AtomRef::auth_name)
+            .map(str::to_owned)
+    }
+
+    #[getter]
+    fn altloc(&self) -> Option<String> {
+        self.inner
+            .atom(self.index)
+            .and_then(AtomRef::alt_label)
+            .map(str::to_owned)
+    }
+
+    #[getter]
+    fn component(&self) -> Option<String> {
+        self.inner
+            .atom(self.index)
+            .and_then(AtomRef::component_name)
+            .map(str::to_owned)
+    }
+
+    #[getter]
     fn element(&self) -> Option<&'static str> {
         self.inner
             .atom(self.index)
@@ -88,5 +112,20 @@ impl PyAtom {
     #[getter]
     fn b_factor(&self) -> Option<f32> {
         self.inner.atom(self.index).and_then(AtomRef::b_factor)
+    }
+
+    #[getter]
+    fn occupancy(&self) -> Option<f32> {
+        self.inner.atom(self.index).and_then(AtomRef::occupancy)
+    }
+
+    #[getter]
+    fn formal_charge(&self) -> Option<i8> {
+        self.inner.atom(self.index).and_then(AtomRef::formal_charge)
+    }
+
+    #[getter]
+    fn atom_site_id(&self) -> Option<u32> {
+        self.inner.atom(self.index).and_then(AtomRef::atom_site_id)
     }
 }

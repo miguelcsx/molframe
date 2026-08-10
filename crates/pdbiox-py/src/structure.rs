@@ -75,14 +75,19 @@ impl PyStructure {
             let positions = snapshot.inner.positions();
             (positions.len(), positions.as_ptr().cast::<f32>())
         };
+        position_count.checked_mul(3).ok_or_else(|| {
+            pyo3::exceptions::PyOverflowError::new_err("coordinate array shape overflows usize")
+        })?;
         let shape = (position_count, 3);
         // SAFETY: `CoordinateBlock` is an immutable contiguous array of f32
-        // triples. `owner` holds the Structure snapshot and becomes the NumPy
+        // triples with no padding; the checked product above proves the shape
+        // is representable. `owner` holds the Structure snapshot and becomes the NumPy
         // base object, so the allocation cannot move or be freed while Python
         // can reach this view. The dimensions cover exactly len * 3 elements.
         let view = unsafe { ArrayView2::from_shape_ptr(shape, pointer) };
         // SAFETY: `view` points into the snapshot retained by `owner`, and that
-        // snapshot is immutable and never reallocates its coordinate block.
+        // snapshot is immutable and never reallocates its coordinate block;
+        // the array is made non-writeable before it escapes this function.
         let array = unsafe { PyArray2::borrow_from_array(&view, owner.into_any()) };
         let _readonly = array.readwrite().make_nonwriteable();
         Ok(array)
