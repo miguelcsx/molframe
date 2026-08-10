@@ -4,7 +4,6 @@ use super::chain::ChainTable;
 use super::entity::EntityTable;
 use super::model::ModelTable;
 use super::residue::ResidueTable;
-use crate::index::ResidueIndex;
 
 /// The whole hierarchy.
 #[derive(Clone, Debug, Default)]
@@ -21,16 +20,11 @@ pub struct Topology {
 
 impl Topology {
     /// The number of atoms the residue table accounts for.
+    ///
     #[must_use]
     pub fn atom_count(&self) -> u32 {
-        let Some(last_position) = self.residues.len().checked_sub(1) else {
-            return 0;
-        };
-
-        let last = ResidueIndex::new(last_position as u32);
-
-        match self.residues.atoms(last) {
-            Some(range) => range.end,
+        match self.residues.last_atom_end() {
+            Some(end) => end,
             None => 0,
         }
     }

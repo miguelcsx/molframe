@@ -1,6 +1,7 @@
 //! The models of a structure, in deposition order.
 
 use crate::index::ModelIndex;
+use crate::limits::{CapacityError, TableError};
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -26,12 +27,21 @@ impl ModelTable {
     }
 
     /// Appends a model covering a range of chains.
-    pub fn push(&mut self, model_num: i32, chains: Range<u32>) -> ModelIndex {
-        let position = self.model_num.len() as u32;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] for a reversed range or exhausted index space.
+    pub fn push(&mut self, model_num: i32, chains: Range<u32>) -> Result<ModelIndex, TableError> {
+        let position = u32::try_from(self.model_num.len())
+            .map_err(|_| TableError::Capacity(CapacityError::new("model table")))?;
+        let chain_count = chains
+            .end
+            .checked_sub(chains.start)
+            .ok_or(TableError::ReversedRange { table: "model" })?;
         Arc::make_mut(&mut self.first_chain).push(chains.start);
-        Arc::make_mut(&mut self.chain_count).push(chains.end.saturating_sub(chains.start));
+        Arc::make_mut(&mut self.chain_count).push(chain_count);
         Arc::make_mut(&mut self.model_num).push(model_num);
-        ModelIndex::new(position)
+        Ok(ModelIndex::new(position))
     }
 
     /// The number the model was deposited under.
@@ -51,8 +61,12 @@ impl ModelTable {
     }
 
     /// Every model position.
+    ///
     pub fn iter(&self) -> impl Iterator<Item = ModelIndex> + '_ {
-        (0..self.model_num.len() as u32).map(ModelIndex::new)
+        self.model_num
+            .iter()
+            .enumerate()
+            .filter_map(|(position, _)| u32::try_from(position).ok().map(ModelIndex::new))
     }
 }
 
@@ -60,5 +74,5 @@ fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u3
     let start = *starts.get(index)?;
     let count = *counts.get(index)?;
 
-    Some(start..start.saturating_add(count))
+    Some(start..start.checked_add(count)?)
 }

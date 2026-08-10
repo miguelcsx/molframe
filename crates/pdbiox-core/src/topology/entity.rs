@@ -12,6 +12,7 @@
 //! between them is the unmodelled region — which is data, not an absence.
 
 use crate::index::EntityIndex;
+use crate::limits::CapacityError;
 use crate::optional::OptionalSymbol;
 use crate::symbol::SymbolId;
 use std::ops::Range;
@@ -42,7 +43,7 @@ pub enum EntityKind {
 #[derive(Clone, Debug, Default)]
 pub struct EntityTable {
     kind: Arc<Vec<EntityKind>>,
-    id: Arc<Vec<SymbolId>>,
+    id: Arc<Vec<OptionalSymbol>>,
     description: Arc<Vec<OptionalSymbol>>,
     sequence_span: Arc<Vec<Range<u32>>>,
     sequence_pool: Arc<Vec<SymbolId>>,
@@ -62,22 +63,57 @@ impl EntityTable {
     }
 
     /// Appends an entity, returning its position.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError`] when the entity table exceeds its index space.
     pub fn push(
         &mut self,
         id: SymbolId,
         kind: EntityKind,
         description: OptionalSymbol,
         canonical_sequence: &[SymbolId],
-    ) -> EntityIndex {
-        let start = self.sequence_pool.len() as u32;
+    ) -> Result<EntityIndex, CapacityError> {
+        self.push_with_optional_id(
+            OptionalSymbol::some(id),
+            kind,
+            description,
+            canonical_sequence,
+        )
+    }
+
+    /// Appends an entity whose source did not declare an identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError`] when the entity table exceeds its index space.
+    pub fn push_without_id(
+        &mut self,
+        kind: EntityKind,
+        description: OptionalSymbol,
+        canonical_sequence: &[SymbolId],
+    ) -> Result<EntityIndex, CapacityError> {
+        self.push_with_optional_id(OptionalSymbol::NONE, kind, description, canonical_sequence)
+    }
+
+    fn push_with_optional_id(
+        &mut self,
+        id: OptionalSymbol,
+        kind: EntityKind,
+        description: OptionalSymbol,
+        canonical_sequence: &[SymbolId],
+    ) -> Result<EntityIndex, CapacityError> {
+        let error = || CapacityError::new("entity table");
+        let start = u32::try_from(self.sequence_pool.len()).map_err(|_| error())?;
+        let added = u32::try_from(canonical_sequence.len()).map_err(|_| error())?;
+        let end = start.checked_add(added).ok_or_else(error)?;
+        let position = u32::try_from(self.kind.len()).map_err(|_| error())?;
         Arc::make_mut(&mut self.sequence_pool).extend_from_slice(canonical_sequence);
-        let end = self.sequence_pool.len() as u32;
-        let position = self.kind.len() as u32;
         Arc::make_mut(&mut self.kind).push(kind);
         Arc::make_mut(&mut self.id).push(id);
         Arc::make_mut(&mut self.description).push(description);
         Arc::make_mut(&mut self.sequence_span).push(start..end);
-        EntityIndex::new(position)
+        Ok(EntityIndex::new(position))
     }
 
     /// What kind of species this entity is.
@@ -89,7 +125,10 @@ impl EntityTable {
     /// The identifier the file gave this entity.
     #[must_use]
     pub fn id(&self, entity: EntityIndex) -> Option<SymbolId> {
-        self.id.get(entity.as_usize()).copied()
+        self.id
+            .get(entity.as_usize())
+            .copied()
+            .and_then(OptionalSymbol::get)
     }
 
     /// The entity carrying `id`, where the file declared one.
@@ -97,12 +136,14 @@ impl EntityTable {
     /// Entity tables are normally small and this is used while building one
     /// chain at a time, not in an atom loop. Keeping the lookup here avoids a
     /// second index whose lifetime and invalidation would duplicate the table.
+    ///
     #[must_use]
     pub fn find_by_id(&self, id: SymbolId) -> Option<EntityIndex> {
         self.id
             .iter()
-            .position(|candidate| *candidate == id)
-            .map(|position| EntityIndex::new(position as u32))
+            .position(|candidate| candidate.get() == Some(id))
+            .and_then(|position| u32::try_from(position).ok())
+            .map(EntityIndex::new)
     }
 
     /// The entity's description, if the file carried one.
@@ -128,8 +169,12 @@ impl EntityTable {
     }
 
     /// Every entity position.
+    ///
     pub fn iter(&self) -> impl Iterator<Item = EntityIndex> + '_ {
-        (0..self.kind.len() as u32).map(EntityIndex::new)
+        self.kind
+            .iter()
+            .enumerate()
+            .filter_map(|(position, _)| u32::try_from(position).ok().map(EntityIndex::new))
     }
 }
 

@@ -7,6 +7,7 @@
 
 use crate::column::BitVec;
 use crate::index::ResidueIndex;
+use crate::limits::{CapacityError, TableError};
 use crate::optional::{OptionalI32, OptionalSymbol};
 use crate::symbol::SymbolId;
 use std::ops::Range;
@@ -56,17 +57,30 @@ impl ResidueTable {
     }
 
     /// Appends a residue covering a range of atoms.
-    pub fn push(&mut self, record: ResidueRecord, atoms: Range<u32>) -> ResidueIndex {
-        let position = self.label_comp_id.len() as u32;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] for a reversed range or exhausted index space.
+    pub fn push(
+        &mut self,
+        record: ResidueRecord,
+        atoms: Range<u32>,
+    ) -> Result<ResidueIndex, TableError> {
+        let capacity = || TableError::Capacity(CapacityError::new("residue table"));
+        let position = u32::try_from(self.label_comp_id.len()).map_err(|_| capacity())?;
+        let atom_count = atoms
+            .end
+            .checked_sub(atoms.start)
+            .ok_or(TableError::ReversedRange { table: "residue" })?;
+        self.het.try_push(record.het).map_err(|_| capacity())?;
         Arc::make_mut(&mut self.first_atom).push(atoms.start);
-        Arc::make_mut(&mut self.atom_count).push(atoms.end.saturating_sub(atoms.start));
+        Arc::make_mut(&mut self.atom_count).push(atom_count);
         Arc::make_mut(&mut self.label_comp_id).push(record.label_comp_id);
         Arc::make_mut(&mut self.auth_comp_id).push(record.auth_comp_id);
         Arc::make_mut(&mut self.label_seq_id).push(record.label_seq_id);
         Arc::make_mut(&mut self.auth_seq_id).push(record.auth_seq_id);
         Arc::make_mut(&mut self.ins_code).push(record.ins_code);
-        self.het.push(record.het);
-        ResidueIndex::new(position)
+        Ok(ResidueIndex::new(position))
     }
 
     /// Replaces the atoms a residue covers.
@@ -74,14 +88,35 @@ impl ResidueTable {
     /// A reader that discovers a residue's extent only after reading its last
     /// atom needs this; nothing else should reach for it, because moving a
     /// residue's atoms without moving its neighbours' breaks the tiling.
-    pub fn set_atoms(&mut self, residue: ResidueIndex, atoms: Range<u32>) {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] for a reversed range or absent residue index.
+    pub fn set_atoms(
+        &mut self,
+        residue: ResidueIndex,
+        atoms: Range<u32>,
+    ) -> Result<(), TableError> {
+        let atom_count = atoms
+            .end
+            .checked_sub(atoms.start)
+            .ok_or(TableError::ReversedRange { table: "residue" })?;
         let Some(first) = Arc::make_mut(&mut self.first_atom).get_mut(residue.as_usize()) else {
-            return;
+            return Err(TableError::MissingIndex { table: "residue" });
         };
         *first = atoms.start;
         if let Some(count) = Arc::make_mut(&mut self.atom_count).get_mut(residue.as_usize()) {
-            *count = atoms.end.saturating_sub(atoms.start);
+            *count = atom_count;
+            return Ok(());
         }
+        Err(TableError::MissingIndex { table: "residue" })
+    }
+
+    pub(crate) fn last_atom_end(&self) -> Option<u32> {
+        self.first_atom
+            .last()
+            .copied()?
+            .checked_add(self.atom_count.last().copied()?)
     }
 
     /// The atoms this residue contains.
@@ -152,7 +187,7 @@ impl ResidueTable {
         let candidate = insertion.checked_sub(1)?;
         let first = *self.first_atom.get(candidate)?;
         let count = *self.atom_count.get(candidate)?;
-        let end = first.saturating_add(count);
+        let end = first.checked_add(count)?;
 
         if atom < first || atom >= end {
             return None;
@@ -168,5 +203,5 @@ fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u3
     let start = *starts.get(index)?;
     let count = *counts.get(index)?;
 
-    Some(start..start.saturating_add(count))
+    Some(start..start.checked_add(count)?)
 }

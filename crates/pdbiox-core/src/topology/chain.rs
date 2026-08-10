@@ -7,6 +7,7 @@
 //! nothing here chooses.
 
 use crate::index::{ChainIndex, EntityIndex};
+use crate::limits::{CapacityError, TableError};
 use crate::optional::OptionalSymbol;
 use crate::symbol::SymbolId;
 use std::ops::Range;
@@ -85,15 +86,28 @@ impl ChainTable {
     }
 
     /// Appends a chain covering a range of residues.
-    pub fn push(&mut self, record: ChainRecord, residues: Range<u32>) -> ChainIndex {
-        let position = self.label_asym_id.len() as u32;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] for a reversed range or exhausted index space.
+    pub fn push(
+        &mut self,
+        record: ChainRecord,
+        residues: Range<u32>,
+    ) -> Result<ChainIndex, TableError> {
+        let position = u32::try_from(self.label_asym_id.len())
+            .map_err(|_| TableError::Capacity(CapacityError::new("chain table")))?;
+        let residue_count = residues
+            .end
+            .checked_sub(residues.start)
+            .ok_or(TableError::ReversedRange { table: "chain" })?;
         Arc::make_mut(&mut self.first_residue).push(residues.start);
-        Arc::make_mut(&mut self.residue_count).push(residues.end.saturating_sub(residues.start));
+        Arc::make_mut(&mut self.residue_count).push(residue_count);
         Arc::make_mut(&mut self.label_asym_id).push(record.label_asym_id);
         Arc::make_mut(&mut self.auth_asym_id).push(record.auth_asym_id);
         Arc::make_mut(&mut self.entity).push(record.entity);
         Arc::make_mut(&mut self.polymer_kind).push(record.polymer_kind);
-        ChainIndex::new(position)
+        Ok(ChainIndex::new(position))
     }
 
     /// The residues this chain contains.
@@ -105,13 +119,16 @@ impl ChainTable {
     /// Finds the chain whose contiguous range contains `residue`.
     ///
     /// Chain ranges are ordered, so this is logarithmic in the chain count.
+    ///
+    /// # Panics
+    /// Panics only if the table exceeds the core's `u32` position limit.
     #[must_use]
     pub fn containing(&self, residue: u32) -> Option<ChainIndex> {
         let candidate = self
             .first_residue
             .partition_point(|first| *first <= residue)
             .checked_sub(1)?;
-        let chain = ChainIndex::new(candidate as u32);
+        let chain = ChainIndex::new(u32::try_from(candidate).ok()?);
         self.residues(chain)?.contains(&residue).then_some(chain)
     }
 
@@ -134,20 +151,24 @@ impl ChainTable {
     ///
     /// Renaming both prevents a writer from silently preferring the old
     /// depositor label over the requested new normalised label.
-    pub fn rename(&mut self, chain: ChainIndex, label: SymbolId) -> bool {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] when `chain` is absent.
+    pub fn rename(&mut self, chain: ChainIndex, label: SymbolId) -> Result<(), TableError> {
         let position = chain.as_usize();
         if position >= self.label_asym_id.len() || position >= self.auth_asym_id.len() {
-            return false;
+            return Err(TableError::MissingIndex { table: "chain" });
         }
         let Some(normalised) = Arc::make_mut(&mut self.label_asym_id).get_mut(position) else {
-            return false;
+            return Err(TableError::MissingIndex { table: "chain" });
         };
         *normalised = label;
         let Some(depositor) = Arc::make_mut(&mut self.auth_asym_id).get_mut(position) else {
-            return false;
+            return Err(TableError::MissingIndex { table: "chain" });
         };
         *depositor = OptionalSymbol::some(label);
-        true
+        Ok(())
     }
 
     /// The species this chain instantiates.
@@ -163,29 +184,42 @@ impl ChainTable {
     }
 
     /// Reclassifies a chain after component chemistry has been resolved.
-    pub fn set_polymer_kind(&mut self, chain: ChainIndex, kind: PolymerKind) -> bool {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] when `chain` is absent.
+    pub fn set_polymer_kind(
+        &mut self,
+        chain: ChainIndex,
+        kind: PolymerKind,
+    ) -> Result<(), TableError> {
         let Some(value) = Arc::make_mut(&mut self.polymer_kind).get_mut(chain.as_usize()) else {
-            return false;
+            return Err(TableError::MissingIndex { table: "chain" });
         };
         *value = kind;
-        true
+        Ok(())
     }
 
     /// Every chain that instantiates `entity`.
     ///
     /// This is the copies-of-the-same-molecule question, answered by reading a
     /// column rather than by comparing sequences.
+    ///
     pub fn instances_of(&self, entity: EntityIndex) -> impl Iterator<Item = ChainIndex> + '_ {
         self.entity
             .iter()
             .enumerate()
             .filter(move |(_, chain_entity)| **chain_entity == entity)
-            .map(|(position, _)| ChainIndex::new(position as u32))
+            .filter_map(|(position, _)| u32::try_from(position).ok().map(ChainIndex::new))
     }
 
     /// Every chain position.
+    ///
     pub fn iter(&self) -> impl Iterator<Item = ChainIndex> + '_ {
-        (0..self.label_asym_id.len() as u32).map(ChainIndex::new)
+        self.label_asym_id
+            .iter()
+            .enumerate()
+            .filter_map(|(position, _)| u32::try_from(position).ok().map(ChainIndex::new))
     }
 }
 
@@ -193,5 +227,5 @@ fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u3
     let start = *starts.get(index)?;
     let count = *counts.get(index)?;
 
-    Some(start..start.saturating_add(count))
+    Some(start..start.checked_add(count)?)
 }
