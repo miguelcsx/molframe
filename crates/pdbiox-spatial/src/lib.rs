@@ -2,19 +2,20 @@
 
 #![forbid(unsafe_code)]
 
-mod brute;
-mod cell;
-mod kd;
-mod neighbor;
-mod periodic;
-mod resolver;
-mod search;
-mod types;
+mod backends;
+mod geometry;
+mod model;
+mod planning;
+mod queries;
 
-pub use cell::CellList;
-pub use kd::KdTree;
-pub use neighbor::NeighborList;
-pub use periodic::PeriodicBox;
-pub use resolver::StructureSpatial;
-pub use search::{pairs_within, within};
-pub use types::{NeighborPair, SpatialBackend, SpatialError};
+pub(crate) use backends::brute;
+pub(crate) use geometry::numeric;
+
+pub use backends::{CellList, KdTree, NeighborList};
+pub use geometry::{PeriodicBox, PeriodicImage};
+pub use model::{NeighborPair, SpatialBackend, SpatialError, SpatialOption};
+pub use planning::{
+    AutoBackendProfile, CellGridOptions, KdPeriodicOptions, NeighborListOptions,
+    NeighborSkinProfile, SpatialPlan, SpatialSearchOptions, StructureSpatial,
+};
+pub use queries::{pairs_within, pairs_within_with_options, within, within_with_options};
