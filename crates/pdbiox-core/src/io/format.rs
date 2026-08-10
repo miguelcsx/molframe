@@ -23,8 +23,12 @@ pub enum Format {
     Auto,
     /// The archive's structured text format.
     Mmcif,
+    /// XML serialization of the `PDBx` data model.
+    Pdbml,
     /// The archive's MessagePack-based binary format.
     BinaryCif,
+    /// The deprecated but still encountered macromolecular transmission format.
+    Mmtf,
     /// The legacy fixed-column format.
     Pdb,
     /// PDB-shaped coordinates carrying partial charge and radius.
@@ -35,9 +39,11 @@ pub enum Format {
 
 impl Format {
     /// The formats a caller may name, excluding automatic detection.
-    pub const NAMED: [Self; 5] = [
+    pub const NAMED: [Self; 7] = [
         Self::Mmcif,
+        Self::Pdbml,
         Self::BinaryCif,
+        Self::Mmtf,
         Self::Pdbqt,
         Self::Pqr,
         Self::Pdb,
@@ -49,7 +55,9 @@ impl Format {
         match self {
             Self::Auto => "auto",
             Self::Mmcif => "mmcif",
+            Self::Pdbml => "pdbml",
             Self::BinaryCif => "bcif",
+            Self::Mmtf => "mmtf",
             Self::Pdb => "pdb",
             Self::Pqr => "pqr",
             Self::Pdbqt => "pdbqt",
@@ -62,7 +70,9 @@ impl Format {
         match self {
             Self::Auto => &[],
             Self::Mmcif => &["cif", "mmcif"],
+            Self::Pdbml => &["xml", "pdbml"],
             Self::BinaryCif => &["bcif"],
+            Self::Mmtf => &["mmtf"],
             Self::Pdb => &["pdb", "ent"],
             Self::Pqr => &["pqr"],
             Self::Pdbqt => &["pdbqt"],
@@ -75,7 +85,9 @@ impl Format {
         match name.to_ascii_lowercase().as_str() {
             "auto" => Some(Self::Auto),
             "mmcif" | "cif" => Some(Self::Mmcif),
+            "pdbml" | "xml" => Some(Self::Pdbml),
             "bcif" | "binarycif" => Some(Self::BinaryCif),
+            "mmtf" => Some(Self::Mmtf),
             "pdb" | "ent" => Some(Self::Pdb),
             "pqr" => Some(Self::Pqr),
             "pdbqt" => Some(Self::Pdbqt),
@@ -95,7 +107,12 @@ impl Format {
             // from a PDB record whose optional element columns are absent.
             Self::Auto | Self::Pqr => false,
             Self::Mmcif => first_lines(bytes, 8).any(|line| line.starts_with(b"data_")),
+            Self::Pdbml => bytes
+                .windows(b"PDBx:datablock".len())
+                .take(2_048)
+                .any(|window| window == b"PDBx:datablock"),
             Self::BinaryCif => recognises_binary_cif(bytes),
+            Self::Mmtf => recognises_mmtf(bytes),
             Self::Pdbqt => recognises_pdbqt(bytes),
             Self::Pdb => first_lines(bytes, 64).any(|line| {
                 [&b"ATOM  "[..], b"HETATM", b"HEADER", b"CRYST1", b"MODEL "]
@@ -120,9 +137,15 @@ impl Format {
         if requested != Self::Auto {
             return Ok(requested);
         }
-        if let Some(format) = [Self::Mmcif, Self::BinaryCif, Self::Pdbqt]
-            .into_iter()
-            .find(|f| f.recognises(input.as_bytes()))
+        if let Some(format) = [
+            Self::Mmcif,
+            Self::Pdbml,
+            Self::BinaryCif,
+            Self::Mmtf,
+            Self::Pdbqt,
+        ]
+        .into_iter()
+        .find(|f| f.recognises(input.as_bytes()))
         {
             return Ok(format);
         }
@@ -176,6 +199,18 @@ fn recognises_binary_cif(bytes: &[u8]) -> bool {
             .any(|window| window == b"dataBlocks")
 }
 
+fn recognises_mmtf(bytes: &[u8]) -> bool {
+    let Some(first) = bytes.first() else {
+        return false;
+    };
+    let is_map = (0x80..=0x8f).contains(first) || matches!(*first, 0xde | 0xdf);
+    is_map
+        && bytes
+            .windows(b"mmtfVersion".len())
+            .take(512)
+            .any(|window| window == b"mmtfVersion")
+}
+
 fn recognises_pdbqt(bytes: &[u8]) -> bool {
     first_lines(bytes, 64).any(|line| {
         if matches!(line, b"ROOT" | b"ENDROOT") || line.starts_with(b"TORSDOF") {
@@ -222,6 +257,26 @@ impl ParseMode {
     }
 }
 
+/// Policy for atom rows whose format-specific element field is absent or invalid.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum MissingElementPolicy {
+    /// Preserve the missing value as [`crate::Element::UNKNOWN`].
+    #[default]
+    PreserveUnknown,
+    /// Explicitly apply the naming convention of the selected input format.
+    InferFromAtomName,
+}
+
+/// Policy for adjacent mmCIF atom groups whose residue identifiers are identical.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum AmbiguousResidueBoundaryPolicy {
+    /// Refuse to invent a residue boundary that the deposited identifiers do not define.
+    #[default]
+    Reject,
+    /// Explicitly split when an atom name repeats in the same alternate location.
+    InferFromFileOrder,
+}
+
 /// What a read should and should not bother doing.
 ///
 /// Skipping work the caller does not want is the largest single lever on read
@@ -254,6 +309,10 @@ pub struct ReadOptions {
     pub only_atomic_coords: bool,
     /// Drop hydrogens while reading.
     pub discard_hydrogens: bool,
+    /// What to do when a row does not declare a valid element.
+    pub missing_element_policy: MissingElementPolicy,
+    /// What to do when mmCIF residue identifiers do not define a boundary.
+    pub ambiguous_residue_boundary_policy: AmbiguousResidueBoundaryPolicy,
     /// Ceilings that apply while reading.
     pub limits: Limits,
 }
@@ -290,6 +349,23 @@ impl ReadOptions {
     #[must_use]
     pub const fn only_atomic_coords(mut self, only: bool) -> Self {
         self.only_atomic_coords = only;
+        self
+    }
+
+    /// Selects an explicit policy for missing or invalid element fields.
+    #[must_use]
+    pub const fn missing_element_policy(mut self, policy: MissingElementPolicy) -> Self {
+        self.missing_element_policy = policy;
+        self
+    }
+
+    /// Selects an explicit policy for ambiguous mmCIF residue boundaries.
+    #[must_use]
+    pub const fn ambiguous_residue_boundary_policy(
+        mut self,
+        policy: AmbiguousResidueBoundaryPolicy,
+    ) -> Self {
+        self.ambiguous_residue_boundary_policy = policy;
         self
     }
 

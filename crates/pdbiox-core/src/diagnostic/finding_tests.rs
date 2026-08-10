@@ -10,7 +10,7 @@ fn a_finding_with_no_message_reports_its_registered_cause() {
     let finding = Diagnostic::new(Code::W3011);
     assert_eq!(
         finding.message(),
-        "residue boundary was ambiguous and fell back to file order"
+        "residue boundary was inferred from file order by explicit policy"
     );
     assert!(finding.remedy().contains("residue identifiers"));
 }

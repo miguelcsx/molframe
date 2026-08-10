@@ -88,3 +88,18 @@ fn a_filter_that_overrides_nothing_writes_everything() {
     assert!(SelectAll.accept_atom(AtomIndex::new(0)));
     assert!(SelectAll.accept_model(crate::index::ModelIndex::new(9)));
 }
+
+#[test]
+fn mmtf_messagepack_is_distinguished_from_binary_cif() {
+    let bytes = b"\x81\xabmmtfVersion\xa51.0.0";
+    assert!(Format::Mmtf.recognises(bytes));
+    assert!(!Format::BinaryCif.recognises(bytes));
+    assert_eq!(Format::from_name("entry.mmtf.gz"), Some(Format::Mmtf));
+}
+
+#[test]
+fn pdbml_is_recognized_by_xml_root_and_suffix() {
+    let bytes = br#"<?xml version="1.0"?><PDBx:datablock datablockName="X"/>"#;
+    assert!(Format::Pdbml.recognises(bytes));
+    assert_eq!(Format::from_name("entry.xml.gz"), Some(Format::Pdbml));
+}

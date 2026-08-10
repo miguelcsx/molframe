@@ -70,9 +70,10 @@ pub struct AtomChunk {
 
 impl AtomChunk {
     /// The number of atoms.
+    ///
     #[must_use]
     pub fn len(&self) -> u32 {
-        self.atoms.end.saturating_sub(self.atoms.start)
+        self.atoms.end - self.atoms.start
     }
 
     /// Returns true when the chunk holds no atoms.

@@ -84,8 +84,8 @@ struct Pending {
 }
 
 impl Pending {
-    fn len(&self) -> u32 {
-        self.element.len() as u32
+    fn len(&self) -> usize {
+        self.element.len()
     }
 
     fn is_empty(&self) -> bool {
@@ -101,7 +101,7 @@ impl Pending {
     }
 
     fn should_close_before(&self, target: u32, residue: u32) -> bool {
-        self.len() >= target && self.starts_new_residue(residue)
+        self.len() as u64 >= u64::from(target) && self.starts_new_residue(residue)
     }
 
     fn begin(&mut self, first_atom: u32, model: u32) {
@@ -294,14 +294,15 @@ impl ChunkBuilder {
     }
 
     fn build_chunk(&mut self) -> AtomChunk {
+        let end = self.coords.len();
         let pending = &mut self.pending;
-        let len = pending.len();
         let first = pending.first_atom;
+        let len = end - first;
 
-        let occupancy_validity = compact_validity(&pending.occupancy_presence);
-        let b_factor_validity = compact_validity(&pending.b_factor_presence);
-        let formal_charge_validity = compact_validity(&pending.formal_charge_presence);
-        let coord_validity = compact_validity(&pending.coord_presence);
+        let occupancy_validity = compact_validity(&pending.occupancy_presence, len);
+        let b_factor_validity = compact_validity(&pending.b_factor_presence, len);
+        let formal_charge_validity = compact_validity(&pending.formal_charge_presence, len);
+        let coord_validity = compact_validity(&pending.coord_presence, len);
 
         let element = EncodedColumn::encode(&pending.element);
 
@@ -324,7 +325,7 @@ impl ChunkBuilder {
         let stats = std::mem::take(&mut pending.stats);
 
         AtomChunk {
-            atoms: first..first + len,
+            atoms: first..end,
             model: self.model,
             element,
             atom_name,
@@ -358,11 +359,8 @@ fn push_with_presence<T>(values: &mut Vec<T>, presences: &mut Vec<Presence>, ent
     presences.push(presence);
 }
 
-fn compact_validity(presences: &[Presence]) -> ValidityMask {
-    let mut validity: ValidityMask = presences.iter().copied().collect();
-
-    validity.compact();
-    validity
+fn compact_validity(presences: &[Presence], len: u32) -> ValidityMask {
+    ValidityMask::from_bounded_iter(presences.iter().copied(), len)
 }
 
 #[cfg(test)]

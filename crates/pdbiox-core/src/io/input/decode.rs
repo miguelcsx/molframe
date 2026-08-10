@@ -78,11 +78,19 @@ pub(super) fn compressed_file_size(
     Ok(size)
 }
 
-pub(super) fn read_bounded(reader: impl Read, limits: Limits) -> std::io::Result<Vec<u8>> {
-    let ceiling = limits.decompressed_bytes.saturating_add(1);
+pub(super) fn read_bounded(mut reader: impl Read, limits: Limits) -> std::io::Result<Vec<u8>> {
     let mut raw = Vec::new();
-    reader.take(ceiling).read_to_end(&mut raw)?;
-    if raw.len() as u64 > limits.decompressed_bytes {
+    match limits.decompressed_bytes.checked_add(1) {
+        Some(ceiling) => {
+            reader.take(ceiling).read_to_end(&mut raw)?;
+        }
+        None => {
+            reader.read_to_end(&mut raw)?;
+        }
+    }
+    let length = u64::try_from(raw.len())
+        .map_err(|_| std::io::Error::other("input length exceeds u64::MAX"))?;
+    if length > limits.decompressed_bytes {
         return Err(std::io::Error::other(
             "input exceeds the configured byte limit",
         ));

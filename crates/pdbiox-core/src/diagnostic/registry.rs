@@ -130,6 +130,9 @@ registry! {
     E3014 = Error 3014, Invalidating,
         "domain extensions would be invalidated by a topology change",
         "explicitly clear extensions before editing topology or merging structures";
+    E3015 = Error 3015, Invalidating,
+        "residue boundary is not defined by the deposited identifiers",
+        "repair the residue identifiers or explicitly select file-order boundary inference";
     E3201 = Error 3201, Invalidating,
         "bundled chemistry reference data is invalid",
         "reinstall pdbiox from a verified distribution";
@@ -253,8 +256,8 @@ registry! {
     W2003 = Warning 2003, Loose,
         "deprecated item used",
         "migrate to the replacement item named in the dictionary";
-    W3011 = Warning 3011, Strict,
-        "residue boundary was ambiguous and fell back to file order",
+    W3011 = Warning 3011, Info,
+        "residue boundary was inferred from file order by explicit policy",
         "check the residue identifiers in this region; consecutive residues carry annotations that do not distinguish them";
     W3012 = Warning 3012, Loose,
         "an alternate location carries a different component identity",

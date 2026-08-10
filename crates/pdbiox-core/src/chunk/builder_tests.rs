@@ -3,10 +3,11 @@ use crate::element::Element;
 use crate::index::ResidueIndex;
 use crate::optional::OptionalSymbol;
 use crate::symbol::AltId;
+use num_traits::ToPrimitive;
 
 fn atom(residue: u32, element: Element, serial: u32) -> AtomRecord {
     AtomRecord {
-        position: Some([serial as f32, 0.0, 0.0]),
+        position: Some([serial.to_f32().expect("small serial"), 0.0, 0.0]),
         element,
         atom_name: SymbolId::from_raw(0),
         auth_atom_name: OptionalSymbol::NONE,
@@ -14,7 +15,10 @@ fn atom(residue: u32, element: Element, serial: u32) -> AtomRecord {
         alt_id: AltId::BLANK,
         residue: ResidueIndex::new(residue),
         occupancy: (1.0, Presence::Present),
-        b_factor: (10.0 + serial as f32, Presence::Present),
+        b_factor: (
+            10.0 + serial.to_f32().expect("small serial"),
+            Presence::Present,
+        ),
         formal_charge: (0, Presence::Inapplicable),
         atom_site_id: serial,
     }
@@ -94,7 +98,6 @@ fn an_atom_with_no_recorded_position_keeps_its_row_and_is_marked_absent() {
 }
 
 #[test]
-#[allow(clippy::float_cmp, reason = "reads back stored values")]
 fn a_missing_position_does_not_poison_the_bounding_box() {
     let mut builder = ChunkBuilder::new();
     let mut without = atom(0, Element::OXYGEN, 0);
@@ -106,8 +109,14 @@ fn a_missing_position_does_not_poison_the_bounding_box() {
     let Some(bounds) = chunks.first().map(|chunk| chunk.stats().bounds) else {
         panic!("expected one chunk")
     };
-    assert_eq!(bounds.min, [5.0, 0.0, 0.0]);
-    assert_eq!(bounds.max, [5.0, 0.0, 0.0]);
+    assert_eq!(
+        bounds.min.map(f32::to_bits),
+        [5.0, 0.0, 0.0].map(f32::to_bits)
+    );
+    assert_eq!(
+        bounds.max.map(f32::to_bits),
+        [5.0, 0.0, 0.0].map(f32::to_bits)
+    );
 }
 
 #[test]
@@ -130,7 +139,7 @@ fn a_chunk_reads_back_every_value_it_was_given() {
     for serial in 0..20u32 {
         builder.push(atom(
             serial / 4,
-            Element::from_atomic_number(6 + serial as u8),
+            Element::from_atomic_number(6 + u8::try_from(serial).expect("small serial")),
             serial,
         ));
     }
@@ -142,12 +151,14 @@ fn a_chunk_reads_back_every_value_it_was_given() {
     for local in 0..20u32 {
         assert_eq!(
             chunk.element(local),
-            Some(Element::from_atomic_number(6 + local as u8))
+            Some(Element::from_atomic_number(
+                6 + u8::try_from(local).expect("small local index"),
+            ))
         );
         assert_eq!(chunk.atom_site_id(local), Some(local));
         assert_eq!(
             chunk.b_factor(local).map(|value| value.0),
-            Some(10.0 + local as f32)
+            Some(10.0 + local.to_f32().expect("small local index"))
         );
         assert_eq!(chunk.alt_id(local), Some(AltId::BLANK));
     }

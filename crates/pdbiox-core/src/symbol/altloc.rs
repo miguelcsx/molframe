@@ -20,7 +20,7 @@ use std::fmt;
 ///
 /// let mut interner = Interner::new();
 /// let a = AltId::labelled(interner.intern("A")?);
-/// assert!(!a.is_blank());
+/// assert!(a.is_some_and(|label| !label.is_blank()));
 /// assert!(AltId::BLANK.is_blank());
 /// # Ok::<(), pdbiox_core::DictionaryFull>(())
 /// ```
@@ -40,8 +40,11 @@ impl AltId {
     /// Runs in `O(1)` time and allocates no memory.
     #[must_use]
     #[inline]
-    pub const fn labelled(symbol: SymbolId) -> Self {
-        Self(symbol.get().saturating_add(1))
+    pub const fn labelled(symbol: SymbolId) -> Option<Self> {
+        match symbol.get().checked_add(1) {
+            Some(raw) => Some(Self(raw)),
+            None => None,
+        }
     }
 
     /// Returns true for the blank label.

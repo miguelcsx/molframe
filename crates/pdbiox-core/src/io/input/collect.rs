@@ -72,7 +72,9 @@ pub(super) fn collect_checked<R: Read>(
         let Ok(current) = u64::try_from(output.len()) else {
             return Err(Limits::exceeded("decompressed bytes", output.len()));
         };
-        let remaining = limit.maximum().saturating_sub(current);
+        let Some(remaining) = limit.maximum().checked_sub(current) else {
+            return Err(Limits::exceeded("decompressed bytes", current));
+        };
         let request = match usize::try_from(remaining) {
             Ok(value) if value < buffer.len() => value + 1,
             Ok(_) | Err(_) => buffer.len(),
@@ -118,7 +120,10 @@ fn reserve_output(
     if required > maximum_capacity {
         return Err(Limits::exceeded("decompressed bytes", required));
     }
-    let grown = output.capacity().saturating_mul(2).max(required);
+    let grown = match output.capacity().checked_mul(2) {
+        Some(doubled) => doubled.max(required),
+        None => maximum_capacity,
+    };
     let target = grown.min(maximum_capacity);
     let Some(extra) = target.checked_sub(output.len()) else {
         return Err(Limits::exceeded("decompressed bytes", required));
@@ -187,21 +192,23 @@ pub(super) fn check_expansion(
     if expanded > ratio_byte_limit(compressed, limits.compression_ratio) {
         return Err(Limits::exceeded(
             "compression ratio",
-            ceiling_ratio(expanded, compressed),
+            ceiling_ratio(expanded, compressed)?,
         ));
     }
     Ok(())
 }
 
 #[cfg(any(feature = "gzip", feature = "zstd", test))]
-fn ceiling_ratio(numerator: u64, denominator: u64) -> u64 {
+fn ceiling_ratio(numerator: u64, denominator: u64) -> Result<u64, Diagnostic> {
     if denominator == 0 {
-        return u64::MAX;
+        return Ok(u64::MAX);
     }
     let quotient = numerator / denominator;
     if numerator.is_multiple_of(denominator) {
-        quotient
+        Ok(quotient)
     } else {
-        quotient.saturating_add(1)
+        quotient
+            .checked_add(1)
+            .ok_or_else(|| Limits::exceeded("compression ratio", "a value greater than u64::MAX"))
     }
 }

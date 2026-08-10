@@ -30,6 +30,7 @@ pub mod diagnostic;
 pub mod element;
 pub mod index;
 pub mod io;
+pub mod limits;
 pub mod optional;
 pub mod selection;
 pub mod span;
@@ -38,9 +39,11 @@ pub mod symbol;
 pub mod topology;
 
 pub use annotation::{
-    ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn, AtomAnnotation,
-    AtomAnnotations, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION, PLDDT_ANNOTATION,
-    SEGMENT_ID_ANNOTATION,
+    AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn,
+    AtomAnnotation, AtomAnnotations, COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION,
+    HBOND_ACCEPTOR_ANNOTATION, HBOND_DONOR_ANNOTATION, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION,
+    PLDDT_ANNOTATION, POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION,
+    STEREO_CONFIGURATION_ANNOTATION,
 };
 pub use bond::{BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder};
 pub use chunk::{AtomChunk, AtomChunkStats, ChunkBuilder, ElementMask, ParentMapping};
@@ -54,10 +57,18 @@ pub use element::Element;
 pub use index::{
     AtomIndex, BondIndex, ChainIndex, ChunkId, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
 };
-pub use io::{Format, InputBuffer, InputKind, ParseMode, ReadOptions, ReadResult, write_output};
+pub use io::{
+    AmbiguousResidueBoundaryPolicy, Format, InputBuffer, InputKind, MissingElementPolicy,
+    ParseMode, ReadOptions, ReadResult, write_output,
+};
+pub use limits::{CapacityError, TableError};
 pub use optional::{OptionalI32, OptionalSymbol};
 pub use selection::AtomSelection;
 pub use span::{ByteSpan, Position};
-pub use structure::{ExtensionStore, Structure, StructureData, StructureView};
+pub use structure::{
+    CountDifference, DifferenceError, ExtensionStore, MetadataDifference, Structure, StructureData,
+    StructureDifference, StructureDifferenceOptions, StructureView, ValueDifference,
+    structure_difference,
+};
 pub use symbol::{AltId, DictionaryFull, Interner, SymbolId};
 pub use topology::{EntityKind, PolymerKind, Topology};

@@ -7,17 +7,19 @@ use crate::topology::ResidueRecord;
 fn residues(count: u32, per: u32) -> ResidueTable {
     let mut table = ResidueTable::default();
     for index in 0..count {
-        table.push(
-            ResidueRecord {
-                label_comp_id: SymbolId::from_raw(1),
-                auth_comp_id: OptionalSymbol::NONE,
-                label_seq_id: OptionalI32::some(index.cast_signed()),
-                auth_seq_id: OptionalI32::some(index.cast_signed()),
-                ins_code: OptionalSymbol::NONE,
-                het: false,
-            },
-            index * per..(index + 1) * per,
-        );
+        table
+            .push(
+                ResidueRecord {
+                    label_comp_id: SymbolId::from_raw(1),
+                    auth_comp_id: OptionalSymbol::NONE,
+                    label_seq_id: OptionalI32::some(index.cast_signed()),
+                    auth_seq_id: OptionalI32::some(index.cast_signed()),
+                    ins_code: OptionalSymbol::NONE,
+                    het: false,
+                },
+                index * per..(index + 1) * per,
+            )
+            .expect("small residue table");
     }
     table
 }

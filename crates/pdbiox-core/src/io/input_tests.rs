@@ -81,7 +81,10 @@ fn a_large_plain_local_file_is_parsed_directly_from_a_mapping() {
         Ok(file) => file,
         Err(error) => panic!("create failed: {error}"),
     };
-    let mut bytes = vec![b' '; MMAP_MIN_BYTES as usize];
+    let Ok(mmap_min_bytes) = usize::try_from(MMAP_MIN_BYTES) else {
+        panic!("mmap threshold fits this platform")
+    };
+    let mut bytes = vec![b' '; mmap_min_bytes];
     bytes[..10].copy_from_slice(b"data_test\n");
     if let Err(error) = file.write_all(&bytes) {
         panic!("write failed: {error}")

@@ -97,22 +97,14 @@ static LOOKUP: OnceLock<Lookup> = OnceLock::new();
 
 /// Process-wide canonical lookup state.
 struct Lookup {
-    table: HashTable<CanonicalOrdinal>,
+    table: HashTable<CanonicalEntry>,
     hasher: RandomState,
 }
 
-/// Computes the hash of a canonical entry.
-///
-/// Invalid ordinals use the empty-string hash as a defensive fallback. Valid
-/// table entries always reference [`CANONICAL`].
-///
-/// Runs in `O(L)` time, where `L` is the string length, and allocates no memory.
-#[inline]
-fn hash_ordinal(hasher: &RandomState, ordinal: CanonicalOrdinal) -> u64 {
-    match ordinal.text() {
-        Some(text) => hasher.hash_one(text),
-        None => hasher.hash_one(""),
-    }
+#[derive(Clone, Copy)]
+struct CanonicalEntry {
+    ordinal: CanonicalOrdinal,
+    hash: u64,
 }
 
 /// Returns the initialized process-wide canonical lookup.
@@ -123,7 +115,7 @@ fn hash_ordinal(hasher: &RandomState, ordinal: CanonicalOrdinal) -> u64 {
 fn lookup() -> &'static Lookup {
     LOOKUP.get_or_init(|| {
         let hasher = RandomState::new();
-        let mut table: HashTable<CanonicalOrdinal> = HashTable::with_capacity(CANONICAL.len());
+        let mut table: HashTable<CanonicalEntry> = HashTable::with_capacity(CANONICAL.len());
 
         for (index, text) in CANONICAL.iter().enumerate() {
             let Some(ordinal) = CanonicalOrdinal::from_index(index) else {
@@ -134,13 +126,14 @@ fn lookup() -> &'static Lookup {
 
             // A duplicate would make one of the two identifiers unreachable; the
             // test below proves there are none, so the later entry is dropped.
+            let entry = CanonicalEntry { ordinal, hash };
             table
                 .entry(
                     hash,
-                    |&other| other.text() == Some(*text),
-                    |&other| hash_ordinal(&hasher, other),
+                    |other| other.ordinal.text() == Some(*text),
+                    |other| other.hash,
                 )
-                .or_insert(ordinal);
+                .or_insert(entry);
         }
 
         Lookup { table, hasher }
@@ -158,8 +151,8 @@ pub(super) fn ordinal_of(text: &str) -> Option<u32> {
 
     lookup
         .table
-        .find(hash, |&ordinal| ordinal.text() == Some(text))
-        .map(|&ordinal| ordinal.get())
+        .find(hash, |entry| entry.ordinal.text() == Some(text))
+        .map(|entry| entry.ordinal.get())
 }
 
 /// Returns the string a canonical identifier names.

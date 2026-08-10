@@ -148,8 +148,14 @@ impl<'a> Rendered<'a> {
         write!(f, "\n {:width$} {gutter}│{reset}", "")?;
         write!(f, "\n {number} {gutter}│{reset} {}", text.trim_end())?;
 
-        let column = (span.start.byte_offset as usize).saturating_sub(line.start);
-        let caret_count = (span.len() as usize).clamp(1, text.len().saturating_sub(column).max(1));
+        let offset = usize::try_from(span.start.byte_offset).map_err(|_| fmt::Error)?;
+        let column = offset.checked_sub(line.start).ok_or(fmt::Error)?;
+        let available = text.len().checked_sub(column).ok_or(fmt::Error)?.max(1);
+        let caret_count = span
+            .len()
+            .and_then(|length| usize::try_from(length).ok())
+            .ok_or(fmt::Error)?
+            .clamp(1, available);
         write!(f, "\n {:width$} {gutter}│{reset} {:column$}", "", "")?;
         write!(f, "{}", self.accent())?;
         for _ in 0..caret_count {
