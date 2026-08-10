@@ -2,16 +2,14 @@ use super::*;
 use crate::diagnostic::{Code, Diagnostic};
 
 #[test]
-#[allow(clippy::float_cmp, reason = "reads back a stored value")]
 fn a_result_dereferences_to_its_value_so_the_common_path_stays_short() {
     let policy = AnalysisPolicy::default();
     let radius = Analysis::complete(14.2_f64, Coverage::complete(1_960), &policy);
-    assert_eq!(*radius, 14.2);
+    assert_eq!(radius.to_bits(), 14.2_f64.to_bits());
     assert_eq!(radius.status, Status::Complete);
 }
 
 #[test]
-#[allow(clippy::float_cmp, reason = "an exact ratio of exact counts")]
 fn coverage_reports_the_fraction_of_intended_atoms_that_were_used() {
     let partial = Coverage {
         intended: 512,
@@ -23,8 +21,8 @@ fn coverage_reports_the_fraction_of_intended_atoms_that_were_used() {
     assert!(!partial.is_complete());
     assert!(Coverage::complete(10).is_complete());
     assert_eq!(
-        Coverage::default().fraction(),
-        1.0,
+        Coverage::default().fraction().to_bits(),
+        1.0_f64.to_bits(),
         "nothing intended is fully covered"
     );
 }

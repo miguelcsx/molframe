@@ -48,3 +48,23 @@ fn a_source_reports_where_it_came_from() {
     assert_eq!(SourceRef::Memory.to_string(), "(memory)");
     assert!(SourceRef::None.as_path().is_none());
 }
+
+#[test]
+fn algorithm_parameters_are_sorted_and_fingerprinted() {
+    let policy = AnalysisPolicy::default();
+    let Some(epsilon) = ParameterValue::finite_float(2.0) else {
+        panic!("finite test value must be accepted");
+    };
+    let first = Provenance::new(&policy)
+        .with_algorithm(AlgorithmId::new("diffusion-map", "1"))
+        .with_parameter("epsilon", epsilon.clone())
+        .with_parameter("time", ParameterValue::Integer(2));
+    let second = Provenance::new(&policy)
+        .with_algorithm(AlgorithmId::new("diffusion-map", "1"))
+        .with_parameter("time", ParameterValue::Integer(2))
+        .with_parameter("epsilon", epsilon);
+    assert_eq!(first.fingerprint(), second.fingerprint());
+    assert!(first.to_json().contains("parameter.epsilon"));
+    let changed = first.with_parameter("time", ParameterValue::Integer(3));
+    assert_ne!(changed.fingerprint(), second.fingerprint());
+}

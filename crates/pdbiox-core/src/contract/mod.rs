@@ -9,6 +9,7 @@
 mod analysis;
 mod policy;
 mod provenance;
+mod reexecution;
 mod serialise;
 
 pub use analysis::{Analysis, Assumption, AssumptionSource, Coverage, ImpactEstimate, Status};
@@ -17,4 +18,9 @@ pub use policy::{
     EquivalencePolicy, Fingerprint, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace,
     PeriodicPolicy, PolicyField, Precision, ProfileId, RadiiSet, SymmetryPolicy, Tolerance,
 };
-pub use provenance::{DictionaryVersion, Provenance, SourceRef};
+pub use provenance::{
+    AlgorithmId, AnalysisParameters, DictionaryVersion, ParameterValue, Provenance, SourceRef,
+};
+pub use reexecution::{
+    Reexecution, ReexecutionEnvironment, ReexecutionError, reexecute_from_provenance,
+};

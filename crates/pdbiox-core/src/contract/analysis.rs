@@ -72,12 +72,15 @@ impl Coverage {
     ///
     /// An analysis over two fifths of the intended atoms is not the same
     /// quantity as one over all of them, and this is what says so.
+    ///
+    /// # Panics
+    /// The checked conversion accepts every unsigned 32-bit count.
     #[must_use]
-    pub fn fraction(self) -> f32 {
+    pub fn fraction(self) -> f64 {
         if self.intended == 0 {
             1.0
         } else {
-            self.used as f32 / self.intended as f32
+            f64::from(self.used) / f64::from(self.intended)
         }
     }
 

@@ -39,7 +39,7 @@ impl Provenance {
             "data_pdbiox_provenance\n#\nloop_\n_pdbiox_provenance.key\n_pdbiox_provenance.value\n",
         );
         for (key, value) in fields {
-            cif_value(&mut output, key);
+            cif_value(&mut output, &key);
             output.push(' ');
             cif_value(&mut output, &value);
             output.push('\n');
@@ -49,9 +49,9 @@ impl Provenance {
     }
 }
 
-fn fields(record: &Provenance) -> Vec<(&'static str, String)> {
+fn fields(record: &Provenance) -> Vec<(String, String)> {
     let policy = &record.policy;
-    vec![
+    let mut result = vec![
         ("pdbiox_version", record.pdbiox_version.to_owned()),
         ("input_source", record.input_source.to_string()),
         (
@@ -97,6 +97,23 @@ fn fields(record: &Provenance) -> Vec<(&'static str, String)> {
             policy.float_tolerance.absolute.to_string(),
         ),
     ]
+    .into_iter()
+    .map(|(key, value)| (key.to_owned(), value))
+    .collect::<Vec<_>>();
+    if let Some(algorithm) = &record.algorithm {
+        result.push(("algorithm.name".to_owned(), algorithm.name().to_owned()));
+        result.push((
+            "algorithm.version".to_owned(),
+            algorithm.version().to_owned(),
+        ));
+    }
+    result.extend(
+        record
+            .parameters
+            .iter()
+            .map(|(name, value)| (format!("parameter.{name}"), value.serialised())),
+    );
+    result
 }
 
 fn optional_display(value: Option<impl std::fmt::Display>) -> String {

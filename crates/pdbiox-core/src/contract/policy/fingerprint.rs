@@ -7,6 +7,11 @@
 use std::fmt;
 use std::hash::Hasher;
 
+/// FNV-1a's specified 64-bit initial state.
+const FNV1A64_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+/// FNV-1a's specified 64-bit prime multiplier.
+const FNV1A64_PRIME: u64 = 0x0000_0100_0000_01b3;
+
 /// A stable content fingerprint.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Fingerprint(u64);
@@ -53,7 +58,7 @@ pub(super) struct Fnv1a(u64);
 
 impl Fnv1a {
     pub(super) const fn new() -> Self {
-        Self(0xcbf2_9ce4_8422_2325)
+        Self(FNV1A64_OFFSET_BASIS)
     }
 }
 
@@ -65,7 +70,9 @@ impl Hasher for Fnv1a {
     fn write(&mut self, bytes: &[u8]) {
         for byte in bytes {
             self.0 ^= u64::from(*byte);
-            self.0 = self.0.wrapping_mul(0x0000_0100_0000_01b3);
+            // FNV-1a is defined modulo 2^64, so wrapping is part of the
+            // algorithm rather than an overflow fallback.
+            self.0 = self.0.wrapping_mul(FNV1A64_PRIME);
         }
     }
 }
