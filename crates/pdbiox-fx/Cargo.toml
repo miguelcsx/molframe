@@ -1,0 +1,25 @@
+[package]
+name = "pdbiox-fx"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Declarative functional-geometry evaluation for pdbiox"
+
+[dependencies]
+num-traits.workspace = true
+pdbiox-core.workspace = true
+pdbiox-chem.workspace = true
+pdbiox-geom.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+pdbiox-cif.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
