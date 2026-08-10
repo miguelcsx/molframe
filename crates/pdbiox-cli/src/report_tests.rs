@@ -43,6 +43,28 @@ fn a_list_of_objects_renders_as_an_array() {
 }
 
 #[test]
+fn json_lines_keeps_one_object_per_line() {
+    let context = Context {
+        format: OutputKind::JsonLines,
+        quiet: true,
+        color: false,
+        mode: pdbiox::ParseMode::Strict,
+        policy: Box::leak(Box::new(pdbiox::AnalysisPolicy::default())),
+        output: None,
+        provenance: None,
+        ccd: None,
+        ccd_version: None,
+        threads: 0,
+        missing_element_policy: pdbiox::MissingElementPolicy::PreserveUnknown,
+        residue_boundary_policy: pdbiox::AmbiguousResidueBoundaryPolicy::Reject,
+    };
+    assert_eq!(
+        context.json_records(&["{\"row\":1}".to_owned(), "{\"row\":2}".to_owned()]),
+        "{\"row\":1}\n{\"row\":2}"
+    );
+}
+
+#[test]
 fn csv_quotes_delimiters_quotes_and_newlines_without_changing_row_order() {
     let mut table = Table::new(',', &["id", "title"]);
     table.row(["1ABC", "a, \"quoted\" title"]);
@@ -51,6 +73,27 @@ fn csv_quotes_delimiters_quotes_and_newlines_without_changing_row_order() {
         table.finish(),
         "id,title\n1ABC,\"a, \"\"quoted\"\" title\"\n2DEF,\"two\nlines\""
     );
+}
+
+#[test]
+fn json_results_embed_policy_and_read_provenance() {
+    let context = Context {
+        format: OutputKind::Json,
+        quiet: true,
+        color: false,
+        mode: pdbiox::ParseMode::Strict,
+        policy: Box::leak(Box::new(pdbiox::AnalysisPolicy::default())),
+        output: None,
+        provenance: None,
+        ccd: None,
+        ccd_version: None,
+        threads: 0,
+        missing_element_policy: pdbiox::MissingElementPolicy::InferFromAtomName,
+        residue_boundary_policy: pdbiox::AmbiguousResidueBoundaryPolicy::InferFromFileOrder,
+    };
+    let rendered = context.with_embedded_provenance("{\"atoms\":2}");
+    assert!(rendered.contains("\"_provenance\""));
+    assert!(rendered.contains("infer-from-atom-name"));
 }
 
 #[test]

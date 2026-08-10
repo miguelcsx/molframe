@@ -8,6 +8,7 @@
 use pdbiox::{Diagnostic, ParseMode, Rendered};
 use std::fmt::Write as _;
 use std::io::Write as _;
+use std::path::Path;
 
 /// Machine or human result representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,10 +17,16 @@ pub enum OutputKind {
     Text,
     /// One structured JSON object.
     Json,
+    /// One structured object per line for streaming.
+    JsonLines,
     /// Comma-separated rows.
     Csv,
     /// Tab-separated rows.
     Tsv,
+    /// Apache Arrow IPC file output.
+    Arrow,
+    /// Apache Parquet file output.
+    Parquet,
 }
 
 /// What the caller asked for that every command needs to know.
@@ -33,13 +40,41 @@ pub struct Context {
     pub color: bool,
     /// How much irregularity a read tolerates.
     pub mode: ParseMode,
+    /// Effective analysis policy after config and CLI overrides.
+    pub policy: &'static pdbiox::AnalysisPolicy,
+    /// Optional destination for the primary rendered result.
+    pub output: Option<&'static Path>,
+    /// Optional destination for a standalone provenance record.
+    pub provenance: Option<&'static Path>,
+    /// Configured Chemical Component Dictionary, if any.
+    pub ccd: Option<&'static Path>,
+    /// Exact release identifier paired with the configured dictionary.
+    pub ccd_version: Option<&'static str>,
+    /// Requested worker count; zero means available parallelism.
+    pub threads: usize,
+    /// Explicit missing-element behavior used by every structural reader.
+    pub missing_element_policy: pdbiox::MissingElementPolicy,
+    /// Explicit behavior for identifiers that cannot delimit adjacent residues.
+    pub residue_boundary_policy: pdbiox::AmbiguousResidueBoundaryPolicy,
 }
 
 impl Context {
+    /// Verifies result destinations before scientific work begins.
+    pub fn prepare_outputs(self) -> std::io::Result<()> {
+        for path in [self.output, self.provenance].into_iter().flatten() {
+            let _file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(path)?;
+        }
+        Ok(())
+    }
+
     /// Whether structured JSON was requested.
     #[must_use]
     pub const fn is_json(self) -> bool {
-        matches!(self.format, OutputKind::Json)
+        matches!(self.format, OutputKind::Json | OutputKind::JsonLines)
     }
 
     /// Delimiter for a requested tabular format.
@@ -48,7 +83,26 @@ impl Context {
         match self.format {
             OutputKind::Csv => Some(','),
             OutputKind::Tsv => Some('\t'),
-            OutputKind::Text | OutputKind::Json => None,
+            OutputKind::Text
+            | OutputKind::Json
+            | OutputKind::JsonLines
+            | OutputKind::Arrow
+            | OutputKind::Parquet => None,
+        }
+    }
+
+    /// Whether a binary Arrow-backed file was requested.
+    #[must_use]
+    pub const fn is_table_file(self) -> bool {
+        matches!(self.format, OutputKind::Arrow | OutputKind::Parquet)
+    }
+
+    /// Renders a sequence of JSON objects as one array or a JSON Lines stream.
+    #[must_use]
+    pub fn json_records(self, records: &[String]) -> String {
+        match self.format {
+            OutputKind::JsonLines => records.join("\n"),
+            _ => json_array(records),
         }
     }
 
@@ -68,12 +122,126 @@ impl Context {
 
     /// Prints a result to standard output.
     ///
-    /// Takes the context by value so that every printing path goes through it,
-    /// even the ones that do not currently consult a field.
-    #[allow(clippy::unused_self, reason = "one printing path for every command")]
     pub fn result(self, text: &str) {
-        let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{text}");
+        let rendered = self.with_embedded_provenance(text);
+        if let Some(path) = self.output {
+            if let Err(error) = std::fs::write(path, format!("{rendered}\n")) {
+                eprintln!("could not write result to {}: {error}", path.display());
+            }
+        } else {
+            let mut out = std::io::stdout().lock();
+            let _ = writeln!(out, "{rendered}");
+        }
+        if let Some(path) = self.provenance
+            && let Err(error) = std::fs::write(path, format!("{}\n", self.provenance_json()))
+        {
+            eprintln!("could not write provenance to {}: {error}", path.display());
+        }
+    }
+
+    fn with_embedded_provenance(self, text: &str) -> String {
+        let provenance = self.provenance_json();
+        match self.format {
+            OutputKind::Json if text.starts_with('{') && text.ends_with('}') => {
+                let Some(body) = text.strip_suffix('}') else {
+                    return text.to_owned();
+                };
+                let separator = if body.len() == 1 { "" } else { "," };
+                format!("{body}{separator}\"_provenance\":{provenance}}}")
+            }
+            OutputKind::Json => format!("{{\"result\":{text},\"_provenance\":{provenance}}}"),
+            OutputKind::JsonLines => {
+                format!("{text}\n{{\"_provenance\":{provenance}}}")
+            }
+            OutputKind::Csv | OutputKind::Tsv => {
+                format!("{text}\n# pdbiox-provenance={provenance}")
+            }
+            _ => text.to_owned(),
+        }
+    }
+
+    fn provenance_json(self) -> String {
+        let mut record = Json::new();
+        record
+            .text("pdbiox_version", env!("CARGO_PKG_VERSION"))
+            .text(
+                "profile",
+                &self
+                    .policy
+                    .profile()
+                    .map_or_else(|| "modified".to_owned(), |profile| profile.to_string()),
+            )
+            .text("policy_fingerprint", &self.policy.fingerprint().to_string())
+            .text("policy", &self.policy.to_string())
+            .text(
+                "invocation",
+                &std::env::args().collect::<Vec<_>>().join(" "),
+            )
+            .number("threads", self.threads);
+        record.text(
+            "missing_element_policy",
+            match self.missing_element_policy {
+                pdbiox::MissingElementPolicy::PreserveUnknown => "preserve-unknown",
+                pdbiox::MissingElementPolicy::InferFromAtomName => "infer-from-atom-name",
+            },
+        );
+        record.text(
+            "ambiguous_residue_boundary_policy",
+            match self.residue_boundary_policy {
+                pdbiox::AmbiguousResidueBoundaryPolicy::Reject => "reject",
+                pdbiox::AmbiguousResidueBoundaryPolicy::InferFromFileOrder => {
+                    "infer-from-file-order"
+                }
+            },
+        );
+        if let Some(path) = self.ccd {
+            record.text("ccd", &path.display().to_string());
+        }
+        if let Some(version) = self.ccd_version {
+            record.text("ccd_version", version);
+        }
+        record.finish()
+    }
+
+    /// Provenance fields suitable for Arrow schema metadata.
+    #[must_use]
+    pub fn provenance_metadata(self) -> std::collections::BTreeMap<String, String> {
+        let mut metadata = std::collections::BTreeMap::from([
+            (
+                "pdbiox.version".to_owned(),
+                env!("CARGO_PKG_VERSION").to_owned(),
+            ),
+            (
+                "pdbiox.policy_fingerprint".to_owned(),
+                self.policy.fingerprint().to_string(),
+            ),
+            ("pdbiox.policy".to_owned(), self.policy.to_string()),
+            (
+                "pdbiox.missing_element_policy".to_owned(),
+                match self.missing_element_policy {
+                    pdbiox::MissingElementPolicy::PreserveUnknown => "preserve-unknown",
+                    pdbiox::MissingElementPolicy::InferFromAtomName => "infer-from-atom-name",
+                }
+                .to_owned(),
+            ),
+            (
+                "pdbiox.ambiguous_residue_boundary_policy".to_owned(),
+                match self.residue_boundary_policy {
+                    pdbiox::AmbiguousResidueBoundaryPolicy::Reject => "reject",
+                    pdbiox::AmbiguousResidueBoundaryPolicy::InferFromFileOrder => {
+                        "infer-from-file-order"
+                    }
+                }
+                .to_owned(),
+            ),
+        ]);
+        if let Some(path) = self.ccd {
+            metadata.insert("pdbiox.ccd".to_owned(), path.display().to_string());
+        }
+        if let Some(version) = self.ccd_version {
+            metadata.insert("pdbiox.ccd_version".to_owned(), version.to_owned());
+        }
+        metadata
     }
 }
 
