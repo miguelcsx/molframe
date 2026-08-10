@@ -2,13 +2,23 @@
 
 use crate::ast::{Column, Operator};
 use crate::glob::Glob;
-use crate::predicate_pattern::{NumericPattern, ResiduePattern, model_membership, residue_ordinal};
+use crate::predicate_pattern::{
+    NumericMatcher, NumericPattern, ResidueMatcher, ResiduePattern, residue_insertion,
+    residue_number,
+};
 use pdbiox_core::contract::{AnalysisPolicy, Namespace};
-use pdbiox_core::diagnostic::{Code, Diagnostic};
+use pdbiox_core::diagnostic::Diagnostic;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
-use pdbiox_core::topology::EntityKind;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
+
+#[path = "predicate_helpers.rs"]
+mod helpers;
+pub(crate) use helpers::atom_selector;
+use helpers::{
+    compare, entity_type, is_residue_id_column, require_namespace, require_numeric, same_by_key,
+    symbol_value,
+};
 
 #[derive(Clone, Copy)]
 pub(super) struct AtomContext<'a> {
@@ -17,7 +27,13 @@ pub(super) struct AtomContext<'a> {
     pub(super) chain: ChainRef<'a>,
 }
 
-pub(super) fn comparison(
+/// Selects atoms whose numeric `column` satisfies `operator expected`.
+///
+/// `absolute` applies `abs()` to the observed value before comparison. The
+/// structure is scanned once, so runtime is `O(A * C_u)` where `A` is the
+/// number of atoms and `C_u` is the cost of `universe.contains`; output space
+/// is `O(M)` for `M` matching atom indices.
+pub(crate) fn comparison(
     structure: &Structure,
     universe: &AtomSelection,
     column: Column,
@@ -27,17 +43,27 @@ pub(super) fn comparison(
     policy: &AnalysisPolicy,
 ) -> Result<AtomSelection, Diagnostic> {
     require_numeric(structure, column)?;
+
+    let tolerance =
+        policy.float_tolerance.absolute + policy.float_tolerance.relative * expected.abs();
+
     Ok(scan(structure, universe, |context| {
         numeric(structure, context, column, policy).is_some_and(|mut actual| {
             if absolute {
                 actual = actual.abs();
             }
-            compare(actual, expected, operator, policy)
+
+            compare(actual, expected, operator, tolerance)
         })
     }))
 }
 
-pub(super) fn membership(
+/// Selects atoms whose `column` matches any textual, numeric, or residue pattern.
+///
+/// Numeric and residue pattern sets are compiled once, reducing repeated
+/// membership checks to `O(log P)` for `P > 1`. Textual glob evaluation is
+/// memoized per distinct borrowed value, avoiding per-key string allocation.
+pub(crate) fn membership(
     structure: &Structure,
     universe: &AtomSelection,
     column: Column,
@@ -46,59 +72,120 @@ pub(super) fn membership(
 ) -> Result<AtomSelection, Diagnostic> {
     require_namespace(column, policy)?;
     crate::annotation::require_available(structure, column)?;
+
+    if values.is_empty() {
+        return Ok(AtomSelection::Empty);
+    }
+
     if column.is_numeric() {
-        let patterns: Result<Vec<NumericPattern>, Diagnostic> = values
-            .iter()
-            .map(|value| NumericPattern::parse(value))
-            .collect();
-        let patterns = patterns?;
-        if matches!(column, Column::Model | Column::ModelIndex) {
-            return Ok(model_membership(structure, universe, column, &patterns));
+        let mut patterns = Vec::with_capacity(values.len());
+
+        for value in values {
+            patterns.push(NumericPattern::parse(value)?);
         }
+
+        if matches!(column, Column::Model | Column::ModelIndex) {
+            return Ok(crate::model_pattern::model_membership(
+                structure, universe, column, &patterns,
+            ));
+        }
+
+        let matcher = NumericMatcher::from_patterns(&patterns);
+
         return Ok(scan(structure, universe, |context| {
             numeric(structure, context, column, policy)
-                .is_some_and(|actual| patterns.iter().any(|pattern| pattern.matches(actual)))
-        }));
-    }
-    if matches!(
-        column,
-        Column::ResidueId | Column::LabelResidueId | Column::AuthResidueId
-    ) {
-        let patterns: Result<Vec<ResiduePattern>, Diagnostic> = values
-            .iter()
-            .map(|value| ResiduePattern::parse(value))
-            .collect();
-        let patterns = patterns?;
-        return Ok(scan(structure, universe, |context| {
-            residue_ordinal(context.residue, column, policy)
-                .is_some_and(|actual| patterns.iter().any(|pattern| pattern.matches(&actual)))
+                .is_some_and(|actual| matcher.matches(actual))
         }));
     }
 
+    if is_residue_id_column(column) {
+        let mut patterns = Vec::with_capacity(values.len());
+
+        for value in values {
+            patterns.push(ResiduePattern::parse(value)?);
+        }
+
+        let matcher = ResidueMatcher::from_patterns(patterns);
+
+        return Ok(scan(structure, universe, |context| {
+            residue_number(context.residue, column, policy).is_some_and(|number| {
+                matcher.matches_parts(number, residue_insertion(context.residue))
+            })
+        }));
+    }
+
+    let resolved = resolved_column(column, policy);
     let globs: Vec<Glob> = values.iter().map(|value| Glob::new(value)).collect();
-    let mut cache: BTreeMap<Box<str>, bool> = BTreeMap::new();
-    Ok(scan(structure, universe, |context| {
-        let Some(actual) = text(structure, context, column, policy) else {
-            return false;
-        };
-        if column == Column::AlternateLocation
-            && values
-                .iter()
-                .any(|value| value.eq_ignore_ascii_case("none"))
-            && actual.is_empty()
-        {
-            return true;
-        }
-        if let Some(matched) = cache.get(actual) {
-            return *matched;
-        }
-        let matched = globs.iter().any(|glob| glob.matches(actual));
-        cache.insert(actual.into(), matched);
-        matched
-    }))
+
+    let matches_empty_alternate = column == Column::AlternateLocation
+        && values
+            .iter()
+            .any(|value| value.eq_ignore_ascii_case("none"));
+
+    Ok(text_membership(
+        structure,
+        universe,
+        resolved,
+        &globs,
+        matches_empty_alternate,
+    ))
 }
 
-pub(super) fn same_column(
+/// Scans text-valued columns with a borrowed-value glob-result cache.
+///
+/// Each distinct textual value is evaluated against `globs` at most once.
+/// Expected runtime is `O(A + U * G)` hash operations/glob evaluations for
+/// `A` atoms, `U` distinct values, and `G` glob patterns, with `O(U)` cache
+/// space and no per-key string allocation.
+fn text_membership<'a>(
+    structure: &'a Structure,
+    universe: &AtomSelection,
+    column: Column,
+    globs: &[Glob],
+    matches_empty_alternate: bool,
+) -> AtomSelection {
+    let mut cache = HashMap::<&'a str, bool>::new();
+    let mut selected = Vec::new();
+
+    visit(structure, |context| {
+        let index = context.atom.index().get();
+
+        if !universe.contains(index) {
+            return;
+        }
+
+        let Some(actual) = text_resolved(structure, context, column) else {
+            return;
+        };
+
+        if matches_empty_alternate && actual.is_empty() {
+            selected.push(index);
+            return;
+        }
+
+        let matched = if let Some(matched) = cache.get(actual) {
+            *matched
+        } else {
+            let matched = globs.iter().any(|glob| glob.matches(actual));
+            cache.insert(actual, matched);
+            matched
+        };
+
+        if matched {
+            selected.push(index);
+        }
+    });
+
+    AtomSelection::from_sorted(selected)
+}
+
+/// Expands `selected` to every atom in `universe` sharing the same `column` value.
+///
+/// Numeric keys use their exact IEEE-754 bit representation, while textual
+/// keys borrow directly from `structure`. Expected runtime is `O(A)` with
+/// `O(K)` key space for `K` distinct selected values, without per-atom string
+/// allocation.
+pub(crate) fn same_column(
     structure: &Structure,
     universe: &AtomSelection,
     selected: &AtomSelection,
@@ -107,36 +194,53 @@ pub(super) fn same_column(
 ) -> Result<AtomSelection, Diagnostic> {
     require_namespace(column, policy)?;
     crate::annotation::require_available(structure, column)?;
-    let mut keys = BTreeSet::new();
-    visit(structure, |context| {
-        if selected.contains(context.atom.index().get())
-            && let Some(key) = key(structure, context, column, policy)
-        {
-            keys.insert(key);
-        }
-    });
-    Ok(scan(structure, universe, |context| {
-        key(structure, context, column, policy).is_some_and(|key| keys.contains(&key))
+
+    if column.is_numeric() {
+        return Ok(same_by_key(structure, universe, selected, |context| {
+            numeric(structure, context, column, policy).map(f64::to_bits)
+        }));
+    }
+
+    let resolved = resolved_column(column, policy);
+
+    Ok(same_by_key(structure, universe, selected, |context| {
+        text_resolved(structure, context, resolved)
     }))
 }
 
-pub(super) fn membership_symbols(
+/// Selects atoms whose symbol-valued `column` is present in `symbols`.
+///
+/// Element queries retain chunk-level pruning and store resolved elements in a
+/// contiguous `Vec`. Runtime is proportional to visited candidate atoms plus
+/// chunk pruning, with `O(M)` output space.
+pub(crate) fn membership_symbols(
     structure: &Structure,
     universe: &AtomSelection,
     column: Column,
     symbols: &BTreeSet<pdbiox_core::symbol::SymbolId>,
 ) -> Result<AtomSelection, Diagnostic> {
     crate::annotation::require_available(structure, column)?;
-    let elements: BTreeSet<pdbiox_core::Element> = if column == Column::Element {
+
+    if symbols.is_empty() {
+        return Ok(AtomSelection::Empty);
+    }
+
+    let elements: Vec<pdbiox_core::Element> = if column == Column::Element {
         symbols
             .iter()
             .filter_map(|symbol| structure.resolve(*symbol))
             .filter_map(pdbiox_core::Element::from_symbol)
             .collect()
     } else {
-        BTreeSet::new()
+        Vec::new()
     };
+
+    if column == Column::Element && elements.is_empty() {
+        return Ok(AtomSelection::Empty);
+    }
+
     let mut selected = Vec::new();
+
     for chunk in structure.data().chunks.iter() {
         if column == Column::Element
             && !elements
@@ -145,16 +249,20 @@ pub(super) fn membership_symbols(
         {
             continue;
         }
+
         for position in chunk.atoms() {
             if !universe.contains(position) {
                 continue;
             }
+
             let Some(atom) = structure.atom(pdbiox_core::AtomIndex::new(position)) else {
                 continue;
             };
+
             let Some(residue) = atom.residue() else {
                 continue;
             };
+
             let Some(chain_index) = structure
                 .data()
                 .topology
@@ -163,14 +271,17 @@ pub(super) fn membership_symbols(
             else {
                 continue;
             };
+
             let Some(chain) = structure.chain(chain_index) else {
                 continue;
             };
+
             let context = AtomContext {
                 atom,
                 residue,
                 chain,
             };
+
             if symbol_value(structure, context, column)
                 .is_some_and(|value| symbols.contains(&value))
             {
@@ -178,24 +289,38 @@ pub(super) fn membership_symbols(
             }
         }
     }
+
     Ok(AtomSelection::from_sorted(selected))
 }
 
+/// Scans atoms in structure order and returns those inside `universe` accepted by `accepts`.
+///
+/// Runtime is `O(A * C_u)` for `A` atoms and universe-membership cost `C_u`;
+/// output space is `O(M)` for matching atoms.
+#[inline]
 pub(super) fn scan(
     structure: &Structure,
     universe: &AtomSelection,
     mut accepts: impl FnMut(AtomContext<'_>) -> bool,
 ) -> AtomSelection {
     let mut selected = Vec::new();
+
     visit(structure, |context| {
         let index = context.atom.index().get();
+
         if universe.contains(index) && accepts(context) {
             selected.push(index);
         }
     });
+
     AtomSelection::from_sorted(selected)
 }
 
+/// Visits every atom once while carrying its residue and chain context.
+///
+/// Runtime is `O(A)` and additional space is `O(1)` outside the caller's
+/// closure state.
+#[inline]
 fn visit<'a>(structure: &'a Structure, mut visitor: impl FnMut(AtomContext<'a>)) {
     for chain in structure.data().chains() {
         for residue in chain.residues() {
@@ -210,6 +335,12 @@ fn visit<'a>(structure: &'a Structure, mut visitor: impl FnMut(AtomContext<'a>))
     }
 }
 
+/// Extracts a numeric value for `column` from an atom context.
+///
+/// Returns `None` when the value or required policy mapping is unavailable.
+/// Runtime is `O(1)` aside from annotation/property backend lookup costs and no
+/// heap allocation is performed by this function.
+#[inline]
 fn numeric(
     structure: &Structure,
     context: AtomContext<'_>,
@@ -218,7 +349,7 @@ fn numeric(
 ) -> Option<f64> {
     let value = match column {
         Column::Index => f64::from(context.atom.index().get()),
-        Column::ByNumber => f64::from(context.atom.index().get().saturating_add(1)),
+        Column::ByNumber => f64::from(context.atom.index().get()) + 1.0,
         Column::AtomSiteId => f64::from(context.atom.atom_site_id()?),
         Column::ResidueIndex => f64::from(context.residue.index().get()),
         Column::ChainIndex => f64::from(context.chain.index().get()),
@@ -227,7 +358,14 @@ fn numeric(
         Column::X => f64::from(context.atom.position()?[0]),
         Column::Y => f64::from(context.atom.position()?[1]),
         Column::Z => f64::from(context.atom.position()?[2]),
-        Column::FormalCharge => f64::from(context.atom.formal_charge()?),
+        Column::FormalCharge => match context.atom.formal_charge() {
+            Some(charge) => f64::from(charge),
+            None => crate::annotation::number(
+                structure,
+                context.atom.index().get(),
+                pdbiox_core::FORMAL_CHARGE_ANNOTATION,
+            )?,
+        },
         Column::Mass => pdbiox_chem::element_properties(context.atom.element()?)?.atomic_weight,
         Column::Radius => f64::from(pdbiox_chem::vdw_radius(
             context.atom.element()?,
@@ -242,9 +380,14 @@ fn numeric(
         )?,
         _ => return None,
     };
+
     Some(value)
 }
 
+/// Maps the analysis radii policy to the chemistry backend radius set.
+///
+/// Returns `None` for unsupported sets. Runtime and space are `O(1)`.
+#[inline]
 fn radius_set(set: pdbiox_core::contract::RadiiSet) -> Option<pdbiox_chem::RadiusSet> {
     Some(match set {
         pdbiox_core::contract::RadiiSet::Bondi => pdbiox_chem::RadiusSet::Bondi,
@@ -255,22 +398,23 @@ fn radius_set(set: pdbiox_core::contract::RadiiSet) -> Option<pdbiox_chem::Radiu
     })
 }
 
-fn text<'a>(
+/// Extracts a textual value after namespace resolution has already been performed.
+///
+/// The returned value borrows from `structure` or static storage, avoiding the
+/// repeated namespace branch in hot scans.
+#[inline]
+fn text_resolved<'a>(
     structure: &'a Structure,
     context: AtomContext<'a>,
     column: Column,
-    policy: &AnalysisPolicy,
 ) -> Option<&'a str> {
-    match resolved_column(column, policy) {
+    match column {
         Column::LabelChain => context.chain.label(),
-        Column::AuthChain => context.chain.auth_label().or_else(|| context.chain.label()),
+        Column::AuthChain => context.chain.auth_label(),
         Column::LabelResidueName => context.atom.component_name(),
-        Column::AuthResidueName => context
-            .residue
-            .auth_name()
-            .or_else(|| context.atom.component_name()),
+        Column::AuthResidueName => context.residue.auth_name(),
         Column::LabelAtomName => context.atom.name(),
-        Column::AuthAtomName => context.atom.auth_name().or_else(|| context.atom.name()),
+        Column::AuthAtomName => context.atom.auth_name(),
         Column::AlternateLocation => context
             .atom
             .alt_id()
@@ -303,6 +447,10 @@ fn text<'a>(
     }
 }
 
+/// Resolves policy-dependent logical columns to their concrete namespace columns.
+///
+/// Runtime and space are `O(1)`.
+#[inline]
 pub(crate) fn resolved_column(column: Column, policy: &AnalysisPolicy) -> Column {
     match (column, policy.identifiers) {
         (Column::Chain, Namespace::Label) => Column::LabelChain,
@@ -313,140 +461,6 @@ pub(crate) fn resolved_column(column: Column, policy: &AnalysisPolicy) -> Column
         (Column::AtomName, Namespace::Auth) => Column::AuthAtomName,
         _ => column,
     }
-}
-
-fn symbol_value(
-    structure: &Structure,
-    context: AtomContext<'_>,
-    column: Column,
-) -> Option<pdbiox_core::symbol::SymbolId> {
-    match column {
-        Column::LabelChain => context.chain.label_asym_id(),
-        Column::AuthChain => context
-            .chain
-            .auth_asym_id()
-            .or_else(|| context.chain.label_asym_id()),
-        Column::LabelResidueName => context.residue.label_comp_id(),
-        Column::AuthResidueName => context
-            .residue
-            .auth_comp_id()
-            .or_else(|| context.residue.label_comp_id()),
-        Column::LabelAtomName => context.atom.name_symbol(),
-        Column::AuthAtomName => context
-            .atom
-            .auth_name_symbol()
-            .or_else(|| context.atom.name_symbol()),
-        Column::AlternateLocation => context.atom.alt_id()?.symbol(),
-        Column::Entity => context
-            .chain
-            .entity()
-            .and_then(|entity| structure.data().topology.entities.id(entity)),
-        Column::Element => structure
-            .data()
-            .dictionary
-            .get(context.atom.element()?.symbol()),
-        Column::InsertionCode => structure
-            .data()
-            .topology
-            .residues
-            .ins_code(context.residue.index()),
-        Column::SegmentId => crate::annotation::symbol(
-            structure,
-            context.atom.index().get(),
-            pdbiox_core::SEGMENT_ID_ANNOTATION,
-        ),
-        _ => None,
-    }
-}
-
-fn require_namespace(column: Column, policy: &AnalysisPolicy) -> Result<(), Diagnostic> {
-    if policy.identifiers == Namespace::Explicit
-        && matches!(
-            column,
-            Column::Chain | Column::ResidueId | Column::ResidueName | Column::AtomName
-        )
-    {
-        Err(Diagnostic::new(Code::E6001))
-    } else {
-        Ok(())
-    }
-}
-
-fn require_numeric(structure: &Structure, column: Column) -> Result<(), Diagnostic> {
-    if column.is_numeric() {
-        crate::annotation::require_available(structure, column)
-    } else {
-        Err(Diagnostic::new(Code::E4002).with_context("column", format!("{column:?}")))
-    }
-}
-
-fn compare(actual: f64, expected: f64, operator: Operator, policy: &AnalysisPolicy) -> bool {
-    let tolerance =
-        policy.float_tolerance.absolute + policy.float_tolerance.relative * expected.abs();
-    match operator {
-        Operator::Less => actual < expected,
-        Operator::LessEqual => actual <= expected,
-        Operator::Greater => actual > expected,
-        Operator::GreaterEqual => actual >= expected,
-        Operator::Equal => (actual - expected).abs() <= tolerance,
-        Operator::NotEqual => (actual - expected).abs() > tolerance,
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum ValueKey {
-    Number(u64),
-    Text(Box<str>),
-}
-
-fn key(
-    structure: &Structure,
-    context: AtomContext<'_>,
-    column: Column,
-    policy: &AnalysisPolicy,
-) -> Option<ValueKey> {
-    if column.is_numeric() {
-        numeric(structure, context, column, policy).map(|value| ValueKey::Number(value.to_bits()))
-    } else {
-        text(structure, context, column, policy).map(|value| ValueKey::Text(value.into()))
-    }
-}
-
-fn entity_type<'a>(structure: &'a Structure, chain: ChainRef<'_>) -> &'a str {
-    match chain
-        .entity()
-        .and_then(|entity| structure.data().topology.entities.kind(entity))
-    {
-        Some(EntityKind::Polymer) => "polymer",
-        Some(EntityKind::NonPolymer) => "non-polymer",
-        Some(EntityKind::Water) => "water",
-        Some(EntityKind::Branched) => "branched",
-        _ => "unknown",
-    }
-}
-
-pub(super) fn atom_selector(
-    structure: &Structure,
-    universe: &AtomSelection,
-    segment: &str,
-    residue: i32,
-    name: &str,
-    policy: &AnalysisPolicy,
-) -> Result<AtomSelection, Diagnostic> {
-    crate::annotation::require_available(structure, Column::SegmentId)?;
-    Ok(scan(structure, universe, |context| {
-        let segment_matches = crate::annotation::symbol(
-            structure,
-            context.atom.index().get(),
-            pdbiox_core::SEGMENT_ID_ANNOTATION,
-        )
-        .and_then(|symbol| structure.resolve(symbol))
-            == Some(segment);
-        let residue_matches = residue_ordinal(context.residue, Column::ResidueId, policy)
-            .is_some_and(|ordinal| ordinal.number == residue && ordinal.insertion.is_empty());
-        let name_matches = text(structure, context, Column::AtomName, policy) == Some(name);
-        segment_matches && residue_matches && name_matches
-    }))
 }
 
 #[cfg(test)]
