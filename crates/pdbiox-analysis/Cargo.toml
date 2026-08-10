@@ -1,0 +1,23 @@
+[package]
+name = "pdbiox-analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Contacts, interactions and secondary structure for pdbiox"
+
+[dependencies]
+num-traits.workspace = true
+pdbiox-core.workspace = true
+pdbiox-cif.workspace = true
+pdbiox-chem.workspace = true
+pdbiox-geom.workspace = true
+pdbiox-spatial.workspace = true
+pdbiox-surface.workspace = true
+pdbiox-traj.workspace = true
+nalgebra.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
