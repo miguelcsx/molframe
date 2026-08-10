@@ -1,5 +1,6 @@
 //! Transactional copy-on-write edits over immutable structure snapshots.
 
+use super::materialize::compact_hierarchy;
 use super::{CoordinateStore, Structure, StructureData, validate};
 use crate::annotation::AtomAnnotation;
 use crate::bond::{BondRecord, BondTableBuilder};
@@ -27,6 +28,32 @@ impl Structure {
             data: self.data().clone(),
             coordinates_changed: false,
         }
+    }
+
+    /// Copies a selected atom set into a compact, independent structure.
+    ///
+    /// Empty residues, chains and unreferenced entities are removed. Domain
+    /// extensions are deliberately discarded because their topology-aligned
+    /// contents cannot remain valid after materialisation.
+    ///
+    /// # Errors
+    ///
+    /// Returns diagnostics for an out-of-range atom, a ragged ensemble, or an
+    /// invalid source hierarchy.
+    pub fn materialize(&self, selection: &AtomSelection) -> Result<Structure, Vec<Diagnostic>> {
+        if let Err(error) = validate_selection(selection, self.data().atom_count()) {
+            return Err(vec![error]);
+        }
+        let deleted = AtomSelection::All(self.atom_count()).difference(selection);
+        let mut editor = self.edit();
+        editor.clear_extensions();
+        if let Err(error) = editor.delete_atoms(&deleted) {
+            return Err(vec![error]);
+        }
+        if let Err(error) = compact_hierarchy(&mut editor.data) {
+            return Err(vec![error]);
+        }
+        editor.commit()
     }
 }
 
@@ -80,11 +107,11 @@ impl StructureEditor {
                 .with_context("limit", "dictionary entries")
                 .with_context("identifier", label)
         })?;
-        if self.data.topology.chains.rename(chain, symbol) {
-            Ok(())
-        } else {
-            Err(Diagnostic::new(Code::E6006).with_context("chain", chain.to_string()))
-        }
+        self.data
+            .topology
+            .chains
+            .rename(chain, symbol)
+            .map_err(|_| Diagnostic::new(Code::E6006).with_context("chain", chain.to_string()))
     }
 
     /// Applies one coordinate transform to selected atoms in every dense frame.
@@ -145,7 +172,12 @@ impl StructureEditor {
     /// unaffected whether commit succeeds or fails.
     pub fn commit(mut self) -> Result<Structure, Vec<Diagnostic>> {
         if self.coordinates_changed {
-            self.data.generation = self.data.generation.next();
+            let Some(generation) = self.data.generation.next() else {
+                return Err(vec![
+                    Diagnostic::new(Code::E6003).with_context("coordinate_generation", "exhausted"),
+                ]);
+            };
+            self.data.generation = generation;
         }
         let findings = validate(&self.data);
         if findings.is_empty() {
@@ -249,7 +281,9 @@ fn delete_from(data: &StructureData, deleted: &AtomSelection) -> Result<Structur
             if deleted.contains(old) {
                 continue;
             }
-            let local = old.saturating_sub(chunk.atoms().start);
+            let local = old.checked_sub(chunk.atoms().start).ok_or_else(|| {
+                Diagnostic::new(Code::E3001).with_context("atom", old.to_string())
+            })?;
             let position = first_positions.get(old as usize).copied();
             let Some(record) = chunk.record(local, &data.topology.residues, position) else {
                 return Err(Diagnostic::new(Code::E3001).with_context("atom", old.to_string()));
@@ -262,9 +296,12 @@ fn delete_from(data: &StructureData, deleted: &AtomSelection) -> Result<Structur
     let mut candidate = data.clone();
     candidate.chunks = std::sync::Arc::new(chunks);
     candidate.coords = filtered_store(&data.coords, deleted, first_coords)?;
-    remap_residue_ranges(&mut candidate, &remap);
+    remap_residue_ranges(&mut candidate, &remap)?;
     candidate.bonds = remap_bonds(&data.bonds, &remap);
-    candidate.annotations = data.annotations.filter(|atom| !deleted.contains(atom));
+    candidate.annotations = data
+        .annotations
+        .filter(|atom| !deleted.contains(atom))
+        .map_err(|_| Diagnostic::new(Code::E6009))?;
     Ok(candidate)
 }
 
@@ -288,7 +325,8 @@ fn filtered_store(
                             .copied()
                             .enumerate()
                             .filter_map(|(atom, position)| {
-                                (!deleted.contains(atom as u32)).then_some(position)
+                                let atom = u32::try_from(atom).ok()?;
+                                (!deleted.contains(atom)).then_some(position)
                             })
                             .collect(),
                     );
@@ -300,9 +338,11 @@ fn filtered_store(
     }
 }
 
-fn remap_residue_ranges(data: &mut StructureData, remap: &[u32]) {
+fn remap_residue_ranges(data: &mut StructureData, remap: &[u32]) -> Result<(), Diagnostic> {
     let mut first = 0u32;
-    for position in 0..data.topology.residues.len() as u32 {
+    for position in
+        0..u32::try_from(data.topology.residues.len()).map_err(|_| Diagnostic::new(Code::E6009))?
+    {
         let residue = ResidueIndex::new(position);
         let Some(old) = data.topology.residues.atoms(residue) else {
             continue;
@@ -313,12 +353,23 @@ fn remap_residue_ranges(data: &mut StructureData, remap: &[u32]) {
                     .get(*atom as usize)
                     .is_some_and(|new| *new != u32::MAX)
             })
-            .count() as u32;
+            .count();
+        let kept = u32::try_from(kept).map_err(|_| Diagnostic::new(Code::E6009))?;
         data.topology
             .residues
-            .set_atoms(residue, first..first + kept);
-        first += kept;
+            .set_atoms(
+                residue,
+                first
+                    ..first
+                        .checked_add(kept)
+                        .ok_or_else(|| Diagnostic::new(Code::E6009))?,
+            )
+            .map_err(|_| Diagnostic::new(Code::E3001))?;
+        first = first
+            .checked_add(kept)
+            .ok_or_else(|| Diagnostic::new(Code::E6009))?;
     }
+    Ok(())
 }
 
 fn remap_bonds(table: &crate::bond::BondTable, remap: &[u32]) -> crate::bond::BondTable {

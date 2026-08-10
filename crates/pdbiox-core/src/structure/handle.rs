@@ -9,7 +9,7 @@
 //! handles are how it is computed.
 
 use super::data::StructureData;
-use super::handle_helpers::{range_or_empty, recorded_value, residue_count_as_u32};
+use super::handle_helpers::{range_or_empty, recorded_value};
 use crate::chunk::AtomChunk;
 use crate::element::Element;
 use crate::index::{AtomIndex, ChainIndex, EntityIndex, ModelIndex, ResidueIndex};
@@ -464,9 +464,11 @@ impl StructureData {
 
     /// Every residue, across every chain.
     pub fn residues(&self) -> impl Iterator<Item = ResidueRef<'_>> {
-        let count = residue_count_as_u32(self.topology.residues.len());
-
-        (0..count).map(move |position| ResidueRef::new(self, ResidueIndex::new(position)))
+        (0..self.topology.residues.len()).filter_map(move |position| {
+            u32::try_from(position)
+                .ok()
+                .map(|position| ResidueRef::new(self, ResidueIndex::new(position)))
+        })
     }
 
     /// Every atom, in file order.

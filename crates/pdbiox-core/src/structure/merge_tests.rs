@@ -12,11 +12,10 @@ fn annotated(label: &str) -> Structure {
     };
     let _ = data.annotations.insert(
         "source",
-        AtomAnnotation::Symbol(AnnotationColumn::from_values(vec![
-            symbol;
-            source.atom_count()
-                as usize
-        ])),
+        AtomAnnotation::Symbol(
+            AnnotationColumn::from_values(vec![symbol; source.atom_count() as usize])
+                .expect("small annotation column"),
+        ),
     );
     Structure::new(data)
 }

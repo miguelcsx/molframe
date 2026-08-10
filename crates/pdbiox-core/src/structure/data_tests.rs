@@ -1,5 +1,6 @@
 use super::*;
 use crate::coords::CoordinateBlock;
+use num_traits::ToPrimitive;
 
 #[test]
 fn an_empty_structure_reports_one_model_and_no_atoms() {
@@ -79,7 +80,11 @@ fn a_unit_cube_with_right_angles_is_recognised_as_no_cell_at_all() {
 #[test]
 fn positions_of_the_first_model_are_the_buffer_itself() {
     let mut data = StructureData::empty();
-    data.coords = CoordinateStore::Single((0..3).map(|i| [i as f32, 0.0, 0.0]).collect());
+    data.coords = CoordinateStore::Single(
+        (0..3)
+            .map(|i| [i.to_f32().expect("small coordinate"), 0.0, 0.0])
+            .collect(),
+    );
     let structure = Structure::new(data);
 
     let first = structure.positions();

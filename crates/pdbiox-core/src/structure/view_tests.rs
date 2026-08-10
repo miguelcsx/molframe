@@ -5,7 +5,7 @@ use crate::structure::fixture;
 fn a_view_of_everything_covers_every_atom() {
     let structure = fixture::sample();
     let view = structure.view();
-    assert_eq!(view.len(), structure.atom_count());
+    assert_eq!(view.len(), u64::from(structure.atom_count()));
     assert_eq!(view.len(), 24);
     assert!(!view.is_empty());
 }
@@ -55,6 +55,9 @@ fn a_view_knows_whether_the_structure_has_moved_on_since_it_was_made() {
     assert!(!view.is_stale_for(&structure));
 
     let mut moved = structure.data().clone();
-    moved.generation = structure.generation().next();
+    moved.generation = structure
+        .generation()
+        .next()
+        .expect("initial generation advances");
     assert!(view.is_stale_for(&Structure::new(moved)));
 }

@@ -29,7 +29,7 @@ use std::sync::Arc;
 /// let nothing = everything.narrow(&AtomSelection::Empty);
 ///
 /// assert!(nothing.is_empty());
-/// assert_eq!(everything.len(), structure.atom_count());
+/// assert_eq!(everything.len(), u64::from(structure.atom_count()));
 /// ```
 #[derive(Clone, Debug)]
 pub struct StructureView {
@@ -63,7 +63,7 @@ impl StructureView {
 
     /// The number of atoms covered.
     #[must_use]
-    pub fn len(&self) -> u32 {
+    pub fn len(&self) -> u64 {
         self.atoms.len()
     }
 

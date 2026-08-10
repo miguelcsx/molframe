@@ -74,10 +74,11 @@ fn check_coordinates(data: &StructureData, findings: &mut Diagnostics) {
         return;
     }
     for model in 0..data.coords.model_count() {
-        let Some(block) = data
-            .coords
-            .block(crate::index::ModelIndex::new(model as u32))
-        else {
+        let Ok(model) = u32::try_from(model) else {
+            findings.push(Diagnostic::new(Code::E3001).with_context("model", "exceeds u32"));
+            return;
+        };
+        let Some(block) = data.coords.block(crate::index::ModelIndex::new(model)) else {
             continue;
         };
         for chunk in data.chunks.iter() {
@@ -173,7 +174,11 @@ fn check_child_ranges(data: &StructureData, findings: &mut Diagnostics) {
 fn check_atom_coverage(data: &StructureData, findings: &mut Diagnostics) {
     let residues = &data.topology.residues;
     let mut expected = 0u32;
-    for position in 0..residues.len() as u32 {
+    let Ok(residue_count) = u32::try_from(residues.len()) else {
+        findings.push(Diagnostic::new(Code::E3001).with_context("residues", "exceeds u32"));
+        return;
+    };
+    for position in 0..residue_count {
         let Some(range) = residues.atoms(ResidueIndex::new(position)) else {
             continue;
         };

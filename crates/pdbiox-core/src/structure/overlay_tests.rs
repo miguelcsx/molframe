@@ -1,6 +1,7 @@
 use super::*;
 use crate::annotation::{AnnotationColumn, AtomAnnotation};
 use crate::column::Presence;
+use crate::structure::fixture;
 
 #[test]
 fn renaming_a_chain_publishes_a_new_snapshot_and_shares_atom_storage() {
@@ -69,7 +70,7 @@ fn a_transform_is_transactional_and_advances_generation_once() {
     assert_position(original.positions()[0], [0.0, 0.0, 0.0]);
     assert_position(edited.positions()[0], [2.0, -1.0, 4.0]);
     assert_position(edited.positions()[23], [3.0, 1.0, 7.0]);
-    assert_eq!(edited.generation(), original.generation().next());
+    assert_eq!(Some(edited.generation()), original.generation().next());
 }
 
 #[test]
@@ -111,14 +112,16 @@ fn deleting_atoms_compacts_rows_residue_ranges_coordinates_and_bonds() {
     };
     assert_eq!(column.len(), 21);
     assert_eq!(column.get(1), Some((2, Presence::Present)));
-    assert_eq!(edited.generation(), original.generation().next());
+    assert_eq!(Some(edited.generation()), original.generation().next());
 }
 
 #[test]
 fn annotation_edits_are_length_checked_and_copy_on_write() {
     let original = crate::structure::fixture::sample();
     let mut editor = original.edit();
-    let short = AtomAnnotation::Boolean(AnnotationColumn::from_values(vec![true]));
+    let short = AtomAnnotation::Boolean(
+        AnnotationColumn::from_values(vec![true]).expect("small annotation column"),
+    );
     assert_eq!(
         editor
             .set_annotation("flag", short)
@@ -129,7 +132,7 @@ fn annotation_edits_are_length_checked_and_copy_on_write() {
     let values = (0..original.atom_count()).map(i64::from).collect();
     if let Err(finding) = editor.set_annotation(
         "score",
-        AtomAnnotation::Integer(AnnotationColumn::from_values(values)),
+        AtomAnnotation::Integer(AnnotationColumn::from_values(values).expect("small column")),
     ) {
         panic!("annotation failed: {finding}")
     }
@@ -229,7 +232,7 @@ fn with_annotation(structure: &Structure) -> Structure {
     if editor
         .set_annotation(
             "score",
-            AtomAnnotation::Integer(AnnotationColumn::from_values(values)),
+            AtomAnnotation::Integer(AnnotationColumn::from_values(values).expect("small column")),
         )
         .is_err()
     {
@@ -239,6 +242,49 @@ fn with_annotation(structure: &Structure) -> Structure {
         Ok(edited) => edited,
         Err(_) => structure.clone(),
     }
+}
+
+#[test]
+fn materialization_compacts_hierarchy_bonds_annotations_and_extensions() {
+    let source = with_annotation(&with_bonds(&fixture::sample()))
+        .with_extension("selection.invalidated.v1", 7u32);
+    let selection = AtomSelection::from_sorted(vec![0, 1]);
+    let selected = match source.materialize(&selection) {
+        Ok(structure) => structure,
+        Err(findings) => panic!("materialization failed: {findings:?}"),
+    };
+
+    assert_eq!(selected.atom_count(), 2);
+    assert_eq!(selected.residue_count(), 1);
+    assert_eq!(selected.chain_count(), 1);
+    assert_eq!(selected.entity_count(), 1);
+    assert_eq!(selected.data().bonds.len(), 1);
+    assert_eq!(
+        selected.annotations().get("score").map(AtomAnnotation::len),
+        Some(2)
+    );
+    assert!(selected.extensions().is_empty());
+    assert_eq!(
+        selected
+            .atom(AtomIndex::new(0))
+            .and_then(crate::structure::AtomRef::name),
+        Some("N")
+    );
+    assert_eq!(
+        selected
+            .atom(AtomIndex::new(1))
+            .and_then(crate::structure::AtomRef::name),
+        Some("CA")
+    );
+}
+
+#[test]
+fn materialization_rejects_atoms_outside_the_structure() {
+    let source = fixture::sample();
+    let result = source.materialize(&AtomSelection::from_sorted(vec![source.atom_count()]));
+    assert!(
+        matches!(result, Err(findings) if findings.iter().any(|finding| finding.code() == Code::E6009))
+    );
 }
 
 fn assert_position(actual: [f32; 3], expected: [f32; 3]) {

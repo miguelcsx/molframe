@@ -95,7 +95,9 @@ fn merge_plain<T: AnnotationType>(
             }
         }
     }
-    Ok(wrap(AnnotationColumn::from_entries(entries)))
+    AnnotationColumn::from_entries(entries)
+        .map(wrap)
+        .map_err(|_| single(Diagnostic::new(Code::E6009)))
 }
 
 fn merge_symbols(
@@ -121,9 +123,9 @@ fn merge_symbols(
             ),
         }
     }
-    Ok(AtomAnnotation::Symbol(AnnotationColumn::from_entries(
-        entries,
-    )))
+    AnnotationColumn::from_entries(entries)
+        .map(AtomAnnotation::Symbol)
+        .map_err(|_| single(Diagnostic::new(Code::E6009)))
 }
 
 fn annotation_type_error(name: &str) -> Vec<Diagnostic> {

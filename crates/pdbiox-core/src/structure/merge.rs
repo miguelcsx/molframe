@@ -104,17 +104,17 @@ impl<'a> Merger<'a> {
                 .entities
                 .kind(entity)
                 .ok_or_else(invariant)?;
-            let _ = self
-                .data
+            self.data
                 .topology
                 .entities
-                .push(id, kind, description, &sequence);
+                .push(id, kind, description, &sequence)
+                .map_err(|_| invariant())?;
         }
         Ok(())
     }
 
     fn append_residues(&mut self, source: &Structure) -> Result<(), Diagnostic> {
-        for residue in 0..source.residue_count() as u32 {
+        for residue in 0..u32_of(source.residue_count())? {
             let residue = ResidueIndex::new(residue);
             let table = &source.data().topology.residues;
             let atoms = table.atoms(residue).ok_or_else(invariant)?;
@@ -138,11 +138,15 @@ impl<'a> Merger<'a> {
                 )?,
                 het: table.is_het(residue),
             };
-            let _ = self.data.topology.residues.push(
-                record,
-                checked_add(atoms.start, self.atom_offset)?
-                    ..checked_add(atoms.end, self.atom_offset)?,
-            );
+            self.data
+                .topology
+                .residues
+                .push(
+                    record,
+                    checked_add(atoms.start, self.atom_offset)?
+                        ..checked_add(atoms.end, self.atom_offset)?,
+                )
+                .map_err(|_| invariant())?;
         }
         Ok(())
     }
@@ -166,11 +170,15 @@ impl<'a> Merger<'a> {
                 entity: EntityIndex::new(checked_add(entity.get(), self.entity_offset)?),
                 polymer_kind: table.polymer_kind(chain).ok_or_else(invariant)?,
             };
-            let _ = self.data.topology.chains.push(
-                record,
-                checked_add(residues.start, self.residue_offset)?
-                    ..checked_add(residues.end, self.residue_offset)?,
-            );
+            self.data
+                .topology
+                .chains
+                .push(
+                    record,
+                    checked_add(residues.start, self.residue_offset)?
+                        ..checked_add(residues.end, self.residue_offset)?,
+                )
+                .map_err(|_| invariant())?;
             self.chain_count = checked_add(self.chain_count, 1)?;
         }
         Ok(())
@@ -180,7 +188,7 @@ impl<'a> Merger<'a> {
         let positions = source.positions();
         for chunk in source.data().chunks.iter() {
             for old in chunk.atoms() {
-                let local = old.saturating_sub(chunk.atoms().start);
+                let local = old.checked_sub(chunk.atoms().start).ok_or_else(invariant)?;
                 let position = positions.get(old as usize).copied();
                 let record = chunk
                     .record(local, &source.data().topology.residues, position)
@@ -212,6 +220,7 @@ impl<'a> Merger<'a> {
             alt_id: match record.alt_id.symbol() {
                 Some(symbol) => {
                     AltId::labelled(remap_symbol(source, symbol, &mut self.data.dictionary)?)
+                        .ok_or_else(invariant)?
                 }
                 None => AltId::BLANK,
             },
@@ -233,8 +242,8 @@ impl<'a> Merger<'a> {
 
     fn advance_offsets(&mut self, source: &Structure) -> Result<(), Diagnostic> {
         self.atom_offset = checked_add(self.atom_offset, source.atom_count())?;
-        self.residue_offset = checked_add(self.residue_offset, source.residue_count() as u32)?;
-        self.entity_offset = checked_add(self.entity_offset, source.entity_count() as u32)?;
+        self.residue_offset = checked_add(self.residue_offset, u32_of(source.residue_count())?)?;
+        self.entity_offset = checked_add(self.entity_offset, u32_of(source.entity_count())?)?;
         Ok(())
     }
 
@@ -249,7 +258,7 @@ impl<'a> Merger<'a> {
                 .all(|source| source.data().bonds.is_available()),
         );
         self.data.annotations = annotations;
-        self.data.coords = merged_coordinates(self.sources, self.frame_count, first);
+        self.data.coords = merged_coordinates(self.sources, self.frame_count, first)?;
         self.data.cell = common_cell(self.sources);
         self.data.generation = CoordinateGeneration::INITIAL;
         add_models(
@@ -257,7 +266,7 @@ impl<'a> Merger<'a> {
             self.sources,
             self.frame_count,
             self.chain_count,
-        );
+        )?;
         let findings = validate(&self.data);
         if findings.is_empty() {
             Ok(Structure::new(self.data))
@@ -311,36 +320,41 @@ fn compatible_frame_count(structures: &[Structure]) -> Result<usize, Vec<Diagnos
     }
 }
 
-fn add_models(topology: &mut Topology, sources: &[Structure], count: usize, chains: u32) {
+fn add_models(
+    topology: &mut Topology,
+    sources: &[Structure],
+    count: usize,
+    chains: u32,
+) -> Result<(), Vec<Diagnostic>> {
     for model in 0..count {
-        let stored = sources[0]
-            .data()
-            .topology
-            .models
-            .model_num(ModelIndex::new(model as u32));
-        let number = match (stored, i32::try_from(model)) {
-            (Some(number), _) => number,
-            (None, Ok(position)) => position.saturating_add(1),
-            (None, Err(_)) => i32::MAX,
+        let index = ModelIndex::new(u32_of(model).map_err(single)?);
+        let stored = sources[0].data().topology.models.model_num(index);
+        let Some(number) = stored else {
+            return Err(single(invariant()));
         };
-        let _ = topology.models.push(number, 0..chains);
+        topology
+            .models
+            .push(number, 0..chains)
+            .map_err(|_| single(invariant()))?;
     }
+    Ok(())
 }
 
 fn merged_coordinates(
     sources: &[Structure],
     frame_count: usize,
     first: CoordinateBlock,
-) -> CoordinateStore {
+) -> Result<CoordinateStore, Vec<Diagnostic>> {
     if frame_count == 1 {
-        return CoordinateStore::Single(first);
+        return Ok(CoordinateStore::Single(first));
     }
     let mut frames = Vec::with_capacity(frame_count);
     frames.push(first);
     for frame in 1..frame_count {
         let mut merged = CoordinateBlock::new();
         for source in sources {
-            if let Some(positions) = source.model_positions(ModelIndex::new(frame as u32)) {
+            let index = ModelIndex::new(u32_of(frame).map_err(single)?);
+            if let Some(positions) = source.model_positions(index) {
                 for position in positions {
                     merged.push(*position);
                 }
@@ -348,7 +362,11 @@ fn merged_coordinates(
         }
         frames.push(merged);
     }
-    CoordinateStore::Dense { frames }
+    Ok(CoordinateStore::Dense { frames })
+}
+
+fn u32_of(value: usize) -> Result<u32, Diagnostic> {
+    u32::try_from(value).map_err(|_| invariant())
 }
 
 fn common_cell(sources: &[Structure]) -> Option<UnitCell> {

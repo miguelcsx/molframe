@@ -25,15 +25,18 @@ fn an_empty_structure_violates_nothing() {
 #[test]
 fn a_chain_pointing_at_a_nonexistent_entity_is_reported() {
     let mut data = StructureData::empty();
-    data.topology.chains.push(
-        ChainRecord {
-            label_asym_id: SymbolId::from_raw(0),
-            auth_asym_id: OptionalSymbol::NONE,
-            entity: EntityIndex::new(7),
-            polymer_kind: PolymerKind::None,
-        },
-        0..0,
-    );
+    data.topology
+        .chains
+        .push(
+            ChainRecord {
+                label_asym_id: SymbolId::from_raw(0),
+                auth_asym_id: OptionalSymbol::NONE,
+                entity: EntityIndex::new(7),
+                polymer_kind: PolymerKind::None,
+            },
+            0..0,
+        )
+        .expect("small chain table");
     assert!(codes(&data).contains(&Code::E3005));
 }
 
@@ -41,17 +44,20 @@ fn a_chain_pointing_at_a_nonexistent_entity_is_reported() {
 fn residues_that_leave_a_gap_in_the_atom_order_are_reported() {
     let mut data = StructureData::empty();
     for range in [0..4u32, 8..12] {
-        data.topology.residues.push(
-            ResidueRecord {
-                label_comp_id: SymbolId::from_raw(0),
-                auth_comp_id: OptionalSymbol::NONE,
-                label_seq_id: OptionalI32::NONE,
-                auth_seq_id: OptionalI32::NONE,
-                ins_code: OptionalSymbol::NONE,
-                het: false,
-            },
-            range,
-        );
+        data.topology
+            .residues
+            .push(
+                ResidueRecord {
+                    label_comp_id: SymbolId::from_raw(0),
+                    auth_comp_id: OptionalSymbol::NONE,
+                    label_seq_id: OptionalI32::NONE,
+                    auth_seq_id: OptionalI32::NONE,
+                    ins_code: OptionalSymbol::NONE,
+                    het: false,
+                },
+                range,
+            )
+            .expect("small residue table");
     }
     assert!(codes(&data).contains(&Code::E3004));
 }
@@ -60,17 +66,20 @@ fn residues_that_leave_a_gap_in_the_atom_order_are_reported() {
 fn models_with_different_atom_counts_cannot_share_a_coordinate_set() {
     let mut data = StructureData::empty();
     let mut builder = ChunkBuilder::new();
-    data.topology.residues.push(
-        ResidueRecord {
-            label_comp_id: SymbolId::from_raw(0),
-            auth_comp_id: OptionalSymbol::NONE,
-            label_seq_id: OptionalI32::NONE,
-            auth_seq_id: OptionalI32::NONE,
-            ins_code: OptionalSymbol::NONE,
-            het: false,
-        },
-        0..2,
-    );
+    data.topology
+        .residues
+        .push(
+            ResidueRecord {
+                label_comp_id: SymbolId::from_raw(0),
+                auth_comp_id: OptionalSymbol::NONE,
+                label_seq_id: OptionalI32::NONE,
+                auth_seq_id: OptionalI32::NONE,
+                ins_code: OptionalSymbol::NONE,
+                het: false,
+            },
+            0..2,
+        )
+        .expect("small residue table");
     for serial in 0..2u32 {
         builder.push(AtomRecord {
             position: Some([0.0; 3]),
@@ -100,17 +109,20 @@ fn models_with_different_atom_counts_cannot_share_a_coordinate_set() {
 fn an_occupancy_outside_the_permitted_range_is_reported() {
     let mut data = StructureData::empty();
     let mut builder = ChunkBuilder::new();
-    data.topology.residues.push(
-        ResidueRecord {
-            label_comp_id: SymbolId::from_raw(0),
-            auth_comp_id: OptionalSymbol::NONE,
-            label_seq_id: OptionalI32::NONE,
-            auth_seq_id: OptionalI32::NONE,
-            ins_code: OptionalSymbol::NONE,
-            het: false,
-        },
-        0..1,
-    );
+    data.topology
+        .residues
+        .push(
+            ResidueRecord {
+                label_comp_id: SymbolId::from_raw(0),
+                auth_comp_id: OptionalSymbol::NONE,
+                label_seq_id: OptionalI32::NONE,
+                auth_seq_id: OptionalI32::NONE,
+                ins_code: OptionalSymbol::NONE,
+                het: false,
+            },
+            0..1,
+        )
+        .expect("small residue table");
     builder.push(AtomRecord {
         position: Some([0.0; 3]),
         element: Element::CARBON,
@@ -135,15 +147,18 @@ fn an_occupancy_outside_the_permitted_range_is_reported() {
 fn every_violation_is_reported_rather_than_only_the_first() {
     let mut data = StructureData::empty();
     for entity in [EntityIndex::new(3), EntityIndex::new(4)] {
-        data.topology.chains.push(
-            ChainRecord {
-                label_asym_id: SymbolId::from_raw(0),
-                auth_asym_id: OptionalSymbol::NONE,
-                entity,
-                polymer_kind: PolymerKind::None,
-            },
-            0..0,
-        );
+        data.topology
+            .chains
+            .push(
+                ChainRecord {
+                    label_asym_id: SymbolId::from_raw(0),
+                    auth_asym_id: OptionalSymbol::NONE,
+                    entity,
+                    polymer_kind: PolymerKind::None,
+                },
+                0..0,
+            )
+            .expect("small chain table");
     }
     assert_eq!(codes(&data).len(), 2);
 }

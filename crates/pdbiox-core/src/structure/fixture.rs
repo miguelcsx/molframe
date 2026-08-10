@@ -18,8 +18,6 @@ const ATOM_NAMES: [&str; 4] = ["N", "CA", "C", "O"];
 
 /// Builds the shared fixture.
 ///
-/// Panics only if the identifier dictionary refuses a handful of strings, which
-/// cannot happen at this size and would be a defect in the interner.
 pub fn sample() -> Structure {
     let mut data = StructureData::empty();
     let dictionary = &mut data.dictionary;
@@ -31,25 +29,30 @@ pub fn sample() -> Structure {
         return Structure::new(data);
     };
     let sequence = [alanine; 4];
-    let entity = data.topology.entities.push(
+    let Ok(entity) = data.topology.entities.push(
         entity_id,
         EntityKind::Polymer,
         OptionalSymbol::NONE,
         &sequence,
-    );
+    ) else {
+        return Structure::new(data);
+    };
 
     let mut builder = ChunkBuilder::new();
     builder.start_model(0);
     let mut residue_position = 0u32;
 
-    for (chain_number, label) in ["A", "B"].into_iter().enumerate() {
+    let mut chain_coordinate = 0.0_f32;
+    let mut atom_site_id = 1u32;
+    for label in ["A", "B"] {
         let Ok(chain_label) = data.dictionary.intern(label) else {
             continue;
         };
         let first_residue = residue_position;
 
+        let mut residue_coordinate = 0.0_f32;
         for offset in 0..3u32 {
-            let residue = data.topology.residues.push(
+            let Ok(residue) = data.topology.residues.push(
                 ResidueRecord {
                     label_comp_id: alanine,
                     auth_comp_id: OptionalSymbol::NONE,
@@ -59,14 +62,17 @@ pub fn sample() -> Structure {
                     het: false,
                 },
                 residue_position * 4..(residue_position + 1) * 4,
-            );
+            ) else {
+                return Structure::new(data);
+            };
 
+            let mut atom_coordinate = 0.0_f32;
             for (slot, name) in ATOM_NAMES.iter().enumerate() {
                 let Ok(atom_name) = data.dictionary.intern(name) else {
                     continue;
                 };
                 builder.push(AtomRecord {
-                    position: Some([chain_number as f32, offset as f32, slot as f32]),
+                    position: Some([chain_coordinate, residue_coordinate, atom_coordinate]),
                     element: element_of(slot),
                     atom_name,
                     auth_atom_name: OptionalSymbol::NONE,
@@ -74,26 +80,39 @@ pub fn sample() -> Structure {
                     alt_id: AltId::BLANK,
                     residue: ResidueIndex::new(residue.get()),
                     occupancy: (1.0, Presence::Present),
-                    b_factor: (20.0 + offset as f32, Presence::Present),
+                    b_factor: (20.0 + residue_coordinate, Presence::Present),
                     formal_charge: (0, Presence::Inapplicable),
-                    atom_site_id: residue_position * 4 + slot as u32 + 1,
+                    atom_site_id,
                 });
+                atom_coordinate += 1.0;
+                atom_site_id += 1;
             }
+            residue_coordinate += 1.0;
             residue_position += 1;
         }
 
-        data.topology.chains.push(
-            ChainRecord {
-                label_asym_id: chain_label,
-                auth_asym_id: OptionalSymbol::some(chain_label),
-                entity,
-                polymer_kind: PolymerKind::Protein,
-            },
-            first_residue..residue_position,
-        );
+        if data
+            .topology
+            .chains
+            .push(
+                ChainRecord {
+                    label_asym_id: chain_label,
+                    auth_asym_id: OptionalSymbol::some(chain_label),
+                    entity,
+                    polymer_kind: PolymerKind::Protein,
+                },
+                first_residue..residue_position,
+            )
+            .is_err()
+        {
+            return Structure::new(data);
+        }
+        chain_coordinate += 1.0;
     }
 
-    data.topology.models.push(1, 0..2);
+    if data.topology.models.push(1, 0..2).is_err() {
+        return Structure::new(data);
+    }
     let (chunks, coords) = builder.finish();
     data.chunks = chunks.into();
     data.coords = CoordinateStore::Single(coords);

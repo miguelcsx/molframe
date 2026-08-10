@@ -86,7 +86,12 @@ impl CoordinateEditor {
 }
 
 fn finish(mut data: StructureData) -> Result<Structure, Vec<crate::diagnostic::Diagnostic>> {
-    data.generation = data.generation.next();
+    let Some(generation) = data.generation.next() else {
+        return Err(vec![
+            Diagnostic::new(Code::E6003).with_context("coordinate_generation", "exhausted"),
+        ]);
+    };
+    data.generation = generation;
     let findings = validate(&data);
     if findings.is_empty() {
         Ok(Structure::new(data))
