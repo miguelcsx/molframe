@@ -1,5 +1,6 @@
 //! Complete `BinaryCIF` column codec chains.
 
+use num_traits::ToPrimitive;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -233,12 +234,16 @@ fn fixed_point(stage: Stage, factor: f64, src_type: DataType) -> Result<Stage, D
     if !factor.is_finite() || factor == 0.0 || !is_float(src_type) {
         return Err(type_error("invalid FixedPoint metadata"));
     }
-    Ok(Stage::Floats(
-        values
-            .into_iter()
-            .map(|value| value as f64 / factor)
-            .collect(),
-    ))
+    let values = values
+        .into_iter()
+        .map(|value| {
+            value
+                .to_f64()
+                .map(|value| value / factor)
+                .ok_or_else(|| type_error("FixedPoint integer is outside the floating-point range"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Stage::Floats(values))
 }
 
 fn interval(
@@ -255,12 +260,16 @@ fn interval(
         return Err(type_error("invalid IntervalQuantization metadata"));
     }
     let increment = (max - min) / f64::from(steps - 1);
-    Ok(Stage::Floats(
-        values
-            .into_iter()
-            .map(|value| min + increment * value as f64)
-            .collect(),
-    ))
+    let values = values
+        .into_iter()
+        .map(|value| {
+            value
+                .to_f64()
+                .map(|value| min + increment * value)
+                .ok_or_else(|| type_error("quantized integer is outside the floating-point range"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Stage::Floats(values))
 }
 
 fn run_length(stage: Stage, src_type: DataType, size: usize) -> Result<Stage, Diagnostic> {
@@ -275,10 +284,15 @@ fn run_length(stage: Stage, src_type: DataType, size: usize) -> Result<Stage, Di
         let Ok(count) = usize::try_from(pair[1]) else {
             return Err(length_error(values.len(), size));
         };
-        if output.len().saturating_add(count) > size {
-            return Err(length_error(output.len().saturating_add(count), size));
+        let Some(new_length) = output.len().checked_add(count) else {
+            return Err(type_error(
+                "decoded run length exceeds the addressable range",
+            ));
+        };
+        if new_length > size {
+            return Err(length_error(new_length, size));
         }
-        output.resize(output.len() + count, pair[0]);
+        output.resize(new_length, pair[0]);
     }
     if output.len() != size {
         return Err(length_error(output.len(), size));
@@ -368,7 +382,11 @@ fn string_array(
     else {
         return Err(type_error("StringArray offsets are not integers"));
     };
-    let mut dictionary = Vec::with_capacity(offsets.len().saturating_sub(1));
+    let dictionary_capacity = match offsets.len().checked_sub(1) {
+        Some(capacity) => capacity,
+        None => 0,
+    };
+    let mut dictionary = Vec::with_capacity(dictionary_capacity);
     for pair in offsets.windows(2) {
         let (Ok(start), Ok(end)) = (usize::try_from(pair[0]), usize::try_from(pair[1])) else {
             return Err(length_error(offsets.len(), string_data.len()));
@@ -414,5 +432,5 @@ fn type_error(message: &'static str) -> Diagnostic {
 }
 
 #[cfg(test)]
-#[path = "codec_tests.rs"]
+#[path = "decode_tests.rs"]
 mod tests;

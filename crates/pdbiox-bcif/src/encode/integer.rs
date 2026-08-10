@@ -1,6 +1,6 @@
 //! Integer transformations and smallest-candidate selection.
 
-use super::keep_smaller;
+use super::strategy::keep_smaller;
 use crate::codec::{DataType, EncodedData, Encoding};
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 
@@ -64,12 +64,24 @@ fn plain(values: &[i64]) -> Option<EncodedData> {
         return None;
     }
     let data = match data_type {
-        DataType::Int8 => values.iter().map(|value| *value as i8 as u8).collect(),
-        DataType::Uint8 => values.iter().map(|value| *value as u8).collect(),
-        DataType::Int16 => flatten(values, |value| (*value as i16).to_le_bytes()),
-        DataType::Uint16 => flatten(values, |value| (*value as u16).to_le_bytes()),
-        DataType::Int32 => flatten(values, |value| (*value as i32).to_le_bytes()),
-        DataType::Uint32 => flatten(values, |value| (*value as u32).to_le_bytes()),
+        DataType::Int8 => checked_flatten(values, |value| {
+            i8::try_from(value).ok().map(i8::to_le_bytes)
+        })?,
+        DataType::Uint8 => checked_flatten(values, |value| {
+            u8::try_from(value).ok().map(u8::to_le_bytes)
+        })?,
+        DataType::Int16 => checked_flatten(values, |value| {
+            i16::try_from(value).ok().map(i16::to_le_bytes)
+        })?,
+        DataType::Uint16 => checked_flatten(values, |value| {
+            u16::try_from(value).ok().map(u16::to_le_bytes)
+        })?,
+        DataType::Int32 => checked_flatten(values, |value| {
+            i32::try_from(value).ok().map(i32::to_le_bytes)
+        })?,
+        DataType::Uint32 => checked_flatten(values, |value| {
+            u32::try_from(value).ok().map(u32::to_le_bytes)
+        })?,
         DataType::Float32 | DataType::Float64 => return None,
     };
     Some(EncodedData {
@@ -93,7 +105,9 @@ fn values_fit(values: &[i64], data_type: DataType) -> bool {
 fn packed(values: &[i64], maximum_bytes: usize) -> Result<Option<EncodedData>, Diagnostic> {
     let unsigned = values.iter().all(|value| *value >= 0);
     let one_bytes = packed_word_count(values, 1, unsigned)?;
-    let two_bytes = packed_word_count(values, 2, unsigned)?.saturating_mul(2);
+    let two_bytes = packed_word_count(values, 2, unsigned)?
+        .checked_mul(2)
+        .ok_or_else(encoding_error)?;
     let (byte_count, encoded_bytes) = if one_bytes <= two_bytes {
         (1, one_bytes)
     } else {
@@ -109,10 +123,26 @@ fn packed(values: &[i64], maximum_bytes: usize) -> Result<Option<EncodedData>, D
         (2, true) => DataType::Uint16,
         _ => DataType::Int16,
     };
-    let data = if byte_count == 1 {
-        words.iter().map(|value| *value as i8 as u8).collect()
+    let data = if byte_count == 1 && unsigned {
+        checked_flatten(&words, |value| {
+            u8::try_from(value).ok().map(u8::to_le_bytes)
+        })
+        .ok_or_else(encoding_error)?
+    } else if byte_count == 1 {
+        checked_flatten(&words, |value| {
+            i8::try_from(value).ok().map(i8::to_le_bytes)
+        })
+        .ok_or_else(encoding_error)?
+    } else if unsigned {
+        checked_flatten(&words, |value| {
+            u16::try_from(value).ok().map(u16::to_le_bytes)
+        })
+        .ok_or_else(encoding_error)?
     } else {
-        flatten(&words, |value| (*value as i16).to_le_bytes())
+        checked_flatten(&words, |value| {
+            i16::try_from(value).ok().map(i16::to_le_bytes)
+        })
+        .ok_or_else(encoding_error)?
     };
     Ok(Some(EncodedData {
         encoding: vec![
@@ -142,9 +172,10 @@ fn packed_word_count(values: &[i64], bytes: u8, unsigned: bool) -> Result<usize,
         let Ok(continuations) = usize::try_from(continuations) else {
             return Err(encoding_error());
         };
-        count = count
-            .checked_add(continuations.saturating_add(1))
-            .ok_or_else(encoding_error)?;
+        let Some(words) = continuations.checked_add(1) else {
+            return Err(encoding_error());
+        };
+        count = count.checked_add(words).ok_or_else(encoding_error)?;
     }
     Ok(count)
 }
@@ -213,7 +244,7 @@ fn runs(values: &[i64]) -> Result<Vec<i64>, Diagnostic> {
     let mut count = 0usize;
     for value in values {
         if *value == current {
-            count = count.saturating_add(1);
+            count = count.checked_add(1).ok_or_else(encoding_error)?;
             continue;
         }
         push_run(&mut output, current, count)?;
@@ -256,12 +287,16 @@ fn source_type(values: &[i64]) -> DataType {
     }
 }
 
-fn flatten<const N: usize>(values: &[i64], encode: impl Fn(&i64) -> [u8; N]) -> Vec<u8> {
-    let mut output = Vec::with_capacity(values.len().saturating_mul(N));
+fn checked_flatten<const N: usize>(
+    values: &[i64],
+    encode: impl Fn(i64) -> Option<[u8; N]>,
+) -> Option<Vec<u8>> {
+    let capacity = values.len().checked_mul(N)?;
+    let mut output = Vec::with_capacity(capacity);
     for value in values {
-        output.extend_from_slice(&encode(value));
+        output.extend_from_slice(&encode(*value)?);
     }
-    output
+    Some(output)
 }
 
 fn encoding_error() -> Diagnostic {

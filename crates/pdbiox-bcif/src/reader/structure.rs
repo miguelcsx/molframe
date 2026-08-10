@@ -53,5 +53,5 @@ pub fn read_with_document(
 }
 
 #[cfg(test)]
-#[path = "reader_tests.rs"]
+#[path = "structure_tests.rs"]
 mod tests;

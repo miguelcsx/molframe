@@ -2,6 +2,7 @@
 
 use crate::container::{EncodedBlock, EncodedCategory, EncodedColumn, EncodedFile};
 use crate::{EncodedData, encode_floats, encode_integers, encode_strings};
+use num_traits::ToPrimitive;
 use pdbiox_cif::{CifValue, Document};
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::io::InputBuffer;
@@ -61,7 +62,25 @@ pub fn write_document(document: &Document) -> Result<Vec<u8>, Diagnostic> {
 ///
 /// Returns canonical projection, parsing, or `BinaryCIF` encoding diagnostics.
 pub fn write_structure(structure: &Structure) -> Result<Vec<u8>, Vec<Diagnostic>> {
-    let text = pdbiox_cif::write_canonical(structure);
+    write_structure_with_options(structure, &pdbiox_cif::CifWriteOptions::new())
+}
+
+/// Writes a structure with explicit canonical CIF identifier decisions.
+///
+/// # Errors
+///
+/// Returns canonical projection, parsing, or `BinaryCIF` encoding diagnostics.
+pub fn write_structure_with_options(
+    structure: &Structure,
+    options: &pdbiox_cif::CifWriteOptions,
+) -> Result<Vec<u8>, Vec<Diagnostic>> {
+    let text = pdbiox_cif::write_canonical_with_options(structure, options).map_err(|error| {
+        vec![
+            Diagnostic::new(Code::E4105)
+                .with_message("structure cannot be projected to canonical BinaryCIF")
+                .with_context("reason", error.to_string()),
+        ]
+    })?;
     let input = InputBuffer::from_bytes(text.into_bytes());
     let (document, findings) = pdbiox_cif::parse(&input)?;
     if !findings.is_empty() {
@@ -87,7 +106,7 @@ fn encode_column<'a>(
         ColumnKind::Float => {
             let mut output = Vec::with_capacity(values.len());
             for value in &values {
-                output.push(float_value(value, &mut mask));
+                output.push(float_value(value, &mut mask)?);
             }
             encode_floats(&output)?
         }
@@ -158,23 +177,23 @@ fn integer_value(value: &CifValue, mask: &mut Vec<i64>) -> i64 {
     }
 }
 
-fn float_value(value: &CifValue, mask: &mut Vec<i64>) -> f64 {
+fn float_value(value: &CifValue, mask: &mut Vec<i64>) -> Result<f64, Diagnostic> {
     match value {
         CifValue::Integer(value) => {
             mask.push(0);
-            *value as f64
+            value.to_f64().ok_or_else(type_error)
         }
         CifValue::Float(value) => {
             mask.push(0);
-            *value
+            Ok(*value)
         }
         CifValue::Inapplicable => {
             mask.push(1);
-            0.0
+            Ok(0.0)
         }
         _ => {
             mask.push(2);
-            0.0
+            Ok(0.0)
         }
     }
 }
@@ -206,5 +225,5 @@ fn encode_error(error: &rmp_serde::encode::Error) -> Diagnostic {
 }
 
 #[cfg(test)]
-#[path = "writer_tests.rs"]
+#[path = "document_tests.rs"]
 mod tests;

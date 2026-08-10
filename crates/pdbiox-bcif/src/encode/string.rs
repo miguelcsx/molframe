@@ -28,7 +28,10 @@ pub fn encode_strings(values: &[String]) -> Result<EncodedData, Diagnostic> {
     }
 
     let mut string_data = String::new();
-    let mut offsets = Vec::with_capacity(dictionary.len().saturating_add(1));
+    let Some(offset_capacity) = dictionary.len().checked_add(1) else {
+        return Err(length_error());
+    };
+    let mut offsets = Vec::with_capacity(offset_capacity);
     offsets.push(0);
     for value in dictionary.keys() {
         string_data.push_str(value);

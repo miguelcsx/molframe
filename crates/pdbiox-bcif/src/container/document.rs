@@ -52,13 +52,17 @@ impl BinaryDocument {
     ///
     /// Returns a registered encoding or length diagnostic for malformed input.
     pub fn parse(bytes: &[u8], limits: Limits) -> Result<Self, Diagnostic> {
-        if bytes.len() as u64 > limits.decompressed_bytes {
+        let byte_count =
+            u64::try_from(bytes.len()).map_err(|_| Limits::exceeded("input bytes", bytes.len()))?;
+        if byte_count > limits.decompressed_bytes {
             return Err(Limits::exceeded("input bytes", bytes.len()));
         }
         let file: EncodedFile =
             rmp_serde::from_slice(bytes).map_err(|error| container_error(&error))?;
         for category in file.data_blocks.iter().flat_map(|block| &block.categories) {
-            if category.row_count as u64 > limits.rows_per_category {
+            let row_count = u64::try_from(category.row_count)
+                .map_err(|_| Limits::exceeded("rows per category", category.row_count))?;
+            if row_count > limits.rows_per_category {
                 return Err(Limits::exceeded("rows per category", category.row_count));
             }
         }
