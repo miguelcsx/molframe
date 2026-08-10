@@ -34,12 +34,80 @@ fn a_dipeptide_reads_with_the_hierarchy_the_file_describes() {
 }
 
 #[test]
+fn atom_records_do_not_invent_polymer_chemistry() {
+    let (structure, _) = parse(DIPEPTIDE);
+    let Some(chain) = structure.data().chains().next() else {
+        panic!("chain absent");
+    };
+
+    assert_eq!(
+        chain.polymer_kind(),
+        pdbiox_core::topology::PolymerKind::None
+    );
+}
+
+#[test]
 fn the_entry_identifier_and_cell_are_read_from_their_own_records() {
     let (structure, _) = parse(DIPEPTIDE);
     assert_eq!(structure.data().entry.id.as_deref(), Some("1ABC"));
     let cell = structure.data().cell;
     assert!(cell.is_some_and(|cell| (cell.lengths[0] - 61.5).abs() < 1e-6));
     assert!(cell.is_some_and(|cell| (cell.angles[2] - 120.0).abs() < 1e-6));
+}
+
+#[test]
+fn every_format_33_metadata_record_is_preserved_in_order() {
+    use crate::{PdbHeadersExt, PdbOptions, write};
+    use std::fmt::Write as _;
+
+    let names = [
+        "HEADER", "OBSLTE", "TITLE", "SPLIT", "CAVEAT", "COMPND", "SOURCE", "KEYWDS", "EXPDTA",
+        "NUMMDL", "MDLTYP", "AUTHOR", "REVDAT", "SPRSDE", "JRNL", "REMARK", "DBREF", "DBREF1",
+        "DBREF2", "SEQADV", "SEQRES", "MODRES", "HET", "HETNAM", "HETSYN", "FORMUL", "HELIX",
+        "SHEET", "SSBOND", "LINK", "CISPEP", "SITE", "CRYST1", "ORIGX1", "ORIGX2", "ORIGX3",
+        "SCALE1", "SCALE2", "SCALE3", "MTRIX1", "MTRIX2", "MTRIX3",
+    ];
+    let mut source = String::new();
+    for name in names {
+        match name {
+            "HEADER" => source
+                .push_str("HEADER    TEST CLASSIFICATION                     01-JAN-00   1ABC\n"),
+            "CRYST1" => {
+                source.push_str("CRYST1   10.000   10.000   10.000  90.00  90.00  90.00 P 1\n");
+            }
+            _ => {
+                let _ = writeln!(source, "{name:<6}    deposited value");
+            }
+        }
+    }
+    source.push_str(
+        "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 10.00           C\nEND\n",
+    );
+    let (structure, _) = parse(&source);
+    let Some(headers) = structure.pdb_headers() else {
+        panic!("metadata extension absent");
+    };
+    let actual: Vec<_> = headers
+        .records()
+        .iter()
+        .map(crate::PdbHeaderRecord::name)
+        .collect();
+    assert_eq!(actual, names);
+    assert_eq!(headers.classification(), Some("TEST CLASSIFICATION"));
+    assert_eq!(headers.deposition_date(), Some("01-JAN-00"));
+
+    let written = write(&structure, &PdbOptions::new())
+        .unwrap_or_else(|findings| panic!("write failed: {findings:?}"));
+    let (round_trip, _) = parse(&written);
+    let Some(round_trip_headers) = round_trip.pdb_headers() else {
+        panic!("round-trip metadata extension absent");
+    };
+    let round_trip_names: Vec<_> = round_trip_headers
+        .records()
+        .iter()
+        .map(crate::PdbHeaderRecord::name)
+        .collect();
+    assert_eq!(round_trip_names, names);
 }
 
 #[test]
@@ -262,7 +330,13 @@ ATOM      1  CA  GLY A   1      1.000   1.000   1.000  1.00  0.00
 HETATM    2 ZN    ZN A 100      2.000   2.000   2.000  1.00  0.00
 END
 ";
-    let (structure, findings) = parse(text);
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options = ReadOptions::new()
+        .missing_element_policy(pdbiox_core::MissingElementPolicy::InferFromAtomName);
+    let (structure, findings) = match read(&input, &options) {
+        Ok(result) => result,
+        Err(findings) => panic!("read failed: {findings:?}"),
+    };
     let elements: Vec<_> = structure
         .data()
         .atoms()
@@ -276,6 +350,20 @@ END
     );
     assert!(findings.iter().all(|finding| finding.code() == Code::W3203));
     assert_eq!(findings.len(), 2);
+}
+
+#[test]
+fn a_missing_element_is_unknown_without_an_explicit_inference_policy() {
+    let text = "\
+ATOM      1  CA  GLY A   1      1.000   1.000   1.000  1.00  0.00
+END
+";
+    let (structure, findings) = parse(text);
+    assert_eq!(
+        structure.data().atoms().next().and_then(AtomRef::element),
+        Some(pdbiox_core::Element::UNKNOWN)
+    );
+    assert!(findings.iter().any(|finding| finding.code() == Code::W3203));
 }
 
 #[test]

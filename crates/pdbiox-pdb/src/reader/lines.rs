@@ -3,6 +3,7 @@
 //! The position is a by-product of the walk rather than something reconstructed
 //! afterwards, so attaching an exact location to a finding costs nothing.
 
+use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::span::Position;
 
 /// A line of the file, with where it began.
@@ -27,9 +28,9 @@ impl<'a> Lines<'a> {
 }
 
 impl<'a> Iterator for Lines<'a> {
-    type Item = Line<'a>;
+    type Item = Result<Line<'a>, Diagnostic>;
 
-    fn next(&mut self) -> Option<Line<'a>> {
+    fn next(&mut self) -> Option<Self::Item> {
         if self.remaining.is_empty() {
             return None;
         }
@@ -39,10 +40,21 @@ impl<'a> Iterator for Lines<'a> {
             None => (self.remaining, ""),
         };
         self.remaining = rest;
-        self.at = Position::new(at.byte_offset + line.len() as u32 + 1, at.line + 1, 1);
-        Some(Line {
+        let advance = u32::try_from(line.len())
+            .ok()
+            .and_then(|length| length.checked_add(1));
+        let Some((byte_offset, line_number)) = advance
+            .and_then(|advance| at.byte_offset.checked_add(advance))
+            .zip(at.line.checked_add(1))
+        else {
+            self.remaining = "";
+            return Some(Err(Diagnostic::new(Code::E1202)
+                .with_message("PDB source position exceeds the supported range")));
+        };
+        self.at = Position::new(byte_offset, line_number, 1);
+        Some(Ok(Line {
             text: line.trim_end_matches('\r'),
             at,
-        })
+        }))
     }
 }

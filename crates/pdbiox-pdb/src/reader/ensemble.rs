@@ -2,6 +2,7 @@
 
 use super::lines::Lines;
 use crate::fixed;
+use pdbiox_core::diagnostic::{Code, Diagnostic};
 
 /// A model selected by its deposition order and number.
 #[derive(Clone, Copy)]
@@ -16,39 +17,44 @@ struct Candidate<'a> {
 }
 
 /// Models that require independent structures, or `None` for dense storage.
-pub(super) fn ragged_models(text: &str, only_first: bool) -> Option<Vec<ModelSpec>> {
+pub(super) fn ragged_models(
+    text: &str,
+    only_first: bool,
+) -> Result<Option<Vec<ModelSpec>>, Diagnostic> {
     if only_first {
-        return None;
+        return Ok(None);
     }
-    let candidates = candidates(text);
-    let first = candidates.first()?;
+    let candidates = candidates(text)?;
+    let Some(first) = candidates.first() else {
+        return Ok(None);
+    };
     if candidates.len() < 2
         || candidates
             .iter()
             .skip(1)
             .all(|candidate| same_atoms(first, candidate))
     {
-        return None;
+        return Ok(None);
     }
-    Some(candidates.iter().map(|candidate| candidate.spec).collect())
+    Ok(Some(
+        candidates.iter().map(|candidate| candidate.spec).collect(),
+    ))
 }
 
-fn candidates(text: &str) -> Vec<Candidate<'_>> {
+fn candidates(text: &str) -> Result<Vec<Candidate<'_>>, Diagnostic> {
     let mut candidates = Vec::new();
     let mut current = None;
     for line in Lines::new(text) {
+        let line = line?;
         match fixed::record(line.text) {
             "MODEL" => {
                 let ordinal = candidates.len();
-                let number = match fixed::integer(line.text, 11, 14)
+                let number = fixed::integer(line.text, 11, 14)
                     .and_then(|value| i32::try_from(value).ok())
-                {
-                    Some(number) => number,
-                    None => match i32::try_from(ordinal + 1) {
-                        Ok(number) => number,
-                        Err(_) => i32::MAX,
-                    },
-                };
+                    .ok_or_else(|| {
+                        Diagnostic::new(Code::E1202)
+                            .with_message("MODEL serial is absent or outside the supported range")
+                    })?;
                 candidates.push(Candidate {
                     spec: ModelSpec { ordinal, number },
                     atoms: Vec::new(),
@@ -74,7 +80,7 @@ fn candidates(text: &str) -> Vec<Candidate<'_>> {
             _ => {}
         }
     }
-    candidates
+    Ok(candidates)
 }
 
 fn same_atoms(left: &Candidate<'_>, right: &Candidate<'_>) -> bool {

@@ -57,12 +57,15 @@ fn read_as(input: &InputBuffer, options: &ReadOptions, variant: Format) -> ReadR
         ]);
     };
 
-    if let Some(models) = ragged_models(text, options.only_first_model) {
-        return read_ragged(text, options, &models, variant);
+    match ragged_models(text, options.only_first_model) {
+        Ok(Some(models)) => return read_ragged(text, options, &models, variant),
+        Ok(None) => {}
+        Err(finding) => return Err(vec![finding]),
     }
 
     let mut state = ReadState::new(options, variant);
     for line in Lines::new(text) {
+        let line = line.map_err(|finding| vec![finding])?;
         state.line(&line);
     }
     state.finish()
@@ -86,9 +89,12 @@ fn read_ragged(
     if let Some(first) = models.first() {
         data.entry = first.data().entry.clone();
         data.cell = first.data().cell;
+        data.extensions = first.data().extensions.clone();
     }
     for spec in specs {
-        data.topology.models.push(spec.number, 0..0);
+        if data.topology.models.push(spec.number, 0..0).is_err() {
+            findings.push(Diagnostic::new(Code::E3001));
+        }
     }
     data.coords = CoordinateStore::Ragged { models };
     options.finish(Structure::new(data), findings)
@@ -104,6 +110,7 @@ fn read_selected_model(
     let mut ordinal = 0;
     let mut current = None;
     for line in Lines::new(text) {
+        let line = line.map_err(|finding| vec![finding])?;
         match fixed::record(line.text) {
             "MODEL" => {
                 current = Some(ordinal);
@@ -119,7 +126,9 @@ fn read_selected_model(
                 current = None;
             }
             "ATOM" | "HETATM" | "TER" if current == Some(target) => state.line(&line),
-            "HEADER" | "TITLE" | "CRYST1" | "CONECT" => state.line(&line),
+            record if crate::header::is_metadata_record(record) || record == "CONECT" => {
+                state.line(&line);
+            }
             _ => {}
         }
     }
