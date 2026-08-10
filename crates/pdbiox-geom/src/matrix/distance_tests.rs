@@ -3,7 +3,9 @@ use super::*;
 #[test]
 fn a_square_matrix_is_symmetric_with_an_exact_zero_diagonal() {
     let points = [[0.0, 0.0, 0.0], [3.0, 4.0, 0.0], [0.0, 0.0, 12.0]];
-    let matrix = distance_matrix(&points);
+    let Ok(matrix) = distance_matrix(&points) else {
+        panic!("small square matrix must fit");
+    };
     assert_eq!((matrix.rows(), matrix.columns()), (3, 3));
     assert_eq!(matrix.get(0, 0), Some(0.0));
     assert_eq!(matrix.get(0, 1), Some(5.0));
@@ -16,7 +18,9 @@ fn a_square_matrix_is_symmetric_with_an_exact_zero_diagonal() {
 fn a_rectangular_matrix_keeps_row_major_shape_and_order() {
     let left = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
     let right = [[0.0, 1.0, 0.0]];
-    let matrix = distance_matrix_between(&left, &right);
+    let Ok(matrix) = distance_matrix_between(&left, &right) else {
+        panic!("small rectangular matrix must fit");
+    };
     assert_eq!((matrix.rows(), matrix.columns()), (2, 1));
     let expected = [1.0, 2.0f64.sqrt()];
     assert!(

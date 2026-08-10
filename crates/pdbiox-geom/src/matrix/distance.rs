@@ -5,6 +5,27 @@
 //! than one allocation per row.
 
 use crate::distance;
+use std::fmt;
+
+/// Why a dense distance matrix could not be materialised.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatrixError {
+    /// The requested dimensions cannot be represented by `usize`.
+    SizeOverflow,
+    /// The contiguous matrix allocation was refused.
+    AllocationFailed,
+}
+
+impl fmt::Display for MatrixError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SizeOverflow => formatter.write_str("distance matrix dimensions overflow usize"),
+            Self::AllocationFailed => formatter.write_str("distance matrix allocation was refused"),
+        }
+    }
+}
+
+impl std::error::Error for MatrixError {}
 
 /// A dense row-major matrix of distances in ångström.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,10 +67,20 @@ impl DistanceMatrix {
 /// The diagonal is exactly zero and the upper triangle is mirrored into the
 /// lower triangle, avoiding duplicate calculations. Runs in `O(n²)` time and
 /// space.
-#[must_use]
-pub fn distance_matrix(positions: &[[f32; 3]]) -> DistanceMatrix {
+///
+/// # Errors
+///
+/// Returns [`MatrixError::SizeOverflow`] when the square element count cannot
+/// be represented, or [`MatrixError::AllocationFailed`] when its single
+/// contiguous allocation is refused.
+pub fn distance_matrix(positions: &[[f32; 3]]) -> Result<DistanceMatrix, MatrixError> {
     let size = positions.len();
-    let mut values = vec![0.0; size.saturating_mul(size)];
+    let count = size.checked_mul(size).ok_or(MatrixError::SizeOverflow)?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| MatrixError::AllocationFailed)?;
+    values.resize(count, 0.0);
     for row in 0..size {
         for column in row + 1..size {
             let value = distance(positions[row], positions[column]);
@@ -57,33 +88,48 @@ pub fn distance_matrix(positions: &[[f32; 3]]) -> DistanceMatrix {
             values[column * size + row] = value;
         }
     }
-    DistanceMatrix {
+    Ok(DistanceMatrix {
         rows: size,
         columns: size,
         values,
-    }
+    })
 }
 
 /// Computes every distance between two position sets.
 ///
 /// Runs in `O(left × right)` time and space. An empty input produces a matrix
 /// with the corresponding zero dimension and no allocation.
-#[must_use]
-pub fn distance_matrix_between(left: &[[f32; 3]], right: &[[f32; 3]]) -> DistanceMatrix {
+///
+/// # Errors
+///
+/// Returns [`MatrixError::SizeOverflow`] when the rectangular element count
+/// cannot be represented, or [`MatrixError::AllocationFailed`] when its single
+/// contiguous allocation is refused.
+pub fn distance_matrix_between(
+    left: &[[f32; 3]],
+    right: &[[f32; 3]],
+) -> Result<DistanceMatrix, MatrixError> {
     let columns = right.len();
-    let mut values = Vec::with_capacity(left.len().saturating_mul(columns));
+    let count = left
+        .len()
+        .checked_mul(columns)
+        .ok_or(MatrixError::SizeOverflow)?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| MatrixError::AllocationFailed)?;
     for left_position in left {
         for right_position in right {
             values.push(distance(*left_position, *right_position));
         }
     }
-    DistanceMatrix {
+    Ok(DistanceMatrix {
         rows: left.len(),
         columns,
         values,
-    }
+    })
 }
 
 #[cfg(test)]
-#[path = "matrix_tests.rs"]
+#[path = "distance_tests.rs"]
 mod tests;
