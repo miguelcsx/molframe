@@ -21,7 +21,9 @@ pub fn text(line: &str, from: usize, to: usize) -> &str {
 /// before they are interpreted.
 #[must_use]
 pub fn raw(line: &str, from: usize, to: usize) -> &str {
-    let start = from.saturating_sub(1);
+    let Some(start) = from.checked_sub(1) else {
+        return "";
+    };
     let end = to.min(line.len());
     if start >= end {
         return "";
@@ -61,5 +63,5 @@ pub fn real(line: &str, from: usize, to: usize) -> Option<f64> {
 }
 
 #[cfg(test)]
-#[path = "fixed_tests.rs"]
+#[path = "fields_tests.rs"]
 mod tests;
