@@ -18,6 +18,12 @@ surface
 traj
 compare
 validate
+adapters
+analysis
+modelcif
+seq
+fx
+audit
 spec
 repo
 ci
