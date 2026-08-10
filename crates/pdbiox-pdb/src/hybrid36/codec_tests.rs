@@ -76,8 +76,8 @@ fn the_encoder_says_when_a_value_still_will_not_fit() {
 
 #[test]
 fn a_value_inside_the_decimal_range_never_needs_the_extended_scheme() {
-    assert!(!needs_hybrid36(99_999, 5));
-    assert!(needs_hybrid36(100_000, 5));
-    assert!(!needs_hybrid36(9_999, 4));
-    assert!(needs_hybrid36(10_000, 4));
+    assert!(!needs_encoding(99_999, 5));
+    assert!(needs_encoding(100_000, 5));
+    assert!(!needs_encoding(9_999, 4));
+    assert!(needs_encoding(10_000, 4));
 }

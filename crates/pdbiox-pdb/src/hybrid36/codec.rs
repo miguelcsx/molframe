@@ -86,7 +86,7 @@ pub fn encode(value: i64, width: u32) -> Option<String> {
 
 /// Returns true when a value needs hybrid-36 to fit `width` columns.
 #[must_use]
-pub fn needs_hybrid36(value: i64, width: u32) -> bool {
+pub fn needs_encoding(value: i64, width: u32) -> bool {
     10i64.checked_pow(width).is_some_and(|range| value >= range)
 }
 
@@ -118,9 +118,9 @@ fn from_base36(text: &str, lower: bool) -> Option<i64> {
 
 fn to_base36(mut value: i64, width: u32, lower: bool) -> Option<String> {
     let alphabet = if lower { LOWER } else { UPPER };
-    let mut digits = vec![b'0'; width as usize];
+    let mut digits = vec![b'0'; usize::try_from(width).ok()?];
     for slot in digits.iter_mut().rev() {
-        *slot = *alphabet.get((value % 36) as usize)?;
+        *slot = *alphabet.get(usize::try_from(value % 36).ok()?)?;
         value /= 36;
     }
     if value != 0 {
@@ -130,5 +130,5 @@ fn to_base36(mut value: i64, width: u32, lower: bool) -> Option<String> {
 }
 
 #[cfg(test)]
-#[path = "hybrid36_tests.rs"]
+#[path = "codec_tests.rs"]
 mod tests;
