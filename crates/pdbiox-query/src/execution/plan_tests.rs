@@ -14,7 +14,8 @@ ATOM 2 O O  GLY A 1 1 0 0\n";
 #[test]
 fn binding_resolves_globs_to_symbols_and_matches_direct_evaluation() {
     let structure = structure();
-    let policy = AnalysisPolicy::default();
+    let policy =
+        AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label);
     let query = match Query::compile("name C*") {
         Ok(query) => query,
         Err(findings) => panic!("compile failed: {findings:?}"),

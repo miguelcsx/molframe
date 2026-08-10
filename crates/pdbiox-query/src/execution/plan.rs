@@ -36,17 +36,27 @@ pub(crate) enum PhysicalExpr {
     Logical(Expr),
 }
 
-pub(crate) fn bind(
-    logical: &LogicalPlan,
+/// Binds an expression directly without first cloning it into `LogicalPlan`.
+///
+/// This path allows `Query::plan` to eliminate one complete AST clone while
+/// retaining exactly the same physical-plan representation.
+pub(crate) fn bind_expr(
+    expr: &Expr,
     structure: &Structure,
     policy: &AnalysisPolicy,
     mut warnings: Vec<Diagnostic>,
 ) -> PhysicalQuery {
-    let expr = lower(&logical.0, structure, policy, &mut warnings);
+    let expr = lower(expr, structure, policy, &mut warnings);
+
     warnings.sort_by_key(Diagnostic::code);
+
     PhysicalQuery { expr, warnings }
 }
 
+/// Lowers one logical expression into a structure-bound physical expression.
+///
+/// Constant branches are folded and supported symbol memberships are resolved
+/// against the structure dictionary exactly once.
 fn lower(
     expr: &Expr,
     structure: &Structure,
@@ -78,6 +88,7 @@ fn lower(
         {
             let column = crate::predicate::resolved_column(*column, policy);
             let symbols = resolve_symbols(structure, values);
+
             if symbols.is_empty() {
                 warnings.push(Diagnostic::new(Code::W4003));
                 PhysicalExpr::None
@@ -89,6 +100,10 @@ fn lower(
     }
 }
 
+/// Folds and cost-orders one binary conjunction.
+///
+/// Existing ordering semantics are retained: operands are exchanged only when
+/// the right-hand side has strictly lower estimated cost.
 fn conjunction(left: PhysicalExpr, right: PhysicalExpr) -> PhysicalExpr {
     match (left, right) {
         (PhysicalExpr::None, _) | (_, PhysicalExpr::None) => PhysicalExpr::None,
@@ -101,6 +116,7 @@ fn conjunction(left: PhysicalExpr, right: PhysicalExpr) -> PhysicalExpr {
     }
 }
 
+/// Constant-folds one binary disjunction.
 fn disjunction(left: PhysicalExpr, right: PhysicalExpr) -> PhysicalExpr {
     match (left, right) {
         (PhysicalExpr::All, _) | (_, PhysicalExpr::All) => PhysicalExpr::All,
@@ -110,6 +126,10 @@ fn disjunction(left: PhysicalExpr, right: PhysicalExpr) -> PhysicalExpr {
     }
 }
 
+/// Returns a small relative execution-cost class for plan ordering.
+///
+/// Runtime and space are `O(1)`.
+#[inline]
 fn cost(expr: &PhysicalExpr) -> u8 {
     match expr {
         PhysicalExpr::None | PhysicalExpr::All => 0,
@@ -120,6 +140,9 @@ fn cost(expr: &PhysicalExpr) -> u8 {
     }
 }
 
+/// Returns whether `column` can be lowered to dictionary symbol membership.
+///
+/// Explicit identifier-policy restrictions are preserved.
 fn symbol_column(column: Column, policy: &AnalysisPolicy) -> bool {
     if policy.identifiers == pdbiox_core::contract::Namespace::Explicit
         && matches!(
@@ -129,6 +152,7 @@ fn symbol_column(column: Column, policy: &AnalysisPolicy) -> bool {
     {
         return false;
     }
+
     matches!(
         crate::predicate::resolved_column(column, policy),
         Column::LabelChain
@@ -145,19 +169,48 @@ fn symbol_column(column: Column, policy: &AnalysisPolicy) -> bool {
     )
 }
 
+/// Resolves membership patterns against the structure symbol dictionary.
+///
+/// Plain literal patterns use direct dictionary lookup and therefore avoid a
+/// complete dictionary scan. Only true glob/escape patterns are compiled and
+/// scanned across dictionary entries.
 fn resolve_symbols(structure: &Structure, values: &[Box<str>]) -> BTreeSet<SymbolId> {
-    let patterns: Vec<Glob> = values.iter().map(|value| Glob::new(value)).collect();
-    structure
-        .data()
-        .dictionary
-        .iter()
-        .filter_map(|(symbol, text)| {
-            patterns
-                .iter()
-                .any(|pattern| pattern.matches(text))
-                .then_some(symbol)
-        })
-        .collect()
+    let dictionary = &structure.data().dictionary;
+    let mut symbols = BTreeSet::new();
+    let mut patterns = Vec::new();
+
+    for value in values {
+        if is_plain_literal(value) {
+            if let Some(symbol) = dictionary.get(value) {
+                symbols.insert(symbol);
+            }
+        } else {
+            patterns.push(Glob::new(value));
+        }
+    }
+
+    if patterns.is_empty() {
+        return symbols;
+    }
+
+    for (symbol, text) in dictionary.iter() {
+        if patterns.iter().any(|pattern| pattern.matches(text)) {
+            symbols.insert(symbol);
+        }
+    }
+
+    symbols
+}
+
+/// Returns whether `pattern` has no glob or escape metacharacters.
+///
+/// Such patterns are semantically exact literals and can be resolved through a
+/// direct dictionary lookup.
+#[inline]
+fn is_plain_literal(pattern: &str) -> bool {
+    !pattern
+        .bytes()
+        .any(|byte| matches!(byte, b'*' | b'?' | b'[' | b'\\'))
 }
 
 #[cfg(test)]
