@@ -1,0 +1,109 @@
+//! Steric clashes: atoms closer than their van der Waals radii allow.
+//!
+//! Two non-bonded atoms clash when the sum of their van der Waals radii exceeds
+//! the distance between them by more than a tolerance. The tolerance keeps the
+//! ordinary give of a contact from being reported as an error while still
+//! catching the overlaps that signal a modelling mistake.
+//!
+//! Directly bonded atoms are never a clash — they are supposed to overlap — so
+//! they are excluded whenever bond information is available. The candidate pairs
+//! come from the shared spatial search bounded by the widest radius in play.
+
+use pdbiox_chem::{RadiusSet, vdw_radius};
+use pdbiox_core::index::AtomIndex;
+use pdbiox_core::selection::AtomSelection;
+use pdbiox_core::structure::Structure;
+use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within};
+
+use crate::numeric::f64_to_f32;
+
+/// Two atoms overlapping more than the tolerance allows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Clash {
+    /// The lower-indexed atom.
+    pub first: AtomIndex,
+    /// The higher-indexed atom.
+    pub second: AtomIndex,
+    /// How far the van der Waals spheres interpenetrate, in ångström.
+    pub overlap: f32,
+}
+
+/// Finds steric clashes under a van der Waals radius set.
+///
+/// `tolerance` is the overlap tolerated before a pair counts as a clash; a
+/// common choice is about 0.4 Å. Atoms whose element has no radius in the set
+/// take no part. Results are sorted by `(first, second)`.
+///
+/// Runs in `O(atoms · local density)` time.
+///
+/// # Errors
+///
+/// Returns [`SpatialError`] from the neighbour search.
+pub fn clashes(
+    structure: &Structure,
+    tolerance: f32,
+    radius_set: RadiusSet,
+    backend: SpatialBackend,
+) -> Result<Vec<Clash>, SpatialError> {
+    let count = structure.atom_count() as usize;
+    let mut radii = vec![f32::NAN; count];
+    let mut widest = 0.0f32;
+    for atom in structure.data().atoms() {
+        let Some(element) = atom.element() else {
+            continue;
+        };
+        if let Some(radius) = vdw_radius(element, radius_set) {
+            if let Some(slot) = radii.get_mut(atom.index().as_usize()) {
+                *slot = radius;
+            }
+            widest = widest.max(radius);
+        }
+    }
+
+    let positions = structure.positions();
+    let all = AtomSelection::from_sorted((0..structure.atom_count()).collect());
+    let cutoff = 2.0 * widest - tolerance;
+    if cutoff <= 0.0 {
+        return Ok(Vec::new());
+    }
+    let pairs = pairs_within(positions, &all, &all, cutoff, backend, None)?;
+
+    let bonds = structure.data().bonds.adjacency(structure.atom_count());
+    let mut result = Vec::new();
+    for pair in pairs {
+        let first = AtomIndex::new(pair.first);
+        let second = AtomIndex::new(pair.second);
+        let (Some(&radius_a), Some(&radius_b)) = (
+            radii.get(pair.first as usize),
+            radii.get(pair.second as usize),
+        ) else {
+            continue;
+        };
+        if radius_a.is_nan() || radius_b.is_nan() {
+            continue;
+        }
+        let (Some(&a), Some(&b)) = (
+            positions.get(pair.first as usize),
+            positions.get(pair.second as usize),
+        ) else {
+            continue;
+        };
+        let overlap = (radius_a + radius_b) - f64_to_f32(pdbiox_geom::distance(a, b));
+        if overlap <= tolerance {
+            continue;
+        }
+        if bonds.neighbours(first).binary_search(&second).is_ok() {
+            continue;
+        }
+        result.push(Clash {
+            first,
+            second,
+            overlap,
+        });
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+#[path = "clash_tests.rs"]
+mod tests;
