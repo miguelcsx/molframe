@@ -1,6 +1,6 @@
 //! Canonical database sequence-reference output.
 
-use crate::write::quote;
+use super::value::quote_text;
 use pdbiox_core::structure::{SEQUENCE_REFERENCES_EXTENSION, SequenceReferences, Structure};
 use std::fmt::Write as _;
 
@@ -32,8 +32,8 @@ _struct_ref.pdbx_seq_one_letter_code\n",
         let _ = writeln!(
             out,
             "{} {} {} {} {} {}",
-            quote(&sequence.id),
-            quote(&sequence.entity_id),
+            quote_text(&sequence.id),
+            quote_text(&sequence.entity_id),
             optional(sequence.database_name.as_deref()),
             optional(sequence.database_code.as_deref()),
             optional(sequence.accession.as_deref()),
@@ -62,8 +62,8 @@ _struct_ref_seq.db_align_end\n",
         let _ = writeln!(
             out,
             "{} {} {} {} {} {} {}",
-            quote(&alignment.id),
-            quote(&alignment.reference_id),
+            quote_text(&alignment.id),
+            quote_text(&alignment.reference_id),
             optional((!chain_ids.is_empty()).then_some(chain_ids.as_str())),
             alignment.canonical[0],
             alignment.canonical[1],
@@ -76,7 +76,7 @@ _struct_ref_seq.db_align_end\n",
 
 fn optional(value: Option<&str>) -> String {
     match value {
-        Some(value) => quote(value),
+        Some(value) => quote_text(value),
         None => "?".to_owned(),
     }
 }

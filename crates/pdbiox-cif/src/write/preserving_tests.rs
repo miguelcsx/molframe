@@ -2,6 +2,7 @@ use super::*;
 use crate::document::{Category, DataBlock};
 use crate::lexer::Quoting;
 use crate::{Document, parse, read};
+use pdbiox_core::Structure;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use proptest::prelude::*;
 
@@ -51,6 +52,17 @@ fn document(text: &str) -> Document {
     }
 }
 
+fn write_canonical(structure: &Structure) -> String {
+    let options = crate::CifWriteOptions::new()
+        .with_block_id("TEST")
+        .with_generated_connection_ids()
+        .with_connection_type_id("covale");
+    match crate::write_canonical_with_options(structure, &options) {
+        Ok(text) => text,
+        Err(error) => panic!("canonical write failed: {error}"),
+    }
+}
+
 #[test]
 fn a_canonical_write_reads_back_to_the_same_structure() {
     let original = structure(SOURCE);
@@ -73,6 +85,22 @@ fn positions_survive_a_canonical_round_trip_to_the_precision_written() {
             );
         }
     }
+}
+
+#[test]
+fn canonical_writing_does_not_fabricate_missing_author_identifiers() {
+    let original = structure(SOURCE);
+    let round_tripped = structure(&write_canonical(&original));
+    let residue = round_tripped.residue(pdbiox_core::index::ResidueIndex::new(0));
+    let atom = round_tripped.atom(pdbiox_core::index::AtomIndex::new(0));
+    assert_eq!(
+        residue.and_then(pdbiox_core::structure::ResidueRef::auth_name),
+        None
+    );
+    assert_eq!(
+        atom.and_then(pdbiox_core::structure::AtomRef::auth_name),
+        None
+    );
 }
 
 #[test]
