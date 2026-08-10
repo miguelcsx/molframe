@@ -45,5 +45,11 @@ fn generation_identity_is_available_to_structure_caches() {
         Err(error) => panic!("build failed: {error}"),
     };
     assert!(list.is_current(CoordinateGeneration::INITIAL));
-    assert!(!list.is_current(CoordinateGeneration::INITIAL.next()));
+    assert!(
+        !list.is_current(
+            CoordinateGeneration::INITIAL
+                .next()
+                .expect("initial generation advances")
+        )
+    );
 }
