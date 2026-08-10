@@ -9,23 +9,41 @@ description = "A batteries-included structural bioinformatics engine"
 
 [dependencies]
 pdbiox-core.workspace = true
+pdbiox-adapters = { workspace = true, optional = true }
+pdbiox-audit = { workspace = true, optional = true }
 pdbiox-bcif = { workspace = true, optional = true }
 pdbiox-cif = { workspace = true, optional = true }
 pdbiox-chem = { workspace = true, optional = true }
 pdbiox-geom = { workspace = true, optional = true }
+pdbiox-fx = { workspace = true, optional = true }
 pdbiox-ic = { workspace = true, optional = true }
 pdbiox-ml = { workspace = true, optional = true }
+pdbiox-modelcif = { workspace = true, optional = true }
 pdbiox-pdb = { workspace = true, optional = true }
 pdbiox-query = { workspace = true, optional = true }
 pdbiox-spatial = { workspace = true, optional = true }
 pdbiox-xtal = { workspace = true, optional = true }
+pdbiox-surface = { workspace = true, optional = true }
+pdbiox-analysis = { workspace = true, optional = true }
+pdbiox-validate = { workspace = true, optional = true }
+pdbiox-seq = { workspace = true, optional = true }
+pdbiox-compare = { workspace = true, optional = true }
+pdbiox-traj = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [features]
-default = ["mmcif", "bcif", "pdb", "geom", "ic", "query", "spatial", "chem", "xtal", "gzip", "zstd"]
+default = ["full"]
 
 # One format per feature, so a caller that reads one does not link the others.
 mmcif = ["dep:pdbiox-cif"]
 bcif = ["mmcif", "dep:pdbiox-bcif"]
+modelcif = ["mmcif", "dep:pdbiox-modelcif"]
 pdb = ["dep:pdbiox-pdb"]
 
 # Geometric kernels.
@@ -34,15 +52,26 @@ ic = ["geom", "dep:pdbiox-ic"]
 query = ["dep:pdbiox-query"]
 spatial = ["query", "dep:pdbiox-spatial"]
 chem = ["dep:pdbiox-chem"]
-arrow = ["dep:pdbiox-ml"]
+ml = ["dep:pdbiox-ml"]
+adapters = ["dep:pdbiox-adapters"]
 xtal = ["dep:pdbiox-xtal", "spatial"]
+
+# Analysis science over the kernels above.
+surface = ["spatial", "dep:pdbiox-surface"]
+analysis = ["spatial", "geom", "chem", "dep:pdbiox-analysis"]
+validate = ["spatial", "geom", "chem", "dep:pdbiox-validate"]
+seq = ["dep:pdbiox-seq"]
+compare = ["geom", "chem", "seq", "dep:pdbiox-compare"]
+traj = ["dep:pdbiox-traj"]
+audit = ["analysis", "dep:pdbiox-audit"]
+fx = ["geom", "chem", "dep:pdbiox-fx"]
 
 # Ways of getting bytes in.
 gzip = ["pdbiox-core/gzip"]
 zstd = ["pdbiox-core/zstd"]
 mmap = ["pdbiox-core/mmap"]
 
-full = ["mmcif", "bcif", "pdb", "geom", "ic", "query", "spatial", "chem", "xtal", "arrow", "gzip", "zstd", "mmap"]
+full = ["mmcif", "bcif", "modelcif", "pdb", "geom", "ic", "query", "spatial", "chem", "xtal", "surface", "analysis", "validate", "seq", "compare", "traj", "audit", "fx", "adapters", "ml", "gzip", "zstd", "mmap"]
 
 [lints]
 workspace = true
