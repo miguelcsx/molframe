@@ -6,6 +6,7 @@
 
 mod atoms;
 mod bonds;
+mod diagnostics;
 mod ensemble;
 mod entry;
 mod keys;

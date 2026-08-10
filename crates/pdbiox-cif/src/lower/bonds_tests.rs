@@ -26,7 +26,12 @@ fn struct_conn_resolves_label_endpoints_order_and_file_provenance() {
 fn canonical_round_trip_keeps_connectivity_order_and_provenance() {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
     let (structure, _) = crate::read(&input, &ReadOptions::new()).expect("fixture reads");
-    let written = crate::write_canonical(&structure);
+    let options = crate::CifWriteOptions::new()
+        .with_block_id("bond")
+        .with_generated_connection_ids()
+        .with_connection_type_id("covale");
+    let written = crate::write_canonical_with_options(&structure, &options)
+        .unwrap_or_else(|error| panic!("write failed: {error}"));
     let input = InputBuffer::from_bytes(written.into_bytes());
     let (round_trip, _) = crate::read(&input, &ReadOptions::new()).expect("output reads");
     assert_eq!(

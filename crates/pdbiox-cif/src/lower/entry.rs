@@ -8,6 +8,7 @@
 use super::atoms::AtomBuilder;
 use super::ensemble::ragged_model_numbers;
 use crate::document::{CifValue, Document};
+use num_traits::ToPrimitive;
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use pdbiox_core::index::EntityIndex;
 use pdbiox_core::io::{ReadOptions, ReadResult};
@@ -55,14 +56,14 @@ fn lower_model(
     let mut findings = Diagnostics::new();
     let mut data = StructureData::empty();
     if !options.only_atomic_coords {
-        read_entry(block, &mut data);
+        read_entry(block, &mut data, &mut findings);
         read_cell(block, &mut data);
     }
     // Entity identity is part of topology rather than optional metadata. It is
     // needed even for a coordinate-only read so chains never become detached
     // from the chemical species declared by the file.
-    read_entities(block, &mut data);
-    let asym_entities = read_asym_entities(block, &mut data);
+    read_entities(block, &mut data, &mut findings);
+    let asym_entities = read_asym_entities(block, &mut data, &mut findings);
 
     let builder = AtomBuilder::new(&mut data, &mut findings, options, &asym_entities);
     let coords = match model {
@@ -104,7 +105,7 @@ fn lower_ragged(
 
     let mut data = StructureData::empty();
     if !options.only_atomic_coords {
-        read_entry(block, &mut data);
+        read_entry(block, &mut data, &mut findings);
         read_cell(block, &mut data);
     }
     for number in model_numbers {
@@ -118,7 +119,9 @@ fn lower_ragged(
             );
             i32::MAX
         };
-        data.topology.models.push(deposited, 0..0);
+        if data.topology.models.push(deposited, 0..0).is_err() {
+            findings.push(Diagnostic::new(Code::E3001));
+        }
     }
     data.coords = CoordinateStore::Ragged { models };
     (Structure::new(data), findings.finish())
@@ -135,6 +138,7 @@ pub(super) struct AsymEntity {
 fn read_asym_entities(
     block: &crate::document::DataBlock,
     data: &mut StructureData,
+    findings: &mut Diagnostics,
 ) -> Vec<AsymEntity> {
     let Some(asym) = block.category("struct_asym") else {
         return Vec::new();
@@ -153,14 +157,19 @@ fn read_asym_entities(
         ) else {
             continue;
         };
-        let entity = match data.topology.entities.find_by_id(entity_id) {
-            Some(entity) => entity,
-            None => data.topology.entities.push(
+        let entity = if let Some(entity) = data.topology.entities.find_by_id(entity_id) {
+            entity
+        } else {
+            let Ok(entity) = data.topology.entities.push(
                 entity_id,
                 EntityKind::Unknown,
                 OptionalSymbol::NONE,
                 &[],
-            ),
+            ) else {
+                findings.push(Diagnostic::new(Code::E3001));
+                continue;
+            };
+            entity
         };
         mappings.push(AsymEntity { asym_id, entity });
     }
@@ -168,7 +177,11 @@ fn read_asym_entities(
 }
 
 /// Reads what the entry says about itself.
-fn read_entry(block: &crate::document::DataBlock, data: &mut StructureData) {
+fn read_entry(
+    block: &crate::document::DataBlock,
+    data: &mut StructureData,
+    findings: &mut Diagnostics,
+) {
     if let Some(entry) = block.category("entry")
         && let Some(id) = entry.text("id", 0)
     {
@@ -190,7 +203,14 @@ fn read_entry(block: &crate::document::DataBlock, data: &mut StructureData) {
             .value("ls_d_res_high", 0)
             .and_then(CifValue::as_float)
     {
-        data.entry.resolution = Some(resolution as f32);
+        match resolution.to_f32() {
+            Some(resolution) => data.entry.resolution = Some(resolution),
+            None => findings.push(
+                Diagnostic::new(Code::E1202)
+                    .with_message("resolution is outside the supported floating-point range")
+                    .in_category("refine"),
+            ),
+        }
     }
     if let Some(method) = block.category("exptl")
         && let Some(text) = method.text("method", 0)
@@ -220,7 +240,11 @@ fn read_cell(block: &crate::document::DataBlock, data: &mut StructureData) {
 }
 
 /// Reads the distinct chemical species, and the sequence each should have.
-fn read_entities(block: &crate::document::DataBlock, data: &mut StructureData) {
+fn read_entities(
+    block: &crate::document::DataBlock,
+    data: &mut StructureData,
+    findings: &mut Diagnostics,
+) {
     let Some(entities) = block.category("entity") else {
         return;
     };
@@ -246,9 +270,15 @@ fn read_entities(block: &crate::document::DataBlock, data: &mut StructureData) {
             None => OptionalSymbol::NONE,
         };
         let sequence = canonical_sequence(block, data, entities.identifier("id", row).as_deref());
-        data.topology
+        if data
+            .topology
             .entities
-            .push(id, kind, description, &sequence);
+            .push(id, kind, description, &sequence)
+            .is_err()
+        {
+            findings.push(Diagnostic::new(Code::E3001));
+            return;
+        }
     }
 }
 

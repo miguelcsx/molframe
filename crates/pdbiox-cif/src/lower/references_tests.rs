@@ -75,7 +75,9 @@ fn canonical_writing_preserves_reference_sequences_and_alignments() {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     };
-    let canonical = crate::write_canonical(&structure);
+    let options = crate::CifWriteOptions::new().with_block_id("references");
+    let canonical = crate::write_canonical_with_options(&structure, &options)
+        .unwrap_or_else(|error| panic!("write failed: {error}"));
     let input = InputBuffer::from_bytes(canonical.into_bytes());
     let round_tripped = match crate::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,

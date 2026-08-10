@@ -1,6 +1,7 @@
 //! Explicit connectivity lowering from `struct_conn`.
 
 use crate::document::{Category, CifValue, DataBlock};
+use crate::lower::diagnostics::at_source_row;
 use pdbiox_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use pdbiox_core::index::AtomIndex;
@@ -23,11 +24,10 @@ pub(super) fn read(block: &DataBlock, data: &mut StructureData, findings: &mut D
         let atom_a = endpoint(category, row, 1, &label, &auth);
         let atom_b = endpoint(category, row, 2, &label, &auth);
         let (Some(atom_a), Some(atom_b)) = (atom_a, atom_b) else {
-            findings.push(
-                Diagnostic::new(Code::E3006)
-                    .in_category("struct_conn")
-                    .at_row(row as u32),
-            );
+            findings.push(at_source_row(
+                Diagnostic::new(Code::E3006).in_category("struct_conn"),
+                row,
+            ));
             continue;
         };
         bonds.push(BondRecord {

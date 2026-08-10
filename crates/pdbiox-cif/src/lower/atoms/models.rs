@@ -5,6 +5,7 @@
 //! later models are checked against it before their positions are accepted.
 
 use super::AtomBuilder;
+use crate::lower::diagnostics::at_source_row;
 use crate::parser::Rows;
 use pdbiox_core::chunk::ChunkBuilder;
 use pdbiox_core::diagnostic::{Code, Diagnostic, Severity};
@@ -65,13 +66,13 @@ impl AtomBuilder<'_> {
         if self.signatures.get(self.atom_position as usize) == Some(&signature) {
             return;
         }
-        self.findings.push(
+        self.findings.push(at_source_row(
             Diagnostic::new(Code::E3010)
                 .with_message("a later model does not describe the same atom topology")
                 .with_severity(Severity::Breaking)
-                .in_category("atom_site")
-                .at_row(rows.row() as u32),
-        );
+                .in_category("atom_site"),
+            rows.row(),
+        ));
     }
 
     pub(super) fn verify_frame_len(&mut self) {

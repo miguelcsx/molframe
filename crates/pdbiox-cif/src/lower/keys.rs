@@ -11,9 +11,9 @@
 //!   was modelled; that is one residue with two chemical identities, not two
 //!   residues, and including the code in the key splits it.
 //! - Where the annotations do not distinguish two adjacent groups at all, the
-//!   order the file listed them in decides, and the fallback is reported. Real
-//!   entries exist where consecutive residues carry identical annotations, and a
-//!   reader that trusts the annotations merges them silently.
+//!   caller must either reject the ambiguity or explicitly permit file-order
+//!   inference. Real entries exist where consecutive residues carry identical
+//!   annotations, and a reader that trusts the annotations merges them silently.
 
 use pdbiox_core::optional::OptionalI32;
 

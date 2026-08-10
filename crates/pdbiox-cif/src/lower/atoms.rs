@@ -6,21 +6,24 @@
 //! made here and reported when it was not forced.
 
 mod chains;
+mod finish;
 mod models;
 
 use models::AtomSignature;
 
+use super::diagnostics::at_source_row;
 use super::entry::AsymEntity;
 use super::keys::{Boundary, ResidueKey, boundary};
 use crate::document::Category;
 use crate::parser::Rows;
+use num_traits::ToPrimitive;
 use pdbiox_core::chunk::{AtomRecord, ChunkBuilder};
 use pdbiox_core::column::Presence;
 use pdbiox_core::coords::CoordinateBlock;
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use pdbiox_core::element::Element;
 use pdbiox_core::index::{EntityIndex, ResidueIndex};
-use pdbiox_core::io::ReadOptions;
+use pdbiox_core::io::{AmbiguousResidueBoundaryPolicy, MissingElementPolicy, ReadOptions};
 use pdbiox_core::optional::{OptionalI32, OptionalSymbol};
 use pdbiox_core::structure::{CoordinateStore, StructureData};
 use pdbiox_core::symbol::{AltId, SymbolId};
@@ -49,7 +52,7 @@ pub struct AtomBuilder<'a> {
     atom_position: u32,
     model: i64,
     topology_locked: bool,
-    reported_fallback: bool,
+    reported_boundary_inference: bool,
 }
 
 impl<'a> AtomBuilder<'a> {
@@ -80,7 +83,7 @@ impl<'a> AtomBuilder<'a> {
             atom_position: 0,
             model: i64::MIN,
             topology_locked: false,
-            reported_fallback: false,
+            reported_boundary_inference: false,
         }
     }
 
@@ -121,9 +124,7 @@ impl<'a> AtomBuilder<'a> {
             self.start_model(model);
         }
 
-        let name_text = rows
-            .identifier("label_atom_id")
-            .or_else(|| rows.identifier("auth_atom_id"));
+        let name_text = rows.identifier("label_atom_id");
         let element = self.element_of(rows, name_text.as_deref());
         if self.options.discard_hydrogens && element.is_hydrogen() {
             return;
@@ -133,9 +134,17 @@ impl<'a> AtomBuilder<'a> {
             Some(name) => name,
             None => "",
         });
-        let alt_id = self.alt_of(rows);
+        let Some(alt_id) = self.alt_of(rows) else {
+            self.findings.push(
+                Diagnostic::new(Code::E1901)
+                    .with_message("alternate-location identifier exceeds its encoding"),
+            );
+            return;
+        };
         let key = self.key_of(rows, model);
-        let residue = self.place(rows, &key, atom_name, alt_id);
+        let Some(residue) = self.place(rows, &key, atom_name, alt_id) else {
+            return;
+        };
         let alternate_component_id = self.alternate_component_of(rows, residue);
 
         let position = self.position_of(rows);
@@ -162,6 +171,8 @@ impl<'a> AtomBuilder<'a> {
                 element,
             },
         );
+        let occupancy = self.optional_float(rows, "occupancy", 1.0);
+        let b_factor = self.optional_float(rows, "B_iso_or_equiv", 0.0);
         self.builder.push(AtomRecord {
             position,
             element,
@@ -170,8 +181,8 @@ impl<'a> AtomBuilder<'a> {
             alternate_component_id,
             alt_id,
             residue,
-            occupancy: optional(rows.float("occupancy"), 1.0),
-            b_factor: optional(rows.float("B_iso_or_equiv"), 0.0),
+            occupancy,
+            b_factor,
             formal_charge: match rows.integer("pdbx_formal_charge") {
                 // A charge outside a signed byte is not a formal charge; it is
                 // a misread column, and is recorded as unstated rather than
@@ -197,11 +208,18 @@ impl<'a> AtomBuilder<'a> {
         key: &ResidueKey,
         atom_name: SymbolId,
         alt_id: AltId,
-    ) -> ResidueIndex {
+    ) -> Option<ResidueIndex> {
         if self.topology_locked {
-            return match self.data.topology.residues.containing(self.atom_position) {
-                Some(residue) => residue,
-                None => ResidueIndex::new(self.residue_position.saturating_sub(1)),
+            return if let Some(residue) = self.data.topology.residues.containing(self.atom_position)
+            {
+                Some(residue)
+            } else {
+                self.findings.push(at_source_row(
+                    Diagnostic::new(Code::E3401)
+                        .with_message("a later model has more atoms than the first"),
+                    rows.row(),
+                ));
+                None
             };
         }
 
@@ -212,18 +230,36 @@ impl<'a> AtomBuilder<'a> {
         };
 
         if matches!(decision, Boundary::New | Boundary::NewByFileOrder) {
-            if decision == Boundary::NewByFileOrder && !self.reported_fallback {
-                self.reported_fallback = true;
-                self.findings.push(
-                    Diagnostic::new(Code::W3011)
-                        .in_category("atom_site")
-                        .at_row(rows.row() as u32),
-                );
+            if decision == Boundary::NewByFileOrder {
+                self.report_ambiguous_boundary(rows);
             }
             self.open_residue(rows, key);
         }
         self.names_in_residue.push((atom_name, alt_id));
-        ResidueIndex::new(self.residue_position.saturating_sub(1))
+        let Some(position) = self.residue_position.checked_sub(1) else {
+            self.findings.push(at_source_row(
+                Diagnostic::new(Code::E1901)
+                    .with_message("atom row could not be assigned to a residue"),
+                rows.row(),
+            ));
+            return None;
+        };
+        Some(ResidueIndex::new(position))
+    }
+
+    fn report_ambiguous_boundary(&mut self, rows: &Rows<'_>) {
+        let code = match self.options.ambiguous_residue_boundary_policy {
+            AmbiguousResidueBoundaryPolicy::Reject => Code::E3015,
+            AmbiguousResidueBoundaryPolicy::InferFromFileOrder => Code::W3011,
+        };
+        if code == Code::W3011 && self.reported_boundary_inference {
+            return;
+        }
+        self.reported_boundary_inference = true;
+        self.findings.push(at_source_row(
+            Diagnostic::new(code).in_category("atom_site"),
+            rows.row(),
+        ));
     }
 
     /// Reports an alternate location that carries a different component code.
@@ -244,13 +280,13 @@ impl<'a> AtomBuilder<'a> {
         if existing == comp.as_ref() {
             return OptionalSymbol::NONE;
         }
-        self.findings.push(
+        self.findings.push(at_source_row(
             Diagnostic::new(Code::W3012)
                 .in_category("atom_site")
-                .at_row(rows.row() as u32)
                 .with_context("component", existing.to_owned())
                 .with_context("alternate component", comp.to_string()),
-        );
+            rows.row(),
+        ));
         OptionalSymbol::some(self.intern(&comp))
     }
 
@@ -276,17 +312,26 @@ impl<'a> AtomBuilder<'a> {
         };
         let het = rows.text("group_PDB") == Some("HETATM");
 
-        self.data.topology.residues.push(
-            ResidueRecord {
-                label_comp_id: comp,
-                auth_comp_id: auth_comp,
-                label_seq_id: key.label_seq,
-                auth_seq_id: key.auth_seq,
-                ins_code,
-                het,
-            },
-            self.atom_position..self.atom_position,
-        );
+        if self
+            .data
+            .topology
+            .residues
+            .push(
+                ResidueRecord {
+                    label_comp_id: comp,
+                    auth_comp_id: auth_comp,
+                    label_seq_id: key.label_seq,
+                    auth_seq_id: key.auth_seq,
+                    ins_code,
+                    het,
+                },
+                self.atom_position..self.atom_position,
+            )
+            .is_err()
+        {
+            self.findings.push(Diagnostic::new(Code::E3001));
+            return;
+        }
         self.residue_position += 1;
     }
 
@@ -298,17 +343,19 @@ impl<'a> AtomBuilder<'a> {
         let Some(range) = self.data.topology.residues.atoms(residue) else {
             return;
         };
-        self.data
+        if let Err(error) = self
+            .data
             .topology
             .residues
-            .set_atoms(residue, range.start..self.atom_position);
+            .set_atoms(residue, range.start..self.atom_position)
+        {
+            self.findings
+                .push(Diagnostic::new(Code::E3001).with_context("cause", error.to_string()));
+        }
     }
 
     fn key_of(&mut self, rows: &Rows<'_>, model: i64) -> ResidueKey {
-        let chain = match rows
-            .identifier("label_asym_id")
-            .or_else(|| rows.identifier("auth_asym_id"))
-        {
+        let chain = match rows.identifier("label_asym_id") {
             Some(text) => self.intern(&text).get(),
             None => ResidueKey::ABSENT,
         };
@@ -337,31 +384,67 @@ impl<'a> AtomBuilder<'a> {
             rows.float("Cartn_y"),
             rows.float("Cartn_z"),
         ) else {
-            self.findings.push(
+            self.findings.push(at_source_row(
                 Diagnostic::new(Code::E1202)
                     .with_message("a coordinate could not be read")
-                    .in_category("atom_site")
-                    .at_row(rows.row() as u32),
-            );
+                    .in_category("atom_site"),
+                rows.row(),
+            ));
             return None;
         };
-        Some([x as f32, y as f32, z as f32])
+        let Some(position) = x
+            .to_f32()
+            .zip(y.to_f32())
+            .zip(z.to_f32())
+            .map(|((x, y), z)| [x, y, z])
+        else {
+            self.findings.push(at_source_row(
+                Diagnostic::new(Code::E1202)
+                    .with_message("a coordinate is outside the supported floating-point range")
+                    .in_category("atom_site"),
+                rows.row(),
+            ));
+            return None;
+        };
+        Some(position)
+    }
+
+    fn optional_float(
+        &mut self,
+        rows: &Rows<'_>,
+        field: &'static str,
+        when_absent: f32,
+    ) -> (f32, Presence) {
+        let Some(value) = rows.float(field) else {
+            return (when_absent, Presence::Unknown);
+        };
+        if let Some(value) = value.to_f32() {
+            return (value, Presence::Present);
+        }
+        self.findings.push(at_source_row(
+            Diagnostic::new(Code::E1202)
+                .with_message("an atom value is outside the supported floating-point range")
+                .in_category("atom_site")
+                .with_context("item", field),
+            rows.row(),
+        ));
+        (when_absent, Presence::Unknown)
     }
 
     fn element_of(&mut self, rows: &Rows<'_>, name: Option<&str>) -> Element {
         if let Some(element) = rows.text("type_symbol").and_then(Element::from_symbol) {
             return element;
         }
-        let inferred = match name {
-            Some(name) => Element::infer_from_name(name),
-            None => Element::UNKNOWN,
+        let inferred = match (self.options.missing_element_policy, name) {
+            (MissingElementPolicy::InferFromAtomName, Some(name)) => Element::infer_from_name(name),
+            _ => Element::UNKNOWN,
         };
-        self.findings.push(
+        self.findings.push(at_source_row(
             Diagnostic::new(Code::W3203)
                 .in_category("atom_site")
-                .at_row(rows.row() as u32)
                 .with_context("inferred", inferred.symbol()),
-        );
+            rows.row(),
+        ));
         inferred
     }
 
@@ -374,13 +457,13 @@ impl<'a> AtomBuilder<'a> {
         OptionalSymbol::NONE
     }
 
-    fn alt_of(&mut self, rows: &Rows<'_>) -> AltId {
+    fn alt_of(&mut self, rows: &Rows<'_>) -> Option<AltId> {
         if let Some(text) = rows.identifier("label_alt_id")
             && !text.is_empty()
         {
             return AltId::labelled(self.intern(&text));
         }
-        AltId::BLANK
+        Some(AltId::BLANK)
     }
 
     fn intern(&mut self, text: &str) -> SymbolId {
@@ -390,38 +473,5 @@ impl<'a> AtomBuilder<'a> {
             return SymbolId::from_raw(0);
         };
         symbol
-    }
-
-    fn finish(mut self) -> CoordinateStore {
-        self.close_residue();
-        self.close_chain();
-        self.verify_frame_len();
-        let (chunks, coords) = self.builder.finish();
-        if self.data.chunks.is_empty() {
-            self.data.chunks = chunks.into();
-        }
-        self.frames.push(coords);
-
-        let chains = 0..self.data.topology.chains.len() as u32;
-        for number in self.model_numbers {
-            self.data.topology.models.push(number, chains.clone());
-        }
-
-        match self.frames.len() {
-            1 => match self.frames.pop() {
-                Some(block) => CoordinateStore::Single(block),
-                None => CoordinateStore::Single(CoordinateBlock::new()),
-            },
-            _ => CoordinateStore::Dense {
-                frames: self.frames,
-            },
-        }
-    }
-}
-
-fn optional(value: Option<f64>, when_absent: f32) -> (f32, Presence) {
-    match value {
-        Some(value) => (value as f32, Presence::Present),
-        None => (when_absent, Presence::Unknown),
     }
 }
