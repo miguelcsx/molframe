@@ -5,6 +5,7 @@
 //! automorphism itself can be. Molecular graphs are sparse and strongly
 //! labelled, so refinement normally leaves only small symmetric groups.
 
+use crate::numeric::usize_to_u32;
 use crate::{Component, ComponentBond};
 use pdbiox_core::contract::DictionaryVersion;
 use std::collections::{BTreeMap, BTreeSet};
@@ -104,22 +105,60 @@ pub fn equivalence_classes(component: &Component) -> EquivalenceClasses {
     sets.finish()
 }
 
+/// Exact graph-automorphism enumeration exceeded its caller-selected bound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutomorphismLimit {
+    /// Maximum complete mappings the caller allowed.
+    pub limit: usize,
+}
+
+impl std::fmt::Display for AutomorphismLimit {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "component has more than {} graph automorphisms",
+            self.limit
+        )
+    }
+}
+
+impl std::error::Error for AutomorphismLimit {}
+
+/// Enumerates exact element- and bond-labelled component automorphisms.
+///
+/// Each mapping is indexed by source atom position and contains its target atom
+/// position. Output is lexicographic and includes the identity mapping.
+///
+/// # Errors
+///
+/// Returns [`AutomorphismLimit`] instead of publishing a truncated set.
+pub fn automorphisms(
+    component: &Component,
+    limit: usize,
+) -> Result<Vec<Box<[u32]>>, AutomorphismLimit> {
+    let graph = Graph::new(component);
+    let mut forward = vec![usize::MAX; graph.elements.len()];
+    let mut reverse = vec![usize::MAX; graph.elements.len()];
+    let mut output = Vec::new();
+    graph.enumerate(&mut forward, &mut reverse, 0, limit, &mut output)?;
+    Ok(output)
+}
+
 #[derive(Debug)]
 struct Graph {
     elements: Vec<u8>,
-    edges: Vec<u8>,
+    edges: BTreeMap<(usize, usize), u8>,
     colours: Vec<u32>,
 }
 
 impl Graph {
     fn new(component: &Component) -> Self {
-        let count = component.atoms.len();
         let elements: Vec<u8> = component
             .atoms
             .iter()
             .map(|atom| atom.element.atomic_number())
             .collect();
-        let mut edges = vec![0; count.saturating_mul(count)];
+        let mut edges = BTreeMap::new();
         let positions: BTreeMap<&str, usize> = component
             .atoms
             .iter()
@@ -134,8 +173,8 @@ impl Graph {
                 continue;
             };
             let label = bond_label(bond);
-            edges[atom_a * count + atom_b] = label;
-            edges[atom_b * count + atom_a] = label;
+            edges.insert((*atom_a, *atom_b), label);
+            edges.insert((*atom_b, *atom_a), label);
         }
         let colours = refine_colours(&elements, &edges);
         Self {
@@ -146,7 +185,10 @@ impl Graph {
     }
 
     fn edge(&self, atom_a: usize, atom_b: usize) -> u8 {
-        self.edges[atom_a * self.elements.len() + atom_b]
+        match self.edges.get(&(atom_a, atom_b)) {
+            Some(edge) => *edge,
+            None => 0,
+        }
     }
 
     fn has_automorphism(&self, source: usize, target: usize) -> bool {
@@ -175,6 +217,40 @@ impl Graph {
             reverse[target] = usize::MAX;
         }
         false
+    }
+
+    fn enumerate(
+        &self,
+        forward: &mut [usize],
+        reverse: &mut [usize],
+        assigned: usize,
+        limit: usize,
+        output: &mut Vec<Box<[u32]>>,
+    ) -> Result<(), AutomorphismLimit> {
+        if assigned == forward.len() {
+            if output.len() == limit {
+                return Err(AutomorphismLimit { limit });
+            }
+            output.push(
+                forward
+                    .iter()
+                    .map(|target| usize_to_u32(*target))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            );
+            return Ok(());
+        }
+        let Some((source, candidates)) = self.next_candidates(forward, reverse) else {
+            return Ok(());
+        };
+        for target in candidates {
+            forward[source] = target;
+            reverse[target] = source;
+            self.enumerate(forward, reverse, assigned + 1, limit, output)?;
+            forward[source] = usize::MAX;
+            reverse[target] = usize::MAX;
+        }
+        Ok(())
     }
 
     fn next_candidates(&self, forward: &[usize], reverse: &[usize]) -> Option<(usize, Vec<usize>)> {
@@ -210,7 +286,7 @@ impl Graph {
     }
 }
 
-fn refine_colours(elements: &[u8], edges: &[u8]) -> Vec<u32> {
+fn refine_colours(elements: &[u8], edges: &BTreeMap<(usize, usize), u8>) -> Vec<u32> {
     let count = elements.len();
     let mut colours: Vec<u32> = elements.iter().map(|element| u32::from(*element)).collect();
     loop {
@@ -218,7 +294,10 @@ fn refine_colours(elements: &[u8], edges: &[u8]) -> Vec<u32> {
             .map(|atom| {
                 let mut neighbours: Vec<(u8, u32)> = (0..count)
                     .filter_map(|other| {
-                        let edge = edges[atom * count + other];
+                        let edge = match edges.get(&(atom, other)) {
+                            Some(edge) => *edge,
+                            None => 0,
+                        };
                         (edge != 0).then_some((edge, colours[other]))
                     })
                     .collect();
@@ -230,7 +309,7 @@ fn refine_colours(elements: &[u8], edges: &[u8]) -> Vec<u32> {
         let ids: BTreeMap<_, _> = unique
             .into_iter()
             .enumerate()
-            .map(|(position, signature)| (signature, position as u32))
+            .map(|(position, signature)| (signature, usize_to_u32(position)))
             .collect();
         let refined: Vec<u32> = signatures
             .iter()
@@ -288,13 +367,13 @@ impl DisjointSets {
             grouped
                 .entry(self.root(atom))
                 .or_default()
-                .push(atom as u32);
+                .push(usize_to_u32(atom));
         }
         let classes: Vec<Arc<[u32]>> = grouped.into_values().map(Arc::from).collect();
         let mut class_by_atom = vec![0; self.0.len()];
         for (class, members) in classes.iter().enumerate() {
             for atom in members.iter().copied() {
-                class_by_atom[atom as usize] = class as u32;
+                class_by_atom[atom as usize] = usize_to_u32(class);
             }
         }
         EquivalenceClasses {

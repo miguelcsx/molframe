@@ -1,6 +1,7 @@
 use super::*;
 use crate::{ComponentAtom, ComponentKind};
 use pdbiox_core::{BondOrder, Element};
+use std::collections::BTreeMap;
 
 fn atom(name: &str, element: Element) -> ComponentAtom {
     ComponentAtom {
@@ -30,6 +31,7 @@ fn component() -> Component {
         name: "ASPARTATE".into(),
         kind: ComponentKind::AminoAcid,
         parent: None,
+        one_letter_code: Some(b'D'),
         formula: None,
         atoms: vec![
             atom("CG", Element::CARBON),
@@ -47,6 +49,20 @@ fn component() -> Component {
         ideal_coordinates: None,
         model_coordinates: None,
     }
+}
+
+#[test]
+fn exact_automorphisms_are_complete_ordered_and_bounded() {
+    let component = component();
+    let mappings = automorphisms(&component, 4)
+        .unwrap_or_else(|error| panic!("automorphism enumeration failed: {error}"));
+    assert_eq!(mappings.len(), 2);
+    assert_eq!(mappings[0].as_ref(), &[0, 1, 2, 3]);
+    assert_eq!(mappings[1].as_ref(), &[0, 2, 1, 3]);
+    assert_eq!(
+        automorphisms(&component, 1),
+        Err(AutomorphismLimit { limit: 1 })
+    );
 }
 
 #[test]
@@ -94,13 +110,13 @@ fn refined_backtracking_matches_exhaustive_permutations_on_all_four_atom_graphs(
             })
             .collect();
         for edge_mask in 0u16..1 << 6 {
-            let mut edges = vec![0; COUNT * COUNT];
+            let mut edges = BTreeMap::new();
             let mut bit = 0;
             for atom_a in 0..COUNT {
                 for atom_b in atom_a + 1..COUNT {
                     if edge_mask & (1 << bit) != 0 {
-                        edges[atom_a * COUNT + atom_b] = 1;
-                        edges[atom_b * COUNT + atom_a] = 1;
+                        edges.insert((atom_a, atom_b), 1);
+                        edges.insert((atom_b, atom_a), 1);
                     }
                     bit += 1;
                 }

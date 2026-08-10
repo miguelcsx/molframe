@@ -17,8 +17,8 @@ fn component() -> Component {
         name: name.into(),
         alternate_name: None,
         element,
-        charge: 0,
-        aromatic: false,
+        charge: if name == "N" { -1 } else { 0 },
+        aromatic: name == "N",
         leaving: false,
         stereo: (name == "CA").then_some(StereoConfiguration::S),
     };
@@ -27,6 +27,7 @@ fn component() -> Component {
         name: "GLYCINE".into(),
         kind: ComponentKind::AminoAcid,
         parent: None,
+        one_letter_code: Some(b'G'),
         formula: Some("C2 H5 N O2".into()),
         atoms: vec![
             atom("N", Element::NITROGEN),
@@ -60,8 +61,22 @@ fn component() -> Component {
 fn ccd_edges_polymer_links_and_chain_classification_are_applied_together() {
     let input = InputBuffer::from_bytes(STRUCTURE.as_bytes().to_vec());
     let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new()).expect("fixture reads");
-    let provider = MemoryProvider::new(DictionaryVersion::new("test-1"), [component()]);
-    let report = apply_component_chemistry(&structure, &provider).expect("provider works");
+    let provider = MemoryProvider::new(DictionaryVersion::new("test-1"), [component()])
+        .expect("component fixture is unique");
+    let report = apply_component_chemistry(
+        &structure,
+        &provider,
+        PolymerLinkPolicy::explicit(
+            2.1,
+            vec![PolymerLinkRule::new(
+                ComponentKind::AminoAcid,
+                "C",
+                ComponentKind::AminoAcid,
+                "N",
+            )],
+        ),
+    )
+    .expect("provider works");
     assert_eq!(report.structure.data().bonds.len(), 5);
     assert_eq!(
         report
@@ -72,14 +87,106 @@ fn ccd_edges_polymer_links_and_chain_classification_are_applied_together() {
     );
     assert_eq!(report.dictionary_version.as_str(), "test-1");
     assert!(report.findings.is_empty());
+    let Some(pdbiox_core::AtomAnnotation::Boolean(aromatic)) = report
+        .structure
+        .annotations()
+        .get(pdbiox_core::AROMATIC_ATOM_ANNOTATION)
+    else {
+        panic!("aromatic annotation absent")
+    };
+    assert_eq!(
+        aromatic.get(0),
+        Some((true, pdbiox_core::Presence::Present))
+    );
+    let Some(pdbiox_core::AtomAnnotation::Integer(charges)) = report
+        .structure
+        .annotations()
+        .get(pdbiox_core::FORMAL_CHARGE_ANNOTATION)
+    else {
+        panic!("formal charge annotation absent")
+    };
+    assert_eq!(charges.get(0), Some((-1, pdbiox_core::Presence::Present)));
+}
+
+#[test]
+fn modelled_stereo_is_anchored_to_the_component_reference_geometry() {
+    let source = "data_stereo\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+HETATM 1 C CTR LIG A 1 0 0 0\n\
+HETATM 2 N A LIG A 1 1 0 0\n\
+HETATM 3 O B LIG A 1 0 1 0\n\
+HETATM 4 S C LIG A 1 0 0 -1\n";
+    let atom = |name: &str, element, stereo| ComponentAtom {
+        name: name.into(),
+        alternate_name: None,
+        element,
+        charge: 0,
+        aromatic: false,
+        leaving: false,
+        stereo,
+    };
+    let bond = |other: &str| ComponentBond {
+        atom_a: "CTR".into(),
+        atom_b: other.into(),
+        order: BondOrder::Single,
+        aromatic: false,
+        stereo: None,
+    };
+    let component = Component {
+        id: "LIG".into(),
+        name: "CHIRAL LIGAND".into(),
+        kind: ComponentKind::NonPolymer,
+        parent: None,
+        one_letter_code: None,
+        formula: None,
+        atoms: vec![
+            atom("CTR", Element::CARBON, Some(StereoConfiguration::R)),
+            atom("A", Element::NITROGEN, None),
+            atom("B", Element::OXYGEN, None),
+            atom("C", Element::SULFUR, None),
+        ]
+        .into(),
+        bonds: vec![bond("A"), bond("B"), bond("C")].into(),
+        ideal_coordinates: Some(
+            vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+            .into(),
+        ),
+        model_coordinates: None,
+    };
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new()).expect("fixture reads");
+    let provider = MemoryProvider::new(DictionaryVersion::new("stereo"), [component])
+        .expect("component fixture is unique");
+    let report = apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled)
+        .expect("chemistry applies");
+    let Some(pdbiox_core::AtomAnnotation::Symbol(stereo)) = report
+        .structure
+        .annotations()
+        .get(pdbiox_core::STEREO_CONFIGURATION_ANNOTATION)
+    else {
+        panic!("stereo annotation absent")
+    };
+    let Some((configuration, pdbiox_core::Presence::Present)) = stereo.get(0) else {
+        panic!("centre configuration absent")
+    };
+    assert_eq!(report.structure.resolve(configuration), Some("S"));
 }
 
 #[test]
 fn an_unknown_component_is_reported_once_and_yields_a_known_empty_graph() {
     let input = InputBuffer::from_bytes(STRUCTURE.as_bytes().to_vec());
     let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new()).expect("fixture reads");
-    let provider = MemoryProvider::new(DictionaryVersion::new("empty"), []);
-    let report = apply_component_chemistry(&structure, &provider).expect("provider works");
+    let provider =
+        MemoryProvider::new(DictionaryVersion::new("empty"), []).expect("empty fixture is unique");
+    let report = apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled)
+        .expect("provider works");
     assert!(report.structure.data().bonds.is_available());
     assert_eq!(
         report

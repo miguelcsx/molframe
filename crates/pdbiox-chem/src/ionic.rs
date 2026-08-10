@@ -174,7 +174,11 @@ impl<'a> Cursor<'a> {
     }
 
     fn remaining(&self) -> usize {
-        self.bytes.len().saturating_sub(self.offset)
+        if self.offset >= self.bytes.len() {
+            0
+        } else {
+            self.bytes.len() - self.offset
+        }
     }
 }
 

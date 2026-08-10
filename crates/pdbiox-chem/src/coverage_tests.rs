@@ -29,7 +29,8 @@ fn missing_and_ambiguous_counts_come_from_expected_ccd_atoms() {
     assert_eq!(report.coverage.used, 1);
     assert_eq!(report.coverage.missing, 2);
     assert_eq!(report.coverage.ambiguous, 1);
-    assert!((report.coverage.fraction() - 0.25).abs() < f32::EPSILON);
+    let fraction = report.coverage.fraction();
+    assert!((fraction - 0.25).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -66,6 +67,7 @@ fn provider() -> MemoryProvider {
             name: "glycine".into(),
             kind: ComponentKind::AminoAcid,
             parent: None,
+            one_letter_code: Some(b'G'),
             formula: None,
             atoms: Arc::from([
                 atom("N", Element::NITROGEN),
@@ -78,6 +80,7 @@ fn provider() -> MemoryProvider {
             model_coordinates: None,
         }],
     )
+    .expect("component fixture is unique")
 }
 
 fn atom(name: &str, element: Element) -> ComponentAtom {

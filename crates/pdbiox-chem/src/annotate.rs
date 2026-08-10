@@ -1,6 +1,12 @@
 //! Applying component chemistry to an immutable structure snapshot.
 
+mod atom_chemistry;
+
 use crate::{Component, ComponentKind, ComponentProvider};
+use atom_chemistry::{
+    AtomChemistry, attach_annotations, is_hydrogen_bond_acceptor, is_hydrogen_bond_donor,
+    observed_stereo,
+};
 use pdbiox_core::BondOrder;
 use pdbiox_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use pdbiox_core::contract::DictionaryVersion;
@@ -20,6 +26,64 @@ pub struct ChemistryReport {
     pub findings: Vec<Diagnostic>,
     /// Exact component dictionary version used.
     pub dictionary_version: DictionaryVersion,
+    /// Explicit rule used to create inter-residue polymer bonds.
+    pub polymer_link_policy: PolymerLinkPolicy,
+}
+
+/// Explicit policy for constructing bonds between consecutive polymer components.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PolymerLinkPolicy {
+    /// Do not construct inter-residue bonds.
+    Disabled,
+    /// Link CCD-declared atoms only when they are within this distance.
+    Explicit {
+        /// Inclusive distance in ångström.
+        angstrom: f32,
+        /// Ordered component/atom attachment rules.
+        rules: Arc<[PolymerLinkRule]>,
+    },
+}
+
+/// One explicit inter-component attachment rule.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PolymerLinkRule {
+    /// Component role on the earlier residue.
+    pub left_kind: ComponentKind,
+    /// Component-local attachment atom on the earlier residue.
+    pub left_atom: Box<str>,
+    /// Component role on the later residue.
+    pub right_kind: ComponentKind,
+    /// Component-local attachment atom on the later residue.
+    pub right_atom: Box<str>,
+}
+
+impl PolymerLinkRule {
+    /// Constructs a named attachment rule without interpreting atom names.
+    #[must_use]
+    pub fn new(
+        left_kind: ComponentKind,
+        left_atom: impl Into<Box<str>>,
+        right_kind: ComponentKind,
+        right_atom: impl Into<Box<str>>,
+    ) -> Self {
+        Self {
+            left_kind,
+            left_atom: left_atom.into(),
+            right_kind,
+            right_atom: right_atom.into(),
+        }
+    }
+}
+
+impl PolymerLinkPolicy {
+    /// Constructs an explicit distance-and-attachment policy.
+    #[must_use]
+    pub fn explicit(angstrom: f32, rules: impl Into<Arc<[PolymerLinkRule]>>) -> Self {
+        Self::Explicit {
+            angstrom,
+            rules: rules.into(),
+        }
+    }
 }
 
 /// Adds CCD internal bonds and checked polymer links without replacing file
@@ -32,7 +96,9 @@ pub struct ChemistryReport {
 pub fn apply_component_chemistry(
     structure: &Structure,
     provider: &dyn ComponentProvider,
+    polymer_link_policy: PolymerLinkPolicy,
 ) -> Result<ChemistryReport, Diagnostic> {
+    validate_link_policy(&polymer_link_policy)?;
     let mut data = structure.data().clone();
     let mut bonds = BondTableBuilder::new();
     for bond in data.bonds.iter() {
@@ -44,6 +110,7 @@ pub fn apply_component_chemistry(
         missing: BTreeSet::new(),
         bonds,
         findings: Diagnostics::new(),
+        chemistry: vec![None; structure.atom_count() as usize],
     };
     for chain in structure.data().chains() {
         let mut kinds = BTreeSet::new();
@@ -51,19 +118,21 @@ pub fn apply_component_chemistry(
         for residue in &residues {
             state.annotate_residue(*residue, &mut kinds)?;
         }
-        classify_chain(&mut data, chain.index(), &kinds);
+        classify_chain(&mut data, chain.index(), &kinds)?;
         link_polymer(
             &residues,
             &state.components,
             &mut state.bonds,
             &mut state.findings,
+            &polymer_link_policy,
         );
     }
-    for component in state.missing {
+    for component in &state.missing {
         state
             .findings
-            .push(Diagnostic::new(Code::W3201).with_context("component", component));
+            .push(Diagnostic::new(Code::W3201).with_context("component", component.to_string()));
     }
+    attach_annotations(&mut data, &state.chemistry)?;
     data.bonds = state.bonds.finish();
     for finding in pdbiox_core::structure::validate(&data) {
         state.findings.push(finding);
@@ -72,7 +141,23 @@ pub fn apply_component_chemistry(
         structure: Structure::new(data),
         findings: state.findings.finish(),
         dictionary_version: provider.version().clone(),
+        polymer_link_policy,
     })
+}
+
+fn validate_link_policy(policy: &PolymerLinkPolicy) -> Result<(), Diagnostic> {
+    match policy {
+        PolymerLinkPolicy::Disabled => Ok(()),
+        PolymerLinkPolicy::Explicit { angstrom, rules }
+            if angstrom.is_finite() && *angstrom > 0.0 && !rules.is_empty() =>
+        {
+            Ok(())
+        }
+        PolymerLinkPolicy::Explicit { .. } => Err(Diagnostic::new(Code::E4003).with_context(
+            "required",
+            "finite positive polymer-link distance and attachment rules",
+        )),
+    }
 }
 
 struct Annotator<'a> {
@@ -81,6 +166,7 @@ struct Annotator<'a> {
     missing: BTreeSet<Box<str>>,
     bonds: BondTableBuilder,
     findings: Diagnostics,
+    chemistry: Vec<Option<AtomChemistry>>,
 }
 
 impl Annotator<'_> {
@@ -118,9 +204,37 @@ impl Annotator<'_> {
                 continue;
             }
             report_missing_atoms(&component, &atoms, residue, &mut self.findings);
+            self.annotate_atoms(&component, residue, &atoms);
             add_component_bonds(&component, &atoms, &mut self.bonds);
         }
         Ok(())
+    }
+
+    fn annotate_atoms(
+        &mut self,
+        component: &Component,
+        residue: ResidueRef<'_>,
+        atoms: &[AtomRef<'_>],
+    ) {
+        for atom in atoms {
+            let Some(name) = atom.name() else {
+                continue;
+            };
+            let Some(expected) = component.atom(name) else {
+                continue;
+            };
+            let Some(slot) = self.chemistry.get_mut(atom.index().as_usize()) else {
+                continue;
+            };
+            *slot = Some(AtomChemistry {
+                kind: component.kind,
+                aromatic: expected.aromatic,
+                charge: expected.charge,
+                donor: is_hydrogen_bond_donor(component, name),
+                acceptor: is_hydrogen_bond_acceptor(component, name),
+                stereo: observed_stereo(component, residue, name, expected.stereo),
+            });
+        }
     }
 }
 
@@ -191,7 +305,7 @@ fn classify_chain(
     data: &mut pdbiox_core::StructureData,
     chain: ChainIndex,
     kinds: &BTreeSet<ComponentKind>,
-) {
+) -> Result<(), Diagnostic> {
     let kind = if kinds.iter().all(|kind| *kind == ComponentKind::AminoAcid) && !kinds.is_empty() {
         PolymerKind::Protein
     } else if kinds.iter().all(|kind| *kind == ComponentKind::Nucleotide) && !kinds.is_empty() {
@@ -199,9 +313,12 @@ fn classify_chain(
     } else if kinds.iter().all(|kind| *kind == ComponentKind::Saccharide) && !kinds.is_empty() {
         PolymerKind::Saccharide
     } else {
-        return;
+        return Ok(());
     };
-    data.topology.chains.set_polymer_kind(chain, kind);
+    data.topology
+        .chains
+        .set_polymer_kind(chain, kind)
+        .map_err(|error| Diagnostic::new(Code::E3001).with_context("cause", error.to_string()))
 }
 
 fn link_polymer(
@@ -209,7 +326,11 @@ fn link_polymer(
     components: &BTreeMap<Box<str>, Arc<Component>>,
     bonds: &mut BondTableBuilder,
     findings: &mut Diagnostics,
+    policy: &PolymerLinkPolicy,
 ) {
+    let PolymerLinkPolicy::Explicit { angstrom, rules } = policy else {
+        return;
+    };
     for pair in residues.windows(2) {
         let [left, right] = pair else {
             continue;
@@ -220,15 +341,17 @@ fn link_polymer(
         let Some(right_component) = right.name().and_then(|name| components.get(name)) else {
             continue;
         };
-        let Some((left_name, right_name)) =
-            linkage_names(left_component.kind, right_component.kind)
+        let Some(rule) = rules.iter().find(|rule| {
+            rule.left_kind == left_component.kind && rule.right_kind == right_component.kind
+        }) else {
+            continue;
+        };
+        let (Some(atom_a), Some(atom_b)) =
+            (left.atom(&rule.left_atom), right.atom(&rule.right_atom))
         else {
             continue;
         };
-        let (Some(atom_a), Some(atom_b)) = (left.atom(left_name), right.atom(right_name)) else {
-            continue;
-        };
-        if within_linkage(atom_a, atom_b) {
+        if within_linkage(atom_a, atom_b, *angstrom) {
             bonds.push(BondRecord {
                 atom_a: atom_a.index(),
                 atom_b: atom_b.index(),
@@ -245,18 +368,7 @@ fn link_polymer(
     }
 }
 
-fn linkage_names(
-    left: ComponentKind,
-    right: ComponentKind,
-) -> Option<(&'static str, &'static str)> {
-    match (left, right) {
-        (ComponentKind::AminoAcid, ComponentKind::AminoAcid) => Some(("C", "N")),
-        (ComponentKind::Nucleotide, ComponentKind::Nucleotide) => Some(("O3'", "P")),
-        _ => None,
-    }
-}
-
-fn within_linkage(atom_a: AtomRef<'_>, atom_b: AtomRef<'_>) -> bool {
+fn within_linkage(atom_a: AtomRef<'_>, atom_b: AtomRef<'_>, max_distance: f32) -> bool {
     let (Some(a), Some(b)) = (atom_a.position(), atom_b.position()) else {
         return false;
     };
@@ -265,7 +377,7 @@ fn within_linkage(atom_a: AtomRef<'_>, atom_b: AtomRef<'_>) -> bool {
         .zip(b)
         .map(|(left, right)| (left - right).powi(2))
         .sum();
-    squared <= 2.1f32.powi(2)
+    squared <= max_distance.powi(2)
 }
 
 #[cfg(test)]

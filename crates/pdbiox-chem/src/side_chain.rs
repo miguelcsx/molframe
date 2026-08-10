@@ -8,36 +8,54 @@ const MAX_PATH_ATOMS: usize = 8;
 /// Ordered component atoms defining up to χ1–χ5.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SideChainDefinition {
-    /// `N`, `CA`, then the selected heavy-atom path from `CB` outward.
+    /// Annotated nitrogen and alpha-carbon anchors, then the side-chain path.
     pub atoms: Box<[Box<str>]>,
+}
+
+/// Component-local atom roles resolved by a CCD-aware or caller-supplied profile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SideChainRoles<'a> {
+    /// Protein peptide nitrogen atom.
+    pub nitrogen: &'a str,
+    /// Protein alpha-carbon atom.
+    pub alpha_carbon: &'a str,
+    /// Atoms belonging to the side chain, including its first heavy atom.
+    pub side_chain_atoms: &'a [&'a str],
 }
 
 impl SideChainDefinition {
     /// Number of consecutive χ torsions defined by this path.
     #[must_use]
     pub fn torsion_count(&self) -> usize {
-        self.atoms.len().saturating_sub(3)
+        if self.atoms.len() < 3 {
+            0
+        } else {
+            self.atoms.len() - 3
+        }
     }
 }
 
-/// Derives the conventional deterministic χ path from CCD connectivity.
+/// Derives a deterministic χ path from CCD connectivity and explicit roles.
 ///
 /// Branch ties use component atom identifiers, so equivalent terminal atoms
 /// never depend on row order. Delocalised/multiple bonds may terminate a path
 /// but remain its last atom, which retains χ2 for aromatic residues and χ5 for
 /// arginine-like guanidinium groups.
 #[must_use]
-pub fn side_chain_definition(component: &Component) -> Option<SideChainDefinition> {
-    let nitrogen = atom_index(component, "N")?;
-    let alpha = atom_index(component, "CA")?;
-    let beta = atom_index(component, "CB")?;
+pub fn side_chain_definition(
+    component: &Component,
+    roles: &SideChainRoles<'_>,
+) -> Option<SideChainDefinition> {
+    let nitrogen = atom_index(component, roles.nitrogen)?;
+    let alpha = atom_index(component, roles.alpha_carbon)?;
     let adjacency = adjacency(component);
-    if !connected(&adjacency, nitrogen, alpha) || !connected(&adjacency, alpha, beta) {
+    if !connected(&adjacency, nitrogen, alpha) {
         return None;
     }
+    let beta = first_side_chain_neighbour(component, &adjacency, alpha, roles)?;
     let mut path = vec![nitrogen, alpha, beta];
     let mut best = path.clone();
-    extend(component, &adjacency, &mut path, &mut best);
+    extend(component, roles, &adjacency, &mut path, &mut best);
     Some(SideChainDefinition {
         atoms: best
             .into_iter()
@@ -48,6 +66,7 @@ pub fn side_chain_definition(component: &Component) -> Option<SideChainDefinitio
 
 fn extend(
     component: &Component,
+    roles: &SideChainRoles<'_>,
     adjacency: &[Vec<(usize, BondOrder)>],
     path: &mut Vec<usize>,
     best: &mut Vec<usize>,
@@ -79,13 +98,27 @@ fn extend(
         atom_name(component, *left).cmp(atom_name(component, *right))
     });
     for (next, _) in candidates {
-        if path.contains(&next) || !side_chain_atom(component, next) {
+        if path.contains(&next) || !side_chain_atom(component, roles, next) {
             continue;
         }
         path.push(next);
-        extend(component, adjacency, path, best);
+        extend(component, roles, adjacency, path, best);
         path.pop();
     }
+}
+
+fn first_side_chain_neighbour(
+    component: &Component,
+    adjacency: &[Vec<(usize, BondOrder)>],
+    alpha: usize,
+    roles: &SideChainRoles<'_>,
+) -> Option<usize> {
+    adjacency
+        .get(alpha)?
+        .iter()
+        .map(|(index, _)| *index)
+        .filter(|index| side_chain_atom(component, roles, *index))
+        .min_by(|left, right| atom_name(component, *left).cmp(atom_name(component, *right)))
 }
 
 fn adjacency(component: &Component) -> Vec<Vec<(usize, BondOrder)>> {
@@ -117,10 +150,9 @@ fn atom_name(component: &Component, index: usize) -> &str {
         .map_or("", |atom| atom.name.as_ref())
 }
 
-fn side_chain_atom(component: &Component, index: usize) -> bool {
+fn side_chain_atom(component: &Component, roles: &SideChainRoles<'_>, index: usize) -> bool {
     component.atoms.get(index).is_some_and(|atom| {
-        atom.element != Element::HYDROGEN
-            && !matches!(atom.name.as_ref(), "N" | "CA" | "C" | "O" | "OXT")
+        atom.element != Element::HYDROGEN && roles.side_chain_atoms.contains(&atom.name.as_ref())
     })
 }
 
