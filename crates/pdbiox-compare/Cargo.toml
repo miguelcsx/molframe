@@ -1,0 +1,23 @@
+[package]
+name = "pdbiox-compare"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Structure comparison scores for pdbiox"
+
+[dependencies]
+num-traits.workspace = true
+pdbiox-core.workspace = true
+pdbiox-chem.workspace = true
+pdbiox-geom.workspace = true
+pdbiox-seq.workspace = true
+pdbiox-surface.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pdbiox-cif.workspace = true
+
+[lints]
+workspace = true
