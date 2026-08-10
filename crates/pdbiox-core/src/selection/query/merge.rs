@@ -49,7 +49,7 @@ impl Iterator for MergeCursor<'_> {
                 *next = (*next).max(current.start);
                 if *next < current.end {
                     let position = *next;
-                    *next = next.saturating_add(1);
+                    *next += 1;
                     return Some(position);
                 }
                 *run += 1;
@@ -98,8 +98,7 @@ pub(super) fn visit_positions(selection: &AtomSelection, mut visit: impl FnMut(u
 }
 
 pub(super) fn merge_positions(left: &AtomSelection, right: &AtomSelection) -> AtomSelection {
-    let capacity = left.len().saturating_add(right.len()) as usize;
-    let mut merged = Vec::with_capacity(capacity);
+    let mut merged = Vec::new();
     merge_cursors(
         MergeCursor::new(left).peekable(),
         MergeCursor::new(right).peekable(),

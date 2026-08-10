@@ -46,23 +46,24 @@ impl AtomSelection {
     }
 
     /// Chooses the cheapest shape for ascending unique positions.
+    ///
+    /// # Panics
+    /// Panics if `positions` is not ascending and unique, or if its storage
+    /// exceeds the platform's addressable range. Collect arbitrary positions
+    /// into `AtomSelection` to sort and deduplicate them first.
     #[must_use]
     pub fn from_sorted(positions: Vec<u32>) -> Self {
         let (Some(first), Some(last)) = (positions.first().copied(), positions.last().copied())
         else {
             return Self::Empty;
         };
-        let span = u64::from(last)
-            .saturating_sub(u64::from(first))
-            .saturating_add(1);
+        let span = u64::from(last - first) + 1;
         if last < u32::MAX && span == positions.len() as u64 {
             return Self::Range(first..last + 1);
         }
         if let Some(runs) = inline_runs(&positions) {
-            let covered = runs.iter().fold(0usize, |covered, run| {
-                covered.saturating_add(run.end.saturating_sub(run.start) as usize)
-            });
-            if covered == positions.len() && runs.len() * 2 < positions.len() {
+            let covered: u64 = runs.iter().map(|run| u64::from(run.end - run.start)).sum();
+            if covered == positions.len() as u64 && runs.len() * 2 < positions.len() {
                 return Self::Ranges(runs);
             }
         }
@@ -75,18 +76,12 @@ impl AtomSelection {
     }
 
     /// The number of atoms selected.
+    ///
+    /// # Panics
+    /// Panics if manually constructed storage violates normalized `u32` ranges.
     #[must_use]
-    pub fn len(&self) -> u32 {
-        match self {
-            Self::Empty => 0,
-            Self::All(count) => *count,
-            Self::Range(run) => run.end.saturating_sub(run.start),
-            Self::Ranges(runs) => runs.iter().fold(0u32, |count, run| {
-                count.saturating_add(run.end.saturating_sub(run.start))
-            }),
-            Self::Sparse(positions) => positions.len() as u32,
-            Self::Dense(mask) => mask.count_ones(),
-        }
+    pub fn len(&self) -> u64 {
+        selection_len(self)
     }
 
     /// Returns true when nothing is selected.
@@ -167,4 +162,15 @@ fn mask_from_positions(len: u32, positions: &[u32]) -> BitVec {
         mask.set(*position, true);
     }
     mask
+}
+
+fn selection_len(selection: &AtomSelection) -> u64 {
+    match selection {
+        AtomSelection::Empty => 0,
+        AtomSelection::All(count) => u64::from(*count),
+        AtomSelection::Range(run) => u64::from(run.end - run.start),
+        AtomSelection::Ranges(runs) => runs.iter().map(|run| u64::from(run.end - run.start)).sum(),
+        AtomSelection::Sparse(positions) => positions.len() as u64,
+        AtomSelection::Dense(mask) => u64::from(mask.count_ones()),
+    }
 }

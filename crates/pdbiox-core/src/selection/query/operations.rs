@@ -25,7 +25,7 @@ impl AtomSelection {
         } else {
             (other, self)
         };
-        let mut kept = Vec::with_capacity(smaller.len() as usize);
+        let mut kept = Vec::new();
         visit_positions(smaller, |position| {
             if larger.contains(position) {
                 kept.push(position);
@@ -67,7 +67,7 @@ impl AtomSelection {
         if let (Some(left), Some(right)) = (RunCursor::new(self), RunCursor::new(other)) {
             return difference_runs(left, right);
         }
-        let mut kept = Vec::with_capacity(self.len() as usize);
+        let mut kept = Vec::new();
         visit_positions(self, |position| {
             if !other.contains(position) {
                 kept.push(position);

@@ -8,5 +8,5 @@ mod runs;
 pub use representation::AtomSelection;
 
 #[cfg(test)]
-#[path = "selection_tests.rs"]
+#[path = "query_tests.rs"]
 mod tests;

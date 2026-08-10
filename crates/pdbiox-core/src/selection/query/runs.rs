@@ -160,7 +160,7 @@ fn complement_sparse(positions: &[u32], count: u32) -> AtomSelection {
     {
         if position >= cursor {
             push_run(&mut gaps, cursor..position);
-            cursor = position.saturating_add(1);
+            cursor = position + 1;
         }
     }
     push_run(&mut gaps, cursor..count);
