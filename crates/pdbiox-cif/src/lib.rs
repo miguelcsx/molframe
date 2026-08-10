@@ -13,13 +13,21 @@ pub mod document;
 pub mod lexer;
 mod lower;
 mod parser;
+mod pdbml;
 mod reader;
+mod small_cif;
 mod write;
-mod write_bonds;
-mod write_references;
 
 pub use document::{Category, CifValue, Column, DataBlock, Document};
 pub use lower::lower;
 pub use parser::{ParseResult, Rows, parse, split_tag};
+pub use pdbml::{PdbmlError, PdbmlReadError, parse_pdbml_document, read_pdbml, write_pdbml};
 pub use reader::{CifReader, read, read_with_document};
-pub use write::{write_canonical, write_preserving};
+pub use small_cif::{
+    SmallCifAtom, SmallCifBond, SmallCifDialect, SmallCifError, SmallCifOptions, SmallCifStructure,
+    lower_small_cif, lower_small_cif_with_options,
+};
+pub use write::{
+    CifWriteError, CifWriteOptions, quote_text, render_value, write_canonical,
+    write_canonical_with_options, write_preserving,
+};

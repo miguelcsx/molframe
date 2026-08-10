@@ -61,6 +61,8 @@ pub enum LexError {
     UnterminatedText(Position),
     /// The input is not valid text.
     NotText,
+    /// A source location exceeded the core's 32-bit position representation.
+    PositionOverflow(Position),
 }
 
 /// Walks the tokens of a file.
@@ -107,18 +109,18 @@ impl<'a> Lexer<'a> {
     ///
     /// Returns the reason the input could not be got past.
     pub fn next_token(&mut self) -> Result<Option<Spanned<'a>>, LexError> {
-        self.skip_trivia();
+        self.skip_trivia()?;
         let start = self.at;
         let Some(byte) = self.peek() else {
             return Ok(None);
         };
 
         let token = match byte {
-            b'_' => Token::Tag(self.take_bare()),
+            b'_' => Token::Tag(self.take_bare()?),
             b'\'' => Token::Value(self.take_quoted(b'\'')?, Quoting::Single),
             b'"' => Token::Value(self.take_quoted(b'"')?, Quoting::Double),
             b';' if start.column == 1 => Token::Value(self.take_text()?, Quoting::Text),
-            _ => self.keyword_or_value(),
+            _ => self.keyword_or_value()?,
         };
         Ok(Some(Spanned {
             token,
@@ -127,22 +129,22 @@ impl<'a> Lexer<'a> {
     }
 
     /// A bare word, which may be a keyword or an ordinary value.
-    fn keyword_or_value(&mut self) -> Token<'a> {
-        let word = self.take_bare();
+    fn keyword_or_value(&mut self) -> Result<Token<'a>, LexError> {
+        let word = self.take_bare()?;
         if let Some(name) = strip_prefix_ignore_case(word, "data_") {
-            return Token::Block(name);
+            return Ok(Token::Block(name));
         }
         if let Some(name) = strip_prefix_ignore_case(word, "save_") {
-            return if name.is_empty() {
+            return Ok(if name.is_empty() {
                 Token::FrameEnd
             } else {
                 Token::FrameStart(name)
-            };
+            });
         }
         if word.eq_ignore_ascii_case("loop_") {
-            return Token::Loop;
+            return Ok(Token::Loop);
         }
-        Token::Value(word, Quoting::Bare)
+        Ok(Token::Value(word, Quoting::Bare))
     }
 
     fn peek(&self) -> Option<u8> {
@@ -154,44 +156,48 @@ impl<'a> Lexer<'a> {
     }
 
     /// Advances over `count` bytes, keeping the line and column right.
-    fn advance(&mut self, count: usize) {
+    fn advance(&mut self, count: usize) -> Result<(), LexError> {
         let text = self.remaining();
         for byte in text.as_bytes().iter().take(count) {
-            self.at = self.at.advance(*byte);
+            self.at = self
+                .at
+                .advance(*byte)
+                .ok_or(LexError::PositionOverflow(self.at))?;
         }
+        Ok(())
     }
 
     /// Skips whitespace and comments.
     ///
     /// A comment runs to the end of its line, and a `#` inside a quoted value is
     /// an ordinary character — which is why this only runs between tokens.
-    fn skip_trivia(&mut self) {
+    fn skip_trivia(&mut self) -> Result<(), LexError> {
         loop {
             let text = self.remaining();
             let spaces = text.bytes().take_while(u8::is_ascii_whitespace).count();
-            self.advance(spaces);
+            self.advance(spaces)?;
 
             if self.peek() != Some(b'#') {
-                return;
+                return Ok(());
             }
             let rest = self.remaining();
             let line = match memchr(b'\n', rest.as_bytes()) {
                 Some(line) => line,
                 None => rest.len(),
             };
-            self.advance(line);
+            self.advance(line)?;
         }
     }
 
     /// A run of non-whitespace.
-    fn take_bare(&mut self) -> &'a str {
+    fn take_bare(&mut self) -> Result<&'a str, LexError> {
         let text = self.remaining();
         let end = text
             .bytes()
             .take_while(|byte| !byte.is_ascii_whitespace())
             .count();
-        self.advance(end);
-        slice_to(text, end)
+        self.advance(end)?;
+        Ok(slice_to(text, end))
     }
 
     /// A value between quotes.
@@ -200,7 +206,7 @@ impl<'a> Lexer<'a> {
     /// line, so an apostrophe inside a quoted word does not end it early.
     fn take_quoted(&mut self, quote: u8) -> Result<&'a str, LexError> {
         let opened_at = self.at;
-        self.advance(1);
+        self.advance(1)?;
         let text = self.remaining();
         let bytes = text.as_bytes();
 
@@ -215,7 +221,7 @@ impl<'a> Lexer<'a> {
                 Some(next) => next.is_ascii_whitespace(),
             };
             if closes {
-                self.advance(candidate + 1);
+                self.advance(candidate + 1)?;
                 return Ok(slice_to(text, candidate));
             }
             if bytes.get(candidate).is_some_and(|byte| *byte == b'\n') {
@@ -232,7 +238,7 @@ impl<'a> Lexer<'a> {
     /// one, so a semicolon anywhere else is ordinary text.
     fn take_text(&mut self) -> Result<&'a str, LexError> {
         let opened_at = self.at;
-        self.advance(1);
+        self.advance(1)?;
         // The rest of the opening line belongs to the value.
         let text = self.remaining();
         let bytes = text.as_bytes();
@@ -245,7 +251,7 @@ impl<'a> Lexer<'a> {
             let line_start = cursor + offset + 1;
             if bytes.get(line_start) == Some(&b';') {
                 let value = slice_to(text, cursor + offset);
-                self.advance(line_start + 1);
+                self.advance(line_start + 1)?;
                 return Ok(value.trim_start_matches(['\r', '\n']));
             }
             cursor = line_start;
@@ -284,5 +290,5 @@ fn strip_prefix_ignore_case<'a>(text: &'a str, prefix: &str) -> Option<&'a str> 
 }
 
 #[cfg(test)]
-#[path = "lexer_tests.rs"]
+#[path = "tokenize_tests.rs"]
 mod tests;

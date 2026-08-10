@@ -13,6 +13,7 @@
 
 use crate::lexer::Quoting;
 use indexmap::IndexMap;
+use num_traits::ToPrimitive;
 use pdbiox_core::span::ByteSpan;
 use std::borrow::Cow;
 
@@ -98,7 +99,7 @@ impl CifValue {
     #[must_use]
     pub fn as_float(&self) -> Option<f64> {
         match self {
-            Self::Integer(value) => Some(*value as f64),
+            Self::Integer(value) => value.to_f64(),
             Self::Float(value) => Some(*value),
             _ => None,
         }
@@ -361,5 +362,5 @@ impl Document {
 }
 
 #[cfg(test)]
-#[path = "document_tests.rs"]
+#[path = "model_tests.rs"]
 mod tests;

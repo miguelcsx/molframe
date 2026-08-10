@@ -191,6 +191,9 @@ fn lex_finding(error: LexError) -> Diagnostic {
         LexError::NotText => Diagnostic::new(Code::E1201)
             .with_message("input is not valid text")
             .at(ByteSpan::empty(Position::START)),
+        LexError::PositionOverflow(at) => Diagnostic::new(Code::E1201)
+            .with_message("input exceeds the supported source-position range")
+            .at(ByteSpan::empty(at)),
     }
 }
 
@@ -268,5 +271,5 @@ impl<'a> Rows<'a> {
 }
 
 #[cfg(test)]
-#[path = "parser_tests.rs"]
+#[path = "document_tests.rs"]
 mod tests;

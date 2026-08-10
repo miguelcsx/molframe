@@ -11,6 +11,9 @@ description = "PDBx/mmCIF reading and writing for pdbiox"
 pdbiox-core.workspace = true
 indexmap.workspace = true
 memchr.workspace = true
+num-traits.workspace = true
+quick-xml.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

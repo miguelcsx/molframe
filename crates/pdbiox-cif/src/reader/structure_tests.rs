@@ -1,7 +1,7 @@
 use super::*;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::index::EntityIndex;
-use pdbiox_core::io::ParseMode;
+use pdbiox_core::io::{AmbiguousResidueBoundaryPolicy, MissingElementPolicy, ParseMode};
 use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
 
 const DIPEPTIDE: &str = "\
@@ -128,6 +128,26 @@ HETATM 2 C C1 LIG B . 20 Y 1 1 1
 }
 
 #[test]
+fn author_identifiers_are_not_copied_into_missing_label_identifiers() {
+    let text = "data_x\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.auth_atom_id\n_atom_site.label_comp_id\n_atom_site.auth_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 C AUTHOR_ATOM LIG AUTHOR_CHAIN 1 0 0 0\n";
+    let (structure, _) = parse_structure(text);
+    let Some(atom) = structure.atom(pdbiox_core::index::AtomIndex::new(0)) else {
+        panic!("fixture atom missing")
+    };
+    let Some(chain) = structure.chain(pdbiox_core::index::ChainIndex::new(0)) else {
+        panic!("fixture chain missing")
+    };
+    assert_ne!(atom.name(), Some("AUTHOR_ATOM"));
+    assert_eq!(atom.auth_name(), Some("AUTHOR_ATOM"));
+    assert_ne!(chain.label(), Some("AUTHOR_CHAIN"));
+    assert_eq!(chain.auth_label(), Some("AUTHOR_CHAIN"));
+}
+
+#[test]
 fn coordinate_only_reads_keep_entity_identity_because_it_is_topology() {
     let text = "\
 data_x
@@ -165,7 +185,7 @@ _atom_site.Cartn_z
 }
 
 #[test]
-fn strict_mode_refuses_an_ambiguous_residue_boundary_that_permissive_mode_reports() {
+fn ambiguous_residue_boundary_requires_explicit_file_order_inference() {
     let text = "\
 data_x
 loop_
@@ -184,11 +204,13 @@ _atom_site.Cartn_z
 #
 ";
     let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
-    let strict = read(&input, &ReadOptions::new().mode(ParseMode::Strict));
-    assert!(strict.is_err());
+    let implicit = read(&input, &ReadOptions::new().mode(ParseMode::Permissive));
+    assert!(implicit.is_err());
 
-    let permissive = read(&input, &ReadOptions::new());
-    assert!(permissive.is_ok());
+    let explicit = ReadOptions::new()
+        .ambiguous_residue_boundary_policy(AmbiguousResidueBoundaryPolicy::InferFromFileOrder);
+    let (_, findings) = read(&input, &explicit).expect("explicit inference should read");
+    assert!(findings.iter().any(|finding| finding.code() == Code::W3011));
 }
 
 #[test]
@@ -219,7 +241,9 @@ _atom_site.Cartn_z
     assert_eq!(components, ["GLY", "ALA"]);
     assert!(findings.iter().any(|finding| finding.code() == Code::W3012));
 
-    let written = crate::write_canonical(&structure);
+    let options = crate::CifWriteOptions::new().with_block_id("reread");
+    let written = crate::write_canonical_with_options(&structure, &options)
+        .unwrap_or_else(|error| panic!("write failed: {error}"));
     let (reread, _) = parse_structure(&written);
     let reread_components: Vec<_> = reread
         .data()
@@ -349,7 +373,17 @@ _atom_site.Cartn_z
 1 CA GLY A 1 1.0 1.0 1.0
 #
 ";
-    let (structure, findings) = parse_structure(text);
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options =
+        ReadOptions::new().missing_element_policy(MissingElementPolicy::InferFromAtomName);
+    let (structure, findings) = match read(&input, &options) {
+        Ok(result) => result,
+        Err(findings) => panic!("read failed: {findings:?}"),
+    };
     assert_eq!(structure.atom_count(), 1);
+    assert_eq!(
+        structure.data().atoms().next().and_then(AtomRef::element),
+        Some(pdbiox_core::Element::CALCIUM),
+    );
     assert!(findings.iter().any(|finding| finding.code() == Code::W3203));
 }
