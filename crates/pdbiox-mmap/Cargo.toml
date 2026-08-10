@@ -10,5 +10,9 @@ description = "Audited read-only memory mapping boundary for pdbiox"
 [dependencies]
 memmap2.workspace = true
 
+[[bench]]
+name = "snapshot"
+harness = false
+
 [lints]
 workspace = true
