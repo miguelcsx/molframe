@@ -1,7 +1,8 @@
 use super::structure_side_chain_torsions;
 use crate::{
-    AnalysisPolicy, BondOrder, Component, ComponentAtom, ComponentBond, ComponentKind,
-    DictionaryVersion, Element, MemoryProvider, ReadOptions,
+    AnalysisPolicy, AnnotationColumn, AtomAnnotation, BondOrder, Component, ComponentAtom,
+    ComponentBond, ComponentKind, DictionaryVersion, Element, MemoryProvider, PolymerAtomRole,
+    ReadOptions, Structure,
 };
 use std::sync::Arc;
 
@@ -23,6 +24,7 @@ fn structure_projection_delegates_all_chi_geometry_to_the_path_kernel() {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     };
+    let structure = annotated(&structure);
     let report =
         match structure_side_chain_torsions(&structure, &provider(), &AnalysisPolicy::default()) {
             Ok(report) => report,
@@ -31,6 +33,41 @@ fn structure_projection_delegates_all_chi_geometry_to_the_path_kernel() {
     assert_eq!(report.records.len(), 1);
     assert_eq!(report.records[0].torsions.len(), 4);
     assert!(report.records[0].torsions.iter().all(Option::is_some));
+}
+
+#[test]
+fn structure_projection_requires_explicit_polymer_roles() {
+    let structure = match crate::read_bytes(
+        ENTRY.as_bytes().to_vec(),
+        Some("x.cif"),
+        &ReadOptions::new(),
+    ) {
+        Ok((structure, _)) => structure,
+        Err(findings) => panic!("fixture failed: {findings:?}"),
+    };
+    let error = structure_side_chain_torsions(&structure, &provider(), &AnalysisPolicy::default());
+    assert!(matches!(error, Err(error) if error.code() == crate::Code::E4003));
+}
+
+fn annotated(structure: &Structure) -> Structure {
+    let mut data = structure.data().clone();
+    let roles = [
+        PolymerAtomRole::PROTEIN_NITROGEN,
+        PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+        PolymerAtomRole::PROTEIN_SIDECHAIN,
+        PolymerAtomRole::PROTEIN_SIDECHAIN,
+        PolymerAtomRole::PROTEIN_SIDECHAIN,
+        PolymerAtomRole::PROTEIN_SIDECHAIN,
+        PolymerAtomRole::PROTEIN_SIDECHAIN,
+    ];
+    let _ = data.annotations.insert(
+        pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION,
+        AtomAnnotation::Integer(
+            AnnotationColumn::from_values(roles.into_iter().map(PolymerAtomRole::code).collect())
+                .expect("small annotation column"),
+        ),
+    );
+    Structure::new(data)
 }
 
 fn provider() -> MemoryProvider {
@@ -49,6 +86,7 @@ fn provider() -> MemoryProvider {
             name: "lysine".into(),
             kind: ComponentKind::AminoAcid,
             parent: None,
+            one_letter_code: Some(b'K'),
             formula: None,
             atoms: names
                 .iter()
@@ -71,4 +109,5 @@ fn provider() -> MemoryProvider {
             model_coordinates: None,
         }],
     )
+    .expect("component fixture is unique")
 }

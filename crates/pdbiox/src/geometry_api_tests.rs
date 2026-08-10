@@ -1,4 +1,5 @@
 use super::*;
+use pdbiox_core::AtomAnnotation;
 
 const PEPTIDE: &str = "\
 ATOM      1  N   GLY A   1       0.000   0.000   0.000  1.00 10.00           N
@@ -25,7 +26,25 @@ fn structure_torsions_follow_explicit_connectivity_and_keep_residue_indices() {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture read failed: {findings:?}"),
     };
-    let torsions = structure_backbone_torsions(&structure);
+    let mut data = structure.data().clone();
+    let roles = [
+        PolymerAtomRole::PROTEIN_NITROGEN,
+        PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+        PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+    ];
+    let role_values = (0..9)
+        .map(|index| roles[index % roles.len()].code())
+        .collect();
+    data.annotations.insert(
+        pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION,
+        AtomAnnotation::Integer(
+            pdbiox_core::AnnotationColumn::from_values(role_values).expect("small column"),
+        ),
+    );
+    let structure = Structure::new(data);
+    let Ok(torsions) = structure_backbone_torsions(&structure) else {
+        panic!("explicit backbone roles should be valid");
+    };
 
     assert_eq!(torsions.len(), 3);
     assert_eq!(torsions[0].residue, ResidueIndex::new(0));

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ReadOptions, read_bytes};
+use crate::{Namespace, ReadOptions, read_bytes};
 
 const SOURCE: &str = "data_q\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -20,7 +20,11 @@ fn structure() -> Structure {
 
 #[test]
 fn structure_text_selection_connects_query_and_spatial_execution() {
-    let selected = structure().select_text("within 1.1 of name C1", &AnalysisPolicy::default());
+    let policy = AnalysisPolicy {
+        identifiers: Namespace::Label,
+        ..AnalysisPolicy::default()
+    };
+    let selected = structure().select_text("within 1.1 of name C1", &policy);
     let selected = match selected {
         Ok(selected) => selected,
         Err(findings) => panic!("select failed: {findings:?}"),
