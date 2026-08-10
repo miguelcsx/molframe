@@ -13,7 +13,21 @@ overridden here falls back to the outer file.
 | `pdbiox-core` | Chunked columnar storage, topology tables, `Structure`/`StructureView`, hierarchy handles, `AtomSelection`, diagnostics, `AnalysisPolicy`/`Analysis<T>`/`Provenance`, format dispatch. `#![forbid(unsafe_code)]`. |
 | `pdbiox-cif` | mmCIF lexer, `Document` (lossless, order-preserving), lowering with residue-boundary rules, canonical and document-preserving writers. |
 | `pdbiox-pdb` | PDB fixed-column reader (hybrid-36, insertion codes, multi-model) and a writer that refuses rather than truncates. |
-| `pdbiox-geom` | Distances, angles, torsions, centroid/centre of mass, radius of gyration, inertia tensor, principal axes, asphericity, rigid transforms, quaternion superposition. The cyclic-Jacobi eigensolver serves both the inertia tensor (3×3) and the superposition matrix (4×4). |
+| `pdbiox-geom` | Distances, angles, torsions, centroid/centre of mass, radius of gyration, inertia tensor, principal axes, asphericity, per-atom fluctuation (RMSF), rigid transforms, quaternion superposition. The cyclic-Jacobi eigensolver serves both the inertia tensor (3×3) and the superposition matrix (4×4). |
+| `pdbiox-bcif` | BinaryCIF codecs, lazy document, reader and writer with deterministic encoding selection. |
+| `pdbiox-chem` | Chemistry data: 118-element properties, named vdW/covalent/ionic radius sets, CCD providers, bond construction with provenance, atom equivalence, residue classification. |
+| `pdbiox-xtal` | Assemblies, operator expressions, lazy instances, all 230 space groups over 530 Hall settings, symmetry, fractional↔Cartesian, crystal neighbour search, NCS. |
+| `pdbiox-ic` | Internal coordinates (hedra/dihedra) and deterministic Cartesian rebuilding. |
+| `pdbiox-query` | Selection DSL: lexer, AST, typed builder, logical/physical plans, glob, macros, connectivity, geometric predicates. |
+| `pdbiox-spatial` | Cell list, k-d tree, brute force, neighbour list, planner, PBC (orthorhombic/triclinic), minimum image. |
+| `pdbiox-surface` | Solvent-accessible surface (Shrake–Rupley), buried surface, deterministic sphere sampling. |
+| `pdbiox-analysis` | Contacts, contact maps, native contacts (Q), hydrogen bonds, salt bridges, chain interfaces. |
+| `pdbiox-validate` | Steric clashes, cis-peptide detection, occupancy/B-factor sanity checks. |
+| `pdbiox-compare` | Superposition-free lDDT; TM-score, GDT-TS and GDT-HA over the shared superposition. |
+| `pdbiox-seq` | Pairwise alignment (global, local, semi-global) with affine gap costs. |
+| `pdbiox-ml` | Apache Arrow interop (C-stream export, extension types). |
+| `pdbiox-mmap` | The single audited `unsafe` boundary for OS memory mapping. |
+| `pdbiox-py` | PyO3 bindings: zero-copy NumPy views, Arrow C-stream, scoped coordinate mutation. |
 | `pdbiox` | Facade crate re-exporting the public surface. |
 | `pdbiox-cli` | `info`, `convert`, `validate`, `measure`, `rmsd`, `policy`. |
 
@@ -84,14 +98,29 @@ returns zero. That runs (in order):
 
 ---
 
-## 5. State on 2026-08-06
+## 5. State on 2026-08-07
 
-**Phase 1 of 2 done** — the 33 of 44 phase-1 capability rows are implemented
-across the six crates above. Green: 361 tests, zero clippy-pedantic warnings,
-`cargo fmt --check` clean. Outstanding, in unblocking order: `pdbiox-py`,
-edit overlay and altloc resolution, mmap/streaming input, golden workflows and
-property tests, the differential harness, `pdbiox-query`, `pdbiox-spatial`,
-`pdbiox-bcif`.
+Phases 1–3 are implemented at `β` across the crates above; phase-4/6 native
+analysis has begun. Every implemented capability sits at `β` (native + tested)
+rather than `✓`, because a `✓` needs a row-specific golden workflow and
+differential evidence against an external corpus that is not in this checkout.
 
-`docs/ROADMAP.md` §Phase 1 carries the dated met/not-met table. Keep it
-truthful — the table is the single source of "are we done" for the phase.
+Recently landed native, deterministic capabilities (all `β`, all with unit and
+property tests): RMSF (`pdbiox-geom`); solvent-accessible surface and buried
+surface (`pdbiox-surface`); contacts, contact maps, native contacts/Q, hydrogen
+bonds, salt bridges, chain interfaces (`pdbiox-analysis`); clashes, cis-peptide
+detection, occupancy/B-factor checks (`pdbiox-validate`); pairwise alignment
+(`pdbiox-seq`); lDDT, TM-score, GDT-TS/HA (`pdbiox-compare`).
+
+Outstanding deterministic work, roughly in dependency order: the rest of each of
+those crates (Lee–Richards/SES/cavities; secondary structure, π-stacking, water
+bridges; bond/angle deviation, planarity, chirality, rotamer/valence/stereo,
+completeness; MSA, phylogenetics, k-mers, sequence formats, substitution
+matrices; chain/atom mapping, DockQ/CAD/QS, CE alignment); `pdbiox-query`
+altloc/entity/assembly and chirality selectors; PEOE charges in `pdbiox-chem`;
+and the format breadth (trajectories, density maps, remaining structural
+formats). Track B (`pdbiox-audit`, `pdbiox-fx`) and adapters are separate.
+
+`docs/PARITY.md` is the row-by-row source of truth; update a capability's row in
+the same change that adds it. `docs/ROADMAP.md` §Phase 1 carries the dated
+met/not-met table — keep it truthful.
