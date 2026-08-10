@@ -5,11 +5,13 @@ use pdbiox_query::{Groups, Query};
 const SOURCE: &str = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
-_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
-ATOM 1 C C1 LIG A 1 0 0 0\n\
-ATOM 2 C C2 LIG A 1 1 0 0\n\
-ATOM 3 C C3 LIG A 1 3 0 0\n\
-ATOM 4 C C4 LIG A 1 0 0 2\n";
+_atom_site.label_seq_id\n_atom_site.label_entity_id\n_atom_site.pdbx_PDB_model_num\n\
+_atom_site.auth_atom_id\n_atom_site.auth_comp_id\n_atom_site.auth_asym_id\n_atom_site.auth_seq_id\n\
+_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 C C1 LIG A 1 1 1 C1 LIG A 1 0 0 0\n\
+ATOM 2 C C2 LIG A 1 1 1 C2 LIG A 1 1 0 0\n\
+ATOM 3 C C3 LIG A 1 1 1 C3 LIG A 1 3 0 0\n\
+ATOM 4 C C4 LIG A 1 1 1 C4 LIG A 1 0 0 2\n";
 
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
@@ -21,7 +23,8 @@ fn structure() -> Structure {
 
 fn select(source: &str, backend: SpatialBackend) -> Vec<u32> {
     let structure = structure();
-    let policy = AnalysisPolicy::default();
+    let policy =
+        AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label);
     let resolver = match StructureSpatial::new(&structure, &policy, backend) {
         Ok(resolver) => resolver,
         Err(finding) => panic!("resolver failed: {finding}"),
@@ -46,7 +49,11 @@ fn textual_geometric_queries_are_identical_across_backends() {
         SpatialBackend::KdTree,
         SpatialBackend::NeighborList,
     ] {
-        assert_eq!(select("within 1.1 of name C1", backend), expected);
+        assert_eq!(
+            select("within 1.1 of name C1", backend),
+            expected,
+            "{backend:?}"
+        );
     }
 }
 
@@ -89,7 +96,8 @@ fn around_beyond_point_spheres_shells_and_cylinders_have_distinct_semantics() {
 #[test]
 fn repeated_structure_queries_reuse_the_same_generation_bound_index() {
     let structure = structure();
-    let policy = AnalysisPolicy::default();
+    let policy =
+        AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label);
     let resolver = match StructureSpatial::new(&structure, &policy, SpatialBackend::CellList) {
         Ok(resolver) => resolver,
         Err(finding) => panic!("resolver failed: {finding}"),
