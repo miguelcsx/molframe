@@ -4,7 +4,7 @@
 # This is the single definition of "green" for the project. The harness
 # dispatcher at bio/scripts/verify.sh runs this only when pdbiox is dirty; if
 # you are working from pdbiox directly, run it yourself. Every check has a
-# reason — see Rules.md §"Checking" for the rationale behind the ordering.
+# reason — see RULES.md §"Checking" for the rationale behind the ordering.
 #
 # Adjusting what this script runs means changing what "green" means. Don't.
 

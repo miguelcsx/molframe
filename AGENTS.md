@@ -31,7 +31,7 @@ overridden here falls back to the outer file.
 | `pdbiox` | Facade crate re-exporting the public surface. |
 | `pdbiox-cli` | `info`, `convert`, `validate`, `measure`, `rmsd`, `policy`. |
 
-`Rules.md` is the binding style guide for code in these crates. Read it before
+`RULES.md` is the binding style guide for code in these crates. Read it before
 editing.
 
 ---
@@ -40,7 +40,7 @@ editing.
 
 | Path | In git? | Why |
 |---|---|---|
-| `crates/`, `Cargo.toml`, `Cargo.lock`, `README.md`, `CONTRIBUTING.md`, `Rules.md`, `rust-toolchain.toml`, `scripts/` | yes | The published surface. |
+| `crates/`, `Cargo.toml`, `Cargo.lock`, `README.md`, `CONTRIBUTING.md`, `RULES.md`, `rust-toolchain.toml`, `scripts/` | yes | The published surface. |
 | `docs/`, `idea/`, `inspo/` | no — `info/exclude` | Spec, design notes, and reference libraries. Re-publish deliberately, not by accident. |
 | `target/` | no — `info/exclude` | Build output. |
 

@@ -122,7 +122,7 @@ cargo test  --workspace
 ./scripts/verify.sh   # the single definition of "green"
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [Rules.md](Rules.md) for the binding style guide.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [RULES.md](RULES.md) for the binding style guide.
 
 ## License and citation
 
