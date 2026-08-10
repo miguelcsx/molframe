@@ -10,11 +10,18 @@
 #![forbid(unsafe_code)]
 
 pub mod fixed;
+mod header;
 pub mod hybrid36;
+mod mmtf;
 mod reader;
-mod variant_writer;
 mod writer;
 
+pub use header::{PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbHeadersExt};
+pub use mmtf::{
+    MMTF_METADATA_EXTENSION, MmtfEntityMetadata, MmtfGroupMetadata, MmtfMetadata,
+    MmtfOptionalField, read_mmtf, write_mmtf,
+};
 pub use reader::{PdbReader, read, read_pdbqt, read_pqr};
-pub use variant_writer::{write_pdbqt, write_pqr};
-pub use writer::{PdbOptions, write, write_selected};
+pub use writer::{
+    PdbIdentifierNamespace, PdbOptions, write, write_pdbqt, write_pqr, write_selected,
+};

@@ -48,21 +48,34 @@ impl ReadState<'_> {
 
     pub(super) fn finish_variant_annotations(&mut self) {
         if !self.partial_charges.is_empty() {
-            let column = AnnotationColumn::from_entries(std::mem::take(&mut self.partial_charges));
+            let Ok(column) =
+                AnnotationColumn::from_entries(std::mem::take(&mut self.partial_charges))
+            else {
+                self.findings.push(Diagnostic::new(Code::E6009));
+                return;
+            };
             let _ = self
                 .data
                 .annotations
                 .insert(PARTIAL_CHARGE_ANNOTATION, AtomAnnotation::Real(column));
         }
         if !self.radii.is_empty() {
-            let column = AnnotationColumn::from_entries(std::mem::take(&mut self.radii));
+            let Ok(column) = AnnotationColumn::from_entries(std::mem::take(&mut self.radii)) else {
+                self.findings.push(Diagnostic::new(Code::E6009));
+                return;
+            };
             let _ = self
                 .data
                 .annotations
                 .insert(ATOM_RADIUS_ANNOTATION, AtomAnnotation::Real(column));
         }
         if !self.autodock_types.is_empty() {
-            let column = AnnotationColumn::from_entries(std::mem::take(&mut self.autodock_types));
+            let Ok(column) =
+                AnnotationColumn::from_entries(std::mem::take(&mut self.autodock_types))
+            else {
+                self.findings.push(Diagnostic::new(Code::E6009));
+                return;
+            };
             let _ = self
                 .data
                 .annotations

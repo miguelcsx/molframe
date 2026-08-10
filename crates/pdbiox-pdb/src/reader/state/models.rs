@@ -4,7 +4,7 @@
 //! The first model records a compact signature and every later row is compared
 //! before it can enter a dense coordinate store.
 
-use super::{ReadState, fixed};
+use super::{ReadState, fixed, hybrid36};
 use crate::reader::lines::Line;
 use pdbiox_core::chunk::ChunkBuilder;
 use pdbiox_core::diagnostic::{Code, Diagnostic, Severity};
@@ -33,12 +33,66 @@ pub(super) struct AtomSignature {
 }
 
 impl ReadState<'_> {
+    pub(super) fn atom_signature(
+        &mut self,
+        line: &Line<'_>,
+        raw_name: &str,
+        element: Element,
+    ) -> Option<AtomSignature> {
+        let chain = self.intern(fixed::text(line.text, 22, 22));
+        let Some(seq) = hybrid36::decode(fixed::raw(line.text, 23, 26), 4) else {
+            self.findings.push(
+                Diagnostic::new(Code::E1202)
+                    .with_message("residue number could not be read")
+                    .at(ByteSpan::empty(line.at)),
+            );
+            return None;
+        };
+        let ins_text = fixed::text(line.text, 27, 27);
+        let ins_code = if ins_text.is_empty() {
+            OptionalSymbol::NONE
+        } else {
+            OptionalSymbol::some(self.intern(ins_text))
+        };
+        let atom_name = self.intern(raw_name.trim());
+        let component_id = self.intern(fixed::text(line.text, 18, 20));
+        let alt = fixed::text(line.text, 17, 17);
+        let alt_id = if alt.is_empty() {
+            Some(AltId::BLANK)
+        } else {
+            AltId::labelled(self.intern(alt))
+        };
+        let Some(alt_id) = alt_id else {
+            self.findings.push(
+                Diagnostic::new(Code::E1901)
+                    .with_message("alternate-location identifier exceeds its encoding"),
+            );
+            return None;
+        };
+        Some(AtomSignature {
+            chain,
+            seq,
+            ins_code,
+            atom_name,
+            component_id,
+            alt_id,
+            element,
+        })
+    }
+
     pub(super) fn model(&mut self, line: &Line<'_>) {
-        let number =
-            match fixed::integer(line.text, 11, 14).and_then(|number| i32::try_from(number).ok()) {
-                Some(number) => number,
-                None => self.model_number,
-            };
+        let mut number = 0;
+        if let Some(parsed) =
+            fixed::integer(line.text, 11, 14).and_then(|value| i32::try_from(value).ok())
+        {
+            number = parsed;
+        } else {
+            self.findings.push(
+                Diagnostic::new(Code::E1202)
+                    .with_message("MODEL serial is absent or outside the supported range")
+                    .at(ByteSpan::empty(line.at)),
+            );
+        }
         match self.model_read {
             ModelRead::Before => {}
             ModelRead::Reading if self.options.only_first_model => {
