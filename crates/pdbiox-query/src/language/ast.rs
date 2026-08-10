@@ -1,5 +1,7 @@
 //! Typed selection intermediate representation.
 
+use pdbiox_chem::SmartsPattern;
+
 /// A selectable structure column.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
@@ -288,5 +290,5 @@ pub(crate) enum Expr {
     },
     Macro(Macro),
     Chirality(Box<str>),
-    Smarts(Box<str>),
+    Smarts(SmartsPattern),
 }
