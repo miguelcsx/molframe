@@ -21,6 +21,10 @@ impl Structure {
     ///
     /// Blank-labelled atoms are retained under every rule because they belong
     /// to every conformation. The stored structure is never changed.
+    ///
+    /// # Panics
+    /// Panics only if an internal alternate-location selector returns more
+    /// atoms than the structure contains.
     #[must_use]
     pub fn resolve_altlocs(&self, policy: &AnalysisPolicy) -> Analysis<AtomSelection> {
         let total = self.atom_count();
@@ -35,14 +39,26 @@ impl Structure {
             AltlocPolicy::HighestOccupancyPerAtom => (self.per_atom_occupancy(), false),
         };
 
-        let used = selection.len();
+        let Ok(used) = u32::try_from(selection.len()) else {
+            return Analysis::indeterminate(
+                selection,
+                Coverage {
+                    intended: total,
+                    used: 0,
+                    missing: total,
+                    ambiguous: 0,
+                },
+                policy,
+            )
+            .with_warning(Diagnostic::new(Code::E3001));
+        };
         let mut result = Analysis::complete(
             selection,
             Coverage {
                 intended: total,
                 used,
                 missing: 0,
-                ambiguous: total.saturating_sub(used),
+                ambiguous: total - used,
             },
             policy,
         );
@@ -71,7 +87,9 @@ impl Structure {
         let Some(symbol) = self.data().dictionary.get(label) else {
             return (self.select_label(None), true);
         };
-        let wanted = AltId::labelled(symbol);
+        let Some(wanted) = AltId::labelled(symbol) else {
+            return (self.select_label(None), true);
+        };
         let present = self
             .data()
             .atoms()

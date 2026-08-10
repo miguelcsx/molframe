@@ -6,41 +6,58 @@ use crate::element::Element;
 use crate::index::ResidueIndex;
 use crate::optional::{OptionalI32, OptionalSymbol};
 use crate::topology::{ChainRecord, EntityKind, PolymerKind, ResidueRecord};
+use num_traits::ToPrimitive;
 
 fn disordered() -> Structure {
     let mut data = super::super::StructureData::empty();
     let entity_id = data.dictionary.intern("1").expect("small dictionary");
     let component = data.dictionary.intern("ALA").expect("small dictionary");
     let chain = data.dictionary.intern("A").expect("small dictionary");
-    let alt_a = AltId::labelled(data.dictionary.intern("A").expect("small dictionary"));
-    let alt_b = AltId::labelled(data.dictionary.intern("B").expect("small dictionary"));
-    let entity = data.topology.entities.push(
-        entity_id,
-        EntityKind::Polymer,
-        OptionalSymbol::NONE,
-        &[component],
-    );
-    let residue = data.topology.residues.push(
-        ResidueRecord {
-            label_comp_id: component,
-            auth_comp_id: OptionalSymbol::NONE,
-            label_seq_id: OptionalI32::some(1),
-            auth_seq_id: OptionalI32::some(1),
-            ins_code: OptionalSymbol::NONE,
-            het: false,
-        },
-        0..5,
-    );
-    data.topology.chains.push(
-        ChainRecord {
-            label_asym_id: chain,
-            auth_asym_id: OptionalSymbol::some(chain),
-            entity,
-            polymer_kind: PolymerKind::Protein,
-        },
-        0..1,
-    );
-    data.topology.models.push(1, 0..1);
+    let alt_a = AltId::labelled(data.dictionary.intern("A").expect("small dictionary"))
+        .expect("interner identifier fits alternate-label encoding");
+    let alt_b = AltId::labelled(data.dictionary.intern("B").expect("small dictionary"))
+        .expect("interner identifier fits alternate-label encoding");
+    let entity = data
+        .topology
+        .entities
+        .push(
+            entity_id,
+            EntityKind::Polymer,
+            OptionalSymbol::NONE,
+            &[component],
+        )
+        .expect("small entity table");
+    let residue = data
+        .topology
+        .residues
+        .push(
+            ResidueRecord {
+                label_comp_id: component,
+                auth_comp_id: OptionalSymbol::NONE,
+                label_seq_id: OptionalI32::some(1),
+                auth_seq_id: OptionalI32::some(1),
+                ins_code: OptionalSymbol::NONE,
+                het: false,
+            },
+            0..5,
+        )
+        .expect("small residue table");
+    data.topology
+        .chains
+        .push(
+            ChainRecord {
+                label_asym_id: chain,
+                auth_asym_id: OptionalSymbol::some(chain),
+                entity,
+                polymer_kind: PolymerKind::Protein,
+            },
+            0..1,
+        )
+        .expect("small chain table");
+    data.topology
+        .models
+        .push(1, 0..1)
+        .expect("small model table");
 
     let mut builder = ChunkBuilder::new();
     builder.start_model(0);
@@ -56,7 +73,7 @@ fn disordered() -> Structure {
     {
         let atom_name = data.dictionary.intern(name).expect("small dictionary");
         builder.push(AtomRecord {
-            position: Some([index as f32, 0.0, 0.0]),
+            position: Some([index.to_f32().expect("small coordinate"), 0.0, 0.0]),
             element: Element::CARBON,
             atom_name,
             auth_atom_name: OptionalSymbol::NONE,
@@ -66,7 +83,10 @@ fn disordered() -> Structure {
             occupancy: (occupancy, Presence::Present),
             b_factor: (0.0, Presence::Present),
             formal_charge: (0, Presence::Inapplicable),
-            atom_site_id: index as u32 + 1,
+            atom_site_id: u32::try_from(index)
+                .expect("small atom index")
+                .checked_add(1)
+                .expect("small atom index"),
         });
     }
     let (chunks, coords) = builder.finish();
