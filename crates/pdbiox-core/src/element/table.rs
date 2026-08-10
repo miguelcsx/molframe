@@ -1,5 +1,5 @@
-//! Chemical element identity, and the fallback for recovering one from an atom
-//! name when a file does not declare it.
+//! Chemical element identity and the explicitly requested convention for
+//! recovering one from an atom name when a file does not declare it.
 //!
 //! An element is its atomic number in one byte. That fits the seven bits the
 //! per-atom column budgets and, more usefully, makes the element its own ordinal
@@ -62,10 +62,10 @@ const fn build_keys() -> [Key; 119] {
 
 const fn build_element_lookup() -> [u8; KEY_COUNT] {
     let mut lookup = [0u8; KEY_COUNT];
-    let mut z = 1;
+    let mut z = 1u8;
 
-    while z < KEYS.len() {
-        lookup[key_index(KEYS[z])] = z as u8;
+    while (z as usize) < KEYS.len() {
+        lookup[key_index(KEYS[z as usize])] = z;
         z += 1;
     }
 
@@ -114,10 +114,14 @@ impl Element {
     pub const NITROGEN: Self = Self(7);
     /// Oxygen.
     pub const OXYGEN: Self = Self(8);
+    /// Fluorine.
+    pub const FLUORINE: Self = Self(9);
     /// Phosphorus.
     pub const PHOSPHORUS: Self = Self(15);
     /// Sulfur.
     pub const SULFUR: Self = Self(16);
+    /// Chlorine.
+    pub const CHLORINE: Self = Self(17);
     /// Calcium — what `CA` means when the atom name starts in the first column.
     pub const CALCIUM: Self = Self(20);
     /// Iron.
@@ -198,9 +202,9 @@ impl Element {
     ///   first two characters name one, and a one-letter element otherwise.
     ///
     /// This is why `" CA "` in an amino acid is carbon and `"CA  "` in an ion is
-    /// calcium. It is only a fallback — a declared element always wins, and
-    /// falling back is recorded as a warning, because the rule is a convention
-    /// that files are free to violate.
+    /// calcium. Readers call this only under an explicit missing-element policy;
+    /// a declared element always wins and inference is recorded as a warning,
+    /// because the rule is a convention that files are free to violate.
     #[must_use]
     pub fn infer_from_pdb_atom_name(field: &str) -> Self {
         let bytes = field.as_bytes();
@@ -293,5 +297,5 @@ impl fmt::Display for Element {
 }
 
 #[cfg(test)]
-#[path = "element_tests.rs"]
+#[path = "table_tests.rs"]
 mod tests;

@@ -34,7 +34,7 @@ fn positions_order_by_ordinal_so_tables_can_be_binary_searched() {
 }
 
 #[test]
-fn advancing_past_the_last_representable_position_stalls_rather_than_wrapping() {
-    assert_eq!(AtomIndex::new(u32::MAX).next(), AtomIndex::new(u32::MAX));
-    assert_eq!(AtomIndex::new(0).next(), AtomIndex::new(1));
+fn advancing_past_the_last_representable_position_is_rejected() {
+    assert_eq!(AtomIndex::new(u32::MAX).next(), None);
+    assert_eq!(AtomIndex::new(0).next(), Some(AtomIndex::new(1)));
 }

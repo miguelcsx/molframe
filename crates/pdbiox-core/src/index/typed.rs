@@ -44,13 +44,13 @@ macro_rules! index_newtype {
                 self.0 as usize
             }
 
-            #[doc = concat!("Returns the next ", $label, " position.")]
-            ///
-            /// Saturates rather than wrapping, so a walk off the end of a table
-            /// stalls at the last position instead of returning to the first.
+            #[doc = concat!("Returns the next ", $label, " position, or `None` at the representation limit.")]
             #[must_use]
-            pub const fn next(self) -> Self {
-                Self(self.0.saturating_add(1))
+            pub const fn next(self) -> Option<Self> {
+                match self.0.checked_add(1) {
+                    Some(next) => Some(Self(next)),
+                    None => None,
+                }
             }
         }
 
@@ -126,5 +126,5 @@ index_newtype!(
 );
 
 #[cfg(test)]
-#[path = "index_tests.rs"]
+#[path = "typed_tests.rs"]
 mod tests;

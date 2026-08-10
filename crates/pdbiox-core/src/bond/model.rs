@@ -261,5 +261,5 @@ fn insert(neighbours: &mut [AtomIndex], cursor: &mut [u32], atom: AtomIndex, val
 }
 
 #[cfg(test)]
-#[path = "bond_tests.rs"]
+#[path = "model_tests.rs"]
 mod tests;

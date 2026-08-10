@@ -1,6 +1,7 @@
 //! Typed structure-local columns attached to atom rows.
 
 use crate::column::{Presence, ValidityMask};
+use crate::limits::CapacityError;
 use crate::symbol::SymbolId;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -13,6 +14,20 @@ pub const PARTIAL_CHARGE_ANNOTATION: &str = "charge";
 pub const ATOM_RADIUS_ANNOTATION: &str = "radius";
 /// Conventional custom column name for `AutoDock` atom types.
 pub const AUTODOCK_TYPE_ANNOTATION: &str = "autodock_type";
+/// Component role assigned from a chemical component definition.
+pub const COMPONENT_KIND_ANNOTATION: &str = "component_kind";
+/// Explicit polymer atom role assigned from a CCD-aware or caller-supplied profile.
+pub const POLYMER_ATOM_ROLE_ANNOTATION: &str = "polymer_atom_role";
+/// Aromatic-atom flag assigned from a chemical component definition.
+pub const AROMATIC_ATOM_ANNOTATION: &str = "aromatic";
+/// Formal charge assigned from a chemical component definition.
+pub const FORMAL_CHARGE_ANNOTATION: &str = "formalcharge";
+/// Hydrogen-bond donor role perceived from CCD connectivity and protonation.
+pub const HBOND_DONOR_ANNOTATION: &str = "hbond_donor";
+/// Hydrogen-bond acceptor role perceived from CCD connectivity and protonation.
+pub const HBOND_ACCEPTOR_ANNOTATION: &str = "hbond_acceptor";
+/// Modelled stereochemical configuration anchored to component coordinates.
+pub const STEREO_CONFIGURATION_ANNOTATION: &str = "chirality";
 /// Conventional custom column name for per-atom predicted confidence.
 pub const PLDDT_ANNOTATION: &str = "plddt";
 /// Conventional custom column name for per-atom predicted aligned error.
@@ -27,13 +42,18 @@ pub struct AnnotationColumn<T> {
 
 impl<T> AnnotationColumn<T> {
     /// Builds an all-present column.
-    #[must_use]
-    pub fn from_values(values: Vec<T>) -> Self {
-        let validity = ValidityMask::all_present(values.len() as u32);
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError`] when the column exceeds the supported row count.
+    pub fn from_values(values: Vec<T>) -> Result<Self, CapacityError> {
+        let len =
+            u32::try_from(values.len()).map_err(|_| CapacityError::new("annotation column"))?;
+        let validity = ValidityMask::all_present(len);
+        Ok(Self {
             values: Arc::new(values),
             validity,
-        }
+        })
     }
 
     /// Number of atom rows covered by the column.
@@ -60,7 +80,7 @@ impl<T> AnnotationColumn<T> {
         &self.values
     }
 
-    pub(crate) fn filter(&self, keep: impl Fn(u32) -> bool) -> Self
+    pub(crate) fn filter(&self, keep: impl Fn(u32) -> bool) -> Result<Self, CapacityError>
     where
         T: Clone,
     {
@@ -78,12 +98,20 @@ impl<T> AnnotationColumn<T> {
 
 impl<T> AnnotationColumn<T> {
     /// Builds a column from dense values paired with their validity state.
-    pub fn from_entries(entries: impl IntoIterator<Item = (T, Presence)>) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError`] when the column exceeds the supported row count.
+    pub fn from_entries(
+        entries: impl IntoIterator<Item = (T, Presence)>,
+    ) -> Result<Self, CapacityError> {
         let (values, presences): (Vec<_>, Vec<_>) = entries.into_iter().unzip();
-        Self {
+        let validity = ValidityMask::try_from_iter(presences)
+            .ok_or_else(|| CapacityError::new("annotation column"))?;
+        Ok(Self {
             values: Arc::new(values),
-            validity: presences.into_iter().collect(),
-        }
+            validity,
+        })
     }
 }
 
@@ -130,13 +158,13 @@ impl AtomAnnotation {
         self.len() == 0
     }
 
-    pub(crate) fn filter(&self, keep: impl Fn(u32) -> bool + Copy) -> Self {
-        match self {
-            Self::Boolean(column) => Self::Boolean(column.filter(keep)),
-            Self::Integer(column) => Self::Integer(column.filter(keep)),
-            Self::Real(column) => Self::Real(column.filter(keep)),
-            Self::Symbol(column) => Self::Symbol(column.filter(keep)),
-        }
+    pub(crate) fn filter(&self, keep: impl Fn(u32) -> bool + Copy) -> Result<Self, CapacityError> {
+        Ok(match self {
+            Self::Boolean(column) => Self::Boolean(column.filter(keep)?),
+            Self::Integer(column) => Self::Integer(column.filter(keep)?),
+            Self::Real(column) => Self::Real(column.filter(keep)?),
+            Self::Symbol(column) => Self::Symbol(column.filter(keep)?),
+        })
     }
 }
 
@@ -186,17 +214,16 @@ impl AtomAnnotations {
         self.columns.remove(name)
     }
 
-    pub(crate) fn filter(&self, keep: impl Fn(u32) -> bool + Copy) -> Self {
-        Self {
-            columns: self
-                .columns
-                .iter()
-                .map(|(name, column)| (name.clone(), column.filter(keep)))
-                .collect(),
-        }
+    pub(crate) fn filter(&self, keep: impl Fn(u32) -> bool + Copy) -> Result<Self, CapacityError> {
+        let columns = self
+            .columns
+            .iter()
+            .map(|(name, column)| Ok((name.clone(), column.filter(keep)?)))
+            .collect::<Result<_, CapacityError>>()?;
+        Ok(Self { columns })
     }
 }
 
 #[cfg(test)]
-#[path = "annotation_tests.rs"]
+#[path = "model_tests.rs"]
 mod tests;

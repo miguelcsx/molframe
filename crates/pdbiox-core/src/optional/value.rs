@@ -184,5 +184,5 @@ impl fmt::Debug for OptionalI32 {
 }
 
 #[cfg(test)]
-#[path = "optional_tests.rs"]
+#[path = "value_tests.rs"]
 mod tests;

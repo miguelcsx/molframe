@@ -44,10 +44,13 @@ impl CoordinateGeneration {
     /// The generation of a structure that has not been edited.
     pub const INITIAL: Self = Self(0);
 
-    /// Returns the next generation.
+    /// Returns the next generation, or `None` when the counter is exhausted.
     #[must_use]
-    pub const fn next(self) -> Self {
-        Self(self.0.saturating_add(1))
+    pub const fn next(self) -> Option<Self> {
+        match self.0.checked_add(1) {
+            Some(next) => Some(Self(next)),
+            None => None,
+        }
     }
 
     /// The raw counter.
@@ -234,7 +237,6 @@ impl CoordinateBlock {
     /// Reaching for this outside a scoped edit skips the generation bump that
     /// invalidates derived state, which is why it is not part of the public
     /// structure API.
-    #[allow(dead_code, reason = "reached by the scoped coordinate edit")]
     pub(crate) fn as_mut_slice(&mut self) -> &mut [[f32; 3]] {
         let all: &mut [[f32; 3]] =
             bytemuck::cast_slice_mut(Arc::make_mut(&mut self.lanes).as_mut_slice());
@@ -332,5 +334,5 @@ fn usize_range(range: Range<u32>) -> Option<Range<usize>> {
 }
 
 #[cfg(test)]
-#[path = "coords_tests.rs"]
+#[path = "storage_tests.rs"]
 mod tests;

@@ -2,14 +2,18 @@ use super::*;
 
 #[test]
 fn advancing_over_a_newline_starts_the_next_line_at_column_one() {
-    let at = Position::START.advance(b'a').advance(b'\n');
-    assert_eq!(at, Position::new(2, 2, 1));
+    let at = Position::START
+        .advance(b'a')
+        .and_then(|position| position.advance(b'\n'));
+    assert_eq!(at, Some(Position::new(2, 2, 1)));
 }
 
 #[test]
 fn advancing_over_an_ordinary_byte_moves_the_column_only() {
-    let at = Position::START.advance(b'a').advance(b'b');
-    assert_eq!(at, Position::new(2, 1, 3));
+    let at = Position::START
+        .advance(b'a')
+        .and_then(|position| position.advance(b'b'));
+    assert_eq!(at, Some(Position::new(2, 1, 3)));
 }
 
 #[test]
@@ -17,7 +21,7 @@ fn a_span_yields_exactly_the_bytes_it_covers() {
     let source = b"data_x\nloop_\n";
     let span = ByteSpan::new(Position::new(7, 2, 1), 12);
     assert_eq!(span.slice(source), Some(&b"loop_"[..]));
-    assert_eq!(span.len(), 5);
+    assert_eq!(span.len(), Some(5));
 }
 
 #[test]

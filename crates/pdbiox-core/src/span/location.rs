@@ -54,22 +54,31 @@ impl Position {
     /// A newline moves to column 1 of the next line; everything else advances
     /// the column. Carriage returns advance the column like any other byte, so a
     /// CRLF file reports the column of the visible character.
+    ///
     #[must_use]
-    pub const fn advance(self, byte: u8) -> Self {
-        let byte_offset = self.byte_offset.saturating_add(1);
+    pub const fn advance(self, byte: u8) -> Option<Self> {
+        let Some(byte_offset) = self.byte_offset.checked_add(1) else {
+            return None;
+        };
 
         if byte == b'\n' {
-            Self {
+            let Some(line) = self.line.checked_add(1) else {
+                return None;
+            };
+            Some(Self {
                 byte_offset,
-                line: self.line.saturating_add(1),
+                line,
                 column: 1,
-            }
+            })
         } else {
-            Self {
+            let Some(column) = self.column.checked_add(1) else {
+                return None;
+            };
+            Some(Self {
                 byte_offset,
                 line: self.line,
-                column: self.column.saturating_add(1),
-            }
+                column,
+            })
         }
     }
 }
@@ -102,7 +111,7 @@ impl ByteSpan {
     /// use pdbiox_core::{ByteSpan, Position};
     ///
     /// let span = ByteSpan::new(Position::new(10, 2, 1), 14);
-    /// assert_eq!(span.len(), 4);
+    /// assert_eq!(span.len(), Some(4));
     /// ```
     #[must_use]
     pub const fn new(start: Position, end: u32) -> Self {
@@ -119,15 +128,16 @@ impl ByteSpan {
     }
 
     /// Returns the length of the span in bytes.
+    ///
     #[must_use]
-    pub const fn len(self) -> u32 {
-        self.end.saturating_sub(self.start.byte_offset)
+    pub const fn len(self) -> Option<u32> {
+        self.end.checked_sub(self.start.byte_offset)
     }
 
     /// Returns true when the span covers no bytes.
     #[must_use]
     pub const fn is_empty(self) -> bool {
-        self.len() == 0
+        matches!(self.len(), Some(0))
     }
 
     /// Returns the bytes this span covers, or `None` if it runs past the end of
@@ -152,5 +162,5 @@ impl fmt::Display for ByteSpan {
 }
 
 #[cfg(test)]
-#[path = "span_tests.rs"]
+#[path = "location_tests.rs"]
 mod tests;
