@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Deposited-component chemistry and versioned element data for pdbiox"
 
 [dependencies]
+num-traits.workspace = true
 pdbiox-cif.workspace = true
 pdbiox-core.workspace = true
 
