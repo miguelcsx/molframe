@@ -72,7 +72,10 @@ proptest! {
             .into_iter()
             .map(|(x, y, z)| [x, y, z])
             .collect();
-        let all = AtomSelection::All(positions.len() as u32);
+        let Ok(atom_count) = u32::try_from(positions.len()) else {
+            panic!("test position count fits u32");
+        };
+        let all = AtomSelection::All(atom_count);
         let expected = pairs_within(
             &positions,
             &all,
@@ -91,6 +94,69 @@ proptest! {
             SpatialBackend::NeighborList,
         ] {
             let actual = pairs_within(&positions, &all, &all, cutoff, backend, None);
+            let actual = match actual {
+                Ok(pairs) => pair_indices(&pairs),
+                Err(error) => return Err(TestCaseError::fail(error.to_string())),
+            };
+            prop_assert_eq!(actual, expected.clone());
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+    #[test]
+    fn native_periodic_indices_match_minimum_image_brute_force(
+        positions in prop::collection::vec(
+            (-12.0_f32..12.0, -12.0_f32..12.0, -12.0_f32..12.0),
+            1..35,
+        ),
+        cutoff in 0.0_f32..3.0,
+        triclinic in any::<bool>(),
+    ) {
+        let positions: Vec<[f32; 3]> = positions
+            .into_iter()
+            .map(|(x, y, z)| [x, y, z])
+            .collect();
+        let angles = if triclinic {
+            [70.0, 80.0, 65.0]
+        } else {
+            [90.0; 3]
+        };
+        let periodic = PeriodicBox::from_cell(pdbiox_core::structure::UnitCell {
+            lengths: [8.0, 9.0, 10.0],
+            angles,
+        });
+        let periodic = match periodic {
+            Ok(periodic) => periodic,
+            Err(error) => return Err(TestCaseError::fail(error.to_string())),
+        };
+        let Ok(atom_count) = u32::try_from(positions.len()) else {
+            panic!("test position count fits u32");
+        };
+        let all = AtomSelection::All(atom_count);
+        let expected = pairs_within(
+            &positions,
+            &all,
+            &all,
+            cutoff,
+            SpatialBackend::BruteForce,
+            Some(&periodic),
+        );
+        let expected = match expected {
+            Ok(pairs) => pair_indices(&pairs),
+            Err(error) => return Err(TestCaseError::fail(error.to_string())),
+        };
+
+        for backend in [SpatialBackend::CellList, SpatialBackend::KdTree] {
+            let actual = pairs_within(
+                &positions,
+                &all,
+                &all,
+                cutoff,
+                backend,
+                Some(&periodic),
+            );
             let actual = match actual {
                 Ok(pairs) => pair_indices(&pairs),
                 Err(error) => return Err(TestCaseError::fail(error.to_string())),
