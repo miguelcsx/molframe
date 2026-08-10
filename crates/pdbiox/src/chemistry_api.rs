@@ -7,6 +7,14 @@ use crate::{
 use pdbiox_core::bond::BondTableBuilder;
 use std::collections::BTreeSet;
 
+/// Default multiplier applied to the sum of two CCD covalent radii.
+pub const DEFAULT_BOND_RADIUS_SCALE: f32 = 1.15;
+
+/// Default minimum accepted interatomic distance in angstroms.
+pub const DEFAULT_MINIMUM_BOND_DISTANCE: f32 = 0.4;
+
+const BOND_INFERENCE_PARAMETER: &str = "bond inference";
+
 /// Parameters for explicitly requested geometric bond inference.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BondInference {
@@ -25,8 +33,8 @@ pub struct BondInference {
 impl Default for BondInference {
     fn default() -> Self {
         Self {
-            scale: 1.15,
-            lower_bound: 0.4,
+            scale: DEFAULT_BOND_RADIUS_SCALE,
+            lower_bound: DEFAULT_MINIMUM_BOND_DISTANCE,
             exclude_across_chains: false,
             respect_existing: true,
             backend: SpatialBackend::Auto,
@@ -61,7 +69,9 @@ pub fn infer_bonds(
         || !options.lower_bound.is_finite()
         || options.lower_bound < 0.0
     {
-        return Err(Diagnostic::new(Code::E4002).with_context("parameter", "bond inference"));
+        return Err(
+            Diagnostic::new(Code::E4002).with_context("parameter", BOND_INFERENCE_PARAMETER)
+        );
     }
     if !structure.data().coords.is_dense() {
         return Err(Diagnostic::new(Code::E6008));
@@ -79,10 +89,20 @@ pub fn infer_bonds(
         .iter()
         .enumerate()
         .filter(|(_, radius)| radius.is_none())
-        .map(|(atom, _)| AtomIndex::new(atom as u32))
-        .collect();
+        .map(|(atom, _)| {
+            u32::try_from(atom)
+                .map(AtomIndex::new)
+                .map_err(|error| Diagnostic::new(Code::E9001).with_message(error.to_string()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let max_radius = radii.iter().flatten().copied().fold(0.0f32, f32::max);
     let maximum = max_radius * 2.0 * options.scale;
+    let lower_squared = options.lower_bound * options.lower_bound;
+    if !maximum.is_finite() || !lower_squared.is_finite() || options.lower_bound > maximum {
+        return Err(
+            Diagnostic::new(Code::E4002).with_context("parameter", BOND_INFERENCE_PARAMETER)
+        );
+    }
     let pairs = pdbiox_spatial::pairs_within(
         structure.positions(),
         &AtomSelection::All(structure.atom_count()),
@@ -104,7 +124,7 @@ pub fn infer_bonds(
         output.push(bond);
     }
     for pair in pairs {
-        if reject_pair(&pair, &radii, &chains, &existing, options) {
+        if reject_pair(&pair, &radii, &chains, &existing, options, lower_squared) {
             continue;
         }
         output.push(BondRecord {
@@ -125,35 +145,36 @@ pub fn infer_bonds(
 fn reject_pair(
     pair: &pdbiox_spatial::NeighborPair,
     radii: &[Option<f32>],
-    chains: &[u32],
+    chains: &[Option<u32>],
     existing: &BTreeSet<(u32, u32)>,
     options: BondInference,
+    lower_squared: f32,
 ) -> bool {
     if options.respect_existing && existing.contains(&(pair.first, pair.second)) {
         return true;
     }
     if options.exclude_across_chains
-        && chains.get(pair.first as usize) != chains.get(pair.second as usize)
+        && chains.get(AtomIndex::new(pair.first).as_usize())
+            != chains.get(AtomIndex::new(pair.second).as_usize())
     {
         return true;
     }
     let (Some(Some(left)), Some(Some(right))) = (
-        radii.get(pair.first as usize),
-        radii.get(pair.second as usize),
+        radii.get(AtomIndex::new(pair.first).as_usize()),
+        radii.get(AtomIndex::new(pair.second).as_usize()),
     ) else {
         return true;
     };
-    let lower = options.lower_bound * options.lower_bound;
     let upper = (left + right).powi(2) * options.scale.powi(2);
-    pair.distance_squared < lower || pair.distance_squared > upper
+    pair.distance_squared < lower_squared || pair.distance_squared > upper
 }
 
-fn atom_chains(structure: &Structure) -> Vec<u32> {
-    let mut chains = vec![u32::MAX; structure.atom_count() as usize];
+fn atom_chains(structure: &Structure) -> Vec<Option<u32>> {
+    let mut chains = vec![None; AtomIndex::new(structure.atom_count()).as_usize()];
     for chain in structure.data().chains() {
         for residue in chain.residues() {
             for atom in residue.atoms() {
-                chains[atom.index().as_usize()] = chain.index().get();
+                chains[atom.index().as_usize()] = Some(chain.index().get());
             }
         }
     }
