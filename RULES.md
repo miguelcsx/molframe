@@ -26,7 +26,7 @@ says *where it was decided* does not.
 
 ```rust
 // Wrong — cites the spec.
-/// Both namespaces are stored (FR-101, see 05-identifiers.md §3).
+/// Both namespaces are stored (REQ-101, see identifiers.md §3).
 
 // Right — says the thing.
 /// Both identifier namespaces are stored. Choosing between them at read time is
