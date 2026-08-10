@@ -10,8 +10,9 @@ This covers *how* the code is written.
 
 ## 1. Comments and docstrings never cite the specification
 
-No requirement numbers, no document names, no section references, no ADR
-numbers. Not `FR-306`, not `04-storage-layout.md §7`, not `ADR-0009`.
+No requirement numbers, no document names, no section references, no internal
+record numbers — nothing that points at a document living outside the code. Not
+`REQ-306`, not `storage-layout.md §7`, not `DEC-0009`.
 
 Explain the reasoning in its own terms instead. Docstrings should still be
 thorough — the rule removes a pointer, not the explanation it pointed at.
