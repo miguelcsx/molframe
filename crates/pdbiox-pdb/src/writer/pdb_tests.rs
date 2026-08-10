@@ -65,6 +65,64 @@ fn names_and_elements_land_in_the_columns_a_reader_expects() {
 }
 
 #[test]
+fn namespace_selects_one_complete_identifier_family() {
+    const CIF: &str = "data_ids\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.auth_atom_id\n_atom_site.label_comp_id\n\
+_atom_site.auth_comp_id\n_atom_site.label_asym_id\n_atom_site.auth_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.auth_seq_id\n_atom_site.Cartn_x\n\
+_atom_site.Cartn_y\n_atom_site.Cartn_z\n_atom_site.occupancy\n_atom_site.B_iso_or_equiv\n\
+ATOM 1 C LC AC LIG DRG L A 7 42 0 0 0 0.75 12.5\n";
+    let input = InputBuffer::from_bytes(CIF.as_bytes().to_vec());
+    let Ok((structure, _)) = pdbiox_cif::read(&input, &ReadOptions::new()) else {
+        panic!("namespace fixture should parse");
+    };
+    let Ok(label) = write(
+        &structure,
+        &PdbOptions::new().namespace(PdbIdentifierNamespace::Label),
+    ) else {
+        panic!("label namespace is complete");
+    };
+    let Ok(auth) = write(
+        &structure,
+        &PdbOptions::new().namespace(PdbIdentifierNamespace::Auth),
+    ) else {
+        panic!("auth namespace is complete");
+    };
+    let Some(label_atom) = label.lines().find(|line| line.starts_with("ATOM")) else {
+        panic!("label atom line absent");
+    };
+    let Some(auth_atom) = auth.lines().find(|line| line.starts_with("ATOM")) else {
+        panic!("auth atom line absent");
+    };
+    assert_eq!(crate::fixed::text(label_atom, 13, 16), "LC");
+    assert_eq!(crate::fixed::text(label_atom, 18, 20), "LIG");
+    assert_eq!(crate::fixed::text(label_atom, 22, 22), "L");
+    assert_eq!(crate::fixed::text(label_atom, 23, 26), "7");
+    assert_eq!(crate::fixed::text(auth_atom, 13, 16), "AC");
+    assert_eq!(crate::fixed::text(auth_atom, 18, 20), "DRG");
+    assert_eq!(crate::fixed::text(auth_atom, 22, 22), "A");
+    assert_eq!(crate::fixed::text(auth_atom, 23, 26), "42");
+}
+
+#[test]
+fn missing_occupancy_and_b_factor_are_refused_before_output() {
+    const MISSING: &str =
+        "ATOM      1  N   GLY A   1      27.340  24.430   2.614                      N\nEND\n";
+    let structure = parse(MISSING);
+    let Err(findings) = write(&structure, &PdbOptions::new()) else {
+        panic!("missing mandatory numeric fields must be refused");
+    };
+    let contexts = findings
+        .iter()
+        .flat_map(|finding| finding.context().iter())
+        .map(pdbiox_core::ContextItem::value)
+        .collect::<Vec<_>>();
+    assert!(contexts.contains(&"occupancy"));
+    assert!(contexts.contains(&"B factor"));
+}
+
+#[test]
 fn a_chain_label_the_format_cannot_hold_is_refused_rather_than_truncated() {
     let mut data = parse(DIPEPTIDE).data().clone();
     let Ok(long) = data.dictionary.intern("AA") else {
@@ -198,13 +256,14 @@ fn generated_pdb(positions: &[(f32, f32, f32)]) -> String {
     let mut source = String::new();
     for (index, (x, y, z)) in positions.iter().enumerate() {
         let serial = index + 1;
-        let _written = writeln!(
+        writeln!(
             source,
             "ATOM  {serial:>5} C{serial:<3} GLY A   1    \
              {x:>8.3}{y:>8.3}{z:>8.3}{occ:>6.2}{b:>6.2}           C  ",
             occ = 1.0,
             b = 10.0,
-        );
+        )
+        .expect("writing to a string is infallible");
     }
     source.push_str("END\n");
     source
@@ -227,32 +286,34 @@ fn rename_first_chain(
             continue;
         };
         let relabelled = chain.get() == 0;
-        rebuilt.push(
-            ChainRecord {
-                label_asym_id: if relabelled {
-                    label
-                } else {
-                    match chains.label_asym_id(chain) {
-                        Some(existing) => existing,
-                        None => label,
-                    }
+        rebuilt
+            .push(
+                ChainRecord {
+                    label_asym_id: if relabelled {
+                        label
+                    } else {
+                        match chains.label_asym_id(chain) {
+                            Some(existing) => existing,
+                            None => label,
+                        }
+                    },
+                    auth_asym_id: OptionalSymbol::some(if relabelled {
+                        label
+                    } else {
+                        match chains.auth_asym_id(chain) {
+                            Some(existing) => existing,
+                            None => label,
+                        }
+                    }),
+                    entity,
+                    polymer_kind: match chains.polymer_kind(chain) {
+                        Some(kind) => kind,
+                        None => PolymerKind::None,
+                    },
                 },
-                auth_asym_id: OptionalSymbol::some(if relabelled {
-                    label
-                } else {
-                    match chains.auth_asym_id(chain) {
-                        Some(existing) => existing,
-                        None => label,
-                    }
-                }),
-                entity,
-                polymer_kind: match chains.polymer_kind(chain) {
-                    Some(kind) => kind,
-                    None => PolymerKind::None,
-                },
-            },
-            residues,
-        );
+                residues,
+            )
+            .expect("small chain table");
     }
     rebuilt
 }

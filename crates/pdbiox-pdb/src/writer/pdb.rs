@@ -11,11 +11,17 @@
 //! the failure this library exists to prevent.
 
 use crate::hybrid36;
+use crate::{PDB_HEADERS_EXTENSION, PdbHeaders};
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::io::{Select, SelectAll};
 use pdbiox_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
 use std::collections::HashMap;
 use std::fmt::Write as _;
+
+#[path = "identity.rs"]
+mod identity;
+pub use identity::PdbIdentifierNamespace;
+pub(crate) use identity::{atom_name, chain_name, component_name, residue_sequence};
 
 /// Bounds whose rounding would overflow an eight-column, three-decimal field.
 /// The negative side loses one digit to the sign, so the limits are asymmetric.
@@ -23,7 +29,7 @@ const MIN_COORDINATE: f64 = -999.999_5;
 const MAX_COORDINATE: f64 = 9_999.999_5;
 
 /// How to write, and what to do about a structure that does not fit.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PdbOptions {
     /// Rename chains on the way out, so a structure with labels the format
     /// cannot hold can still be written deliberately.
@@ -33,6 +39,18 @@ pub struct PdbOptions {
     /// Off by default: a consumer that does not implement the scheme would read
     /// a wrong number without noticing, so it is offered rather than assumed.
     hybrid36: bool,
+    /// Identifier namespace used consistently for every deposited identity.
+    namespace: PdbIdentifierNamespace,
+}
+
+impl Default for PdbOptions {
+    fn default() -> Self {
+        Self {
+            chain_map: HashMap::new(),
+            hybrid36: false,
+            namespace: PdbIdentifierNamespace::Label,
+        }
+    }
 }
 
 impl PdbOptions {
@@ -54,6 +72,17 @@ impl PdbOptions {
     pub const fn hybrid36(mut self, enabled: bool) -> Self {
         self.hybrid36 = enabled;
         self
+    }
+
+    /// Selects one identifier namespace for chains, residues and atoms.
+    #[must_use]
+    pub const fn namespace(mut self, namespace: PdbIdentifierNamespace) -> Self {
+        self.namespace = namespace;
+        self
+    }
+
+    pub(crate) const fn identifier_namespace(&self) -> PdbIdentifierNamespace {
+        self.namespace
     }
 
     /// The label a chain is written under.
@@ -85,7 +114,7 @@ pub fn write_selected(
     options: &PdbOptions,
     select: &impl Select,
 ) -> Result<String, Vec<Diagnostic>> {
-    let refusals = check_capacity(structure, options, select);
+    let refusals = check_capacity(structure, options, select, RequiredAtomFields::Pdb);
     if !refusals.is_empty() {
         return Err(refusals);
     }
@@ -93,8 +122,55 @@ pub fn write_selected(
     let data = structure.data();
     let mut out = String::with_capacity(structure.atom_count() as usize * 81);
 
+    if let Some(headers) = data.extensions.get::<PdbHeaders>(PDB_HEADERS_EXTENSION) {
+        for record in headers.records() {
+            let _ = writeln!(out, "{}", record.line());
+        }
+    } else {
+        write_generated_metadata(&mut out, structure);
+    }
+
+    let mut serial = 1i64;
+    for chain in data.chains() {
+        if !select.accept_chain(chain.index()) {
+            continue;
+        }
+        let label = chain_label(&chain, options.namespace);
+        let label = options.label_for(label);
+
+        for residue in chain.residues() {
+            if !select.accept_residue(residue.index()) {
+                continue;
+            }
+            for atom in residue.atoms() {
+                if !select.accept_atom(atom.index()) {
+                    continue;
+                }
+                if let Err(finding) =
+                    write_atom(&mut out, structure, &atom, &residue, label, serial, options)
+                {
+                    return Err(vec![finding]);
+                }
+                serial += 1;
+            }
+        }
+        let _ = writeln!(out, "TER   {:>5}", serial_field(serial, options));
+        serial += 1;
+    }
+    out.push_str("END\n");
+    Ok(out)
+}
+
+fn write_generated_metadata(out: &mut String, structure: &Structure) {
+    let data = structure.data();
     if let Some(id) = &data.entry.id {
         let _ = writeln!(out, "HEADER    {:<40}{:<9}   {:>4}", "", "", id);
+    }
+    if let Some(title) = &data.entry.title {
+        let _ = writeln!(out, "TITLE     {title}");
+    }
+    if let Some(method) = &data.entry.method {
+        let _ = writeln!(out, "EXPDTA    {method}");
     }
     if let Some(cell) = data.cell {
         let _ = writeln!(
@@ -108,32 +184,6 @@ pub fn write_selected(
             cell.angles[2],
         );
     }
-
-    let mut serial = 1i64;
-    for chain in data.chains() {
-        if !select.accept_chain(chain.index()) {
-            continue;
-        }
-        let label = chain_label(structure, &chain);
-        let label = options.label_for(&label);
-
-        for residue in chain.residues() {
-            if !select.accept_residue(residue.index()) {
-                continue;
-            }
-            for atom in residue.atoms() {
-                if !select.accept_atom(atom.index()) {
-                    continue;
-                }
-                write_atom(&mut out, structure, &atom, &residue, label, serial, options);
-                serial += 1;
-            }
-        }
-        let _ = writeln!(out, "TER   {:>5}", serial_field(serial, options));
-        serial += 1;
-    }
-    out.push_str("END\n");
-    Ok(out)
 }
 
 fn write_atom(
@@ -144,12 +194,14 @@ fn write_atom(
     chain: &str,
     serial: i64,
     options: &PdbOptions,
-) {
+) -> Result<(), Diagnostic> {
     let record = if residue.is_het() { "HETATM" } else { "ATOM  " };
-    let name = match atom.name() {
-        Some(name) => name,
-        None => "",
-    };
+    let name = required_text(
+        atom_name(*atom, options.namespace),
+        "atom identifier",
+        *atom,
+        options,
+    )?;
     let element = match atom.element() {
         Some(element) => element.symbol(),
         None => "",
@@ -157,13 +209,21 @@ fn write_atom(
     // An atom whose position was never recorded still has a row here, but the
     // format has no way to say "unrecorded" — so it is left out of the file
     // rather than written as an origin the experiment never observed.
-    let Some(position) = atom.position() else {
-        return;
-    };
-    let seq = match residue.auth_seq_id().or_else(|| residue.label_seq_id()) {
-        Some(seq) => i64::from(seq),
-        None => 0,
-    };
+    let position = required_value(atom.position(), "coordinates", *atom, options)?;
+    let seq = i64::from(required_value(
+        residue_sequence(*residue, options.namespace),
+        "residue sequence identifier",
+        *atom,
+        options,
+    )?);
+    let component = required_text(
+        component_name(*atom, *residue, options.namespace),
+        "component identifier",
+        *atom,
+        options,
+    )?;
+    let occupancy = required_value(atom.occupancy(), "occupancy", *atom, options)?;
+    let b_factor = required_value(atom.b_factor(), "B factor", *atom, options)?;
 
     let _ = writeln!(
         out,
@@ -172,10 +232,7 @@ fn write_atom(
         serial = serial_field(serial, options),
         name = atom_name_field(name),
         alt = alt_field(structure, atom),
-        comp = match atom.component_name() {
-            Some(comp) => comp,
-            None => "",
-        },
+        comp = component,
         seq = residue_field(seq, options),
         ins = match residue.ins_code() {
             Some(code) => code,
@@ -184,15 +241,10 @@ fn write_atom(
         x = f64::from(position[0]),
         y = f64::from(position[1]),
         z = f64::from(position[2]),
-        occ = match atom.occupancy() {
-            Some(occupancy) => f64::from(occupancy),
-            None => 1.0,
-        },
-        b = match atom.b_factor() {
-            Some(b_factor) => f64::from(b_factor),
-            None => 0.0,
-        },
+        occ = f64::from(occupancy),
+        b = f64::from(b_factor),
     );
+    Ok(())
 }
 
 /// The four-column name field.
@@ -240,12 +292,21 @@ pub(crate) fn residue_field(seq: i64, options: &PdbOptions) -> String {
     }
 }
 
-pub(crate) fn chain_label(structure: &Structure, chain: &ChainRef<'_>) -> Box<str> {
-    let symbol = chain.auth_asym_id().or_else(|| chain.label_asym_id());
-    match symbol.and_then(|symbol| structure.resolve(symbol)) {
-        Some(label) => label.into(),
-        None => "".into(),
+pub(crate) fn chain_label<'a>(
+    chain: &'a ChainRef<'a>,
+    namespace: PdbIdentifierNamespace,
+) -> &'a str {
+    match chain_name(*chain, namespace) {
+        Some(name) => name,
+        None => "",
     }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum RequiredAtomFields {
+    Pdb,
+    Pqr,
+    Pdbqt,
 }
 
 /// Everything about the structure that the format cannot hold.
@@ -253,6 +314,7 @@ pub(crate) fn check_capacity(
     structure: &Structure,
     options: &PdbOptions,
     select: &impl Select,
+    required: RequiredAtomFields,
 ) -> Vec<Diagnostic> {
     let data = structure.data();
     let mut refusals = Vec::new();
@@ -261,8 +323,8 @@ pub(crate) fn check_capacity(
         if !select.accept_chain(chain.index()) {
             continue;
         }
-        let original = chain_label(structure, &chain);
-        let written = options.label_for(&original);
+        let original = chain_label(&chain, options.namespace);
+        let written = options.label_for(original);
         if written.chars().count() > 1 {
             refusals.push(
                 Diagnostic::new(Code::E4102)
@@ -274,7 +336,7 @@ pub(crate) fn check_capacity(
             if !select.accept_residue(residue.index()) {
                 continue;
             }
-            check_residue(&residue, options, &mut refusals);
+            check_residue(&residue, options, select, required, &mut refusals);
         }
     }
 
@@ -289,8 +351,14 @@ pub(crate) fn check_capacity(
     refusals
 }
 
-fn check_residue(residue: &ResidueRef<'_>, options: &PdbOptions, refusals: &mut Vec<Diagnostic>) {
-    if let Some(seq) = residue.auth_seq_id().or_else(|| residue.label_seq_id())
+fn check_residue(
+    residue: &ResidueRef<'_>,
+    options: &PdbOptions,
+    select: &impl Select,
+    required: RequiredAtomFields,
+    refusals: &mut Vec<Diagnostic>,
+) {
+    if let Some(seq) = residue_sequence(*residue, options.namespace)
         && !options.hybrid36
         && hybrid36::needs_hybrid36(i64::from(seq), 4)
     {
@@ -301,6 +369,10 @@ fn check_residue(residue: &ResidueRef<'_>, options: &PdbOptions, refusals: &mut 
         );
     }
     for atom in residue.atoms() {
+        if !select.accept_atom(atom.index()) {
+            continue;
+        }
+        check_required_atom_fields(atom, *residue, options, required, refusals);
         let Some(position) = atom.position() else {
             continue;
         };
@@ -317,6 +389,73 @@ fn check_residue(residue: &ResidueRef<'_>, options: &PdbOptions, refusals: &mut 
     }
 }
 
+fn check_required_atom_fields(
+    atom: AtomRef<'_>,
+    residue: ResidueRef<'_>,
+    options: &PdbOptions,
+    required: RequiredAtomFields,
+    refusals: &mut Vec<Diagnostic>,
+) {
+    let common = [
+        (atom.position().is_some(), "coordinates"),
+        (
+            atom_name(atom, options.namespace).is_some(),
+            "atom identifier",
+        ),
+        (
+            component_name(atom, residue, options.namespace).is_some(),
+            "component identifier",
+        ),
+        (
+            residue_sequence(residue, options.namespace).is_some(),
+            "residue sequence identifier",
+        ),
+    ];
+    for (present, field) in common {
+        if !present {
+            refusals.push(missing_field(field, atom, options));
+        }
+    }
+    if matches!(
+        required,
+        RequiredAtomFields::Pdb | RequiredAtomFields::Pdbqt
+    ) {
+        for (present, field) in [
+            (atom.occupancy().is_some(), "occupancy"),
+            (atom.b_factor().is_some(), "B factor"),
+        ] {
+            if !present {
+                refusals.push(missing_field(field, atom, options));
+            }
+        }
+    }
+}
+
+fn required_text<'a>(
+    value: Option<&'a str>,
+    field: &'static str,
+    atom: AtomRef<'_>,
+    options: &PdbOptions,
+) -> Result<&'a str, Diagnostic> {
+    value.ok_or_else(|| missing_field(field, atom, options))
+}
+
+fn required_value<T>(
+    value: Option<T>,
+    field: &'static str,
+    atom: AtomRef<'_>,
+    options: &PdbOptions,
+) -> Result<T, Diagnostic> {
+    value.ok_or_else(|| missing_field(field, atom, options))
+}
+
+fn missing_field(field: &'static str, atom: AtomRef<'_>, options: &PdbOptions) -> Diagnostic {
+    Diagnostic::new(Code::E4105)
+        .with_context("required field", field)
+        .with_context("atom", atom.index().to_string())
+        .with_context("namespace", options.namespace.as_str())
+}
+
 #[cfg(test)]
-#[path = "writer_tests.rs"]
+#[path = "pdb_tests.rs"]
 mod tests;

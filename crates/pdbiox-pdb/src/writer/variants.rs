@@ -1,8 +1,8 @@
 //! Writing the PQR and PDBQT extensions without duplicating topology logic.
 
 use crate::writer::{
-    PdbOptions, alt_field, atom_name_field, chain_label, check_capacity, residue_field,
-    serial_field,
+    PdbOptions, RequiredAtomFields, alt_field, atom_name, atom_name_field, chain_label,
+    check_capacity, component_name, residue_field, residue_sequence, serial_field,
 };
 use pdbiox_core::annotation::{
     ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn, AtomAnnotation,
@@ -59,7 +59,11 @@ fn write_variant(
     options: &PdbOptions,
     variant: Variant,
 ) -> Result<String, Vec<Diagnostic>> {
-    let refusals = check_capacity(structure, options, &SelectAll);
+    let required = match variant {
+        Variant::Pqr => RequiredAtomFields::Pqr,
+        Variant::Pdbqt => RequiredAtomFields::Pdbqt,
+    };
+    let refusals = check_capacity(structure, options, &SelectAll, required);
     if !refusals.is_empty() {
         return Err(refusals);
     }
@@ -85,8 +89,8 @@ fn write_variant(
     }
     let mut serial = 1_i64;
     for chain in structure.data().chains() {
-        let original_label = chain_label(structure, &chain);
-        let label = options.label_for(&original_label);
+        let original_label = chain_label(&chain, options.identifier_namespace());
+        let label = options.label_for(original_label);
         let context = LineContext {
             chain: label,
             options,
@@ -95,7 +99,11 @@ fn write_variant(
         };
         for residue in chain.residues() {
             for atom in residue.atoms() {
-                write_atom(&mut out, structure, &atom, &residue, serial, &context);
+                if let Err(finding) =
+                    write_atom(&mut out, structure, &atom, &residue, serial, &context)
+                {
+                    return Err(vec![finding]);
+                }
                 serial += 1;
             }
         }
@@ -114,26 +122,22 @@ fn write_atom(
     residue: &ResidueRef<'_>,
     serial: i64,
     context: &LineContext<'_>,
-) {
-    let Some(position) = atom.position() else {
-        return;
-    };
+) -> Result<(), Diagnostic> {
+    let position = atom
+        .position()
+        .ok_or_else(|| missing_field("coordinates", *atom))?;
     let record = if residue.is_het() { "HETATM" } else { "ATOM  " };
-    let name = atom_name_field(match atom.name() {
-        Some(name) => name,
-        None => "",
-    });
-    let component = match atom.component_name() {
-        Some(component) => component,
-        None => "",
-    };
+    let name = atom_name(*atom, context.options.identifier_namespace())
+        .ok_or_else(|| missing_field("atom identifier", *atom))?;
+    let name = atom_name_field(name);
+    let component = component_name(*atom, *residue, context.options.identifier_namespace())
+        .ok_or_else(|| missing_field("component identifier", *atom))?;
     let sequence = i64::from(
-        match residue.auth_seq_id().or_else(|| residue.label_seq_id()) {
-            Some(sequence) => sequence,
-            None => 0,
-        },
+        residue_sequence(*residue, context.options.identifier_namespace())
+            .ok_or_else(|| missing_field("residue sequence identifier", *atom))?,
     );
-    let charge = present_real(context.columns.charges, atom.index().get());
+    let charge = present_real(context.columns.charges, atom.index().get())
+        .ok_or_else(|| missing_field(PARTIAL_CHARGE_ANNOTATION, *atom))?;
     let prefix = format!(
         "{record}{serial:>5} {name:<4}{alt:1}{component:>3} {chain:>1}{sequence}{ins:1}   \
          {x:8.3}{y:8.3}{z:8.3}",
@@ -158,8 +162,8 @@ fn write_atom(
             let _ = writeln!(
                 out,
                 "{prefix}{charge:8.4}{radius:7.4}",
-                charge = value(charge),
-                radius = value(radius)
+                charge = charge,
+                radius = radius.ok_or_else(|| missing_field(ATOM_RADIUS_ANNOTATION, *atom))?
             );
         }
         Variant::Pdbqt => {
@@ -167,20 +171,25 @@ fn write_atom(
                 .columns
                 .atom_types
                 .and_then(|column| present_symbol(column, atom.index().get()))
-                .and_then(|symbol| structure.resolve(symbol));
+                .and_then(|symbol| structure.resolve(symbol))
+                .ok_or_else(|| missing_field(AUTODOCK_TYPE_ANNOTATION, *atom))?;
+            let occupancy = atom
+                .occupancy()
+                .ok_or_else(|| missing_field("occupancy", *atom))?;
+            let b_factor = atom
+                .b_factor()
+                .ok_or_else(|| missing_field("B factor", *atom))?;
             let _ = writeln!(
                 out,
                 "{prefix}{occ:6.2}{b:6.2}      {charge:6.3} {atom_type:<2}",
-                occ = atom.occupancy().map_or(1.0, f64::from),
-                b = atom.b_factor().map_or(0.0, f64::from),
-                charge = value(charge),
-                atom_type = match atom_type {
-                    Some(atom_type) => atom_type,
-                    None => "",
-                },
+                occ = f64::from(occupancy),
+                b = f64::from(b_factor),
+                charge = charge,
+                atom_type = atom_type,
             );
         }
     }
+    Ok(())
 }
 
 fn real_column<'a>(
@@ -234,13 +243,6 @@ fn present_symbol(column: &AnnotationColumn<SymbolId>, atom: u32) -> Option<Symb
         .and_then(|(value, presence)| (presence == Presence::Present).then_some(value))
 }
 
-fn value(value: Option<f64>) -> f64 {
-    match value {
-        Some(value) => value,
-        None => 0.0,
-    }
-}
-
 fn missing(annotation: &str) -> Vec<Diagnostic> {
     vec![
         Diagnostic::new(Code::E4105)
@@ -249,6 +251,12 @@ fn missing(annotation: &str) -> Vec<Diagnostic> {
     ]
 }
 
+fn missing_field(field: &str, atom: AtomRef<'_>) -> Diagnostic {
+    Diagnostic::new(Code::E4105)
+        .with_context("required field", field)
+        .with_context("atom", atom.index().to_string())
+}
+
 #[cfg(test)]
-#[path = "variant_writer_tests.rs"]
+#[path = "variants_tests.rs"]
 mod tests;
