@@ -166,7 +166,10 @@ fn an_unreadable_path_reports_a_finding_rather_than_panicking() {
 fn component_dictionary_reading_is_explicit_and_returns_a_versioned_provider() {
     use crate::ComponentProvider;
 
-    let ccd = "data_HOH\n_chem_comp.id HOH\n_chem_comp.name WATER\n_chem_comp.type water\n";
+    let ccd = "data_HOH\n\
+_chem_comp.id HOH\n_chem_comp.name WATER\n_chem_comp.type water\n\
+loop_\n_chem_comp_atom.atom_id\n_chem_comp_atom.type_symbol\n_chem_comp_atom.charge\n\
+_chem_comp_atom.pdbx_aromatic_flag\n_chem_comp_atom.pdbx_leaving_atom_flag\nO O 0 N N\n";
     let path = std::env::temp_dir().join(format!("pdbiox-ccd-{}.cif", std::process::id()));
     if let Err(error) = std::fs::write(&path, ccd) {
         panic!("fixture write failed: {error}")
@@ -208,6 +211,7 @@ fn a_generic_write_dispatches_by_name_and_reads_back() {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("read failed: {findings:?}"),
     };
+    let structure = with_entry_id(&structure, "test");
     let path = std::env::temp_dir().join(format!("pdbiox-facade-{}.cif.gz", std::process::id()));
     if let Err(findings) = write(&path, &structure) {
         panic!("write failed: {findings:?}")
@@ -219,6 +223,36 @@ fn a_generic_write_dispatches_by_name_and_reads_back() {
         Err(findings) => panic!("round trip failed: {findings:?}"),
     };
     assert_eq!(round_tripped.atom_count(), structure.atom_count());
+}
+
+#[cfg(feature = "pdb")]
+#[test]
+fn mmtf_is_dispatched_by_content_and_suffix() {
+    let (structure, _) = read_bytes(
+        DIPEPTIDE.as_bytes().to_vec(),
+        Some("test.pdb"),
+        &ReadOptions::new(),
+    )
+    .unwrap_or_else(|findings| panic!("fixture read failed: {findings:?}"));
+    let rendered = render(&structure, Format::Mmtf);
+    assert!(rendered.is_err());
+}
+
+#[cfg(feature = "mmcif")]
+#[test]
+fn pdbml_is_dispatched_by_content_and_roundtrips() {
+    let (structure, _) = read_bytes(
+        DIPEPTIDE.as_bytes().to_vec(),
+        Some("test.pdb"),
+        &ReadOptions::new(),
+    )
+    .unwrap_or_else(|findings| panic!("fixture read failed: {findings:?}"));
+    let structure = with_entry_id(&structure, "test");
+    let rendered = render(&structure, Format::Pdbml).expect("PDBML render");
+    let (decoded, findings) =
+        read_bytes(rendered, None, &ReadOptions::new()).expect("PDBML content dispatch");
+    assert!(findings.is_empty());
+    assert_eq!(decoded.atom_count(), structure.atom_count());
 }
 
 #[cfg(feature = "geom")]
@@ -280,4 +314,107 @@ fn a_transform_rejects_atoms_outside_the_topology_before_editing() {
             .and_then(|findings| findings.first().map(Diagnostic::code)),
         Some(Code::E6009)
     );
+}
+
+#[cfg(feature = "modelcif")]
+#[test]
+fn modelcif_metadata_is_attached_and_written_through_the_facade() {
+    use crate::ModelCifExt;
+
+    let source = "data_model\n\
+loop_\n_ma_qa_metric.id\n_ma_qa_metric.name\n_ma_qa_metric.type\n_ma_qa_metric.mode\n1 score pLDDT local\n#\n\
+loop_\n_ma_qa_metric_local.model_id\n_ma_qa_metric_local.label_asym_id\n_ma_qa_metric_local.label_seq_id\n_ma_qa_metric_local.label_comp_id\n_ma_qa_metric_local.metric_id\n_ma_qa_metric_local.metric_value\n1 A 1 GLY 1 95.0\n#\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\nATOM 1 C CA GLY A 1 0 0 0\n";
+    let (structure, _) = read_bytes(
+        source.as_bytes().to_vec(),
+        Some("model.cif"),
+        &ReadOptions::new(),
+    )
+    .unwrap_or_else(|findings| panic!("read failed: {findings:?}"));
+    assert_eq!(
+        structure
+            .confidence()
+            .map(|confidence| confidence.plddt().count()),
+        Some(1)
+    );
+    let rendered = render(&structure, Format::Mmcif)
+        .unwrap_or_else(|findings| panic!("write failed: {findings:?}"));
+    assert!(String::from_utf8_lossy(&rendered).contains("_ma_qa_metric_local.metric_value"));
+}
+
+#[test]
+fn core_namespace_exposes_native_types() {
+    let _ = std::mem::size_of::<crate::core::Structure>();
+}
+
+#[cfg(feature = "chem")]
+#[test]
+fn chemistry_namespace_exposes_native_types() {
+    let _ = std::mem::size_of::<crate::chem::Component>();
+}
+
+#[cfg(feature = "geom")]
+#[test]
+fn geometry_namespace_exposes_native_kernels() {
+    let _ = crate::geom::distance;
+}
+
+#[cfg(feature = "xtal")]
+#[test]
+fn crystallography_namespace_exposes_native_types() {
+    let _ = std::mem::size_of::<crate::xtal::Operator>();
+}
+
+#[cfg(feature = "query")]
+#[test]
+fn query_namespace_exposes_native_builder() {
+    let _ = crate::query::col::all();
+}
+
+#[cfg(feature = "spatial")]
+#[test]
+fn spatial_namespace_exposes_native_types() {
+    let _ = std::mem::size_of::<crate::spatial::SpatialPlan>();
+}
+
+#[cfg(feature = "ic")]
+#[test]
+fn internal_coordinate_namespace_exposes_native_types() {
+    let _ = std::mem::size_of::<crate::ic::Hedron>();
+}
+
+#[cfg(feature = "mmcif")]
+#[test]
+fn cif_namespace_exposes_native_document() {
+    let _ = std::mem::size_of::<crate::cif::Document>();
+}
+
+#[cfg(feature = "pdb")]
+#[test]
+fn pdb_namespace_exposes_native_options() {
+    let _ = std::mem::size_of::<crate::pdb::PdbOptions>();
+}
+
+#[cfg(feature = "modelcif")]
+#[test]
+fn modelcif_namespace_exposes_native_model() {
+    let _ = std::mem::size_of::<crate::modelcif::ModelCif>();
+}
+
+#[cfg(feature = "bcif")]
+#[test]
+fn binary_cif_namespace_exposes_native_document() {
+    let _ = std::mem::size_of::<crate::bcif::BinaryDocument>();
+}
+
+fn with_entry_id(structure: &Structure, id: &str) -> Structure {
+    let mut data = structure.data().clone();
+    data.entry.id = Some(id.into());
+    Structure::from(data)
+}
+
+#[cfg(feature = "ml")]
+#[test]
+fn machine_learning_namespace_exposes_native_dataset() {
+    let _ = std::mem::size_of::<crate::ml::Dataset>();
 }

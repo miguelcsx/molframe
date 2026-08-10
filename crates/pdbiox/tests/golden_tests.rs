@@ -1,8 +1,8 @@
 //! Executable end-to-end correctness fixtures for shipped workflows.
 
 use pdbiox::{
-    AltlocPolicy, AnalysisPolicy, AtomSelection, Code, PdbOptions, ReadOptions, Rigid, read_bytes,
-    superpose, transform, write_bcif, write_mmcif, write_pdb,
+    AltlocPolicy, AnalysisPolicy, AtomSelection, CifWriteOptions, Code, PdbOptions, ReadOptions,
+    Rigid, read_bytes, superpose, transform, write_bcif, write_mmcif_with_options, write_pdb,
 };
 
 const MULTI_MODEL_PDB: &str = "\
@@ -92,7 +92,9 @@ fn gw_002_round_trips_mmcif_through_binary_cif_semantically() {
 #[test]
 fn gw_003_converts_insertion_codes_and_deposited_models_to_mmcif() {
     let structure = read_fixture(MULTI_MODEL_PDB, "golden.pdb");
-    let rendered = write_mmcif(&structure);
+    let options = CifWriteOptions::new().with_block_id("1ABC");
+    let rendered = write_mmcif_with_options(&structure, &options);
+    let rendered = rendered.unwrap_or_else(|error| panic!("mmCIF write failed: {error}"));
     let round_tripped = read_fixture(&rendered, "golden.cif");
     let model_numbers: Vec<i32> = round_tripped
         .data()
@@ -115,7 +117,10 @@ fn gw_003_converts_insertion_codes_and_deposited_models_to_mmcif() {
     .iter()
     .enumerate()
     {
-        let Some(actual) = round_tripped.model_positions(pdbiox::ModelIndex::new(model as u32))
+        let Ok(model_index) = u32::try_from(model) else {
+            panic!("test model index does not fit in u32");
+        };
+        let Some(actual) = round_tripped.model_positions(pdbiox::ModelIndex::new(model_index))
         else {
             panic!("round-tripped model missing")
         };
@@ -145,7 +150,7 @@ fn gw_005_refuses_a_lossy_legacy_chain_and_names_the_capacity() {
 #[test]
 fn gw_007_altloc_policies_produce_recorded_atom_counts() {
     let structure = read_fixture(NAMESPACED_CIF, "golden.cif");
-    let counts: Vec<u32> = [
+    let counts: Vec<u64> = [
         AltlocPolicy::KeepAll,
         AltlocPolicy::First,
         AltlocPolicy::HighestOccupancyPerResidue,
@@ -204,6 +209,10 @@ fn gw_011_superposes_and_applies_the_reported_rigid_transform() {
     };
     assert_eq!(
         moved.generation().get(),
-        structure.generation().next().get()
+        structure
+            .generation()
+            .next()
+            .expect("initial generation advances")
+            .get()
     );
 }
