@@ -1,0 +1,18 @@
+[package]
+name = "pdbiox-modelcif"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ModelCIF metadata and confidence metrics for pdbiox"
+
+[dependencies]
+pdbiox-core.workspace = true
+pdbiox-cif.workspace = true
+
+[dev-dependencies]
+pdbiox-core.workspace = true
+
+[lints]
+workspace = true
