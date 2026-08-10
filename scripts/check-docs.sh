@@ -5,16 +5,29 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+CHECK_DOCS_TMP=$(mktemp -d "${TMPDIR:-/tmp}/pdbiox-docs.XXXXXX") || exit 1
+cleanup() { rm -rf "$CHECK_DOCS_TMP"; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+
 FAIL=0
 pass() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; FAIL=1; }
 note() { printf '        %s\n' "$1"; }
 
 DOCS=(README.md CONTRIBUTING.md docs/*.md docs/adr/*.md)
+DOC_MANIFEST=docs/MANIFEST.txt
 
 echo "== 1. completeness =="
-N=$(ls README.md CONTRIBUTING.md docs/*.md docs/adr/*.md | wc -l)
-[ "$N" -eq 46 ] && pass "46 documents present" || fail "expected 46 documents, found $N"
+grep -vE '^[[:space:]]*(#|$)' "$DOC_MANIFEST" | sort -u > "$CHECK_DOCS_TMP/expected-docs"
+printf '%s\n' "${DOCS[@]}" | sort -u > "$CHECK_DOCS_TMP/discovered-docs"
+if diff -u "$CHECK_DOCS_TMP/expected-docs" "$CHECK_DOCS_TMP/discovered-docs" \
+    > "$CHECK_DOCS_TMP/document-diff"; then
+  pass "document set matches $DOC_MANIFEST"
+else
+  fail "document set differs from $DOC_MANIFEST"
+  sed 's/^/        /' "$CHECK_DOCS_TMP/document-diff"
+fi
 
 # TODO markers, excluding the ADR template and lines that merely name the marker
 if grep -rn 'TODO\|TBD\|FIXME' "${DOCS[@]}" 2>/dev/null \
@@ -26,31 +39,31 @@ else
 fi
 
 echo "== 2. requirement traceability =="
-grep -o '\*\*\(FR\|NFR\)-[0-9]\+\*\*' docs/01-requirements.md | tr -d '*' | sort -u > /tmp/pdbiox_defined
-grep -rho '\(FR\|NFR\)-[0-9]\{3,4\}' "${DOCS[@]}" | sort -u > /tmp/pdbiox_cited
+grep -o '\*\*\(FR\|NFR\)-[0-9]\+\*\*' docs/01-requirements.md | tr -d '*' | sort -u > "$CHECK_DOCS_TMP/defined"
+grep -rho '\(FR\|NFR\)-[0-9]\{3,4\}' "${DOCS[@]}" | sort -u > "$CHECK_DOCS_TMP/cited"
 grep -rho '\(FR\|NFR\)-[0-9]\{3,4\}' README.md CONTRIBUTING.md docs/*.md docs/adr/*.md \
-  --exclude=01-requirements.md | sort -u > /tmp/pdbiox_elsewhere
+  --exclude=01-requirements.md | sort -u > "$CHECK_DOCS_TMP/elsewhere"
 
-UNDEF=$(comm -13 /tmp/pdbiox_defined /tmp/pdbiox_cited)
+UNDEF=$(comm -13 "$CHECK_DOCS_TMP/defined" "$CHECK_DOCS_TMP/cited")
 [ -z "$UNDEF" ] && pass "every cited requirement is defined" \
                 || { fail "cited but undefined:"; note "$UNDEF"; }
 
-UNCITED=$(comm -23 /tmp/pdbiox_defined /tmp/pdbiox_elsewhere)
+UNCITED=$(comm -23 "$CHECK_DOCS_TMP/defined" "$CHECK_DOCS_TMP/elsewhere")
 [ -z "$UNCITED" ] && pass "every requirement is cited by a subsystem document" \
                   || { fail "defined but never cited:"; note "$UNCITED"; }
 
 echo "== 3. error codes =="
-grep -rho 'PDBIOX-[EW][0-9]\{4\}' "${DOCS[@]}" | sort -u > /tmp/pdbiox_ecited
+grep -rho 'PDBIOX-[EW][0-9]\{4\}' "${DOCS[@]}" | sort -u > "$CHECK_DOCS_TMP/error-cited"
 grep -o '`[EW][0-9]\{4\}`' docs/18-errors-and-diagnostics.md | tr -d '`' \
-  | sed 's/^/PDBIOX-/' | sort -u > /tmp/pdbiox_ereg
-UNREG=$(comm -23 /tmp/pdbiox_ecited /tmp/pdbiox_ereg)
+  | sed 's/^/PDBIOX-/' | sort -u > "$CHECK_DOCS_TMP/error-registered"
+UNREG=$(comm -23 "$CHECK_DOCS_TMP/error-cited" "$CHECK_DOCS_TMP/error-registered")
 [ -z "$UNREG" ] && pass "every cited error code is registered" \
                || { fail "unregistered codes:"; note "$UNREG"; }
 
 echo "== 4. ADR references =="
-grep -rho 'ADR-[0-9]\{4\}' "${DOCS[@]}" | sort -u > /tmp/pdbiox_adrcited
-ls docs/adr/ | grep -o '^[0-9]\{4\}' | sed 's/^/ADR-/' | sort -u > /tmp/pdbiox_adrhave
-BAD=$(comm -23 /tmp/pdbiox_adrcited /tmp/pdbiox_adrhave)
+grep -rho 'ADR-[0-9]\{4\}' "${DOCS[@]}" | sort -u > "$CHECK_DOCS_TMP/adr-cited"
+ls docs/adr/ | grep -o '^[0-9]\{4\}' | sed 's/^/ADR-/' | sort -u > "$CHECK_DOCS_TMP/adr-present"
+BAD=$(comm -23 "$CHECK_DOCS_TMP/adr-cited" "$CHECK_DOCS_TMP/adr-present")
 [ -z "$BAD" ] && pass "every ADR reference resolves" || { fail "dangling:"; note "$BAD"; }
 
 echo "== 5. decision closure =="
@@ -68,13 +81,12 @@ STRAY=$(grep -rnoE '\b(pdbio|pbiox)\b' README.md CONTRIBUTING.md docs/*.md docs/
                || { fail "stray retired name:"; note "$STRAY"; }
 
 echo "== 7. reference paths =="
-rm -f /tmp/pdbiox_missing_paths /tmp/pdbiox_skipped_roots
 grep -rhoE '(inspo|bio)/[A-Za-z0-9_./-]+' "${DOCS[@]}" | sed 's/[.,;:)`]*$//' | sort -u \
 | while read -r p; do
     case "$p" in
       inspo/*)
         if [ ! -d inspo ]; then
-          echo "inspo/" >> /tmp/pdbiox_skipped_roots
+          echo "inspo/" >> "$CHECK_DOCS_TMP/skipped-roots"
           continue
         fi
         full="$p"
@@ -83,21 +95,21 @@ grep -rhoE '(inspo|bio)/[A-Za-z0-9_./-]+' "${DOCS[@]}" | sed 's/[.,;:)`]*$//' | 
         relative="${p#bio/}"
         project="${relative%%/*}"
         if [ ! -d "../$project" ]; then
-          echo "bio/$project/" >> /tmp/pdbiox_skipped_roots
+          echo "bio/$project/" >> "$CHECK_DOCS_TMP/skipped-roots"
           continue
         fi
         full="../$relative"
         ;;
     esac
     [ -e "$full" ] || echo "$p"
-  done > /tmp/pdbiox_missing_paths
-if [ -s /tmp/pdbiox_missing_paths ]; then
-  fail "cited reference paths do not exist:"; note "$(cat /tmp/pdbiox_missing_paths)"
+  done > "$CHECK_DOCS_TMP/missing-paths"
+if [ -s "$CHECK_DOCS_TMP/missing-paths" ]; then
+  fail "cited reference paths do not exist:"; note "$(cat "$CHECK_DOCS_TMP/missing-paths")"
 else
   pass "every cited path in an installed external reference root exists"
 fi
-if [ -s /tmp/pdbiox_skipped_roots ]; then
-  note "external reference roots not installed: $(sort -u /tmp/pdbiox_skipped_roots | tr '\n' ' ')"
+if [ -s "$CHECK_DOCS_TMP/skipped-roots" ]; then
+  note "external reference roots not installed: $(sort -u "$CHECK_DOCS_TMP/skipped-roots" | tr '\n' ' ')"
 fi
 
 echo "== 8. internal links =="

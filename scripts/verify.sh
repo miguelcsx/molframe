@@ -12,6 +12,11 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+VERIFY_TMP=$(mktemp -d "${TMPDIR:-/tmp}/pdbiox-verify.XXXXXX") || exit 1
+cleanup() { rm -rf "$VERIFY_TMP"; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+
 fail=0
 pass() { printf '\033[32mPASS\033[0m  %s\n' "$1"; }
 die()  { printf '\033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail + 1)); }
@@ -25,7 +30,7 @@ fi
 
 # 2. Lints. The workspace permits exactly the warns/allows declared in
 #    Cargo.toml; everything else is a regression. -D warnings is the floor.
-if cargo clippy --workspace --all-targets -- -D warnings 2>&1 | tee /tmp/pdbiox_clippy; then
+if cargo clippy --workspace --all-targets -- -D warnings 2>&1 | tee "$VERIFY_TMP/clippy"; then
     pass "cargo clippy --workspace --all-targets -- -D warnings"
 else
     die "cargo clippy --workspace --all-targets -- -D warnings"
@@ -33,7 +38,7 @@ fi
 
 # 3. Tests. The whole claim is that this compiles, runs, and is correct on
 #    every fixture we care about. cargo test --workspace is the assertion.
-if cargo test --workspace 2>&1 | tee /tmp/pdbiox_test; then
+if cargo test --workspace 2>&1 | tee "$VERIFY_TMP/test"; then
     pass "cargo test --workspace"
 else
     die "cargo test --workspace"
@@ -74,27 +79,12 @@ else
     die "scripts/check-python.py"
 fi
 
-# 7. No panic-on-absence helpers outside tests. The whole point of the rule in
-#    Rules.md is that every absent case remains visible at its call site.
-if grep -rnE "\.(unwrap|expect)(_[A-Za-z0-9_]+)?\(" crates/ 2>/dev/null \
-    | grep -v "_tests.rs" > /tmp/pdbiox_unwrap; then
-    if [ -s /tmp/pdbiox_unwrap ]; then
-        die "unwrap used outside tests:"
-        sed 's/^/        /' /tmp/pdbiox_unwrap
-    fi
+# 7. Source policy. Layout, size and explicit-error rules apply to the whole
+#    user-facing surface, not only to Rust implementation files.
+if scripts/check-code-policy.sh; then
+    pass "scripts/check-code-policy.sh"
 else
-    pass "no unwrap outside tests"
-fi
-
-# 8. File size ceiling. `wc` emits an aggregate row when it receives multiple
-#    files; that row is not a source file and must never make a large workspace
-#    fail this per-file gate.
-oversize="$(find crates -name "*.rs" -exec wc -l {} + | awk '$2 != "total" && $1 > 500 {print}')"
-if [ -n "$oversize" ]; then
-    die "files over the 500-line ceiling:"
-    printf '        %s\n' $oversize
-else
-    pass "every file under the 500-line ceiling"
+    die "scripts/check-code-policy.sh"
 fi
 
 printf '\n'
