@@ -1,15 +1,17 @@
 //! Compiled query evaluation over immutable structures.
 
 use crate::ast::{Expr, GeometricExpr, SameKey};
-use crate::builder::Builder;
-use crate::parser;
-use crate::plan::{LogicalPlan, PhysicalExpr, PhysicalQuery};
+use crate::plan::{PhysicalExpr, PhysicalQuery};
 use crate::spatial::{GeometricRequest, SpatialResolver};
+use pdbiox_chem::SmartsDataError;
 use pdbiox_core::contract::AnalysisPolicy;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::Structure;
 use std::collections::BTreeMap;
+
+#[path = "eval_query.rs"]
+mod query;
 
 /// Named selections supplied to `group <name>` expressions.
 pub type Groups = BTreeMap<Box<str>, AtomSelection>;
@@ -28,89 +30,6 @@ pub struct Evaluation {
 pub struct Query {
     expr: Expr,
     warnings: Vec<Diagnostic>,
-}
-
-impl Query {
-    /// Compiles textual selection syntax into a reusable typed plan.
-    ///
-    /// # Errors
-    ///
-    /// Returns registered diagnostics for lexical, syntax and type errors.
-    pub fn compile(source: &str) -> Result<Self, Vec<Diagnostic>> {
-        let parsed = parser::parse(source)?;
-        Ok(Self {
-            expr: parsed.expr,
-            warnings: parsed.warnings,
-        })
-    }
-
-    /// Creates a reusable query from the typed builder surface.
-    #[must_use]
-    pub fn from_builder(builder: Builder) -> Self {
-        Self {
-            expr: builder.into_expr(),
-            warnings: Vec::new(),
-        }
-    }
-
-    /// Returns the storage-independent plan produced by either input surface.
-    #[must_use]
-    pub fn logical_plan(&self) -> LogicalPlan {
-        LogicalPlan(self.expr.clone())
-    }
-
-    /// Binds this query to a structure dictionary and analysis policy.
-    ///
-    /// The physical plan resolves globs once, folds constants and orders cheap
-    /// predicates before expensive ones. It can be reused over dense frames.
-    #[must_use]
-    pub fn plan(&self, structure: &Structure, policy: &AnalysisPolicy) -> PhysicalQuery {
-        crate::plan::bind(
-            &self.logical_plan(),
-            structure,
-            policy,
-            self.warnings.clone(),
-        )
-    }
-
-    /// Evaluates against the whole first-model topology.
-    ///
-    /// # Errors
-    ///
-    /// Returns diagnostics when the query requests unavailable data or a
-    /// geometric predicate without a spatial resolver.
-    pub fn evaluate(
-        &self,
-        structure: &Structure,
-        policy: &AnalysisPolicy,
-        groups: &Groups,
-        spatial: Option<&dyn SpatialResolver>,
-    ) -> Result<Evaluation, Vec<Diagnostic>> {
-        self.evaluate_in(
-            structure,
-            &AtomSelection::All(structure.atom_count()),
-            policy,
-            groups,
-            spatial,
-        )
-    }
-
-    /// Evaluates inside a current view; `global` escapes to the whole topology.
-    ///
-    /// # Errors
-    ///
-    /// Returns the same diagnostics as [`Query::evaluate`].
-    pub fn evaluate_in(
-        &self,
-        structure: &Structure,
-        universe: &AtomSelection,
-        policy: &AnalysisPolicy,
-        groups: &Groups,
-        spatial: Option<&dyn SpatialResolver>,
-    ) -> Result<Evaluation, Vec<Diagnostic>> {
-        self.plan(structure, policy)
-            .evaluate_in(structure, universe, policy, groups, spatial)
-    }
 }
 
 impl PhysicalQuery {
@@ -153,18 +72,21 @@ impl PhysicalQuery {
                 Diagnostic::new(Code::E6009).with_context("atom", atom.to_string()),
             ]);
         }
+
         let mut context = Context {
             structure,
             policy,
             groups,
             spatial,
             warnings: self.warnings.clone(),
-            all: AtomSelection::All(structure.atom_count()),
         };
+
         let selection = context
             .eval_physical(&self.expr, universe)
             .map_err(|finding| vec![finding])?;
+
         context.warnings.sort_by_key(Diagnostic::code);
+
         Ok(Evaluation {
             selection,
             warnings: context.warnings,
@@ -172,16 +94,21 @@ impl PhysicalQuery {
     }
 }
 
+/// Immutable evaluation dependencies plus evaluation-local warning state.
 struct Context<'a> {
     structure: &'a Structure,
     policy: &'a AnalysisPolicy,
     groups: &'a Groups,
     spatial: Option<&'a dyn SpatialResolver>,
     warnings: Vec<Diagnostic>,
-    all: AtomSelection,
 }
 
 impl Context<'_> {
+    /// Evaluates a lowered physical expression inside `universe`.
+    ///
+    /// Constant branches and pre-resolved memberships avoid falling back to the
+    /// logical evaluator. Allocation is limited to selections produced by
+    /// individual operators.
     fn eval_physical(
         &mut self,
         expr: &PhysicalExpr,
@@ -192,16 +119,23 @@ impl Context<'_> {
             PhysicalExpr::None => Ok(AtomSelection::Empty),
             PhysicalExpr::And(left, right) => {
                 let first = self.eval_physical(left, universe)?;
+
                 if first.is_empty() {
                     return Ok(first);
                 }
-                Ok(first.intersect(&self.eval_physical(right, &first)?))
+
+                let second = self.eval_physical(right, &first)?;
+                Ok(first.intersect(&second))
             }
-            PhysicalExpr::Or(left, right) => Ok(self
-                .eval_physical(left, universe)?
-                .union(&self.eval_physical(right, universe)?)),
+            PhysicalExpr::Or(left, right) => {
+                let left = self.eval_physical(left, universe)?;
+                let right = self.eval_physical(right, universe)?;
+
+                Ok(left.union(&right))
+            }
             PhysicalExpr::Not(target) => {
-                Ok(universe.difference(&self.eval_physical(target, universe)?))
+                let selected = self.eval_physical(target, universe)?;
+                Ok(universe.difference(&selected))
             }
             PhysicalExpr::ResolvedMembership { column, symbols } => {
                 crate::predicate::membership_symbols(self.structure, universe, *column, symbols)
@@ -210,27 +144,41 @@ impl Context<'_> {
         }
     }
 
+    /// Evaluates a logical expression inside `universe`.
+    ///
+    /// Boolean operations short-circuit empty conjunctions while preserving
+    /// `global` semantics and the original diagnostic behavior.
     fn eval(&mut self, expr: &Expr, universe: &AtomSelection) -> Result<AtomSelection, Diagnostic> {
         match expr {
             Expr::All => Ok(universe.clone()),
             Expr::None => Ok(AtomSelection::Empty),
             Expr::And(left, right) => {
                 let first = self.eval(left, universe)?;
+
                 if first.is_empty() {
                     return Ok(first);
                 }
-                Ok(first.intersect(&self.eval(right, universe)?))
+
+                let second = self.eval(right, &first)?;
+                Ok(first.intersect(&second))
             }
-            Expr::Or(left, right) => Ok(self
-                .eval(left, universe)?
-                .union(&self.eval(right, universe)?)),
-            Expr::Not(target) => Ok(universe.difference(&self.eval(target, universe)?)),
+            Expr::Or(left, right) => {
+                let left = self.eval(left, universe)?;
+                let right = self.eval(right, universe)?;
+
+                Ok(left.union(&right))
+            }
+            Expr::Not(target) => {
+                let selected = self.eval(target, universe)?;
+                Ok(universe.difference(&selected))
+            }
             Expr::Global(target) => {
-                let all = self.all.clone();
+                let all = AtomSelection::All(self.structure.atom_count());
                 self.eval(target, &all)
             }
             Expr::ByResidue(target) => {
                 let selected = self.eval(target, universe)?;
+
                 Ok(crate::expand::same_residue(
                     self.structure,
                     universe,
@@ -243,6 +191,7 @@ impl Context<'_> {
             }
             Expr::Bonded { depth, target } => {
                 let selected = self.eval(target, universe)?;
+
                 crate::connectivity::bonded(self.structure, universe, &selected, *depth)
             }
             Expr::Geometric(geometric) => self.geometric(geometric, universe),
@@ -268,9 +217,11 @@ impl Context<'_> {
                     values,
                     self.policy,
                 )?;
+
                 if selected.is_empty() {
                     self.warnings.push(Diagnostic::new(Code::W4003));
                 }
+
                 Ok(selected)
             }
             Expr::Group(name) => {
@@ -294,14 +245,23 @@ impl Context<'_> {
                 name,
                 self.policy,
             ),
-            Expr::Macro(macro_name) => {
-                crate::macros::macro_selection(self.structure, universe, *macro_name)
+            Expr::Macro(macro_name) => crate::macros::macro_selection(
+                self.structure,
+                universe,
+                *macro_name,
+                &mut self.warnings,
+            ),
+            Expr::Chirality(configuration) => {
+                crate::macros::chirality_selection(self.structure, universe, configuration)
             }
-            Expr::Chirality(_) => Err(missing("CCD stereochemistry")),
-            Expr::Smarts(_) => Err(missing("substructure matcher")),
+            Expr::Smarts(pattern) => smarts_selection(pattern, self.structure, universe),
         }
     }
 
+    /// Expands `selected` according to a `same` relation.
+    ///
+    /// Delegates to specialized hierarchy, connectivity, or column expansion
+    /// implementations while preserving `universe`.
     fn same(
         &self,
         key: &SameKey,
@@ -351,6 +311,10 @@ impl Context<'_> {
         }
     }
 
+    /// Resolves a geometric expression with the configured spatial backend.
+    ///
+    /// Target expressions are evaluated exactly once. Returns `E4003` when no
+    /// spatial resolver is available.
     fn geometric(
         &mut self,
         expr: &GeometricExpr,
@@ -359,40 +323,45 @@ impl Context<'_> {
         let Some(spatial) = self.spatial else {
             return Err(missing("spatial resolver"));
         };
-        let request = match expr {
+
+        match expr {
             GeometricExpr::Within { radius, target } => {
                 let target = self.eval(target, universe)?;
-                return spatial.resolve(GeometricRequest::Within {
+
+                spatial.resolve(GeometricRequest::Within {
                     universe,
                     target: &target,
                     radius: *radius,
                     include_target: true,
-                });
+                })
             }
             GeometricExpr::Beyond { radius, target } => {
                 let target = self.eval(target, universe)?;
-                return spatial.resolve(GeometricRequest::Beyond {
+
+                spatial.resolve(GeometricRequest::Beyond {
                     universe,
                     target: &target,
                     radius: *radius,
-                });
+                })
             }
             GeometricExpr::Around { radius, target } => {
                 let target = self.eval(target, universe)?;
-                return spatial.resolve(GeometricRequest::Within {
+
+                spatial.resolve(GeometricRequest::Within {
                     universe,
                     target: &target,
                     radius: *radius,
                     include_target: false,
-                });
+                })
             }
             GeometricExpr::SphereZone { radius, target } => {
                 let target = self.eval(target, universe)?;
-                return spatial.resolve(GeometricRequest::SphereZone {
+
+                spatial.resolve(GeometricRequest::SphereZone {
                     universe,
                     target: &target,
                     radius: *radius,
-                });
+                })
             }
             GeometricExpr::SphereLayer {
                 inner,
@@ -400,12 +369,13 @@ impl Context<'_> {
                 target,
             } => {
                 let target = self.eval(target, universe)?;
-                return spatial.resolve(GeometricRequest::SphereLayer {
+
+                spatial.resolve(GeometricRequest::SphereLayer {
                     universe,
                     target: &target,
                     inner: *inner,
                     outer: *outer,
-                });
+                })
             }
             GeometricExpr::IsoLayer {
                 inner,
@@ -413,25 +383,29 @@ impl Context<'_> {
                 target,
             } => {
                 let target = self.eval(target, universe)?;
-                return spatial.resolve(GeometricRequest::IsoLayer {
+
+                spatial.resolve(GeometricRequest::IsoLayer {
                     universe,
                     target: &target,
                     inner: *inner,
                     outer: *outer,
-                });
+                })
             }
             GeometricExpr::CylinderZone { .. } | GeometricExpr::CylinderLayer { .. } => {
-                return self.geometric_cylinder(expr, universe, spatial);
+                self.geometric_cylinder(expr, universe, spatial)
             }
-            GeometricExpr::Point { point, radius } => GeometricRequest::Point {
+            GeometricExpr::Point { point, radius } => spatial.resolve(GeometricRequest::Point {
                 universe,
                 point: *point,
                 radius: *radius,
-            },
-        };
-        spatial.resolve(request)
+            }),
+        }
     }
 
+    /// Resolves cylinder-specific geometric expressions.
+    ///
+    /// This helper keeps the primary geometric dispatcher compact while
+    /// evaluating the cylinder target exactly once.
     fn geometric_cylinder(
         &mut self,
         expr: &GeometricExpr,
@@ -446,6 +420,7 @@ impl Context<'_> {
                 target,
             } => {
                 let target = self.eval(target, universe)?;
+
                 spatial.resolve(GeometricRequest::CylinderZone {
                     universe,
                     target: &target,
@@ -462,6 +437,7 @@ impl Context<'_> {
                 target,
             } => {
                 let target = self.eval(target, universe)?;
+
                 spatial.resolve(GeometricRequest::CylinderLayer {
                     universe,
                     target: &target,
@@ -476,8 +452,36 @@ impl Context<'_> {
     }
 }
 
+/// Builds the standard missing-data diagnostic for an evaluation dependency.
+///
+/// Runtime and space are `O(1)` apart from diagnostic-owned context storage.
 fn missing(data: &'static str) -> Diagnostic {
     Diagnostic::new(Code::E4003).with_context("required", data)
+}
+
+fn missing_smarts_data(error: SmartsDataError) -> Diagnostic {
+    let required = match error {
+        SmartsDataError::Connectivity => "resolved connectivity",
+        SmartsDataError::Aromaticity => "CCD aromaticity",
+        SmartsDataError::FormalCharge => "CCD formal charges",
+        SmartsDataError::Stereochemistry => "CCD stereochemistry",
+    };
+    missing(required)
+}
+
+fn smarts_selection(
+    pattern: &pdbiox_chem::SmartsPattern,
+    structure: &Structure,
+    universe: &AtomSelection,
+) -> Result<AtomSelection, Diagnostic> {
+    let selected: AtomSelection = pattern
+        .find_structure_matches(structure)
+        .map_err(missing_smarts_data)?
+        .into_iter()
+        .flat_map(|matched| matched.atom_indices.into_vec())
+        .filter_map(|atom| u32::try_from(atom).ok())
+        .collect();
+    Ok(universe.intersect(&selected))
 }
 
 #[cfg(test)]

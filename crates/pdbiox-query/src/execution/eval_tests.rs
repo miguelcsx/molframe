@@ -19,14 +19,42 @@ fn structure() -> Structure {
     }
 }
 
+fn macro_structure() -> Structure {
+    let structure = structure();
+    let mut data = structure.data().clone();
+    data.annotations.insert(
+        pdbiox_core::COMPONENT_KIND_ANNOTATION,
+        pdbiox_core::AtomAnnotation::Integer(
+            pdbiox_core::AnnotationColumn::from_values(vec![
+                pdbiox_chem::ComponentKind::AminoAcid.code(),
+                pdbiox_chem::ComponentKind::AminoAcid.code(),
+                pdbiox_chem::ComponentKind::Solvent.code(),
+            ])
+            .expect("small annotation column"),
+        ),
+    );
+    data.annotations.insert(
+        pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION,
+        pdbiox_core::AtomAnnotation::Integer(
+            pdbiox_core::AnnotationColumn::from_values(vec![
+                pdbiox_chem::PolymerAtomRole::PROTEIN_NITROGEN.code(),
+                pdbiox_chem::PolymerAtomRole::PROTEIN_ALPHA_CARBON.code(),
+                pdbiox_chem::PolymerAtomRole::UNKNOWN.code(),
+            ])
+            .expect("small annotation column"),
+        ),
+    );
+    Structure::new(data)
+}
+
 fn evaluate(source: &str) -> Evaluation {
     let query = match Query::compile(source) {
         Ok(query) => query,
         Err(findings) => panic!("compile failed: {findings:?}"),
     };
     match query.evaluate(
-        &structure(),
-        &AnalysisPolicy::default(),
+        &macro_structure(),
+        &AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label),
         &Groups::new(),
         None,
     ) {
@@ -83,6 +111,33 @@ fn hierarchy_expansion_and_macros_execute_over_one_store() {
 }
 
 #[test]
+fn a_chemistry_macro_refuses_absent_component_chemistry() {
+    let query = Query::compile("protein").expect("query compiles");
+    let result = query.evaluate(
+        &structure(),
+        &AnalysisPolicy::default(),
+        &Groups::new(),
+        None,
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn polymer_macro_does_not_infer_chemistry_from_atom_record_type() {
+    let query = Query::compile("polymer").expect("query compiles");
+    let evaluation = query
+        .evaluate(
+            &structure(),
+            &AnalysisPolicy::default(),
+            &Groups::new(),
+            None,
+        )
+        .expect("topology query evaluates");
+
+    assert!(evaluation.selection.is_empty());
+}
+
+#[test]
 fn chemistry_numeric_columns_and_aromatic_edges_use_shared_rust_data() {
     assert_eq!(
         evaluate("mass > 13 and radius < 1.6")
@@ -107,6 +162,111 @@ fn chemistry_numeric_columns_and_aromatic_edges_use_shared_rust_data() {
         .evaluate(&structure, &AnalysisPolicy::default(), &Groups::new(), None)
         .expect("annotations exist");
     assert_eq!(result.selection.iter().collect::<Vec<_>>(), vec![0, 1]);
+}
+
+#[test]
+fn chemistry_macros_aromatic_charge_and_chirality_use_ccd_annotations() {
+    let structure = chemistry_structure();
+    for (source, expected) in [
+        ("ligand", vec![0, 1, 2, 3]),
+        ("aromatic", vec![2]),
+        ("formalcharge < 0", vec![3]),
+        ("chirality S", vec![0]),
+        ("smarts '[C;D3]-[S-]'", vec![0, 3]),
+    ] {
+        let query = match Query::compile(source) {
+            Ok(query) => query,
+            Err(findings) => panic!("{source} compile failed: {findings:?}"),
+        };
+        let evaluation =
+            match query.evaluate(&structure, &AnalysisPolicy::default(), &Groups::new(), None) {
+                Ok(evaluation) => evaluation,
+                Err(findings) => panic!("{source} evaluation failed: {findings:?}"),
+            };
+        assert_eq!(evaluation.selection.iter().collect::<Vec<_>>(), expected);
+    }
+}
+
+fn chemistry_structure() -> Structure {
+    use pdbiox_chem::{
+        Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider, StereoConfiguration,
+    };
+    use pdbiox_core::{BondOrder, Element};
+
+    let source = "data_chem\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+HETATM 1 C CTR LIG A 1 0 0 0\n\
+HETATM 2 N A LIG A 1 1 0 0\n\
+HETATM 3 O B LIG A 1 0 1 0\n\
+HETATM 4 S C LIG A 1 0 0 -1\n";
+    let atom = |name: &str, element, charge, aromatic, stereo| ComponentAtom {
+        name: name.into(),
+        alternate_name: None,
+        element,
+        charge,
+        aromatic,
+        leaving: false,
+        stereo,
+    };
+    let bond = |other: &str| ComponentBond {
+        atom_a: "CTR".into(),
+        atom_b: other.into(),
+        order: BondOrder::Single,
+        aromatic: false,
+        stereo: None,
+    };
+    let component = Component {
+        id: "LIG".into(),
+        name: "CHIRAL LIGAND".into(),
+        kind: ComponentKind::NonPolymer,
+        parent: None,
+        one_letter_code: None,
+        formula: None,
+        atoms: vec![
+            atom(
+                "CTR",
+                Element::CARBON,
+                0,
+                false,
+                Some(StereoConfiguration::R),
+            ),
+            atom("A", Element::NITROGEN, 0, false, None),
+            atom("B", Element::OXYGEN, 0, true, None),
+            atom("C", Element::SULFUR, -1, false, None),
+        ]
+        .into(),
+        bonds: vec![bond("A"), bond("B"), bond("C")].into(),
+        ideal_coordinates: Some(
+            vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+            .into(),
+        ),
+        model_coordinates: None,
+    };
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let (structure, _) = match pdbiox_cif::read(&input, &ReadOptions::new()) {
+        Ok(result) => result,
+        Err(findings) => panic!("chemistry fixture failed: {findings:?}"),
+    };
+    let provider = MemoryProvider::new(
+        pdbiox_core::contract::DictionaryVersion::new("query-test"),
+        [component],
+    )
+    .expect("component fixture is unique");
+    match pdbiox_chem::apply_component_chemistry(
+        &structure,
+        &provider,
+        pdbiox_chem::PolymerLinkPolicy::Disabled,
+    ) {
+        Ok(report) => report.structure,
+        Err(finding) => panic!("chemistry annotation failed: {finding}"),
+    }
 }
 
 #[test]
@@ -195,20 +355,22 @@ fn segment_atom_and_predicted_annotations_execute_from_core_columns() {
     };
     let _ = data.annotations.insert(
         pdbiox_core::SEGMENT_ID_ANNOTATION,
-        pdbiox_core::AtomAnnotation::Symbol(pdbiox_core::AnnotationColumn::from_values(vec![
-            system, system, solvent,
-        ])),
+        pdbiox_core::AtomAnnotation::Symbol(
+            pdbiox_core::AnnotationColumn::from_values(vec![system, system, solvent])
+                .expect("small annotation column"),
+        ),
     );
     let _ = data.annotations.insert(
         pdbiox_core::PLDDT_ANNOTATION,
-        pdbiox_core::AtomAnnotation::Real(pdbiox_core::AnnotationColumn::from_values(vec![
-            90.0, 40.0, 80.0,
-        ])),
+        pdbiox_core::AtomAnnotation::Real(
+            pdbiox_core::AnnotationColumn::from_values(vec![90.0, 40.0, 80.0])
+                .expect("small annotation column"),
+        ),
     );
     let structure = Structure::new(data);
     for (source, expected) in [
         ("segid SYSTEM", vec![0, 1]),
-        ("atom SYSTEM 42 CA", vec![1]),
+        ("atom SYSTEM 1 CA", vec![1]),
         ("same segment as name CA", vec![0, 1]),
         ("plddt > 70", vec![0, 2]),
     ] {
@@ -216,7 +378,9 @@ fn segment_atom_and_predicted_annotations_execute_from_core_columns() {
             Ok(query) => query,
             Err(findings) => panic!("compile failed: {findings:?}"),
         };
-        let result = query.evaluate(&structure, &AnalysisPolicy::default(), &Groups::new(), None);
+        let policy =
+            AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label);
+        let result = query.evaluate(&structure, &policy, &Groups::new(), None);
         let result = match result {
             Ok(result) => result,
             Err(findings) => panic!("evaluation failed: {findings:?}"),
