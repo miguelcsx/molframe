@@ -76,6 +76,16 @@ fn deviation_is_symmetric_and_zero_against_itself() {
 }
 
 #[test]
+fn flat_coordinates_use_the_same_kernel_without_truncation() {
+    let flat = TRIANGLE.into_iter().flatten().collect::<Vec<_>>();
+    assert_eq!(rmsd_flat(&flat, &flat), Ok(0.0));
+    assert_eq!(
+        rmsd_flat(&flat[..flat.len() - 1], &flat[..flat.len() - 1]),
+        Err(SuperposeError::LengthMismatch)
+    );
+}
+
+#[test]
 fn sets_of_different_sizes_are_refused_rather_than_truncated() {
     assert_eq!(
         rmsd(&TRIANGLE, &TRIANGLE[..2]),

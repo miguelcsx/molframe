@@ -60,6 +60,15 @@ impl DistanceMatrix {
     pub fn as_slice(&self) -> &[f64] {
         &self.values
     }
+
+    /// Consumes the matrix and returns its contiguous row-major values.
+    ///
+    /// This is useful for FFI boundaries that can adopt the allocation without
+    /// cloning its `O(rows × columns)` payload.
+    #[must_use]
+    pub fn into_values(self) -> Vec<f64> {
+        self.values
+    }
 }
 
 /// Computes all distances within one position set.

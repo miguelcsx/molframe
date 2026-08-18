@@ -31,3 +31,13 @@ fn a_rectangular_matrix_keeps_row_major_shape_and_order() {
             .all(|(actual, expected)| (actual - expected).abs() < f64::EPSILON)
     );
 }
+
+#[test]
+fn values_can_be_moved_without_changing_row_major_order() {
+    let left = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
+    let right = [[0.0, 1.0, 0.0]];
+    let Ok(matrix) = distance_matrix_between(&left, &right) else {
+        panic!("small rectangular matrix must fit");
+    };
+    assert_eq!(matrix.into_values(), vec![1.0, 2.0f64.sqrt()]);
+}

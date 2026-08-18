@@ -60,6 +60,7 @@ pub use rotation::{
     rotation_mean_with_options,
 };
 pub use superpose::{
-    SuperposeError, SuperposeOptions, Superposition, rmsd, superpose, superpose_with_options,
+    SuperposeError, SuperposeOptions, Superposition, rmsd, rmsd_flat, superpose,
+    superpose_with_options,
 };
 pub use transform::Rigid;

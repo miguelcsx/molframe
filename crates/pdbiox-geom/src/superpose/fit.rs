@@ -101,6 +101,39 @@ pub fn rmsd(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Superpos
     Ok((total / count).sqrt())
 }
 
+/// Measures paired coordinates stored as contiguous `(x, y, z)` scalars.
+///
+/// This is the ABI-friendly form used by zero-copy array bindings. It keeps
+/// the same `O(n)` kernel and does not materialise an intermediate vector of
+/// points. Callers must provide complete triples; malformed buffers are
+/// reported as a length mismatch rather than silently truncated.
+///
+/// # Errors
+///
+/// Returns [`SuperposeError::LengthMismatch`] when the slices have different
+/// lengths or do not contain complete coordinate triples. Returns
+/// [`SuperposeError::TooManyPoints`] when the point count cannot be represented
+/// exactly by the accumulator.
+pub fn rmsd_flat(mobile: &[f32], reference: &[f32]) -> Result<f64, SuperposeError> {
+    if mobile.len() != reference.len() || !mobile.len().is_multiple_of(3) {
+        return Err(SuperposeError::LengthMismatch);
+    }
+    if mobile.is_empty() {
+        return Ok(0.0);
+    }
+
+    let mut total = 0.0;
+    for (left, right) in mobile.chunks_exact(3).zip(reference.chunks_exact(3)) {
+        let dx = f64::from(left[0]) - f64::from(right[0]);
+        let dy = f64::from(left[1]) - f64::from(right[1]);
+        let dz = f64::from(left[2]) - f64::from(right[2]);
+        total += dx.mul_add(dx, dy.mul_add(dy, dz * dz));
+    }
+
+    let count = exact_count(mobile.len() / 3).ok_or(SuperposeError::TooManyPoints)?;
+    Ok((total / count).sqrt())
+}
+
 /// A fit, and what it achieved.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Superposition {

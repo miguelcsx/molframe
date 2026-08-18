@@ -10,5 +10,13 @@ description = "Geometric kernels for pdbiox"
 [dependencies]
 num-traits.workspace = true
 
+[dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
+
+[[bench]]
+name = "geom"
+harness = false
+
 [lints]
 workspace = true
