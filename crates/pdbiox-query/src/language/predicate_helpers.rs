@@ -63,10 +63,8 @@ where
     K: Eq + Hash,
 {
     let mut keys = HashSet::new();
-    visit(structure, |context| {
-        if selected.contains(context.atom.index().get())
-            && let Some(key) = key_for(context)
-        {
+    visit(structure, selected, |context: AtomContext<'_>| {
+        if let Some(key) = key_for(context) {
             keys.insert(key);
         }
     });
@@ -74,9 +72,9 @@ where
         return AtomSelection::Empty;
     }
     let mut matches = Vec::new();
-    visit(structure, |context| {
+    visit(structure, universe, |context: AtomContext<'_>| {
         let index = context.atom.index().get();
-        if universe.contains(index) && key_for(context).is_some_and(|key| keys.contains(&key)) {
+        if key_for(context).is_some_and(|key| keys.contains(&key)) {
             matches.push(index);
         }
     });

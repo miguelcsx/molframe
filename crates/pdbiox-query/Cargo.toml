@@ -12,7 +12,14 @@ pdbiox-chem.workspace = true
 pdbiox-core.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 pdbiox-cif.workspace = true
+pdbiox-spatial.workspace = true
+
+[[bench]]
+name = "query"
+harness = false
 
 [lints]
 workspace = true
