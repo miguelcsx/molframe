@@ -7,12 +7,14 @@
 
 #![forbid(unsafe_code)]
 
+mod batch;
 mod engine;
 mod numeric;
 mod plan;
 mod report;
 mod value;
 
+pub use batch::{BatchAudit, BatchDimension, audit_batch};
 pub use engine::audit;
 pub use plan::{AuditPlan, PlanError, PolicyDimension, PolicySpace};
 pub use report::{AuditReport, AuditRun, DimensionSensitivity, SensitiveItem};

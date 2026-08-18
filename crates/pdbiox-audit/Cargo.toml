@@ -11,5 +11,13 @@ description = "Bounded policy-sensitivity audits for pdbiox analyses"
 num-traits.workspace = true
 pdbiox-core.workspace = true
 
+[dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
+
+[[bench]]
+name = "audit"
+harness = false
+
 [lints]
 workspace = true

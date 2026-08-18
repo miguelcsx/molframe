@@ -222,6 +222,12 @@ impl AuditPlan {
     pub fn policies(&self) -> &[AnalysisPolicy] {
         &self.policies
     }
+
+    /// Cartesian coordinates identifying the selected alternative in each field.
+    #[must_use]
+    pub fn coordinates(&self) -> &[Vec<usize>] {
+        &self.coordinates
+    }
 }
 
 /// Why a policy space could not be planned.
