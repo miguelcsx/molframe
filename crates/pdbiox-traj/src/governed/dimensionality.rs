@@ -4,8 +4,8 @@ use pdbiox_core::contract::{AlgorithmId, Analysis, AnalysisPolicy, Coverage, Par
 use pdbiox_geom::PeriodicAngle;
 
 use crate::{
-    CartesianFit, DiffusionMap, EnsembleDistanceMatrix, EnsembleGeometryError, PcaResult,
-    cartesian_pca, diffusion_map, dihedral_pca,
+    CartesianFit, DiffusionMap, EnsembleDistanceMatrix, EnsembleGeometryError, FrameView,
+    PcaResult, cartesian_pca, cartesian_pca_view, diffusion_map, dihedral_pca,
 };
 
 /// Runs Cartesian PCA and records every numerical choice in provenance.
@@ -20,13 +20,52 @@ pub fn analyse_cartesian_pca(
     memory_limit: usize,
     policy: &AnalysisPolicy,
 ) -> Result<Analysis<PcaResult>, EnsembleGeometryError> {
+    cartesian_pca_analysis(
+        cartesian_pca(frames, fit, components, memory_limit)?,
+        frames.len(),
+        fit,
+        components,
+        memory_limit,
+        policy,
+    )
+}
+
+/// Runs Cartesian PCA over borrowed contiguous frames with governed provenance.
+///
+/// # Errors
+///
+/// Returns the underlying validation, fitting, decomposition or memory error.
+pub fn analyse_cartesian_pca_view(
+    frames: FrameView<'_>,
+    fit: CartesianFit<'_>,
+    components: usize,
+    memory_limit: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<PcaResult>, EnsembleGeometryError> {
+    cartesian_pca_analysis(
+        cartesian_pca_view(frames, fit, components, memory_limit)?,
+        frames.frame_count(),
+        fit,
+        components,
+        memory_limit,
+        policy,
+    )
+}
+
+fn cartesian_pca_analysis(
+    value: PcaResult,
+    frame_count: usize,
+    fit: CartesianFit<'_>,
+    components: usize,
+    memory_limit: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<PcaResult>, EnsembleGeometryError> {
     let fit_name = match fit {
         CartesianFit::None => "none",
         CartesianFit::Reference(_) => "reference",
         CartesianFit::IterativeMean { .. } => "iterative-mean",
     };
-    let value = cartesian_pca(frames, fit, components, memory_limit)?;
-    let mut analysis = Analysis::complete(value, coverage(frames.len())?, policy);
+    let mut analysis = Analysis::complete(value, coverage(frame_count)?, policy);
     analysis.provenance = analysis
         .provenance
         .with_algorithm(AlgorithmId::new("cartesian-pca", "1"))

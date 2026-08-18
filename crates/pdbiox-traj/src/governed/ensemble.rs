@@ -1,13 +1,15 @@
 //! Governed wrappers for deterministic ensemble kernels.
 
+use crate::FrameView;
 use crate::{
     Clustering, ConvergenceBlock, EnsembleDistanceMatrix, EnsembleGeometryError,
     EnsembleSimilarityError, EnsembleStatisticsError, FrameAlignment, GroupVariance,
-    HarmonicSimilarity, HarmonicSimilarityOptions, KMeans, KMeansError, KMeansOptions, Linkage,
-    RemainderPolicy, Timestep, agglomerative_clustering, block_convergence,
+    HarmonicSimilarity, HarmonicSimilarityOptions, KMeansError, Linkage, MeanSquaredDisplacement,
+    MsdError, RemainderPolicy, Timestep, agglomerative_clustering, block_convergence,
     cluster_population_similarity, dbscan_clustering, generalized_procrustes_mean,
-    group_coordinate_variance, harmonic_ensemble_similarity, kmeans, medoid, pairwise_fitted_rmsd,
-    pairwise_torus_distance, rmsd_to_reference,
+    generalized_procrustes_mean_view, group_coordinate_variance, group_coordinate_variance_view,
+    harmonic_ensemble_similarity, mean_squared_displacement_view, medoid, pairwise_fitted_rmsd,
+    pairwise_fitted_rmsd_view, pairwise_torus_distance, rmsd_to_reference, rmsd_to_reference_view,
 };
 use pdbiox_core::contract::{AlgorithmId, Analysis, AnalysisPolicy, Coverage, ParameterValue};
 use pdbiox_geom::{PeriodicAngle, TorusMetric};
@@ -27,12 +29,15 @@ pub enum GovernedEnsembleError {
     /// Variance or convergence failure.
     #[error(transparent)]
     Statistics(#[from] EnsembleStatisticsError),
+    /// Mean-squared displacement failure.
+    #[error(transparent)]
+    MeanSquaredDisplacement(#[from] MsdError),
     /// Observation count exceeds public coverage counters.
     #[error("ensemble observation count exceeds u32 coverage limits")]
     CoverageOverflow,
 }
 
-fn governed<T>(
+pub(super) fn governed<T>(
     value: T,
     observations: usize,
     policy: &AnalysisPolicy,
@@ -46,13 +51,13 @@ fn governed<T>(
     Ok(analysis)
 }
 
-fn integer(value: usize) -> Result<ParameterValue, GovernedEnsembleError> {
+pub(super) fn integer(value: usize) -> Result<ParameterValue, GovernedEnsembleError> {
     i64::try_from(value)
         .map(ParameterValue::Integer)
         .map_err(|_| GovernedEnsembleError::CoverageOverflow)
 }
 
-fn float(value: f64) -> Result<ParameterValue, GovernedEnsembleError> {
+pub(super) fn float(value: f64) -> Result<ParameterValue, GovernedEnsembleError> {
     ParameterValue::finite_float(value).ok_or(GovernedEnsembleError::Geometry(
         EnsembleGeometryError::InvalidParameter,
     ))
@@ -69,8 +74,43 @@ pub fn analyse_rmsd_to_reference(
     alignment: FrameAlignment,
     policy: &AnalysisPolicy,
 ) -> Result<Analysis<Vec<f64>>, GovernedEnsembleError> {
-    let value = rmsd_to_reference(frames, reference, alignment)?;
-    let mut result = governed(value, frames.len(), policy, "ensemble-rmsd-to-reference")?;
+    rmsd_to_reference_analysis(
+        rmsd_to_reference(frames, reference, alignment)?,
+        frames.len(),
+        reference,
+        alignment,
+        policy,
+    )
+}
+
+/// Governed RMSD series directly over borrowed contiguous frame coordinates.
+///
+/// # Errors
+///
+/// Returns the typed raw-kernel failure or coverage overflow.
+pub fn analyse_rmsd_to_reference_view(
+    frames: FrameView<'_>,
+    reference: usize,
+    alignment: FrameAlignment,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<Vec<f64>>, GovernedEnsembleError> {
+    rmsd_to_reference_analysis(
+        rmsd_to_reference_view(frames, reference, alignment)?,
+        frames.frame_count(),
+        reference,
+        alignment,
+        policy,
+    )
+}
+
+fn rmsd_to_reference_analysis(
+    value: Vec<f64>,
+    frame_count: usize,
+    reference: usize,
+    alignment: FrameAlignment,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<Vec<f64>>, GovernedEnsembleError> {
+    let mut result = governed(value, frame_count, policy, "ensemble-rmsd-to-reference")?;
     result.provenance = result
         .provenance
         .with_parameter("reference", integer(reference)?)
@@ -91,8 +131,39 @@ pub fn analyse_pairwise_fitted_rmsd(
     memory_limit: usize,
     policy: &AnalysisPolicy,
 ) -> Result<Analysis<EnsembleDistanceMatrix>, GovernedEnsembleError> {
-    let value = pairwise_fitted_rmsd(frames, memory_limit)?;
-    let mut result = governed(value, frames.len(), policy, "pairwise-fitted-rmsd")?;
+    pairwise_fitted_rmsd_analysis(
+        pairwise_fitted_rmsd(frames, memory_limit)?,
+        frames.len(),
+        memory_limit,
+        policy,
+    )
+}
+
+/// Governed pairwise fitted RMSD directly over borrowed contiguous frames.
+///
+/// # Errors
+///
+/// Returns the typed raw-kernel failure or coverage overflow.
+pub fn analyse_pairwise_fitted_rmsd_view(
+    frames: FrameView<'_>,
+    memory_limit: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<EnsembleDistanceMatrix>, GovernedEnsembleError> {
+    pairwise_fitted_rmsd_analysis(
+        pairwise_fitted_rmsd_view(frames, memory_limit)?,
+        frames.frame_count(),
+        memory_limit,
+        policy,
+    )
+}
+
+fn pairwise_fitted_rmsd_analysis(
+    value: EnsembleDistanceMatrix,
+    frame_count: usize,
+    memory_limit: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<EnsembleDistanceMatrix>, GovernedEnsembleError> {
+    let mut result = governed(value, frame_count, policy, "pairwise-fitted-rmsd")?;
     result.provenance = result
         .provenance
         .with_parameter("memory_limit", integer(memory_limit)?);
@@ -131,12 +202,77 @@ pub fn analyse_generalized_procrustes_mean(
     maximum_iterations: usize,
     policy: &AnalysisPolicy,
 ) -> Result<Analysis<Vec<[f32; 3]>>, GovernedEnsembleError> {
-    let value = generalized_procrustes_mean(frames, tolerance, maximum_iterations)?;
-    let mut result = governed(value, frames.len(), policy, "generalized-procrustes-mean")?;
+    generalized_procrustes_mean_analysis(
+        generalized_procrustes_mean(frames, tolerance, maximum_iterations)?,
+        frames.len(),
+        tolerance,
+        maximum_iterations,
+        policy,
+    )
+}
+
+/// Governed generalized Procrustes centroid over borrowed contiguous frames.
+///
+/// # Errors
+///
+/// Returns the typed raw-kernel failure or coverage overflow.
+pub fn analyse_generalized_procrustes_mean_view(
+    frames: FrameView<'_>,
+    tolerance: f64,
+    maximum_iterations: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<Vec<[f32; 3]>>, GovernedEnsembleError> {
+    generalized_procrustes_mean_analysis(
+        generalized_procrustes_mean_view(frames, tolerance, maximum_iterations)?,
+        frames.frame_count(),
+        tolerance,
+        maximum_iterations,
+        policy,
+    )
+}
+
+fn generalized_procrustes_mean_analysis(
+    value: Vec<[f32; 3]>,
+    frame_count: usize,
+    tolerance: f64,
+    maximum_iterations: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<Vec<[f32; 3]>>, GovernedEnsembleError> {
+    let mut result = governed(value, frame_count, policy, "generalized-procrustes-mean")?;
     result.provenance = result
         .provenance
         .with_parameter("tolerance", float(tolerance)?)
         .with_parameter("maximum_iterations", integer(maximum_iterations)?);
+    Ok(result)
+}
+
+/// Governed mean-squared displacement directly over borrowed contiguous frames.
+///
+/// # Errors
+///
+/// Returns the typed raw-kernel failure or coverage overflow.
+pub fn analyse_mean_squared_displacement_view(
+    frames: FrameView<'_>,
+    atoms: &[usize],
+    maximum_lag: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<Vec<MeanSquaredDisplacement>>, GovernedEnsembleError> {
+    let value = mean_squared_displacement_view(frames, atoms, maximum_lag)?;
+    let mut result = governed(
+        value,
+        frames.frame_count(),
+        policy,
+        "mean-squared-displacement",
+    )?;
+    let atom_parameter = if atoms.is_empty() {
+        ParameterValue::Text("all".into())
+    } else {
+        integer(atoms.len())?
+    };
+    result.provenance = result
+        .provenance
+        .with_parameter("atoms", atom_parameter)
+        .with_parameter("maximum_lag", integer(maximum_lag)?);
     Ok(result)
 }
 
@@ -201,32 +337,6 @@ pub fn analyse_medoid(
     )
 }
 
-/// Governed deterministic k-means.
-///
-/// # Errors
-///
-/// Returns the typed raw-kernel failure or coverage overflow.
-pub fn analyse_kmeans(
-    observations: &[Vec<f64>],
-    options: KMeansOptions<'_>,
-    policy: &AnalysisPolicy,
-) -> Result<Analysis<KMeans>, GovernedEnsembleError> {
-    let value = kmeans(observations, options)?;
-    let mut result = governed(value, observations.len(), policy, "kmeans")?;
-    result.provenance = result
-        .provenance
-        .with_parameter(
-            "initial_centres",
-            ParameterValue::Text(format!("{:?}", options.initial_centres).into()),
-        )
-        .with_parameter("maximum_iterations", integer(options.maximum_iterations)?)
-        .with_parameter(
-            "convergence_tolerance_squared",
-            float(options.convergence_tolerance_squared)?,
-        );
-    Ok(result)
-}
-
 /// Governed harmonic ensemble similarity.
 ///
 /// # Errors
@@ -289,12 +399,36 @@ pub fn analyse_group_coordinate_variance(
     groups: &[Vec<usize>],
     policy: &AnalysisPolicy,
 ) -> Result<Analysis<Vec<GroupVariance>>, GovernedEnsembleError> {
-    governed(
+    group_coordinate_variance_analysis(
         group_coordinate_variance(frames, groups)?,
         frames.len(),
         policy,
-        "group-coordinate-variance",
     )
+}
+
+/// Governed per-group coordinate variance directly over borrowed frames.
+///
+/// # Errors
+///
+/// Returns the typed raw-kernel failure or coverage overflow.
+pub fn analyse_group_coordinate_variance_view(
+    frames: FrameView<'_>,
+    groups: &[Vec<usize>],
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<Vec<GroupVariance>>, GovernedEnsembleError> {
+    group_coordinate_variance_analysis(
+        group_coordinate_variance_view(frames, groups)?,
+        frames.frame_count(),
+        policy,
+    )
+}
+
+fn group_coordinate_variance_analysis(
+    value: Vec<GroupVariance>,
+    frame_count: usize,
+    policy: &AnalysisPolicy,
+) -> Result<Analysis<Vec<GroupVariance>>, GovernedEnsembleError> {
+    governed(value, frame_count, policy, "group-coordinate-variance")
 }
 
 /// Governed scalar block-convergence summary.
