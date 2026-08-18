@@ -19,8 +19,14 @@ pdbiox-spatial.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 pdbiox-cif.workspace = true
 tempfile.workspace = true
+
+[[bench]]
+name = "ml"
+harness = false
 
 [lints]
 workspace = true

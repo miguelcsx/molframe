@@ -15,7 +15,13 @@ sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 pdbiox-pdb.workspace = true
+
+[[bench]]
+name = "adapters"
+harness = false
 
 [lints]
 workspace = true

@@ -12,7 +12,13 @@ pdbiox-core.workspace = true
 pdbiox-cif.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 pdbiox-core.workspace = true
+
+[[bench]]
+name = "modelcif"
+harness = false
 
 [lints]
 workspace = true

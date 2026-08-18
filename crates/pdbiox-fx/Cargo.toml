@@ -18,8 +18,14 @@ serde_json.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 pdbiox-cif.workspace = true
 tempfile.workspace = true
+
+[[bench]]
+name = "fx"
+harness = false
 
 [lints]
 workspace = true
