@@ -17,6 +17,12 @@ serde_bytes.workspace = true
 [dev-dependencies]
 pdbiox-cif.workspace = true
 proptest.workspace = true
+criterion.workspace = true
+pdbiox-bench.workspace = true
+
+[[bench]]
+name = "pdb"
+harness = false
 
 [lints]
 workspace = true
