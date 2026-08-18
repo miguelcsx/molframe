@@ -58,6 +58,12 @@ impl RowScores {
     fn set(&mut self, state: State, column: usize, value: i64) {
         self.states[state.index()][column] = value;
     }
+
+    fn reset(&mut self) {
+        for state in &mut self.states {
+            state.fill(NEGATIVE_INFINITY);
+        }
+    }
 }
 
 pub(super) fn global_linear<S: Score>(
@@ -219,8 +225,9 @@ fn forward<S: Score>(
         );
         previous.set(State::LeftGap, column, value);
     }
+    let mut current = RowScores::new(width);
     for row_symbol in rows.iter().copied() {
-        let mut current = RowScores::new(width);
+        current.reset();
         current.set(
             State::RightGap,
             0,
@@ -258,7 +265,7 @@ fn forward<S: Score>(
                 ),
             );
         }
-        previous = current;
+        std::mem::swap(&mut previous, &mut current);
     }
     Ok(previous)
 }
@@ -289,8 +296,9 @@ fn backward<S: Score>(
             add(next.get(State::LeftGap, column + 1), gap_extend)?,
         );
     }
+    let mut current = RowScores::new(width);
     for row in (0..rows.len()).rev() {
-        let mut current = RowScores::new(width);
+        current.reset();
         current.set(
             State::Match,
             columns.len(),
@@ -332,7 +340,7 @@ fn backward<S: Score>(
                 ),
             );
         }
-        next = current;
+        std::mem::swap(&mut next, &mut current);
     }
     Ok(next)
 }

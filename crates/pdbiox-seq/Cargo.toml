@@ -9,5 +9,12 @@ description = "Sequence alignment and comparison for pdbiox"
 
 [dependencies]
 
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "seq"
+harness = false
+
 [lints]
 workspace = true
