@@ -71,3 +71,33 @@ fn reference_rmsd_rejects_out_of_range_reference() {
         Err(EnsembleGeometryError::InvalidParameter)
     );
 }
+
+#[test]
+fn borrowed_frame_views_match_owned_ensemble_kernels() {
+    let owned = frames();
+    let positions = owned.iter().flatten().copied().collect::<Vec<[f32; 3]>>();
+    let view = crate::FrameView::new(&positions, owned.len(), owned[0].len())
+        .expect("contiguous test coordinates");
+    let trajectory = owned
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(frame, positions)| crate::Timestep {
+            frame,
+            positions,
+            ..crate::Timestep::default()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rmsd_to_reference_view(view, 0, FrameAlignment::Rigid),
+        rmsd_to_reference(&trajectory, 0, FrameAlignment::Rigid)
+    );
+    assert_eq!(
+        pairwise_fitted_rmsd_view(view, 1024),
+        pairwise_fitted_rmsd(&owned, 1024)
+    );
+    assert_eq!(
+        generalized_procrustes_mean_view(view, 1.0e-6, 20),
+        generalized_procrustes_mean(&owned, 1.0e-6, 20)
+    );
+}

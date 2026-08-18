@@ -1,5 +1,6 @@
 //! Per-group ensemble dispersion and block convergence summaries.
 
+use crate::frame_view::{FrameSource, FrameView};
 use crate::numeric::f64_from_usize;
 
 /// Coordinate dispersion for one explicit atom group.
@@ -64,6 +65,28 @@ pub fn group_coordinate_variance(
     frames: &[Vec<[f32; 3]>],
     groups: &[Vec<usize>],
 ) -> Result<Vec<GroupVariance>, EnsembleStatisticsError> {
+    group_coordinate_variance_source(frames, groups)
+}
+
+/// Computes coordinate variance directly from borrowed contiguous frames.
+///
+/// The input coordinates remain borrowed; only the requested result records
+/// are allocated.
+///
+/// # Errors
+///
+/// Returns [`EnsembleStatisticsError`] for invalid frames or groups.
+pub fn group_coordinate_variance_view(
+    frames: FrameView<'_>,
+    groups: &[Vec<usize>],
+) -> Result<Vec<GroupVariance>, EnsembleStatisticsError> {
+    group_coordinate_variance_source(&frames, groups)
+}
+
+fn group_coordinate_variance_source<S: FrameSource + ?Sized>(
+    frames: &S,
+    groups: &[Vec<usize>],
+) -> Result<Vec<GroupVariance>, EnsembleStatisticsError> {
     let atom_count = validate_frames(frames)?;
     if groups.is_empty()
         || groups
@@ -94,70 +117,96 @@ pub fn block_convergence(
     if remainder == RemainderPolicy::Reject && !values.len().is_multiple_of(block_size) {
         return Err(EnsembleStatisticsError::PartialBlock);
     }
+    // Once the complete input length is exactly representable, every block
+    // boundary and block length is exactly representable too.  Validate that
+    // invariant once instead of paying the checked conversion cost for every
+    // output row.
+    let total_count = f64_from_usize(values.len()).ok_or(EnsembleStatisticsError::InvalidBlocks)?;
+    let full_block_count = (block_size <= values.len())
+        .then(|| f64_from_usize(block_size))
+        .flatten();
+    let remainder_count = (!values.len().is_multiple_of(block_size))
+        .then(|| f64_from_usize(values.len() % block_size))
+        .flatten();
     let mut cumulative_sum = 0.0;
-    values
-        .chunks(block_size)
-        .enumerate()
-        .map(|(block, chunk)| {
-            let start = block * block_size;
-            let end = start + chunk.len();
-            let block_sum: f64 = chunk.iter().sum();
-            cumulative_sum += block_sum;
-            let block_count =
-                f64_from_usize(chunk.len()).ok_or(EnsembleStatisticsError::InvalidBlocks)?;
-            let cumulative_count =
-                f64_from_usize(end).ok_or(EnsembleStatisticsError::InvalidBlocks)?;
-            Ok(ConvergenceBlock {
-                start,
-                end,
-                block_mean: block_sum / block_count,
-                cumulative_mean: cumulative_sum / cumulative_count,
-            })
-        })
-        .collect()
+    let mut cumulative_count = 0.0;
+    let mut blocks = Vec::with_capacity(values.len().div_ceil(block_size));
+    for (block, chunk) in values.chunks(block_size).enumerate() {
+        let start = block * block_size;
+        let end = start + chunk.len();
+        let block_sum: f64 = chunk.iter().sum();
+        cumulative_sum += block_sum;
+        let block_count = if chunk.len() == block_size {
+            full_block_count.ok_or(EnsembleStatisticsError::InvalidBlocks)?
+        } else {
+            match remainder_count {
+                Some(count) => count,
+                None => total_count,
+            }
+        };
+        cumulative_count += block_count;
+        blocks.push(ConvergenceBlock {
+            start,
+            end,
+            block_mean: block_sum / block_count,
+            cumulative_mean: cumulative_sum / cumulative_count,
+        });
+    }
+    Ok(blocks)
 }
 
-fn validate_frames(frames: &[Vec<[f32; 3]>]) -> Result<usize, EnsembleStatisticsError> {
-    let Some(first) = frames.first() else {
-        return Err(EnsembleStatisticsError::InvalidFrames);
-    };
-    if first.is_empty()
-        || frames.iter().any(|frame| frame.len() != first.len())
-        || frames
-            .iter()
-            .flatten()
-            .flatten()
-            .any(|value| !value.is_finite())
-    {
+fn validate_frames<S: FrameSource + ?Sized>(frames: &S) -> Result<usize, EnsembleStatisticsError> {
+    if frames.frame_count() == 0 {
         return Err(EnsembleStatisticsError::InvalidFrames);
     }
-    Ok(first.len())
+    let atom_count = frames.atom_count();
+    if atom_count == 0 {
+        return Err(EnsembleStatisticsError::InvalidFrames);
+    }
+    for index in 0..frames.frame_count() {
+        let frame = frames
+            .frame(index)
+            .ok_or(EnsembleStatisticsError::InvalidFrames)?;
+        if frame.len() != atom_count || frame.iter().flatten().any(|value| !value.is_finite()) {
+            return Err(EnsembleStatisticsError::InvalidFrames);
+        }
+    }
+    Ok(atom_count)
 }
 
-fn group_variance(
-    frames: &[Vec<[f32; 3]>],
+fn group_variance<S: FrameSource + ?Sized>(
+    frames: &S,
     group: &[usize],
 ) -> Result<GroupVariance, EnsembleStatisticsError> {
     let observations = frames
-        .len()
+        .frame_count()
         .checked_mul(group.len())
         .and_then(f64_from_usize)
         .ok_or(EnsembleStatisticsError::InvalidFrames)?;
-    let means: [f64; 3] = std::array::from_fn(|axis| {
-        frames
-            .iter()
-            .flat_map(|frame| group.iter().map(|atom| f64::from(frame[*atom][axis])))
-            .sum::<f64>()
-            / observations
-    });
-    let variance_by_axis = std::array::from_fn(|axis| {
-        frames
-            .iter()
-            .flat_map(|frame| group.iter().map(|atom| f64::from(frame[*atom][axis])))
-            .map(|value| (value - means[axis]).powi(2))
-            .sum::<f64>()
-            / observations
-    });
+    let mut sums = [0.0; 3];
+    for frame_index in 0..frames.frame_count() {
+        let frame = frames
+            .frame(frame_index)
+            .ok_or(EnsembleStatisticsError::InvalidFrames)?;
+        for &atom in group {
+            for axis in 0..3 {
+                sums[axis] += f64::from(frame[atom][axis]);
+            }
+        }
+    }
+    let means = sums.map(|sum| sum / observations);
+    let mut variance_by_axis = [0.0; 3];
+    for frame_index in 0..frames.frame_count() {
+        let frame = frames
+            .frame(frame_index)
+            .ok_or(EnsembleStatisticsError::InvalidFrames)?;
+        for &atom in group {
+            for axis in 0..3 {
+                variance_by_axis[axis] += (f64::from(frame[atom][axis]) - means[axis]).powi(2);
+            }
+        }
+    }
+    variance_by_axis = variance_by_axis.map(|sum| sum / observations);
     Ok(GroupVariance {
         atoms: group.to_vec(),
         rms_fluctuation: variance_by_axis.into_iter().sum::<f64>().sqrt(),

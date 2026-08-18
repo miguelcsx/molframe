@@ -1,4 +1,6 @@
-use super::{RemainderPolicy, block_convergence, group_coordinate_variance};
+use super::{
+    RemainderPolicy, block_convergence, group_coordinate_variance, group_coordinate_variance_view,
+};
 
 #[test]
 fn group_variance_uses_explicit_grouping_and_current_frame() {
@@ -11,6 +13,26 @@ fn group_variance_uses_explicit_grouping_and_current_frame() {
     };
     assert_vector_close(groups[0].variance_by_axis, [1.0, 0.0, 0.0]);
     assert_vector_close(groups[1].variance_by_axis, [0.0; 3]);
+}
+
+#[test]
+fn borrowed_group_variance_matches_owned_frames() {
+    let positions = [
+        [0.0, 0.0, 0.0],
+        [10.0, 0.0, 0.0],
+        [2.0, 0.0, 0.0],
+        [10.0, 0.0, 0.0],
+    ];
+    let view = crate::FrameView::new(&positions, 2, 2).expect("valid borrowed frames");
+    let owned = vec![
+        vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+        vec![[2.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+    ];
+    let groups = [vec![0], vec![1]];
+    assert_eq!(
+        group_coordinate_variance_view(view, &groups),
+        group_coordinate_variance(&owned, &groups)
+    );
 }
 
 #[test]

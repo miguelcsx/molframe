@@ -88,8 +88,11 @@ pub mod format_xyz;
 pub mod frame_ops;
 #[path = "trajectory.rs"]
 pub mod frame_store;
+#[path = "frame_view.rs"]
+mod frame_view;
 #[path = "ensemble.rs"]
 pub mod geometry_ensemble;
+mod interpolation;
 #[path = "dispatch/mod.rs"]
 pub mod io_dispatch;
 #[path = "diffusion.rs"]
@@ -213,8 +216,10 @@ pub use dms::{
     read_dms, write_dms,
 };
 pub use ensemble::{
-    DEFAULT_PAIRWISE_MEMORY_LIMIT, EnsembleDistanceMatrix, EnsembleGeometryError, FrameAlignment,
-    generalized_procrustes_mean, pairwise_fitted_rmsd, pairwise_torus_distance, rmsd_to_reference,
+    DEFAULT_PAIRWISE_MEMORY_LIMIT, DEFAULT_PROCRUSTES_MAXIMUM_ITERATIONS,
+    DEFAULT_PROCRUSTES_TOLERANCE, EnsembleDistanceMatrix, EnsembleGeometryError, FrameAlignment,
+    generalized_procrustes_mean, generalized_procrustes_mean_view, pairwise_fitted_rmsd,
+    pairwise_fitted_rmsd_view, pairwise_torus_distance, rmsd_to_reference, rmsd_to_reference_view,
 };
 pub use ensemble_similarity::{
     EnsembleSimilarityError, HarmonicSimilarity, HarmonicSimilarityOptions,
@@ -222,18 +227,22 @@ pub use ensemble_similarity::{
 };
 pub use ensemble_statistics::{
     ConvergenceBlock, EnsembleStatisticsError, GroupVariance, RemainderPolicy, block_convergence,
-    group_coordinate_variance,
+    group_coordinate_variance, group_coordinate_variance_view,
 };
+pub use frame_view::{FrameView, FrameViewError};
 pub use gamess::{
     GamessAtom, GamessError, GamessFrame, GamessRunType, GamessTrajectory, parse_gamess_output,
 };
 pub use governed::{
     GovernedEnsembleError, analyse_agglomerative_clustering, analyse_block_convergence,
-    analyse_cartesian_pca, analyse_cluster_population_similarity, analyse_dbscan_clustering,
-    analyse_diffusion_map, analyse_dihedral_pca, analyse_generalized_procrustes_mean,
-    analyse_group_coordinate_variance, analyse_harmonic_ensemble_similarity, analyse_kmeans,
-    analyse_medoid, analyse_pairwise_fitted_rmsd, analyse_pairwise_torus_distance,
-    analyse_rmsd_to_reference,
+    analyse_cartesian_pca, analyse_cartesian_pca_view, analyse_cluster_population_similarity,
+    analyse_dbscan_clustering, analyse_diffusion_map, analyse_dihedral_pca,
+    analyse_generalized_procrustes_mean, analyse_generalized_procrustes_mean_view,
+    analyse_group_coordinate_variance, analyse_group_coordinate_variance_view,
+    analyse_harmonic_ensemble_similarity, analyse_kmeans, analyse_kmeans_view,
+    analyse_mean_squared_displacement_view, analyse_medoid, analyse_pairwise_fitted_rmsd,
+    analyse_pairwise_fitted_rmsd_view, analyse_pairwise_torus_distance, analyse_rmsd_to_reference,
+    analyse_rmsd_to_reference_view,
 };
 pub use gro::{GroAtom, GroError, GroFrame, parse_gro_records, write_gro};
 pub use gromacs_itp::{
@@ -252,18 +261,25 @@ pub use imd::{
     ImdClient, ImdConnectionOptions, ImdEnergies, ImdError, ImdForce, ImdLimits, ImdMessage,
     ImdPeerEndian,
 };
-pub use kmeans::{KMeans, KMeansError, KMeansOptions, kmeans};
+pub use interpolation::{
+    TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames,
+};
+pub use kmeans::{KMeans, KMeansError, KMeansOptions, kmeans, kmeans_view};
 pub use lammps::{LammpsError, parse_lammps_dump};
 pub use lammps_data::{
     LammpsAtomStyle, LammpsData, LammpsDataAtom, LammpsDataCell, LammpsDataError,
     LammpsInteraction, parse_lammps_data,
 };
 pub use minimal::MinimalTopology;
-pub use msd::{MeanSquaredDisplacement, MsdError, mean_squared_displacement};
+pub use msd::{
+    MeanSquaredDisplacement, MsdError, mean_squared_displacement, mean_squared_displacement_view,
+};
 pub use namd::{NamdBinary, NamdEndian, NamdError, parse_namd_binary, write_namd_binary};
 pub use neighbors::{FrameNeighborList, NeighborStatistics};
-pub use path_similarity::{PathFrameMetric, PathSimilarity, PathSimilarityError, path_similarity};
-pub use pca::{CartesianFit, PcaResult, cartesian_pca, dihedral_pca};
+pub use path_similarity::{
+    PathFrameMetric, PathSimilarity, PathSimilarityError, path_similarity, path_similarity_view,
+};
+pub use pca::{CartesianFit, PcaResult, cartesian_pca, cartesian_pca_view, dihedral_pca};
 pub use periodic_transform::{Unwrap, Wrap};
 pub use psf::{PsfAtom, PsfError, PsfTopology, parse_psf, write_psf};
 pub use reader::{
