@@ -28,5 +28,13 @@ mmap = ["dep:pdbiox-mmap"]
 gzip = ["dep:flate2"]
 zstd = ["dep:zstd"]
 
+[[bench]]
+name = "core"
+harness = false
+
+[dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
+
 [lints]
 workspace = true

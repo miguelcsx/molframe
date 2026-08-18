@@ -46,7 +46,10 @@ pub use annotation::{
     STEREO_CONFIGURATION_ANNOTATION,
 };
 pub use bond::{BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder};
-pub use chunk::{AtomChunk, AtomChunkStats, ChunkBuilder, ElementMask, ParentMapping};
+pub use chunk::{
+    AtomChunk, AtomChunkStats, ChunkBuilder, ElementMask, Extremes, ParentMapping,
+    TARGET_CHUNK_ATOMS,
+};
 pub use column::{BitVec, EncodedColumn, Presence, ValidityMask};
 pub use contract::{Analysis, AnalysisPolicy, Coverage, Provenance, Status};
 pub use coords::{Aabb, CoordinateBlock, CoordinateGeneration};

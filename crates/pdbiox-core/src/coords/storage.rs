@@ -44,6 +44,17 @@ impl CoordinateGeneration {
     /// The generation of a structure that has not been edited.
     pub const INITIAL: Self = Self(0);
 
+    /// Rebuilds a generation from a value previously produced by this type.
+    ///
+    /// The counter is opaque to callers that only need freshness checks, but
+    /// preserving it at an interop boundary is useful when a cached view is
+    /// serialised or handed between language runtimes.  No validation is
+    /// required because every `u64` is a representable generation.
+    #[must_use]
+    pub const fn from_raw(value: u64) -> Self {
+        Self(value)
+    }
+
     /// Returns the next generation, or `None` when the counter is exhausted.
     #[must_use]
     pub const fn next(self) -> Option<Self> {
@@ -82,8 +93,9 @@ impl Aabb {
 
     /// Returns true when no point has been added.
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
-        self.min.iter().zip(&self.max).any(|(min, max)| min > max)
+        self.min[0] > self.max[0] || self.min[1] > self.max[1] || self.min[2] > self.max[2]
     }
 
     /// Grows the box to contain `point`.
@@ -91,18 +103,15 @@ impl Aabb {
     /// Non-finite components are ignored: a coordinate that is not a number
     /// says nothing about where the atoms are, and letting it poison the box
     /// would disable chunk skipping for the whole structure.
+    #[inline]
     pub fn extend(&mut self, point: [f32; 3]) {
-        for ((min, max), value) in self.min.iter_mut().zip(&mut self.max).zip(point) {
-            if !value.is_finite() {
-                continue;
-            }
-
-            *min = min.min(value);
-            *max = max.max(value);
-        }
+        extend_axis(&mut self.min[0], &mut self.max[0], point[0]);
+        extend_axis(&mut self.min[1], &mut self.max[1], point[1]);
+        extend_axis(&mut self.min[2], &mut self.max[2], point[2]);
     }
 
     /// Grows the box to contain another box.
+    #[inline]
     pub fn union(&mut self, other: &Self) {
         if other.is_empty() {
             return;
@@ -116,34 +125,37 @@ impl Aabb {
     ///
     /// Compares squared separations, so no square root is taken.
     #[must_use]
+    #[inline]
     pub fn within(&self, other: &Self, distance: f32) -> bool {
         if self.is_empty() || other.is_empty() {
             return false;
         }
 
         let maximum_gap_squared = distance * distance;
-        let mut gap_squared = 0.0f32;
 
-        for axis in 0..3 {
-            let gap = axis_gap(
-                self.min[axis],
-                self.max[axis],
-                other.min[axis],
-                other.max[axis],
-            );
+        let x = axis_gap(self.min[0], self.max[0], other.min[0], other.max[0]);
+        let mut gap_squared = x * x;
 
-            gap_squared += gap * gap;
-
-            if gap_squared > maximum_gap_squared {
-                return false;
-            }
+        if gap_squared > maximum_gap_squared {
+            return false;
         }
+
+        let y = axis_gap(self.min[1], self.max[1], other.min[1], other.max[1]);
+        gap_squared += y * y;
+
+        if gap_squared > maximum_gap_squared {
+            return false;
+        }
+
+        let z = axis_gap(self.min[2], self.max[2], other.min[2], other.max[2]);
+        gap_squared += z * z;
 
         gap_squared <= maximum_gap_squared
     }
 }
 
 impl Default for Aabb {
+    /// Creates an empty bounding box.
     fn default() -> Self {
         Self::EMPTY
     }
@@ -183,7 +195,7 @@ impl CoordinateBlock {
     #[must_use]
     pub fn with_capacity(positions: usize) -> Self {
         Self {
-            lanes: Arc::new(Vec::with_capacity(positions.div_ceil(LANE))),
+            lanes: Arc::new(Vec::with_capacity(lanes_for_positions(positions))),
             len: 0,
         }
     }
@@ -201,24 +213,19 @@ impl CoordinateBlock {
     }
 
     /// Appends a position.
+    ///
+    /// Copy-on-write detachment is performed at most once for the append, and
+    /// the visible length changes only after the target slot has been written.
     pub fn push(&mut self, position: [f32; 3]) {
-        let index = self.len as usize;
-
-        if index == self.lanes.len() * LANE {
-            Arc::make_mut(&mut self.lanes).push(CoordLane([[0.0; 3]; LANE]));
-        }
-
-        let (lane, slot) = lane_position(index);
-
-        let Some(target) = Arc::make_mut(&mut self.lanes)
-            .get_mut(lane)
-            .and_then(|lane| lane.0.get_mut(slot))
-        else {
+        let Some((index, next_len)) = append_indices(self.len) else {
             return;
         };
 
-        *target = position;
-        self.len += 1;
+        let lanes = Arc::make_mut(&mut self.lanes);
+
+        if write_position(lanes, index, position) {
+            self.len = next_len;
+        }
     }
 
     /// All positions, contiguously.
@@ -226,9 +233,9 @@ impl CoordinateBlock {
     /// This slice is the whole point of the layout: it is what an array
     /// interface receives without a copy.
     #[must_use]
+    #[inline]
     pub fn as_slice(&self) -> &[[f32; 3]] {
         let all: &[[f32; 3]] = bytemuck::cast_slice(self.lanes.as_slice());
-
         visible_slice(all, self.len)
     }
 
@@ -237,18 +244,19 @@ impl CoordinateBlock {
     /// Reaching for this outside a scoped edit skips the generation bump that
     /// invalidates derived state, which is why it is not part of the public
     /// structure API.
+    #[inline]
     pub(crate) fn as_mut_slice(&mut self) -> &mut [[f32; 3]] {
-        let all: &mut [[f32; 3]] =
-            bytemuck::cast_slice_mut(Arc::make_mut(&mut self.lanes).as_mut_slice());
+        let lanes = Arc::make_mut(&mut self.lanes);
+        let all: &mut [[f32; 3]] = bytemuck::cast_slice_mut(lanes.as_mut_slice());
 
         visible_mut_slice(all, self.len)
     }
 
     /// The positions a chunk covers, or `None` if the range runs past the end.
     #[must_use]
+    #[inline]
     pub fn range(&self, range: Range<u32>) -> Option<&[[f32; 3]]> {
         let range = usize_range(range)?;
-
         self.as_slice().get(range)
     }
 
@@ -259,13 +267,13 @@ impl CoordinateBlock {
             return Aabb::EMPTY;
         };
 
-        positions
-            .iter()
-            .copied()
-            .fold(Aabb::EMPTY, |mut bounds, position| {
-                bounds.extend(position);
-                bounds
-            })
+        let mut bounds = Aabb::EMPTY;
+
+        for &position in positions {
+            bounds.extend(position);
+        }
+
+        bounds
     }
 
     /// Bytes the block occupies, including the unused tail of the last lane.
@@ -276,6 +284,7 @@ impl CoordinateBlock {
 }
 
 impl fmt::Debug for CoordinateBlock {
+    /// Formats block metadata without dumping the potentially large coordinate buffer.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CoordinateBlock")
             .field("positions", &self.len)
@@ -284,26 +293,125 @@ impl fmt::Debug for CoordinateBlock {
 }
 
 impl FromIterator<[f32; 3]> for CoordinateBlock {
+    /// Collects positions directly into aligned coordinate lanes.
+    ///
+    /// Construction writes directly into the backing `Vec`, avoiding an
+    /// `Arc::make_mut` uniqueness check for every collected position.
     fn from_iter<T: IntoIterator<Item = [f32; 3]>>(iter: T) -> Self {
-        let iter = iter.into_iter();
-        let mut block = Self::with_capacity(iter.size_hint().0);
+        let mut iter = iter.into_iter();
+        let hinted_positions = iter.size_hint().0;
 
-        for position in iter {
-            block.push(position);
+        let mut lanes = Vec::new();
+        let hinted_lanes = lanes_for_positions(hinted_positions);
+
+        // A size hint is advisory and may come from arbitrary iterator code.
+        // Failure to honour it must not prevent incremental collection.
+        if hinted_lanes != 0 {
+            let _reserve_failed = lanes.try_reserve_exact(hinted_lanes).is_err();
         }
 
-        block
+        let mut len = 0u32;
+
+        for position in &mut iter {
+            let Some((index, next_len)) = append_indices(len) else {
+                break;
+            };
+
+            if !write_position(&mut lanes, index, position) {
+                break;
+            }
+
+            len = next_len;
+        }
+
+        Self {
+            lanes: Arc::new(lanes),
+            len,
+        }
     }
 }
 
+/// Extends one bounding-box axis when `value` is finite.
+#[inline]
+fn extend_axis(minimum: &mut f32, maximum: &mut f32, value: f32) {
+    if !value.is_finite() {
+        return;
+    }
+
+    *minimum = minimum.min(value);
+    *maximum = maximum.max(value);
+}
+
+/// Returns the non-overlapping gap between two intervals on one axis.
+#[inline]
 fn axis_gap(own_min: f32, own_max: f32, other_min: f32, other_max: f32) -> f32 {
     (other_min - own_max).max(own_min - other_max).max(0.0)
 }
 
+/// Converts a position count into the number of aligned lanes required.
+#[inline]
+fn lanes_for_positions(positions: usize) -> usize {
+    positions.div_ceil(LANE)
+}
+
+/// Computes the backing-buffer index and next visible length for an append.
+///
+/// Returns `None` when the block has exhausted its `u32` position space or the
+/// current index cannot be represented by the platform.
+#[inline]
+fn append_indices(len: u32) -> Option<(usize, u32)> {
+    let next_len = len.checked_add(1)?;
+    let index = usize::try_from(len).ok()?;
+
+    Some((index, next_len))
+}
+
+/// Writes one position into its lane, growing the lane vector when necessary.
+///
+/// Returns `false` only when the supplied logical index is inconsistent with
+/// the current contiguous lane layout.
+#[inline]
+fn write_position(lanes: &mut Vec<CoordLane>, index: usize, position: [f32; 3]) -> bool {
+    let (lane_index, slot) = lane_position(index);
+
+    if lane_index > lanes.len() {
+        return false;
+    }
+
+    if lane_index == lanes.len() {
+        let mut lane = CoordLane([[0.0; 3]; LANE]);
+
+        let Some(target) = lane.0.get_mut(slot) else {
+            return false;
+        };
+
+        *target = position;
+        lanes.push(lane);
+        return true;
+    }
+
+    let Some(target) = lanes
+        .get_mut(lane_index)
+        .and_then(|lane| lane.0.get_mut(slot))
+    else {
+        return false;
+    };
+
+    *target = position;
+    true
+}
+
+/// Maps a logical position to its lane and in-lane slot.
+#[inline]
 const fn lane_position(position: usize) -> (usize, usize) {
     (position / LANE, position % LANE)
 }
 
+/// Restricts a backing slice to the number of logically visible values.
+///
+/// An impossible length is treated as an empty view rather than causing an
+/// out-of-bounds panic.
+#[inline]
 fn visible_slice<T>(values: &[T], len: u32) -> &[T] {
     let Ok(len) = usize::try_from(len) else {
         return &[];
@@ -315,6 +423,11 @@ fn visible_slice<T>(values: &[T], len: u32) -> &[T] {
     }
 }
 
+/// Restricts a mutable backing slice to the number of logically visible values.
+///
+/// An impossible length is treated as an empty view rather than exposing
+/// storage outside the block's logical extent.
+#[inline]
 fn visible_mut_slice<T>(values: &mut [T], len: u32) -> &mut [T] {
     let Ok(len) = usize::try_from(len) else {
         return &mut [];
@@ -326,6 +439,8 @@ fn visible_mut_slice<T>(values: &mut [T], len: u32) -> &mut [T] {
     }
 }
 
+/// Converts an atom-position range into platform-native slice indices.
+#[inline]
 fn usize_range(range: Range<u32>) -> Option<Range<usize>> {
     let start = usize::try_from(range.start).ok()?;
     let end = usize::try_from(range.end).ok()?;
