@@ -118,15 +118,8 @@ impl BinaryDocument {
             let mut block = DataBlock::new(encoded_block.header.clone());
             for encoded_category in &encoded_block.categories {
                 let decoded = decode_category(encoded_category)?;
-                let category = block.category_mut(decoded.name(), ByteSpan::default());
-                for item in decoded.items() {
-                    for row in 0..decoded.row_count() {
-                        let Some(value) = decoded.value(item, row) else {
-                            return Err(length_error(row, decoded.row_count()));
-                        };
-                        category.column_mut(item).push(value.clone(), Quoting::Bare);
-                    }
-                }
+                let name = decoded.name().to_owned();
+                *block.category_mut(&name, ByteSpan::default()) = decoded;
             }
             document.push(block);
         }
@@ -160,9 +153,31 @@ fn decode_category(encoded: &EncodedCategory) -> Result<Category, Diagnostic> {
             }
             None => None,
         };
-        for row in 0..encoded.row_count {
-            let value = masked_value(&values, mask.as_deref(), row)?;
-            category.column_mut(&column.name).push(value, Quoting::Bare);
+        let target = category.column_mut(&column.name);
+        target.reserve(encoded.row_count);
+        if let Some(mask) = mask {
+            for row in 0..encoded.row_count {
+                let value = masked_value(&values, Some(&mask), row)?;
+                target.push(value, Quoting::Bare);
+            }
+        } else {
+            match values {
+                Decoded::Integers(values) => {
+                    for value in values {
+                        target.push(CifValue::Integer(value), Quoting::Bare);
+                    }
+                }
+                Decoded::Floats(values) => {
+                    for value in values {
+                        target.push(CifValue::Float(value), Quoting::Bare);
+                    }
+                }
+                Decoded::Strings(values) => {
+                    for value in values {
+                        target.push(CifValue::Text(value.into_boxed_str()), Quoting::Bare);
+                    }
+                }
+            }
         }
     }
     Ok(category)

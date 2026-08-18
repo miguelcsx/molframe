@@ -19,6 +19,12 @@ serde_repr.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+criterion.workspace = true
+pdbiox-bench.workspace = true
+
+[[bench]]
+name = "bcif"
+harness = false
 
 [lints]
 workspace = true
