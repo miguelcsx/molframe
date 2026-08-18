@@ -15,7 +15,8 @@ use pdbiox_spatial::SpatialError;
 
 use crate::neighbourhood::{self, Neighbourhood};
 use crate::numeric::{f64_to_f32, f64_to_u16, f64_to_usize};
-use crate::sampling::{fibonacci_sphere, for_each_fibonacci};
+use crate::sampling::fibonacci_sphere;
+use std::collections::BTreeMap;
 
 #[path = "sasa/contact.rs"]
 mod contact;
@@ -218,10 +219,11 @@ pub fn surface_points_at_density(
         return Ok(Vec::new());
     };
 
+    let mut directions = BTreeMap::new();
     let mut points = Vec::new();
 
     for atom in 0..positions.len() {
-        append_density_surface_points(&hood, atom, density, &mut points)?;
+        append_density_surface_points(&hood, atom, density, &mut directions, &mut points)?;
     }
 
     Ok(points)
@@ -229,12 +231,13 @@ pub fn surface_points_at_density(
 
 /// Samples one atom at area-proportional Fibonacci density.
 ///
-/// Directions are streamed directly and therefore require `O(1)` temporary
-/// memory instead of allocating a direction vector per atom.
+/// Directions are cached by sample count so atoms with the same area density
+/// reuse the same deterministic lattice instead of recalculating it.
 fn append_density_surface_points(
     hood: &Neighbourhood,
     atom: usize,
     density: f32,
+    directions: &mut BTreeMap<u16, Vec<[f64; 3]>>,
     output: &mut Vec<SurfacePoint>,
 ) -> Result<(), SasaError> {
     let radius = hood.expanded[atom];
@@ -246,7 +249,10 @@ fn append_density_surface_points(
     let samples = samples_for_density(radius, density)?;
     let centre = hood.centres[atom];
 
-    for_each_fibonacci(samples, |direction| {
+    let directions = directions
+        .entry(samples)
+        .or_insert_with(|| fibonacci_sphere(samples));
+    for &direction in directions.iter() {
         let point = point_on_sphere(centre, radius, direction);
 
         if hood.point_is_clear(point, atom) {
@@ -256,7 +262,7 @@ fn append_density_surface_points(
                 normal: direction.map(f64_to_f32),
             });
         }
-    });
+    }
 
     Ok(())
 }

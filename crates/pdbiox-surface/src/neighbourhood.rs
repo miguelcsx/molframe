@@ -24,6 +24,8 @@ pub(crate) struct Neighbourhood {
     pub(crate) centres: Vec<[f64; 3]>,
     /// Each atom's radius grown by the probe, indexed by atom.
     pub(crate) expanded: Vec<f64>,
+    /// Squared grown radii, kept beside `expanded` for hot point tests.
+    pub(crate) expanded_squared: Vec<f64>,
     /// For each atom, the atoms whose grown spheres can reach it.
     pub(crate) adjacency: Vec<Vec<u32>>,
 }
@@ -55,7 +57,7 @@ impl Neighbourhood {
                 continue;
             }
 
-            if point_inside_sphere(point, self.centres[other], self.expanded[other]) {
+            if point_inside_sphere(point, self.centres[other], self.expanded_squared[other]) {
                 return false;
             }
         }
@@ -88,6 +90,7 @@ pub(crate) fn build(
     }
 
     let (expanded, widest) = expand_radii(radii, probe)?;
+    let expanded_squared = expanded.iter().map(|radius| radius * radius).collect();
     let centres = promote_centres(positions);
 
     let adjacency = neighbours(positions, &centres, &expanded, widest)?;
@@ -95,6 +98,7 @@ pub(crate) fn build(
     Ok(Some(Neighbourhood {
         centres,
         expanded,
+        expanded_squared,
         adjacency,
     }))
 }
@@ -283,8 +287,8 @@ fn pair_overlaps(pair: &NeighborPair, centres: &[[f64; 3]], expanded: &[f64]) ->
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn point_inside_sphere(point: [f64; 3], centre: [f64; 3], radius: f64) -> bool {
-    squared_distance(point, centre) < radius * radius
+fn point_inside_sphere(point: [f64; 3], centre: [f64; 3], radius_squared: f64) -> bool {
+    squared_distance(point, centre) < radius_squared
 }
 
 /// Computes squared Euclidean distance between double-precision points.

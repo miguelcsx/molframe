@@ -26,6 +26,16 @@ struct SliceCircle {
     absolute_height: f64,
 }
 
+/// Slice-invariant geometry between one atom and one neighbouring sphere.
+#[derive(Clone, Copy)]
+struct SliceNeighbour {
+    radius: f64,
+    centre_z: f64,
+    separation_squared: f64,
+    separation: f64,
+    bearing: f64,
+}
+
 /// Per-atom solvent-accessible surface area by the Lee–Richards slice method.
 ///
 /// `radii` are the bare atomic radii and the probe is added internally; `slices`
@@ -95,9 +105,13 @@ fn atom_area(atom: usize, hood: &Neighbourhood, slices: u16) -> f64 {
     // Archimedes: the sphere's lateral area over a slice of this thickness is the
     // same at every height, so the exposed fraction is all that varies.
     let ring_area = TWO_PI * radius * thickness;
+    let neighbours: Vec<SliceNeighbour> = hood.adjacency[atom]
+        .iter()
+        .map(|&neighbour| slice_neighbour(hood, neighbour as usize, centre))
+        .collect();
 
     let mut area = 0.0;
-    let mut segments = Vec::new();
+    let mut segments = Vec::with_capacity(neighbours.len() * 2);
 
     for slice in 0..slices {
         let Some(circle) = slice_circle(centre[2], radius, thickness, slice) else {
@@ -106,7 +120,7 @@ fn atom_area(atom: usize, hood: &Neighbourhood, slices: u16) -> f64 {
 
         segments.clear();
 
-        if slice_fully_covered(atom, hood, centre, circle, &mut segments) {
+        if slice_fully_covered(&neighbours, circle, &mut segments) {
             continue;
         }
 
@@ -147,14 +161,12 @@ fn slice_circle(centre_z: f64, radius: f64, thickness: f64, slice: u16) -> Optio
 ///
 /// Returns `true` as soon as one neighbour covers the entire slice circle.
 fn slice_fully_covered(
-    atom: usize,
-    hood: &Neighbourhood,
-    centre: [f64; 3],
+    neighbours: &[SliceNeighbour],
     circle: SliceCircle,
     segments: &mut Vec<(f64, f64)>,
 ) -> bool {
-    for &neighbour in &hood.adjacency[atom] {
-        if add_neighbour_coverage(hood, neighbour as usize, centre, circle, segments) {
+    for &neighbour in neighbours {
+        if add_neighbour_coverage(neighbour, circle, segments) {
             return true;
         }
     }
@@ -166,72 +178,81 @@ fn slice_fully_covered(
 ///
 /// Returns `true` only when the neighbour covers the whole target slice circle.
 fn add_neighbour_coverage(
-    hood: &Neighbourhood,
-    neighbour: usize,
-    centre: [f64; 3],
+    neighbour: SliceNeighbour,
     circle: SliceCircle,
     segments: &mut Vec<(f64, f64)>,
 ) -> bool {
-    let neighbour_radius = hood.expanded[neighbour];
-    let neighbour_centre = hood.centres[neighbour];
+    let rise = neighbour.centre_z - circle.absolute_height;
 
-    let rise = neighbour_centre[2] - circle.absolute_height;
-
-    if rise.abs() >= neighbour_radius {
+    if rise.abs() >= neighbour.radius {
         return false;
     }
 
-    let disk_squared = neighbour_radius * neighbour_radius - rise * rise;
+    let disk_squared = neighbour.radius * neighbour.radius - rise * rise;
 
     if disk_squared <= 0.0 {
         return false;
     }
 
     let disk_radius = disk_squared.sqrt();
-    let dx = neighbour_centre[0] - centre[0];
-    let dy = neighbour_centre[1] - centre[1];
-    let separation_squared = dx * dx + dy * dy;
     let reach = circle.radius + disk_radius;
 
-    if separation_squared >= reach * reach {
+    if neighbour.separation_squared >= reach * reach {
         return false;
     }
 
-    let separation = separation_squared.sqrt();
-
-    if separation + circle.radius <= disk_radius {
+    if neighbour.separation + circle.radius <= disk_radius {
         return true;
     }
 
-    if separation <= f64::EPSILON {
+    if neighbour.separation <= f64::EPSILON {
         return false;
     }
 
-    let cosine = ((separation_squared + circle.radius * circle.radius - disk_radius * disk_radius)
-        / (2.0 * separation * circle.radius))
+    let cosine = ((neighbour.separation_squared + circle.radius * circle.radius
+        - disk_radius * disk_radius)
+        / (2.0 * neighbour.separation * circle.radius))
         .clamp(-1.0, 1.0);
 
     let half = cosine.acos();
-    let bearing = dy.atan2(dx);
 
-    push_wrapped_interval(segments, bearing - half, bearing + half);
+    push_wrapped_interval(segments, neighbour.bearing - half, neighbour.bearing + half);
 
     false
+}
+
+fn slice_neighbour(hood: &Neighbourhood, neighbour: usize, centre: [f64; 3]) -> SliceNeighbour {
+    let neighbour_centre = hood.centres[neighbour];
+    let dx = neighbour_centre[0] - centre[0];
+    let dy = neighbour_centre[1] - centre[1];
+    let separation_squared = dx * dx + dy * dy;
+    let bearing = dy.atan2(dx);
+    let bearing = if bearing < 0.0 {
+        bearing + TWO_PI
+    } else {
+        bearing
+    };
+    SliceNeighbour {
+        radius: hood.expanded[neighbour],
+        centre_z: neighbour_centre[2],
+        separation_squared,
+        separation: separation_squared.sqrt(),
+        bearing,
+    }
 }
 
 /// Normalises one angular interval to `[0, 2π)` and splits it at wraparound.
 ///
 /// No allocation occurs except growth of `segments`.
 fn push_wrapped_interval(segments: &mut Vec<(f64, f64)>, start: f64, end: f64) {
-    let width = (end - start).min(TWO_PI);
-    let normalized = start.rem_euclid(TWO_PI);
-    let finish = normalized + width;
-
-    if finish <= TWO_PI {
-        segments.push((normalized, finish));
+    if start < 0.0 {
+        segments.push((start + TWO_PI, TWO_PI));
+        segments.push((0.0, end));
+    } else if end > TWO_PI {
+        segments.push((start, TWO_PI));
+        segments.push((0.0, end - TWO_PI));
     } else {
-        segments.push((normalized, TWO_PI));
-        segments.push((0.0, finish - TWO_PI));
+        segments.push((start, end));
     }
 }
 

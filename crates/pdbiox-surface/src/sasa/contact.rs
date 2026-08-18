@@ -3,8 +3,8 @@
 use super::{SasaError, point_on_sphere, samples_for_density, validate_density};
 use crate::neighbourhood::{self, Neighbourhood};
 use crate::numeric::f64_to_f32;
-use crate::sampling::for_each_fibonacci;
-use std::collections::BTreeSet;
+use crate::sampling::fibonacci_sphere;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// A surface point exposed when one candidate neighbour is omitted.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -45,10 +45,18 @@ pub fn atom_contact_areas(
     let Some(hood) = neighbourhood::build(positions, radii, probe)? else {
         return Ok(Vec::new());
     };
-    candidate_pairs(&hood)
-        .into_iter()
-        .map(|(first, second)| atom_contact_area(&hood, first, second, density))
-        .collect()
+    let mut directions = BTreeMap::new();
+    let mut output = Vec::new();
+    for (first, second) in candidate_pairs(&hood) {
+        output.push(atom_contact_area(
+            &hood,
+            first,
+            second,
+            density,
+            &mut directions,
+        )?);
+    }
+    Ok(output)
 }
 
 fn candidate_pairs(hood: &Neighbourhood) -> BTreeSet<(usize, usize)> {
@@ -69,10 +77,11 @@ fn atom_contact_area(
     first: usize,
     second: usize,
     density: f32,
+    directions: &mut BTreeMap<u16, Vec<[f64; 3]>>,
 ) -> Result<AtomContactArea, SasaError> {
     let mut points = Vec::new();
-    sample_excluding(hood, first, second, density, &mut points)?;
-    sample_excluding(hood, second, first, density, &mut points)?;
+    sample_excluding(hood, first, second, density, directions, &mut points)?;
+    sample_excluding(hood, second, first, density, directions, &mut points)?;
     Ok(AtomContactArea {
         first,
         second,
@@ -96,11 +105,12 @@ pub fn surface_points_excluding_pairs(
     let Some(hood) = neighbourhood::build(positions, radii, probe)? else {
         return Ok(Vec::new());
     };
+    let mut directions = BTreeMap::new();
     let mut points = Vec::new();
     for &(first, second) in pairs {
         if first < positions.len() && second < positions.len() && first != second {
-            sample_excluding(&hood, first, second, density, &mut points)?;
-            sample_excluding(&hood, second, first, density, &mut points)?;
+            sample_excluding(&hood, first, second, density, &mut directions, &mut points)?;
+            sample_excluding(&hood, second, first, density, &mut directions, &mut points)?;
         }
     }
     Ok(points)
@@ -111,6 +121,7 @@ fn sample_excluding(
     atom: usize,
     excluded: usize,
     density: f32,
+    directions: &mut BTreeMap<u16, Vec<[f64; 3]>>,
     output: &mut Vec<ExcludedSurfacePoint>,
 ) -> Result<(), SasaError> {
     let radius = hood.expanded[atom];
@@ -120,10 +131,16 @@ fn sample_excluding(
     let centre = hood.centres[atom];
     let samples = samples_for_density(radius, density)?;
     let area = 4.0 * core::f64::consts::PI * radius * radius / f64::from(samples);
-    for_each_fibonacci(samples, |direction| {
+    let directions = directions
+        .entry(samples)
+        .or_insert_with(|| fibonacci_sphere(samples));
+    for &direction in directions.iter() {
         let point = point_on_sphere(centre, radius, direction);
-        if point_inside(point, hood.centres[excluded], hood.expanded[excluded])
-            && hood.point_is_clear_except(point, atom, Some(excluded))
+        if point_inside(
+            point,
+            hood.centres[excluded],
+            hood.expanded_squared[excluded],
+        ) && hood.point_is_clear_except(point, atom, Some(excluded))
         {
             output.push(ExcludedSurfacePoint {
                 atom,
@@ -132,15 +149,15 @@ fn sample_excluding(
                 area,
             });
         }
-    });
+    }
     Ok(())
 }
 
-fn point_inside(point: [f64; 3], centre: [f64; 3], radius: f64) -> bool {
+fn point_inside(point: [f64; 3], centre: [f64; 3], radius_squared: f64) -> bool {
     point
         .iter()
         .zip(centre)
         .map(|(value, centre)| (value - centre).powi(2))
         .sum::<f64>()
-        <= radius * radius
+        <= radius_squared
 }

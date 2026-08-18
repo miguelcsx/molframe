@@ -13,6 +13,7 @@ mod accessible_area;
 mod burial;
 pub mod cavity;
 mod cavity_geometry;
+mod components;
 pub mod depth;
 pub mod geodesic;
 mod grid_options;
@@ -39,6 +40,10 @@ pub use burial::{
     buried_solvent_excluded_surface_with_options, buried_surface,
 };
 pub use cavity::{Cavity, cavities, cavities_with_options};
+pub use components::{
+    SurfaceComponent, SurfaceComponentError, SurfaceComponentFilter, filter_surface_components,
+    surface_components,
+};
 pub use depth::{AtomDepthError, AtomDepthOptions, atom_depths};
 pub use geodesic::{
     SurfaceDistances, SurfaceGeometryError, edge_geodesic_distances, surface_patch,

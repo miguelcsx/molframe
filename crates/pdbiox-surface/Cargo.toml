@@ -14,7 +14,13 @@ pdbiox-spatial.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 tempfile.workspace = true
+
+[[bench]]
+name = "surface"
+harness = false
 
 [lints]
 workspace = true
