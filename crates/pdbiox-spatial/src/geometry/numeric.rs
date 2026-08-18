@@ -11,7 +11,11 @@ pub(crate) fn ceil_i64(value: f64) -> Option<i64> {
 }
 
 pub(crate) fn usize_f64(value: usize) -> Option<f64> {
-    const MAX_EXACT_F64_INTEGER: usize = 1usize << f64::MANTISSA_DIGITS;
+    const MAX_EXACT_F64_INTEGER: usize = if usize::BITS <= f64::MANTISSA_DIGITS {
+        usize::MAX
+    } else {
+        1usize << f64::MANTISSA_DIGITS
+    };
     (value <= MAX_EXACT_F64_INTEGER)
         .then_some(value)
         .and_then(|number| number.to_f64())

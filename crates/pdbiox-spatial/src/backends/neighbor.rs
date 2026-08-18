@@ -66,9 +66,13 @@ impl NeighborList {
             return Err(SpatialError::InvalidCutoff);
         }
 
-        let pairs =
-            CellList::build_with_options(positions, right, outer, periodic, options.cell_grid)?
-                .pairs(left, outer)?;
+        let index =
+            CellList::build_with_options(positions, right, outer, periodic, options.cell_grid)?;
+        let pairs = if left == right {
+            crate::backends::cell::pairs_same_selection(&index, left, outer)?
+        } else {
+            index.pairs(left, outer)?
+        };
 
         Ok(Self {
             reference: positions.to_vec(),

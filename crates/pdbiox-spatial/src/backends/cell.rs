@@ -9,6 +9,11 @@ use geometry::{finite_bounds, grid_geometry};
 #[path = "cell/periodic.rs"]
 mod periodic_grid;
 use periodic_grid::PeriodicGrid;
+#[path = "cell/unique.rs"]
+mod unique;
+pub(crate) use unique::{
+    for_each_pairs_same_selection_unordered, pairs_same_selection, pairs_same_selection_unordered,
+};
 
 const NEIGHBOUR_OFFSETS: [[isize; 3]; 27] = [
     [-1, -1, -1],
@@ -47,6 +52,7 @@ struct Grid {
     dims: [usize; 3],
     offsets: Vec<usize>,
     members: Vec<u32>,
+    non_empty_cells: Vec<usize>,
 }
 
 #[derive(Debug)]
@@ -151,7 +157,7 @@ fn grid_pairs(
     query: &[u32],
     cutoff_squared: f32,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
-    let mut found = Vec::new();
+    let mut found = Vec::with_capacity(query.len());
 
     for &atom in query {
         let Ok(index) = usize::try_from(atom) else {
@@ -251,6 +257,11 @@ fn build_grid(
 
     let counts = count_members(positions, targets, bounds.min, edge, dims, count)?;
     let offsets = prefix_offsets(&counts)?;
+    let non_empty_cells = counts
+        .iter()
+        .enumerate()
+        .filter_map(|(cell, &count)| (count != 0).then_some(cell))
+        .collect();
     let members = fill_members(
         positions,
         targets,
@@ -267,6 +278,7 @@ fn build_grid(
         dims,
         offsets,
         members,
+        non_empty_cells,
     }))
 }
 

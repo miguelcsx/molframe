@@ -15,8 +15,14 @@ thiserror.workspace = true
 wide.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 proptest.workspace = true
 pdbiox-cif.workspace = true
+
+[[bench]]
+name = "spatial"
+harness = false
 
 [lints]
 workspace = true

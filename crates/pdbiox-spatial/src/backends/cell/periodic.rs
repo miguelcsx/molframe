@@ -98,6 +98,71 @@ impl PeriodicGrid {
         Ok(found)
     }
 
+    pub(super) fn pairs_same_selection(
+        &self,
+        positions: &[[f32; 3]],
+        query: &[u32],
+        cutoff_squared: f32,
+        periodic: &PeriodicBox,
+        sort_result: bool,
+    ) -> Result<Vec<NeighborPair>, SpatialError> {
+        let mut found = Vec::new();
+
+        for &atom in query {
+            let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
+            let Some(position) = positions.get(index).copied() else {
+                continue;
+            };
+            if !finite(position) {
+                continue;
+            }
+            self.append_pairs_same_selection(
+                positions,
+                atom,
+                position,
+                cutoff_squared,
+                periodic,
+                &mut |pair| found.push(pair),
+            )?;
+        }
+
+        if sort_result {
+            canonicalise(&mut found);
+        }
+        Ok(found)
+    }
+
+    pub(super) fn for_each_pairs_same_selection<F>(
+        &self,
+        positions: &[[f32; 3]],
+        query: &[u32],
+        cutoff_squared: f32,
+        periodic: &PeriodicBox,
+        emit: &mut F,
+    ) -> Result<(), SpatialError>
+    where
+        F: FnMut(NeighborPair),
+    {
+        for &atom in query {
+            let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
+            let Some(position) = positions.get(index).copied() else {
+                continue;
+            };
+            if !finite(position) {
+                continue;
+            }
+            self.append_pairs_same_selection(
+                positions,
+                atom,
+                position,
+                cutoff_squared,
+                periodic,
+                emit,
+            )?;
+        }
+        Ok(())
+    }
+
     fn append_pairs(
         &self,
         positions: &[[f32; 3]],
@@ -134,6 +199,51 @@ impl PeriodicGrid {
                 let squared = distance_squared(position, target_position, Some(periodic));
                 if squared <= cutoff_squared {
                     found.push(NeighborPair::new(atom, target, squared));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn append_pairs_same_selection<F>(
+        &self,
+        positions: &[[f32; 3]],
+        atom: u32,
+        position: [f32; 3],
+        cutoff_squared: f32,
+        periodic: &PeriodicBox,
+        emit: &mut F,
+    ) -> Result<(), SpatialError>
+    where
+        F: FnMut(NeighborPair),
+    {
+        let centre = cell(periodic, position, self.dims)?;
+        let mut visited = [usize::MAX; NEIGHBOUR_OFFSETS.len()];
+        let mut visited_count = 0usize;
+
+        for delta in NEIGHBOUR_OFFSETS {
+            let candidate = periodic_neighbour(self.dims, centre, delta)?;
+            if visited[..visited_count].contains(&candidate) {
+                continue;
+            }
+            visited[visited_count] = candidate;
+            visited_count += 1;
+
+            let members = self
+                .members(candidate)
+                .ok_or(SpatialError::NumericRangeExceeded)?;
+            for &target in members {
+                if atom >= target {
+                    continue;
+                }
+                let index =
+                    usize::try_from(target).map_err(|_| SpatialError::NumericRangeExceeded)?;
+                let Some(target_position) = positions.get(index).copied() else {
+                    continue;
+                };
+                let squared = distance_squared(position, target_position, Some(periodic));
+                if squared <= cutoff_squared {
+                    emit(NeighborPair::new(atom, target, squared));
                 }
             }
         }
