@@ -3,7 +3,8 @@
 use nalgebra::{DMatrix, SymmetricEigen};
 use pdbiox_geom::{PeriodicAngle, superpose};
 
-use crate::ensemble::{EnsembleGeometryError, generalized_procrustes_mean, validate_frames};
+use crate::ensemble::{EnsembleGeometryError, generalized_procrustes_mean_source, validate_frames};
+use crate::frame_view::{FrameSource, FrameView};
 use crate::numeric::f64_from_usize;
 
 type Eigenvectors = (Vec<f64>, Vec<Box<[f64]>>);
@@ -48,17 +49,34 @@ pub fn cartesian_pca(
     component_count: usize,
     memory_limit: usize,
 ) -> Result<PcaResult, EnsembleGeometryError> {
+    cartesian_pca_source(frames, fit, component_count, memory_limit)
+}
+
+/// Runs Cartesian PCA directly over borrowed contiguous frame coordinates.
+///
+/// Input coordinates are read in place. The `f64` feature matrix is retained
+/// as the documented PCA working buffer; frames are never repacked first.
+///
+/// # Errors
+///
+/// Returns an error for invalid observations, fitting, controls, or memory requirements.
+pub fn cartesian_pca_view(
+    frames: FrameView<'_>,
+    fit: CartesianFit<'_>,
+    component_count: usize,
+    memory_limit: usize,
+) -> Result<PcaResult, EnsembleGeometryError> {
+    cartesian_pca_source(&frames, fit, component_count, memory_limit)
+}
+
+fn cartesian_pca_source<S: FrameSource + ?Sized>(
+    frames: &S,
+    fit: CartesianFit<'_>,
+    component_count: usize,
+    memory_limit: usize,
+) -> Result<PcaResult, EnsembleGeometryError> {
     validate_frames(frames)?;
-    let fitted = fit_frames(frames, fit)?;
-    let rows: Vec<Vec<f64>> = fitted
-        .iter()
-        .map(|frame| {
-            frame
-                .iter()
-                .flat_map(|point| point.iter().map(|value| f64::from(*value)))
-                .collect()
-        })
-        .collect();
+    let rows = fitted_rows(frames, fit)?;
     principal_components(&rows, component_count, memory_limit)
 }
 
@@ -92,34 +110,54 @@ pub fn dihedral_pca(
     principal_components(&rows, component_count, memory_limit)
 }
 
-fn fit_frames(
-    frames: &[Vec<[f32; 3]>],
+fn fitted_rows<S: FrameSource + ?Sized>(
+    frames: &S,
     fit: CartesianFit<'_>,
-) -> Result<Vec<Vec<[f32; 3]>>, EnsembleGeometryError> {
-    let reference = match fit {
-        CartesianFit::None => return Ok(frames.to_vec()),
+) -> Result<Vec<Vec<f64>>, EnsembleGeometryError> {
+    match fit {
+        CartesianFit::None => rows_from_frames(frames, None),
         CartesianFit::Reference(reference) => {
-            if reference.len() != frames[0].len() {
+            if reference.len() != frames.atom_count() {
                 return Err(EnsembleGeometryError::DimensionMismatch);
             }
-            reference.to_vec()
+            rows_from_frames(frames, Some(reference))
         }
         CartesianFit::IterativeMean {
             tolerance,
             max_iterations,
-        } => generalized_procrustes_mean(frames, tolerance, max_iterations)?,
-    };
-    frames
-        .iter()
-        .map(|frame| {
-            let fit =
-                superpose(frame, &reference).map_err(|_| EnsembleGeometryError::DegenerateFit)?;
-            Ok(frame
+        } => {
+            let mean = generalized_procrustes_mean_source(frames, tolerance, max_iterations)?;
+            rows_from_frames(frames, Some(&mean))
+        }
+    }
+}
+
+fn rows_from_frames<S: FrameSource + ?Sized>(
+    frames: &S,
+    reference: Option<&[[f32; 3]]>,
+) -> Result<Vec<Vec<f64>>, EnsembleGeometryError> {
+    let mut rows = Vec::with_capacity(frames.frame_count());
+    for index in 0..frames.frame_count() {
+        let frame = frames
+            .frame(index)
+            .ok_or(EnsembleGeometryError::DimensionMismatch)?;
+        let row = match reference {
+            Some(reference) => {
+                let fit = superpose(frame, reference)
+                    .map_err(|_| EnsembleGeometryError::DegenerateFit)?;
+                frame
+                    .iter()
+                    .flat_map(|&point| fit.transform.apply(point).into_iter().map(f64::from))
+                    .collect()
+            }
+            None => frame
                 .iter()
-                .map(|&point| fit.transform.apply(point))
-                .collect())
-        })
-        .collect()
+                .flat_map(|point| point.iter().copied().map(f64::from))
+                .collect(),
+        };
+        rows.push(row);
+    }
+    Ok(rows)
 }
 
 fn principal_components(

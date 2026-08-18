@@ -1,5 +1,6 @@
 //! Hausdorff and discrete Fréchet similarity between coordinate paths.
 
+use crate::frame_view::{FrameSource, FrameView};
 use pdbiox_geom::{rmsd, superpose};
 
 /// Frame-to-frame distance used by path comparison.
@@ -45,10 +46,33 @@ pub fn path_similarity(
     metric: PathFrameMetric,
     memory_limit_bytes: usize,
 ) -> Result<PathSimilarity, PathSimilarityError> {
+    path_similarity_source(first, second, metric, memory_limit_bytes)
+}
+
+/// Compares two borrowed contiguous coordinate paths without repacking frames.
+///
+/// # Errors
+///
+/// Returns [`PathSimilarityError`] for invalid paths, allocation, or rigid fitting.
+pub fn path_similarity_view(
+    first: FrameView<'_>,
+    second: FrameView<'_>,
+    metric: PathFrameMetric,
+    memory_limit_bytes: usize,
+) -> Result<PathSimilarity, PathSimilarityError> {
+    path_similarity_source(&first, &second, metric, memory_limit_bytes)
+}
+
+fn path_similarity_source<F: FrameSource + ?Sized, S: FrameSource + ?Sized>(
+    first: &F,
+    second: &S,
+    metric: PathFrameMetric,
+    memory_limit_bytes: usize,
+) -> Result<PathSimilarity, PathSimilarityError> {
     validate(first, second)?;
     let elements = first
-        .len()
-        .checked_mul(second.len())
+        .frame_count()
+        .checked_mul(second.frame_count())
         .ok_or(PathSimilarityError::MemoryLimit)?;
     let required = elements
         .checked_mul(size_of::<f64>())
@@ -57,29 +81,52 @@ pub fn path_similarity(
         return Err(PathSimilarityError::MemoryLimit);
     }
     let mut distances = vec![0.0; elements];
-    for (row, first_frame) in first.iter().enumerate() {
-        for (column, second_frame) in second.iter().enumerate() {
-            distances[row * second.len() + column] =
+    for row in 0..first.frame_count() {
+        let first_frame = first.frame(row).ok_or(PathSimilarityError::InvalidPaths)?;
+        for column in 0..second.frame_count() {
+            let second_frame = second
+                .frame(column)
+                .ok_or(PathSimilarityError::InvalidPaths)?;
+            distances[row * second.frame_count() + column] =
                 frame_distance(first_frame, second_frame, metric)?;
         }
     }
     Ok(PathSimilarity {
-        hausdorff_distance: hausdorff(&distances, first.len(), second.len()),
-        discrete_frechet_distance: discrete_frechet(&distances, first.len(), second.len()),
+        hausdorff_distance: hausdorff(&distances, first.frame_count(), second.frame_count()),
+        discrete_frechet_distance: discrete_frechet(
+            &distances,
+            first.frame_count(),
+            second.frame_count(),
+        ),
     })
 }
 
-fn validate(first: &[Vec<[f32; 3]>], second: &[Vec<[f32; 3]>]) -> Result<(), PathSimilarityError> {
-    let Some(atom_count) = first.first().map(Vec::len) else {
+fn validate<F: FrameSource + ?Sized, S: FrameSource + ?Sized>(
+    first: &F,
+    second: &S,
+) -> Result<(), PathSimilarityError> {
+    if first.frame_count() == 0 || second.frame_count() == 0 {
         return Err(PathSimilarityError::InvalidPaths);
-    };
-    if atom_count == 0
-        || second.is_empty()
-        || first.iter().chain(second).any(|frame| {
-            frame.len() != atom_count || frame.iter().flatten().any(|value| !value.is_finite())
-        })
-    {
+    }
+    let atom_count = first.atom_count();
+    if atom_count == 0 || second.atom_count() != atom_count {
         return Err(PathSimilarityError::InvalidPaths);
+    }
+    for index in 0..first.frame_count() {
+        let frame = first
+            .frame(index)
+            .ok_or(PathSimilarityError::InvalidPaths)?;
+        if frame.len() != atom_count || frame.iter().flatten().any(|value| !value.is_finite()) {
+            return Err(PathSimilarityError::InvalidPaths);
+        }
+    }
+    for index in 0..second.frame_count() {
+        let frame = second
+            .frame(index)
+            .ok_or(PathSimilarityError::InvalidPaths)?;
+        if frame.len() != atom_count || frame.iter().flatten().any(|value| !value.is_finite()) {
+            return Err(PathSimilarityError::InvalidPaths);
+        }
     }
     Ok(())
 }

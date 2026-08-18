@@ -1,5 +1,6 @@
 //! Window-averaged mean-squared displacement over caller-un-wrapped coordinates.
 
+use crate::frame_view::{FrameSource, FrameView};
 use crate::numeric::f64_from_u64;
 
 /// MSD at one frame lag.
@@ -50,61 +51,95 @@ pub fn mean_squared_displacement(
     atoms: &[usize],
     maximum_lag: usize,
 ) -> Result<Vec<MeanSquaredDisplacement>, MsdError> {
+    mean_squared_displacement_source(frames, atoms, maximum_lag)
+}
+
+/// Computes window-averaged MSD directly from borrowed contiguous frames.
+///
+/// Empty `atoms` selects all atoms without materialising an index vector.
+///
+/// # Errors
+///
+/// Returns [`MsdError`] for empty, malformed, non-finite, out-of-range, or
+/// invalid input.
+pub fn mean_squared_displacement_view(
+    frames: FrameView<'_>,
+    atoms: &[usize],
+    maximum_lag: usize,
+) -> Result<Vec<MeanSquaredDisplacement>, MsdError> {
+    mean_squared_displacement_source(&frames, atoms, maximum_lag)
+}
+
+fn mean_squared_displacement_source<S: FrameSource + ?Sized>(
+    frames: &S,
+    atoms: &[usize],
+    maximum_lag: usize,
+) -> Result<Vec<MeanSquaredDisplacement>, MsdError> {
     let atom_count = validate(frames, atoms, maximum_lag)?;
-    let selected: Vec<usize> = if atoms.is_empty() {
-        (0..atom_count).collect()
-    } else {
-        atoms.to_vec()
-    };
     (0..=maximum_lag)
-        .map(|lag| lag_value(frames, &selected, lag))
+        .map(|lag| lag_value(frames, atoms, atom_count, lag))
         .collect()
 }
 
-fn validate(
-    frames: &[Vec<[f32; 3]>],
+fn validate<S: FrameSource + ?Sized>(
+    frames: &S,
     atoms: &[usize],
     maximum_lag: usize,
 ) -> Result<usize, MsdError> {
-    let Some(first) = frames.first() else {
-        return Err(MsdError::Empty);
-    };
-    if first.is_empty() {
+    if frames.frame_count() == 0 {
         return Err(MsdError::Empty);
     }
-    if frames.iter().any(|frame| frame.len() != first.len()) {
-        return Err(MsdError::DimensionMismatch);
+    let atom_count = frames.atom_count();
+    if atom_count == 0 {
+        return Err(MsdError::Empty);
     }
-    if frames
-        .iter()
-        .flatten()
-        .flatten()
-        .any(|value| !value.is_finite())
-    {
-        return Err(MsdError::NonFinite);
+    for index in 0..frames.frame_count() {
+        let Some(frame) = frames.frame(index) else {
+            return Err(MsdError::DimensionMismatch);
+        };
+        if frame.len() != atom_count {
+            return Err(MsdError::DimensionMismatch);
+        }
+        if frame.iter().flatten().any(|value| !value.is_finite()) {
+            return Err(MsdError::NonFinite);
+        }
     }
-    if let Some(atom) = atoms.iter().copied().find(|atom| *atom >= first.len()) {
+    if let Some(atom) = atoms.iter().copied().find(|atom| *atom >= atom_count) {
         return Err(MsdError::AtomOutOfBounds(atom));
     }
-    if maximum_lag >= frames.len() {
+    if maximum_lag >= frames.frame_count() {
         return Err(MsdError::InvalidLag);
     }
-    Ok(first.len())
+    Ok(atom_count)
 }
 
-fn lag_value(
-    frames: &[Vec<[f32; 3]>],
+fn lag_value<S: FrameSource + ?Sized>(
+    frames: &S,
     atoms: &[usize],
+    atom_count: usize,
     lag: usize,
 ) -> Result<MeanSquaredDisplacement, MsdError> {
     let mut sum = 0.0;
     let mut observations = 0_u64;
-    for origin in 0..frames.len() - lag {
-        for &atom in atoms {
-            sum += squared_distance(frames[origin][atom], frames[origin + lag][atom]);
-            observations = observations
-                .checked_add(1)
-                .ok_or(MsdError::ObservationLimit)?;
+    for origin in 0..frames.frame_count() - lag {
+        let left = frames.frame(origin).ok_or(MsdError::DimensionMismatch)?;
+        let right = frames
+            .frame(origin + lag)
+            .ok_or(MsdError::DimensionMismatch)?;
+        if atoms.is_empty() {
+            for atom in 0..atom_count {
+                sum += squared_distance(left[atom], right[atom]);
+                observations = observations
+                    .checked_add(1)
+                    .ok_or(MsdError::ObservationLimit)?;
+            }
+        } else {
+            for &atom in atoms {
+                sum += squared_distance(left[atom], right[atom]);
+                observations = observations
+                    .checked_add(1)
+                    .ok_or(MsdError::ObservationLimit)?;
+            }
         }
     }
     let divisor = f64_from_u64(observations).ok_or(MsdError::ObservationLimit)?;

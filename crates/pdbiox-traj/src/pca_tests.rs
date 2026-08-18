@@ -15,6 +15,31 @@ fn cartesian_pca_finds_the_only_varying_axis() {
 }
 
 #[test]
+fn borrowed_cartesian_pca_matches_owned_frames() {
+    let positions = [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0],
+        [2.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0],
+        [3.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ];
+    let view = crate::FrameView::new(&positions, 3, 3).expect("valid borrowed frames");
+    let owned = vec![
+        positions[..3].to_vec(),
+        positions[3..6].to_vec(),
+        positions[6..].to_vec(),
+    ];
+    assert_eq!(
+        cartesian_pca_view(view, CartesianFit::None, 1, 4096),
+        cartesian_pca(&owned, CartesianFit::None, 1, 4096)
+    );
+}
+
+#[test]
 fn dihedral_pca_is_wrapping_invariant() {
     let Ok(left) = PeriodicAngle::from_radians(-3.0) else {
         panic!("finite angle");

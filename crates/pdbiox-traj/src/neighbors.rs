@@ -2,6 +2,7 @@
 
 use crate::{Timestep, TrajectoryError};
 use pdbiox_core::coords::CoordinateGeneration;
+use pdbiox_core::structure::UnitCell;
 use pdbiox_spatial::{NeighborList, NeighborPair, PeriodicBox};
 
 /// Observable cost of a frame neighbour-list cache.
@@ -51,19 +52,36 @@ impl FrameNeighborList {
     ///
     /// Returns a shared spatial error for invalid cutoffs, selections or cells.
     pub fn pairs(&mut self, timestep: &Timestep) -> Result<Vec<NeighborPair>, TrajectoryError> {
-        let periodic = timestep.cell.map(PeriodicBox::from_cell).transpose()?;
+        self.pairs_positions(&timestep.positions, timestep.cell)
+    }
+
+    /// Filters pairs from borrowed coordinates without constructing a frame.
+    ///
+    /// This is the native array-oriented entry point. It lets bindings retain a
+    /// caller-owned coordinate buffer for the duration of the spatial query
+    /// instead of cloning it into a [`Timestep`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a shared spatial error for invalid cutoffs, selections or cells.
+    pub fn pairs_positions(
+        &mut self,
+        positions: &[[f32; 3]],
+        cell: Option<UnitCell>,
+    ) -> Result<Vec<NeighborPair>, TrajectoryError> {
+        let periodic = cell.map(PeriodicBox::from_cell).transpose()?;
         self.statistics.frames += 1;
         let reusable = self
             .list
             .as_ref()
-            .is_some_and(|list| list.can_reuse(&timestep.positions, periodic.as_ref()));
+            .is_some_and(|list| list.can_reuse(positions, periodic.as_ref()));
         if !reusable {
             self.generation = self
                 .generation
                 .next()
                 .ok_or(TrajectoryError::CoordinateGenerationExhausted)?;
             self.list = Some(NeighborList::build(
-                &timestep.positions,
+                positions,
                 &self.left,
                 &self.right,
                 self.cutoff,
@@ -74,7 +92,7 @@ impl FrameNeighborList {
             self.statistics.rebuilds += 1;
         }
         match &self.list {
-            Some(list) => Ok(list.pairs(&timestep.positions, self.cutoff, periodic.as_ref())?),
+            Some(list) => Ok(list.pairs(positions, self.cutoff, periodic.as_ref())?),
             None => Ok(Vec::new()),
         }
     }
