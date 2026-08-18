@@ -11,10 +11,10 @@
 
 use pdbiox_core::index::ResidueIndex;
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError};
-use std::collections::BTreeMap;
+use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within_unsorted};
+use std::collections::HashMap;
 
-use crate::atom_pairs::atom_contacts;
+use crate::numeric::f64_to_f32;
 
 /// A residue pair in contact and the closest approach between them.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -68,13 +68,16 @@ pub fn residue_contact_map(
     backend: SpatialBackend,
 ) -> Result<ContactMap, SpatialError> {
     let residue_of = atom_to_residue(structure);
-    let atom_pairs = atom_contacts(structure, cutoff, backend)?;
+    let all =
+        pdbiox_core::selection::AtomSelection::from_sorted((0..structure.atom_count()).collect());
+    let atom_pairs =
+        pairs_within_unsorted(structure.positions(), &all, &all, cutoff, backend, None)?;
 
-    let mut closest: BTreeMap<(u32, u32), f32> = BTreeMap::new();
-    for contact in atom_pairs {
+    let mut closest: HashMap<(u32, u32), f32> = HashMap::new();
+    for pair in atom_pairs {
         let (Some(&Some(first)), Some(&Some(second))) = (
-            residue_of.get(contact.first.as_usize()),
-            residue_of.get(contact.second.as_usize()),
+            residue_of.get(pair.first as usize),
+            residue_of.get(pair.second as usize),
         ) else {
             continue;
         };
@@ -92,21 +95,22 @@ pub fn residue_contact_map(
         closest
             .entry((low, high))
             .and_modify(|distance| {
-                if contact.distance < *distance {
-                    *distance = contact.distance;
+                if pair.distance_squared < *distance {
+                    *distance = pair.distance_squared;
                 }
             })
-            .or_insert(contact.distance);
+            .or_insert(pair.distance_squared);
     }
 
-    let contacts = closest
+    let mut contacts: Vec<_> = closest
         .into_iter()
-        .map(|((low, high), min_distance)| ResidueContact {
+        .map(|((low, high), min_distance_squared)| ResidueContact {
             first: ResidueIndex::new(low),
             second: ResidueIndex::new(high),
-            min_distance,
+            min_distance: f64_to_f32(f64::from(min_distance_squared).sqrt()),
         })
         .collect();
+    contacts.sort_unstable_by_key(|contact| (contact.first.get(), contact.second.get()));
 
     Ok(ContactMap {
         residue_count: structure.residue_count(),

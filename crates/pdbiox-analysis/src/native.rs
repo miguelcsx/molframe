@@ -11,9 +11,8 @@
 //! broken contact does not.
 
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError};
+use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within_unsorted};
 
-use crate::atom_pairs::atom_contacts;
 use crate::numeric::usize_to_f64;
 
 /// Why the native-contact fraction could not be computed.
@@ -70,7 +69,10 @@ pub fn native_contact_fraction(
         });
     }
 
-    let native_contacts = atom_contacts(reference, cutoff, backend)?;
+    let all =
+        pdbiox_core::selection::AtomSelection::from_sorted((0..reference.atom_count()).collect());
+    let native_contacts =
+        pairs_within_unsorted(reference.positions(), &all, &all, cutoff, backend, None)?;
     let native = native_contacts.len();
     if native == 0 {
         return Ok(NativeContacts {
@@ -83,10 +85,10 @@ pub fn native_contact_fraction(
     let target_positions = target.positions();
     let kept_cutoff_squared = f64::from(tolerance * cutoff).powi(2);
     let mut kept = 0usize;
-    for contact in native_contacts {
+    for pair in native_contacts {
         let (Some(&a), Some(&b)) = (
-            target_positions.get(contact.first.as_usize()),
-            target_positions.get(contact.second.as_usize()),
+            target_positions.get(pair.first as usize),
+            target_positions.get(pair.second as usize),
         ) else {
             continue;
         };

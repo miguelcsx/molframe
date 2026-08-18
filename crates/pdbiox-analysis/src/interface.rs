@@ -11,7 +11,7 @@
 use pdbiox_core::index::ResidueIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::{AtomRef, ChainRef, Structure};
-use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within};
+use pdbiox_spatial::{SpatialBackend, SpatialError, StructureSpatial, pairs_within};
 
 /// Returns the residues at the interface between the two named chains.
 ///
@@ -38,6 +38,41 @@ pub fn chain_interface(
     let right = AtomSelection::from_sorted(second_atoms);
     let pairs = pairs_within(positions, &left, &right, cutoff, backend, None)?;
 
+    Ok(interface_residues(structure, pairs))
+}
+
+/// Returns interface residues through a structure-bound spatial resolver.
+///
+/// A compiled plan uses this entry point so repeated interface/contact
+/// operations can share the resolver's bounded cell/k-d index cache.  The
+/// resolver remains borrowed from the same immutable structure snapshot, which
+/// makes the lifetime and coordinate generation relationship explicit.
+///
+/// # Errors
+///
+/// Returns a diagnostic when the resolver rejects the workload or an atom index
+/// cannot be mapped back to the structure hierarchy.
+pub fn chain_interface_with_spatial(
+    structure: &Structure,
+    first: &str,
+    second: &str,
+    cutoff: f32,
+    backend: SpatialBackend,
+    spatial: &StructureSpatial<'_>,
+) -> Result<Vec<ResidueIndex>, pdbiox_core::diagnostic::Diagnostic> {
+    let first_atoms = chain_atoms(structure, first);
+    let second_atoms = chain_atoms(structure, second);
+    let left = AtomSelection::from_sorted(first_atoms);
+    let right = AtomSelection::from_sorted(second_atoms);
+    let pairs = spatial.pairs_with_backend(&left, &right, cutoff, backend)?;
+
+    Ok(interface_residues(structure, pairs))
+}
+
+fn interface_residues(
+    structure: &Structure,
+    pairs: Vec<pdbiox_spatial::NeighborPair>,
+) -> Vec<ResidueIndex> {
     let mut residues = Vec::new();
     for pair in pairs {
         if let Some(residue) = residue_of(structure, pair.first) {
@@ -49,7 +84,7 @@ pub fn chain_interface(
     }
     residues.sort_unstable();
     residues.dedup();
-    Ok(residues.into_iter().map(ResidueIndex::new).collect())
+    residues.into_iter().map(ResidueIndex::new).collect()
 }
 
 /// Collects the atom indices belonging to a chain matched by either identifier.

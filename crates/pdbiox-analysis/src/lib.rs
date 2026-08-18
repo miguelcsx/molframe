@@ -61,6 +61,7 @@ mod sugar_conformation;
 pub mod surface_contacts;
 #[path = "ensemble.rs"]
 mod trajectory_ensemble;
+mod vector_field;
 #[path = "water_bridge.rs"]
 mod water_mediation;
 
@@ -70,9 +71,11 @@ mod chemistry_test_support;
 pub use aromatic_stacking::{
     PiStacking, PiStackingError, PiStackingOptions, StackingKind, pi_stacking,
 };
-pub use atom_pairs::{Contact, atom_contacts};
+pub use atom_pairs::{
+    Contact, atom_contacts, atom_contacts_between, atom_contacts_between_with_spatial,
+};
 pub use cation_aromatic::{CationPi, CationPiError, CationPiOptions, cation_pi};
-pub use chain_boundary::chain_interface;
+pub use chain_boundary::{chain_interface, chain_interface_with_spatial};
 pub use chain_statistics::{PolymerError, PolymerStatistics, polymer_statistics};
 pub use channel_profile::{PoreError, PoreProfileOptions, PoreSample, pore_profile};
 pub use elastic_network::{GaussianNetworkModel, GnmError, GnmOptions, gaussian_network_model};
@@ -133,5 +136,9 @@ pub use trajectory_ensemble::{
     block_convergence, cluster_population_similarity, dbscan_clustering,
     generalized_procrustes_mean, group_coordinate_variance, harmonic_ensemble_similarity, kmeans,
     medoid, pairwise_fitted_rmsd, pairwise_torus_distance, rmsd_to_reference,
+};
+pub use vector_field::{
+    StreamlineDirection, StreamlineOptions, VectorFieldError, VectorFieldGrid,
+    integrate_streamlines,
 };
 pub use water_mediation::{WaterBridge, WaterBridgeOptions, water_bridges};

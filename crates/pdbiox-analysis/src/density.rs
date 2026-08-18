@@ -162,18 +162,18 @@ pub fn density_map(
         .into_iter()
         .try_fold(1_usize, usize::checked_mul)
         .ok_or(DensityError::GridTooLarge)?;
+    let volume = spec.spacing.into_iter().map(f64::from).product::<f64>();
+    let inverse_volume = 1.0 / volume;
     let mut density = vec![0.0; voxel_count];
     let mut excluded_weight = 0.0;
     for (position, weight) in positions.iter().zip(weights) {
         if let Some([x, y, z]) = voxel_index(*position, spec) {
-            density[(x * spec.shape[1] + y) * spec.shape[2] + z] += weight;
+            // The dense grid can be much larger than the observations. Scale
+            // on write so empty voxels do not pay a division pass.
+            density[(x * spec.shape[1] + y) * spec.shape[2] + z] += weight * inverse_volume;
         } else {
             excluded_weight += weight;
         }
-    }
-    let volume = spec.spacing.into_iter().map(f64::from).product::<f64>();
-    for value in &mut density {
-        *value /= volume;
     }
     Ok(DensityGrid {
         spec,

@@ -2,7 +2,9 @@
 
 use core::f64::consts::PI;
 use pdbiox_core::selection::AtomSelection;
-use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialError, pairs_within};
+use pdbiox_spatial::{
+    PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions, for_each_pairs_within_unsorted,
+};
 
 use crate::numeric::{f32_to_usize, f64_to_f32, u64_to_f64, usize_to_f32};
 
@@ -156,28 +158,27 @@ pub fn radial_distribution(
     periodic: Option<&PeriodicBox>,
 ) -> Result<Vec<RadialBin>, RadialError> {
     validate_options(options)?;
+    let mut counts = vec![0_u64; options.bins];
     let width = (options.maximum_distance - options.minimum_distance) / usize_to_f32(options.bins);
-    let pairs = pairs_within(
+    for_each_pairs_within_unsorted(
         positions,
         left,
         right,
         options.maximum_distance,
-        options.backend,
+        SpatialSearchOptions::with_backend(options.backend),
         periodic,
-    )?;
-    let mut counts = vec![0_u64; options.bins];
-
-    for pair in pairs {
-        let distance = pair.distance_squared.sqrt();
-        if distance >= options.minimum_distance {
-            let Some(bin) = f32_to_usize((distance - options.minimum_distance) / width) else {
-                continue;
-            };
-            if let Some(count) = counts.get_mut(bin) {
-                *count += 1;
+        |pair| {
+            let distance = pair.distance_squared.sqrt();
+            if distance >= options.minimum_distance {
+                let Some(bin) = f32_to_usize((distance - options.minimum_distance) / width) else {
+                    return;
+                };
+                if let Some(count) = counts.get_mut(bin) {
+                    *count += 1;
+                }
             }
-        }
-    }
+        },
+    )?;
 
     let possible_pairs = u64_to_f64(possible_pair_count(left, right)?);
     Ok(counts
@@ -205,20 +206,33 @@ pub fn coordination_numbers(
     periodic: Option<&PeriodicBox>,
 ) -> Result<Vec<u32>, RadialError> {
     validate_bounds(minimum_distance, maximum_distance)?;
-    let pairs = pairs_within(positions, left, right, maximum_distance, backend, periodic)?;
+    let minimum_squared = minimum_distance * minimum_distance;
+    let same_selection = left == right;
     let mut by_atom = vec![0_u32; positions.len()];
-
-    for pair in pairs {
-        if pair.distance_squared.sqrt() < minimum_distance {
-            continue;
-        }
-        if left.contains(pair.first) && right.contains(pair.second) {
-            by_atom[pair.first as usize] += 1;
-        }
-        if left.contains(pair.second) && right.contains(pair.first) {
-            by_atom[pair.second as usize] += 1;
-        }
-    }
+    for_each_pairs_within_unsorted(
+        positions,
+        left,
+        right,
+        maximum_distance,
+        SpatialSearchOptions::with_backend(backend),
+        periodic,
+        |pair| {
+            if pair.distance_squared < minimum_squared {
+                return;
+            }
+            if same_selection {
+                by_atom[pair.first as usize] += 1;
+                by_atom[pair.second as usize] += 1;
+                return;
+            }
+            if left.contains(pair.first) && right.contains(pair.second) {
+                by_atom[pair.first as usize] += 1;
+            }
+            if left.contains(pair.second) && right.contains(pair.first) {
+                by_atom[pair.second as usize] += 1;
+            }
+        },
+    )?;
 
     Ok(left
         .into_iter()

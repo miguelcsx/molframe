@@ -11,7 +11,7 @@
 use pdbiox_core::index::AtomIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within};
+use pdbiox_spatial::{SpatialBackend, SpatialError, StructureSpatial, pairs_within};
 
 use crate::numeric::f64_to_f32;
 
@@ -42,9 +42,59 @@ pub fn atom_contacts(
     cutoff: f32,
     backend: SpatialBackend,
 ) -> Result<Vec<Contact>, SpatialError> {
-    let positions = structure.positions();
     let all = AtomSelection::from_sorted((0..structure.atom_count()).collect());
-    let pairs = pairs_within(positions, &all, &all, cutoff, backend, None)?;
+    atom_contacts_between(structure, &all, &all, cutoff, backend)
+}
+
+/// Finds contacts between two arbitrary atom selections.
+///
+/// The selections are already typed and sorted by the query layer, so this
+/// operation does not parse or iterate over Python objects. The spatial
+/// backend only visits candidate neighbours and the returned contacts are
+/// deterministic by atom index.
+///
+/// # Errors
+///
+/// Returns [`SpatialError`] when the cutoff or spatial workload is invalid.
+pub fn atom_contacts_between(
+    structure: &Structure,
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    backend: SpatialBackend,
+) -> Result<Vec<Contact>, SpatialError> {
+    let pairs = pairs_within(structure.positions(), left, right, cutoff, backend, None)?;
+    Ok(contacts_from_pairs(structure, pairs))
+}
+
+/// Finds contacts between two selections using a reusable structure-bound
+/// spatial resolver.
+///
+/// This is the plan-facing form: compatible workloads reuse the resolver's
+/// bounded index cache while the contact projection remains the same native
+/// kernel as [`atom_contacts_between`].
+///
+/// # Errors
+///
+/// Returns a spatial diagnostic when the resolver rejects the workload or a
+/// pair cannot be projected to a finite contact.
+pub fn atom_contacts_between_with_spatial(
+    structure: &Structure,
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    backend: SpatialBackend,
+    spatial: &StructureSpatial<'_>,
+) -> Result<Vec<Contact>, pdbiox_core::diagnostic::Diagnostic> {
+    let pairs = spatial.pairs_with_backend(left, right, cutoff, backend)?;
+    Ok(contacts_from_pairs(structure, pairs))
+}
+
+fn contacts_from_pairs(
+    structure: &Structure,
+    pairs: Vec<pdbiox_spatial::NeighborPair>,
+) -> Vec<Contact> {
+    let positions = structure.positions();
 
     let mut contacts = Vec::with_capacity(pairs.len());
     for pair in pairs {
@@ -59,7 +109,7 @@ pub fn atom_contacts(
             distance: f64_to_f32(pdbiox_geom::distance(a, b)),
         });
     }
-    Ok(contacts)
+    contacts
 }
 
 #[cfg(test)]

@@ -19,5 +19,13 @@ pdbiox-traj.workspace = true
 nalgebra.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
+
+[[bench]]
+name = "analysis"
+harness = false
+
 [lints]
 workspace = true

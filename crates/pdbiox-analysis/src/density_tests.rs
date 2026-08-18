@@ -35,6 +35,19 @@ fn density_map_reports_outside_weight() {
 }
 
 #[test]
+fn density_map_normalises_by_the_voxel_volume() {
+    let spec = DensityGridSpec {
+        origin: [0.0; 3],
+        spacing: [2.0; 3],
+        shape: [1; 3],
+    };
+    let Ok(grid) = density_map(&[[1.0, 1.0, 1.0]], &[8.0], spec) else {
+        panic!("valid density grid");
+    };
+    assert!((grid.density[0] - 1.0).abs() < f64::EPSILON);
+}
+
+#[test]
 fn density_requires_explicit_valid_grid() {
     let result = density_map(
         &[],
