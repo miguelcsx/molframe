@@ -8,6 +8,19 @@ use crate::{
 use pdbiox_core::CoordinateGeneration;
 use pdbiox_core::selection::AtomSelection;
 
+#[derive(Clone, Copy)]
+enum PairOrder {
+    Sorted,
+    Unsorted,
+}
+
+#[derive(Clone, Copy)]
+struct PairDispatch {
+    plan: crate::SpatialPlan,
+    options: SpatialSearchOptions,
+    order: PairOrder,
+}
+
 /// Enumerates unique unordered pairs no further apart than `cutoff`.
 ///
 /// Results are sorted by `(first, second)` for every backend. Self-pairs are
@@ -34,6 +47,34 @@ pub fn pairs_within(
     )
 }
 
+/// Enumerates unique same-selection pairs without sorting the returned vector.
+///
+/// The deterministic ordering contract of [`pairs_within`] remains unchanged.
+/// This variant is intended for reductions such as histograms and counts that
+/// do not consume pair order. For different left and right selections it keeps
+/// the canonical implementation so overlapping selections remain duplicate-free.
+///
+/// # Errors
+///
+/// Returns the same validation and backend errors as [`pairs_within`].
+pub fn pairs_within_unsorted(
+    positions: &[[f32; 3]],
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    backend: SpatialBackend,
+    periodic: Option<&PeriodicBox>,
+) -> Result<Vec<NeighborPair>, SpatialError> {
+    pairs_within_unsorted_with_options(
+        positions,
+        left,
+        right,
+        cutoff,
+        SpatialSearchOptions::with_backend(backend),
+        periodic,
+    )
+}
+
 /// Enumerates pairs under a complete, inspectable planning profile.
 ///
 /// # Errors
@@ -47,13 +88,134 @@ pub fn pairs_within_with_options(
     options: SpatialSearchOptions,
     periodic: Option<&PeriodicBox>,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
+    pairs_with_order(
+        positions,
+        left,
+        right,
+        cutoff,
+        options,
+        periodic,
+        PairOrder::Sorted,
+    )
+}
+
+/// Executes a fixed-radius query without sorting identical-selection results.
+///
+/// # Errors
+///
+/// Returns the same validation and backend errors as [`pairs_within`].
+pub fn pairs_within_unsorted_with_options(
+    positions: &[[f32; 3]],
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    options: SpatialSearchOptions,
+    periodic: Option<&PeriodicBox>,
+) -> Result<Vec<NeighborPair>, SpatialError> {
+    pairs_with_order(
+        positions,
+        left,
+        right,
+        cutoff,
+        options,
+        periodic,
+        PairOrder::Unsorted,
+    )
+}
+
+/// Visits fixed-radius same-selection pairs without requiring a result vector.
+///
+/// The callback receives the same unordered pair set as
+/// [`pairs_within_unsorted`]. Cell-list execution streams matches directly;
+/// other backends retain their existing implementation and forward its result
+/// vector. This is intended for reductions that do not consume pair order.
+///
+/// # Errors
+///
+/// Returns the same validation and backend errors as [`pairs_within_unsorted`].
+pub fn for_each_pairs_within_unsorted<F>(
+    positions: &[[f32; 3]],
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    options: SpatialSearchOptions,
+    periodic: Option<&PeriodicBox>,
+    mut emit: F,
+) -> Result<(), SpatialError>
+where
+    F: FnMut(NeighborPair),
+{
+    validate_cutoff(cutoff)?;
+    let left_indices = checked_indices(left, positions.len())?;
+    let right_indices = checked_indices(right, positions.len())?;
+    let plan = options.plan(
+        left_indices.len(),
+        right_indices.len(),
+        periodic.is_some(),
+        cutoff,
+    )?;
+
+    if plan.backend == SpatialBackend::CellList && left_indices == right_indices {
+        let index = CellList::build_with_options(
+            positions,
+            &right_indices,
+            cutoff,
+            periodic,
+            options.cell_grid,
+        )?;
+        return crate::backends::cell::for_each_pairs_same_selection_unordered(
+            &index,
+            &left_indices,
+            cutoff,
+            emit,
+        );
+    }
+
+    let pairs = dispatch_pairs(
+        positions,
+        &left_indices,
+        &right_indices,
+        cutoff,
+        PairDispatch {
+            plan,
+            options,
+            order: PairOrder::Unsorted,
+        },
+        periodic,
+    )?;
+    for pair in pairs {
+        emit(pair);
+    }
+    Ok(())
+}
+
+fn pairs_with_order(
+    positions: &[[f32; 3]],
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    options: SpatialSearchOptions,
+    periodic: Option<&PeriodicBox>,
+    order: PairOrder,
+) -> Result<Vec<NeighborPair>, SpatialError> {
     validate_cutoff(cutoff)?;
 
     let left = checked_indices(left, positions.len())?;
     let right = checked_indices(right, positions.len())?;
     let plan = options.plan(left.len(), right.len(), periodic.is_some(), cutoff)?;
 
-    dispatch_pairs(positions, &left, &right, cutoff, plan, options, periodic)
+    dispatch_pairs(
+        positions,
+        &left,
+        &right,
+        cutoff,
+        PairDispatch {
+            plan,
+            options,
+            order,
+        },
+        periodic,
+    )
 }
 
 /// Selects query atoms within `cutoff` of any target atom.
@@ -112,17 +274,32 @@ fn dispatch_pairs(
     left: &[u32],
     right: &[u32],
     cutoff: f32,
-    plan: crate::SpatialPlan,
-    options: SpatialSearchOptions,
+    dispatch: PairDispatch,
     periodic: Option<&PeriodicBox>,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
-    match plan.backend {
+    let same_selection = left == right;
+
+    match dispatch.plan.backend {
         SpatialBackend::CellList => {
-            CellList::build_with_options(positions, right, cutoff, periodic, options.cell_grid)?
-                .pairs(left, cutoff)
+            let index = CellList::build_with_options(
+                positions,
+                right,
+                cutoff,
+                periodic,
+                dispatch.options.cell_grid,
+            )?;
+            if same_selection {
+                if matches!(dispatch.order, PairOrder::Sorted) {
+                    crate::backends::cell::pairs_same_selection(&index, left, cutoff)
+                } else {
+                    crate::backends::cell::pairs_same_selection_unordered(&index, left, cutoff)
+                }
+            } else {
+                index.pairs(left, cutoff)
+            }
         }
         SpatialBackend::KdTree => {
-            KdTree::build_with_options(positions, right, periodic, options.kd_periodic)?
+            KdTree::build_with_options(positions, right, periodic, dispatch.options.kd_periodic)?
                 .pairs(left, cutoff)
         }
         SpatialBackend::NeighborList => neighbor_list_pairs(
@@ -130,17 +307,38 @@ fn dispatch_pairs(
             left,
             right,
             cutoff,
-            plan.neighbor_skin,
-            options,
+            dispatch.plan.neighbor_skin,
+            dispatch.options,
             periodic,
         ),
-        SpatialBackend::BruteForce => Ok(brute::pairs(
-            positions,
-            left,
-            right,
-            cutoff * cutoff,
-            periodic,
-        )),
+        SpatialBackend::BruteForce => {
+            let cutoff_squared = cutoff * cutoff;
+            if same_selection {
+                if matches!(dispatch.order, PairOrder::Sorted) {
+                    Ok(brute::pairs_same_selection(
+                        positions,
+                        left,
+                        cutoff_squared,
+                        periodic,
+                    ))
+                } else {
+                    Ok(brute::pairs_same_selection_unordered(
+                        positions,
+                        left,
+                        cutoff_squared,
+                        periodic,
+                    ))
+                }
+            } else {
+                Ok(brute::pairs(
+                    positions,
+                    left,
+                    right,
+                    cutoff_squared,
+                    periodic,
+                ))
+            }
+        }
         SpatialBackend::Auto => Err(SpatialError::InvalidOption(
             crate::SpatialOption::PeriodicBackend,
         )),

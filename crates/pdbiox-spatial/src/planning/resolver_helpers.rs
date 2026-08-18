@@ -128,6 +128,15 @@ pub(super) fn collect_within(
     Ok(AtomSelection::from_sorted(selected))
 }
 
+pub(super) fn collect_selection_indices(selection: &AtomSelection) -> Vec<u32> {
+    let Ok(capacity) = usize::try_from(selection.len()) else {
+        return selection.iter().collect();
+    };
+    let mut indices = Vec::with_capacity(capacity);
+    indices.extend(selection.iter());
+    indices
+}
+
 fn mark_atom(matched: &mut [bool], atom: u32) -> Result<(), Diagnostic> {
     let index = usize::try_from(atom).map_err(|_| atom_out_of_bounds(atom))?;
     let Some(slot) = matched.get_mut(index) else {

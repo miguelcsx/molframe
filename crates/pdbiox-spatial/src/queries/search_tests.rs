@@ -59,6 +59,100 @@ fn every_backend_agrees_under_triclinic_periodicity() {
     }
 }
 
+#[test]
+fn identical_selections_keep_sorted_unique_pair_contract() {
+    let positions = [
+        [0.0, 0.0, 0.0],
+        [0.8, 0.0, 0.0],
+        [1.6, 0.0, 0.0],
+        [0.0, 2.0, 0.0],
+    ];
+    let selection = AtomSelection::All(4);
+    let expected = vec![(0, 1), (1, 2)];
+    for backend in [
+        SpatialBackend::BruteForce,
+        SpatialBackend::CellList,
+        SpatialBackend::KdTree,
+        SpatialBackend::NeighborList,
+    ] {
+        let pairs = match pairs_within(&positions, &selection, &selection, 1.0, backend, None) {
+            Ok(pairs) => pair_indices(&pairs),
+            Err(error) => panic!("query failed for {backend:?}: {error}"),
+        };
+
+        assert_eq!(pairs, expected, "backend {backend:?}");
+    }
+}
+
+#[test]
+fn unsorted_same_selection_query_keeps_pair_set_without_order_contract() {
+    let positions = [
+        [0.0, 0.0, 0.0],
+        [0.8, 0.0, 0.0],
+        [1.6, 0.0, 0.0],
+        [0.0, 2.0, 0.0],
+    ];
+    let selection = AtomSelection::All(4);
+    let expected = pairs_within(
+        &positions,
+        &selection,
+        &selection,
+        1.0,
+        SpatialBackend::CellList,
+        None,
+    )
+    .unwrap_or_else(|error| panic!("sorted query failed: {error}"));
+    for backend in [
+        SpatialBackend::BruteForce,
+        SpatialBackend::CellList,
+        SpatialBackend::KdTree,
+        SpatialBackend::NeighborList,
+    ] {
+        let mut actual =
+            pairs_within_unsorted(&positions, &selection, &selection, 1.0, backend, None)
+                .unwrap_or_else(|error| panic!("unsorted query failed for {backend:?}: {error}"));
+        let mut expected = expected.clone();
+        actual.sort_unstable_by_key(|pair| (pair.first, pair.second));
+        expected.sort_unstable_by_key(|pair| (pair.first, pair.second));
+        assert_eq!(actual, expected, "backend {backend:?}");
+    }
+}
+
+#[test]
+fn streamed_same_selection_query_matches_materialized_pairs() {
+    let positions = [
+        [0.0, 0.0, 0.0],
+        [0.8, 0.0, 0.0],
+        [1.6, 0.0, 0.0],
+        [0.0, 2.0, 0.0],
+    ];
+    let selection = AtomSelection::All(4);
+    let expected = pairs_within_unsorted(
+        &positions,
+        &selection,
+        &selection,
+        1.0,
+        SpatialBackend::CellList,
+        None,
+    )
+    .unwrap_or_else(|error| panic!("materialized query failed: {error}"));
+    let mut actual = Vec::new();
+    for_each_pairs_within_unsorted(
+        &positions,
+        &selection,
+        &selection,
+        1.0,
+        SpatialSearchOptions::with_backend(SpatialBackend::CellList),
+        None,
+        |pair| actual.push(pair),
+    )
+    .unwrap_or_else(|error| panic!("streamed query failed: {error}"));
+    actual.sort_unstable_by_key(|pair| (pair.first, pair.second));
+    let mut expected = expected;
+    expected.sort_unstable_by_key(|pair| (pair.first, pair.second));
+    assert_eq!(actual, expected);
+}
+
 proptest! {
     #[test]
     fn all_backends_return_the_same_pairs(

@@ -9,18 +9,25 @@ use pdbiox_core::contract::AnalysisPolicy;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::Structure;
-use pdbiox_query::{GeometricRequest, SpatialResolver};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::collections::{HashMap, hash_map::Entry};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 #[path = "resolver_helpers.rs"]
 mod helpers;
+#[path = "resolver_dispatch.rs"]
+mod resolver_dispatch;
 use helpers::{
-    atom_out_of_bounds, backend_key, cacheable_backend, collect_within, index_cutoff_key,
-    mark_pair_matches, periodic_box, radial_squared, resolve_beyond_request,
-    resolve_within_request, select_iso_layer, spatial_diagnostic, update_nearest_distances,
-    validate_shell, z_matches,
+    atom_out_of_bounds, backend_key, cacheable_backend, collect_selection_indices, collect_within,
+    index_cutoff_key, mark_pair_matches, periodic_box, radial_squared, select_iso_layer,
+    spatial_diagnostic, update_nearest_distances, validate_shell, z_matches,
 };
+
+/// Maximum number of spatial indices retained by one resolver.
+///
+/// Query predicates can produce arbitrarily many distinct target selections
+/// and cutoffs. Bounding retained indices prevents a long-lived resolver from
+/// accumulating unbounded query-controlled cache state.
+const MAX_CACHED_INDICES: usize = 64;
 
 /// A spatial resolver bound to one immutable structure snapshot.
 #[derive(Debug)]
@@ -28,17 +35,21 @@ pub struct StructureSpatial<'a> {
     structure: &'a Structure,
     options: SpatialSearchOptions,
     periodic: Option<PeriodicBox>,
-    cache: Mutex<HashMap<IndexKey, Arc<CachedIndex<'a>>>>,
+    cache: RwLock<HashMap<IndexKey, Arc<CachedIndex<'a>>>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// Identifies a reusable spatial index within one immutable resolver.
+///
+/// Backend and cutoff precede the potentially large atom selection so equality
+/// checks can reject incompatible plans before comparing selection contents.
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct IndexKey {
-    generation: u64,
-    selection: Box<[u32]>,
-    cutoff: u32,
     backend: u8,
+    cutoff: u32,
+    selection: Box<[u32]>,
 }
 
+/// A spatial index retained for reuse by compatible geometric predicates.
 #[derive(Debug)]
 enum CachedIndex<'a> {
     Cell(CellList<'a>),
@@ -80,27 +91,27 @@ impl<'a> StructureSpatial<'a> {
             structure,
             options,
             periodic,
-            cache: Mutex::new(HashMap::new()),
+            cache: RwLock::new(HashMap::new()),
         })
     }
 
     /// Number of structure-bound indices currently retained for reuse.
     #[must_use]
     pub fn cached_index_count(&self) -> usize {
-        self.lock_cache().len()
+        self.read_cache().len()
     }
 
     /// Returns this structure snapshot's coordinate slice.
-    ///
-    /// Runtime and auxiliary space are `O(1)`.
     #[inline]
     fn positions(&self) -> &[[f32; 3]] {
         self.structure.positions()
     }
 
     /// Resolves one atom position or returns the query out-of-bounds diagnostic.
+    #[inline]
     fn position(&self, atom: u32) -> Result<[f32; 3], Diagnostic> {
         let index = usize::try_from(atom).map_err(|_| atom_out_of_bounds(atom))?;
+
         self.positions()
             .get(index)
             .copied()
@@ -150,8 +161,6 @@ impl<'a> StructureSpatial<'a> {
     }
 
     /// Computes periodic or ordinary displacement from `left` to `right`.
-    ///
-    /// Runtime and auxiliary space are `O(1)`.
     #[inline]
     fn displacement(&self, left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
         match &self.periodic {
@@ -184,7 +193,10 @@ impl<'a> StructureSpatial<'a> {
             sum[0] += f64::from(position[0]);
             sum[1] += f64::from(position[1]);
             sum[2] += f64::from(position[2]);
-            count += 1;
+
+            count = count
+                .checked_add(1)
+                .ok_or_else(|| Diagnostic::new(Code::E3001))?;
         }
 
         if count == 0 {
@@ -193,9 +205,10 @@ impl<'a> StructureSpatial<'a> {
 
         let divisor = f64::from(count);
 
-        let convert = |value| {
+        let convert = |value: f64| {
             crate::numeric::finite_f32(value / divisor).ok_or_else(|| Diagnostic::new(Code::E5003))
         };
+
         Ok([convert(sum[0])?, convert(sum[1])?, convert(sum[2])?])
     }
 
@@ -216,8 +229,8 @@ impl<'a> StructureSpatial<'a> {
 
     /// Selects atoms whose nearest target distance lies inside `[inner, outer]`.
     ///
-    /// A dense nearest-distance buffer gives `O(P + U)` processing after the
-    /// spatial pair search and avoids tree-map operations per pair.
+    /// A dense nearest-distance buffer keeps pair updates contiguous and avoids
+    /// map lookups for atom-indexed nearest-distance state.
     fn iso_layer(
         &self,
         universe: &AtomSelection,
@@ -237,7 +250,8 @@ impl<'a> StructureSpatial<'a> {
 
     /// Selects query atoms within `cutoff` of at least one target.
     ///
-    /// A dense bit vector removes the previous sort/dedup pass.
+    /// A dense bit vector records membership directly by atom index and avoids
+    /// sorting or deduplicating matched pair endpoints.
     fn within(
         &self,
         query: &AtomSelection,
@@ -254,13 +268,34 @@ impl<'a> StructureSpatial<'a> {
 
     /// Dispatches pair search through periodic, cached or uncached backends.
     ///
-    /// Non-periodic cell/k-d indices are cached for repeated geometric
-    /// predicates over the same target selection.
+    /// Non-periodic cell and k-d indices are eligible for reuse when the
+    /// selected backend supports structure-bound indexing.
     fn pairs(
         &self,
         query: &AtomSelection,
         target: &AtomSelection,
         cutoff: f32,
+    ) -> Result<Vec<NeighborPair>, Diagnostic> {
+        self.pairs_with_backend(query, target, cutoff, self.options.backend)
+    }
+
+    /// Searches one pair workload while retaining indices in this resolver.
+    ///
+    /// The resolver itself is configured with `Auto` in a reusable plan.  A
+    /// request may still pin a concrete backend; the target index is keyed by
+    /// that backend, cutoff and selection, so compatible operations share the
+    /// construction without changing the requested algorithm.
+    ///
+    /// # Errors
+    ///
+    /// Returns a diagnostic when the requested backend cannot be planned or
+    /// the spatial kernel rejects the workload.
+    pub fn pairs_with_backend(
+        &self,
+        query: &AtomSelection,
+        target: &AtomSelection,
+        cutoff: f32,
+        requested_backend: SpatialBackend,
     ) -> Result<Vec<NeighborPair>, Diagnostic> {
         if self.periodic.is_some() {
             return pairs_within_with_options(
@@ -268,31 +303,42 @@ impl<'a> StructureSpatial<'a> {
                 query,
                 target,
                 cutoff,
-                self.options,
+                SpatialSearchOptions {
+                    backend: requested_backend,
+                    ..self.options
+                },
                 self.periodic.as_ref(),
             )
             .map_err(spatial_diagnostic);
         }
 
-        let backend = cacheable_backend(self.options, query.len(), target.len())
-            .map_err(spatial_diagnostic)?;
+        let requested = SpatialSearchOptions {
+            backend: requested_backend,
+            ..self.options
+        };
+        let backend =
+            cacheable_backend(requested, query.len(), target.len()).map_err(spatial_diagnostic)?;
 
-        if matches!(backend, SpatialBackend::CellList | SpatialBackend::KdTree) {
-            self.cached_pairs(query, target, cutoff, backend)
-        } else {
-            let options = SpatialSearchOptions {
-                backend,
-                ..self.options
-            };
-            pairs_within_with_options(self.positions(), query, target, cutoff, options, None)
-                .map_err(spatial_diagnostic)
+        match backend {
+            SpatialBackend::CellList | SpatialBackend::KdTree => {
+                self.cached_pairs(query, target, cutoff, backend)
+            }
+            _ => {
+                let options = SpatialSearchOptions {
+                    backend,
+                    ..self.options
+                };
+
+                pairs_within_with_options(self.positions(), query, target, cutoff, options, None)
+                    .map_err(spatial_diagnostic)
+            }
         }
     }
 
-    /// Executes a query using a cached `CellList` or `KdTree`.
+    /// Executes a query using a reusable `CellList` or `KdTree`.
     ///
-    /// The returned `Arc` allows the mutex to be released before the expensive
-    /// spatial query itself is executed.
+    /// Atom selections are materialised only where the index APIs require
+    /// contiguous integer slices.
     fn cached_pairs(
         &self,
         query: &AtomSelection,
@@ -300,50 +346,65 @@ impl<'a> StructureSpatial<'a> {
         cutoff: f32,
         backend: SpatialBackend,
     ) -> Result<Vec<NeighborPair>, Diagnostic> {
-        let selection: Vec<u32> = target.iter().collect();
+        let target_indices = collect_selection_indices(target);
 
         let key = IndexKey {
-            generation: self.structure.generation().get(),
-            selection: selection.into_boxed_slice(),
-            cutoff: index_cutoff_key(backend, cutoff),
             backend: backend_key(backend),
+            cutoff: index_cutoff_key(backend, cutoff),
+            selection: target_indices.into_boxed_slice(),
         };
 
         let index = self.cached_index(key, backend, cutoff)?;
-
-        let query: Vec<u32> = query.iter().collect();
+        let query_indices = collect_selection_indices(query);
 
         match index.as_ref() {
-            CachedIndex::Cell(index) => index.pairs(&query, cutoff).map_err(spatial_diagnostic),
-            CachedIndex::Kd(index) => index.pairs(&query, cutoff).map_err(spatial_diagnostic),
+            CachedIndex::Cell(index) => index
+                .pairs(&query_indices, cutoff)
+                .map_err(spatial_diagnostic),
+            CachedIndex::Kd(index) => index
+                .pairs(&query_indices, cutoff)
+                .map_err(spatial_diagnostic),
         }
     }
 
-    /// Returns or constructs one cached structure-bound spatial index.
+    /// Returns or constructs one structure-bound spatial index.
     ///
-    /// Cache lookup is expected `O(1)`. An `Arc` is cloned so the mutex is not
-    /// held while performing the actual query.
+    /// Index construction occurs without holding the cache lock. A second
+    /// lookup after construction resolves concurrent insertions of the same key
+    /// without replacing an index already retained by another thread.
     fn cached_index(
         &self,
         key: IndexKey,
         backend: SpatialBackend,
         cutoff: f32,
     ) -> Result<Arc<CachedIndex<'a>>, Diagnostic> {
-        let mut cache = self.lock_cache();
+        {
+            let cache = self.read_cache();
 
-        if let Some(index) = cache.get(&key) {
-            return Ok(Arc::clone(index));
+            if let Some(index) = cache.get(&key) {
+                return Ok(Arc::clone(index));
+            }
         }
 
-        let index = Arc::new(self.build_cached_index(backend, &key.selection, cutoff)?);
+        let built = Arc::new(self.build_cached_index(backend, key.selection.as_ref(), cutoff)?);
 
-        cache.insert(key, Arc::clone(&index));
-        Ok(index)
+        let mut cache = self.write_cache();
+        let can_retain = cache.len() < MAX_CACHED_INDICES;
+
+        match cache.entry(key) {
+            Entry::Occupied(entry) => Ok(Arc::clone(entry.get())),
+            Entry::Vacant(entry) if can_retain => {
+                entry.insert(Arc::clone(&built));
+                Ok(built)
+            }
+            Entry::Vacant(_) => Ok(built),
+        }
     }
 
     /// Constructs one cacheable index over `targets`.
     ///
-    /// K-d trees are cutoff-independent; `CellLists` retain their build cutoff.
+    /// K-d trees are independent from the query cutoff, while cell lists retain
+    /// the cutoff used to define their spatial grid.
     fn build_cached_index(
         &self,
         backend: SpatialBackend,
@@ -371,73 +432,25 @@ impl<'a> StructureSpatial<'a> {
         }
     }
 
-    /// Acquires the index cache, recovering data from a poisoned mutex.
+    /// Acquires shared access to the spatial-index cache.
     ///
-    /// Poison recovery preserves the original behavior and never panics.
-    fn lock_cache(&self) -> MutexGuard<'_, HashMap<IndexKey, Arc<CachedIndex<'a>>>> {
-        match self.cache.lock() {
+    /// Poisoned locks are recovered because an interrupted cache operation
+    /// cannot invalidate the immutable structure snapshot itself.
+    fn read_cache(&self) -> RwLockReadGuard<'_, HashMap<IndexKey, Arc<CachedIndex<'a>>>> {
+        match self.cache.read() {
             Ok(cache) => cache,
             Err(poisoned) => poisoned.into_inner(),
         }
     }
-}
 
-impl SpatialResolver for StructureSpatial<'_> {
-    /// Resolves one query-language geometric request.
+    /// Acquires exclusive access to mutate the spatial-index cache.
     ///
-    /// Each variant delegates to a focused helper to keep dispatch complexity
-    /// independent from the spatial algorithms themselves.
-    fn resolve(&self, request: GeometricRequest<'_>) -> Result<AtomSelection, Diagnostic> {
-        match request {
-            GeometricRequest::Within {
-                universe,
-                target,
-                radius,
-                include_target,
-            } => resolve_within_request(self, universe, target, radius, include_target),
-            GeometricRequest::Beyond {
-                universe,
-                target,
-                radius,
-            } => resolve_beyond_request(self, universe, target, radius),
-            GeometricRequest::SphereZone {
-                universe,
-                target,
-                radius,
-            } => self.radial_from_target(universe, target, 0.0, radius, None),
-            GeometricRequest::SphereLayer {
-                universe,
-                target,
-                inner,
-                outer,
-            } => self.radial_from_target(universe, target, inner, outer, None),
-            GeometricRequest::IsoLayer {
-                universe,
-                target,
-                inner,
-                outer,
-            } => self.iso_layer(universe, target, inner, outer),
-            GeometricRequest::CylinderZone {
-                universe,
-                target,
-                radius,
-                z_max,
-                z_min,
-            } => self.radial_from_target(universe, target, 0.0, radius, Some((z_min, z_max))),
-            GeometricRequest::CylinderLayer {
-                universe,
-                target,
-                inner,
-                outer,
-                z_max,
-                z_min,
-            } => self.radial_from_target(universe, target, inner, outer, Some((z_min, z_max))),
-            GeometricRequest::Point {
-                universe,
-                point,
-                radius,
-            } => self.radial(universe, point, 0.0, radius, None),
-            _ => Err(Diagnostic::new(Code::E9001)),
+    /// Poisoned locks are recovered so cache availability is not coupled to a
+    /// prior thread panic.
+    fn write_cache(&self) -> RwLockWriteGuard<'_, HashMap<IndexKey, Arc<CachedIndex<'a>>>> {
+        match self.cache.write() {
+            Ok(cache) => cache,
+            Err(poisoned) => poisoned.into_inner(),
         }
     }
 }
