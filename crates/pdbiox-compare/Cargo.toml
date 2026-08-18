@@ -17,7 +17,13 @@ pdbiox-surface.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
+pdbiox-bench.workspace = true
 pdbiox-cif.workspace = true
+
+[[bench]]
+name = "compare"
+harness = false
 
 [lints]
 workspace = true

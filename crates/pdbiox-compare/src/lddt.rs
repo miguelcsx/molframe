@@ -92,22 +92,22 @@ pub fn lddt_with_options(
 
     let mut considered = 0u64;
     let mut preserved = 0.0f64;
+    let minimum_squared = options.minimum_reference_distance * options.minimum_reference_distance;
+    let inclusion_squared = options.inclusion_radius * options.inclusion_radius;
     for i in 0..reference.len() {
         for j in (i + 1)..reference.len() {
-            let reference_distance = pdbiox_geom::distance(reference[i], reference[j]);
-            if reference_distance <= options.minimum_reference_distance
-                || reference_distance > options.inclusion_radius
-            {
+            let reference_squared = squared_distance(reference[i], reference[j]);
+            if reference_squared <= minimum_squared || reference_squared > inclusion_squared {
                 continue;
             }
             considered += 1;
+            let reference_distance = reference_squared.sqrt();
             let model_distance = pdbiox_geom::distance(model[i], model[j]);
             let error = (model_distance - reference_distance).abs();
-            let within = options
-                .tolerances
-                .iter()
-                .filter(|tolerance| error < **tolerance)
-                .count();
+            let within = options.tolerances.len()
+                - options
+                    .tolerances
+                    .partition_point(|tolerance| *tolerance <= error);
             preserved += usize_to_f64(within) / usize_to_f64(options.tolerances.len());
         }
     }
@@ -119,6 +119,14 @@ pub fn lddt_with_options(
         };
     }
     Ok(preserved / u64_to_f64(considered))
+}
+
+#[inline]
+fn squared_distance(left: [f32; 3], right: [f32; 3]) -> f64 {
+    let dx = f64::from(left[0]) - f64::from(right[0]);
+    let dy = f64::from(left[1]) - f64::from(right[1]);
+    let dz = f64::from(left[2]) - f64::from(right[2]);
+    dx.mul_add(dx, dy.mul_add(dy, dz * dz))
 }
 
 fn validate_options(
