@@ -51,11 +51,24 @@ impl CifValue {
             "." => Self::Inapplicable,
             "?" => Self::Unknown,
             _ => {
-                if let Ok(value) = text.parse::<i64>() {
-                    return Self::Integer(value);
-                }
-                if let Ok(value) = text.parse::<f64>() {
-                    return Self::Float(value);
+                let fractional = text
+                    .as_bytes()
+                    .iter()
+                    .any(|byte| matches!(byte, b'.' | b'e' | b'E'));
+                if fractional {
+                    if let Ok(value) = text.parse::<f64>() {
+                        return Self::Float(value);
+                    }
+                    if let Ok(value) = text.parse::<i64>() {
+                        return Self::Integer(value);
+                    }
+                } else {
+                    if let Ok(value) = text.parse::<i64>() {
+                        return Self::Integer(value);
+                    }
+                    if let Ok(value) = text.parse::<f64>() {
+                        return Self::Float(value);
+                    }
                 }
                 Self::Text(text.into())
             }
@@ -120,6 +133,12 @@ pub struct Column {
 }
 
 impl Column {
+    /// Reserves space for additional values and their original quoting.
+    pub fn reserve(&mut self, additional: usize) {
+        self.values.reserve(additional);
+        self.quoting.reserve(additional);
+    }
+
     /// Appends a value and how it was written.
     pub fn push(&mut self, value: CifValue, quoting: Quoting) {
         self.values.push(value);
@@ -218,7 +237,11 @@ impl Category {
 
     /// One item's values, creating the item if it is new.
     pub fn column_mut(&mut self, item: &str) -> &mut Column {
-        self.columns.entry(item.into()).or_default()
+        if let Some(index) = self.columns.get_index_of(item) {
+            return &mut self.columns[index];
+        }
+        let (index, _) = self.columns.insert_full(item.into(), Column::default());
+        &mut self.columns[index]
     }
 
     /// The item names, in the order the file gave them.
@@ -276,9 +299,13 @@ impl DataBlock {
 
     /// One category, creating it if it is new.
     pub fn category_mut(&mut self, name: &str, span: ByteSpan) -> &mut Category {
-        self.categories
-            .entry(name.into())
-            .or_insert_with(|| Category::new(name, span))
+        if let Some(index) = self.categories.get_index_of(name) {
+            return &mut self.categories[index];
+        }
+        let (index, _) = self
+            .categories
+            .insert_full(name.into(), Category::new(name, span));
+        &mut self.categories[index]
     }
 
     /// The categories, in the order the file gave them.

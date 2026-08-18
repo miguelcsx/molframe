@@ -6,10 +6,10 @@ use pdbiox_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder}
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use pdbiox_core::index::AtomIndex;
 use pdbiox_core::structure::{AtomRef, ChainRef, ResidueRef, StructureData};
-use std::collections::BTreeMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 type Key<'a> = (&'a str, Option<i32>, &'a str, &'a str, Option<&'a str>);
-type AtomMap<'a> = BTreeMap<Key<'a>, Option<AtomIndex>>;
+type AtomMap<'a> = HashMap<Key<'a>, Option<AtomIndex>>;
 
 pub(super) fn read(block: &DataBlock, data: &mut StructureData, findings: &mut Diagnostics) {
     let Some(category) = block.category("struct_conn") else {
@@ -41,8 +41,8 @@ pub(super) fn read(block: &DataBlock, data: &mut StructureData, findings: &mut D
 }
 
 fn atom_maps(data: &StructureData) -> (AtomMap<'_>, AtomMap<'_>) {
-    let mut label = BTreeMap::new();
-    let mut auth = BTreeMap::new();
+    let mut label = HashMap::new();
+    let mut auth = HashMap::new();
     for chain in data.chains() {
         for residue in chain.residues() {
             for atom in residue.atoms() {
@@ -98,10 +98,10 @@ fn alt_text(atom: AtomRef<'_>) -> Option<&str> {
 
 fn insert<'a>(map: &mut AtomMap<'a>, key: Key<'a>, atom: AtomIndex) {
     match map.entry(key) {
-        std::collections::btree_map::Entry::Vacant(entry) => {
+        Entry::Vacant(entry) => {
             entry.insert(Some(atom));
         }
-        std::collections::btree_map::Entry::Occupied(mut entry) => {
+        Entry::Occupied(mut entry) => {
             entry.insert(None);
         }
     }

@@ -120,7 +120,7 @@ impl ParseState {
         self.collecting_tags = false;
 
         if let Some((category, item, at)) = self.pending_tag.take() {
-            self.store(&category, &item, text, quoting, at);
+            store(&mut self.document, &category, &item, text, quoting, at);
             return;
         }
         if self.loop_tags.is_empty() {
@@ -128,21 +128,11 @@ impl ParseState {
             return;
         }
         let column = self.loop_cursor % self.loop_tags.len();
-        let Some((category, item)) = self.loop_tags.get(column).cloned() else {
+        let Some((category, item)) = self.loop_tags.get(column) else {
             return;
         };
         self.loop_cursor += 1;
-        self.store(&category, &item, text, quoting, span);
-    }
-
-    fn store(&mut self, category: &str, item: &str, text: &str, quoting: Quoting, span: ByteSpan) {
-        let Some(block) = self.document.last_block_mut() else {
-            return;
-        };
-        block
-            .category_mut(category, span)
-            .column_mut(item)
-            .push(CifValue::parse(text, quoting), quoting);
+        store(&mut self.document, category, item, text, quoting, span);
     }
 
     /// Closes the loop being read, checking that its rows are whole.
@@ -181,6 +171,23 @@ impl ParseState {
         }
         Ok((self.document, self.findings.finish()))
     }
+}
+
+fn store(
+    document: &mut Document,
+    category: &str,
+    item: &str,
+    text: &str,
+    quoting: Quoting,
+    span: ByteSpan,
+) {
+    let Some(block) = document.last_block_mut() else {
+        return;
+    };
+    block
+        .category_mut(category, span)
+        .column_mut(item)
+        .push(CifValue::parse(text, quoting), quoting);
 }
 
 /// Turns a lexer refusal into a finding.
