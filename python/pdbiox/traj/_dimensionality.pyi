@@ -1,0 +1,9 @@
+from numpy import float32, float64
+from numpy.typing import NDArray
+from ..core.contract import Analysis
+from ..query import AnalysisPolicy
+from .._trajectory import CartesianFit, DiffusionMap, PcaResult
+
+def analyse_pca(frames: NDArray[float32], *, fit: CartesianFit, components: int, memory_limit: int, policy: AnalysisPolicy) -> Analysis[PcaResult]: ...
+def analyse_torsion_pca(angles: NDArray[float64], *, torsion_set: str, components: int, memory_limit: int, policy: AnalysisPolicy) -> Analysis[PcaResult]: ...
+def analyse_diffusion(distances: NDArray[float64], *, metric: str, epsilon: float, time: int, dimensions: int, policy: AnalysisPolicy) -> Analysis[DiffusionMap]: ...
