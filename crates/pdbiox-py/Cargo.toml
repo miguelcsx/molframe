@@ -15,8 +15,25 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 arrow.workspace = true
 numpy.workspace = true
-pdbiox = { workspace = true, features = ["ml"] }
+pdbiox = { path = "../pdbiox", version = "0.1.0", default-features = false, features = ["full"] }
 pyo3 = { workspace = true, features = ["multiple-pymethods"] }
 
-[lints]
-workspace = true
+[lints.rust]
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cognitive_complexity = "warn"
+# PyO3 extracts public call arguments by value and exposes flat typed
+# constructors.  These three lints describe the FFI signature rather than the
+# native kernel and would otherwise force copies or untyped dict-based APIs.
+needless_pass_by_value = "allow"
+trivially_copy_pass_by_ref = "allow"
+too_many_arguments = "allow"
+# PyO3 exposes trait-shaped instance methods even when a native policy method
+# is independent of the receiver; changing these to static methods would
+# change the public Python contract rather than improve the native kernel.
+unused_self = "allow"
+manual_unwrap_or_default = "allow"
+manual_unwrap_or = "allow"
