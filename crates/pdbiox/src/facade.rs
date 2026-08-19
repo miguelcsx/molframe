@@ -203,10 +203,20 @@ fn read_mmcif_buffer(input: &InputBuffer, options: &ReadOptions) -> ReadResult {
 #[cfg(any(feature = "mmcif", feature = "bcif"))]
 fn attach_cif_metadata(
     document: &pdbiox_cif::Document,
-    mut structure: Structure,
-    mut findings: Vec<Diagnostic>,
+    structure: Structure,
+    findings: Vec<Diagnostic>,
     options: &ReadOptions,
 ) -> ReadResult {
+    let (structure, findings) = attach_optional_extensions(document, structure, findings);
+    options.finish(structure, findings)
+}
+
+#[cfg(any(feature = "modelcif", feature = "xtal"))]
+fn attach_optional_extensions(
+    document: &pdbiox_cif::Document,
+    mut structure: Structure,
+    mut findings: Vec<Diagnostic>,
+) -> (Structure, Vec<Diagnostic>) {
     #[cfg(feature = "modelcif")]
     {
         let (model, model_findings) = pdbiox_modelcif::lower(document);
@@ -239,7 +249,16 @@ fn attach_cif_metadata(
             Err(symmetry_findings) => findings.extend(symmetry_findings),
         }
     }
-    options.finish(structure, findings)
+    (structure, findings)
+}
+
+#[cfg(not(any(feature = "modelcif", feature = "xtal")))]
+fn attach_optional_extensions(
+    _document: &pdbiox_cif::Document,
+    structure: Structure,
+    findings: Vec<Diagnostic>,
+) -> (Structure, Vec<Diagnostic>) {
+    (structure, findings)
 }
 
 /// Writes a structure in the legacy fixed-column format, or explains why it

@@ -36,7 +36,10 @@ pub use pdbiox_core::annotation::{
     PLDDT_ANNOTATION, POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION,
     STEREO_CONFIGURATION_ANNOTATION,
 };
-pub use pdbiox_core::chunk::{AtomChunk, AtomRecord, ChunkBuilder};
+pub use pdbiox_core::chunk::{
+    AtomChunk, AtomChunkStats, AtomRecord, ChunkBuilder, ElementMask, Extremes, ParentMapping,
+    TARGET_CHUNK_ATOMS,
+};
 pub use pdbiox_core::column::{BitVec, EncodedColumn, Presence, ValidityMask};
 pub use pdbiox_core::contract::{
     AlgorithmId, AltlocPolicy, Analysis, AnalysisParameters, AnalysisPolicy, AssemblyChoice,
@@ -46,15 +49,15 @@ pub use pdbiox_core::contract::{
 };
 pub use pdbiox_core::coords::{Aabb, CoordinateBlock, CoordinateGeneration};
 pub use pdbiox_core::diagnostic::{
-    Class, Code, ContextItem, Diagnostic, Diagnostics, Rendered, Severity, Strictness,
+    Class, Code, ContextItem, Diagnostic, Diagnostics, Kind, Rendered, Severity, Strictness,
 };
 pub use pdbiox_core::element::Element;
 pub use pdbiox_core::index::{
     AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
 };
 pub use pdbiox_core::io::{
-    AmbiguousResidueBoundaryPolicy, Format, InputBuffer, InputKind, Limits, MissingElementPolicy,
-    ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll,
+    AmbiguousResidueBoundaryPolicy, Compression, Format, InputBuffer, InputKind, Limits,
+    MissingElementPolicy, ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll,
 };
 pub use pdbiox_core::selection::AtomSelection;
 pub use pdbiox_core::span::{ByteSpan, Position};
@@ -68,7 +71,9 @@ pub use pdbiox_core::structure::{
 };
 pub use pdbiox_core::symbol::{AltId, Interner, SymbolId};
 pub use pdbiox_core::topology::{EntityKind, PolymerKind, Topology};
-pub use pdbiox_core::{BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable};
+pub use pdbiox_core::{
+    BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder,
+};
 
 #[cfg(feature = "adapters")]
 pub use pdbiox_adapters as adapters;
@@ -102,20 +107,24 @@ pub use pdbiox_ml::{
 pub use pdbiox_chem as chem;
 #[cfg(feature = "chem")]
 pub use pdbiox_chem::{
-    ChemistryReport, CifProvider, Component, ComponentAtom, ComponentBond, ComponentCoverage,
-    ComponentKind, ComponentProvider, ElementProperties, EquivalenceCache, EquivalenceClasses,
-    IonicRadius, IonicSpin, MemoryProvider, PeoeAtom, PeoeAtomType, PeoeBond, PeoeError,
-    PeoeOptions, PeoeParameterProfile, PolymerAtomRole, PolymerLinkPolicy, PolymerLinkRule,
-    PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, RadiusSet, RadiusTable,
-    SideChainDefinition, SideChainRoles, StereoConfiguration, apply_component_chemistry,
-    apply_polymer_role_profile, component_coverage, component_peoe_charges, element_properties,
+    AutomorphismLimit, ChemistryReport, CifProvider, Component, ComponentAtom, ComponentBond,
+    ComponentCoverage, ComponentKind, ComponentProvider, ElementProperties, EquivalenceCache,
+    EquivalenceClasses, IonicRadius, IonicSpin, MemoryProvider, PeoeAtom, PeoeAtomType, PeoeBond,
+    PeoeError, PeoeOptions, PeoeParameterProfile, PolymerAtomRole, PolymerLinkPolicy,
+    PolymerLinkRule, PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, RadiusSet,
+    RadiusTable, SideChainDefinition, SideChainRoles, SmartsDataError, SmartsError, SmartsMatch,
+    SmartsPattern, StereoConfiguration, apply_component_chemistry, apply_polymer_role_profile,
+    automorphisms, component_coverage, component_peoe_charges, element_properties,
     equivalence_classes, ionic_radii, peoe_charges, read_ccd, side_chain_definition, vdw_radius,
 };
 
 #[cfg(feature = "mmcif")]
 pub use pdbiox_cif as cif;
 #[cfg(feature = "mmcif")]
-pub use pdbiox_cif::{CifValue, CifWriteError, CifWriteOptions, Document, write_preserving};
+pub use pdbiox_cif::{
+    Category, CifValue, CifWriteError, CifWriteOptions, Column, DataBlock, Document,
+    write_preserving,
+};
 
 #[cfg(feature = "modelcif")]
 pub use pdbiox_modelcif as modelcif;
@@ -144,15 +153,15 @@ pub use pdbiox_geom::{
     dihedral, displacement, distance, distance_matrix, distance_matrix_between, distance_squared,
     dot, gyration_axes, gyration_axes_with_options, helix_geometry, helix_geometry_with_options,
     inertia_tensor, norm, normalise, path_torsions, plane_deviation, plane_deviation_with_options,
-    principal_axes, principal_axes_with_options, radius_of_gyration, rmsd, rmsf, rotation_mean,
-    rotation_mean_with_options, superpose, superpose_with_options, torus_summary,
+    principal_axes, principal_axes_with_options, radius_of_gyration, rmsd, rmsd_flat, rmsf,
+    rotation_mean, rotation_mean_with_options, superpose, superpose_with_options, torus_summary,
 };
 
 #[cfg(feature = "ic")]
 pub use pdbiox_ic as ic;
 #[cfg(feature = "ic")]
 pub use pdbiox_ic::{
-    Dihedron, Hedron, InternalAtom, InternalCoordinates, internal_coordinates, place_atom,
+    BatFrame, Dihedron, Hedron, InternalAtom, InternalCoordinates, internal_coordinates, place_atom,
 };
 
 #[cfg(feature = "pdb")]
@@ -196,14 +205,28 @@ pub use pdbiox_xtal::{
 // re-exported under their own namespace rather than flattened into the root.
 #[cfg(feature = "analysis")]
 pub use pdbiox_analysis as analysis;
+#[cfg(feature = "analysis")]
+pub use pdbiox_analysis::{
+    StreamlineDirection, StreamlineOptions, VectorFieldError, VectorFieldGrid,
+    integrate_streamlines,
+};
 #[cfg(feature = "compare")]
 pub use pdbiox_compare as compare;
 #[cfg(feature = "seq")]
 pub use pdbiox_seq as seq;
 #[cfg(feature = "surface")]
 pub use pdbiox_surface as surface;
+#[cfg(feature = "surface")]
+pub use pdbiox_surface::{
+    SurfaceComponent, SurfaceComponentError, SurfaceComponentFilter, filter_surface_components,
+    surface_components,
+};
 #[cfg(feature = "traj")]
 pub use pdbiox_traj as traj;
+#[cfg(feature = "traj")]
+pub use pdbiox_traj::{
+    TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames,
+};
 #[cfg(feature = "validate")]
 pub use pdbiox_validate as validate;
 
@@ -212,8 +235,10 @@ mod chemistry_api;
 mod facade;
 #[cfg(all(feature = "geom", feature = "chem"))]
 mod geometry_api;
+#[cfg(all(feature = "analysis", feature = "geom"))]
+mod operations;
 mod policy_config;
-#[cfg(feature = "chem")]
+#[cfg(all(feature = "geom", feature = "chem"))]
 mod polymer_roles;
 pub mod prelude;
 #[cfg(feature = "query")]
@@ -228,6 +253,22 @@ pub use policy_config::{
     ApplicationConfiguration, ChemistryConfiguration, OutputConfiguration, PolicyConfigError,
     PolicyOverrides, read_configuration, read_policy, read_policy_overrides,
 };
+
+#[cfg(all(feature = "analysis", feature = "geom"))]
+pub use operations::FloatInput;
+#[cfg(feature = "compare")]
+pub use operations::{ComparisonMetric, ComparisonRequest, ComparisonResult};
+#[cfg(all(feature = "analysis", feature = "geom"))]
+pub use operations::{
+    ContactsRequest, CoordinateInput, ExecutionPlanError, FrameInput, GeometryRequest,
+    GeometryValue, IndexInput, PhysicalRequest, PhysicalValue, Plan, PlanInput, PlanOperation,
+    PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput, SelectionRequest,
+    SpatialRequest, SpatialValue, StructureRequest, StructureValue,
+};
+#[cfg(all(feature = "analysis", feature = "geom", feature = "surface"))]
+pub use operations::{MaskInput, SurfaceRequest, SurfaceValue};
+#[cfg(all(feature = "analysis", feature = "geom", feature = "traj"))]
+pub use operations::{TrajectoryRequest, TrajectoryValue};
 
 #[cfg(feature = "geom")]
 pub use facade::transform;
