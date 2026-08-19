@@ -1,8 +1,9 @@
 //! Native Arrow and Parquet atom-table writers.
 
 use crate::structure::PyStructure;
-use pyo3::exceptions::PyOSError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[pyfunction]
@@ -13,7 +14,7 @@ pub(crate) fn write_atom_ipc(
 ) -> PyResult<()> {
     let structure = structure.structure().clone();
     py.detach(move || pdbiox::write_atom_ipc(path, &structure))
-        .map_err(io_error)
+        .map_err(|error| crate::errors::table_file_error(&error))
 }
 
 #[pyfunction]
@@ -24,9 +25,45 @@ pub(crate) fn write_atom_parquet(
 ) -> PyResult<()> {
     let structure = structure.structure().clone();
     py.detach(move || pdbiox::write_atom_parquet(path, &structure))
-        .map_err(io_error)
+        .map_err(|error| crate::errors::table_file_error(&error))
 }
 
-fn io_error(error: impl std::fmt::Display) -> PyErr {
-    PyOSError::new_err(error.to_string())
+#[pyfunction]
+#[pyo3(signature = (path, structure, *, metadata=None))]
+pub(crate) fn write_atom_ipc_with_metadata(
+    py: Python<'_>,
+    path: PathBuf,
+    structure: &PyStructure,
+    metadata: Option<&Bound<'_, PyDict>>,
+) -> PyResult<()> {
+    let metadata = metadata_map(metadata)?;
+    let structure = structure.structure().clone();
+    py.detach(move || pdbiox::write_atom_ipc_with_metadata(path, &structure, metadata))
+        .map_err(|error| crate::errors::table_file_error(&error))
+}
+
+#[pyfunction]
+#[pyo3(signature = (path, structure, *, metadata=None))]
+pub(crate) fn write_atom_parquet_with_metadata(
+    py: Python<'_>,
+    path: PathBuf,
+    structure: &PyStructure,
+    metadata: Option<&Bound<'_, PyDict>>,
+) -> PyResult<()> {
+    let metadata = metadata_map(metadata)?;
+    let structure = structure.structure().clone();
+    py.detach(move || pdbiox::write_atom_parquet_with_metadata(path, &structure, metadata))
+        .map_err(|error| crate::errors::table_file_error(&error))
+}
+
+fn metadata_map(metadata: Option<&Bound<'_, PyDict>>) -> PyResult<BTreeMap<String, String>> {
+    metadata
+        .map(|metadata| {
+            metadata
+                .iter()
+                .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<String>()?)))
+                .collect()
+        })
+        .transpose()
+        .map(Option::unwrap_or_default)
 }

@@ -41,19 +41,26 @@ impl PyStructure {
         }
         let tensor = pdbiox::DlpackTensor::coordinates(self.structure())
             .map_err(|error| PyBufferError::new_err(error.to_string()))?;
-        let pointer = NonNull::new(tensor.into_raw().cast::<c_void>())
-            .ok_or_else(|| PyBufferError::new_err("DLPack ownership transfer failed"))?;
-        // SAFETY: the Rust producer transferred the managed tensor to this
-        // capsule. Its DLPack deleter owns both metadata and independent tensor
-        // storage, so a mutable consumer cannot alter a Structure snapshot.
-        unsafe {
-            PyCapsule::new_with_pointer_and_destructor(
-                py,
-                pointer,
-                c"dltensor",
-                Some(delete_unused_capsule),
-            )
-        }
+        tensor_capsule(py, tensor)
+    }
+}
+
+pub(crate) fn tensor_capsule(
+    py: Python<'_>,
+    tensor: pdbiox::DlpackTensor,
+) -> PyResult<Bound<'_, PyCapsule>> {
+    let pointer = NonNull::new(tensor.into_raw().cast::<c_void>())
+        .ok_or_else(|| PyBufferError::new_err("DLPack ownership transfer failed"))?;
+    // SAFETY: the Rust producer transferred the managed tensor to this
+    // capsule. Its DLPack deleter owns both metadata and independent tensor
+    // storage, so a mutable consumer cannot alter a Structure snapshot.
+    unsafe {
+        PyCapsule::new_with_pointer_and_destructor(
+            py,
+            pointer,
+            c"dltensor",
+            Some(delete_unused_capsule),
+        )
     }
 }
 
