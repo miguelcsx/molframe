@@ -29,6 +29,12 @@ impl PyHydrogenBondOptions {
     }
 }
 
+impl PyHydrogenBondOptions {
+    pub(crate) const fn native(&self) -> pdbiox::analysis::HydrogenBondOptions {
+        self.0
+    }
+}
+
 #[pyclass(name = "HydrogenBond", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyHydrogenBond {
@@ -79,6 +85,16 @@ impl PyPiStackingOptions {
     }
 }
 
+impl PyPiStackingOptions {
+    pub(crate) const fn native(&self) -> pdbiox::analysis::PiStackingOptions {
+        self.0
+    }
+
+    pub(crate) const fn from_native_parts(value: pdbiox::analysis::PiStackingOptions) -> Self {
+        Self(value)
+    }
+}
+
 #[pyclass(name = "CationPiOptions", frozen, from_py_object)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyCationPiOptions(pdbiox::analysis::CationPiOptions);
@@ -92,6 +108,16 @@ impl PyCationPiOptions {
             maximum_face_angle,
             plane_fit: plane_fit.inner,
         })
+    }
+}
+
+impl PyCationPiOptions {
+    pub(crate) const fn native(&self) -> pdbiox::analysis::CationPiOptions {
+        self.0
+    }
+
+    pub(crate) const fn from_native_parts(value: pdbiox::analysis::CationPiOptions) -> Self {
+        Self(value)
     }
 }
 
@@ -137,6 +163,35 @@ pub(crate) struct PyWaterBridge {
     first: u32,
     #[pyo3(get)]
     second: u32,
+}
+
+#[pyclass(name = "WaterBridgeOptions", frozen, from_py_object)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PyWaterBridgeOptions(pub(crate) PyHydrogenBondOptions);
+
+#[pymethods]
+impl PyWaterBridgeOptions {
+    #[new]
+    fn new(hydrogen_bonds: &PyHydrogenBondOptions) -> Self {
+        Self(*hydrogen_bonds)
+    }
+
+    #[getter]
+    fn hydrogen_bonds(&self) -> PyHydrogenBondOptions {
+        self.0
+    }
+}
+
+impl PyWaterBridgeOptions {
+    pub(crate) const fn native(&self) -> pdbiox::analysis::WaterBridgeOptions {
+        pdbiox::analysis::WaterBridgeOptions {
+            hydrogen_bonds: self.0.native(),
+        }
+    }
+
+    pub(crate) const fn from_native_parts(value: pdbiox::analysis::WaterBridgeOptions) -> Self {
+        Self(PyHydrogenBondOptions(value.hydrogen_bonds))
+    }
 }
 
 #[pymethods]
@@ -206,6 +261,79 @@ impl PyStructure {
         .map(|values| values.into_iter().map(PyWaterBridge::from).collect())
         .map_err(value_error)
     }
+}
+
+/// Runs the native hydrogen-bond kernel without exposing a Python atom loop.
+#[pyfunction]
+pub(crate) fn hydrogen_bonds(
+    py: Python<'_>,
+    structure: &PyStructure,
+    options: &PyHydrogenBondOptions,
+) -> PyResult<Vec<PyHydrogenBond>> {
+    let structure = structure.structure().clone();
+    let options = options.0;
+    py.detach(move || pdbiox::analysis::hydrogen_bonds(&structure, options))
+        .map(|values| values.into_iter().map(PyHydrogenBond::from).collect())
+        .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn salt_bridges(
+    py: Python<'_>,
+    structure: &PyStructure,
+    maximum_distance: f32,
+    backend: PySpatialBackend,
+) -> PyResult<Vec<PySaltBridge>> {
+    let structure = structure.structure().clone();
+    py.detach(move || pdbiox::analysis::salt_bridges(&structure, maximum_distance, backend.into()))
+        .map(|values| values.into_iter().map(PySaltBridge::from).collect())
+        .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn pi_stacking(
+    py: Python<'_>,
+    structure: &PyStructure,
+    options: &PyPiStackingOptions,
+) -> PyResult<Vec<PyPiStacking>> {
+    let structure = structure.structure().clone();
+    let options = options.0;
+    py.detach(move || pdbiox::analysis::pi_stacking(&structure, options))
+        .map(|values| values.into_iter().map(PyPiStacking::from).collect())
+        .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn cation_pi(
+    py: Python<'_>,
+    structure: &PyStructure,
+    options: &PyCationPiOptions,
+) -> PyResult<Vec<PyCationPi>> {
+    let structure = structure.structure().clone();
+    let options = options.0;
+    py.detach(move || pdbiox::analysis::cation_pi(&structure, options))
+        .map(|values| values.into_iter().map(PyCationPi::from).collect())
+        .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn water_bridges(
+    py: Python<'_>,
+    structure: &PyStructure,
+    options: &PyWaterBridgeOptions,
+) -> PyResult<Vec<PyWaterBridge>> {
+    let structure = structure.structure().clone();
+    let options = options.0.0;
+    py.detach(move || {
+        pdbiox::analysis::water_bridges(
+            &structure,
+            pdbiox::analysis::WaterBridgeOptions {
+                hydrogen_bonds: options,
+            },
+        )
+    })
+    .map(|values| values.into_iter().map(PyWaterBridge::from).collect())
+    .map_err(value_error)
 }
 
 impl From<pdbiox::analysis::HydrogenBond> for PyHydrogenBond {
