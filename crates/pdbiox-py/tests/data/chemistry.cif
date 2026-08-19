@@ -1,0 +1,30 @@
+data_ALA
+_chem_comp.id ALA
+_chem_comp.name ALANINE
+_chem_comp.type 'L-peptide linking'
+_chem_comp.one_letter_code A
+_chem_comp.formula 'C3 H7 N O2'
+#
+loop_
+_chem_comp_atom.atom_id
+_chem_comp_atom.type_symbol
+_chem_comp_atom.charge
+_chem_comp_atom.pdbx_aromatic_flag
+_chem_comp_atom.pdbx_leaving_atom_flag
+_chem_comp_atom.pdbx_stereo_config
+N N 0 N N N
+CA C 0 N N S
+CB C 0 N N N
+C C 0 N N N
+O O 0 N N N
+#
+loop_
+_chem_comp_bond.atom_id_1
+_chem_comp_bond.atom_id_2
+_chem_comp_bond.value_order
+_chem_comp_bond.pdbx_aromatic_flag
+_chem_comp_bond.pdbx_stereo_config
+N CA SING N N
+CA CB SING N N
+CA C SING N N
+C O DOUB N N
