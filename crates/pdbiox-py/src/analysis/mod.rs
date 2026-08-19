@@ -1,12 +1,16 @@
 //! Native interaction and validation reports.
 
 mod bfactor;
+#[path = "../validate/chemical_validation.rs"]
 mod chemical_validation;
 mod chemistry;
 mod distributions;
+mod dssp_binary;
 mod dynamics;
 mod fields;
+#[path = "../validate/general_validation.rs"]
 mod general_validation;
+#[path = "../validate/governance_validation.rs"]
 mod governance_validation;
 mod governed;
 mod helical;
@@ -17,7 +21,15 @@ mod periodic;
 mod physical;
 mod reference;
 mod structural;
+#[path = "../validate/validation.rs"]
 mod validation;
+#[path = "../validate/validation_direct.rs"]
+mod validation_direct;
+#[path = "../validate/validation_maps.rs"]
+mod validation_maps;
+#[path = "../validate/validation_reports.rs"]
+mod validation_reports;
+pub(crate) mod vector_field;
 
 pub(crate) use bfactor::{
     PyBFactorDistribution, PyBFactorOutlier, PyTlsBFactorFlag, PyTlsBFactorReport, PyTlsGroup,
@@ -26,29 +38,34 @@ pub(crate) use bfactor::{
 };
 pub(crate) use chemical_validation::{
     PyChiralityFlag, PyChiralityIssue, PyChiralityOptions, PyChiralityReport, PyRotamerDefinition,
-    PyRotamerFlag, PyRotamerOptions, PyRotamerProfile, PyRotamerReport, PyStereoConfiguration,
+    PyRotamerFlag, PyRotamerOptions, PyRotamerProfile, PyRotamerReport,
 };
 pub(crate) use chemistry::{
     PyCationPi, PyCationPiOptions, PyHydrogenBond, PyHydrogenBondOptions, PyPiStacking,
-    PyPiStackingOptions, PySaltBridge, PyStackingKind, PyWaterBridge,
+    PyPiStackingOptions, PySaltBridge, PyStackingKind, PyWaterBridge, PyWaterBridgeOptions,
+    cation_pi, hydrogen_bonds, pi_stacking, salt_bridges, water_bridges,
 };
 pub(crate) use distributions::{
-    PyRadialBin, PyRadialOptions, analyse_centre_of_mass_radial_distribution,
+    PyCentreGroup, PyLeaflet, PyLeafletOptions, PyRadialBin, PyRadialOptions,
+    analyse_centre_of_mass_radial_distribution, centre_of_mass_radial_distribution,
+    coordination_analysis, coordination_numbers, identify_leaflets, leaflets_analysis,
+    radial_analysis, radial_distribution,
 };
+pub(crate) use dssp_binary::{PyDsspSegment, parse_dssp_output, run_dssp};
 pub(crate) use dynamics::{
     PyDielectricOptions, PyDielectricResult, PyWaterDynamicsOptions, PyWaterLag,
     analyse_dielectric_from_dipoles, analyse_water_dynamics, dielectric_from_dipoles,
     water_dynamics,
 };
 pub(crate) use fields::{
-    PyAtomDepthOptions, PyCartesianAxis, PyCavity, PyDensityGrid, PyDensityGridSpec,
-    PyLinearDensityBin, PySurfaceAreas, atom_depths, buried_surface, cavities, density_map,
-    linear_density, solvent_accessible_surface,
+    PyCartesianAxis, PyDensityGrid, PyDensityGridSpec, PyLinearDensityBin, PyLinearDensityOptions,
+    density_map, density_map_analysis, linear_density, linear_density_analysis,
+    linear_density_with_options,
 };
 pub(crate) use general_validation::{
     PyBondDeviation, PyChainCompleteness, PyCisPeptide, PyClash, PyMissingResidue, PyPlanarityFlag,
     PyPlanarityOptions, PyReferenceAssessment, PyValenceError, assess_bond_deviation,
-    assess_ramachandran, classify_ramachandran,
+    assess_ramachandran, project_completeness,
 };
 pub(crate) use governance_validation::{
     PyAltlocOccupancyIssue, PyAltlocOccupancyOptions, PyAltlocOccupancyRecord,
@@ -66,21 +83,43 @@ pub(crate) use helical::{
     PyBaseFrame, PyHelicalOptions, PyHelicalParameters, analyse_helical_parameters,
     analyse_helical_steps, helical_parameters, helical_steps,
 };
-pub(crate) use interactions::{PyContact, PyDsspOptions, PySecondaryStructure, PySseKind};
-pub(crate) use networks::{
-    PyFragmentMatch, PyFragmentReference, PyGaussianNetworkModel, PyGnmOptions, map_fragments,
+pub(crate) use interactions::{
+    PyContact, PyContactTable, PyDsspOptions, PySecondaryStructure, PySseKind, PySseRecord,
+    atom_contacts, atom_contacts_between, contact_analysis_to_py, secondary_structure,
 };
-pub(crate) use nucleic::{PyNucleicTorsions, PyPucker, sugar_pucker};
+pub(crate) use networks::{
+    PyFragmentMatch, PyFragmentReference, PyGaussianNetworkModel, PyGnmOptions,
+    gaussian_network_model, map_fragments,
+};
+pub(crate) use nucleic::{PyNucleicTorsions, PyPucker, nucleic_torsions, sugar_pucker};
 pub(crate) use physical::{
-    PyPolymerStatistics, PyPoreOptions, PyPoreSample, polymer_statistics, pore_profile,
+    PyPolymerStatistics, PyPoreOptions, PyPoreSample, polymer_statistics, pore_analysis,
+    pore_profile,
 };
 pub(crate) use reference::{
     PyRamachandranBasin, PyRamachandranOptions, PyReferenceDistribution, PyReferenceLibrary,
 };
 pub(crate) use structural::{
     PyBasePair, PyBasePairOptions, PyContactMap, PyHalfSphereExposure, PyNativeContacts,
-    PyResidueContact, PySurfaceContactOptions,
+    PyResidueContact, PySurfaceContactOptions, base_pairs, chain_interface, half_sphere_exposure,
+    native_contact_fraction, residue_contact_map, surface_contacts, surface_contacts_analysis,
 };
 pub(crate) use validation::{
     PyQualityFlag, PyQualityIssue, PyRamachandranRecord, PyRamachandranRegion,
+};
+pub(crate) use validation_direct::{
+    altloc_occupancy_sums, bond_length_deviations, ccd_missing_atoms, chirality_outliers,
+    cis_peptides, clashes, classify, completeness, ligand_geometry, ligand_geometry_outliers,
+    nonplanar_aromatic_rings, nucleic_acid_geometry, overvalent_atoms, plane_restraint_outliers,
+    quality_flags, ramachandran, ramachandran_outliers, reference_geometry, rotamer_outliers,
+};
+pub(crate) use validation_maps::{
+    governed_masked_real_space_correlation, governed_real_space_map_correlation,
+    governed_sampled_real_space_correlation, masked_real_space_correlation,
+    real_space_map_correlation, sampled_real_space_correlation,
+};
+pub(crate) use validation_reports::{
+    PyLigandGeometryReport, PyNucleicGeometryIssue, PyNucleicGeometryPolicy,
+    PyNucleicGeometryRecord, PyRealSpaceCorrelation, PyReferenceAngleFlag, PyReferenceBondFlag,
+    PyReferenceGeometryOptions, PyReferenceGeometryReport,
 };

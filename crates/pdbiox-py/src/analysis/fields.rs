@@ -1,11 +1,12 @@
 //! Vectorized density and surface kernels with caller-owned scientific policy.
 
-use crate::geometry::coordinates;
-use crate::intrinsic::PySurfaceGridOptions;
-use numpy::ndarray::Array3;
-use numpy::{IntoPyArray, PyArray1, PyArray3, PyReadonlyArray1, PyReadonlyArray2};
+use crate::contract::{PyAnalysis, analysis_with_value};
+use crate::geometry::borrowed_coordinates;
+use numpy::ndarray::ArrayView3;
+use numpy::{PyArray3, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyList;
 
 #[pyclass(name = "CartesianAxis", frozen, eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,6 +27,52 @@ pub(crate) struct PyLinearDensityBin {
     weight: f64,
     #[pyo3(get)]
     density: f64,
+}
+
+#[pyclass(name = "LinearDensityOptions", frozen, from_py_object)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PyLinearDensityOptions {
+    #[pyo3(get)]
+    axis: PyCartesianAxis,
+    #[pyo3(get)]
+    minimum: f32,
+    #[pyo3(get)]
+    maximum: f32,
+    #[pyo3(get)]
+    bins: usize,
+}
+
+#[pymethods]
+impl PyLinearDensityOptions {
+    #[new]
+    fn new(axis: PyCartesianAxis, minimum: f32, maximum: f32, bins: usize) -> Self {
+        Self {
+            axis,
+            minimum,
+            maximum,
+            bins,
+        }
+    }
+}
+
+impl PyLinearDensityOptions {
+    pub(crate) fn native(&self) -> pdbiox::analysis::LinearDensityOptions {
+        pdbiox::analysis::LinearDensityOptions {
+            axis: self.axis.into(),
+            minimum: self.minimum,
+            maximum: self.maximum,
+            bins: self.bins,
+        }
+    }
+
+    pub(crate) fn from_native(options: pdbiox::analysis::LinearDensityOptions) -> Self {
+        Self {
+            axis: options.axis.into(),
+            minimum: options.minimum,
+            maximum: options.maximum,
+            bins: options.bins,
+        }
+    }
 }
 
 #[pyclass(name = "DensityGridSpec", frozen, from_py_object)]
@@ -57,6 +104,16 @@ impl PyDensityGridSpec {
     }
 }
 
+impl PyDensityGridSpec {
+    pub(crate) const fn native(&self) -> pdbiox::analysis::DensityGridSpec {
+        self.0
+    }
+
+    pub(crate) const fn from_native(spec: pdbiox::analysis::DensityGridSpec) -> Self {
+        Self(spec)
+    }
+}
+
 #[pyclass(name = "DensityGrid", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyDensityGrid {
@@ -74,46 +131,28 @@ impl PyDensityGrid {
     }
 
     #[getter]
-    fn density<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray3<f64>>> {
-        Array3::from_shape_vec(self.spec.shape, self.values.clone())
-            .map(|array| array.into_pyarray(py))
-            .map_err(value_error)
-    }
-}
-
-#[pyclass(name = "SurfaceAreas", frozen, skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub(crate) struct PySurfaceAreas {
-    #[pyo3(get)]
-    first_alone: f64,
-    #[pyo3(get)]
-    second_alone: f64,
-    #[pyo3(get)]
-    together: f64,
-    #[pyo3(get)]
-    buried: f64,
-}
-
-#[pyclass(name = "Cavity", frozen, skip_from_py_object)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct PyCavity {
-    #[pyo3(get)]
-    volume: f64,
-    #[pyo3(get)]
-    representative: [f32; 3],
-    #[pyo3(get)]
-    cells: usize,
-}
-
-#[pyclass(name = "AtomDepthOptions", frozen, from_py_object)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct PyAtomDepthOptions(pdbiox::surface::AtomDepthOptions);
-
-#[pymethods]
-impl PyAtomDepthOptions {
-    #[new]
-    fn new(cell_size: f64) -> Self {
-        Self(pdbiox::surface::AtomDepthOptions { cell_size })
+    fn density<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyArray3<f64>>> {
+        let (shape, length, pointer) = {
+            let grid = slf.borrow();
+            (grid.spec.shape, grid.values.len(), grid.values.as_ptr())
+        };
+        let expected = shape.iter().try_fold(1_usize, |product, dimension| {
+            product.checked_mul(*dimension)
+        });
+        if expected != Some(length) {
+            return Err(PyValueError::new_err(
+                "density-grid buffer length does not match its declared shape",
+            ));
+        }
+        // SAFETY: the checked grid shape covers the complete contiguous f64
+        // allocation. `slf` is retained as the array base below, so the frozen
+        // grid and its vector cannot be dropped while the view exists.
+        let view = unsafe { ArrayView3::from_shape_ptr(shape, pointer) };
+        // SAFETY: the frozen grid owns the immutable backing allocation for the
+        // whole lifetime of the exported view, which is made read-only below.
+        let density = unsafe { PyArray3::borrow_from_array(&view, slf.clone().into_any()) };
+        let _readonly = density.readwrite().make_nonwriteable();
+        Ok(density)
     }
 }
 
@@ -126,18 +165,42 @@ pub(crate) fn linear_density(
     bounds: (f32, f32),
     bins: usize,
 ) -> PyResult<Vec<PyLinearDensityBin>> {
-    let positions = coordinates(positions)?;
-    let weight_values = weights.as_slice()?.to_vec();
-    drop(weights);
+    let positions = borrowed_coordinates(&positions)?;
+    let weight_values = weights.as_slice()?;
     py.detach(move || {
         pdbiox::analysis::linear_density(
-            &positions,
-            &weight_values,
+            positions,
+            weight_values,
             pdbiox::analysis::LinearDensityOptions {
                 axis: axis.into(),
                 minimum: bounds.0,
                 maximum: bounds.1,
                 bins,
+            },
+        )
+    })
+    .map(|values| values.into_iter().map(PyLinearDensityBin::from).collect())
+    .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn linear_density_with_options(
+    py: Python<'_>,
+    positions: PyReadonlyArray2<'_, f32>,
+    weights: PyReadonlyArray1<'_, f64>,
+    options: PyLinearDensityOptions,
+) -> PyResult<Vec<PyLinearDensityBin>> {
+    let positions = borrowed_coordinates(&positions)?;
+    let weights = weights.as_slice()?;
+    py.detach(move || {
+        pdbiox::analysis::linear_density(
+            positions,
+            weights,
+            pdbiox::analysis::LinearDensityOptions {
+                axis: options.axis.into(),
+                minimum: options.minimum,
+                maximum: options.maximum,
+                bins: options.bins,
             },
         )
     })
@@ -152,92 +215,15 @@ pub(crate) fn density_map(
     weights: PyReadonlyArray1<'_, f64>,
     spec: &PyDensityGridSpec,
 ) -> PyResult<PyDensityGrid> {
-    let positions = coordinates(positions)?;
-    let weight_values = weights.as_slice()?.to_vec();
-    drop(weights);
+    let positions = borrowed_coordinates(&positions)?;
+    let weight_values = weights.as_slice()?;
     let spec = spec.0;
-    py.detach(move || pdbiox::analysis::density_map(&positions, &weight_values, spec))
+    py.detach(move || pdbiox::analysis::density_map(positions, weight_values, spec))
         .map(|value| PyDensityGrid {
             spec: value.spec,
             values: value.density,
             excluded_weight: value.excluded_weight,
         })
-        .map_err(value_error)
-}
-
-#[pyfunction]
-pub(crate) fn solvent_accessible_surface(
-    py: Python<'_>,
-    positions: PyReadonlyArray2<'_, f32>,
-    radii: PyReadonlyArray1<'_, f32>,
-    probe_radius: f32,
-    sample_points: u16,
-) -> PyResult<Vec<f64>> {
-    let positions = coordinates(positions)?;
-    let radius_values = radii.as_slice()?.to_vec();
-    drop(radii);
-    py.detach(move || {
-        pdbiox::surface::shrake_rupley(&positions, &radius_values, probe_radius, sample_points)
-    })
-    .map_err(value_error)
-}
-
-#[pyfunction]
-pub(crate) fn buried_surface(
-    py: Python<'_>,
-    positions: PyReadonlyArray2<'_, f32>,
-    radii: PyReadonlyArray1<'_, f32>,
-    first: PyReadonlyArray1<'_, bool>,
-    probe_radius: f32,
-    sample_points: u16,
-) -> PyResult<PySurfaceAreas> {
-    let positions = coordinates(positions)?;
-    let radius_values = radii.as_slice()?.to_vec();
-    drop(radii);
-    let first_values = first.as_slice()?.to_vec();
-    drop(first);
-    py.detach(move || {
-        pdbiox::surface::buried_surface(
-            &positions,
-            &radius_values,
-            probe_radius,
-            sample_points,
-            &first_values,
-        )
-    })
-    .map(PySurfaceAreas::from)
-    .map_err(value_error)
-}
-
-/// Compute all atom depths through one native Rust kernel invocation.
-#[pyfunction]
-pub(crate) fn atom_depths<'py>(
-    py: Python<'py>,
-    atoms: PyReadonlyArray2<'_, f32>,
-    surface: PyReadonlyArray2<'_, f32>,
-    options: PyAtomDepthOptions,
-) -> PyResult<Bound<'py, PyArray1<f32>>> {
-    let atoms = coordinates(atoms)?;
-    let surface = coordinates(surface)?;
-    let options = options.0;
-    py.detach(move || pdbiox::surface::atom_depths(&atoms, &surface, options))
-        .map(|values| values.into_pyarray(py))
-        .map_err(value_error)
-}
-
-#[pyfunction]
-pub(crate) fn cavities(
-    py: Python<'_>,
-    positions: PyReadonlyArray2<'_, f32>,
-    radii_array: PyReadonlyArray1<'_, f32>,
-    probe: f32,
-    options: PySurfaceGridOptions,
-) -> PyResult<Vec<PyCavity>> {
-    let positions = coordinates(positions)?;
-    let radii = radii_array.as_slice()?.to_vec();
-    drop(radii_array);
-    py.detach(move || pdbiox::surface::cavities_with_options(&positions, &radii, probe, options.0))
-        .map(|values| values.into_iter().map(Into::into).collect())
         .map_err(value_error)
 }
 
@@ -247,6 +233,16 @@ impl From<PyCartesianAxis> for pdbiox::analysis::CartesianAxis {
             PyCartesianAxis::X => Self::X,
             PyCartesianAxis::Y => Self::Y,
             PyCartesianAxis::Z => Self::Z,
+        }
+    }
+}
+
+impl From<pdbiox::analysis::CartesianAxis> for PyCartesianAxis {
+    fn from(value: pdbiox::analysis::CartesianAxis) -> Self {
+        match value {
+            pdbiox::analysis::CartesianAxis::X => Self::X,
+            pdbiox::analysis::CartesianAxis::Y => Self::Y,
+            pdbiox::analysis::CartesianAxis::Z => Self::Z,
         }
     }
 }
@@ -262,25 +258,34 @@ impl From<pdbiox::analysis::LinearDensityBin> for PyLinearDensityBin {
     }
 }
 
-impl From<pdbiox::surface::BuriedSurface> for PySurfaceAreas {
-    fn from(value: pdbiox::surface::BuriedSurface) -> Self {
-        Self {
-            first_alone: value.first_alone,
-            second_alone: value.second_alone,
-            together: value.together,
-            buried: value.buried,
-        }
-    }
+pub(crate) fn linear_density_analysis(
+    py: Python<'_>,
+    analysis: pdbiox::Analysis<Vec<pdbiox::analysis::LinearDensityBin>>,
+) -> PyResult<PyAnalysis> {
+    analysis_with_value(py, analysis, |py, values| {
+        let values = values
+            .into_iter()
+            .map(|value| Py::new(py, PyLinearDensityBin::from(value)))
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(PyList::new(py, values)?.unbind().into_any())
+    })
 }
 
-impl From<pdbiox::surface::Cavity> for PyCavity {
-    fn from(value: pdbiox::surface::Cavity) -> Self {
-        Self {
-            volume: value.volume,
-            representative: value.representative,
-            cells: value.cells,
-        }
-    }
+pub(crate) fn density_map_analysis(
+    py: Python<'_>,
+    analysis: pdbiox::Analysis<pdbiox::analysis::DensityGrid>,
+) -> PyResult<PyAnalysis> {
+    analysis_with_value(py, analysis, |py, value| {
+        Ok(Py::new(
+            py,
+            PyDensityGrid {
+                spec: value.spec,
+                values: value.density,
+                excluded_weight: value.excluded_weight,
+            },
+        )?
+        .into_any())
+    })
 }
 
 fn value_error(error: impl std::fmt::Display) -> PyErr {
