@@ -1,0 +1,49 @@
+//! Core structures, topology, I/O contracts, and declarative execution.
+
+#[path = "core_annotations.rs"]
+pub(crate) mod annotations;
+pub(crate) mod atom;
+pub(crate) mod bonds;
+#[path = "core_chunk_stats.rs"]
+pub(crate) mod chunk_stats;
+#[path = "core_columns.rs"]
+pub(crate) mod columns;
+pub(crate) mod config;
+pub(crate) mod contract;
+#[path = "core_contract.rs"]
+pub(crate) mod contract_types;
+#[path = "core_data.rs"]
+pub(crate) mod data;
+#[path = "core_diagnostic.rs"]
+pub(crate) mod diagnostic;
+pub(crate) mod edit;
+#[path = "core_edit.rs"]
+pub(crate) mod edit_types;
+#[path = "core_encoded.rs"]
+pub(crate) mod encoded;
+pub(crate) mod errors;
+pub(crate) mod facade;
+pub(crate) mod hierarchy;
+pub(crate) mod index;
+pub(crate) mod io;
+#[path = "core_io.rs"]
+pub(crate) mod io_types;
+pub(crate) mod metadata;
+pub(crate) mod mmtf_metadata;
+pub(crate) mod plan;
+#[path = "core_records.rs"]
+pub(crate) mod records;
+pub(crate) mod reexecution;
+#[path = "core_storage.rs"]
+pub(crate) mod storage;
+pub(crate) mod structure;
+#[path = "core_topology.rs"]
+pub(crate) mod topology;
+#[path = "core_topology_root.rs"]
+pub(crate) mod topology_root;
+#[path = "core_values.rs"]
+pub(crate) mod values;
+#[path = "core_views.rs"]
+pub(crate) mod views;
+
+pub(crate) use diagnostic as core_diagnostic;
