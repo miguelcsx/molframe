@@ -1,6 +1,6 @@
 //! Explicit polymer and pore geometry without inferred chemistry.
 
-use crate::geometry::coordinates;
+use crate::geometry::borrowed_coordinates;
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -25,8 +25,8 @@ pub(crate) fn polymer_statistics(
     py: Python<'_>,
     path: PyReadonlyArray2<'_, f32>,
 ) -> PyResult<PyPolymerStatistics> {
-    let path = coordinates(path)?;
-    py.detach(|| pdbiox::analysis::polymer_statistics(&path))
+    let path = borrowed_coordinates(&path)?;
+    py.detach(|| pdbiox::analysis::polymer_statistics(path))
         .map(|value| PyPolymerStatistics {
             contour_length: value.contour_length,
             end_to_end_distance: value.end_to_end_distance,
@@ -66,6 +66,16 @@ impl PyPoreOptions {
     }
 }
 
+impl PyPoreOptions {
+    pub(crate) const fn native(&self) -> pdbiox::analysis::PoreProfileOptions {
+        self.0
+    }
+
+    pub(crate) const fn from_native(options: pdbiox::analysis::PoreProfileOptions) -> Self {
+        Self(options)
+    }
+}
+
 #[pyclass(name = "PoreSample", frozen, skip_from_py_object)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PyPoreSample {
@@ -77,6 +87,29 @@ pub(crate) struct PyPoreSample {
     radius: f32,
 }
 
+impl From<pdbiox::analysis::PoreSample> for PyPoreSample {
+    fn from(value: pdbiox::analysis::PoreSample) -> Self {
+        Self {
+            axial_coordinate: value.axial_coordinate,
+            centre: value.centre,
+            radius: value.radius,
+        }
+    }
+}
+
+pub(crate) fn pore_analysis(
+    py: Python<'_>,
+    analysis: pdbiox::Analysis<Vec<pdbiox::analysis::PoreSample>>,
+) -> PyResult<crate::contract::PyAnalysis> {
+    crate::contract::analysis_with_value(py, analysis, |py, values| {
+        let values = values
+            .into_iter()
+            .map(|value| Py::new(py, PyPoreSample::from(value)))
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(pyo3::types::PyList::new(py, values)?.unbind().into_any())
+    })
+}
+
 #[pyfunction]
 pub(crate) fn pore_profile(
     py: Python<'_>,
@@ -84,21 +117,11 @@ pub(crate) fn pore_profile(
     radii: PyReadonlyArray1<'_, f32>,
     options: &PyPoreOptions,
 ) -> PyResult<Vec<PyPoreSample>> {
-    let positions = coordinates(positions)?;
-    let radius_values = radii.as_slice()?.to_vec();
-    drop(radii);
+    let positions = borrowed_coordinates(&positions)?;
+    let radius_values = radii.as_slice()?;
     let options = options.0;
-    py.detach(|| pdbiox::analysis::pore_profile(&positions, &radius_values, options))
-        .map(|samples| {
-            samples
-                .into_iter()
-                .map(|value| PyPoreSample {
-                    axial_coordinate: value.axial_coordinate,
-                    centre: value.centre,
-                    radius: value.radius,
-                })
-                .collect()
-        })
+    py.detach(|| pdbiox::analysis::pore_profile(positions, radius_values, options))
+        .map(|samples| samples.into_iter().map(PyPoreSample::from).collect())
         .map_err(value_error)
 }
 

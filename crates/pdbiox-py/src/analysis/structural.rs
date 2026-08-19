@@ -1,6 +1,7 @@
 //! Structure-level interaction analyses delegated to native Rust kernels.
 
 use crate::chemistry::PyComponentDictionary;
+use crate::contract::PyAnalysis;
 use crate::graph::PySpatialBackend;
 use crate::structure::PyStructure;
 use numpy::PyReadonlyArray1;
@@ -30,6 +31,16 @@ impl PyBasePairOptions {
             },
             minimum_hydrogen_bonds,
         })
+    }
+}
+
+impl PyBasePairOptions {
+    pub(crate) const fn native(&self) -> pdbiox::analysis::BasePairOptions {
+        self.0
+    }
+
+    pub(crate) const fn from_native(value: pdbiox::analysis::BasePairOptions) -> Self {
+        Self(value)
     }
 }
 
@@ -114,6 +125,41 @@ impl PySurfaceContactOptions {
             surface_density,
             minimum_area,
             backend,
+        }
+    }
+}
+
+pub(crate) fn surface_contacts_analysis(
+    py: Python<'_>,
+    analysis: pdbiox::Analysis<Vec<pdbiox::analysis::Contact>>,
+) -> PyResult<PyAnalysis> {
+    super::contact_analysis_to_py(py, analysis)
+}
+
+impl PySurfaceContactOptions {
+    pub(crate) fn native_parts(&self) -> (f32, f32, f32, f32, pdbiox::SpatialBackend) {
+        (
+            self.tolerance,
+            self.probe,
+            self.surface_density,
+            self.minimum_area,
+            self.backend.into(),
+        )
+    }
+
+    pub(crate) fn from_native_parts(
+        tolerance: f32,
+        probe: f32,
+        surface_density: f32,
+        minimum_area: f32,
+        backend: pdbiox::SpatialBackend,
+    ) -> Self {
+        Self {
+            tolerance,
+            probe,
+            surface_density,
+            minimum_area,
+            backend: backend.into(),
         }
     }
 }
@@ -211,24 +257,138 @@ impl PyStructure {
         py: Python<'_>,
         radii: PyReadonlyArray1<'_, f32>,
         options: PySurfaceContactOptions,
-    ) -> PyResult<Vec<super::PyContact>> {
+    ) -> PyResult<super::PyContactTable> {
         let structure = self.structure().clone();
-        let radius_values = radii.as_slice()?.to_vec();
-        drop(radii);
+        let radius_values = radii.as_slice()?;
         py.detach(move || {
             pdbiox::analysis::surface_contacts(
                 &structure,
-                &radius_values,
+                radius_values,
                 options.tolerance,
                 options.probe,
                 options.surface_density,
                 options.minimum_area,
                 options.backend.into(),
             )
+            .map(super::PyContactTable::from)
         })
-        .map(|values| values.into_iter().map(super::PyContact::from).collect())
         .map_err(value_error)
     }
+}
+
+#[pyfunction]
+pub(crate) fn base_pairs(
+    py: Python<'_>,
+    structure: &PyStructure,
+    dictionary: &PyComponentDictionary,
+    options: PyBasePairOptions,
+) -> PyResult<Vec<PyBasePair>> {
+    let structure = structure.structure().clone();
+    let dictionary = dictionary.0.clone();
+    py.detach(move || pdbiox::analysis::base_pairs(&structure, dictionary.as_ref(), options.0))
+        .map(|values| values.into_iter().map(PyBasePair::from).collect())
+        .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn residue_contact_map(
+    py: Python<'_>,
+    structure: &PyStructure,
+    cutoff: f32,
+    minimum_separation: u32,
+    backend: PySpatialBackend,
+) -> PyResult<PyContactMap> {
+    let structure = structure.structure().clone();
+    py.detach(move || {
+        pdbiox::analysis::residue_contact_map(
+            &structure,
+            cutoff,
+            minimum_separation,
+            backend.into(),
+        )
+    })
+    .map(PyContactMap::from)
+    .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn half_sphere_exposure(
+    py: Python<'_>,
+    structure: &PyStructure,
+    radius: f32,
+    backend: PySpatialBackend,
+) -> PyResult<Vec<PyHalfSphereExposure>> {
+    let structure = structure.structure().clone();
+    py.detach(move || pdbiox::analysis::half_sphere_exposure(&structure, radius, backend.into()))
+        .map(|values| values.into_iter().map(PyHalfSphereExposure::from).collect())
+        .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn chain_interface(
+    py: Python<'_>,
+    structure: &PyStructure,
+    first: &str,
+    second: &str,
+    cutoff: f32,
+    backend: PySpatialBackend,
+) -> PyResult<Vec<u32>> {
+    let structure = structure.structure().clone();
+    let first = first.to_owned();
+    let second = second.to_owned();
+    py.detach(move || {
+        pdbiox::analysis::chain_interface(&structure, &first, &second, cutoff, backend.into())
+    })
+    .map(|values| values.into_iter().map(pdbiox::ResidueIndex::get).collect())
+    .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn native_contact_fraction(
+    py: Python<'_>,
+    reference: &PyStructure,
+    target: &PyStructure,
+    cutoff: f32,
+    tolerance: f32,
+    backend: PySpatialBackend,
+) -> PyResult<PyNativeContacts> {
+    let reference = reference.structure().clone();
+    let target = target.structure().clone();
+    py.detach(move || {
+        pdbiox::analysis::native_contact_fraction(
+            &reference,
+            &target,
+            cutoff,
+            tolerance,
+            backend.into(),
+        )
+    })
+    .map(PyNativeContacts::from)
+    .map_err(value_error)
+}
+
+#[pyfunction]
+pub(crate) fn surface_contacts(
+    py: Python<'_>,
+    structure: &PyStructure,
+    radii: PyReadonlyArray1<'_, f32>,
+    options: PySurfaceContactOptions,
+) -> PyResult<super::PyContactTable> {
+    let structure = structure.structure().clone();
+    let radii = radii.as_slice()?;
+    py.detach(move || {
+        pdbiox::analysis::surface_contacts(
+            &structure,
+            radii,
+            options.tolerance,
+            options.probe,
+            options.surface_density,
+            options.minimum_area,
+            options.backend.into(),
+        )
+        .map(super::PyContactTable::from)
+    })
+    .map_err(value_error)
 }
 
 impl From<pdbiox::analysis::BasePair> for PyBasePair {

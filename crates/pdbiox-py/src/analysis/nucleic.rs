@@ -45,6 +45,17 @@ impl PyStructure {
 }
 
 #[pyfunction]
+pub(crate) fn nucleic_torsions(
+    py: Python<'_>,
+    structure: &PyStructure,
+) -> PyResult<Vec<PyNucleicTorsions>> {
+    let structure = structure.structure().clone();
+    py.detach(move || pdbiox::analysis::nucleic_torsions(&structure))
+        .map(|values| values.into_iter().map(PyNucleicTorsions::from).collect())
+        .map_err(value_error)
+}
+
+#[pyfunction]
 pub(crate) fn sugar_pucker(py: Python<'_>, torsions: [f64; 5]) -> PyPucker {
     py.detach(move || pdbiox::analysis::sugar_pucker(torsions))
         .into()

@@ -61,6 +61,16 @@ impl PyGnmOptions {
     }
 }
 
+impl PyGnmOptions {
+    pub(crate) const fn from_native(value: pdbiox::analysis::GnmOptions) -> Self {
+        Self(value)
+    }
+
+    pub(crate) const fn native(self) -> pdbiox::analysis::GnmOptions {
+        self.0
+    }
+}
+
 #[pyclass(name = "GaussianNetworkModel", frozen, skip_from_py_object)]
 pub(crate) struct PyGaussianNetworkModel {
     sites: Py<PyArray1<u32>>,
@@ -101,6 +111,32 @@ pub(crate) fn map_fragments(
         .map_err(value_error)
 }
 
+#[pyfunction]
+#[pyo3(signature = (structure, sites, options, *, periodic=false))]
+pub(crate) fn gaussian_network_model(
+    py: Python<'_>,
+    structure: &PyStructure,
+    sites: &PySelection,
+    options: PyGnmOptions,
+    periodic: bool,
+) -> PyResult<PyGaussianNetworkModel> {
+    let structure = structure.structure().clone();
+    let sites = sites.inner.clone();
+    let value = py
+        .detach(move || {
+            let periodic_box = periodic_box(&structure, periodic)?;
+            pdbiox::analysis::gaussian_network_model(
+                structure.positions(),
+                &sites,
+                options.0,
+                periodic_box.as_ref(),
+            )
+            .map_err(|error| error.to_string())
+        })
+        .map_err(PyValueError::new_err)?;
+    PyGaussianNetworkModel::new(py, value)
+}
+
 #[pymethods]
 impl PyStructure {
     #[pyo3(signature = (sites, options, *, periodic=false))]
@@ -130,7 +166,10 @@ impl PyStructure {
 }
 
 impl PyGaussianNetworkModel {
-    fn new(py: Python<'_>, value: pdbiox::analysis::GaussianNetworkModel) -> PyResult<Self> {
+    pub(crate) fn new(
+        py: Python<'_>,
+        value: pdbiox::analysis::GaussianNetworkModel,
+    ) -> PyResult<Self> {
         let rows = value.modes.len();
         let columns = value.sites.len();
         let modes = value.modes.into_iter().flatten().collect::<Vec<_>>();
