@@ -1,0 +1,472 @@
+//! Deterministic native plan execution.
+
+#[cfg(feature = "compare")]
+use super::comparison;
+use super::geometry;
+use super::physical;
+use super::requests::{
+    ContactsRequest, CoordinateInput, ExecutionPlanError, PlanInput, PlanOperation, PlanResult,
+    PlanResultEntry, PlanValue, RmsdRequest, SelectionRequest,
+};
+use super::spatial;
+use super::spatial_cache::SpatialContext;
+use super::structure;
+#[cfg(feature = "surface")]
+use super::surface;
+#[cfg(feature = "traj")]
+use super::{TrajectoryRequest, trajectory};
+use crate::QueryStructure;
+use pdbiox_analysis::Contact;
+use pdbiox_core::contract::{Analysis, AnalysisPolicy, Coverage, Status};
+use pdbiox_core::structure::Structure;
+use pdbiox_query::Groups;
+use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialSearchOptions, StructureSpatial};
+use std::collections::BTreeMap;
+use std::fmt;
+
+/// A deterministic native operation plan.
+#[derive(Clone, Debug, Default)]
+pub struct Plan {
+    operations: BTreeMap<Box<str>, PlanOperation>,
+}
+
+impl Plan {
+    /// Starts an empty plan.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            operations: BTreeMap::new(),
+        }
+    }
+
+    /// Adds one typed operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is already used.
+    pub fn add(
+        &mut self,
+        id: impl Into<Box<str>>,
+        operation: PlanOperation,
+    ) -> Result<(), ExecutionPlanError> {
+        let id = id.into();
+        if self.operations.contains_key(&id) {
+            return Err(ExecutionPlanError::DuplicateId(id));
+        }
+        self.operations.insert(id, operation);
+        Ok(())
+    }
+
+    /// Adds a contacts operation after native validation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
+    /// already used.
+    pub fn add_contacts(
+        &mut self,
+        id: impl Into<Box<str>>,
+        request: ContactsRequest,
+    ) -> Result<(), ExecutionPlanError> {
+        self.add(id, PlanOperation::Contacts(Box::new(request)))
+    }
+
+    /// Adds an RMSD operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
+    /// already used.
+    pub fn add_rmsd(
+        &mut self,
+        id: impl Into<Box<str>>,
+        request: RmsdRequest,
+    ) -> Result<(), ExecutionPlanError> {
+        self.add(id, PlanOperation::Rmsd(request))
+    }
+
+    /// Adds a compiled selection operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
+    /// already used.
+    pub fn add_selection(
+        &mut self,
+        id: impl Into<Box<str>>,
+        request: SelectionRequest,
+    ) -> Result<(), ExecutionPlanError> {
+        self.add(id, PlanOperation::Selection(request))
+    }
+
+    /// Adds an explicit distance-based bond-inference operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
+    /// already used.
+    pub fn add_bond_inference(
+        &mut self,
+        id: impl Into<Box<str>>,
+        options: crate::BondInference,
+    ) -> Result<(), ExecutionPlanError> {
+        self.add(id, PlanOperation::BondInference(options))
+    }
+
+    /// Adds one typed trajectory analysis over a borrowed frame-array slot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
+    /// already used.
+    #[cfg(feature = "traj")]
+    pub fn add_trajectory(
+        &mut self,
+        id: impl Into<Box<str>>,
+        request: TrajectoryRequest,
+    ) -> Result<(), ExecutionPlanError> {
+        self.add(id, request.into())
+    }
+
+    /// Number of operation nodes.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.operations.len()
+    }
+
+    /// Whether the plan has no operation nodes.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty()
+    }
+
+    /// Executes all nodes in Rust without materialising borrowed arrays.
+    ///
+    /// A default, non-disordered structure gets one shared spatial resolver,
+    /// so compatible contacts reuse bounded indices.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed setup or native-kernel error without publishing partial
+    /// results.
+    pub fn execute(&self, input: PlanInput<'_>) -> Result<PlanResult, ExecutionPlanError> {
+        let has_contacts = self.operations.values().any(|operation| {
+            matches!(
+                operation,
+                PlanOperation::Contacts(_) | PlanOperation::Selection(_)
+            )
+        });
+        let default_policy = AnalysisPolicy::default();
+        let reusable_spatial = reusable_spatial(input.structure, has_contacts, &default_policy)?;
+        let mut coordinate_contexts = coordinate_contexts(&self.operations, input.arrays)?;
+        let mut entries = Vec::with_capacity(self.operations.len());
+        for (id, operation) in &self.operations {
+            let value = Self::execute_one(
+                id,
+                operation,
+                input,
+                reusable_spatial.as_ref(),
+                &mut coordinate_contexts,
+            )?;
+            entries.push(PlanResultEntry {
+                id: id.clone(),
+                value,
+            });
+        }
+        let structure_index_count = reusable_spatial
+            .as_ref()
+            .map_or(0, StructureSpatial::cached_index_count);
+        let cached_index_count = coordinate_contexts
+            .iter()
+            .map(SpatialContext::cached_index_count)
+            .fold(structure_index_count, usize::saturating_add);
+        Ok(PlanResult {
+            entries,
+            cached_index_count,
+        })
+    }
+
+    fn execute_one(
+        id: &str,
+        operation: &PlanOperation,
+        input: PlanInput<'_>,
+        spatial: Option<&StructureSpatial<'_>>,
+        coordinate_contexts: &mut [SpatialContext<'_>],
+    ) -> Result<PlanValue, ExecutionPlanError> {
+        match operation {
+            PlanOperation::Selection(request) => {
+                let structure = required_structure(id, input.structure)?;
+                let groups = Groups::new();
+                let evaluation = if request.policy() == &AnalysisPolicy::default() {
+                    if let Some(spatial) = spatial {
+                        request.query().evaluate(
+                            structure,
+                            request.policy(),
+                            &groups,
+                            Some(spatial),
+                        )
+                    } else {
+                        structure.select(request.query(), request.policy(), &groups)
+                    }
+                } else {
+                    structure.select(request.query(), request.policy(), &groups)
+                };
+                evaluation
+                    .map(|value| PlanValue::Selection(Box::new(value)))
+                    .map_err(ExecutionPlanError::Selection)
+            }
+            PlanOperation::Contacts(request) => {
+                let structure = required_structure(id, input.structure)?;
+                let spatial = spatial.filter(|_| request.policy() == &AnalysisPolicy::default());
+                Ok(PlanValue::Contacts(Box::new(execute_contacts(
+                    request, structure, spatial,
+                )?)))
+            }
+            PlanOperation::Rmsd(request) => {
+                let mobile = array_slot(id, input.arrays, request.mobile())?;
+                let reference = array_slot(id, input.arrays, request.reference())?;
+                Ok(PlanValue::Rmsd(
+                    pdbiox_geom::rmsd(mobile.positions, reference.positions)
+                        .map_err(ExecutionPlanError::Rmsd)?,
+                ))
+            }
+            PlanOperation::Structure(request) => {
+                let structure = required_structure(id, input.structure)?;
+                Ok(PlanValue::Structure(Box::new(structure::execute(
+                    request, structure,
+                )?)))
+            }
+            PlanOperation::Physical(request) => {
+                let structure = required_structure(id, input.structure)?;
+                Ok(PlanValue::Physical(Box::new(physical::execute(
+                    id, request, structure, input,
+                )?)))
+            }
+            PlanOperation::Geometry(request) => Ok(PlanValue::Geometry(Box::new(
+                geometry::execute(id, request, input)?,
+            ))),
+            PlanOperation::Spatial(request) => Ok(PlanValue::Spatial(Box::new(spatial::execute(
+                id,
+                request,
+                input,
+                coordinate_contexts
+                    .iter_mut()
+                    .find(|context| context.matches(request)),
+            )?))),
+            #[cfg(feature = "surface")]
+            PlanOperation::Surface(request) => Ok(PlanValue::Surface(Box::new(surface::execute(
+                id, request, input,
+            )?))),
+            PlanOperation::BondInference(options) => {
+                let structure = required_structure(id, input.structure)?;
+                crate::infer_bonds(structure, *options)
+                    .map(|report| PlanValue::BondInference(Box::new(report)))
+                    .map_err(ExecutionPlanError::Chemistry)
+            }
+            #[cfg(feature = "compare")]
+            PlanOperation::Comparison(request) => {
+                let mobile = array_slot(id, input.arrays, request.mobile())?;
+                let reference = array_slot(id, input.arrays, request.reference())?;
+                Ok(PlanValue::Comparison(comparison::execute(
+                    request,
+                    mobile.positions,
+                    reference.positions,
+                )?))
+            }
+            #[cfg(feature = "traj")]
+            PlanOperation::Trajectory(request) => {
+                let frames = frame_slot(id, input.frames, request.frame_slot())?;
+                let atoms = match request.atom_slot() {
+                    Some(slot) => index_slot(id, input.indices, slot)?,
+                    None => &[],
+                };
+                Ok(PlanValue::Trajectory(Box::new(trajectory::execute(
+                    request, frames, atoms,
+                )?)))
+            }
+        }
+    }
+}
+
+fn coordinate_contexts<'a>(
+    operations: &BTreeMap<Box<str>, PlanOperation>,
+    arrays: &'a [CoordinateInput<'a>],
+) -> Result<Vec<SpatialContext<'a>>, ExecutionPlanError> {
+    let mut contexts: Vec<SpatialContext<'a>> = Vec::new();
+    for (id, operation) in operations {
+        let PlanOperation::Spatial(request) = operation else {
+            continue;
+        };
+        if contexts.iter().any(|context| context.matches(request)) {
+            continue;
+        }
+        let (slot, options, periodic) = spatial_key(request);
+        let input = array_slot(id, arrays, slot)?;
+        contexts.push(SpatialContext::new(
+            slot,
+            input.positions,
+            options,
+            periodic,
+        )?);
+    }
+    Ok(contexts)
+}
+
+fn spatial_key(
+    request: &super::spatial::SpatialRequest,
+) -> (usize, SpatialSearchOptions, Option<PeriodicBox>) {
+    match request {
+        super::spatial::SpatialRequest::NeighborPairs {
+            positions,
+            options,
+            periodic,
+            ..
+        }
+        | super::spatial::SpatialRequest::AtomsWithin {
+            positions,
+            options,
+            periodic,
+            ..
+        } => (*positions, *options, *periodic),
+    }
+}
+
+fn reusable_spatial<'a>(
+    structure: Option<&'a Structure>,
+    needed: bool,
+    policy: &AnalysisPolicy,
+) -> Result<Option<StructureSpatial<'a>>, ExecutionPlanError> {
+    let Some(structure) = structure.filter(|_| needed) else {
+        return Ok(None);
+    };
+    let resolution = structure.resolve_altlocs(policy);
+    if resolution.status != Status::Complete || resolution.coverage.ambiguous != 0 {
+        return Ok(None);
+    }
+    StructureSpatial::new_with_options(
+        structure,
+        policy,
+        SpatialSearchOptions::with_backend(SpatialBackend::Auto),
+    )
+    .map(Some)
+    .map_err(ExecutionPlanError::Spatial)
+}
+
+fn required_structure<'a>(
+    operation: &str,
+    structure: Option<&'a Structure>,
+) -> Result<&'a Structure, ExecutionPlanError> {
+    structure.ok_or_else(|| ExecutionPlanError::MissingInput {
+        operation: operation.into(),
+        input: "structure",
+    })
+}
+
+fn array_slot<'a>(
+    operation: &str,
+    arrays: &'a [CoordinateInput<'a>],
+    slot: usize,
+) -> Result<&'a CoordinateInput<'a>, ExecutionPlanError> {
+    arrays
+        .get(slot)
+        .ok_or_else(|| ExecutionPlanError::ArraySlot {
+            operation: operation.into(),
+            slot,
+        })
+}
+
+fn frame_slot<'a>(
+    operation: &str,
+    frames: &'a [super::requests::FrameInput<'a>],
+    slot: usize,
+) -> Result<&'a super::requests::FrameInput<'a>, ExecutionPlanError> {
+    frames
+        .get(slot)
+        .ok_or_else(|| ExecutionPlanError::FrameSlot {
+            operation: operation.into(),
+            slot,
+        })
+}
+
+fn index_slot<'a>(
+    operation: &str,
+    indices: &'a [super::requests::IndexInput<'a>],
+    slot: usize,
+) -> Result<&'a [usize], ExecutionPlanError> {
+    indices
+        .get(slot)
+        .map(|input| input.indices)
+        .ok_or_else(|| ExecutionPlanError::IndexSlot {
+            operation: operation.into(),
+            slot,
+        })
+}
+
+fn execute_contacts(
+    request: &ContactsRequest,
+    structure: &Structure,
+    spatial: Option<&StructureSpatial<'_>>,
+) -> Result<Analysis<Vec<Contact>>, ExecutionPlanError> {
+    let groups = Groups::new();
+    let (left, right, contacts) = if let Some(spatial) = spatial {
+        let left = request
+            .left_query()
+            .evaluate(structure, request.policy(), &groups, Some(spatial))
+            .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
+        let right = request
+            .right_query()
+            .evaluate(structure, request.policy(), &groups, Some(spatial))
+            .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
+        let contacts = pdbiox_analysis::atom_contacts_between_with_spatial(
+            structure,
+            &left.selection,
+            &right.selection,
+            request.cutoff(),
+            request.backend(),
+            spatial,
+        )
+        .map_err(ExecutionPlanError::Spatial)?;
+        (left, right, contacts)
+    } else {
+        let left = structure
+            .select(request.left_query(), request.policy(), &groups)
+            .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
+        let right = structure
+            .select(request.right_query(), request.policy(), &groups)
+            .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
+        let contacts = pdbiox_analysis::atom_contacts_between(
+            structure,
+            &left.selection,
+            &right.selection,
+            request.cutoff(),
+            request.backend(),
+        )
+        .map_err(|error| ExecutionPlanError::Governed(error.to_string().into()))?;
+        (left, right, contacts)
+    };
+    let mut analysis = Analysis::complete(
+        contacts,
+        Coverage::complete(structure.atom_count()),
+        request.policy(),
+    );
+    analysis.warnings.extend(left.warnings);
+    analysis.warnings.extend(right.warnings);
+    Ok(analysis)
+}
+
+impl fmt::Display for Plan {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Plan")
+            .field("operation_count", &self.operations.len())
+            .field(
+                "operation_ids",
+                &self
+                    .operations
+                    .keys()
+                    .map(AsRef::as_ref)
+                    .collect::<Vec<_>>(),
+            )
+            .finish()
+    }
+}
