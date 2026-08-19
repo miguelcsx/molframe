@@ -34,8 +34,10 @@ pdbiox-traj = { path = "crates/pdbiox-traj", version = "0.1.0" }
 pdbiox-validate = { path = "crates/pdbiox-validate", version = "0.1.0" }
 pdbiox-xtal = { path = "crates/pdbiox-xtal", version = "0.1.0" }
 pdbiox = { path = "crates/pdbiox", version = "0.1.0" }
+pdbiox-bench = { path = "crates/pdbiox-bench" }
 
 bytemuck = { version = "1", features = ["derive"] }
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 clap_mangen = "0.2"
@@ -87,3 +89,10 @@ cognitive_complexity = "warn"
 # value is missing is written down at the site rather than implied by a default.
 manual_unwrap_or_default = "allow"
 manual_unwrap_or = "allow"
+
+[profile.bench]
+debug = 1
+# Keep optimized benchmark code while avoiding the host's global release-LTO
+# setting, which makes the complete Criterion target matrix impractical to build.
+lto = false
+strip = "none"
