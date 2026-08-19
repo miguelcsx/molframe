@@ -1,0 +1,15 @@
+from . import AnnotationColumn, AtomAnnotation, AtomAnnotations
+
+AROMATIC_ATOM_ANNOTATION: AnnotationColumn
+ATOM_RADIUS_ANNOTATION: AnnotationColumn
+AUTODOCK_TYPE_ANNOTATION: AnnotationColumn
+COMPONENT_KIND_ANNOTATION: AnnotationColumn
+FORMAL_CHARGE_ANNOTATION: AnnotationColumn
+HBOND_ACCEPTOR_ANNOTATION: AnnotationColumn
+HBOND_DONOR_ANNOTATION: AnnotationColumn
+PAE_ANNOTATION: AnnotationColumn
+PARTIAL_CHARGE_ANNOTATION: AnnotationColumn
+PLDDT_ANNOTATION: AnnotationColumn
+POLYMER_ATOM_ROLE_ANNOTATION: AnnotationColumn
+SEGMENT_ID_ANNOTATION: AnnotationColumn
+STEREO_CONFIGURATION_ANNOTATION: AnnotationColumn
