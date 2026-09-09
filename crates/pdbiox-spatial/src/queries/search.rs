@@ -5,13 +5,36 @@ use crate::{
     CellList, KdTree, NeighborList, NeighborPair, PeriodicBox, SpatialBackend, SpatialError,
     SpatialSearchOptions,
 };
-use pdbiox_core::CoordinateGeneration;
 use pdbiox_core::selection::AtomSelection;
+use pdbiox_core::{CoordinateGeneration, ExecutionContext};
+use std::borrow::Cow;
 
 #[derive(Clone, Copy)]
 enum PairOrder {
     Sorted,
     Unsorted,
+}
+
+/// How a pair enumeration should be produced.
+#[derive(Clone, Copy)]
+struct PairRequest {
+    options: SpatialSearchOptions,
+    order: PairOrder,
+}
+
+impl PairRequest {
+    const fn sorted(options: SpatialSearchOptions) -> Self {
+        Self {
+            options,
+            order: PairOrder::Sorted,
+        }
+    }
+    const fn unsorted(options: SpatialSearchOptions) -> Self {
+        Self {
+            options,
+            order: PairOrder::Unsorted,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -36,6 +59,7 @@ pub fn pairs_within(
     cutoff: f32,
     backend: SpatialBackend,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     pairs_within_with_options(
         positions,
@@ -44,6 +68,7 @@ pub fn pairs_within(
         cutoff,
         SpatialSearchOptions::with_backend(backend),
         periodic,
+        context,
     )
 }
 
@@ -64,6 +89,7 @@ pub fn pairs_within_unsorted(
     cutoff: f32,
     backend: SpatialBackend,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     pairs_within_unsorted_with_options(
         positions,
@@ -72,6 +98,7 @@ pub fn pairs_within_unsorted(
         cutoff,
         SpatialSearchOptions::with_backend(backend),
         periodic,
+        context,
     )
 }
 
@@ -87,15 +114,16 @@ pub fn pairs_within_with_options(
     cutoff: f32,
     options: SpatialSearchOptions,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     pairs_with_order(
         positions,
         left,
         right,
         cutoff,
-        options,
         periodic,
-        PairOrder::Sorted,
+        PairRequest::sorted(options),
+        context,
     )
 }
 
@@ -111,82 +139,17 @@ pub fn pairs_within_unsorted_with_options(
     cutoff: f32,
     options: SpatialSearchOptions,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     pairs_with_order(
         positions,
         left,
         right,
         cutoff,
-        options,
         periodic,
-        PairOrder::Unsorted,
+        PairRequest::unsorted(options),
+        context,
     )
-}
-
-/// Visits fixed-radius same-selection pairs without requiring a result vector.
-///
-/// The callback receives the same unordered pair set as
-/// [`pairs_within_unsorted`]. Cell-list execution streams matches directly;
-/// other backends retain their existing implementation and forward its result
-/// vector. This is intended for reductions that do not consume pair order.
-///
-/// # Errors
-///
-/// Returns the same validation and backend errors as [`pairs_within_unsorted`].
-pub fn for_each_pairs_within_unsorted<F>(
-    positions: &[[f32; 3]],
-    left: &AtomSelection,
-    right: &AtomSelection,
-    cutoff: f32,
-    options: SpatialSearchOptions,
-    periodic: Option<&PeriodicBox>,
-    mut emit: F,
-) -> Result<(), SpatialError>
-where
-    F: FnMut(NeighborPair),
-{
-    validate_cutoff(cutoff)?;
-    let left_indices = checked_indices(left, positions.len())?;
-    let right_indices = checked_indices(right, positions.len())?;
-    let plan = options.plan(
-        left_indices.len(),
-        right_indices.len(),
-        periodic.is_some(),
-        cutoff,
-    )?;
-
-    if plan.backend == SpatialBackend::CellList && left_indices == right_indices {
-        let index = CellList::build_with_options(
-            positions,
-            &right_indices,
-            cutoff,
-            periodic,
-            options.cell_grid,
-        )?;
-        return crate::backends::cell::for_each_pairs_same_selection_unordered(
-            &index,
-            &left_indices,
-            cutoff,
-            emit,
-        );
-    }
-
-    let pairs = dispatch_pairs(
-        positions,
-        &left_indices,
-        &right_indices,
-        cutoff,
-        PairDispatch {
-            plan,
-            options,
-            order: PairOrder::Unsorted,
-        },
-        periodic,
-    )?;
-    for pair in pairs {
-        emit(pair);
-    }
-    Ok(())
 }
 
 fn pairs_with_order(
@@ -194,76 +157,35 @@ fn pairs_with_order(
     left: &AtomSelection,
     right: &AtomSelection,
     cutoff: f32,
-    options: SpatialSearchOptions,
     periodic: Option<&PeriodicBox>,
-    order: PairOrder,
+    request: PairRequest,
+    context: &ExecutionContext,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     validate_cutoff(cutoff)?;
 
-    let left = checked_indices(left, positions.len())?;
-    let right = checked_indices(right, positions.len())?;
-    let plan = options.plan(left.len(), right.len(), periodic.is_some(), cutoff)?;
+    let indices = super::indices::IndexWorkspace::new(left, right, positions.len(), context)?;
+    let left_indices = indices.left();
+    let right_indices = indices.right();
+    let plan = request.options.plan(
+        left_indices.len(),
+        right_indices.len(),
+        periodic.is_some(),
+        cutoff,
+    )?;
 
     dispatch_pairs(
         positions,
-        &left,
-        &right,
+        left_indices,
+        right_indices,
         cutoff,
         PairDispatch {
             plan,
-            options,
-            order,
+            options: request.options,
+            order: request.order,
         },
         periodic,
+        context,
     )
-}
-
-/// Selects query atoms within `cutoff` of any target atom.
-///
-/// Target atoms are included when they also belong to `query`, matching the
-/// conventional meaning of `within` rather than `around`.
-///
-/// # Errors
-///
-/// Returns the same errors as [`pairs_within`].
-pub fn within(
-    positions: &[[f32; 3]],
-    query: &AtomSelection,
-    target: &AtomSelection,
-    cutoff: f32,
-    backend: SpatialBackend,
-    periodic: Option<&PeriodicBox>,
-) -> Result<AtomSelection, SpatialError> {
-    within_with_options(
-        positions,
-        query,
-        target,
-        cutoff,
-        SpatialSearchOptions::with_backend(backend),
-        periodic,
-    )
-}
-
-/// Selects query atoms under a complete, inspectable planning profile.
-///
-/// # Errors
-///
-/// Returns the same errors as [`pairs_within_with_options`].
-pub fn within_with_options(
-    positions: &[[f32; 3]],
-    query: &AtomSelection,
-    target: &AtomSelection,
-    cutoff: f32,
-    options: SpatialSearchOptions,
-    periodic: Option<&PeriodicBox>,
-) -> Result<AtomSelection, SpatialError> {
-    let pairs = pairs_within_with_options(positions, query, target, cutoff, options, periodic)?;
-
-    let mut matched = vec![false; positions.len()];
-
-    mark_matches(&mut matched, query, target, pairs)?;
-
-    collect_matches(query, target, &matched)
 }
 
 /// Dispatches already-validated index slices to one spatial backend.
@@ -276,20 +198,27 @@ fn dispatch_pairs(
     cutoff: f32,
     dispatch: PairDispatch,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     let same_selection = left == right;
 
     match dispatch.plan.backend {
         SpatialBackend::CellList => {
-            let index = CellList::build_with_options(
+            let index = CellList::build_in(
                 positions,
                 right,
                 cutoff,
                 periodic,
                 dispatch.options.cell_grid,
+                context,
             )?;
             if same_selection {
-                if matches!(dispatch.order, PairOrder::Sorted) {
+                let sorted = matches!(dispatch.order, PairOrder::Sorted);
+                if context.worker_budget() > 1 {
+                    crate::backends::cell::pairs_same_selection_parallel(
+                        &index, left, cutoff, context, sorted,
+                    )
+                } else if sorted {
                     crate::backends::cell::pairs_same_selection(&index, left, cutoff)
                 } else {
                     crate::backends::cell::pairs_same_selection_unordered(&index, left, cutoff)
@@ -298,10 +227,14 @@ fn dispatch_pairs(
                 index.pairs(left, cutoff)
             }
         }
-        SpatialBackend::KdTree => {
-            KdTree::build_with_options(positions, right, periodic, dispatch.options.kd_periodic)?
-                .pairs(left, cutoff)
-        }
+        SpatialBackend::KdTree => KdTree::build_in(
+            positions,
+            right,
+            periodic,
+            dispatch.options.kd_periodic,
+            context,
+        )?
+        .pairs(left, cutoff),
         SpatialBackend::NeighborList => neighbor_list_pairs(
             positions,
             left,
@@ -379,13 +312,27 @@ fn neighbor_list_pairs(
     list.pairs(positions, cutoff, periodic)
 }
 
-/// Copies and validates an atom selection.
+/// Validates an atom selection, borrowing existing sparse index storage.
 ///
-/// Runtime is `O(N)` with exactly one output allocation.
-fn checked_indices(
+/// Runtime is `O(N)`. Sparse and empty selections need no allocation; other
+/// representations expand into one contiguous index buffer.
+pub(super) fn checked_indices(
     selection: &AtomSelection,
     position_count: usize,
-) -> Result<Vec<u32>, SpatialError> {
+) -> Result<Cow<'_, [u32]>, SpatialError> {
+    if let AtomSelection::Sparse(indices) = selection {
+        for &atom in indices {
+            if usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?
+                >= position_count
+            {
+                return Err(SpatialError::AtomOutOfBounds(atom));
+            }
+        }
+        return Ok(Cow::Borrowed(indices));
+    }
+    if selection.is_empty() {
+        return Ok(Cow::Borrowed(&[]));
+    }
     let capacity =
         usize::try_from(selection.len()).map_err(|_| SpatialError::NumericRangeExceeded)?;
     let mut indices = Vec::with_capacity(capacity);
@@ -399,76 +346,13 @@ fn checked_indices(
         indices.push(atom);
     }
 
-    Ok(indices)
-}
-
-/// Marks query endpoints participating in query-target neighbour pairs.
-///
-/// The dense bit vector removes the `O(M log M)` sort/dedup stage previously
-/// required by `within`.
-fn mark_matches(
-    matched: &mut [bool],
-    query: &AtomSelection,
-    target: &AtomSelection,
-    pairs: Vec<NeighborPair>,
-) -> Result<(), SpatialError> {
-    for pair in pairs {
-        if query.contains(pair.first) && target.contains(pair.second) {
-            mark_atom(matched, pair.first)?;
-        }
-
-        if query.contains(pair.second) && target.contains(pair.first) {
-            mark_atom(matched, pair.second)?;
-        }
-    }
-
-    Ok(())
-}
-
-/// Collects marked atoms in query-selection order.
-///
-/// Query-target overlap is included without requiring self-pairs.
-fn collect_matches(
-    query: &AtomSelection,
-    target: &AtomSelection,
-    matched: &[bool],
-) -> Result<AtomSelection, SpatialError> {
-    let mut selected = Vec::new();
-
-    for atom in query {
-        let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-        let spatial_match = matched
-            .get(index)
-            .copied()
-            .ok_or(SpatialError::AtomOutOfBounds(atom))?;
-
-        if spatial_match || target.contains(atom) {
-            selected.push(atom);
-        }
-    }
-
-    Ok(AtomSelection::from_sorted(selected))
-}
-
-/// Marks one atom in a dense match bitmap.
-///
-/// # Errors
-///
-/// Returns an out-of-bounds error for an invalid pair endpoint.
-fn mark_atom(matched: &mut [bool], atom: u32) -> Result<(), SpatialError> {
-    let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-    let Some(slot) = matched.get_mut(index) else {
-        return Err(SpatialError::AtomOutOfBounds(atom));
-    };
-
-    *slot = true;
-    Ok(())
+    Ok(Cow::Owned(indices))
 }
 
 /// Validates a non-negative finite cutoff.
 ///
 /// Runtime and auxiliary space are `O(1)`.
-fn validate_cutoff(cutoff: f32) -> Result<(), SpatialError> {
+pub(super) fn validate_cutoff(cutoff: f32) -> Result<(), SpatialError> {
     if cutoff.is_finite() && cutoff >= 0.0 {
         Ok(())
     } else {
