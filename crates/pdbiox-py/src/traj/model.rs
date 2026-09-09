@@ -140,7 +140,8 @@ impl PyTrajectory {
                 })
             })
             .collect::<PyResult<_>>()?;
-        Ok(pdbiox::traj::Trajectory::from_frames(frames))
+        pdbiox::traj::Trajectory::from_frames(frames)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
     }
 
     fn timestep_value(&self, py: Python<'_>, frame: usize) -> PyResult<Timestep> {

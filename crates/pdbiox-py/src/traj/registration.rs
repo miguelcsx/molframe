@@ -5,12 +5,19 @@ use pyo3::prelude::*;
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     formats::register(module)?;
+    super::streaming::register(module)?;
     super::data::register(module)?;
     super::generic::register(module)?;
     super::transforms::register(module)?;
     module.add_class::<super::io::PyAmberAsciiReadOptions>()?;
     module.add_class::<super::io::PyTrajectoryReadOptions>()?;
-    module.add_function(wrap_pyfunction!(super::io::read_trajectory, module)?)?;
+    module.add_class::<super::io::PyTrajectoryReaderOptions>()?;
+    module.add_class::<super::io::PyTrajectoryStreamReader>()?;
+    module.add_function(wrap_pyfunction!(super::io::read_trajectory_stream, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        super::io::read_trajectory_materialized,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(super::io::write_trajectory, module)?)?;
     super::kernels::register(module)?;
     super::operations::register(module)?;
@@ -22,6 +29,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     super::container_formats::register(module)?;
     super::dlpoly_formats::register(module)?;
     super::reader_types::register(module)?;
+    super::xvg::register(module)?;
     super::text_formats::register(module)?;
     super::topology_formats::register(module)?;
     super::gromacs_formats::register(module)?;

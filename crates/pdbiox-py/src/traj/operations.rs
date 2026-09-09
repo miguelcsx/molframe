@@ -59,7 +59,7 @@ impl pdbiox::traj::FrameAnalysis for NativeRmsdAnalysis {
             .frame(self.reference)
             .ok_or_else(|| NativeFrameAnalysisError::Invalid("reference frame is absent".into()))?;
         Ok(RmsdPartial {
-            reference: frame.positions.clone().into_boxed_slice(),
+            reference: frame.positions.to_vec().into_boxed_slice(),
             values: Vec::new(),
         })
     }
@@ -68,6 +68,7 @@ impl pdbiox::traj::FrameAnalysis for NativeRmsdAnalysis {
         &self,
         timestep: &pdbiox::traj::Timestep,
         partial: &mut Self::Partial,
+        _context: &pdbiox::core::ExecutionContext,
     ) -> Result<(), Self::Error> {
         if timestep.positions.len() != partial.reference.len() {
             return Err(pdbiox::traj::TrajectoryError::AtomCountMismatch {
@@ -183,23 +184,22 @@ impl PyFrameAnalysis {
 }
 
 #[pyfunction]
-#[pyo3(signature = (trajectory, analysis, *, workers=1, policy))]
+#[pyo3(signature = (trajectory, analysis, *, policy, context=None))]
 pub(crate) fn run_analysis(
     py: Python<'_>,
     trajectory: PyRef<'_, super::PyTrajectory>,
     analysis: &PyFrameAnalysis,
-    workers: usize,
     policy: &PyAnalysisPolicy,
+    context: Option<&crate::core::execution::PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
-    if workers == 0 {
-        return Err(PyValueError::new_err(
-            "frame analysis requires at least one worker",
-        ));
-    }
     let native_trajectory = trajectory.native_trajectory(py)?;
     let native_analysis = analysis.native(policy.inner.clone());
+    let context = context.map_or_else(
+        crate::core::execution::default_context,
+        crate::core::execution::PyExecutionContext::native,
+    );
     let result = py
-        .detach(move || pdbiox::traj::run_analysis(&native_trajectory, &native_analysis, workers))
+        .detach(move || pdbiox::traj::run_analysis(&native_trajectory, &native_analysis, &context))
         .map_err(kernel_error)?;
     analysis_with_value(py, result, |py, value| {
         Ok(PyList::new(py, value)?.unbind().into_any())
@@ -251,50 +251,68 @@ pub(crate) struct PyWaterDynamics {
 
 #[pyfunction]
 pub(crate) fn agglomerative_clustering(
+    py: Python<'_>,
     distances: &PyEnsembleDistanceMatrix,
     cluster_count: usize,
     linkage: PyLinkage,
 ) -> PyResult<PyClustering> {
-    pdbiox::traj::agglomerative_clustering(&distances.native(), cluster_count, linkage.into())
-        .map(PyClustering::from)
-        .map_err(kernel_error)
+    py.detach(move || -> PyResult<PyClustering> {
+        pdbiox::traj::agglomerative_clustering(&distances.native(), cluster_count, linkage.into())
+            .map(PyClustering::from)
+            .map_err(kernel_error)
+    })
 }
 
 #[pyfunction]
 pub(crate) fn dbscan_clustering(
+    py: Python<'_>,
     distances: &PyEnsembleDistanceMatrix,
     epsilon: f64,
     minimum_points: usize,
 ) -> PyResult<PyClustering> {
-    pdbiox::traj::dbscan_clustering(&distances.native(), epsilon, minimum_points)
-        .map(PyClustering::from)
-        .map_err(kernel_error)
+    py.detach(move || -> PyResult<PyClustering> {
+        pdbiox::traj::dbscan_clustering(&distances.native(), epsilon, minimum_points)
+            .map(PyClustering::from)
+            .map_err(kernel_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn medoid(distances: &PyEnsembleDistanceMatrix, members: Vec<usize>) -> PyResult<usize> {
-    pdbiox::traj::medoid(&distances.native(), &members).map_err(kernel_error)
+pub(crate) fn medoid(
+    py: Python<'_>,
+    distances: &PyEnsembleDistanceMatrix,
+    members: Vec<usize>,
+) -> PyResult<usize> {
+    py.detach(move || -> PyResult<usize> {
+        pdbiox::traj::medoid(&distances.native(), &members).map_err(kernel_error)
+    })
 }
 
 #[pyfunction]
 pub(crate) fn harmonic_ensemble_similarity(
+    py: Python<'_>,
     first: Vec<Vec<f64>>,
     second: Vec<Vec<f64>>,
     options: &PyHarmonicSimilarityOptions,
 ) -> PyResult<PyHarmonicSimilarity> {
-    pdbiox::traj::harmonic_ensemble_similarity(&first, &second, options.native())
-        .map(PyHarmonicSimilarity::from)
-        .map_err(kernel_error)
+    py.detach(move || -> PyResult<PyHarmonicSimilarity> {
+        pdbiox::traj::harmonic_ensemble_similarity(&first, &second, options.native())
+            .map(PyHarmonicSimilarity::from)
+            .map_err(kernel_error)
+    })
 }
 
 #[pyfunction]
 pub(crate) fn cluster_population_similarity(
+    py: Python<'_>,
     first: Vec<usize>,
     second: Vec<usize>,
     cluster_count: usize,
 ) -> PyResult<f64> {
-    pdbiox::traj::cluster_population_similarity(&first, &second, cluster_count)
-        .map_err(kernel_error)
+    py.detach(move || -> PyResult<f64> {
+        pdbiox::traj::cluster_population_similarity(&first, &second, cluster_count)
+            .map_err(kernel_error)
+    })
 }
 
 #[pyfunction]
@@ -311,13 +329,16 @@ pub(crate) fn group_coordinate_variance(
 
 #[pyfunction]
 pub(crate) fn block_convergence(
+    py: Python<'_>,
     values: Vec<f64>,
     block_size: usize,
     remainder: PyRemainderPolicy,
 ) -> PyResult<Vec<PyConvergenceBlock>> {
-    pdbiox::traj::block_convergence(&values, block_size, remainder.into())
-        .map(|values| values.into_iter().map(PyConvergenceBlock::from).collect())
-        .map_err(kernel_error)
+    py.detach(move || -> PyResult<Vec<PyConvergenceBlock>> {
+        pdbiox::traj::block_convergence(&values, block_size, remainder.into())
+            .map(|values| values.into_iter().map(PyConvergenceBlock::from).collect())
+            .map_err(kernel_error)
+    })
 }
 
 #[pyfunction]

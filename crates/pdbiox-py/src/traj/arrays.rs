@@ -98,3 +98,36 @@ fn require_elements(actual: usize, dimensions: &[usize]) -> PyResult<()> {
         ))
     }
 }
+
+pub(super) fn frame_vectors(
+    py: Python<'_>,
+    lease: Arc<pdbiox::core::BatchLease<pdbiox::traj::TrajectoryBatch>>,
+    column: u8,
+) -> PyResult<Option<Bound<'_, PyArray2<f32>>>> {
+    let owner = Bound::new(py, super::stream_frame::PyStreamFrame { lease })?;
+    let (length, pointer) = {
+        let data = owner.borrow();
+        let frame = data
+            .lease
+            .batch()
+            .timestep()
+            .ok_or_else(|| PyValueError::new_err("frame is absent"))?;
+        let values = match column {
+            0 => Some(&frame.positions),
+            1 => frame.velocities.as_ref(),
+            _ => frame.forces.as_ref(),
+        };
+        let Some(values) = values else {
+            return Ok(None);
+        };
+        (values.len(), values.as_ptr().cast::<f32>())
+    };
+    // SAFETY: the lease owns `length` contiguous triples. It cannot be recycled
+    // while NumPy's base retains an Arc to the lease; mutation is forbidden.
+    let view = unsafe { ArrayView2::from_shape_ptr((length, 3), pointer) };
+    // SAFETY: owner retains the frame allocation and its memory reservation for
+    // the entire array lifetime, including sliced arrays and shared references.
+    let result = unsafe { PyArray2::borrow_from_array(&view, owner.into_any()) };
+    let _readonly = result.readwrite().make_nonwriteable();
+    Ok(Some(result))
+}

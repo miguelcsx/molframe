@@ -4,6 +4,7 @@ use super::reader_types::PyTimestep;
 use crate::graph::PySpatialBackend;
 use crate::query::{PyAnalysisPolicy, PyEvaluation, PyQuery, PySelection, groups_from_python};
 use crate::structure::PyStructure;
+use pyo3::exceptions::PyMemoryError;
 use pyo3::prelude::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -40,12 +41,27 @@ impl PyUpdatingSelection {
         }
     }
 
-    fn evaluate(&self, py: Python<'_>, timestep: &PyTimestep) -> PyResult<PyEvaluation> {
+    #[pyo3(signature = (timestep, context=None))]
+    fn evaluate(
+        &self,
+        py: Python<'_>,
+        timestep: &PyTimestep,
+        context: Option<&crate::core::execution::PyExecutionContext>,
+    ) -> PyResult<PyEvaluation> {
         let frame = timestep.clone().try_into()?;
         let selection = Arc::clone(&self.inner);
-        py.detach(move || selection.evaluate(&frame))
+        let context = context.map_or_else(
+            crate::core::execution::default_context,
+            crate::core::execution::PyExecutionContext::native,
+        );
+        py.detach(move || selection.evaluate(&frame, &context))
             .map(PyEvaluation::from)
-            .map_err(|error| crate::errors::UpdatingSelectionError::new_err(error.to_string()))
+            .map_err(|error| match error {
+                pdbiox::traj::UpdatingSelectionError::Memory(_) => {
+                    PyMemoryError::new_err(error.to_string())
+                }
+                _ => crate::errors::UpdatingSelectionError::new_err(error.to_string()),
+            })
     }
 }
 

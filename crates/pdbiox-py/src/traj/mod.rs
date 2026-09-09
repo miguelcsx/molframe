@@ -25,12 +25,15 @@ mod operations;
 mod reader_types;
 mod registration;
 mod selection;
+mod stream_frame;
+mod streaming;
 mod text_extended;
 mod text_formats;
 mod topology_extended;
 mod topology_formats;
 mod transforms;
 mod types;
+mod xvg;
 
 pub(crate) use amber_formats::PyAmberRestartLayout;
 pub(crate) use model::PyTrajectory;

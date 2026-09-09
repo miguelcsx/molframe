@@ -36,19 +36,22 @@ pub(crate) enum PyTrajectoryInterpolationError {
 
 #[pyfunction]
 fn interpolate_trajectory_frames(
+    py: Python<'_>,
     frames: Vec<Vec<[f32; 3]>>,
     fraction: f32,
     interpolation: PyTrajectoryInterpolation,
 ) -> PyResult<Vec<[f32; 3]>> {
-    let [first, second, third, fourth] = frames.as_slice() else {
-        return Err(PyValueError::new_err("exactly four frames are required"));
-    };
-    pdbiox::traj::interpolate_trajectory_frames(
-        [first, second, third, fourth],
-        fraction,
-        interpolation.into(),
-    )
-    .map_err(|error| PyValueError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<Vec<[f32; 3]>> {
+        let [first, second, third, fourth] = frames.as_slice() else {
+            return Err(PyValueError::new_err("exactly four frames are required"));
+        };
+        pdbiox::traj::interpolate_trajectory_frames(
+            [first, second, third, fourth],
+            fraction,
+            interpolation.into(),
+        )
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
