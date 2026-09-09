@@ -9,6 +9,7 @@
 
 #![forbid(unsafe_code)]
 
+mod batch;
 pub mod fixed;
 mod header;
 pub mod hybrid36;
@@ -16,12 +17,14 @@ mod mmtf;
 mod reader;
 mod writer;
 
+pub use batch::PdbBatchSource;
 pub use header::{PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbHeadersExt};
 pub use mmtf::{
     MMTF_METADATA_EXTENSION, MmtfEntityMetadata, MmtfGroupMetadata, MmtfMetadata,
-    MmtfOptionalField, read_mmtf, write_mmtf,
+    MmtfOptionalField, read_mmtf, write_mmtf, write_mmtf_to,
 };
 pub use reader::{PdbReader, read, read_pdbqt, read_pqr};
 pub use writer::{
-    PdbIdentifierNamespace, PdbOptions, write, write_pdbqt, write_pqr, write_selected,
+    PdbIdentifierNamespace, PdbOptions, write, write_pdbqt, write_pdbqt_to, write_pqr,
+    write_pqr_to, write_selected, write_selected_to, write_to,
 };

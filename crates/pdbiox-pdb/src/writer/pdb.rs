@@ -16,7 +16,7 @@ use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::io::{Select, SelectAll};
 use pdbiox_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
 use std::collections::HashMap;
-use std::fmt::Write as _;
+use std::fmt;
 
 #[path = "identity.rs"]
 mod identity;
@@ -114,20 +114,30 @@ pub fn write_selected(
     options: &PdbOptions,
     select: &impl Select,
 ) -> Result<String, Vec<Diagnostic>> {
+    let mut out = String::with_capacity(structure.atom_count() as usize * 81);
+    render_selected(&mut out, structure, options, select)?;
+    Ok(out)
+}
+
+pub(super) fn render_selected(
+    out: &mut impl fmt::Write,
+    structure: &Structure,
+    options: &PdbOptions,
+    select: &impl Select,
+) -> Result<(), Vec<Diagnostic>> {
     let refusals = check_capacity(structure, options, select, RequiredAtomFields::Pdb);
     if !refusals.is_empty() {
         return Err(refusals);
     }
 
     let data = structure.data();
-    let mut out = String::with_capacity(structure.atom_count() as usize * 81);
 
     if let Some(headers) = data.extensions.get::<PdbHeaders>(PDB_HEADERS_EXTENSION) {
         for record in headers.records() {
             let _ = writeln!(out, "{}", record.line());
         }
     } else {
-        write_generated_metadata(&mut out, structure);
+        write_generated_metadata(out, structure);
     }
 
     let mut serial = 1i64;
@@ -147,7 +157,7 @@ pub fn write_selected(
                     continue;
                 }
                 if let Err(finding) =
-                    write_atom(&mut out, structure, &atom, &residue, label, serial, options)
+                    write_atom(out, structure, &atom, &residue, label, serial, options)
                 {
                     return Err(vec![finding]);
                 }
@@ -157,11 +167,11 @@ pub fn write_selected(
         let _ = writeln!(out, "TER   {:>5}", serial_field(serial, options));
         serial += 1;
     }
-    out.push_str("END\n");
-    Ok(out)
+    let _ = out.write_str("END\n");
+    Ok(())
 }
 
-fn write_generated_metadata(out: &mut String, structure: &Structure) {
+fn write_generated_metadata(out: &mut impl fmt::Write, structure: &Structure) {
     let data = structure.data();
     if let Some(id) = &data.entry.id {
         let _ = writeln!(out, "HEADER    {:<40}{:<9}   {:>4}", "", "", id);
@@ -187,7 +197,7 @@ fn write_generated_metadata(out: &mut String, structure: &Structure) {
 }
 
 fn write_atom(
-    out: &mut String,
+    out: &mut impl fmt::Write,
     structure: &Structure,
     atom: &AtomRef<'_>,
     residue: &ResidueRef<'_>,

@@ -10,10 +10,11 @@ use pdbiox_core::annotation::{
 };
 use pdbiox_core::column::Presence;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::io::SelectAll;
+use pdbiox_core::io::{SelectAll, TextOutput};
 use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
 use pdbiox_core::symbol::SymbolId;
-use std::fmt::Write as _;
+use std::fmt;
+use std::io::Write as IoWrite;
 
 #[derive(Clone, Copy)]
 enum Variant {
@@ -54,11 +55,61 @@ pub fn write_pdbqt(structure: &Structure, options: &PdbOptions) -> Result<String
     write_variant(structure, options, Variant::Pdbqt)
 }
 
+/// Streams PQR coordinates without retaining the complete text.
+///
+/// # Errors
+///
+/// Returns fixed-column, annotation, or destination diagnostics.
+pub fn write_pqr_to<W: IoWrite>(
+    structure: &Structure,
+    options: &PdbOptions,
+    output: &mut W,
+) -> Result<(), Vec<Diagnostic>> {
+    write_variant_to(structure, options, Variant::Pqr, output)
+}
+
+/// Streams a rigid PDBQT model without retaining the complete text.
+///
+/// # Errors
+///
+/// Returns fixed-column, annotation, or destination diagnostics.
+pub fn write_pdbqt_to<W: IoWrite>(
+    structure: &Structure,
+    options: &PdbOptions,
+    output: &mut W,
+) -> Result<(), Vec<Diagnostic>> {
+    write_variant_to(structure, options, Variant::Pdbqt, output)
+}
+
 fn write_variant(
     structure: &Structure,
     options: &PdbOptions,
     variant: Variant,
 ) -> Result<String, Vec<Diagnostic>> {
+    let mut out = String::with_capacity(structure.atom_count() as usize * 82);
+    render_variant(&mut out, structure, options, variant)?;
+    Ok(out)
+}
+
+fn write_variant_to<W: IoWrite>(
+    structure: &Structure,
+    options: &PdbOptions,
+    variant: Variant,
+    output: &mut W,
+) -> Result<(), Vec<Diagnostic>> {
+    let mut output = TextOutput::new(output);
+    render_variant(&mut output, structure, options, variant)?;
+    output.finish().map_err(|error| {
+        vec![Diagnostic::new(Code::E7901).with_context("reason", error.to_string())]
+    })
+}
+
+fn render_variant(
+    out: &mut impl fmt::Write,
+    structure: &Structure,
+    options: &PdbOptions,
+    variant: Variant,
+) -> Result<(), Vec<Diagnostic>> {
     let required = match variant {
         Variant::Pqr => RequiredAtomFields::Pqr,
         Variant::Pdbqt => RequiredAtomFields::Pdbqt,
@@ -83,9 +134,8 @@ fn write_variant(
     };
     require_present(structure, &columns)?;
 
-    let mut out = String::with_capacity(structure.atom_count() as usize * 82);
     if matches!(variant, Variant::Pdbqt) {
-        out.push_str("ROOT\n");
+        let _ = out.write_str("ROOT\n");
     }
     let mut serial = 1_i64;
     for chain in structure.data().chains() {
@@ -99,8 +149,7 @@ fn write_variant(
         };
         for residue in chain.residues() {
             for atom in residue.atoms() {
-                if let Err(finding) =
-                    write_atom(&mut out, structure, &atom, &residue, serial, &context)
+                if let Err(finding) = write_atom(out, structure, &atom, &residue, serial, &context)
                 {
                     return Err(vec![finding]);
                 }
@@ -109,14 +158,18 @@ fn write_variant(
         }
     }
     match variant {
-        Variant::Pqr => out.push_str("END\n"),
-        Variant::Pdbqt => out.push_str("ENDROOT\nTORSDOF 0\n"),
+        Variant::Pqr => {
+            let _ = out.write_str("END\n");
+        }
+        Variant::Pdbqt => {
+            let _ = out.write_str("ENDROOT\nTORSDOF 0\n");
+        }
     }
-    Ok(out)
+    Ok(())
 }
 
 fn write_atom(
-    out: &mut String,
+    out: &mut impl fmt::Write,
     structure: &Structure,
     atom: &AtomRef<'_>,
     residue: &ResidueRef<'_>,
@@ -138,7 +191,8 @@ fn write_atom(
     );
     let charge = present_real(context.columns.charges, atom.index().get())
         .ok_or_else(|| missing_field(PARTIAL_CHARGE_ANNOTATION, *atom))?;
-    let prefix = format!(
+    let _ = write!(
+        out,
         "{record}{serial:>5} {name:<4}{alt:1}{component:>3} {chain:>1}{sequence}{ins:1}   \
          {x:8.3}{y:8.3}{z:8.3}",
         chain = context.chain,
@@ -161,7 +215,7 @@ fn write_atom(
                 .and_then(|column| present_real(column, atom.index().get()));
             let _ = writeln!(
                 out,
-                "{prefix}{charge:8.4}{radius:7.4}",
+                "{charge:8.4}{radius:7.4}",
                 charge = charge,
                 radius = radius.ok_or_else(|| missing_field(ATOM_RADIUS_ANNOTATION, *atom))?
             );
@@ -181,7 +235,7 @@ fn write_atom(
                 .ok_or_else(|| missing_field("B factor", *atom))?;
             let _ = writeln!(
                 out,
-                "{prefix}{occ:6.2}{b:6.2}      {charge:6.3} {atom_type:<2}",
+                "{occ:6.2}{b:6.2}      {charge:6.3} {atom_type:<2}",
                 occ = f64::from(occupancy),
                 b = f64::from(b_factor),
                 charge = charge,

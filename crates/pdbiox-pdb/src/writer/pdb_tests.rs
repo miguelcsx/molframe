@@ -3,6 +3,8 @@ use crate::read;
 use pdbiox_core::index::AtomIndex;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use proptest::prelude::*;
+use std::fmt::Write as _;
+use std::io::{self, Write};
 
 const DIPEPTIDE: &str = "\
 ATOM      1  N   GLY A   1      27.340  24.430   2.614  1.00 10.00           N
@@ -205,6 +207,39 @@ fn a_written_file_ends_with_the_record_that_says_so() {
     assert!(written(DIPEPTIDE).ends_with("END\n"));
 }
 
+#[derive(Default)]
+struct CountingWriter {
+    bytes: usize,
+    writes: usize,
+    largest_write: usize,
+}
+
+impl Write for CountingWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.bytes += bytes.len();
+        self.writes += 1;
+        self.largest_write = self.largest_write.max(bytes.len());
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn pdb_writer_emits_records_without_a_full_file_buffer() {
+    let structure = parse(DIPEPTIDE);
+    let expected = written(DIPEPTIDE);
+    let mut writer = CountingWriter::default();
+    if let Err(findings) = crate::write_to(&structure, &PdbOptions::new(), &mut writer) {
+        panic!("stream write failed: {findings:?}");
+    }
+    assert_eq!(writer.bytes, expected.len());
+    assert!(writer.writes > 1);
+    assert!(writer.largest_write < expected.len());
+}
+
 proptest! {
     #[test]
     fn generated_representable_structures_survive_a_pdb_round_trip(
@@ -231,7 +266,8 @@ proptest! {
 #[test]
 fn a_negative_coordinate_that_loses_a_digit_to_the_sign_is_refused() {
     let original = parse(DIPEPTIDE);
-    let mut editor = original.edit_coordinates();
+    let context = pdbiox_core::ExecutionContext::default();
+    let mut editor = original.edit_coordinates(&context).expect("edit fits");
     let Some(positions) = editor.positions_mut(pdbiox_core::index::ModelIndex::new(0)) else {
         panic!("first model missing")
     };
