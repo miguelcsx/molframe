@@ -6,24 +6,28 @@
 //! made here and reported when it was not forced.
 
 mod chains;
+mod fields;
 mod finish;
 mod models;
+mod names;
+mod row;
+
+pub use row::{AtomSiteRow, AtomSiteRowSink, Field};
 
 use models::AtomSignature;
+use names::ResidueNames;
 
 use super::diagnostics::at_source_row;
 use super::entry::AsymEntity;
 use super::keys::{Boundary, ResidueKey, boundary};
 use crate::document::Category;
 use crate::parser::Rows;
-use num_traits::ToPrimitive;
 use pdbiox_core::chunk::{AtomRecord, ChunkBuilder};
 use pdbiox_core::column::Presence;
 use pdbiox_core::coords::CoordinateBlock;
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
-use pdbiox_core::element::Element;
 use pdbiox_core::index::{EntityIndex, ResidueIndex};
-use pdbiox_core::io::{AmbiguousResidueBoundaryPolicy, MissingElementPolicy, ReadOptions};
+use pdbiox_core::io::{AmbiguousResidueBoundaryPolicy, ReadOptions};
 use pdbiox_core::optional::{OptionalI32, OptionalSymbol};
 use pdbiox_core::structure::{CoordinateStore, StructureData};
 use pdbiox_core::symbol::{AltId, SymbolId};
@@ -31,18 +35,20 @@ use pdbiox_core::topology::ResidueRecord;
 
 /// Builds the atoms, residues, chains and models of a structure.
 pub struct AtomBuilder<'a> {
-    data: &'a mut StructureData,
-    findings: &'a mut Diagnostics,
+    data: StructureData,
+    findings: Diagnostics,
     options: &'a ReadOptions,
-    asym_entities: &'a [AsymEntity],
+    asym_entities: Vec<AsymEntity>,
     model_filter: Option<i64>,
     builder: ChunkBuilder,
     frames: Vec<CoordinateBlock>,
     model_numbers: Vec<i32>,
     signatures: Vec<AtomSignature>,
+    expected: Option<models::ExpectedAtoms>,
+    track_identity: bool,
     /// The residue being filled, and the atom names already in it.
     current: Option<ResidueKey>,
-    names_in_residue: Vec<(SymbolId, AltId)>,
+    names_in_residue: ResidueNames,
     /// The chain being filled.
     chain: Option<u32>,
     chain_auth: OptionalSymbol,
@@ -56,12 +62,12 @@ pub struct AtomBuilder<'a> {
 }
 
 impl<'a> AtomBuilder<'a> {
-    /// Starts building into `data`.
+    /// Starts building from prepared structure state.
     pub fn new(
-        data: &'a mut StructureData,
-        findings: &'a mut Diagnostics,
+        data: StructureData,
+        findings: Diagnostics,
         options: &'a ReadOptions,
-        asym_entities: &'a [AsymEntity],
+        asym_entities: Vec<AsymEntity>,
     ) -> Self {
         Self {
             data,
@@ -73,8 +79,10 @@ impl<'a> AtomBuilder<'a> {
             frames: Vec::new(),
             model_numbers: Vec::new(),
             signatures: Vec::new(),
+            expected: None,
+            track_identity: true,
             current: None,
-            names_in_residue: Vec::new(),
+            names_in_residue: ResidueNames::default(),
             chain: None,
             chain_auth: OptionalSymbol::NONE,
             chain_entity: None,
@@ -95,7 +103,7 @@ impl<'a> AtomBuilder<'a> {
     }
 
     /// Reads every row of the coordinate category.
-    pub fn read(mut self, category: &Category) -> CoordinateStore {
+    pub fn read(mut self, category: &Category) -> (StructureData, Diagnostics, CoordinateStore) {
         let mut rows = Rows::new(category);
         if category.row_count() > 0 {
             loop {
@@ -107,10 +115,9 @@ impl<'a> AtomBuilder<'a> {
         }
         self.finish()
     }
-
-    fn row(&mut self, rows: &Rows<'_>) {
+    fn row(&mut self, rows: &dyn AtomSiteRow) {
         // A file that does not number its models has exactly one.
-        let model = match rows.integer("pdbx_PDB_model_num") {
+        let model = match rows.integer(Field::ModelNum) {
             Some(model) => model,
             None => self.model.max(1),
         };
@@ -124,7 +131,7 @@ impl<'a> AtomBuilder<'a> {
             self.start_model(model);
         }
 
-        let name_text = rows.identifier("label_atom_id");
+        let name_text = rows.identifier(Field::LabelAtomId);
         let element = self.element_of(rows, name_text.as_deref());
         if self.options.discard_hydrogens && element.is_hydrogen() {
             return;
@@ -157,7 +164,37 @@ impl<'a> AtomBuilder<'a> {
             Some(component) => component,
             None => primary_component_id,
         };
-        self.observe_signature(
+        let occupancy = self.optional_float(rows, Field::Occupancy, 1.0);
+        let b_factor = self.optional_float(rows, Field::BFactor, 0.0);
+        let record = AtomRecord {
+            position,
+            element,
+            atom_name,
+            auth_atom_name,
+            alternate_component_id,
+            alt_id,
+            residue,
+            occupancy,
+            b_factor,
+            formal_charge: match rows.integer(Field::FormalCharge) {
+                // A charge outside a signed byte is not a formal charge; it is
+                // a misread column, and is recorded as unstated rather than
+                // clamped to something that looks deliberate.
+                Some(charge) => match i8::try_from(charge) {
+                    Ok(charge) => (charge, Presence::Present),
+                    Err(_) => (0, Presence::Unknown),
+                },
+                None => (0, Presence::Inapplicable),
+            },
+            atom_site_id: match rows
+                .integer(Field::Id)
+                .and_then(|id| u32::try_from(id).ok())
+            {
+                Some(id) => id,
+                None => 0,
+            },
+        };
+        self.observe_atom(
             rows,
             AtomSignature {
                 chain: key.chain,
@@ -170,41 +207,16 @@ impl<'a> AtomBuilder<'a> {
                 alt_id,
                 element,
             },
+            &record,
         );
-        let occupancy = self.optional_float(rows, "occupancy", 1.0);
-        let b_factor = self.optional_float(rows, "B_iso_or_equiv", 0.0);
-        self.builder.push(AtomRecord {
-            position,
-            element,
-            atom_name,
-            auth_atom_name,
-            alternate_component_id,
-            alt_id,
-            residue,
-            occupancy,
-            b_factor,
-            formal_charge: match rows.integer("pdbx_formal_charge") {
-                // A charge outside a signed byte is not a formal charge; it is
-                // a misread column, and is recorded as unstated rather than
-                // clamped to something that looks deliberate.
-                Some(charge) => match i8::try_from(charge) {
-                    Ok(charge) => (charge, Presence::Present),
-                    Err(_) => (0, Presence::Unknown),
-                },
-                None => (0, Presence::Inapplicable),
-            },
-            atom_site_id: match rows.integer("id").and_then(|id| u32::try_from(id).ok()) {
-                Some(id) => id,
-                None => 0,
-            },
-        });
+        self.builder.push(record);
         self.atom_position += 1;
     }
 
     /// Where this atom's residue sits, opening a new one if the row starts one.
     fn place(
         &mut self,
-        rows: &Rows<'_>,
+        rows: &dyn AtomSiteRow,
         key: &ResidueKey,
         atom_name: SymbolId,
         alt_id: AltId,
@@ -223,7 +235,7 @@ impl<'a> AtomBuilder<'a> {
             };
         }
 
-        let repeats = self.names_in_residue.contains(&(atom_name, alt_id));
+        let repeats = self.names_in_residue.contains(atom_name, alt_id);
         let decision = match &self.current {
             None => Boundary::New,
             Some(current) => boundary(current, key, repeats),
@@ -235,7 +247,7 @@ impl<'a> AtomBuilder<'a> {
             }
             self.open_residue(rows, key);
         }
-        self.names_in_residue.push((atom_name, alt_id));
+        self.names_in_residue.insert(atom_name, alt_id);
         let Some(position) = self.residue_position.checked_sub(1) else {
             self.findings.push(at_source_row(
                 Diagnostic::new(Code::E1901)
@@ -247,7 +259,7 @@ impl<'a> AtomBuilder<'a> {
         Some(ResidueIndex::new(position))
     }
 
-    fn report_ambiguous_boundary(&mut self, rows: &Rows<'_>) {
+    fn report_ambiguous_boundary(&mut self, rows: &dyn AtomSiteRow) {
         let code = match self.options.ambiguous_residue_boundary_policy {
             AmbiguousResidueBoundaryPolicy::Reject => Code::E3015,
             AmbiguousResidueBoundaryPolicy::InferFromFileOrder => Code::W3011,
@@ -267,8 +279,12 @@ impl<'a> AtomBuilder<'a> {
     /// This is a modelled point mutation: one residue with two chemical
     /// identities. Both are kept; the finding says the file did something worth
     /// knowing about rather than something wrong.
-    fn alternate_component_of(&mut self, rows: &Rows<'_>, residue: ResidueIndex) -> OptionalSymbol {
-        let Some(comp) = rows.identifier("label_comp_id") else {
+    fn alternate_component_of(
+        &mut self,
+        rows: &dyn AtomSiteRow,
+        residue: ResidueIndex,
+    ) -> OptionalSymbol {
+        let Some(comp) = rows.identifier(Field::LabelCompId) else {
             return OptionalSymbol::NONE;
         };
         let Some(existing_symbol) = self.data.topology.residues.label_comp_id(residue) else {
@@ -290,7 +306,7 @@ impl<'a> AtomBuilder<'a> {
         OptionalSymbol::some(self.intern(&comp))
     }
 
-    fn open_residue(&mut self, rows: &Rows<'_>, key: &ResidueKey) {
+    fn open_residue(&mut self, rows: &dyn AtomSiteRow, key: &ResidueKey) {
         self.close_residue();
         if self.chain != Some(key.chain) {
             self.open_chain(rows, key.chain);
@@ -298,19 +314,19 @@ impl<'a> AtomBuilder<'a> {
         self.current = Some(*key);
         self.names_in_residue.clear();
 
-        let comp = self.intern(match rows.identifier("label_comp_id").as_deref() {
+        let comp = self.intern(match rows.identifier(Field::LabelCompId).as_deref() {
             Some(name) => name,
             None => "",
         });
-        let auth_comp = match rows.identifier("auth_comp_id") {
+        let auth_comp = match rows.identifier(Field::AuthCompId) {
             Some(text) => OptionalSymbol::some(self.intern(&text)),
             None => OptionalSymbol::NONE,
         };
-        let ins_code = match rows.identifier("pdbx_PDB_ins_code") {
+        let ins_code = match rows.identifier(Field::InsCode) {
             Some(text) => OptionalSymbol::some(self.intern(&text)),
             None => OptionalSymbol::NONE,
         };
-        let het = rows.text("group_PDB") == Some("HETATM");
+        let het = rows.text(Field::GroupPdb) == Some("HETATM");
 
         if self
             .data
@@ -354,12 +370,12 @@ impl<'a> AtomBuilder<'a> {
         }
     }
 
-    fn key_of(&mut self, rows: &Rows<'_>, model: i64) -> ResidueKey {
-        let chain = match rows.identifier("label_asym_id") {
+    fn key_of(&mut self, rows: &dyn AtomSiteRow, model: i64) -> ResidueKey {
+        let chain = match rows.identifier(Field::LabelAsymId) {
             Some(text) => self.intern(&text).get(),
             None => ResidueKey::ABSENT,
         };
-        let ins_code = match rows.identifier("pdbx_PDB_ins_code") {
+        let ins_code = match rows.identifier(Field::InsCode) {
             Some(text) => self.intern(&text).get(),
             None => ResidueKey::ABSENT,
         };
@@ -367,111 +383,20 @@ impl<'a> AtomBuilder<'a> {
             model,
             chain,
             label_seq: OptionalI32::from(
-                rows.integer("label_seq_id")
+                rows.integer(Field::LabelSeqId)
                     .and_then(|seq| i32::try_from(seq).ok()),
             ),
             auth_seq: OptionalI32::from(
-                rows.integer("auth_seq_id")
+                rows.integer(Field::AuthSeqId)
                     .and_then(|seq| i32::try_from(seq).ok()),
             ),
             ins_code,
         }
     }
+}
 
-    fn position_of(&mut self, rows: &Rows<'_>) -> Option<[f32; 3]> {
-        let (Some(x), Some(y), Some(z)) = (
-            rows.float("Cartn_x"),
-            rows.float("Cartn_y"),
-            rows.float("Cartn_z"),
-        ) else {
-            self.findings.push(at_source_row(
-                Diagnostic::new(Code::E1202)
-                    .with_message("a coordinate could not be read")
-                    .in_category("atom_site"),
-                rows.row(),
-            ));
-            return None;
-        };
-        let Some(position) = x
-            .to_f32()
-            .zip(y.to_f32())
-            .zip(z.to_f32())
-            .map(|((x, y), z)| [x, y, z])
-        else {
-            self.findings.push(at_source_row(
-                Diagnostic::new(Code::E1202)
-                    .with_message("a coordinate is outside the supported floating-point range")
-                    .in_category("atom_site"),
-                rows.row(),
-            ));
-            return None;
-        };
-        Some(position)
-    }
-
-    fn optional_float(
-        &mut self,
-        rows: &Rows<'_>,
-        field: &'static str,
-        when_absent: f32,
-    ) -> (f32, Presence) {
-        let Some(value) = rows.float(field) else {
-            return (when_absent, Presence::Unknown);
-        };
-        if let Some(value) = value.to_f32() {
-            return (value, Presence::Present);
-        }
-        self.findings.push(at_source_row(
-            Diagnostic::new(Code::E1202)
-                .with_message("an atom value is outside the supported floating-point range")
-                .in_category("atom_site")
-                .with_context("item", field),
-            rows.row(),
-        ));
-        (when_absent, Presence::Unknown)
-    }
-
-    fn element_of(&mut self, rows: &Rows<'_>, name: Option<&str>) -> Element {
-        if let Some(element) = rows.text("type_symbol").and_then(Element::from_symbol) {
-            return element;
-        }
-        let inferred = match (self.options.missing_element_policy, name) {
-            (MissingElementPolicy::InferFromAtomName, Some(name)) => Element::infer_from_name(name),
-            _ => Element::UNKNOWN,
-        };
-        self.findings.push(at_source_row(
-            Diagnostic::new(Code::W3203)
-                .in_category("atom_site")
-                .with_context("inferred", inferred.symbol()),
-            rows.row(),
-        ));
-        inferred
-    }
-
-    fn auth_name_of(&mut self, rows: &Rows<'_>, label: Option<&str>) -> OptionalSymbol {
-        if let Some(text) = rows.identifier("auth_atom_id")
-            && Some(text.as_ref()) != label
-        {
-            return OptionalSymbol::some(self.intern(&text));
-        }
-        OptionalSymbol::NONE
-    }
-
-    fn alt_of(&mut self, rows: &Rows<'_>) -> Option<AltId> {
-        if let Some(text) = rows.identifier("label_alt_id")
-            && !text.is_empty()
-        {
-            return AltId::labelled(self.intern(&text));
-        }
-        Some(AltId::BLANK)
-    }
-
-    fn intern(&mut self, text: &str) -> SymbolId {
-        let Ok(symbol) = self.data.dictionary.intern(text) else {
-            self.findings
-                .push(Diagnostic::new(Code::E1901).with_message("the dictionary is full"));
-            return SymbolId::from_raw(0);
-        };
-        symbol
+impl AtomSiteRowSink for AtomBuilder<'_> {
+    fn feed(&mut self, row: &dyn AtomSiteRow) {
+        self.row(row);
     }
 }

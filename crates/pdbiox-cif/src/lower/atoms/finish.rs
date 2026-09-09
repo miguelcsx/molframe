@@ -2,11 +2,11 @@
 
 use super::AtomBuilder;
 use pdbiox_core::coords::CoordinateBlock;
-use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::structure::CoordinateStore;
+use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
+use pdbiox_core::structure::{CoordinateStore, StructureData};
 
 impl AtomBuilder<'_> {
-    pub(super) fn finish(mut self) -> CoordinateStore {
+    pub(crate) fn finish(mut self) -> (StructureData, Diagnostics, CoordinateStore) {
         self.close_residue();
         self.close_chain();
         self.verify_frame_len();
@@ -37,7 +37,7 @@ impl AtomBuilder<'_> {
             }
         }
 
-        match self.frames.len() {
+        let coords = match self.frames.len() {
             1 => match self.frames.pop() {
                 Some(block) => CoordinateStore::Single(block),
                 None => CoordinateStore::Single(CoordinateBlock::new()),
@@ -45,6 +45,11 @@ impl AtomBuilder<'_> {
             _ => CoordinateStore::Dense {
                 frames: self.frames,
             },
-        }
+        };
+        (self.data, self.findings, coords)
+    }
+
+    pub(crate) fn abort(self) -> Diagnostics {
+        self.findings
     }
 }
