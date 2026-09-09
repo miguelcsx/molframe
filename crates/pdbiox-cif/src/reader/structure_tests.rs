@@ -2,7 +2,12 @@ use super::*;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::index::EntityIndex;
 use pdbiox_core::io::{AmbiguousResidueBoundaryPolicy, MissingElementPolicy, ParseMode};
-use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
+use pdbiox_core::structure::{
+    AtomRef, ResidueRef, Structure, StructureDifferenceOptions, structure_difference,
+};
+
+#[path = "structure_model_tests.rs"]
+mod model_tests;
 
 const DIPEPTIDE: &str = "\
 data_TEST
@@ -37,6 +42,98 @@ fn parse_structure(text: &str) -> (Structure, Vec<Diagnostic>) {
         Ok(result) => result,
         Err(findings) => panic!("read failed: {findings:?}"),
     }
+}
+
+#[test]
+fn direct_and_lossless_single_model_reads_are_semantically_identical() {
+    let input = InputBuffer::from_bytes(DIPEPTIDE.as_bytes().to_vec());
+    let options = ReadOptions::new();
+    let (direct, direct_findings) = read(&input, &options).expect("direct read should succeed");
+    let (_, lossless, lossless_findings) =
+        read_with_document(&input, &options).expect("lossless read should succeed");
+    let difference = structure_difference(
+        &direct,
+        &lossless,
+        StructureDifferenceOptions {
+            coordinate_tolerance: 0.0,
+        },
+    )
+    .expect("zero is a valid coordinate tolerance");
+
+    assert!(difference.is_empty(), "difference: {difference:?}");
+    assert_eq!(direct_findings, lossless_findings);
+}
+
+#[test]
+fn metadata_after_atom_site_is_reconciled_without_reparsing() {
+    let text = "\
+data_late
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+1 N N GLY A 1 0 0 0
+#
+_entry.id LATE
+loop_
+_entity.id
+_entity.type
+7 polymer
+#
+loop_
+_struct_asym.id
+_struct_asym.entity_id
+A 7
+#
+_cell.length_a 10
+_cell.length_b 11
+_cell.length_c 12
+_cell.angle_alpha 90
+_cell.angle_beta 90
+_cell.angle_gamma 90
+";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let options = ReadOptions::new();
+    let (direct, direct_findings) = read(&input, &options).expect("direct read should succeed");
+    let (_, lossless, lossless_findings) =
+        read_with_document(&input, &options).expect("lossless read should succeed");
+    let difference = structure_difference(
+        &direct,
+        &lossless,
+        StructureDifferenceOptions {
+            coordinate_tolerance: 0.0,
+        },
+    )
+    .expect("zero is a valid coordinate tolerance");
+
+    assert!(difference.is_empty(), "difference: {difference:?}");
+    assert_eq!(direct_findings, lossless_findings);
+    assert_eq!(direct.data().entry.id.as_deref(), Some("LATE"));
+    assert_eq!(
+        direct.data().topology.entities.kind(EntityIndex::new(0)),
+        Some(pdbiox_core::topology::EntityKind::Polymer)
+    );
+    assert_eq!(
+        direct.data().cell.map(|cell| cell.lengths),
+        Some([10.0, 11.0, 12.0])
+    );
+}
+
+#[test]
+fn atom_site_can_follow_unrelated_metadata_loops() {
+    let text = "data_x\n\
+loop_\n_entity.id\n_entity.type\n1 polymer\n#\n\
+loop_\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n\
+_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+1 C CA 0 0 0\n#\n";
+    let (structure, _) = parse_structure(text);
+    assert_eq!(structure.atom_count(), 1);
 }
 
 #[test]
@@ -254,90 +351,24 @@ _atom_site.Cartn_z
 }
 
 #[test]
-fn dense_models_keep_numbers_and_identity_changes_become_ragged() {
-    let text = "\
-data_x
-loop_
-_atom_site.id
-_atom_site.type_symbol
-_atom_site.label_atom_id
-_atom_site.label_comp_id
-_atom_site.label_asym_id
-_atom_site.label_seq_id
-_atom_site.Cartn_x
-_atom_site.Cartn_y
-_atom_site.Cartn_z
-_atom_site.pdbx_PDB_model_num
-1 N N GLY A 1 0 0 0 5
-2 C CA GLY A 1 1 0 0 5
-1 N N GLY A 1 0 1 0 9
-2 C CA GLY A 1 1 1 0 9
-#
-";
-    let (structure, _) = parse_structure(text);
-    let numbers: Vec<_> = structure
-        .data()
-        .models()
-        .filter_map(pdbiox_core::structure::ModelRef::number)
-        .collect();
-    assert_eq!(numbers, [5, 9]);
-    assert_eq!(structure.model_count(), 2);
+fn non_row_atom_site_layouts_are_rejected_without_a_document_fallback() {
+    let scalar = "data_x\n\
+_atom_site.id 1\n_atom_site.type_symbol C\n_atom_site.label_atom_id CA\n\
+_atom_site.label_comp_id GLY\n_atom_site.label_asym_id A\n_atom_site.label_seq_id 1\n\
+_atom_site.Cartn_x 0\n_atom_site.Cartn_y 0\n_atom_site.Cartn_z 0\n";
+    let repeated_loop = "data_x\n\
+loop_\n_atom_site.id\n_atom_site.Cartn_x\n1 0\n\
+loop_\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n0 0\n";
+    let duplicate = "data_x\n\
+loop_\n_atom_site.id\n_atom_site.id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n\
+_atom_site.Cartn_z\n1 1 0 0 0\n";
 
-    let mismatched = text.replacen("2 C CA GLY A 1 1 1 0 9", "2 O O GLY A 1 1 1 0 9", 1);
-    let input = InputBuffer::from_bytes(mismatched.into_bytes());
-    let (ragged, _) = match read(&input, &ReadOptions::new().mode(ParseMode::Recover)) {
-        Ok(result) => result,
-        Err(findings) => panic!("ragged read failed: {findings:?}"),
-    };
-    let Some(models) = ragged.ragged_models() else {
-        panic!("identity-changing models must be ragged")
-    };
-    assert_eq!(models.len(), 2);
-    let names: Vec<Vec<_>> = models
-        .iter()
-        .map(|model| model.data().atoms().filter_map(AtomRef::name).collect())
-        .collect();
-    assert_eq!(names, [["N", "CA"], ["N", "O"]]);
-    let numbers: Vec<_> = ragged
-        .data()
-        .models()
-        .filter_map(pdbiox_core::structure::ModelRef::number)
-        .collect();
-    assert_eq!(numbers, [5, 9]);
-}
-
-#[test]
-fn reading_only_the_first_cif_model_does_not_append_an_empty_frame() {
-    let text = "\
-data_x
-loop_
-_atom_site.id
-_atom_site.type_symbol
-_atom_site.label_atom_id
-_atom_site.label_comp_id
-_atom_site.label_asym_id
-_atom_site.label_seq_id
-_atom_site.Cartn_x
-_atom_site.Cartn_y
-_atom_site.Cartn_z
-_atom_site.pdbx_PDB_model_num
-1 N N GLY A 1 0 0 0 4
-1 N N GLY A 1 1 1 1 8
-#
-";
-    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
-    let options = ReadOptions::new().only_first_model(true);
-    let (structure, _) = match read(&input, &options) {
-        Ok(result) => result,
-        Err(findings) => panic!("read failed: {findings:?}"),
-    };
-    assert_eq!(structure.model_count(), 1);
-    let number = structure
-        .data()
-        .models()
-        .next()
-        .and_then(pdbiox_core::structure::ModelRef::number);
-    assert_eq!(number, Some(4));
+    for text in [scalar, repeated_loop, duplicate] {
+        let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+        let findings = read(&input, &ReadOptions::new())
+            .expect_err("ambiguous atom_site layout must be rejected");
+        assert!(findings.iter().any(|finding| finding.code() == Code::E1104));
+    }
 }
 
 #[test]
