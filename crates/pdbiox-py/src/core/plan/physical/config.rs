@@ -319,7 +319,9 @@ fn complexity(operation: &PyPhysicalOperation) -> &'static str {
         PyPhysicalOperation::Leaflets { .. } => "O(sites + local_neighbours + sites·α(sites))",
         PyPhysicalOperation::LinearDensity { .. } => "O(atoms + bins)",
         PyPhysicalOperation::DensityMap { .. } => "O(atoms + grid_cells)",
-        PyPhysicalOperation::PoreProfile { .. } => "O(atoms + samples × local_neighbours)",
+        PyPhysicalOperation::PoreProfile { .. } => {
+            "O(atoms log atoms + samples × transverse_candidates × log atoms), O(atoms × samples × transverse_candidates) worst-case"
+        }
         PyPhysicalOperation::SurfaceContacts { .. } => {
             "O(atoms + local_neighbours × surface_samples)"
         }

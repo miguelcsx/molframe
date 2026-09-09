@@ -35,7 +35,7 @@ pub(super) fn run(
     let plan = PyPlan {
         operations: vec![("result".to_owned(), Operation::Structure(request.clone()))],
     };
-    let result = execute_native(&plan, py, Some(structure))?;
+    let result = execute_native(&plan, py, Some(structure), None)?;
     let Some(entry) = result.entries.into_iter().next() else {
         return Err(PyValueError::new_err(
             "native structure plan returned no result",

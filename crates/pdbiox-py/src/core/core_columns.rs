@@ -182,8 +182,8 @@ impl PyValidityMask {
 }
 
 #[pyfunction]
-pub(crate) fn bit_width(maximum: u64) -> u8 {
-    pdbiox::core::column::bit_width(maximum)
+pub(crate) fn bit_width(py: Python<'_>, maximum: u64) -> u8 {
+    py.detach(move || -> u8 { pdbiox::core::column::bit_width(maximum) })
 }
 
 #[pyfunction(name = "pack")]

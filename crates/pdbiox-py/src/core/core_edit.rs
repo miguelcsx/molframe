@@ -8,7 +8,7 @@ use crate::structure::PyStructure;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-#[pyclass(name = "StructureEditor", unsendable, skip_from_py_object)]
+#[pyclass(name = "StructureEditor", skip_from_py_object)]
 pub(crate) struct PyStructureEditor {
     inner: Option<pdbiox::StructureEditor>,
 }

@@ -368,7 +368,7 @@ pub(super) fn execute_operation(
             Operation::Physical(operation.clone_ref(py)),
         )],
     };
-    let result = execute_native(&plan, py, Some(structure))?;
+    let result = execute_native(&plan, py, Some(structure), None)?;
     let Some(entry) = result.entries.into_iter().next() else {
         return Err(PyValueError::new_err(
             "native physical plan returned no result",

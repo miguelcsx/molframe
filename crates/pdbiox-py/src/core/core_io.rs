@@ -33,6 +33,10 @@ pub(crate) struct PySelect;
 #[pyclass(name = "Reader", frozen)]
 pub(crate) struct PyReader;
 
+#[pyclass(name = "OutputOptions", frozen, from_py_object)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PyOutputOptions(pub(crate) pdbiox::OutputOptions);
+
 impl From<pdbiox::Compression> for PyCompression {
     fn from(value: pdbiox::Compression) -> Self {
         match value {
@@ -164,6 +168,40 @@ impl PyReader {
     }
 }
 
+#[pymethods]
+impl PyOutputOptions {
+    #[new]
+    #[pyo3(signature = (*, memory_limit_bytes=pdbiox::core::io::DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES))]
+    fn new(memory_limit_bytes: usize) -> PyResult<Self> {
+        if memory_limit_bytes == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "memory_limit_bytes must be greater than zero",
+            ));
+        }
+        Ok(Self(
+            pdbiox::OutputOptions::default().with_memory_limit(memory_limit_bytes),
+        ))
+    }
+
+    #[getter]
+    fn memory_limit_bytes(&self) -> usize {
+        self.0.memory_limit_bytes
+    }
+}
+
+#[pyfunction]
+pub(crate) fn write_with_options(
+    py: Python<'_>,
+    path: PathBuf,
+    structure: &crate::structure::PyStructure,
+    options: &PyOutputOptions,
+) -> PyResult<()> {
+    let structure = structure.structure().clone();
+    let options = options.0;
+    py.detach(move || pdbiox::write_with_options(path, &structure, options))
+        .map_err(|findings| read_error(py, &findings))
+}
+
 #[pyfunction]
 fn write_output(py: Python<'_>, path: PathBuf, data: &Bound<'_, PyBytes>) -> PyResult<()> {
     let bytes = data.as_bytes().to_vec();
@@ -181,6 +219,11 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyInputBuffer>()?;
     module.add_class::<PySelect>()?;
     module.add_class::<PyReader>()?;
+    module.add_class::<PyOutputOptions>()?;
+    module.add(
+        "DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES",
+        pdbiox::core::io::DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES,
+    )?;
     module.add_function(wrap_pyfunction!(write_output, module)?)?;
     module.add("SelectAll", module.getattr("Select")?)?;
     module.add("ReadResult", module.getattr("ReadReport")?)?;

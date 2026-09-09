@@ -133,8 +133,8 @@ pub(crate) struct PySideChainTorsionReport {
 }
 
 #[pyfunction]
-pub(crate) fn default_limits() -> PyLimits {
-    PyLimits::from_inner(pdbiox::default_limits())
+pub(crate) fn default_limits(py: Python<'_>) -> PyLimits {
+    py.detach(move || -> PyLimits { PyLimits::from_inner(pdbiox::default_limits()) })
 }
 
 #[pyfunction]
@@ -145,9 +145,15 @@ pub(crate) fn infer_bonds(
 ) -> PyResult<PyBondInferenceReport> {
     let structure = structure.structure().clone();
     let options = options.0;
-    py.detach(move || pdbiox::infer_bonds(&structure, options))
-        .map(PyBondInferenceReport::from_native)
-        .map_err(|finding| crate::errors::read_error(py, std::slice::from_ref(&finding)))
+    py.detach(move || {
+        pdbiox::infer_bonds(
+            &structure,
+            options,
+            &crate::core::execution::default_context(),
+        )
+    })
+    .map(PyBondInferenceReport::from_native)
+    .map_err(|finding| crate::errors::read_error(py, std::slice::from_ref(&finding)))
 }
 
 #[pyfunction]

@@ -17,7 +17,7 @@ pub(crate) struct PyDiagnostic {
     #[pyo3(get)]
     remedy: String,
     #[pyo3(get)]
-    span: Option<(u32, u32, u32, u32)>,
+    span: Option<(u64, u64, u64, u64)>,
 }
 
 impl From<Diagnostic> for PyDiagnostic {
@@ -77,7 +77,7 @@ impl PyDiagnostic {
         value.refresh()
     }
 
-    fn at_row(&self, row: u32) -> Self {
+    fn at_row(&self, row: u64) -> Self {
         let mut value = self.clone();
         value.inner = value.inner.at_row(row);
         value.refresh()
@@ -104,7 +104,7 @@ impl PyDiagnostic {
     }
 
     #[getter]
-    fn row(&self) -> Option<u32> {
+    fn row(&self) -> Option<u64> {
         self.inner.row()
     }
 

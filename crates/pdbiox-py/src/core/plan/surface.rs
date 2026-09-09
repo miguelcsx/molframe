@@ -219,7 +219,7 @@ fn execute_operation(
             Operation::Surface(operation.clone_ref(py)),
         )],
     };
-    let result = execute_native(&plan, py, None)?;
+    let result = execute_native(&plan, py, None, None)?;
     let Some(entry) = result.entries.into_iter().next() else {
         return Err(PyValueError::new_err(
             "native surface plan returned no result",

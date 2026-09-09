@@ -213,23 +213,31 @@ impl From<PyMmtfMetadata> for pdbiox::pdb::MmtfMetadata {
 }
 
 #[pyfunction]
-pub(crate) fn mmtf_metadata(structure: &PyStructure) -> Option<PyMmtfMetadata> {
-    structure
-        .structure()
-        .extensions()
-        .get::<pdbiox::pdb::MmtfMetadata>(pdbiox::pdb::MMTF_METADATA_EXTENSION)
-        .cloned()
-        .map(Into::into)
+pub(crate) fn mmtf_metadata(py: Python<'_>, structure: &PyStructure) -> Option<PyMmtfMetadata> {
+    py.detach(move || -> Option<PyMmtfMetadata> {
+        structure
+            .structure()
+            .extensions()
+            .get::<pdbiox::pdb::MmtfMetadata>(pdbiox::pdb::MMTF_METADATA_EXTENSION)
+            .cloned()
+            .map(Into::into)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn with_mmtf_metadata(structure: &PyStructure, metadata: PyMmtfMetadata) -> PyStructure {
-    let metadata: pdbiox::pdb::MmtfMetadata = metadata.into();
-    PyStructure::new(
-        structure
-            .structure()
-            .with_extension(pdbiox::pdb::MMTF_METADATA_EXTENSION, metadata),
-    )
+pub(crate) fn with_mmtf_metadata(
+    py: Python<'_>,
+    structure: &PyStructure,
+    metadata: PyMmtfMetadata,
+) -> PyStructure {
+    py.detach(move || -> PyStructure {
+        let metadata: pdbiox::pdb::MmtfMetadata = metadata.into();
+        PyStructure::new(
+            structure
+                .structure()
+                .with_extension(pdbiox::pdb::MMTF_METADATA_EXTENSION, metadata),
+        )
+    })
 }
 
 #[pyfunction]

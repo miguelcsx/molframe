@@ -257,7 +257,7 @@ fn execute_operation(
             Operation::Spatial(operation.clone_ref(py)),
         )],
     };
-    let result = execute_native(&plan, py, None)?;
+    let result = execute_native(&plan, py, None, None)?;
     let Some(entry) = result.entries.into_iter().next() else {
         return Err(PyValueError::new_err(
             "native spatial plan returned no result",

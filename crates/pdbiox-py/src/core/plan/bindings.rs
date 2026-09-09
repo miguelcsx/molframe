@@ -96,22 +96,24 @@ impl PyPlan {
         })
     }
 
-    #[pyo3(signature = (structure=None))]
+    #[pyo3(signature = (structure=None, *, context=None))]
     fn execute<'py>(
         &self,
         py: Python<'py>,
         structure: Option<&'py PyStructure>,
+        context: Option<&crate::core::execution::PyExecutionContext>,
     ) -> PyResult<Bound<'py, PyDict>> {
-        results::plan_result_dict(py, execute_native(self, py, structure)?, structure)
+        results::plan_result_dict(py, execute_native(self, py, structure, context)?, structure)
     }
 
-    #[pyo3(signature = (structure=None))]
+    #[pyo3(signature = (structure=None, *, context=None))]
     fn execute_report<'py>(
         &self,
         py: Python<'py>,
         structure: Option<&'py PyStructure>,
+        context: Option<&crate::core::execution::PyExecutionContext>,
     ) -> PyResult<PyPlanResult> {
-        let native = execute_native(self, py, structure)?;
+        let native = execute_native(self, py, structure, context)?;
         let cached_index_count = native.cached_index_count;
         let results = results::plan_result_dict(py, native, structure)?.unbind();
         Ok(PyPlanResult {
@@ -220,6 +222,7 @@ fn execute_native(
     plan: &PyPlan,
     py: Python<'_>,
     structure: Option<&PyStructure>,
+    context: Option<&crate::core::execution::PyExecutionContext>,
 ) -> PyResult<pdbiox::PlanResult> {
     let mut native = pdbiox::Plan::new();
     let mut arrays = Vec::new();
@@ -266,6 +269,7 @@ fn execute_native(
         mask_arrays,
         frame_arrays,
         index_arrays,
+        context,
     )
 }
 
@@ -279,6 +283,7 @@ fn execute_lowered<'py>(
     mask_arrays: Vec<numpy::PyReadonlyArray1<'py, bool>>,
     frame_arrays: Vec<numpy::PyReadonlyArray3<'py, f32>>,
     index_arrays: Vec<PyReadonlyArray1<'py, usize>>,
+    context: Option<&crate::core::execution::PyExecutionContext>,
 ) -> PyResult<pdbiox::PlanResult> {
     let coordinates = arrays
         .iter()
@@ -346,17 +351,23 @@ fn execute_lowered<'py>(
         .map(|indices| pdbiox::IndexInput { indices })
         .collect::<Vec<_>>();
     let retained_structure = structure.map(|value| value.structure().clone());
+    let execution = context.map_or_else(pdbiox::core::ExecutionContext::default, |value| {
+        value.native()
+    });
     py.detach(|| {
         native
-            .execute(pdbiox::PlanInput {
-                structure: retained_structure.as_ref(),
-                arrays: &inputs,
-                scalars: &scalars,
-                floats: &floats,
-                masks: &masks,
-                frames: &frame_values,
-                indices: &indices,
-            })
+            .execute(
+                pdbiox::PlanInput {
+                    structure: retained_structure.as_ref(),
+                    arrays: &inputs,
+                    scalars: &scalars,
+                    floats: &floats,
+                    masks: &masks,
+                    frames: &frame_values,
+                    indices: &indices,
+                },
+                &execution,
+            )
             .map_err(plan_error)
     })
 }
@@ -386,7 +397,7 @@ fn execute_comparison(
             }),
         )],
     };
-    let result = execute_native(&plan, py, None)?;
+    let result = execute_native(&plan, py, None, None)?;
     let Some(entry) = result.entries.into_iter().next() else {
         return Err(PyValueError::new_err(
             "native comparison plan returned no result",

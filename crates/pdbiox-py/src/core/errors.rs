@@ -20,6 +20,7 @@ create_exception!(_native, ReexecutionError, PdbioxError);
 create_exception!(_native, CapacityError, PdbioxError);
 create_exception!(_native, TableError, PdbioxError);
 create_exception!(_native, DatasetError, PdbioxError);
+create_exception!(_native, ProviderError, PdbioxError);
 create_exception!(_native, GraphError, PdbioxError);
 create_exception!(_native, TableFileError, PdbioxError);
 create_exception!(_native, DlpackError, PdbioxError);
@@ -58,10 +59,12 @@ create_exception!(_native, StandaloneAnalysisError, PdbioxError);
 create_exception!(_native, AtomDepthError, PdbioxError);
 create_exception!(_native, BuriedSurfaceError, PdbioxError);
 create_exception!(_native, SasaError, PdbioxError);
+create_exception!(_native, SasaStreamError, PdbioxError);
 create_exception!(_native, SurfaceGeometryError, PdbioxError);
 create_exception!(_native, SurfaceWorkflowError, PdbioxError);
 create_exception!(_native, MapStatisticsError, PdbioxError);
 create_exception!(_native, MrcError, PdbioxError);
+create_exception!(_native, MrcBrickError, PdbioxError);
 create_exception!(_native, MonomerLibraryReadError, PdbioxError);
 create_exception!(_native, RestraintError, PdbioxError);
 create_exception!(_native, ReflectionError, PdbioxError);
@@ -116,6 +119,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("CapacityError", module.py().get_type::<CapacityError>())?;
     module.add("TableError", module.py().get_type::<TableError>())?;
     module.add("DatasetError", module.py().get_type::<DatasetError>())?;
+    module.add("ProviderError", module.py().get_type::<ProviderError>())?;
     module.add("GraphError", module.py().get_type::<GraphError>())?;
     module.add("TableFileError", module.py().get_type::<TableFileError>())?;
     module.add("DlpackError", module.py().get_type::<DlpackError>())?;
@@ -200,10 +204,12 @@ fn register_analysis_errors(module: &Bound<'_, PyModule>) -> PyResult<()> {
         AtomDepthError,
         BuriedSurfaceError,
         SasaError,
+        SasaStreamError,
         SurfaceGeometryError,
         SurfaceWorkflowError,
         MapStatisticsError,
         MrcError,
+        MrcBrickError,
         MonomerLibraryReadError,
         RestraintError,
         ReflectionError,
@@ -324,7 +330,7 @@ pub(crate) fn read_error(py: Python<'_>, findings: &[Diagnostic]) -> PyErr {
     attach_diagnostic(py, error, finding)
 }
 
-pub(crate) fn cif_write_error(error: &pdbiox::CifWriteError) -> PyErr {
+pub(crate) fn cif_write_error(error: &pdbiox::CifWriteToError) -> PyErr {
     ConversionError::new_err(error.to_string())
 }
 

@@ -38,7 +38,7 @@ impl PyInferBonds {
         let plan = PyPlan {
             operations: vec![("result".to_owned(), Operation::BondInference(self.clone()))],
         };
-        let result = execute_native(&plan, py, Some(structure))?;
+        let result = execute_native(&plan, py, Some(structure), None)?;
         let Some(entry) = result.entries.into_iter().next() else {
             return Err(PyValueError::new_err(
                 "native bond-inference plan returned no result",

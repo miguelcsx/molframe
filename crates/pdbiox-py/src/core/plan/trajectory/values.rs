@@ -61,7 +61,7 @@ pub(crate) fn execute_operation(
             super::super::Operation::Trajectory(operation.clone_ref(py)),
         )],
     };
-    let native = super::super::execute_native(&plan, py, None)?;
+    let native = super::super::execute_native(&plan, py, None, None)?;
     let Some(entry) = native.entries.into_iter().next() else {
         return Err(PyValueError::new_err(
             "native trajectory plan returned no result",

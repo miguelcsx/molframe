@@ -78,8 +78,7 @@ impl PyStructureView {
         model: PyModelIndex,
     ) -> Bound<'py, numpy::PyArray2<f32>> {
         let view = self.0.clone();
-        let positions = py.detach(|| view.positions(model.0).collect::<Vec<_>>());
-        let values = positions.into_iter().flatten().collect::<Vec<_>>();
+        let values = py.detach(|| view.positions(model.0).flatten().collect::<Vec<_>>());
         let shape = (values.len() / 3, 3);
         match Array2::from_shape_vec(shape, values) {
             Ok(array) => array.into_pyarray(py),

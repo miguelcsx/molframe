@@ -55,7 +55,7 @@ impl PyBondRecord {
 #[derive(Clone, Debug)]
 pub(crate) struct PyBondTable(pub(crate) pdbiox::BondTable);
 
-#[pyclass(name = "BondTableBuilder", unsendable, skip_from_py_object)]
+#[pyclass(name = "BondTableBuilder", skip_from_py_object)]
 pub(crate) struct PyBondTableBuilder(pdbiox::BondTableBuilder);
 
 #[pyclass(name = "BondAdjacency", frozen, skip_from_py_object)]

@@ -14,7 +14,7 @@ pub(crate) struct PyPosition(pub(crate) pdbiox::Position);
 #[pymethods]
 impl PyPosition {
     #[new]
-    fn new(byte_offset: u32, line: u32, column: u32) -> Self {
+    fn new(byte_offset: u64, line: u64, column: u64) -> Self {
         Self(pdbiox::Position::new(byte_offset, line, column))
     }
 
@@ -25,17 +25,17 @@ impl PyPosition {
     }
 
     #[getter]
-    fn byte_offset(&self) -> u32 {
+    fn byte_offset(&self) -> u64 {
         self.0.byte_offset
     }
 
     #[getter]
-    fn line(&self) -> u32 {
+    fn line(&self) -> u64 {
         self.0.line
     }
 
     #[getter]
-    fn column(&self) -> u32 {
+    fn column(&self) -> u64 {
         self.0.column
     }
 
@@ -62,7 +62,7 @@ pub(crate) struct PyByteSpan(pub(crate) pdbiox::ByteSpan);
 #[pymethods]
 impl PyByteSpan {
     #[new]
-    fn new(start: PyPosition, end: u32) -> Self {
+    fn new(start: PyPosition, end: u64) -> Self {
         Self(pdbiox::ByteSpan::new(start.0, end))
     }
 
@@ -77,11 +77,11 @@ impl PyByteSpan {
     }
 
     #[getter]
-    fn end(&self) -> u32 {
+    fn end(&self) -> u64 {
         self.0.end
     }
 
-    fn len(&self) -> Option<u32> {
+    fn len(&self) -> Option<u64> {
         self.0.len()
     }
 
@@ -416,6 +416,10 @@ impl PyInterner {
 
     fn arena_len(&self) -> usize {
         self.0.arena_len()
+    }
+
+    fn retained_bytes(&self) -> usize {
+        self.0.retained_bytes()
     }
 
     #[pyo3(name = "iter")]

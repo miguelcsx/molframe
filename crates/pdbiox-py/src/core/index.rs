@@ -72,7 +72,93 @@ index_class!(PyEntityIndex, "EntityIndex", pdbiox::EntityIndex);
 index_class!(PyInstanceId, "InstanceId", pdbiox::InstanceId);
 index_class!(PyModelIndex, "ModelIndex", pdbiox::ModelIndex);
 index_class!(PyResidueIndex, "ResidueIndex", pdbiox::ResidueIndex);
-index_class!(PyChunkId, "ChunkId", pdbiox::core::ChunkId);
+
+macro_rules! global_id_class {
+    ($name:ident, $python:literal, $rust:path) => {
+        #[pyclass(name = $python, frozen, eq, from_py_object)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub(crate) struct $name(pub(crate) $rust);
+
+        #[pymethods]
+        impl $name {
+            #[new]
+            fn new(value: u64) -> Self {
+                Self(<$rust>::new(value))
+            }
+
+            #[staticmethod]
+            fn from_raw(value: u64) -> Self {
+                Self(<$rust>::new(value))
+            }
+
+            #[getter]
+            fn value(&self) -> u64 {
+                self.0.get()
+            }
+
+            fn get(&self) -> u64 {
+                self.0.get()
+            }
+
+            fn next(&self) -> Option<Self> {
+                self.0.next().map(Self)
+            }
+
+            fn __int__(&self) -> u64 {
+                self.0.get()
+            }
+
+            fn __index__(&self) -> u64 {
+                self.0.get()
+            }
+
+            fn __repr__(&self) -> String {
+                format!("{}({})", $python, self.0.get())
+            }
+        }
+    };
+}
+
+global_id_class!(PyDatasetId, "DatasetId", pdbiox::DatasetId);
+global_id_class!(PyChunkId, "ChunkId", pdbiox::ChunkId);
+global_id_class!(PyLogicalRow, "LogicalRow", pdbiox::LogicalRow);
+
+#[pyclass(name = "LocalRow", frozen, eq, from_py_object)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PyLocalRow(pub(crate) pdbiox::LocalRow);
+
+#[pymethods]
+impl PyLocalRow {
+    #[new]
+    fn new(value: u32) -> Self {
+        Self(pdbiox::LocalRow::new(value))
+    }
+
+    #[getter]
+    fn value(&self) -> u32 {
+        self.0.get()
+    }
+
+    fn get(&self) -> u32 {
+        self.0.get()
+    }
+
+    fn next(&self) -> Option<Self> {
+        self.0.next().map(Self)
+    }
+
+    fn __int__(&self) -> u32 {
+        self.0.get()
+    }
+
+    fn __index__(&self) -> u32 {
+        self.0.get()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("LocalRow({})", self.0.get())
+    }
+}
 
 #[cfg(test)]
 #[path = "index_tests.rs"]

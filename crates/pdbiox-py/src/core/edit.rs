@@ -5,7 +5,7 @@ use crate::structure::PyStructure;
 use numpy::ndarray::ArrayViewMut2;
 use numpy::{PyArray2, PyArrayMethods};
 use pdbiox::{CoordinateEditor, ModelIndex};
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyMemoryError, PyValueError};
 use pyo3::prelude::*;
 
 #[pyclass(name = "CoordinateEdit", skip_from_py_object)]
@@ -27,11 +27,15 @@ impl PyCoordinateEdit {
 
 #[pymethods]
 impl PyStructure {
-    fn edit_coordinates(slf: &Bound<'_, Self>) -> PyCoordinateEdit {
-        PyCoordinateEdit::new(
-            slf.clone().unbind(),
-            slf.borrow().structure().edit_coordinates(),
-        )
+    fn edit_coordinates(
+        slf: &Bound<'_, Self>,
+        context: &crate::core::execution::PyExecutionContext,
+    ) -> PyResult<PyCoordinateEdit> {
+        slf.borrow()
+            .structure()
+            .edit_coordinates(&context.native())
+            .map(|editor| PyCoordinateEdit::new(slf.clone().unbind(), editor))
+            .map_err(|error| PyMemoryError::new_err(error.to_string()))
     }
 }
 

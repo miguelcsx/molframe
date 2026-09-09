@@ -49,7 +49,7 @@ impl PyAtomRecord {
 #[derive(Clone, Debug)]
 pub(crate) struct PyAtomChunk(pub(crate) pdbiox::AtomChunk);
 
-#[pyclass(name = "ChunkBuilder", unsendable, skip_from_py_object)]
+#[pyclass(name = "ChunkBuilder", skip_from_py_object)]
 pub(crate) struct PyChunkBuilder(pub(crate) pdbiox::ChunkBuilder);
 
 fn readonly_f32<'py>(

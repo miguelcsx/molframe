@@ -22,6 +22,7 @@ pub(crate) mod edit_types;
 #[path = "core_encoded.rs"]
 pub(crate) mod encoded;
 pub(crate) mod errors;
+pub(crate) mod execution;
 pub(crate) mod facade;
 pub(crate) mod hierarchy;
 pub(crate) mod index;
@@ -30,13 +31,17 @@ pub(crate) mod io;
 pub(crate) mod io_types;
 pub(crate) mod metadata;
 pub(crate) mod mmtf_metadata;
+pub(crate) mod parallel;
 pub(crate) mod plan;
+pub(crate) mod provider;
 #[path = "core_records.rs"]
 pub(crate) mod records;
 pub(crate) mod reexecution;
+pub(crate) mod retained_array;
 #[path = "core_storage.rs"]
 pub(crate) mod storage;
 pub(crate) mod structure;
+pub(crate) mod structure_batches;
 #[path = "core_topology.rs"]
 pub(crate) mod topology;
 #[path = "core_topology_root.rs"]

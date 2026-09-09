@@ -10,6 +10,7 @@ use numpy::ndarray::ArrayView2;
 use numpy::{PyArray2, PyArrayMethods};
 use pdbiox::Structure;
 use pyo3::prelude::*;
+use pyo3::types::PyCapsule;
 use std::path::PathBuf;
 
 #[pyclass(name = "Structure", skip_from_py_object)]
@@ -69,6 +70,14 @@ impl PyStructure {
 
     fn __repr__(&self) -> String {
         self.inner.to_string()
+    }
+
+    /// Publishes the immutable native snapshot for sibling Rust extensions.
+    ///
+    /// The capsule is deliberately private to the Python protocol: consumers
+    /// must validate its name before reading the `repr(C)` payload.
+    fn _pdviewx_structure_capsule<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyCapsule>> {
+        PyCapsule::new_with_value(py, self.inner.clone(), c"pdbiox.Structure")
     }
 
     fn write(&self, py: Python<'_>, path: PathBuf) -> PyResult<()> {

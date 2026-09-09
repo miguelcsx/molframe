@@ -72,7 +72,7 @@ impl PySelectQuery {
                 Operation::Selection(self.clone_ref(py)),
             )],
         };
-        let result = execute_native(&plan, py, Some(structure))?;
+        let result = execute_native(&plan, py, Some(structure), None)?;
         let Some(entry) = result.entries.into_iter().next() else {
             return Err(PyValueError::new_err(
                 "native selection plan returned no result",
