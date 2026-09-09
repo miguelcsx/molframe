@@ -18,6 +18,11 @@ use crate::eigen;
 use crate::numeric::exact_count;
 use crate::transform::Rigid;
 
+#[path = "fit_statistics.rs"]
+mod statistics;
+
+use statistics::{FitStatistics, fit_statistics};
+
 /// Numerical controls for quaternion rigid superposition.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SuperposeOptions {
@@ -91,11 +96,7 @@ pub fn rmsd(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Superpos
         return Ok(0.0);
     }
 
-    let mut total = 0.0;
-
-    for (&a, &b) in mobile.iter().zip(reference) {
-        total += crate::measure::distance_squared(a, b);
-    }
+    let total = crate::simd::squared_deviation_sum(mobile, reference);
 
     let count = exact_count(mobile.len()).ok_or(SuperposeError::TooManyPoints)?;
     Ok((total / count).sqrt())
@@ -231,107 +232,6 @@ pub fn superpose_with_options(
     Ok(Superposition { transform, rmsd })
 }
 
-/// Statistics required to solve and validate a rigid fit.
-#[derive(Clone, Copy)]
-struct FitStatistics {
-    mobile_centre: [f64; 3],
-    reference_centre: [f64; 3],
-    covariance: [[f64; 3]; 3],
-    mobile_scatter: [[f64; 3]; 3],
-    reference_scatter: [[f64; 3]; 3],
-}
-
-/// Computes paired centres, scatter tensors and cross-covariance in one pass.
-///
-/// The online update is the multivariate Welford recurrence, avoiding the
-/// cancellation of raw second moments. Runs in `O(n)` time and `O(1)` space.
-fn fit_statistics(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> FitStatistics {
-    let mut mobile_centre = [0.0; 3];
-    let mut reference_centre = [0.0; 3];
-    let mut covariance = [[0.0; 3]; 3];
-    let mut mobile_scatter = [[0.0; 3]; 3];
-    let mut reference_scatter = [[0.0; 3]; 3];
-    let mut count = 0.0f64;
-
-    for (&mobile_position, &reference_position) in mobile.iter().zip(reference) {
-        count += 1.0;
-
-        let inverse_count = count.recip();
-        let mobile_point = to_f64(mobile_position);
-        let reference_point = to_f64(reference_position);
-        let mobile_delta = subtract(mobile_point, mobile_centre);
-        let reference_delta = subtract(reference_point, reference_centre);
-
-        add_scaled(&mut mobile_centre, mobile_delta, inverse_count);
-        add_scaled(&mut reference_centre, reference_delta, inverse_count);
-
-        let mobile_after = subtract(mobile_point, mobile_centre);
-        let reference_after = subtract(reference_point, reference_centre);
-
-        accumulate_symmetric_outer(&mut mobile_scatter, mobile_delta, mobile_after);
-        accumulate_symmetric_outer(&mut reference_scatter, reference_delta, reference_after);
-        accumulate_cross_covariance(&mut covariance, mobile_delta, reference_after);
-    }
-
-    mirror_upper_triangle(&mut mobile_scatter);
-    mirror_upper_triangle(&mut reference_scatter);
-
-    FitStatistics {
-        mobile_centre,
-        reference_centre,
-        covariance,
-        mobile_scatter,
-        reference_scatter,
-    }
-}
-
-/// The three-by-three cross-covariance of the two centred sets.
-///
-/// Adds one online co-moment outer product. Runs in `O(1)` time and allocates no
-/// memory.
-#[inline]
-fn accumulate_cross_covariance(
-    covariance: &mut [[f64; 3]; 3],
-    mobile_delta: [f64; 3],
-    reference_after: [f64; 3],
-) {
-    covariance[0][0] += mobile_delta[0] * reference_after[0];
-    covariance[0][1] += mobile_delta[0] * reference_after[1];
-    covariance[0][2] += mobile_delta[0] * reference_after[2];
-
-    covariance[1][0] += mobile_delta[1] * reference_after[0];
-    covariance[1][1] += mobile_delta[1] * reference_after[1];
-    covariance[1][2] += mobile_delta[1] * reference_after[2];
-
-    covariance[2][0] += mobile_delta[2] * reference_after[0];
-    covariance[2][1] += mobile_delta[2] * reference_after[1];
-    covariance[2][2] += mobile_delta[2] * reference_after[2];
-}
-
-/// Adds the six independent components of an outer product.
-///
-/// For Welford updates the result is symmetric up to rounding. Only the upper
-/// triangle is accumulated, reducing memory traffic. Runs in `O(1)` time.
-#[inline]
-fn accumulate_symmetric_outer(scatter: &mut [[f64; 3]; 3], left: [f64; 3], right: [f64; 3]) {
-    scatter[0][0] += left[0] * right[0];
-    scatter[0][1] += left[0] * right[1];
-    scatter[0][2] += left[0] * right[2];
-    scatter[1][1] += left[1] * right[1];
-    scatter[1][2] += left[1] * right[2];
-    scatter[2][2] += left[2] * right[2];
-}
-
-/// Copies the upper triangle of a three-by-three matrix into the lower one.
-///
-/// Runs in `O(1)` time and allocates no memory.
-#[inline]
-fn mirror_upper_triangle(matrix: &mut [[f64; 3]; 3]) {
-    matrix[1][0] = matrix[0][1];
-    matrix[2][0] = matrix[0][2];
-    matrix[2][1] = matrix[1][2];
-}
-
 /// Returns whether a centred scatter tensor has rank below two.
 ///
 /// A rank-zero or rank-one scatter represents coincident or collinear points,
@@ -455,36 +355,6 @@ fn optimal_rmsd(statistics: &FitStatistics, maximum_correlation: f64, count: f64
 #[inline]
 fn trace(matrix: &[[f64; 3]; 3]) -> f64 {
     matrix[0][0] + matrix[1][1] + matrix[2][2]
-}
-
-/// Converts one stored position to double precision.
-///
-/// Runs in `O(1)` time and allocates no heap memory.
-#[inline]
-fn to_f64(position: [f32; 3]) -> [f64; 3] {
-    [
-        f64::from(position[0]),
-        f64::from(position[1]),
-        f64::from(position[2]),
-    ]
-}
-
-/// Subtracts two three-dimensional vectors.
-///
-/// Runs in `O(1)` time and allocates no heap memory.
-#[inline]
-fn subtract(left: [f64; 3], right: [f64; 3]) -> [f64; 3] {
-    [left[0] - right[0], left[1] - right[1], left[2] - right[2]]
-}
-
-/// Adds `scale * delta` to a three-dimensional accumulator.
-///
-/// Runs in `O(1)` time and allocates no memory.
-#[inline]
-fn add_scaled(accumulator: &mut [f64; 3], delta: [f64; 3], scale: f64) {
-    accumulator[0] += delta[0] * scale;
-    accumulator[1] += delta[1] * scale;
-    accumulator[2] += delta[2] * scale;
 }
 
 #[cfg(test)]
