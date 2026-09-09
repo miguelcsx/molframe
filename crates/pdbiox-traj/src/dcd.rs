@@ -4,6 +4,11 @@ use crate::Timestep;
 use pdbiox_core::structure::UnitCell;
 use std::collections::BTreeSet;
 
+#[path = "dcd/reader.rs"]
+mod reader;
+
+pub use reader::DcdReader;
+
 pub(crate) const AKMA_TO_PS: f64 = 0.048_888_21;
 
 /// Integer and floating-point byte order used by a DCD stream.
@@ -55,6 +60,12 @@ pub struct DcdTrajectory {
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum DcdError {
+    /// The file could not be opened or read.
+    #[error("DCD I/O failed: {kind:?}")]
+    Io {
+        /// Portable operating-system error category.
+        kind: std::io::ErrorKind,
+    },
     /// Initial record marker is neither endian representation of 84.
     #[error("DCD header marker is invalid")]
     InvalidHeader,
@@ -76,6 +87,20 @@ pub enum DcdError {
     /// Unit-cell values cannot define a crystallographic cell.
     #[error("DCD unit-cell record is invalid")]
     InvalidCell,
+    /// A requested memory ceiling is zero or exceeds the process hard limit.
+    #[error("invalid DCD memory limit {requested}; it must be at least one byte")]
+    InvalidMemoryLimit {
+        /// Caller-provided ceiling.
+        requested: usize,
+    },
+    /// Reader workspaces and two reusable frame buffers exceed the ceiling.
+    #[error("DCD frame storage requires {required} bytes, over the {limit} byte limit")]
+    MemoryLimit {
+        /// Required bytes, or `usize::MAX` when dimensions overflow.
+        required: usize,
+        /// Caller-provided ceiling.
+        limit: usize,
+    },
 }
 
 /// Parses a complete DCD byte stream including fixed atoms and periodic cells.
