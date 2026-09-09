@@ -7,4 +7,5 @@ mod string;
 
 pub use float::{encode_floats, encode_interval};
 pub use integer::encode_integers;
+pub(crate) use string::StringColumnEncoder;
 pub use string::encode_strings;

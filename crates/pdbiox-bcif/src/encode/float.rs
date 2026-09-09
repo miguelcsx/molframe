@@ -1,6 +1,6 @@
 //! Exact floating-point encodings and explicit interval quantization.
 
-use super::{integer::encode_integers, strategy::keep_smaller};
+use super::{integer::encode_integers, strategy::EncodingChoice};
 use crate::codec::{DataType, EncodedData, Encoding};
 use num_traits::ToPrimitive;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
@@ -16,16 +16,16 @@ use std::mem::size_of;
 ///
 /// Returns a codec diagnostic if an exact integer candidate overflows.
 pub fn encode_floats(values: &[f64]) -> Result<EncodedData, Diagnostic> {
-    let mut best = byte_array_f64(values)?;
+    let mut best = EncodingChoice::new(byte_array_f64(values)?);
     if let Some(candidate) = byte_array_f32(values) {
-        keep_smaller(&mut best, candidate);
+        best.consider(candidate);
     }
     for factor in [1.0, 10.0, 100.0, 1_000.0, 10_000.0, 100_000.0, 1_000_000.0] {
         if let Some(candidate) = fixed_point(values, factor)? {
-            keep_smaller(&mut best, candidate);
+            best.consider(candidate);
         }
     }
-    Ok(best)
+    Ok(best.finish())
 }
 
 /// Quantizes finite floats over their observed interval into `steps` bins.
@@ -90,6 +90,16 @@ fn fixed_point(values: &[f64], factor: f64) -> Result<Option<EncodedData>, Diagn
             return Ok(None);
         };
         integers.push(integer);
+    }
+    // The per-value guard admits [i32::MIN, u32::MAX], which no single integer
+    // type covers: a negative minimum with a maximum above i32::MAX narrows to
+    // Int32 and then fails to flatten. Decline the candidate instead.
+    let spans_signed_and_unsigned = match (integers.iter().min(), integers.iter().max()) {
+        (Some(minimum), Some(maximum)) => *minimum < 0 && *maximum > i64::from(i32::MAX),
+        _ => false,
+    };
+    if spans_signed_and_unsigned {
+        return Ok(None);
     }
     let mut encoded = encode_integers(&integers)?;
     encoded.encoding.insert(
