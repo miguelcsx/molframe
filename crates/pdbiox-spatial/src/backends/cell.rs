@@ -1,10 +1,14 @@
 //! Contiguous fixed-radius cell list.
 
-use crate::brute::{canonicalise, distance_squared, finite};
+use crate::brute::{canonicalise, finite};
 use crate::{CellGridOptions, NeighborPair, PeriodicBox, SpatialError};
 
+#[path = "cell/budget.rs"]
+mod budget;
 #[path = "cell/geometry.rs"]
 mod geometry;
+#[path = "cell/owned.rs"]
+mod owned;
 use geometry::{finite_bounds, grid_geometry};
 #[path = "cell/periodic.rs"]
 mod periodic_grid;
@@ -12,8 +16,12 @@ use periodic_grid::PeriodicGrid;
 #[path = "cell/unique.rs"]
 mod unique;
 pub(crate) use unique::{
-    for_each_pairs_same_selection_unordered, pairs_same_selection, pairs_same_selection_unordered,
+    for_each_pairs_same_selection_unordered, pairs_same_selection, pairs_same_selection_parallel,
+    pairs_same_selection_unordered, reduce_pairs_same_selection_parallel,
 };
+#[path = "cell/visit.rs"]
+mod visit;
+use visit::grid_for_each_pair;
 
 const NEIGHBOUR_OFFSETS: [[isize; 3]; 27] = [
     [-1, -1, -1],
@@ -53,6 +61,7 @@ struct Grid {
     offsets: Vec<usize>,
     members: Vec<u32>,
     non_empty_cells: Vec<usize>,
+    largest_cell: usize,
 }
 
 #[derive(Debug)]
@@ -68,6 +77,7 @@ pub struct CellList<'a> {
     cutoff: f32,
     periodic: Option<&'a PeriodicBox>,
     grid: Option<CellGrid>,
+    reservation: Option<pdbiox_core::MemoryReservation>,
 }
 
 impl<'a> CellList<'a> {
@@ -119,6 +129,7 @@ impl<'a> CellList<'a> {
             cutoff,
             periodic,
             grid,
+            reservation: None,
         })
     }
 
@@ -129,111 +140,54 @@ impl<'a> CellList<'a> {
     /// Returns an error when the requested cutoff exceeds the build cutoff or
     /// a query index is out of range.
     pub fn pairs(&self, query: &[u32], cutoff: f32) -> Result<Vec<NeighborPair>, SpatialError> {
+        let mut found = Vec::with_capacity(query.len());
+        self.for_each_pair(query, cutoff, |pair| found.push(pair))?;
+        canonicalise(&mut found);
+        Ok(found)
+    }
+
+    /// Visits pairs for the indexed targets without retaining a result vector.
+    pub(crate) fn for_each_pair(
+        &self,
+        query: &[u32],
+        cutoff: f32,
+        mut emit: impl FnMut(NeighborPair),
+    ) -> Result<(), SpatialError> {
+        self.for_each_candidate(query, cutoff, |atom, target, squared| {
+            emit(NeighborPair::new(atom, target, squared));
+        })
+    }
+
+    /// Visits oriented query-target candidates without retaining pairs.
+    ///
+    /// Self-pairs are omitted. Overlapping query and target sets may emit both
+    /// orientations; callers computing symmetric results must choose ownership.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid query indices or a cutoff larger than the indexed cutoff.
+    pub fn for_each_candidate(
+        &self,
+        query: &[u32],
+        cutoff: f32,
+        mut emit: impl FnMut(u32, u32, f32),
+    ) -> Result<(), SpatialError> {
         validate_query_cutoff(cutoff, self.cutoff)?;
         validate_indices(query, self.positions.len())?;
 
         match &self.grid {
             Some(CellGrid::Cartesian(grid)) => {
-                grid_pairs(self.positions, grid, query, cutoff * cutoff)
+                grid_for_each_pair::<false>(self.positions, grid, query, cutoff * cutoff, &mut emit)
             }
             Some(CellGrid::Periodic(grid)) => {
                 let Some(periodic) = self.periodic else {
                     return Err(SpatialError::InvalidCell);
                 };
-                grid.pairs(self.positions, query, cutoff * cutoff, periodic)
+                grid.for_each_pair(self.positions, query, cutoff * cutoff, periodic, &mut emit)
             }
-            None => Ok(Vec::new()),
+            None => Ok(()),
         }
     }
-}
-
-/// Evaluates a cell-grid query and canonicalises the resulting pairs.
-///
-/// Each finite query atom visits at most 27 cells. Pairwise work inside those
-/// cells depends on local spatial density.
-fn grid_pairs(
-    positions: &[[f32; 3]],
-    grid: &Grid,
-    query: &[u32],
-    cutoff_squared: f32,
-) -> Result<Vec<NeighborPair>, SpatialError> {
-    let mut found = Vec::with_capacity(query.len());
-
-    for &atom in query {
-        let Ok(index) = usize::try_from(atom) else {
-            return Err(SpatialError::NumericRangeExceeded);
-        };
-        let Some(position) = positions.get(index).copied() else {
-            continue;
-        };
-
-        if !finite(position) {
-            continue;
-        }
-
-        append_grid_pairs(positions, grid, atom, position, cutoff_squared, &mut found)?;
-    }
-
-    canonicalise(&mut found);
-    Ok(found)
-}
-
-/// Searches the 27 neighbouring cells for one query atom.
-///
-/// Runtime is proportional to the members of the visited cells and no
-/// temporary heap allocation is performed.
-fn append_grid_pairs(
-    positions: &[[f32; 3]],
-    grid: &Grid,
-    atom: u32,
-    position: [f32; 3],
-    cutoff_squared: f32,
-    found: &mut Vec<NeighborPair>,
-) -> Result<(), SpatialError> {
-    let centre = cell_of(grid, position)?;
-
-    for delta in NEIGHBOUR_OFFSETS {
-        let Some(cell) = neighbour_cell(grid.dims, centre, delta) else {
-            continue;
-        };
-
-        let members = members_of_cell(grid, cell).ok_or(SpatialError::NumericRangeExceeded)?;
-        append_cell_pairs(positions, atom, position, members, cutoff_squared, found)?;
-    }
-    Ok(())
-}
-
-/// Compares one query atom against all members of one cell.
-///
-/// Grid members are finite by construction, so only defensive bounds checks
-/// remain in the hot loop.
-fn append_cell_pairs(
-    positions: &[[f32; 3]],
-    atom: u32,
-    position: [f32; 3],
-    targets: &[u32],
-    cutoff_squared: f32,
-    found: &mut Vec<NeighborPair>,
-) -> Result<(), SpatialError> {
-    for &target in targets {
-        if atom == target {
-            continue;
-        }
-
-        let Ok(index) = usize::try_from(target) else {
-            return Err(SpatialError::NumericRangeExceeded);
-        };
-        let Some(target_position) = positions.get(index).copied() else {
-            continue;
-        };
-
-        let squared = distance_squared(position, target_position, None);
-
-        if squared <= cutoff_squared {
-            found.push(NeighborPair::new(atom, target, squared));
-        }
-    }
-    Ok(())
 }
 
 /// Builds the contiguous grid representation for finite target coordinates.
@@ -255,20 +209,25 @@ fn build_grid(
         grid_geometry(bounds.min, bounds.max, cutoff, options)?
     };
 
-    let counts = count_members(positions, targets, bounds.min, edge, dims, count)?;
+    let mut counts = count_members(positions, targets, bounds.min, edge, dims, count)?;
+    let mut non_empty_cells = Vec::with_capacity(bounds.finite_count.min(count));
+    let mut largest_cell = 0;
+    for (cell, &count) in counts.iter().enumerate() {
+        largest_cell = largest_cell.max(count);
+        if count != 0 {
+            non_empty_cells.push(cell);
+        }
+    }
     let offsets = prefix_offsets(&counts)?;
-    let non_empty_cells = counts
-        .iter()
-        .enumerate()
-        .filter_map(|(cell, &count)| (count != 0).then_some(cell))
-        .collect();
+    let cell_count = counts.len();
+    counts.copy_from_slice(&offsets[..cell_count]);
     let members = fill_members(
         positions,
         targets,
         bounds.min,
         edge,
         dims,
-        &offsets,
+        &mut counts,
         bounds.finite_count,
     )?;
 
@@ -279,6 +238,7 @@ fn build_grid(
         offsets,
         members,
         non_empty_cells,
+        largest_cell,
     }))
 }
 
@@ -350,14 +310,9 @@ fn fill_members(
     origin: [f32; 3],
     edge: f32,
     dims: [usize; 3],
-    offsets: &[usize],
+    cursors: &mut [usize],
     finite_count: usize,
 ) -> Result<Vec<u32>, SpatialError> {
-    let cell_count = offsets
-        .len()
-        .checked_sub(1)
-        .ok_or(SpatialError::NumericRangeExceeded)?;
-    let mut cursors: Vec<usize> = offsets.iter().take(cell_count).copied().collect();
     let mut members = vec![0u32; finite_count];
 
     for &target in targets {

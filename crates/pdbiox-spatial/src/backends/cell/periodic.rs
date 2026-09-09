@@ -13,6 +13,10 @@ pub(super) struct PeriodicGrid {
 }
 
 impl PeriodicGrid {
+    pub(super) fn retained_bytes(&self) -> usize {
+        self.offsets.capacity() * size_of::<usize>() + self.members.capacity() * size_of::<u32>()
+    }
+
     pub(super) fn build(
         positions: &[[f32; 3]],
         targets: &[u32],
@@ -35,7 +39,7 @@ impl PeriodicGrid {
         }
 
         let offsets = prefix_offsets(&counts)?;
-        let mut cursors: Vec<usize> = offsets.iter().take(cell_count).copied().collect();
+        counts.copy_from_slice(&offsets[..cell_count]);
         let finite_count = match offsets.last() {
             Some(count) => *count,
             None => 0,
@@ -51,7 +55,7 @@ impl PeriodicGrid {
                 continue;
             }
             let index = linear(dims, cell(periodic, position, dims)?)?;
-            let Some(cursor) = cursors.get_mut(index) else {
+            let Some(cursor) = counts.get_mut(index) else {
                 continue;
             };
             if let Some(slot) = members.get_mut(*cursor) {
@@ -67,15 +71,17 @@ impl PeriodicGrid {
         })
     }
 
-    pub(super) fn pairs(
+    pub(super) fn for_each_pair<F>(
         &self,
         positions: &[[f32; 3]],
         query: &[u32],
         cutoff_squared: f32,
         periodic: &PeriodicBox,
-    ) -> Result<Vec<NeighborPair>, SpatialError> {
-        let mut found = Vec::new();
-
+        emit: &mut F,
+    ) -> Result<(), SpatialError>
+    where
+        F: FnMut(u32, u32, f32),
+    {
         for &atom in query {
             let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
             let Some(position) = positions.get(index).copied() else {
@@ -84,18 +90,9 @@ impl PeriodicGrid {
             if !finite(position) {
                 continue;
             }
-            self.append_pairs(
-                positions,
-                atom,
-                position,
-                cutoff_squared,
-                periodic,
-                &mut found,
-            )?;
+            self.append_pairs(positions, atom, position, cutoff_squared, periodic, emit)?;
         }
-
-        canonicalise(&mut found);
-        Ok(found)
+        Ok(())
     }
 
     pub(super) fn pairs_same_selection(
@@ -163,15 +160,18 @@ impl PeriodicGrid {
         Ok(())
     }
 
-    fn append_pairs(
+    fn append_pairs<F>(
         &self,
         positions: &[[f32; 3]],
         atom: u32,
         position: [f32; 3],
         cutoff_squared: f32,
         periodic: &PeriodicBox,
-        found: &mut Vec<NeighborPair>,
-    ) -> Result<(), SpatialError> {
+        emit: &mut F,
+    ) -> Result<(), SpatialError>
+    where
+        F: FnMut(u32, u32, f32),
+    {
         let centre = cell(periodic, position, self.dims)?;
         let mut visited = [usize::MAX; NEIGHBOUR_OFFSETS.len()];
         let mut visited_count = 0usize;
@@ -198,7 +198,7 @@ impl PeriodicGrid {
                 };
                 let squared = distance_squared(position, target_position, Some(periodic));
                 if squared <= cutoff_squared {
-                    found.push(NeighborPair::new(atom, target, squared));
+                    emit(atom, target, squared);
                 }
             }
         }
@@ -258,7 +258,7 @@ impl PeriodicGrid {
     }
 }
 
-fn periodic_dimensions(
+pub(super) fn periodic_dimensions(
     periodic: &PeriodicBox,
     cutoff: f32,
     options: CellGridOptions,
@@ -302,7 +302,7 @@ fn cell(
     let fractional = periodic
         .fractional(position)
         .map(|value| value.rem_euclid(1.0));
-    let coordinate = |axis: usize| {
+    let coordinate = |axis: usize| -> Result<usize, SpatialError> {
         let dimension =
             crate::numeric::usize_f64(dims[axis]).ok_or(SpatialError::NumericRangeExceeded)?;
         let value = crate::numeric::floor_usize(fractional[axis] * dimension)
@@ -359,7 +359,7 @@ fn prefix_offsets(counts: &[usize]) -> Result<Vec<usize>, SpatialError> {
     Ok(offsets)
 }
 
-fn cell_count(dims: [usize; 3]) -> Result<usize, SpatialError> {
+pub(super) fn cell_count(dims: [usize; 3]) -> Result<usize, SpatialError> {
     dims[0]
         .checked_mul(dims[1])
         .and_then(|value| value.checked_mul(dims[2]))

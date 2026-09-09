@@ -3,6 +3,8 @@
 use super::{CellGrid, CellList, Grid, NEIGHBOUR_OFFSETS};
 use crate::brute::{canonicalise, distance_squared};
 use crate::{NeighborPair, SpatialError};
+use pdbiox_core::ExecutionContext;
+use pdbiox_core::parallel::{BlockPlan, map_blocks_in};
 
 /// Finds each unordered pair from one selection once.
 ///
@@ -107,24 +109,170 @@ where
     F: FnMut(NeighborPair),
 {
     for &cell in &grid.non_empty_cells {
-        let members =
-            super::members_of_cell(grid, cell).ok_or(SpatialError::NumericRangeExceeded)?;
-        append_same_cell_pairs(positions, members, cutoff_squared, emit)?;
-
-        let centre = cell_coordinates(grid.dims, cell).ok_or(SpatialError::NumericRangeExceeded)?;
-        for delta in NEIGHBOUR_OFFSETS {
-            let Some(neighbour) = super::neighbour_cell(grid.dims, centre, delta) else {
-                continue;
-            };
-            if neighbour <= cell {
-                continue;
-            }
-            let targets = super::members_of_cell(grid, neighbour)
-                .ok_or(SpatialError::NumericRangeExceeded)?;
-            append_cross_cell_pairs(positions, members, targets, cutoff_squared, emit)?;
-        }
+        emit_cell_pairs(positions, grid, cell, cutoff_squared, emit)?;
     }
     Ok(())
+}
+
+/// Emits every unordered pair owned by one non-empty cell: pairs inside the
+/// cell, and cross-cell pairs with each higher-indexed neighbour. Each pair is
+/// owned by exactly one cell, so partitioning `non_empty_cells` across threads
+/// yields a disjoint emission with no double counting.
+pub(super) fn emit_cell_pairs<F>(
+    positions: &[[f32; 3]],
+    grid: &Grid,
+    cell: usize,
+    cutoff_squared: f32,
+    emit: &mut F,
+) -> Result<(), SpatialError>
+where
+    F: FnMut(NeighborPair),
+{
+    let members = super::members_of_cell(grid, cell).ok_or(SpatialError::NumericRangeExceeded)?;
+    append_same_cell_pairs(positions, members, cutoff_squared, emit)?;
+
+    let centre = cell_coordinates(grid.dims, cell).ok_or(SpatialError::NumericRangeExceeded)?;
+    for delta in NEIGHBOUR_OFFSETS {
+        let Some(neighbour) = super::neighbour_cell(grid.dims, centre, delta) else {
+            continue;
+        };
+        if neighbour <= cell {
+            continue;
+        }
+        let targets =
+            super::members_of_cell(grid, neighbour).ok_or(SpatialError::NumericRangeExceeded)?;
+        append_cross_cell_pairs(positions, members, targets, cutoff_squared, emit)?;
+    }
+    Ok(())
+}
+
+/// Finds each unordered same-selection pair across `workers` scoped threads.
+///
+/// `non_empty_cells` is divided by a block plan whose boundaries come from the
+/// cell count, not the worker count; each cell owns a disjoint set of pairs, so
+/// the concatenated result is exactly the serial set. `canonicalise` then sorts
+/// it, making the output identical to [`pairs_same_selection`] for any worker
+/// count. Non-Cartesian grids fall back to the serial sorted path.
+pub(crate) fn pairs_same_selection_parallel(
+    list: &CellList<'_>,
+    query: &[u32],
+    cutoff: f32,
+    context: &ExecutionContext,
+    sort_result: bool,
+) -> Result<Vec<NeighborPair>, SpatialError> {
+    /// Cells per block. Occupancy varies widely between a dense protein core
+    /// and a solvent shell, so blocks are much smaller than one worker's share.
+    const BLOCK_CELLS: usize = 64;
+    /// Below this size, dispatch and per-block vectors cost more than the
+    /// available cell parallelism on the calibrated Apple M4 workload.
+    const MIN_PARALLEL_ATOMS: usize = 2_048;
+
+    super::validate_query_cutoff(cutoff, list.cutoff)?;
+    super::validate_indices(query, list.positions.len())?;
+
+    let Some(CellGrid::Cartesian(grid)) = &list.grid else {
+        return pairs_same_selection_with_order(list, query, cutoff, sort_result);
+    };
+    if query.len() < MIN_PARALLEL_ATOMS {
+        return pairs_same_selection_with_order(list, query, cutoff, sort_result);
+    }
+
+    let cutoff_squared = cutoff * cutoff;
+    let cells = &grid.non_empty_cells;
+    let positions = list.positions;
+
+    let plan = BlockPlan::new(cells.len(), BLOCK_CELLS);
+    let produced = map_blocks_in(plan, context, |_, range| match cells.get(range) {
+        Some(chunk) => collect_cells(positions, grid, chunk, cutoff_squared),
+        None => Ok(Vec::new()),
+    })
+    .map_err(|_| SpatialError::WorkerPanicked)?;
+
+    let mut found = Vec::new();
+    for part in produced {
+        found.extend(part?);
+    }
+
+    if sort_result {
+        canonicalise(&mut found);
+    }
+    Ok(found)
+}
+
+/// Folds every same-selection pair into per-block accumulators.
+///
+/// Identical block partitioning to [`pairs_same_selection_parallel`], but each
+/// block reduces its pairs as it finds them instead of collecting them. Peak
+/// retained bytes then track the accumulator, not the pair count — the
+/// difference between a reduction that fits in cache and one that needs
+/// hundreds of gigabytes at a billion atoms (FR-516).
+///
+/// Accumulators are returned in block order, so merging them in the order given
+/// produces the same result at any worker count (FR-515).
+pub(crate) fn reduce_pairs_same_selection_parallel<T, I, F>(
+    list: &CellList<'_>,
+    query: &[u32],
+    cutoff: f32,
+    context: &ExecutionContext,
+    init: I,
+    fold: F,
+) -> Result<Option<Vec<T>>, SpatialError>
+where
+    T: Send,
+    I: Fn() -> T + Sync,
+    F: Fn(&mut T, NeighborPair) + Sync,
+{
+    /// Cells per block, matching the collecting kernel so both partition alike.
+    const BLOCK_CELLS: usize = 64;
+
+    super::validate_query_cutoff(cutoff, list.cutoff)?;
+    super::validate_indices(query, list.positions.len())?;
+
+    // Only a Cartesian grid owns disjoint pairs per cell; other grids have no
+    // block decomposition, so the caller falls back to the serial visitor.
+    let Some(CellGrid::Cartesian(grid)) = &list.grid else {
+        return Ok(None);
+    };
+
+    let cutoff_squared = cutoff * cutoff;
+    let cells = &grid.non_empty_cells;
+    let positions = list.positions;
+
+    let plan = BlockPlan::new(cells.len(), BLOCK_CELLS);
+    let produced = map_blocks_in(plan, context, |_, range| {
+        let mut accumulator = init();
+        let Some(chunk) = cells.get(range) else {
+            return Ok(accumulator);
+        };
+        for &cell in chunk {
+            emit_cell_pairs(positions, grid, cell, cutoff_squared, &mut |pair| {
+                fold(&mut accumulator, pair);
+            })?;
+        }
+        Ok(accumulator)
+    })
+    .map_err(|_| SpatialError::WorkerPanicked)?;
+
+    produced
+        .into_iter()
+        .collect::<Result<Vec<T>, _>>()
+        .map(Some)
+}
+
+/// Collects every pair owned by a contiguous slice of non-empty cells.
+fn collect_cells(
+    positions: &[[f32; 3]],
+    grid: &Grid,
+    cells: &[usize],
+    cutoff_squared: f32,
+) -> Result<Vec<NeighborPair>, SpatialError> {
+    let mut found = Vec::new();
+    for &cell in cells {
+        emit_cell_pairs(positions, grid, cell, cutoff_squared, &mut |pair| {
+            found.push(pair);
+        })?;
+    }
+    Ok(found)
 }
 
 /// Converts a linear cell index back to three-dimensional coordinates.
