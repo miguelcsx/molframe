@@ -28,10 +28,14 @@ pub mod contract;
 pub mod coords;
 pub mod diagnostic;
 pub mod element;
+pub mod execution;
+pub mod hashing;
 pub mod index;
 pub mod io;
 pub mod limits;
 pub mod optional;
+pub mod parallel;
+pub mod provider;
 pub mod selection;
 pub mod span;
 pub mod structure;
@@ -57,15 +61,30 @@ pub use diagnostic::{
     Class, Code, ContextItem, Diagnostic, Diagnostics, Kind, Rendered, Severity, Strictness,
 };
 pub use element::Element;
+pub use execution::{
+    Backpressure, Batch, BatchDemand, BatchLease, BatchSource, CancellationToken, Cancelled,
+    ContextError, ExecutionContext, ExecutionContextBuilder, MemoryBudget, MemoryBudgetError,
+    MemoryReservation, ScratchPolicy, SpillArtifact, SpillError, SpillFile, SpillReader,
+    TempStoragePolicy,
+};
 pub use index::{
-    AtomIndex, BondIndex, ChainIndex, ChunkId, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
+    AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
 };
 pub use io::{
-    AmbiguousResidueBoundaryPolicy, Format, InputBuffer, InputKind, MissingElementPolicy,
-    ParseMode, ReadOptions, ReadResult, write_output,
+    AmbiguousResidueBoundaryPolicy, BatchContinuity, ByteWindow, ContinuityLevel, Format,
+    InputBuffer, InputKind, MissingElementPolicy, ParseMode, ReadOptions, ReadResult, SourceBytes,
+    SpillWindowedFile, StructureAtomRecord, StructureBatch, StructureBatchBuffer,
+    StructureBatchBuilder, StructureBatchError, StructureBatchPool, WindowedFile,
+    WindowedSourceFile, collect_structure, write_output,
 };
 pub use limits::{CapacityError, TableError};
 pub use optional::{OptionalI32, OptionalSymbol};
+pub use provider::{
+    AtomEndpoint, BondChunk, BondChunkProvider, BondChunkRecord, ChunkDescriptor, ChunkId,
+    ChunkLayout, DatasetCatalog, DatasetDescriptor, DatasetId, FrameChunk, FrameChunkProvider,
+    LocalRow, LogicalRow, PayloadKind, PropertyChunk, PropertyChunkProvider, PropertyKind,
+    PropertyValue, ProviderError, StructureChunk, StructureChunkProvider, TARGET_CHUNK_BONDS,
+};
 pub use selection::AtomSelection;
 pub use span::{ByteSpan, Position};
 pub use structure::{
