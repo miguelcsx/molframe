@@ -238,3 +238,14 @@ pub fn semi_global_matrix(
         None,
     )
 }
+
+/// Scores a global affine alignment without constructing its traceback.
+///
+/// Uses `O(min(n, m))` working memory and `O(n * m)` time.
+///
+/// # Errors
+///
+/// Returns a numeric error if dimensions or the exact score overflow.
+pub fn global_score(left: &[u8], right: &[u8], scoring: Scoring) -> Result<i32, AlignError> {
+    super::linear::global_score_linear(left, right, &scoring, scoring.gap_open, scoring.gap_extend)
+}

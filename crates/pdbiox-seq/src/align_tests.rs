@@ -171,3 +171,17 @@ fn exact_score_overflow_is_reported() {
         Err(AlignError::NumericOverflow)
     );
 }
+
+#[test]
+fn score_only_matches_traceback_with_empty_and_unequal_inputs() {
+    let sequences: &[&[u8]] = &[b"", b"A", b"AC", b"GATTACA", b"TAGACCA"];
+    for left in sequences {
+        for right in sequences {
+            let scoring = Scoring::simple();
+            assert_eq!(
+                crate::global_score(left, right, scoring).expect("score"),
+                global(left, right, scoring).expect("alignment").score,
+            );
+        }
+    }
+}

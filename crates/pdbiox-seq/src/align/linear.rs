@@ -87,6 +87,34 @@ pub(super) fn global_linear<S: Score>(
     }
 }
 
+pub(super) fn global_score_linear<S: Score>(
+    left: &[u8],
+    right: &[u8],
+    scorer: &S,
+    gap_open: i32,
+    gap_extend: i32,
+) -> Result<i32, AlignError> {
+    let (row, column) = if right.len() <= left.len() {
+        (
+            forward(left, right, scorer, gap_open, gap_extend, State::Match)?,
+            right.len(),
+        )
+    } else {
+        (
+            forward(
+                right,
+                left,
+                &ReversedScore(scorer),
+                gap_open,
+                gap_extend,
+                State::Match,
+            )?,
+            left.len(),
+        )
+    };
+    i32::try_from(best_end(&row, column).0).map_err(|_| AlignError::NumericOverflow)
+}
+
 fn solve<S: Score>(
     rows: &[u8],
     columns: &[u8],

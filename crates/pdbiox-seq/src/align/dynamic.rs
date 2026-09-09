@@ -18,6 +18,7 @@ pub(super) enum Mode {
 
 struct Tables {
     width: usize,
+    rows: Vec<Row>,
     m: Vec<i64>,
     ix: Vec<i64>,
     iy: Vec<i64>,
@@ -26,9 +27,22 @@ struct Tables {
     from_iy: Vec<u8>,
 }
 
+struct Row {
+    offset: usize,
+    first: usize,
+    end: usize,
+}
+
 impl Tables {
     fn at(&self, row: usize, col: usize) -> usize {
-        row * self.width + col
+        let layout = &self.rows[row];
+        if col == 0 {
+            return layout.offset;
+        }
+        if col < layout.first || col >= layout.end {
+            return 0;
+        }
+        layout.offset + 1 + col - layout.first
     }
 }
 
@@ -49,7 +63,7 @@ pub(super) fn run<S: Score>(
         .len()
         .checked_add(1)
         .ok_or(AlignError::NumericOverflow)?;
-    let mut tables = seed(rows, width, gap_open, gap_extend, mode)?;
+    let mut tables = seed(rows, width, gap_open, gap_extend, mode, band)?;
     let cell = CellParameters {
         left,
         right,
@@ -59,13 +73,13 @@ pub(super) fn run<S: Score>(
         mode,
     };
 
+    // A band restricts which cells are filled, so it must restrict which cells
+    // are visited. Testing the band inside a full traversal still walks every
+    // one of the `rows * width` positions to skip most of them, which for a
+    // narrow band over long sequences is the whole cost of the alignment.
     for i in 1..rows {
-        for j in 1..width {
-            if let Some(band) = band
-                && i.abs_diff(j) > band
-            {
-                continue;
-            }
+        let (first, last) = banded_columns(i, width, band);
+        for j in first..last {
             fill_cell(&mut tables, &cell, i, j)?;
         }
     }
@@ -81,16 +95,53 @@ pub(super) fn run<S: Score>(
     })
 }
 
+/// The half-open column range row `i` fills under an optional band.
+///
+/// Without a band that is every column. With one it is the columns within
+/// `band` of the diagonal, clamped to the row.
+fn banded_columns(row: usize, width: usize, band: Option<usize>) -> (usize, usize) {
+    let Some(band) = band else {
+        return (1, width);
+    };
+    let first = row.saturating_sub(band).max(1);
+    let last = match row.checked_add(band).and_then(|last| last.checked_add(1)) {
+        Some(last) => last.min(width),
+        None => width,
+    };
+    (first, last.max(first))
+}
+
 fn seed(
     rows: usize,
     width: usize,
     gap_open: i32,
     gap_extend: i32,
     mode: Mode,
+    band: Option<usize>,
 ) -> Result<Tables, AlignError> {
-    let size = rows.checked_mul(width).ok_or(AlignError::NumericOverflow)?;
+    // Slot zero is the immutable unreachable predecessor outside the band.
+    // Keep the complete boundary row/column to preserve free-end semantics.
+    let mut layout = Vec::with_capacity(rows);
+    let mut size = 1usize;
+    for row in 0..rows {
+        let (first, end) = if row == 0 {
+            (1, width)
+        } else {
+            banded_columns(row, width, band)
+        };
+        layout.push(Row {
+            offset: size,
+            first,
+            end,
+        });
+        size = size
+            .checked_add(1)
+            .and_then(|value| value.checked_add(end - first))
+            .ok_or(AlignError::NumericOverflow)?;
+    }
     let mut tables = Tables {
         width,
+        rows: layout,
         m: vec![NEG; size],
         ix: vec![NEG; size],
         iy: vec![NEG; size],
@@ -98,7 +149,8 @@ fn seed(
         from_ix: vec![STOP; size],
         from_iy: vec![STOP; size],
     };
-    tables.m[0] = 0;
+    let origin = tables.at(0, 0);
+    tables.m[origin] = 0;
     match mode {
         Mode::Global => {
             let mut penalty = i64::from(gap_open);
@@ -217,7 +269,7 @@ fn better(first: i64, first_from: u8, second: i64, second_from: u8) -> (i64, u8)
 }
 
 fn start(tables: &Tables, mode: Mode) -> (usize, usize, u8, i64) {
-    let rows = tables.m.len() / tables.width;
+    let rows = tables.rows.len();
     let width = tables.width;
     match mode {
         Mode::Global => {
@@ -228,7 +280,7 @@ fn start(tables: &Tables, mode: Mode) -> (usize, usize, u8, i64) {
         Mode::Local => {
             let mut best = (0usize, 0usize, STOP, 0_i64);
             for i in 0..rows {
-                for j in 0..width {
+                for j in std::iter::once(0).chain(tables.rows[i].first..tables.rows[i].end) {
                     let value = tables.m[tables.at(i, j)];
                     if value > best.3 {
                         best = (i, j, FROM_M, value);
@@ -308,3 +360,7 @@ fn trace(tables: &Tables, mode: Mode, mut i: usize, mut j: usize, mut state: u8)
     columns.reverse();
     columns
 }
+
+#[cfg(test)]
+#[path = "dynamic_tests.rs"]
+mod tests;

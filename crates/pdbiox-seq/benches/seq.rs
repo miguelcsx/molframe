@@ -62,6 +62,42 @@ fn bench_sequence_algorithms(c: &mut Criterion) {
             ))
         });
     });
+
+    let larger: [Vec<u8>; 8] = std::array::from_fn(|index| {
+        let mut sequence = synthetic_sequence(512 + index * 3);
+        for position in (index + 11..sequence.len()).step_by(47 + index) {
+            sequence[position] = b'Y';
+        }
+        sequence
+    });
+    let larger_views = larger.each_ref().map(Vec::as_slice);
+    c.bench_function("seq_msa/progressive_eight_512", |b| {
+        b.iter(|| {
+            black_box(progressive_msa(
+                &larger_views,
+                MsaOptions::progressive(Scoring::simple()),
+            ))
+        });
+    });
+
+    let many = (0..64)
+        .map(|index| {
+            let mut sequence = synthetic_sequence(128);
+            for position in (index % 23..sequence.len()).step_by(29 + index % 7) {
+                sequence[position] = b'W';
+            }
+            sequence
+        })
+        .collect::<Vec<_>>();
+    let many_views = many.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    c.bench_function("seq_msa/progressive_sixty_four_128", |b| {
+        b.iter(|| {
+            black_box(progressive_msa(
+                &many_views,
+                MsaOptions::progressive(Scoring::simple()),
+            ))
+        });
+    });
 }
 
 fn bench_formats(c: &mut Criterion) {

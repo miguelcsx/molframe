@@ -38,8 +38,8 @@ pub use a2m::{A2mError, a2m_match_columns, parse_a2m, write_a2m};
 pub use a3m::{a3m_match_columns, parse_a3m, write_a3m};
 pub use align::{
     AlignError, Alignment, AlignmentMode, Column, RegionAlignError, RegionError, RegionOptions,
-    align_region, global, global_banded, global_matrix, local, local_matrix, semi_global,
-    semi_global_matrix,
+    align_region, global, global_banded, global_matrix, global_score, local, local_matrix,
+    semi_global, semi_global_matrix,
 };
 pub use alphabet::{
     Alphabet, AlphabetError, Code, CustomAlphabet, DNA, DnaAlphabet, NUCLEOTIDE,
