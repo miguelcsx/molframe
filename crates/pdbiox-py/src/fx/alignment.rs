@@ -61,14 +61,22 @@ impl PyAlignedMotif {
 }
 
 #[pyfunction]
-pub(crate) fn align_intrinsic(mapping: &PyMappedMotif) -> PyAlignedMotif {
-    PyAlignedMotif(pdbiox::fx::align_intrinsic(mapping.0.clone()))
+pub(crate) fn align_intrinsic(py: Python<'_>, mapping: &PyMappedMotif) -> PyAlignedMotif {
+    py.detach(move || -> PyAlignedMotif {
+        PyAlignedMotif(pdbiox::fx::align_intrinsic(mapping.0.clone()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn align_with_transform(mapping: &PyMappedMotif, transform: &PyRigid) -> PyAlignedMotif {
-    PyAlignedMotif(pdbiox::fx::align_with_transform(
-        mapping.0.clone(),
-        transform.0,
-    ))
+pub(crate) fn align_with_transform(
+    py: Python<'_>,
+    mapping: &PyMappedMotif,
+    transform: &PyRigid,
+) -> PyAlignedMotif {
+    py.detach(move || -> PyAlignedMotif {
+        PyAlignedMotif(pdbiox::fx::align_with_transform(
+            mapping.0.clone(),
+            transform.0,
+        ))
+    })
 }

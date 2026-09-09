@@ -18,11 +18,12 @@ pub(crate) struct PyMsaOptions(pdbiox::seq::MsaOptions);
 #[pymethods]
 impl PyMsaOptions {
     #[new]
-    #[pyo3(signature = (scoring, *, refinement_passes=0))]
-    fn new(scoring: PyScoring, refinement_passes: usize) -> Self {
+    #[pyo3(signature = (scoring, *, refinement_passes=0, memory_limit_bytes=100_000_000))]
+    fn new(scoring: PyScoring, refinement_passes: usize, memory_limit_bytes: usize) -> Self {
         Self(
             pdbiox::seq::MsaOptions::progressive(scoring.inner())
-                .with_refinement_passes(refinement_passes),
+                .with_refinement_passes(refinement_passes)
+                .with_memory_limit(memory_limit_bytes),
         )
     }
 
@@ -33,6 +34,10 @@ impl PyMsaOptions {
 
     fn with_refinement_passes(&self, refinement_passes: usize) -> Self {
         Self(self.0.with_refinement_passes(refinement_passes))
+    }
+
+    fn with_memory_limit(&self, memory_limit_bytes: usize) -> Self {
+        Self(self.0.with_memory_limit(memory_limit_bytes))
     }
 }
 
@@ -184,6 +189,20 @@ pub(crate) fn align_global_banded(
         .map_err(super::sequence::align_error)
 }
 
+/// Scores without allocating an alignment traceback.
+#[pyfunction]
+pub(crate) fn global_score(
+    py: Python<'_>,
+    left: Vec<u8>,
+    right: Vec<u8>,
+    scoring: PyScoring,
+) -> PyResult<i32> {
+    let left = left.into_boxed_slice();
+    let right = right.into_boxed_slice();
+    py.detach(move || pdbiox::seq::global_score(&left, &right, scoring.inner()))
+        .map_err(super::sequence::align_error)
+}
+
 #[pyfunction]
 pub(crate) fn seed_and_extend(
     py: Python<'_>,
@@ -258,8 +277,8 @@ impl PySubstitutionMatrix {
 }
 
 #[pyfunction]
-pub(crate) fn blosum62() -> PySubstitutionMatrix {
-    PySubstitutionMatrix(pdbiox::seq::blosum62())
+pub(crate) fn blosum62(py: Python<'_>) -> PySubstitutionMatrix {
+    py.detach(move || -> PySubstitutionMatrix { PySubstitutionMatrix(pdbiox::seq::blosum62()) })
 }
 
 macro_rules! matrix_aligner {

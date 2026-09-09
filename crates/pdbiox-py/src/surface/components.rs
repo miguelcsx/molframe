@@ -60,21 +60,26 @@ pub(crate) enum PySurfaceComponentError {
 }
 
 #[pyfunction]
-fn surface_components(mesh: &PyIndexedSurfaceMesh) -> Vec<PySurfaceComponent> {
-    pdbiox::surface::surface_components(&mesh.native)
-        .into_iter()
-        .map(Into::into)
-        .collect()
+fn surface_components(py: Python<'_>, mesh: &PyIndexedSurfaceMesh) -> Vec<PySurfaceComponent> {
+    py.detach(move || -> Vec<PySurfaceComponent> {
+        pdbiox::surface::surface_components(&mesh.native)
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    })
 }
 
 #[pyfunction]
 fn filter_surface_components(
+    py: Python<'_>,
     mesh: &PyIndexedSurfaceMesh,
     filter: &PySurfaceComponentFilter,
 ) -> PyResult<PyIndexedSurfaceMesh> {
-    pdbiox::surface::filter_surface_components(&mesh.native, filter.native)
-        .map(PyIndexedSurfaceMesh::from_native)
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<PyIndexedSurfaceMesh> {
+        pdbiox::surface::filter_surface_components(&mesh.native, filter.native)
+            .map(PyIndexedSurfaceMesh::from_native)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

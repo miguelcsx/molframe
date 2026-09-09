@@ -39,6 +39,10 @@ impl PyPeriodicBox {
         self.0.displacement(left, right)
     }
 
+    fn displacement_f64(&self, left: [f64; 3], right: [f64; 3]) -> [f64; 3] {
+        self.0.displacement_f64(left, right)
+    }
+
     fn minimum_image(&self, left: [f32; 3], right: [f32; 3]) -> PyPeriodicImage {
         self.0.minimum_image(left, right).into()
     }

@@ -151,17 +151,28 @@ impl PyStructure {
             .collect()
     }
 
-    #[pyo3(signature = (tolerance, radius_set, *, backend=PySpatialBackend::Auto))]
+    #[pyo3(signature = (tolerance, radius_set, *, backend=PySpatialBackend::Auto, context=None))]
     fn clashes(
         &self,
         py: Python<'_>,
         tolerance: f32,
         radius_set: PyRadiusSet,
         backend: PySpatialBackend,
+        context: Option<&crate::core::execution::PyExecutionContext>,
     ) -> PyResult<Vec<PyClash>> {
         let structure = self.structure().clone();
+        let context = context.map_or_else(
+            crate::core::execution::default_context,
+            crate::core::execution::PyExecutionContext::native,
+        );
         py.detach(move || {
-            pdbiox::validate::clashes(&structure, tolerance, radius_set.into(), backend.into())
+            pdbiox::validate::clashes(
+                &structure,
+                tolerance,
+                radius_set.into(),
+                backend.into(),
+                &context,
+            )
         })
         .map(|values| values.into_iter().map(PyClash::from).collect())
         .map_err(value_error)

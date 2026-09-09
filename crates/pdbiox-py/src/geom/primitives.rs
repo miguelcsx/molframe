@@ -4,8 +4,8 @@ use super::arrays::{distance_matrix_value, matrix_error};
 use super::borrowed_coordinates;
 use numpy::ndarray::{Array1, Array2};
 use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3,
-    PyUntypedArrayMethods,
+    IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
+    PyReadonlyArray3, PyUntypedArrayMethods,
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -69,8 +69,8 @@ macro_rules! binary_scalar {
             left: PyReadonlyArray2<'_, f32>,
             right: PyReadonlyArray2<'_, f32>,
         ) -> PyResult<Bound<'py, PyArray1<f64>>> {
-            let left = borrowed_coordinates(&left)?;
-            let right = borrowed_coordinates(&right)?;
+            let left = borrowed_coordinates(&left)?.to_vec();
+            let right = borrowed_coordinates(&right)?.to_vec();
             equal_rows(&left, &right)?;
             let values = py.detach(|| {
                 left.iter()
@@ -83,8 +83,25 @@ macro_rules! binary_scalar {
     };
 }
 
-binary_scalar!(distance, pdbiox::distance);
 binary_scalar!(distance_squared, pdbiox::distance_squared);
+
+#[pyfunction]
+pub(crate) fn distance<'py>(
+    py: Python<'py>,
+    left: PyReadonlyArray2<'_, f32>,
+    right: PyReadonlyArray2<'_, f32>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let left = borrowed_coordinates(&left)?.to_vec();
+    let right = borrowed_coordinates(&right)?.to_vec();
+    equal_rows(&left, &right)?;
+    let values = py.detach(move || {
+        let mut output = vec![0.0; left.len()];
+        pdbiox::distances_into(&left, &right, &mut output)
+            .map(|_| output)
+            .map_err(batch_error)
+    })?;
+    Ok(readonly_array(py, values))
+}
 
 #[pyfunction]
 #[pyo3(signature = (left, right))]
@@ -171,51 +188,48 @@ pub(crate) fn normalise(
 }
 
 #[pyfunction]
-pub(crate) fn angle(
-    py: Python<'_>,
+pub(crate) fn angle<'py>(
+    py: Python<'py>,
     first: PyReadonlyArray2<'_, f32>,
     vertex: PyReadonlyArray2<'_, f32>,
     third: PyReadonlyArray2<'_, f32>,
-) -> PyResult<Vec<Option<f64>>> {
-    let first = borrowed_coordinates(&first)?;
-    let vertex = borrowed_coordinates(&vertex)?;
-    let third = borrowed_coordinates(&third)?;
-    equal_rows(first, vertex)?;
-    equal_rows(first, third)?;
-    Ok(py.detach(|| {
-        first
-            .iter()
-            .zip(vertex.iter())
-            .zip(third.iter())
-            .map(|((&first, &vertex), &third)| pdbiox::angle(first, vertex, third))
-            .collect()
-    }))
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let first = borrowed_coordinates(&first)?.to_vec();
+    let vertex = borrowed_coordinates(&vertex)?.to_vec();
+    let third = borrowed_coordinates(&third)?.to_vec();
+    equal_rows(&first, &vertex)?;
+    equal_rows(&first, &third)?;
+    let values = py.detach(move || {
+        let mut output = vec![0.0; first.len()];
+        pdbiox::angles_into(&first, &vertex, &third, &mut output)
+            .map(|_| output)
+            .map_err(batch_error)
+    })?;
+    Ok(readonly_array(py, values))
 }
 
 #[pyfunction]
-pub(crate) fn dihedral(
-    py: Python<'_>,
+pub(crate) fn dihedral<'py>(
+    py: Python<'py>,
     first: PyReadonlyArray2<'_, f32>,
     second: PyReadonlyArray2<'_, f32>,
     third: PyReadonlyArray2<'_, f32>,
     fourth: PyReadonlyArray2<'_, f32>,
-) -> PyResult<Vec<Option<f64>>> {
-    let first = borrowed_coordinates(&first)?;
-    let second = borrowed_coordinates(&second)?;
-    let third = borrowed_coordinates(&third)?;
-    let fourth = borrowed_coordinates(&fourth)?;
-    equal_rows(first, second)?;
-    equal_rows(first, third)?;
-    equal_rows(first, fourth)?;
-    Ok(py.detach(|| {
-        first
-            .iter()
-            .zip(second.iter())
-            .zip(third.iter())
-            .zip(fourth.iter())
-            .map(|(((&a, &b), &c), &d)| pdbiox::dihedral(a, b, c, d))
-            .collect()
-    }))
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let first = borrowed_coordinates(&first)?.to_vec();
+    let second = borrowed_coordinates(&second)?.to_vec();
+    let third = borrowed_coordinates(&third)?.to_vec();
+    let fourth = borrowed_coordinates(&fourth)?.to_vec();
+    equal_rows(&first, &second)?;
+    equal_rows(&first, &third)?;
+    equal_rows(&first, &fourth)?;
+    let values = py.detach(move || {
+        let mut output = vec![0.0; first.len()];
+        pdbiox::torsions_into(&first, &second, &third, &fourth, &mut output)
+            .map(|_| output)
+            .map_err(batch_error)
+    })?;
+    Ok(readonly_array(py, values))
 }
 
 #[pyfunction]
@@ -256,6 +270,16 @@ fn equal_rows<T>(left: &[T], right: &[T]) -> PyResult<()> {
     } else {
         Err(PyValueError::new_err("vector batches differ in length"))
     }
+}
+
+fn readonly_array<T: numpy::Element>(py: Python<'_>, values: Vec<T>) -> Bound<'_, PyArray1<T>> {
+    let array = Array1::from_vec(values).into_pyarray(py);
+    array.readwrite().make_nonwriteable();
+    array
+}
+
+fn batch_error(error: pdbiox::BatchGeometryError) -> PyErr {
+    PyValueError::new_err(error.to_string())
 }
 
 fn triples(py: Python<'_>, values: Vec<[f64; 3]>) -> PyResult<Bound<'_, PyArray2<f64>>> {

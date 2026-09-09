@@ -172,11 +172,18 @@ impl PyStructure {
         let query = query.inner.clone();
         let policy = policy.map_or_else(AnalysisPolicy::default, |value| value.inner.clone());
         let groups = groups_from_python(groups);
-        py.detach(move || structure.select(&query, &policy, &groups))
-            .map(|evaluation| PySelection {
-                inner: evaluation.selection,
-            })
-            .map_err(|findings| read_error(py, &findings))
+        py.detach(move || {
+            structure.select(
+                &query,
+                &policy,
+                &groups,
+                &crate::core::execution::default_context(),
+            )
+        })
+        .map(|evaluation| PySelection {
+            inner: evaluation.selection,
+        })
+        .map_err(|findings| read_error(py, &findings))
     }
 
     #[pyo3(signature = (query, *, policy=None, groups=None))]

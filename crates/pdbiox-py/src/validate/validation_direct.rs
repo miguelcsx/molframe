@@ -60,17 +60,35 @@ pub(crate) fn ligand_geometry(
 }
 
 #[pyfunction]
-#[pyo3(signature = (structure, tolerance, radius_set, *, backend=PySpatialBackend::Auto))]
+#[pyo3(signature = (
+    structure,
+    tolerance,
+    radius_set,
+    *,
+    backend=PySpatialBackend::Auto,
+    context=None,
+))]
 pub(crate) fn clashes(
     py: Python<'_>,
     structure: &PyStructure,
     tolerance: f32,
     radius_set: PyRadiusSet,
     backend: PySpatialBackend,
+    context: Option<&crate::core::execution::PyExecutionContext>,
 ) -> PyResult<Vec<PyClash>> {
     let structure = structure.structure().clone();
+    let context = context.map_or_else(
+        crate::core::execution::default_context,
+        crate::core::execution::PyExecutionContext::native,
+    );
     py.detach(move || {
-        pdbiox::validate::clashes(&structure, tolerance, radius_set.into(), backend.into())
+        pdbiox::validate::clashes(
+            &structure,
+            tolerance,
+            radius_set.into(),
+            backend.into(),
+            &context,
+        )
     })
     .map(|values| values.into_iter().map(Into::into).collect())
     .map_err(value_error)

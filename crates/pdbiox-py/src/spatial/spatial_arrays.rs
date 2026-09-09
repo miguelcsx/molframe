@@ -292,12 +292,24 @@ fn run_neighbor_pairs(
     let left = array_selection(left, positions.len()).map_err(SpatialBindingError::Input)?;
     let right = array_selection(right, positions.len()).map_err(SpatialBindingError::Input)?;
     let pairs = match profile {
-        SearchProfile::Backend(backend) => {
-            pdbiox::pairs_within(positions, &left, &right, cutoff, backend, periodic)
-        }
-        SearchProfile::Options(options) => {
-            pdbiox::pairs_within_with_options(positions, &left, &right, cutoff, options, periodic)
-        }
+        SearchProfile::Backend(backend) => pdbiox::pairs_within(
+            positions,
+            &left,
+            &right,
+            cutoff,
+            backend,
+            periodic,
+            &crate::core::execution::default_context(),
+        ),
+        SearchProfile::Options(options) => pdbiox::pairs_within_with_options(
+            positions,
+            &left,
+            &right,
+            cutoff,
+            options,
+            periodic,
+            &crate::core::execution::default_context(),
+        ),
     }
     .map_err(SpatialBindingError::Spatial)?;
     PyNeighborTable::from_pairs(pairs).map_err(SpatialBindingError::Allocation)
@@ -315,12 +327,24 @@ fn run_atoms_within(
     let targets =
         array_selection(Some(targets), positions.len()).map_err(SpatialBindingError::Input)?;
     let selected = match profile {
-        SearchProfile::Backend(backend) => {
-            pdbiox::within(positions, &query, &targets, cutoff, backend, periodic)
-        }
-        SearchProfile::Options(options) => {
-            pdbiox::within_with_options(positions, &query, &targets, cutoff, options, periodic)
-        }
+        SearchProfile::Backend(backend) => pdbiox::within(
+            positions,
+            &query,
+            &targets,
+            cutoff,
+            backend,
+            periodic,
+            &crate::core::execution::default_context(),
+        ),
+        SearchProfile::Options(options) => pdbiox::within_with_options(
+            positions,
+            &query,
+            &targets,
+            cutoff,
+            options,
+            periodic,
+            &crate::core::execution::default_context(),
+        ),
     }
     .map_err(SpatialBindingError::Spatial)?;
     Ok(selected.into_iter().collect())

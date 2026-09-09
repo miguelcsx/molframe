@@ -12,8 +12,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 #[pyfunction]
-pub(crate) fn fibonacci_sphere(count: u16) -> Vec<[f64; 3]> {
-    pdbiox::surface::fibonacci_sphere(count)
+pub(crate) fn fibonacci_sphere(py: Python<'_>, count: u16) -> Vec<[f64; 3]> {
+    py.detach(move || -> Vec<[f64; 3]> { pdbiox::surface::fibonacci_sphere(count) })
 }
 
 #[pyfunction]
@@ -26,8 +26,16 @@ pub(crate) fn shrake_rupley(
 ) -> PyResult<Vec<f64>> {
     let positions = borrowed_coordinates(&positions)?;
     let radii = radii.as_slice()?;
-    py.detach(move || pdbiox::surface::shrake_rupley(positions, radii, probe, points))
-        .map_err(value_error)
+    py.detach(move || {
+        pdbiox::surface::shrake_rupley(
+            positions,
+            radii,
+            probe,
+            points,
+            &crate::core::execution::default_context(),
+        )
+    })
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -38,10 +46,18 @@ pub(crate) fn lee_richards(
     probe: f32,
     slices: u16,
 ) -> PyResult<Vec<f64>> {
-    let positions = borrowed_coordinates(&positions)?;
-    let radii = radii.as_slice()?;
-    py.detach(move || pdbiox::surface::lee_richards(positions, radii, probe, slices))
-        .map_err(value_error)
+    let positions = borrowed_coordinates(&positions)?.to_vec();
+    let radii = radii.as_slice()?.to_vec();
+    py.detach(move || {
+        pdbiox::surface::lee_richards(
+            &positions,
+            &radii,
+            probe,
+            slices,
+            &crate::core::execution::default_context(),
+        )
+    })
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -52,10 +68,18 @@ pub(crate) fn solvent_accessible_surface(
     probe_radius: f32,
     sample_points: u16,
 ) -> PyResult<Vec<f64>> {
-    let positions = borrowed_coordinates(&positions)?;
-    let radii = radii.as_slice()?;
-    py.detach(move || pdbiox::surface::shrake_rupley(positions, radii, probe_radius, sample_points))
-        .map_err(value_error)
+    let positions = borrowed_coordinates(&positions)?.to_vec();
+    let radii = radii.as_slice()?.to_vec();
+    py.detach(move || {
+        pdbiox::surface::shrake_rupley(
+            &positions,
+            &radii,
+            probe_radius,
+            sample_points,
+            &crate::core::execution::default_context(),
+        )
+    })
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -67,11 +91,18 @@ pub(crate) fn buried_surface(
     probe_radius: f32,
     sample_points: u16,
 ) -> PyResult<PyBuriedSurface> {
-    let positions = borrowed_coordinates(&positions)?;
-    let radii = radii.as_slice()?;
-    let first = first.as_slice()?;
+    let positions = borrowed_coordinates(&positions)?.to_vec();
+    let radii = radii.as_slice()?.to_vec();
+    let first = first.as_slice()?.to_vec();
     py.detach(move || {
-        pdbiox::surface::buried_surface(positions, radii, probe_radius, sample_points, first)
+        pdbiox::surface::buried_surface(
+            &positions,
+            &radii,
+            probe_radius,
+            sample_points,
+            &first,
+            &crate::core::execution::default_context(),
+        )
     })
     .map(Into::into)
     .map_err(value_error)
@@ -115,11 +146,19 @@ pub(crate) fn surface_points(
     probe: f32,
     samples: u16,
 ) -> PyResult<Vec<PySurfacePoint>> {
-    let positions = borrowed_coordinates(&positions)?;
-    let radii = radii.as_slice()?;
-    py.detach(move || pdbiox::surface::surface_points(positions, radii, probe, samples))
-        .map(|values| values.into_iter().map(Into::into).collect())
-        .map_err(value_error)
+    let positions = borrowed_coordinates(&positions)?.to_vec();
+    let radii = radii.as_slice()?.to_vec();
+    py.detach(move || {
+        pdbiox::surface::surface_points(
+            &positions,
+            &radii,
+            probe,
+            samples,
+            &crate::core::execution::default_context(),
+        )
+    })
+    .map(|values| values.into_iter().map(Into::into).collect())
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -130,11 +169,19 @@ pub(crate) fn surface_points_at_density(
     probe: f32,
     density: f32,
 ) -> PyResult<Vec<PySurfacePoint>> {
-    let positions = borrowed_coordinates(&positions)?;
-    let radii = radii.as_slice()?;
-    py.detach(move || pdbiox::surface::surface_points_at_density(positions, radii, probe, density))
-        .map(|values| values.into_iter().map(Into::into).collect())
-        .map_err(value_error)
+    let positions = borrowed_coordinates(&positions)?.to_vec();
+    let radii = radii.as_slice()?.to_vec();
+    py.detach(move || {
+        pdbiox::surface::surface_points_at_density(
+            &positions,
+            &radii,
+            probe,
+            density,
+            &crate::core::execution::default_context(),
+        )
+    })
+    .map(|values| values.into_iter().map(Into::into).collect())
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -145,11 +192,19 @@ pub(crate) fn atom_contact_areas(
     probe: f32,
     density: f32,
 ) -> PyResult<Vec<PyAtomContactArea>> {
-    let positions = borrowed_coordinates(&positions)?;
-    let radii = radii.as_slice()?;
-    py.detach(move || pdbiox::surface::atom_contact_areas(positions, radii, probe, density))
-        .map(|values| values.into_iter().map(Into::into).collect())
-        .map_err(value_error)
+    let positions = borrowed_coordinates(&positions)?.to_vec();
+    let radii = radii.as_slice()?.to_vec();
+    py.detach(move || {
+        pdbiox::surface::atom_contact_areas(
+            &positions,
+            &radii,
+            probe,
+            density,
+            &crate::core::execution::default_context(),
+        )
+    })
+    .map(|values| values.into_iter().map(Into::into).collect())
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -161,14 +216,21 @@ pub(crate) fn surface_points_excluding_pairs(
     density: f32,
     pairs: Vec<[usize; 2]>,
 ) -> PyResult<Vec<PyExcludedSurfacePoint>> {
-    let positions = borrowed_coordinates(&positions)?;
-    let radii = radii.as_slice()?;
+    let positions = borrowed_coordinates(&positions)?.to_vec();
+    let radii = radii.as_slice()?.to_vec();
     let pairs = pairs
         .into_iter()
         .map(|pair| (pair[0], pair[1]))
         .collect::<Vec<_>>();
     py.detach(move || {
-        pdbiox::surface::surface_points_excluding_pairs(positions, radii, probe, density, &pairs)
+        pdbiox::surface::surface_points_excluding_pairs(
+            &positions,
+            &radii,
+            probe,
+            density,
+            &pairs,
+            &crate::core::execution::default_context(),
+        )
     })
     .map(|values| values.into_iter().map(Into::into).collect())
     .map_err(value_error)
@@ -271,35 +333,48 @@ fn solvent_excluded_surface_with_options_impl(
 
 #[pyfunction]
 pub(crate) fn edge_geodesic_distances(
+    py: Python<'_>,
     mesh: &PyIndexedSurfaceMesh,
     source: u32,
 ) -> PyResult<PySurfaceDistances> {
-    pdbiox::surface::edge_geodesic_distances(&mesh.native, source)
-        .map(Into::into)
-        .map_err(value_error)
+    py.detach(move || -> PyResult<PySurfaceDistances> {
+        pdbiox::surface::edge_geodesic_distances(&mesh.native, source)
+            .map(Into::into)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
 pub(crate) fn surface_patch(
+    py: Python<'_>,
     mesh: &PyIndexedSurfaceMesh,
     source: u32,
     radius: f64,
 ) -> PyResult<Vec<u32>> {
-    pdbiox::surface::surface_patch(&mesh.native, source, radius)
-        .map(<[u32]>::into_vec)
-        .map_err(value_error)
+    py.detach(move || -> PyResult<Vec<u32>> {
+        pdbiox::surface::surface_patch(&mesh.native, source, radius)
+            .map(<[u32]>::into_vec)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn surface_curvatures(mesh: &PyIndexedSurfaceMesh) -> PyResult<Vec<PySurfaceCurvature>> {
-    pdbiox::surface::surface_curvatures(&mesh.native)
-        .map(|values| values.into_iter().map(Into::into).collect())
-        .map_err(value_error)
+pub(crate) fn surface_curvatures(
+    py: Python<'_>,
+    mesh: &PyIndexedSurfaceMesh,
+) -> PyResult<Vec<PySurfaceCurvature>> {
+    py.detach(move || -> PyResult<Vec<PySurfaceCurvature>> {
+        pdbiox::surface::surface_curvatures(&mesh.native)
+            .map(|values| values.into_iter().map(Into::into).collect())
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_obj(path: &str, mesh: &PyIndexedSurfaceMesh) -> PyResult<()> {
-    pdbiox::surface::write_obj(path, &mesh.native).map_err(value_error)
+pub(crate) fn write_obj(py: Python<'_>, path: &str, mesh: &PyIndexedSurfaceMesh) -> PyResult<()> {
+    py.detach(move || -> PyResult<()> {
+        pdbiox::surface::write_obj(path, &mesh.native).map_err(value_error)
+    })
 }
 
 fn value_error(error: impl std::fmt::Display) -> PyErr {
@@ -309,6 +384,7 @@ fn value_error(error: impl std::fmt::Display) -> PyErr {
 pub(crate) fn register_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(fibonacci_sphere, module)?)?;
     module.add_function(wrap_pyfunction!(shrake_rupley, module)?)?;
+    super::streaming::register(module)?;
     module.add_function(wrap_pyfunction!(lee_richards, module)?)?;
     module.add_function(wrap_pyfunction!(solvent_accessible_surface, module)?)?;
     module.add_function(wrap_pyfunction!(buried_surface, module)?)?;

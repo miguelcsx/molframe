@@ -218,9 +218,15 @@ fn canonical_bindings_reject_noncontiguous_coordinates_and_indices() {
         }
         let coordinates =
             arr2(&[[0.0_f32, 0.0, 0.0], [1.0, 0.0, 0.0], [3.0, 0.0, 0.0]]).into_pyarray(py);
-        let noncontiguous_coordinates = match coordinates.transpose() {
-            Ok(array) => array.readonly(),
-            Err(error) => panic!("transpose should create a view: {error}"),
+        let coordinate_view =
+            match coordinates.get_item((PySlice::new(py, 0, 3, 2), PySlice::new(py, 0, 3, 1))) {
+                Ok(view) => view,
+                Err(error) => panic!("stride slice should create a coordinate view: {error}"),
+            };
+        let noncontiguous_coordinates = match coordinate_view.extract::<PyReadonlyArray2<'_, f32>>()
+        {
+            Ok(array) => array,
+            Err(error) => panic!("stride slice should remain a float32 matrix: {error}"),
         };
         assert!(
             neighbor_pairs(

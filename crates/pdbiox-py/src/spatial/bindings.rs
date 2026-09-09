@@ -346,6 +346,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PySpatialSearchOptions>()?;
     module.add_class::<PySpatialPlan>()?;
     spatial_arrays::register(module)?;
+    super::count::register(module)?;
     Ok(())
 }
 

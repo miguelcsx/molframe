@@ -166,7 +166,12 @@ pub(crate) fn analyse_altloc_occupancy(
     let analysis = py
         .detach(move || {
             let kernel = pdbiox::validate::altloc_occupancy_sums_kernel(options.0);
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, altloc_report_value)
@@ -200,7 +205,12 @@ pub(crate) fn analyse_ccd_completeness(
     let analysis = py
         .detach(move || {
             let kernel = pdbiox::validate::ccd_missing_atoms_kernel(dictionary.as_ref());
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, ccd_report_value)
@@ -236,7 +246,12 @@ pub(crate) fn analyse_plane_restraints(
     let analysis = py
         .detach(move || {
             let kernel = pdbiox::validate::plane_restraint_outliers_kernel(&restraints, options.0);
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, plane_report_value)

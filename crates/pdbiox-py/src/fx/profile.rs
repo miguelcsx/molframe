@@ -141,13 +141,17 @@ impl PyCompatibilityVerdict {
 }
 
 #[pyfunction]
-pub(crate) fn motifbench_1_0() -> PyCompatibilityProfile {
-    PyCompatibilityProfile(pdbiox::fx::motifbench_1_0())
+pub(crate) fn motifbench_1_0(py: Python<'_>) -> PyCompatibilityProfile {
+    py.detach(move || -> PyCompatibilityProfile {
+        PyCompatibilityProfile(pdbiox::fx::motifbench_1_0())
+    })
 }
 
 #[pyfunction]
-pub(crate) fn ame_heavy_atom_1_0() -> PyCompatibilityProfile {
-    PyCompatibilityProfile(pdbiox::fx::ame_heavy_atom_1_0())
+pub(crate) fn ame_heavy_atom_1_0(py: Python<'_>) -> PyCompatibilityProfile {
+    py.detach(move || -> PyCompatibilityProfile {
+        PyCompatibilityProfile(pdbiox::fx::ame_heavy_atom_1_0())
+    })
 }
 
 fn native_metrics(metrics: BTreeMap<String, f64>) -> BTreeMap<Box<str>, f64> {

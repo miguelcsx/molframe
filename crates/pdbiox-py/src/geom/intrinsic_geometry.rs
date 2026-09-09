@@ -42,10 +42,16 @@ pub(crate) struct PySurfaceGridOptions(pub(crate) SurfaceGridOptions);
 #[pymethods]
 impl PySurfaceGridOptions {
     #[new]
-    fn new(resolution: f32, max_cells: usize) -> Self {
+    #[pyo3(signature = (
+        resolution,
+        max_cells,
+        max_workspace_bytes = SurfaceGridOptions::STANDARD_WORKSPACE_BYTES,
+    ))]
+    fn new(resolution: f32, max_cells: usize, max_workspace_bytes: usize) -> Self {
         Self(SurfaceGridOptions {
             resolution,
             max_cells,
+            max_workspace_bytes,
         })
     }
 
