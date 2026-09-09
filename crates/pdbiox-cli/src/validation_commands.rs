@@ -55,10 +55,12 @@ fn validate_with(input: &Path, options: ValidationOptions<'_>, context: Context)
                 Ok(rows) => rows,
                 Err(exit) => return exit,
             },
-            ValidationChoice::Clashes => match clash_rows(&structure, &options) {
-                Ok(rows) => rows,
-                Err(exit) => return exit,
-            },
+            ValidationChoice::Clashes => {
+                match clash_rows(&structure, &options, context.execution) {
+                    Ok(rows) => rows,
+                    Err(exit) => return exit,
+                }
+            }
             ValidationChoice::Completeness => match completeness_rows(&structure, context) {
                 Ok(rows) => rows,
                 Err(exit) => return exit,
@@ -94,7 +96,7 @@ fn b_factor_rows(
         eprintln!("B-factor validation requires --b-factor-z-score");
         return Err(Exit::Usage);
     };
-    let selection = pdbiox::AtomSelection::from_sorted((0..structure.atom_count()).collect());
+    let selection = pdbiox::AtomSelection::All(structure.atom_count());
     let report = pdbiox::validate::b_factor_distribution(structure, &selection, threshold)
         .map_err(|error| {
             eprintln!("B-factor validation failed: {error}");
@@ -262,12 +264,13 @@ fn geometry_rows(
 fn clash_rows(
     structure: &pdbiox::Structure,
     options: &ValidationOptions<'_>,
+    execution: &pdbiox::core::ExecutionContext,
 ) -> Result<Vec<Row>, Exit> {
     let (Some(tolerance), Some(radii)) = (options.clash_tolerance, options.radii) else {
         eprintln!("clash validation requires --clash-tolerance and --radii");
         return Err(Exit::Usage);
     };
-    match pdbiox::validate::clashes(structure, tolerance, radii, SpatialBackend::Auto) {
+    match pdbiox::validate::clashes(structure, tolerance, radii, SpatialBackend::Auto, execution) {
         Ok(flags) => Ok(flags
             .into_iter()
             .map(|flag| {

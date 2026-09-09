@@ -122,10 +122,7 @@ fn msa(input: &str, scoring: pdbiox::seq::Scoring, passes: usize) -> Result<Stri
         .iter()
         .map(|record| record.sequence.as_slice())
         .collect();
-    let options = pdbiox::seq::MsaOptions {
-        scoring,
-        refinement_passes: passes,
-    };
+    let options = pdbiox::seq::MsaOptions::progressive(scoring).with_refinement_passes(passes);
     let aligned = pdbiox::seq::progressive_msa(&sequences, options).map_err(display)?;
     for (record, sequence) in records.iter_mut().zip(aligned) {
         record.sequence = sequence;

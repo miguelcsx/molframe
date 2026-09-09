@@ -25,20 +25,22 @@ pub(crate) fn superpose(
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let mobile_selection = match mobile_structure.select_text(query, context.policy) {
-        Ok(evaluation) => evaluation,
-        Err(findings) => {
-            context.findings(&findings, &mobile.display().to_string());
-            return Exit::of(&findings);
-        }
-    };
-    let reference_selection = match reference_structure.select_text(query, context.policy) {
-        Ok(evaluation) => evaluation,
-        Err(findings) => {
-            context.findings(&findings, &reference.display().to_string());
-            return Exit::of(&findings);
-        }
-    };
+    let mobile_selection =
+        match mobile_structure.select_text(query, context.policy, context.execution) {
+            Ok(evaluation) => evaluation,
+            Err(findings) => {
+                context.findings(&findings, &mobile.display().to_string());
+                return Exit::of(&findings);
+            }
+        };
+    let reference_selection =
+        match reference_structure.select_text(query, context.policy, context.execution) {
+            Ok(evaluation) => evaluation,
+            Err(findings) => {
+                context.findings(&findings, &reference.display().to_string());
+                return Exit::of(&findings);
+            }
+        };
     context.findings(&mobile_selection.warnings, &mobile.display().to_string());
     context.findings(
         &reference_selection.warnings,
@@ -166,13 +168,13 @@ fn comparison_points(
         return Ok((mobile.positions().to_vec(), reference.positions().to_vec()));
     };
     let moving = mobile
-        .select_text(query, context.policy)
+        .select_text(query, context.policy, context.execution)
         .map_err(|findings| {
             context.findings(&findings, &mobile_path.display().to_string());
             Exit::of(&findings)
         })?;
     let fixed = reference
-        .select_text(query, context.policy)
+        .select_text(query, context.policy, context.execution)
         .map_err(|findings| {
             context.findings(&findings, &reference_path.display().to_string());
             Exit::of(&findings)
@@ -253,7 +255,7 @@ pub(crate) fn compare(
     };
     let mut rows = Vec::new();
     for metric in options.metrics {
-        let measured = match measure(*metric, &model, &reference, &options) {
+        let measured = match measure(*metric, &model, &reference, &options, context.execution) {
             Ok(value) => value,
             Err(exit) => return exit,
         };
@@ -268,6 +270,7 @@ fn measure(
     model: &pdbiox::Structure,
     reference: &pdbiox::Structure,
     options: &ComparisonOptions<'_>,
+    execution: &pdbiox::core::ExecutionContext,
 ) -> Result<Vec<(&'static str, f64)>, Exit> {
     let result = match metric {
         MetricChoice::Lddt => {
@@ -292,6 +295,7 @@ fn measure(
                     tolerances: options.lddt_tolerances.into(),
                     empty_policy: empty,
                 },
+                execution,
             )
         }
         MetricChoice::TmScore => {

@@ -162,6 +162,16 @@ pub(super) fn trajectory(command: TrajectoryCommand, context: Context) -> Exit {
             trz_title.as_deref(),
             context,
         ),
+        TrajectoryCommand::Contacts { input, cutoff } => {
+            crate::trajectory::contacts(&input, cutoff, context)
+        }
+        TrajectoryCommand::Sasa {
+            input,
+            topology,
+            probe,
+            samples,
+            radii,
+        } => crate::trajectory::sasa(&input, &topology, probe, samples, radii.into(), context),
         TrajectoryCommand::Rmsd {
             input,
             reference,

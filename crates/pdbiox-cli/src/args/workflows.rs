@@ -55,6 +55,25 @@ pub(crate) enum TrajectoryCommand {
         #[arg(long, value_name = "TEXT")]
         trz_title: Option<String>,
     },
+    /// Stream contact counts from XTC, DCD or TRR under the execution budget.
+    Contacts {
+        input: PathBuf,
+        /// Inclusive contact cutoff in angstrom.
+        #[arg(long)]
+        cutoff: f32,
+    },
+    /// Stream total SASA using radii from a bounded, single-model topology read.
+    Sasa {
+        input: PathBuf,
+        #[arg(long)]
+        topology: PathBuf,
+        #[arg(long)]
+        probe: f32,
+        #[arg(long)]
+        samples: u16,
+        #[arg(long, value_enum)]
+        radii: RadiusChoice,
+    },
     /// Measure every frame against one reference frame.
     Rmsd {
         input: PathBuf,

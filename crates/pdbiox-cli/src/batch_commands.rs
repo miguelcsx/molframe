@@ -3,7 +3,6 @@
 use crate::BatchCommand;
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table};
-use rayon::prelude::*;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -19,7 +18,7 @@ fn info(patterns: &[String], context: Context) -> Exit {
         Ok(paths) => paths,
         Err(error) => return batch_error(&error),
     };
-    let results = run(&paths, context.threads, |path| {
+    let results = run(&paths, context.execution, |path| {
         pdbiox::read_with_options(
             path,
             &pdbiox::ReadOptions::new()
@@ -63,7 +62,7 @@ fn convert(patterns: &[String], format: &str, outdir: &Path, context: Context) -
         Err(error) => return batch_error(&error),
     };
     let jobs = paths.into_iter().zip(destinations).collect::<Vec<_>>();
-    let results = run(&jobs, context.threads, |(input, output)| {
+    let results = run(&jobs, context.execution, |(input, output)| {
         if output.exists() {
             return Err(format!("destination exists: {}", output.display()));
         }
@@ -87,16 +86,18 @@ fn convert(patterns: &[String], format: &str, outdir: &Path, context: Context) -
 
 fn run<T: Sync, R: Send>(
     jobs: &[T],
-    threads: usize,
+    context: &pdbiox::core::ExecutionContext,
     operation: impl Fn(&T) -> Result<R, String> + Sync + Send,
 ) -> Vec<Result<R, String>> {
-    let mut builder = rayon::ThreadPoolBuilder::new();
-    if threads > 0 {
-        builder = builder.num_threads(threads);
-    }
-    match builder.build() {
-        Ok(pool) => pool.install(|| jobs.par_iter().map(operation).collect()),
-        Err(error) => vec![Err(format!("could not create worker pool: {error}"))],
+    let plan = pdbiox::core::parallel::BlockPlan::new(jobs.len(), 1);
+    match pdbiox::core::parallel::map_blocks_in(plan, context, |_, range| {
+        let Some(job) = jobs.get(range.start) else {
+            return Err("batch plan produced an invalid job index".to_owned());
+        };
+        operation(job)
+    }) {
+        Ok(results) => results,
+        Err(error) => vec![Err(format!("shared worker pool failed: {error}"))],
     }
 }
 

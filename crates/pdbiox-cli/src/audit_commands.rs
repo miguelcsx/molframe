@@ -48,7 +48,7 @@ pub(crate) fn audit_selection(args: &AuditArguments, context: Context) -> Exit {
         &plan,
         |policy| {
             structure
-                .select_text(&args.query, policy)
+                .select_text(&args.query, policy, context.execution)
                 .map(|evaluation| evaluation.selection)
         },
         |selection| selection.iter().collect::<BTreeSet<_>>(),

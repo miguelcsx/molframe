@@ -149,6 +149,7 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
         pdbiox::surface::SurfaceGridOptions {
             resolution: options.resolution,
             max_cells: options.max_cells,
+            max_workspace_bytes: pdbiox::surface::SurfaceGridOptions::STANDARD_WORKSPACE_BYTES,
         },
     ) else {
         eprintln!("surface construction failed for the supplied probe or resolution");

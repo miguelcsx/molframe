@@ -226,68 +226,72 @@ pub fn convert(
         return Exit::Usage;
     };
 
-    let bytes = match target {
-        Format::Mmcif => match pdbiox::write_mmcif_with_options(&structure, cif_options) {
-            Ok(text) => text.into_bytes(),
-            Err(error) => {
-                eprintln!("canonical CIF write refused: {error}");
-                return Exit::Refused;
-            }
-        },
-        Format::BinaryCif => match pdbiox::write_bcif_with_options(&structure, cif_options) {
-            Ok(bytes) => bytes,
-            Err(refusals) => {
-                context.findings(&refusals, &input.display().to_string());
-                return Exit::of(&refusals);
-            }
-        },
-        Format::Mmtf => match pdbiox::write_mmtf(&structure) {
-            Ok(bytes) => bytes,
-            Err(refusals) => {
-                context.findings(&refusals, &input.display().to_string());
-                return Exit::of(&refusals);
-            }
-        },
-        Format::Pdb => {
-            let options = match pdb_options(chain_map, hybrid36, context.policy.identifiers) {
-                Ok(options) => options,
-                Err(exit) => return exit,
-            };
-            match pdbiox::write_pdb(&structure, &options) {
-                Ok(text) => text.into_bytes(),
-                Err(refusals) => {
-                    context.findings(&refusals, &input.display().to_string());
-                    return Exit::of(&refusals);
-                }
-            }
+    let pdb_options = if matches!(target, Format::Pdb | Format::Pqr | Format::Pdbqt) {
+        match pdb_options(chain_map, hybrid36, context.policy.identifiers) {
+            Ok(options) => Some(options),
+            Err(exit) => return exit,
         }
-        Format::Pqr | Format::Pdbqt => {
-            let options = match pdb_options(chain_map, hybrid36, context.policy.identifiers) {
-                Ok(options) => options,
-                Err(exit) => return exit,
-            };
-            let rendered = match target {
-                Format::Pqr => pdbiox::write_pqr(&structure, &options),
-                Format::Pdbqt => pdbiox::write_pdbqt(&structure, &options),
-                _ => return Exit::Usage,
-            };
-            match rendered {
-                Ok(text) => text.into_bytes(),
-                Err(refusals) => {
-                    context.findings(&refusals, &input.display().to_string());
-                    return Exit::of(&refusals);
-                }
-            }
+    } else {
+        None
+    };
+    if !matches!(
+        target,
+        Format::Mmcif
+            | Format::BinaryCif
+            | Format::Mmtf
+            | Format::Pdb
+            | Format::Pqr
+            | Format::Pdbqt
+    ) {
+        return Exit::Usage;
+    }
+    let output_options = pdbiox::OutputOptions::default();
+    let mut sink = match pdbiox::core::io::OutputSink::create(output, output_options) {
+        Ok(sink) => sink,
+        Err(finding) => {
+            context.findings(&[finding], &output.display().to_string());
+            return Exit::Failure;
         }
+    };
+    let written = match target {
+        Format::Mmcif => pdbiox::write_mmcif_to_with_options(&structure, cif_options, &mut sink)
+            .map_err(|error| vec![write_finding(error)]),
+        Format::BinaryCif => pdbiox::bcif::write_structure_to_with_memory_limit(
+            &structure,
+            cif_options,
+            output_options.memory_limit_bytes,
+            &mut sink,
+        ),
+        Format::Mmtf => pdbiox::write_mmtf_to(&structure, &mut sink),
+        Format::Pdb => match &pdb_options {
+            Some(options) => pdbiox::pdb::write_to(&structure, options, &mut sink),
+            None => return Exit::Usage,
+        },
+        Format::Pqr => match &pdb_options {
+            Some(options) => pdbiox::write_pqr_to(&structure, options, &mut sink),
+            None => return Exit::Usage,
+        },
+        Format::Pdbqt => match &pdb_options {
+            Some(options) => pdbiox::write_pdbqt_to(&structure, options, &mut sink),
+            None => return Exit::Usage,
+        },
         _ => return Exit::Usage,
     };
-    match std::fs::write(output, bytes) {
+    if let Err(refusals) = written {
+        context.findings(&refusals, &input.display().to_string());
+        return Exit::of(&refusals);
+    }
+    match sink.finish() {
         Ok(()) => Exit::Success,
-        Err(error) => {
-            eprintln!("could not write {}: {error}", output.display());
+        Err(finding) => {
+            context.findings(&[finding], &output.display().to_string());
             Exit::Failure
         }
     }
+}
+
+fn write_finding(error: impl std::fmt::Display) -> pdbiox::Diagnostic {
+    pdbiox::Diagnostic::new(pdbiox::Code::E4105).with_context("reason", error.to_string())
 }
 
 fn pdb_options(
@@ -335,10 +339,22 @@ fn preserving_convert(input: &Path, output: &Path, context: Context) -> Exit {
             return Exit::of(&findings);
         }
     };
-    match std::fs::write(output, pdbiox::write_preserving(&document)) {
+    let mut sink =
+        match pdbiox::core::io::OutputSink::create(output, pdbiox::OutputOptions::default()) {
+            Ok(sink) => sink,
+            Err(finding) => {
+                context.findings(&[finding], &output.display().to_string());
+                return Exit::Failure;
+            }
+        };
+    if let Err(error) = pdbiox::write_preserving_to(&document, &mut sink) {
+        eprintln!("could not write {}: {error}", output.display());
+        return Exit::Failure;
+    }
+    match sink.finish() {
         Ok(()) => Exit::Success,
-        Err(error) => {
-            eprintln!("could not write {}: {error}", output.display());
+        Err(finding) => {
+            context.findings(&[finding], &output.display().to_string());
             Exit::Failure
         }
     }

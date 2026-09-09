@@ -257,7 +257,7 @@ fn advanced_workflows_have_declarative_entrypoints() {
         ])
         .is_err()
     );
-    assert!(Cli::try_parse_from(["pdbiox", "batch", "info", "*.cif", "--threads", "4",]).is_ok());
+    assert!(Cli::try_parse_from(["pdbiox", "batch", "info", "*.cif", "--workers", "4",]).is_ok());
     assert!(Cli::try_parse_from(["pdbiox", "man", "--outdir", "man"]).is_ok());
 }
 

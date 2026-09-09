@@ -18,9 +18,18 @@ pub(crate) struct GlobalOptions {
     /// Write the effective CLI provenance record to this JSON path.
     #[arg(long, global = true)]
     pub provenance: Option<PathBuf>,
-    /// Worker count for batch commands; zero selects available parallelism.
+    /// Maximum Rust workers shared by every operation; zero uses pool capacity.
     #[arg(long, global = true, default_value_t = 0)]
-    pub threads: usize,
+    pub workers: usize,
+    /// Complete retained-memory budget for the native execution graph.
+    #[arg(long, global = true, default_value_t = 100_000_000)]
+    pub memory_budget: usize,
+    /// Directory for deterministic, bounded native spill files.
+    #[arg(long, global = true, requires = "spill_budget")]
+    pub spill_directory: Option<PathBuf>,
+    /// Maximum spill bytes; requires `--spill-directory`.
+    #[arg(long, global = true, default_value_t = 0, requires = "spill_directory")]
+    pub spill_budget: u64,
     #[command(flatten)]
     read_behavior: ReadBehavior,
     /// How much irregularity to tolerate while reading.
@@ -119,6 +128,34 @@ impl GlobalOptions {
                 None => default_output_format(),
             },
         };
+        let memory = pdbiox::core::MemoryBudget::new(self.memory_budget).map_err(|error| {
+            pdbiox::PolicyConfigError::InvalidValue {
+                field: "memory-budget",
+                value: error.to_string(),
+            }
+        })?;
+        let mut execution = pdbiox::core::ExecutionContext::builder()
+            .memory_budget(memory)
+            .scratch_policy(pdbiox::core::ScratchPolicy::new(
+                self.memory_budget.min(8_000_000),
+            ));
+        if self.workers > 0 {
+            execution = execution.worker_budget(self.workers);
+        }
+        if let Some(directory) = self.spill_directory {
+            execution = execution.temp_storage_policy(pdbiox::core::TempStoragePolicy::directory(
+                directory,
+                self.spill_budget,
+            ));
+        }
+        let execution =
+            execution
+                .build()
+                .map_err(|error| pdbiox::PolicyConfigError::InvalidValue {
+                    field: "execution-context",
+                    value: error.to_string(),
+                })?;
+        let execution = Box::leak(Box::new(execution));
         Ok(Context {
             format: format.into(),
             quiet: self.display_behavior.quiet,
@@ -129,7 +166,7 @@ impl GlobalOptions {
             provenance,
             ccd,
             ccd_version,
-            threads: self.threads,
+            execution,
             missing_element_policy: if self.read_behavior.infer_elements {
                 pdbiox::MissingElementPolicy::InferFromAtomName
             } else {

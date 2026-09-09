@@ -17,7 +17,7 @@ pub(crate) fn select(
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let evaluation = match structure.select_text(query, context.policy) {
+    let evaluation = match structure.select_text(query, context.policy, context.execution) {
         Ok(evaluation) => evaluation,
         Err(findings) => {
             context.findings(&findings, &input.display().to_string());

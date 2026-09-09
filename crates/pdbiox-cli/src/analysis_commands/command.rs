@@ -2,10 +2,9 @@
 
 use crate::commands::open;
 use crate::exit::Exit;
-use crate::report::{Context, Json, Table};
+use crate::report::{Context, RowWriter};
 use pdbiox::QueryStructure as _;
 use pdbiox::{AtomIndex, RadiusSet, SpatialBackend};
-use std::fmt::Write as _;
 use std::path::Path;
 
 pub(crate) fn contacts(
@@ -18,34 +17,50 @@ pub(crate) fn contacts(
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let contacts = match pdbiox::analysis::atom_contacts(&structure, cutoff, SpatialBackend::Auto) {
-        Ok(contacts) => contacts,
-        Err(error) => {
-            eprintln!("contact search failed: {error}");
-            return Exit::Usage;
-        }
-    };
     let filters = match contact_filters(&structure, between, input, context) {
         Ok(filters) => filters,
         Err(exit) => return exit,
     };
-    let rows = contacts
-        .iter()
-        .filter(|contact| contact_allowed(contact.first, contact.second, filters.as_ref()))
-        .map(|contact| {
-            vec![
-                contact.first.get().to_string(),
-                contact.second.get().to_string(),
-                contact.distance.to_string(),
-            ]
-        })
-        .collect::<Vec<_>>();
-    emit_rows(
-        context,
-        &["first_atom", "second_atom", "distance_angstrom"],
-        &rows,
-    );
-    Exit::Success
+    let mut output =
+        match RowWriter::new(context, &["first_atom", "second_atom", "distance_angstrom"]) {
+            Ok(output) => output,
+            Err(error) => return output_error(&error),
+        };
+    let mut write_error = None;
+    let mut emit = |contact: pdbiox::analysis::Contact| {
+        if write_error.is_some() {
+            return;
+        }
+        let first = contact.first.get().to_string();
+        let second = contact.second.get().to_string();
+        let distance = contact.distance.to_string();
+        write_error = output
+            .row([first.as_str(), second.as_str(), distance.as_str()])
+            .err();
+    };
+    let searched = match filters {
+        Some((left, right)) => pdbiox::analysis::visit_atom_contacts_between(
+            &structure,
+            &left,
+            &right,
+            cutoff,
+            SpatialBackend::Auto,
+            context.execution,
+            &mut emit,
+        ),
+        None => pdbiox::analysis::visit_atom_contacts(
+            &structure,
+            cutoff,
+            SpatialBackend::Auto,
+            context.execution,
+            &mut emit,
+        ),
+    };
+    if let Err(error) = searched {
+        eprintln!("contact search failed: {error}");
+        return Exit::Usage;
+    }
+    finish_rows(output, write_error.as_ref())
 }
 
 fn contact_filters(
@@ -62,13 +77,13 @@ fn contact_filters(
         return Err(Exit::Usage);
     };
     let first = structure
-        .select_text(first, context.policy)
+        .select_text(first, context.policy, context.execution)
         .map_err(|findings| {
             context.findings(&findings, &input.display().to_string());
             Exit::of(&findings)
         })?;
     let second = structure
-        .select_text(second, context.policy)
+        .select_text(second, context.policy, context.execution)
         .map_err(|findings| {
             context.findings(&findings, &input.display().to_string());
             Exit::of(&findings)
@@ -78,24 +93,13 @@ fn contact_filters(
     Ok(Some((first.selection, second.selection)))
 }
 
-fn contact_allowed(
-    first: AtomIndex,
-    second: AtomIndex,
-    filters: Option<&(pdbiox::AtomSelection, pdbiox::AtomSelection)>,
-) -> bool {
-    filters.is_none_or(|(left, right)| {
-        (left.contains(first.get()) && right.contains(second.get()))
-            || (left.contains(second.get()) && right.contains(first.get()))
-    })
-}
-
 pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context) -> Exit {
     use pdbiox::QueryStructure as _;
     let structure = match open(input, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let evaluation = match structure.select_text(query, context.policy) {
+    let evaluation = match structure.select_text(query, context.policy, context.execution) {
         Ok(evaluation) => evaluation,
         Err(findings) => {
             context.findings(&findings, &input.display().to_string());
@@ -104,32 +108,38 @@ pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context
     };
     context.findings(&evaluation.warnings, &input.display().to_string());
     let all = pdbiox::AtomSelection::All(structure.atom_count());
-    let pairs = match pdbiox::pairs_within(
-        structure.positions(),
-        &evaluation.selection,
-        &all,
-        cutoff,
-        SpatialBackend::Auto,
-        None,
-    ) {
-        Ok(pairs) => pairs,
-        Err(error) => {
-            eprintln!("neighbor search failed: {error}");
-            return Exit::Usage;
-        }
+    let mut output = match RowWriter::new(context, &["atom_a", "atom_b", "distance_angstrom"]) {
+        Ok(output) => output,
+        Err(error) => return output_error(&error),
     };
-    let rows = pairs
-        .into_iter()
-        .map(|pair| {
-            vec![
-                pair.first.to_string(),
-                pair.second.to_string(),
-                pair.distance_squared.sqrt().to_string(),
-            ]
-        })
-        .collect::<Vec<_>>();
-    emit_rows(context, &["atom_a", "atom_b", "distance_angstrom"], &rows);
-    Exit::Success
+    let mut write_error = None;
+    let searched = pdbiox::spatial::for_each_pairs_within_unsorted(
+        &pdbiox::spatial::PairQuery {
+            positions: structure.positions(),
+            left: &evaluation.selection,
+            right: &all,
+            cutoff,
+            options: pdbiox::SpatialSearchOptions::with_backend(SpatialBackend::Auto),
+            periodic: None,
+            context: context.execution,
+        },
+        |pair| {
+            if write_error.is_some() {
+                return;
+            }
+            let first = pair.first.to_string();
+            let second = pair.second.to_string();
+            let distance = pair.distance_squared.sqrt().to_string();
+            write_error = output
+                .row([first.as_str(), second.as_str(), distance.as_str()])
+                .err();
+        },
+    );
+    if let Err(error) = searched {
+        eprintln!("neighbor search failed: {error}");
+        return Exit::Usage;
+    }
+    finish_rows(output, write_error.as_ref())
 }
 
 #[derive(Clone, Copy)]
@@ -173,17 +183,17 @@ pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Ex
             return Exit::Consistency;
         }
     };
-    let rows = records
-        .into_iter()
-        .map(|record| {
+    emit_rows(
+        context,
+        &["residue", "secondary_structure"],
+        records,
+        |record| {
             vec![
                 record.residue.get().to_string(),
                 sse_name(record.kind).to_owned(),
             ]
-        })
-        .collect::<Vec<_>>();
-    emit_rows(context, &["residue", "secondary_structure"], &rows);
-    Exit::Success
+        },
+    )
 }
 
 pub(crate) fn interfaces(input: &Path, between: &[String], cutoff: f32, context: Context) -> Exit {
@@ -201,6 +211,7 @@ pub(crate) fn interfaces(input: &Path, between: &[String], cutoff: f32, context:
         second,
         cutoff,
         SpatialBackend::Auto,
+        context.execution,
     ) {
         Ok(residues) => residues,
         Err(error) => {
@@ -208,12 +219,9 @@ pub(crate) fn interfaces(input: &Path, between: &[String], cutoff: f32, context:
             return Exit::Usage;
         }
     };
-    let rows = residues
-        .into_iter()
-        .map(|residue| vec![residue.get().to_string()])
-        .collect::<Vec<_>>();
-    emit_rows(context, &["residue"], &rows);
-    Exit::Success
+    emit_rows(context, &["residue"], residues, |residue| {
+        vec![residue.get().to_string()]
+    })
 }
 
 pub(crate) fn sasa(
@@ -245,49 +253,59 @@ pub(crate) fn sasa(
         positions.push(position);
         radii.push(radius);
     }
-    let areas = match pdbiox::surface::shrake_rupley(&positions, &radii, probe, points) {
+    let areas = match pdbiox::surface::shrake_rupley(
+        &positions,
+        &radii,
+        probe,
+        points,
+        context.execution,
+    ) {
         Ok(areas) => areas,
         Err(error) => {
             eprintln!("SASA calculation failed: {error}");
             return Exit::Usage;
         }
     };
-    let rows = indices
-        .into_iter()
-        .zip(areas)
-        .map(|(atom, area)| vec![atom.to_string(), area.to_string()])
-        .collect::<Vec<_>>();
-    emit_rows(context, &["atom", "area_angstrom_squared"], &rows);
-    Exit::Success
+    emit_rows(
+        context,
+        &["atom", "area_angstrom_squared"],
+        indices.into_iter().zip(areas),
+        |(atom, area)| vec![atom.to_string(), area.to_string()],
+    )
 }
 
-fn emit_rows(context: Context, header: &[&str], rows: &[Vec<String>]) {
-    if context.is_json() {
-        let objects = rows
-            .iter()
-            .map(|row| {
-                let mut json = Json::new();
-                for (key, value) in header.iter().zip(row) {
-                    json.text(key, value);
-                }
-                json.finish()
-            })
-            .collect::<Vec<_>>();
-        context.result(&context.json_records(&objects));
-    } else if let Some(delimiter) = context.delimiter() {
-        let mut table = Table::new(delimiter, header);
-        for row in rows {
-            table.row(row.iter().map(String::as_str));
+fn emit_rows<T>(
+    context: Context,
+    header: &[&str],
+    rows: impl IntoIterator<Item = T>,
+    render: impl Fn(T) -> Vec<String>,
+) -> Exit {
+    let mut output = match RowWriter::new(context, header) {
+        Ok(output) => output,
+        Err(error) => return output_error(&error),
+    };
+    for item in rows {
+        let row = render(item);
+        if let Err(error) = output.row(row.iter().map(String::as_str)) {
+            return output_error(&error);
         }
-        context.result(&table.finish());
-    } else {
-        let mut text = String::new();
-        let _ = writeln!(text, "{}", header.join("\t"));
-        for row in rows {
-            let _ = writeln!(text, "{}", row.join("\t"));
-        }
-        context.result(text.trim_end());
     }
+    finish_rows(output, None)
+}
+
+fn finish_rows(output: RowWriter, error: Option<&std::io::Error>) -> Exit {
+    if let Some(error) = error {
+        return output_error(error);
+    }
+    match output.finish() {
+        Ok(()) => Exit::Success,
+        Err(error) => output_error(&error),
+    }
+}
+
+fn output_error(error: &std::io::Error) -> Exit {
+    eprintln!("could not write result: {error}");
+    Exit::Consistency
 }
 
 pub(super) fn sse_name(kind: pdbiox::analysis::SseKind) -> &'static str {
