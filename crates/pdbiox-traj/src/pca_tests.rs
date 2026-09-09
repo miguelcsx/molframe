@@ -1,4 +1,5 @@
 use super::*;
+use std::mem::size_of;
 
 #[test]
 fn cartesian_pca_finds_the_only_varying_axis() {
@@ -61,4 +62,83 @@ fn pca_memory_is_bounded() {
         cartesian_pca(&frames, CartesianFit::None, 1, 1).err(),
         Some(EnsembleGeometryError::MemoryLimit)
     );
+}
+
+#[test]
+fn pca_rejects_the_full_workspace_before_attempting_a_fit() {
+    let frames = vec![vec![[0.0, 0.0, 0.0]; 128], vec![[0.0, 0.0, 0.0]; 128]];
+    assert_eq!(
+        cartesian_pca(&frames, CartesianFit::Reference(&frames[0]), 1, 1,),
+        Err(EnsembleGeometryError::MemoryLimit)
+    );
+}
+
+#[test]
+fn exact_workspace_ceiling_is_accepted() {
+    let frames = vec![
+        vec![[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        vec![[2.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    ];
+    let observations = frames.len();
+    let features = 9;
+    let components = 1;
+    let data = observations * features;
+    let eigensolver = 2 * features.min(observations).pow(2);
+    let result = features * components + observations * components + features + components;
+    let exact = (data + eigensolver + result) * size_of::<f64>();
+    assert_eq!(
+        cartesian_pca(&frames, CartesianFit::None, components, exact - 1),
+        Err(EnsembleGeometryError::MemoryLimit)
+    );
+    assert!(cartesian_pca(&frames, CartesianFit::None, components, exact).is_ok());
+}
+
+#[test]
+fn the_gram_matrix_matches_the_matrix_product_it_replaces() {
+    // Deliberately wider than it is tall, the shape the Gram path exists for.
+    let observations = 5;
+    let features = 23;
+    let matrix = DMatrix::from_fn(observations, features, |row, column| {
+        let row = f64::from(u32::try_from(row).expect("small row"));
+        let column = f64::from(u32::try_from(column).expect("small column"));
+        (row + 1.0).mul_add(0.7, column * -0.31) + (row * column).sin()
+    });
+    let divisor = 4.0;
+
+    let expected = &matrix * matrix.transpose() / divisor;
+    let actual = gram_matrix(&matrix, divisor);
+
+    assert_eq!(actual.nrows(), observations);
+    assert_eq!(actual.ncols(), observations);
+    for row in 0..observations {
+        for column in 0..observations {
+            let difference = actual[(row, column)] - expected[(row, column)];
+            assert!(
+                difference.abs() < 1.0e-9,
+                "gram[{row}][{column}] was {} not {}",
+                actual[(row, column)],
+                expected[(row, column)]
+            );
+        }
+    }
+}
+
+#[test]
+fn the_gram_matrix_is_symmetric_and_survives_a_zero_column() {
+    let matrix = DMatrix::from_fn(3, 4, |row, column| {
+        if column == 2 {
+            0.0
+        } else {
+            f64::from(u32::try_from(row + column).expect("small index"))
+        }
+    });
+    let gram = gram_matrix(&matrix, 2.0);
+
+    for row in 0..3 {
+        for column in 0..3 {
+            let difference = gram[(row, column)] - gram[(column, row)];
+            assert!(difference.abs() < 1.0e-12, "gram must be symmetric");
+        }
+    }
 }
