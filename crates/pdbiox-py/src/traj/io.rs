@@ -6,14 +6,145 @@ use super::{
 };
 use pdbiox::traj::{
     AmberAsciiReadOptions, GsdOptions, H5mdOptions, TrajectoryFormat, TrajectoryReadOptions,
-    TrajectoryWriteOptions, read_trajectory as native_read_trajectory,
+    TrajectoryReader, TrajectoryReaderOptions, TrajectoryWriteOptions,
+    read_trajectory as native_read_trajectory,
+    read_trajectory_materialized as native_read_trajectory_materialized,
     write_trajectory as native_write_trajectory,
 };
-use pyo3::exceptions::{PyOSError, PyValueError};
+use pyo3::exceptions::{PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::path::PathBuf;
+use std::sync::{Mutex, MutexGuard};
 
 const UNKNOWN_OUTPUT_FORMAT: &str = "trajectory output format cannot be inferred from the path";
+
+#[pyclass(name = "TrajectoryReaderOptions", frozen, from_py_object)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PyTrajectoryReaderOptions(pub(crate) TrajectoryReaderOptions);
+
+#[pymethods]
+impl PyTrajectoryReaderOptions {
+    #[new]
+    #[pyo3(signature = (*, format=None, memory_limit_bytes=TrajectoryReaderOptions::DEFAULT_MEMORY_LIMIT_BYTES))]
+    fn new(format: Option<PyTrajectoryFormat>, memory_limit_bytes: usize) -> Self {
+        Self(TrajectoryReaderOptions {
+            format: format.map(Into::into),
+            memory_limit_bytes,
+        })
+    }
+
+    #[getter]
+    fn memory_limit_bytes(&self) -> usize {
+        self.0.memory_limit_bytes
+    }
+
+    #[getter]
+    fn format(&self) -> PyResult<Option<PyTrajectoryFormat>> {
+        self.0.format.map(TryInto::try_into).transpose()
+    }
+}
+
+#[pyclass(name = "TrajectoryStreamReader")]
+pub(crate) struct PyTrajectoryStreamReader {
+    state: Mutex<TrajectoryStreamState>,
+}
+
+struct TrajectoryStreamState {
+    reader: Box<dyn TrajectoryReader>,
+    timestep: pdbiox::traj::Timestep,
+}
+
+#[pymethods]
+impl PyTrajectoryStreamReader {
+    #[new]
+    #[pyo3(signature = (path, *, memory_limit_bytes=TrajectoryReaderOptions::DEFAULT_MEMORY_LIMIT_BYTES))]
+    fn new(path: PathBuf, memory_limit_bytes: usize) -> PyResult<Self> {
+        open_reader(
+            path,
+            TrajectoryReaderOptions {
+                format: Some(TrajectoryFormat::Xtc),
+                memory_limit_bytes,
+            },
+        )
+    }
+
+    #[getter]
+    fn format(&self) -> PyResult<&'static str> {
+        Ok(self.lock()?.reader.format())
+    }
+    #[getter]
+    fn n_atoms(&self) -> PyResult<usize> {
+        Ok(self.lock()?.reader.n_atoms())
+    }
+    #[getter]
+    fn n_frames(&self) -> PyResult<Option<usize>> {
+        Ok(self.lock()?.reader.n_frames())
+    }
+    #[getter]
+    fn units(&self) -> PyResult<super::generic::PyUnits> {
+        Ok(self.lock()?.reader.units().into())
+    }
+    #[getter]
+    fn random_access(&self) -> PyResult<super::generic::PyRandomAccess> {
+        Ok(match self.lock()?.reader.random_access() {
+            pdbiox::traj::RandomAccess::Full => super::generic::PyRandomAccess::Full,
+            pdbiox::traj::RandomAccess::ViaIndex => super::generic::PyRandomAccess::ViaIndex,
+            pdbiox::traj::RandomAccess::None => super::generic::PyRandomAccess::None,
+        })
+    }
+
+    fn read_next(&self) -> PyResult<Option<super::reader_types::PyTimestep>> {
+        let mut state = self.lock()?;
+        let TrajectoryStreamState { reader, timestep } = &mut *state;
+        reader
+            .read_next(timestep)
+            .map_err(value_error)?
+            .then(|| timestep.clone().try_into())
+            .transpose()
+    }
+
+    fn seek(&self, frame: usize) -> PyResult<()> {
+        self.lock()?.reader.seek(frame).map_err(value_error)
+    }
+    fn rewind(&self) -> PyResult<()> {
+        self.lock()?.reader.rewind().map_err(value_error)
+    }
+}
+
+impl PyTrajectoryStreamReader {
+    fn lock(&self) -> PyResult<MutexGuard<'_, TrajectoryStreamState>> {
+        self.state
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("trajectory reader state is poisoned"))
+    }
+}
+
+#[pyfunction(name = "read_trajectory")]
+#[pyo3(signature = (path, *, options=None))]
+pub(crate) fn read_trajectory_stream(
+    path: PathBuf,
+    options: Option<PyTrajectoryReaderOptions>,
+) -> PyResult<PyTrajectoryStreamReader> {
+    let options = match options {
+        Some(value) => value.0,
+        None => TrajectoryReaderOptions::default(),
+    };
+    open_reader(path, options)
+}
+
+fn open_reader(
+    path: PathBuf,
+    options: TrajectoryReaderOptions,
+) -> PyResult<PyTrajectoryStreamReader> {
+    native_read_trajectory(&path, &options)
+        .map(|reader| PyTrajectoryStreamReader {
+            state: Mutex::new(TrajectoryStreamState {
+                reader,
+                timestep: pdbiox::traj::Timestep::default(),
+            }),
+        })
+        .map_err(io_error)
+}
 
 #[pyclass(name = "AmberAsciiReadOptions", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
@@ -110,7 +241,7 @@ impl PyTrajectory {
             None,
             None,
         )?;
-        read_native(path, &options.inner)
+        read_materialized_native(path, &options.inner)
     }
 
     #[pyo3(signature = (path, *, options=None))]
@@ -135,12 +266,12 @@ impl PyTrajectory {
 
 #[pyfunction]
 #[pyo3(signature = (path, *, options=None))]
-pub(crate) fn read_trajectory(
+pub(crate) fn read_trajectory_materialized(
     path: PathBuf,
     options: Option<PyRef<'_, PyTrajectoryReadOptions>>,
 ) -> PyResult<PyTrajectory> {
     let options = options.map_or_else(TrajectoryReadOptions::default, |value| value.inner.clone());
-    read_native(path, &options)
+    read_materialized_native(path, &options)
 }
 
 #[pyfunction]
@@ -160,9 +291,12 @@ pub(crate) fn write_trajectory(
     native_write_trajectory(&path, &trajectory.to_data(py, format)?, &writer).map_err(io_error)
 }
 
-fn read_native(path: PathBuf, options: &TrajectoryReadOptions) -> PyResult<PyTrajectory> {
+fn read_materialized_native(
+    path: PathBuf,
+    options: &TrajectoryReadOptions,
+) -> PyResult<PyTrajectory> {
     let path = path.into_boxed_path();
-    native_read_trajectory(&path, options)
+    native_read_trajectory_materialized(&path, options)
         .map_err(io_error)
         .and_then(PyTrajectory::from_data)
 }
