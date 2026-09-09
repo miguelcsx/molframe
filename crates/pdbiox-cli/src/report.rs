@@ -10,6 +10,10 @@ use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::Path;
 
+mod rows;
+
+pub use rows::RowWriter;
+
 /// Machine or human result representation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputKind {
@@ -50,8 +54,8 @@ pub struct Context {
     pub ccd: Option<&'static Path>,
     /// Exact release identifier paired with the configured dictionary.
     pub ccd_version: Option<&'static str>,
-    /// Requested worker count; zero means available parallelism.
-    pub threads: usize,
+    /// Shared native executor, memory, cancellation, scratch and spill policy.
+    pub execution: &'static pdbiox::core::ExecutionContext,
     /// Explicit missing-element behavior used by every structural reader.
     pub missing_element_policy: pdbiox::MissingElementPolicy,
     /// Explicit behavior for identifiers that cannot delimit adjacent residues.
@@ -62,11 +66,13 @@ impl Context {
     /// Verifies result destinations before scientific work begins.
     pub fn prepare_outputs(self) -> std::io::Result<()> {
         for path in [self.output, self.provenance].into_iter().flatten() {
-            let _file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(path)?;
+            let directory = path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty());
+            let _temporary = match directory {
+                Some(parent) => tempfile::NamedTempFile::new_in(parent)?,
+                None => tempfile::NamedTempFile::new_in(".")?,
+            };
         }
         Ok(())
     }
@@ -160,7 +166,7 @@ impl Context {
         }
     }
 
-    fn provenance_json(self) -> String {
+    pub(super) fn provenance_json(self) -> String {
         let mut record = Json::new();
         record
             .text("pdbiox_version", env!("CARGO_PKG_VERSION"))
@@ -177,7 +183,12 @@ impl Context {
                 "invocation",
                 &std::env::args().collect::<Vec<_>>().join(" "),
             )
-            .number("threads", self.threads);
+            .number("workers", self.execution.worker_budget())
+            .number("memory_budget", self.execution.memory_budget().bytes())
+            .number(
+                "spill_budget",
+                self.execution.temp_storage_policy().max_bytes(),
+            );
         record.text(
             "missing_element_policy",
             match self.missing_element_policy {
@@ -285,7 +296,7 @@ impl Table {
     }
 }
 
-fn delimited_field(output: &mut String, value: &str, delimiter: char) {
+pub(super) fn delimited_field(output: &mut String, value: &str, delimiter: char) {
     if !value.contains([delimiter, '"', '\n', '\r']) {
         output.push_str(value);
         return;
@@ -359,7 +370,7 @@ pub fn json_array(items: &[String]) -> String {
 }
 
 /// Escapes the characters a string field cannot carry literally.
-fn escape(text: &str) -> String {
+pub(super) fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for character in text.chars() {
         match character {

@@ -54,7 +54,7 @@ fn json_lines_keeps_one_object_per_line() {
         provenance: None,
         ccd: None,
         ccd_version: None,
-        threads: 0,
+        execution: Box::leak(Box::new(pdbiox::core::ExecutionContext::default())),
         missing_element_policy: pdbiox::MissingElementPolicy::PreserveUnknown,
         residue_boundary_policy: pdbiox::AmbiguousResidueBoundaryPolicy::Reject,
     };
@@ -87,7 +87,7 @@ fn json_results_embed_policy_and_read_provenance() {
         provenance: None,
         ccd: None,
         ccd_version: None,
-        threads: 0,
+        execution: Box::leak(Box::new(pdbiox::core::ExecutionContext::default())),
         missing_element_policy: pdbiox::MissingElementPolicy::InferFromAtomName,
         residue_boundary_policy: pdbiox::AmbiguousResidueBoundaryPolicy::InferFromFileOrder,
     };
@@ -101,4 +101,71 @@ fn tsv_only_quotes_fields_that_need_it() {
     let mut table = Table::new('\t', &["chain", "atoms"]);
     table.row(["A\tB", "42"]);
     assert_eq!(table.finish(), "chain\tatoms\n\"A\tB\"\t42");
+}
+
+#[test]
+fn incremental_json_rows_are_published_as_one_valid_document() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path: &'static Path = Box::leak(Box::new(directory.path().join("rows.json")));
+    let context = test_context(OutputKind::Json, Some(path));
+    let mut rows = RowWriter::new(context, &["id", "title"]).expect("open rows");
+    rows.row(["1", "first"]).expect("first row");
+    rows.row(["2", "second"]).expect("second row");
+    rows.finish().expect("finish rows");
+    let output = std::fs::read_to_string(path).expect("published output");
+    assert!(output.starts_with(
+        "{\"result\":[{\"id\":\"1\",\"title\":\"first\"},{\"id\":\"2\",\"title\":\"second\"}]"
+    ));
+    assert!(output.contains("\"_provenance\""));
+}
+
+#[test]
+fn an_unfinished_row_file_does_not_replace_the_destination() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path: &'static Path = Box::leak(Box::new(directory.path().join("rows.csv")));
+    std::fs::write(path, "previous\n").expect("seed destination");
+    let context = test_context(OutputKind::Csv, Some(path));
+    let mut rows = RowWriter::new(context, &["id"]).expect("open rows");
+    rows.row(["new"]).expect("row");
+    drop(rows);
+    assert_eq!(
+        std::fs::read_to_string(path).expect("unchanged destination"),
+        "previous\n"
+    );
+}
+
+#[test]
+fn invalid_row_width_writes_nothing_and_the_sink_remains_usable() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path: &'static Path = Box::leak(Box::new(directory.path().join("rows.csv")));
+    let context = test_context(OutputKind::Csv, Some(path));
+    let mut rows = RowWriter::new(context, &["id", "value"]).expect("open rows");
+    assert!(rows.row(["too", "many", "columns"]).is_err());
+    rows.row(["1", "kept"]).expect("valid row");
+    rows.finish().expect("finish rows");
+    assert_eq!(
+        std::fs::read_to_string(path)
+            .expect("published output")
+            .lines()
+            .take(2)
+            .collect::<Vec<_>>(),
+        ["id,value", "1,kept"]
+    );
+}
+
+fn test_context(format: OutputKind, output: Option<&'static Path>) -> Context {
+    Context {
+        format,
+        quiet: true,
+        color: false,
+        mode: pdbiox::ParseMode::Strict,
+        policy: Box::leak(Box::new(pdbiox::AnalysisPolicy::default())),
+        output,
+        provenance: None,
+        ccd: None,
+        ccd_version: None,
+        execution: Box::leak(Box::new(pdbiox::core::ExecutionContext::default())),
+        missing_element_policy: pdbiox::MissingElementPolicy::PreserveUnknown,
+        residue_boundary_policy: pdbiox::AmbiguousResidueBoundaryPolicy::Reject,
+    }
 }
