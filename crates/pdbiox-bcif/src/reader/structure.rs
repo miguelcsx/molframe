@@ -1,4 +1,4 @@
-//! `BinaryCIF` container reading followed by shared mmCIF lowering.
+//! `BinaryCIF` container and structure reading.
 
 use crate::BinaryDocument;
 use pdbiox_cif::Document;
@@ -26,13 +26,65 @@ pub fn read_document(input: &InputBuffer, limits: Limits) -> Result<BinaryDocume
     BinaryDocument::parse(input.as_bytes(), limits)
 }
 
-/// Reads a `BinaryCIF` structure through the shared `Document` lowering path.
+/// Reads a `BinaryCIF` structure without materialising a coordinate DOM.
 ///
 /// # Errors
 ///
 /// Returns ordered container, codec, or interpretation diagnostics.
 pub fn read(input: &InputBuffer, options: &ReadOptions) -> ReadResult {
-    read_with_document(input, options).map(|(_, structure, findings)| (structure, findings))
+    super::direct::read(input, options)
+}
+
+/// Reads a structure while retaining selected non-coordinate categories.
+///
+/// The returned document is a bounded metadata projection, not a lossless
+/// representation. Use [`read_with_document`] when every category must survive
+/// a round trip.
+///
+/// # Errors
+///
+/// Returns ordered container, codec, or interpretation diagnostics.
+#[doc(hidden)]
+pub fn read_with_metadata(
+    input: &InputBuffer,
+    options: &ReadOptions,
+    keep_category: fn(&str) -> bool,
+) -> Result<(Document, pdbiox_core::Structure, Vec<Diagnostic>), Vec<Diagnostic>> {
+    super::direct::read_with_metadata(input, options, keep_category)
+}
+
+/// Result of a direct structure read and compact non-coordinate projection.
+#[doc(hidden)]
+pub type ProjectedReadResult<T> = Result<
+    (
+        Document,
+        pdbiox_core::Structure,
+        T,
+        Vec<pdbiox_core::Diagnostic>,
+    ),
+    Vec<pdbiox_core::Diagnostic>,
+>;
+
+/// Reads a structure and an external compact projection from one container decode.
+///
+/// Projected categories are decoded one column at a time and are not retained
+/// in the returned metadata document unless `keep_category` also requests
+/// them. Coordinate projection remains owned by the direct structure reader.
+///
+/// # Errors
+///
+/// Returns ordered container, codec, or interpretation diagnostics.
+#[doc(hidden)]
+pub fn read_with_projection<S>(
+    input: &InputBuffer,
+    options: &ReadOptions,
+    keep_category: fn(&str) -> bool,
+    projection: S,
+) -> ProjectedReadResult<S::Output>
+where
+    S: pdbiox_cif::CifEventSink,
+{
+    super::direct::read_with_projection(input, options, keep_category, projection)
 }
 
 /// Reads both the decoded shared document and its normalised structure once.
