@@ -1,9 +1,54 @@
 """Native MRC density-map values and summaries."""
 
 from .._native import DensityMap, MapBoundary, MapHistogram, MapStatistics
-from .._native import MapStatisticsError, MrcError
+from .._native import MapStatisticsError, MrcBrickError, MrcError
+from .._native.xtal import (
+    DEFAULT_MRC_BLOCK_MEMORY_LIMIT_BYTES,
+    DEFAULT_MRC_BRICK_PAYLOAD_BYTES,
+    DEFAULT_MRC_BRICK_WORKING_SET_BYTES,
+    CubeAtom,
+    CubeGrid,
+    MapBrickAddress,
+    MapBrickId,
+    MapBrickShape,
+    MrcBlockOptions,
+    MrcBlockReader,
+    MrcBrickBudget,
+    MrcBrickDescriptor,
+    MrcBrickOptions,
+    MrcBrickProvider,
+    MrcMapDescriptor,
+    ScalarBrickMetadata,
+    ScalarBrickPayload,
+    read_cube,
+    read_dx,
+)
 
 __all__ = [
-    "DensityMap", "MapBoundary", "MapHistogram", "MapStatistics",
-    "MapStatisticsError", "MrcError",
+    "DEFAULT_MRC_BLOCK_MEMORY_LIMIT_BYTES",
+    "DEFAULT_MRC_BRICK_PAYLOAD_BYTES",
+    "DEFAULT_MRC_BRICK_WORKING_SET_BYTES",
+    "CubeAtom",
+    "CubeGrid",
+    "DensityMap",
+    "MapBoundary",
+    "MapHistogram",
+    "MapStatistics",
+    "MapStatisticsError",
+    "MapBrickAddress",
+    "MapBrickId",
+    "MapBrickShape",
+    "MrcBlockOptions",
+    "MrcBlockReader",
+    "MrcBrickBudget",
+    "MrcBrickDescriptor",
+    "MrcBrickOptions",
+    "MrcBrickProvider",
+    "MrcBrickError",
+    "MrcError",
+    "MrcMapDescriptor",
+    "ScalarBrickMetadata",
+    "ScalarBrickPayload",
+    "read_cube",
+    "read_dx",
 ]
