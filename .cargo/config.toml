@@ -1,0 +1,4 @@
+# A host-wide performance profile must not turn recoverable worker panics into
+# process termination inside Python. Keep the workspace's release contract.
+[profile.release]
+panic = "unwind"

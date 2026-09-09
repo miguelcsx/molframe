@@ -8,6 +8,7 @@ repository.workspace = true
 description = "ModelCIF metadata and confidence metrics for pdbiox"
 
 [dependencies]
+num-traits.workspace = true
 pdbiox-core.workspace = true
 pdbiox-cif.workspace = true
 

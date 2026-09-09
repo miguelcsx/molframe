@@ -13,6 +13,7 @@ pdbiox-core = { workspace = true, features = ["gzip"] }
 pdbiox-cif.workspace = true
 pdbiox-pdb.workspace = true
 pdbiox-bcif.workspace = true
+num-traits.workspace = true
 
 [lints]
 workspace = true

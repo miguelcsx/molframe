@@ -9,10 +9,14 @@ description = "Allocation and resident-memory measurements for pdbiox"
 publish = false
 
 [dependencies]
+arrow.workspace = true
 pdbiox.workspace = true
 pdbiox-bench.workspace = true
+pdbiox-mmap.workspace = true
+tempfile.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+rmp-serde.workspace = true
 
 [lints]
 workspace = true

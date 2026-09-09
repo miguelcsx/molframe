@@ -42,6 +42,7 @@ clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 clap_mangen = "0.2"
 flate2 = "1"
+faer = { version = "0.24.4", default-features = false, features = ["std", "rayon"] }
 glob = "0.3"
 hashbrown = "0.16"
 hoomd-gsd = "1.1"
@@ -76,7 +77,7 @@ serde_json = "1"
 serde_bytes = "0.11"
 serde_repr = "0.1"
 sha2 = "0.10"
-tng-rs = { git = "https://github.com/miguelcsx/tng-rs", rev = "5fecdcc66934bd5718545b2fa6efc2f344d1cfb1" }
+tng-rs = "0.3"
 
 [workspace.lints.rust]
 missing_docs = "warn"
@@ -90,9 +91,24 @@ cognitive_complexity = "warn"
 manual_unwrap_or_default = "allow"
 manual_unwrap_or = "allow"
 
+[profile.release]
+# Twenty-seven crates with cross-crate generics and per-atom calls that cross
+# crate boundaries. Without link-time optimisation and a single code generation
+# unit, those calls are never inlined, which is where most of the difference
+# lies. Declaring the profile here rather than inheriting the host's settings
+# also makes a release build reproducible between machines.
+lto = "thin"
+codegen-units = 1
+# Worker-panic recovery and the Python exception mapping both unwind. Aborting
+# would convert a recoverable worker fault into process death inside an
+# interpreter, so this is a correctness setting, not a tuning one.
+panic = "unwind"
+
 [profile.bench]
 debug = 1
-# Keep optimized benchmark code while avoiding the host's global release-LTO
-# setting, which makes the complete Criterion target matrix impractical to build.
+# Keep optimized benchmark code while avoiding the release profile's link-time
+# optimisation, which makes the complete Criterion target matrix impractical to
+# build.
 lto = false
+codegen-units = 16
 strip = "none"

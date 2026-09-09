@@ -9,6 +9,7 @@ description = "Geometric kernels for pdbiox"
 
 [dependencies]
 num-traits.workspace = true
+wide.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

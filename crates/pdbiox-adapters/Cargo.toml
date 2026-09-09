@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Typed projections for external structural-bioinformatics adapters"
+description = "Neutral topology transfer and verified byte acquisition"
 
 [dependencies]
 pdbiox-chem.workspace = true

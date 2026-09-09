@@ -7,14 +7,14 @@ license.workspace = true
 repository.workspace = true
 description = "Core types, storage and analysis contracts for pdbiox"
 
-# 02-architecture.md §3 layer 0: `pdbiox-core` has almost no dependencies, so that
-# a downstream project wanting only the types pays for only the types. Memory
-# mapping and decompression (FR-209, FR-210) are feature-gated rather than
-# default, which keeps the default dependency list to the four named there.
+# 02-architecture.md §3 layer 0: `pdbiox-core` keeps its dependency surface
+# narrow. Rayon lives here because the process-wide executor is itself a core
+# execution contract; mapping and decompression remain feature-gated.
 [dependencies]
 bytemuck.workspace = true
 hashbrown.workspace = true
 num-traits.workspace = true
+rayon.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 

@@ -13,6 +13,7 @@ pdbiox-core.workspace = true
 pdbiox-chem.workspace = true
 pdbiox-geom.workspace = true
 pdbiox-seq.workspace = true
+pdbiox-spatial.workspace = true
 pdbiox-surface.workspace = true
 thiserror.workspace = true
 

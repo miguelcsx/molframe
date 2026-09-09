@@ -9,6 +9,7 @@ description = "Contacts, interactions and secondary structure for pdbiox"
 
 [dependencies]
 num-traits.workspace = true
+faer.workspace = true
 pdbiox-core.workspace = true
 pdbiox-cif.workspace = true
 pdbiox-chem.workspace = true

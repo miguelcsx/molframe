@@ -36,6 +36,7 @@ toml.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+flate2.workspace = true
 pdbiox-bench.workspace = true
 tempfile.workspace = true
 
@@ -66,7 +67,7 @@ ml = ["dep:pdbiox-ml"]
 adapters = ["dep:pdbiox-adapters"]
 xtal = ["dep:pdbiox-xtal", "spatial"]
 
-# Analysis science over the kernels above.
+# Analysis domains over the kernels above.
 surface = ["spatial", "dep:pdbiox-surface"]
 analysis = ["spatial", "geom", "chem", "dep:pdbiox-analysis"]
 validate = ["spatial", "geom", "chem", "dep:pdbiox-validate"]
