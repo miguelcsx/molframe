@@ -116,7 +116,7 @@ pub fn write_structure_factor_cif(table: &ReflectionTable) -> Result<String, Ref
         if let Some(name) = &table.space_group_name {
             category
                 .column_mut("space_group_name_H-M")
-                .push(CifValue::Text(name.clone()), Quoting::Bare);
+                .push(CifValue::Text(name.as_ref().into()), Quoting::Bare);
         }
     }
     if !table.symmetry_operations.is_empty() {
@@ -130,7 +130,7 @@ pub fn write_structure_factor_cif(table: &ReflectionTable) -> Result<String, Ref
             );
             category
                 .column_mut("operation_xyz")
-                .push(CifValue::Text(operation.clone()), Quoting::Bare);
+                .push(CifValue::Text(operation.as_ref().into()), Quoting::Bare);
         }
     }
     if let Some(wavelength) = table.datasets.iter().find_map(|dataset| dataset.wavelength) {
@@ -229,7 +229,7 @@ fn from_cif_value(value: &CifValue) -> ReflectionValue {
         CifValue::Inapplicable => ReflectionValue::Inapplicable,
         CifValue::Integer(value) => ReflectionValue::Integer(*value),
         CifValue::Float(value) => ReflectionValue::Real(*value),
-        CifValue::Text(value) => ReflectionValue::Text(value.clone()),
+        CifValue::Text(value) => ReflectionValue::Text(value.as_ref().into()),
     }
 }
 fn to_cif_value(value: &ReflectionValue) -> CifValue {
@@ -238,7 +238,7 @@ fn to_cif_value(value: &ReflectionValue) -> CifValue {
         ReflectionValue::Inapplicable => CifValue::Inapplicable,
         ReflectionValue::Integer(value) => CifValue::Integer(*value),
         ReflectionValue::Real(value) => CifValue::Float(*value),
-        ReflectionValue::Text(value) => CifValue::Text(value.clone()),
+        ReflectionValue::Text(value) => CifValue::Text(value.as_ref().into()),
     }
 }
 

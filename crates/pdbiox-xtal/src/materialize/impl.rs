@@ -29,8 +29,8 @@ struct Materializer<'a> {
     copies: Vec<CopySpan>,
     source_atoms: Vec<u32>,
     instance_ids: Vec<i64>,
-    used_labels: HashSet<SymbolId>,
-    label_counts: HashMap<SymbolId, u32>,
+    used_labels: IdentityHashSet<SymbolId>,
+    label_counts: IdentityHashMap<SymbolId, u32>,
 }
 
 struct ResidueAppend<'a> {
@@ -72,12 +72,12 @@ impl<'a> Materializer<'a> {
             .try_reserve_exact(total_atoms)
             .map_err(|_| capacity("atoms"))?;
 
-        let mut used_labels = HashSet::new();
+        let mut used_labels = IdentityHashSet::default();
         used_labels
             .try_reserve(view.instance_count())
             .map_err(|_| capacity("chain identifiers"))?;
 
-        let mut label_counts = HashMap::new();
+        let mut label_counts = IdentityHashMap::default();
         label_counts
             .try_reserve(view.instance_count())
             .map_err(|_| capacity("chain identifiers"))?;

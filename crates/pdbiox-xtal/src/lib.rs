@@ -10,8 +10,10 @@ mod assembly_spatial;
 mod category_transform;
 mod cell;
 mod crystal;
+mod crystal_batch;
 mod crystal_images;
 mod expression;
+mod grid;
 mod lower;
 mod map_statistics;
 mod materialize;
@@ -32,14 +34,25 @@ pub use assembly::{ASSEMBLIES_EXTENSION, AssemblyDef, AssemblySet, Generator, Op
 pub use assembly_spatial::AssemblyNeighbor;
 pub use cell::CellTransform;
 pub use crystal::{
-    CrystalNeighbor, DEFAULT_CRYSTAL_IMAGE_LIMIT, crystal_neighbors,
-    crystal_neighbors_with_backend, crystal_neighbors_with_limit,
+    CrystalNeighbor, CrystalNeighborBatch, CrystalNeighborOptions, DEFAULT_CRYSTAL_IMAGE_LIMIT,
+    collect_crystal_neighbors, crystal_neighbor_batches, visit_crystal_neighbors,
 };
+pub use crystal_batch::{
+    CrystalImageBatch, CrystalImageBatchOptions, crystal_image_batches, visit_crystal_images,
+};
+pub use crystal_images::CrystalImage;
 pub use expression::{DEFAULT_INSTANCE_LIMIT, OperExpression};
+pub use grid::{CubeAtom, CubeGrid, GridError, read_cube, read_dx};
 pub use lower::lower_assemblies;
 pub use map_statistics::{MapHistogram, MapStatistics, MapStatisticsError};
 pub use materialize::INSTANCE_ID_ANNOTATION;
-pub use mrc::{DensityMap, MapBoundary, MrcError};
+pub use mrc::{
+    DEFAULT_MRC_BLOCK_MEMORY_LIMIT_BYTES, DEFAULT_MRC_BRICK_PAYLOAD_BYTES,
+    DEFAULT_MRC_BRICK_WORKING_SET_BYTES, DensityMap, DensitySampler, MapBoundary, MapBrickAddress,
+    MapBrickId, MapBrickShape, MrcBlockOptions, MrcBlockReader, MrcBrickBudget, MrcBrickDescriptor,
+    MrcBrickError, MrcBrickOptions, MrcBrickProvider, MrcError, MrcMapDescriptor,
+    ScalarBrickMetadata, ScalarBrickPayload,
+};
 pub use mtz::{read_mtz, write_mtz};
 pub use ncs::{
     NCS_EXTENSION, NcsAtomInstance, NcsCode, NcsExt, NcsOperator, NcsSet, NcsView, lower_ncs,

@@ -30,6 +30,20 @@ impl DensityMap {
         self.sample_grid_cubic(self.cartesian_to_grid(position)?, boundary)
     }
 
+    /// Prepares the cell transform once so many samples share it.
+    ///
+    /// Building the transform costs several transcendental functions and a
+    /// matrix inverse — an order of magnitude more than the interpolation it
+    /// enables — so sampling a coordinate list one call at a time spends nearly
+    /// all its time rebuilding a value that never changes.
+    #[must_use]
+    pub fn sampler(&self) -> Option<DensitySampler<'_>> {
+        Some(DensitySampler {
+            map: self,
+            transform: CellTransform::new(&self.cell).ok()?,
+        })
+    }
+
     fn cartesian_to_grid(&self, position: [f64; 3]) -> Option<[f64; 3]> {
         let transform = CellTransform::new(&self.cell).ok()?;
         let has_origin = self.origin.iter().any(|value| value.abs() > f64::EPSILON);
@@ -145,4 +159,57 @@ fn cubic_weights(fraction: f64) -> [f64; 4] {
         0.5 * fraction + 2.0 * squared - 1.5 * cubed,
         -0.5 * squared + 0.5 * cubed,
     ]
+}
+
+/// A density map with its cell transform already built.
+///
+/// Sampling through this pays for the transform once instead of once per
+/// coordinate, and holds nothing proportional to the number of samples.
+#[derive(Debug)]
+pub struct DensitySampler<'a> {
+    /// The map being sampled.
+    map: &'a DensityMap,
+    /// The prepared Cartesian-to-fractional conversion.
+    transform: CellTransform,
+}
+
+impl DensitySampler<'_> {
+    /// Trilinearly samples a Cartesian coordinate in ångströms.
+    #[must_use]
+    pub fn sample_cartesian(&self, position: [f64; 3], boundary: MapBoundary) -> Option<f32> {
+        self.map.sample_grid(self.to_grid(position), boundary)
+    }
+
+    /// Tricubically samples a Cartesian coordinate with a Catmull-Rom kernel.
+    #[must_use]
+    pub fn sample_cartesian_cubic(&self, position: [f64; 3], boundary: MapBoundary) -> Option<f32> {
+        self.map.sample_grid_cubic(self.to_grid(position), boundary)
+    }
+
+    /// Converts a Cartesian coordinate to a local grid coordinate.
+    ///
+    /// Identical arithmetic to `DensityMap::cartesian_to_grid`, reading the
+    /// prepared transform instead of constructing one.
+    fn to_grid(&self, position: [f64; 3]) -> [f64; 3] {
+        let map = self.map;
+        let has_origin = map.origin.iter().any(|value| value.abs() > f64::EPSILON);
+        let fractional = if has_origin {
+            self.transform.to_fractional([
+                position[0] - map.origin[0],
+                position[1] - map.origin[1],
+                position[2] - map.origin[2],
+            ])
+        } else {
+            self.transform.to_fractional(position)
+        };
+
+        let mut local = [0.0; 3];
+        for axis in 0..3 {
+            local[axis] = fractional[axis] * usize_to_f64(map.sampling[axis]);
+            if !has_origin {
+                local[axis] -= f64::from(map.starts[axis]);
+            }
+        }
+        local
+    }
 }

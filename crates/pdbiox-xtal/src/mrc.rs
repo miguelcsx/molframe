@@ -1,18 +1,20 @@
 //! MRC2014/CCP4 density maps and coordinate-space sampling.
 
-use pdbiox_core::structure::UnitCell;
-
 use crate::numeric::i32_to_usize;
-
+use pdbiox_core::structure::UnitCell;
 const HEADER_BYTES: usize = 1024;
-
+#[path = "mrc_block.rs"]
+mod block;
+#[path = "mrc_brick.rs"]
+mod brick;
 #[path = "mrc_sampling.rs"]
 mod sampling;
+pub use sampling::DensitySampler;
 #[path = "mrc_values.rs"]
 mod values;
 use values::{
-    f64_triplet_to_f32, statistics, to_i32, usize_triplet_to_i32, write_f32, write_f32_triplet,
-    write_i32, write_i32_triplet,
+    f64_triplet_to_f32, half_to_f32, statistics, to_i32, usize_triplet_to_i32, write_f32,
+    write_f32_triplet, write_i32, write_i32_triplet,
 };
 
 /// Boundary handling for density-map interpolation.
@@ -69,13 +71,42 @@ pub enum MrcError {
     /// A value cannot be written as a deterministic scalar map.
     #[error("MRC/CCP4 map contains a non-finite density")]
     NonFiniteDensity,
+    /// A requested subvolume lies outside the canonical map dimensions.
+    #[error("MRC/CCP4 block is empty or outside the stored grid")]
+    InvalidRegion,
+    /// A caller requested a zero or excessively large working-memory budget.
+    #[error("invalid MRC/CCP4 memory limit {requested}; it must be at least one byte")]
+    InvalidMemoryLimit {
+        /// Requested limit in bytes.
+        requested: usize,
+    },
+    /// A requested subvolume cannot fit in the configured working-memory budget.
+    #[error("MRC/CCP4 block requires {required} bytes; limit is {limit}")]
+    MemoryLimit {
+        /// Output plus reusable encoded-row workspace in bytes.
+        required: usize,
+        /// Configured limit in bytes.
+        limit: usize,
+    },
+    /// Seeking or reading the backing source failed.
+    #[error("MRC/CCP4 I/O failed: {0:?}")]
+    Io(std::io::ErrorKind),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Endian {
     Little,
     Big,
 }
+
+pub use block::{
+    DEFAULT_MRC_BLOCK_MEMORY_LIMIT_BYTES, MrcBlockOptions, MrcBlockReader, MrcMapDescriptor,
+};
+pub use brick::{
+    DEFAULT_MRC_BRICK_PAYLOAD_BYTES, DEFAULT_MRC_BRICK_WORKING_SET_BYTES, MapBrickAddress,
+    MapBrickId, MapBrickShape, MrcBrickBudget, MrcBrickDescriptor, MrcBrickError, MrcBrickOptions,
+    MrcBrickProvider, ScalarBrickMetadata, ScalarBrickPayload,
+};
 
 impl DensityMap {
     /// Reads an MRC2014 or compatible CCP4 scalar map.
@@ -122,10 +153,17 @@ impl DensityMap {
             return Err(MrcError::Truncated);
         }
         let count = product(stored_dimensions)?;
-        let stored_values = decode_values(&bytes[data_offset..], mode, count, endian)?;
         let dimensions = permute_usize(stored_dimensions, axes);
         let starts = permute_i32(stored_starts, axes);
-        let values = canonicalise(&stored_values, stored_dimensions, dimensions, axes);
+        let values = decode_values(
+            &bytes[data_offset..],
+            mode,
+            count,
+            endian,
+            stored_dimensions,
+            dimensions,
+            axes,
+        )?;
         let label_count = usize::try_from(read_i32(bytes, 220, endian)?)
             .map_err(|_| MrcError::InvalidHeader)?
             .min(10);
@@ -307,6 +345,9 @@ fn decode_values(
     mode: i32,
     count: usize,
     endian: Endian,
+    stored_dimensions: [usize; 3],
+    dimensions: [usize; 3],
+    axes: [i32; 3],
 ) -> Result<Vec<f32>, MrcError> {
     let width = match mode {
         0 => 1,
@@ -323,30 +364,48 @@ fn decode_values(
     if bytes.len() < required {
         return Err(MrcError::Truncated);
     }
-    if mode == 101 {
-        return Ok((0..count)
-            .map(|index| {
-                let byte = bytes[index / 2];
-                f32::from(if index % 2 == 0 {
-                    byte & 0x0f
+    let mut output = Vec::new();
+    output
+        .try_reserve_exact(count)
+        .map_err(|_| MrcError::ResourceLimit)?;
+    output.resize(count, 0.0);
+    let identity = axes == [1, 2, 3];
+    let mut stored_index = 0_usize;
+    for section in 0..stored_dimensions[2] {
+        for row in 0..stored_dimensions[1] {
+            for column in 0..stored_dimensions[0] {
+                let offset = stored_index
+                    .checked_mul(width)
+                    .ok_or(MrcError::SizeOverflow)?;
+                let value = match mode {
+                    0 => f32::from(bytes[stored_index].cast_signed()),
+                    1 => f32::from(read_i16(bytes, offset, endian)?),
+                    2 => read_f32(bytes, offset, endian)?,
+                    6 => f32::from(read_u16(bytes, offset, endian)?),
+                    12 => half_to_f32(read_u16(bytes, offset, endian)?),
+                    101 => {
+                        let byte = bytes[stored_index / 2];
+                        f32::from(if stored_index.is_multiple_of(2) {
+                            byte & 0x0f
+                        } else {
+                            byte >> 4
+                        })
+                    }
+                    _ => return Err(MrcError::UnsupportedMode(mode)),
+                };
+                let target = if identity {
+                    stored_index
                 } else {
-                    byte >> 4
-                })
-            })
-            .collect());
-    }
-    let mut output = Vec::with_capacity(count);
-    for index in 0..count {
-        let offset = index * width;
-        let value = match mode {
-            0 => f32::from(bytes[offset].cast_signed()),
-            1 => f32::from(read_i16(bytes, offset, endian)?),
-            2 => read_f32(bytes, offset, endian)?,
-            6 => f32::from(read_u16(bytes, offset, endian)?),
-            12 => half_to_f32(read_u16(bytes, offset, endian)?),
-            _ => return Err(MrcError::UnsupportedMode(mode)),
-        };
-        output.push(value);
+                    let mut xyz = [0; 3];
+                    xyz[i32_to_usize(axes[0] - 1)] = column;
+                    xyz[i32_to_usize(axes[1] - 1)] = row;
+                    xyz[i32_to_usize(axes[2] - 1)] = section;
+                    linear(xyz, dimensions)
+                };
+                output[target] = value;
+                stored_index += 1;
+            }
+        }
     }
     Ok(output)
 }
@@ -373,22 +432,6 @@ fn read_u16(bytes: &[u8], offset: usize, endian: Endian) -> Result<u16, MrcError
         Endian::Big => u16::from_be_bytes(raw),
     })
 }
-fn half_to_f32(value: u16) -> f32 {
-    let sign = u32::from(value & 0x8000) << 16;
-    let exponent = (value >> 10) & 0x1f;
-    let fraction = u32::from(value & 0x03ff);
-    let bits = match exponent {
-        0 if fraction == 0 => sign,
-        0 => {
-            let shift = fraction.leading_zeros() - 21;
-            sign | ((127 - 15 - shift) << 23) | ((fraction << (shift + 1) & 0x03ff) << 13)
-        }
-        31 => sign | 0x7f80_0000 | (fraction << 13),
-        _ => sign | (u32::from(exponent + 112) << 23) | (fraction << 13),
-    };
-    f32::from_bits(bits)
-}
-
 fn is_axis_permutation(axes: [i32; 3]) -> bool {
     axes.into_iter().all(|axis| (1..=3).contains(&axis))
         && axes[0] != axes[1]
@@ -406,27 +449,6 @@ fn permute_i32(values: [i32; 3], axes: [i32; 3]) -> [i32; 3] {
     let mut output = [0; 3];
     for stored in 0..3 {
         output[i32_to_usize(axes[stored] - 1)] = values[stored];
-    }
-    output
-}
-fn canonicalise(
-    stored: &[f32],
-    stored_dimensions: [usize; 3],
-    dimensions: [usize; 3],
-    axes: [i32; 3],
-) -> Vec<f32> {
-    let mut output = vec![0.0; stored.len()];
-    for section in 0..stored_dimensions[2] {
-        for row in 0..stored_dimensions[1] {
-            for column in 0..stored_dimensions[0] {
-                let mut xyz = [0; 3];
-                xyz[i32_to_usize(axes[0] - 1)] = column;
-                xyz[i32_to_usize(axes[1] - 1)] = row;
-                xyz[i32_to_usize(axes[2] - 1)] = section;
-                output[linear(xyz, dimensions)] =
-                    stored[column + stored_dimensions[0] * (row + stored_dimensions[1] * section)];
-            }
-        }
     }
     output
 }

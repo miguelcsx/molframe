@@ -46,6 +46,22 @@ pub(super) fn f64_triplet_to_f32(values: [f64; 3]) -> Result<[f32; 3], MrcError>
     Ok([to_f32(values[0])?, to_f32(values[1])?, to_f32(values[2])?])
 }
 
+pub(super) fn half_to_f32(value: u16) -> f32 {
+    let sign = u32::from(value & 0x8000) << 16;
+    let exponent = (value >> 10) & 0x1f;
+    let fraction = u32::from(value & 0x03ff);
+    let bits = match exponent {
+        0 if fraction == 0 => sign,
+        0 => {
+            let shift = fraction.leading_zeros() - 21;
+            sign | ((127 - 15 - shift) << 23) | ((fraction << (shift + 1) & 0x03ff) << 13)
+        }
+        31 => sign | 0x7f80_0000 | (fraction << 13),
+        _ => sign | (u32::from(exponent + 112) << 23) | (fraction << 13),
+    };
+    f32::from_bits(bits)
+}
+
 pub(super) fn write_i32(bytes: &mut [u8], offset: usize, value: i32) {
     bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
 }

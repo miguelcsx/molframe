@@ -4,6 +4,7 @@ use crate::AssemblyView;
 use pdbiox_core::annotation::{AnnotationColumn, AtomAnnotation, AtomAnnotations};
 use pdbiox_core::bond::{BondRecord, BondTableBuilder};
 use pdbiox_core::chunk::{AtomRecord, ChunkBuilder};
+use pdbiox_core::hashing::{IdentityHashMap, IdentityHashSet};
 use pdbiox_core::optional::OptionalSymbol;
 use pdbiox_core::structure::CoordinateStore;
 use pdbiox_core::symbol::SymbolId;
@@ -13,7 +14,7 @@ use pdbiox_core::{
     ResidueIndex, Structure, StructureData,
 };
 use pdbiox_geom::Rigid;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 /// Per-atom annotation holding the generated chain's stable instance identifier.

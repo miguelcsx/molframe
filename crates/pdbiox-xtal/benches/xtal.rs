@@ -1,16 +1,20 @@
 //! Criterion coverage for crystal catalogue and symmetry workflows.
 
-use criterion::{Criterion, black_box};
+use criterion::measurement::WallTime;
+use criterion::{BenchmarkGroup, Criterion, black_box};
 use pdbiox_bench::{Sample, input, structure};
 use pdbiox_core::ModelIndex;
+use pdbiox_core::execution::ExecutionContext;
 use pdbiox_core::structure::UnitCell;
 use pdbiox_xtal::{
-    AffineTransform, CellTransform, DensityMap, MapBoundary, ReflectionColumn,
-    ReflectionColumnType, ReflectionTable, ReflectionValue, crystal_neighbors, lower_assemblies,
-    lower_ncs, lower_structure_factor_cif, lower_symmetry, read_mtz, space_group_by_hall,
-    space_group_setting, space_group_settings, write_mtz, write_structure_factor_cif,
+    AffineTransform, CellTransform, DensityMap, MapBoundary, MrcBlockOptions, MrcBlockReader,
+    NcsSet, ReflectionColumn, ReflectionColumnType, ReflectionTable, ReflectionValue,
+    collect_crystal_neighbors, lower_assemblies, lower_ncs, lower_structure_factor_cif,
+    lower_symmetry, read_cube, read_dx, read_mtz, space_group_by_hall, space_group_setting,
+    space_group_settings, write_mtz, write_structure_factor_cif,
 };
-use std::fmt::Debug;
+use std::fmt::{Debug, Write};
+use std::io::Cursor;
 
 trait BenchRequired<T> {
     fn required(self, context: &str) -> T;
@@ -40,6 +44,7 @@ fn bench_space_groups(c: &mut Criterion) {
 }
 
 fn bench_crystal_workflows(c: &mut Criterion) {
+    let context = ExecutionContext::default();
     let Some(bytes) = Sample::Tiny.cif() else {
         panic!("tiny benchmark fixture has no mmCIF");
     };
@@ -53,7 +58,14 @@ fn bench_crystal_workflows(c: &mut Criterion) {
         Err(findings) => panic!("crystal benchmark symmetry failed: {findings:?}"),
     };
     let structure = structure(Sample::Tiny);
-    if let Err(finding) = crystal_neighbors(&structure, &symmetry, ModelIndex::new(0), 5.0) {
+    if let Err(finding) = collect_crystal_neighbors(
+        &structure,
+        &symmetry,
+        ModelIndex::new(0),
+        5.0,
+        pdbiox_xtal::CrystalNeighborOptions::default(),
+        &context,
+    ) {
         panic!("crystal-neighbour benchmark setup failed: {finding}");
     }
     let mut group = c.benchmark_group("xtal_workflows");
@@ -65,11 +77,13 @@ fn bench_crystal_workflows(c: &mut Criterion) {
     });
     group.bench_function("crystal_neighbors", |b| {
         b.iter(|| {
-            black_box(crystal_neighbors(
+            black_box(collect_crystal_neighbors(
                 &structure,
                 &symmetry,
                 ModelIndex::new(0),
                 5.0,
+                pdbiox_xtal::CrystalNeighborOptions::default(),
+                &context,
             ))
         });
     });
@@ -79,6 +93,12 @@ fn bench_crystal_workflows(c: &mut Criterion) {
 fn bench_extended_crystal_workflows(c: &mut Criterion) {
     let map = density_map();
     let map_bytes = map.to_mrc_bytes().required("MRC benchmark fixture failed");
+    let mut block_reader = MrcBlockReader::new(
+        Cursor::new(map_bytes.as_slice()),
+        MrcBlockOptions::default(),
+    )
+    .required("MRC block-reader fixture failed");
+    let mut block_values = Vec::new();
     let reflection = reflection_table();
     let mtz = write_mtz(&reflection).required("MTZ benchmark fixture failed");
     let structure_factor_document = parse_document(REFLECTION_CIF);
@@ -100,6 +120,14 @@ fn bench_extended_crystal_workflows(c: &mut Criterion) {
     });
     group.bench_function("mrc_read/4096", |b| {
         b.iter(|| black_box(DensityMap::from_mrc_bytes(&map_bytes)));
+    });
+    group.bench_function("mrc_block_read/8x8x8", |b| {
+        b.iter(|| {
+            block_reader
+                .read_block_into([3, 3, 3], [8, 8, 8], &mut block_values)
+                .required("MRC benchmark block failed");
+            black_box(&block_values);
+        });
     });
     group.bench_function("map_statistics/4096", |b| {
         b.iter(|| black_box(map.statistics()));
@@ -128,6 +156,82 @@ fn bench_extended_crystal_workflows(c: &mut Criterion) {
             )
         });
     });
+    bench_reflection_workflows(
+        &mut group,
+        &ReflectionFixtures {
+            reflection: &reflection,
+            mtz: &mtz,
+            structure_factor_document: &structure_factor_document,
+            ncs_document: &ncs_document,
+            ncs: &ncs,
+            map: &map,
+        },
+    );
+    group.finish();
+}
+
+fn bench_text_grids(c: &mut Criterion) {
+    let [cube, dx] = text_grid_fixtures(64);
+    let mut group = c.benchmark_group("xtal_text_grid_read");
+    group.bench_function("cube/64x64x64", |b| {
+        b.iter(|| black_box(read_cube(cube.as_bytes())));
+    });
+    group.bench_function("dx/64x64x64", |b| {
+        b.iter(|| black_box(read_dx(dx.as_bytes())));
+    });
+    group.finish();
+}
+
+fn text_grid_fixtures(side: usize) -> [String; 2] {
+    let values = side * side * side;
+    let mut cube =
+        format!("density\nbenchmark\n0 0 0 0\n{side} 1 0 0\n{side} 0 1 0\n{side} 0 0 1\n");
+    let mut dx = format!(
+        "object 1 class gridpositions counts {side} {side} {side}\n\
+         origin 0 0 0\n\
+         delta 1 0 0\n\
+         delta 0 1 0\n\
+         delta 0 0 1\n\
+         object 2 class gridconnections counts {side} {side} {side}\n\
+         object 3 class array type float rank 0 items {values} data follows\n"
+    );
+    for index in 0..values {
+        let value = index % 97;
+        write!(cube, "{value}.0 ").required("cube benchmark fixture formatting failed");
+        write!(dx, "{value}.0 ").required("DX benchmark fixture formatting failed");
+        if index % 8 == 7 {
+            cube.push('\n');
+            dx.push('\n');
+        }
+    }
+    [cube, dx]
+}
+
+/// Everything the reflection and symmetry benchmarks read, built once by the
+/// caller so no fixture is reconstructed inside a measured iteration.
+struct ReflectionFixtures<'a> {
+    reflection: &'a ReflectionTable,
+    mtz: &'a [u8],
+    structure_factor_document: &'a pdbiox_cif::Document,
+    ncs_document: &'a pdbiox_cif::Document,
+    ncs: &'a NcsSet,
+    map: &'a DensityMap,
+}
+
+/// Reflection tables, MTZ round trips and NCS lowering, kept out of the density
+/// benchmark so neither function outgrows a readable screenful.
+fn bench_reflection_workflows(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    fixtures: &ReflectionFixtures<'_>,
+) {
+    let ReflectionFixtures {
+        reflection,
+        mtz,
+        structure_factor_document,
+        ncs_document,
+        ncs,
+        map,
+    } = *fixtures;
     group.bench_function("reflection_validate/512", |b| {
         b.iter(|| black_box(reflection.validate()));
     });
@@ -135,35 +239,37 @@ fn bench_extended_crystal_workflows(c: &mut Criterion) {
         b.iter(|| black_box(reflection.miller_indices()));
     });
     group.bench_function("mtz_write/512x4", |b| {
-        b.iter(|| black_box(write_mtz(&reflection)));
+        b.iter(|| black_box(write_mtz(reflection)));
     });
     group.bench_function("mtz_read/512x4", |b| {
-        b.iter(|| black_box(read_mtz(&mtz)));
+        b.iter(|| black_box(read_mtz(mtz)));
     });
     group.bench_function("structure_factor_lower/2", |b| {
-        b.iter(|| black_box(lower_structure_factor_cif(&structure_factor_document)));
+        b.iter(|| black_box(lower_structure_factor_cif(structure_factor_document)));
     });
     group.bench_function("structure_factor_write/2x6", |b| {
-        let table = lower_structure_factor_cif(&structure_factor_document)
+        let table = lower_structure_factor_cif(structure_factor_document)
             .required("structure-factor fixture failed");
         b.iter(|| black_box(write_structure_factor_cif(&table)));
     });
     group.bench_function("ncs_lower/2", |b| {
-        b.iter(|| black_box(lower_ncs(&ncs_document)));
+        b.iter(|| black_box(lower_ncs(ncs_document)));
     });
     group.bench_function("ncs_iterators/2", |b| {
         b.iter(|| black_box((ncs.len(), ncs.operators().count(), ncs.generators().count())));
     });
     group.bench_function("map_sample/1024", |b| {
+        let Some(sampler) = map.sampler() else {
+            panic!("density map cell must be valid");
+        };
         b.iter(|| {
             black_box(
                 (0..1_024)
-                    .map(|_| map.sample_cartesian([1.0, 2.0, 3.0], MapBoundary::Missing))
+                    .map(|_| sampler.sample_cartesian([1.0, 2.0, 3.0], MapBoundary::Missing))
                     .collect::<Vec<_>>(),
             )
         });
     });
-    group.finish();
 }
 
 const NCS_CIF: &str = r"data_ncs
@@ -279,5 +385,6 @@ fn main() {
     bench_space_groups(&mut criterion);
     bench_crystal_workflows(&mut criterion);
     bench_extended_crystal_workflows(&mut criterion);
+    bench_text_grids(&mut criterion);
     criterion.final_summary();
 }

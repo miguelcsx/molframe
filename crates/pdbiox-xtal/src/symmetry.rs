@@ -4,7 +4,10 @@ use pdbiox_cif::{Category, DataBlock, Document};
 use pdbiox_core::{Code, Diagnostic, ModelIndex, Structure};
 use std::collections::BTreeSet;
 
-use crate::numeric::usize_to_u32;
+#[path = "symmetry_parse.rs"]
+mod parse;
+
+use parse::{determinant, gcd, parse_component};
 
 /// Stable extension key for crystallographic space-group metadata.
 pub const SYMMETRY_EXTENSION: &str = "pdbiox.xtal.symmetry.v1";
@@ -227,17 +230,22 @@ pub trait SymmetryExt {
     /// # Errors
     ///
     /// Returns a diagnostic when symmetry, cell, coordinates or cutoff are invalid.
-    fn crystal_neighbors(&self, cutoff: f64) -> Result<Vec<crate::CrystalNeighbor>, Diagnostic>;
+    fn collect_crystal_neighbors(
+        &self,
+        cutoff: f64,
+        context: &pdbiox_core::ExecutionContext,
+    ) -> Result<Vec<crate::CrystalNeighbor>, Diagnostic>;
 
     /// Finds unique crystal contacts in a selected coordinate model.
     ///
     /// # Errors
     ///
     /// Returns a diagnostic when symmetry, cell, model or cutoff are invalid.
-    fn crystal_neighbors_in_model(
+    fn collect_crystal_neighbors_in_model(
         &self,
         model: ModelIndex,
         cutoff: f64,
+        context: &pdbiox_core::ExecutionContext,
     ) -> Result<Vec<crate::CrystalNeighbor>, Diagnostic>;
 }
 
@@ -246,19 +254,31 @@ impl SymmetryExt for Structure {
         self.extensions().get(SYMMETRY_EXTENSION)
     }
 
-    fn crystal_neighbors(&self, cutoff: f64) -> Result<Vec<crate::CrystalNeighbor>, Diagnostic> {
-        self.crystal_neighbors_in_model(ModelIndex::new(0), cutoff)
+    fn collect_crystal_neighbors(
+        &self,
+        cutoff: f64,
+        context: &pdbiox_core::ExecutionContext,
+    ) -> Result<Vec<crate::CrystalNeighbor>, Diagnostic> {
+        self.collect_crystal_neighbors_in_model(ModelIndex::new(0), cutoff, context)
     }
 
-    fn crystal_neighbors_in_model(
+    fn collect_crystal_neighbors_in_model(
         &self,
         model: ModelIndex,
         cutoff: f64,
+        context: &pdbiox_core::ExecutionContext,
     ) -> Result<Vec<crate::CrystalNeighbor>, Diagnostic> {
         let symmetry = self
             .symmetry_set()
             .ok_or_else(|| Diagnostic::new(Code::E6016).with_context("symmetry", "absent"))?;
-        crate::crystal_neighbors(self, symmetry, model, cutoff)
+        crate::collect_crystal_neighbors(
+            self,
+            symmetry,
+            model,
+            cutoff,
+            crate::CrystalNeighborOptions::default(),
+            context,
+        )
     }
 }
 
@@ -349,124 +369,6 @@ fn text(category: &Category, item: &str) -> Option<Box<str>> {
     category
         .identifier(item, 0)
         .map(|value| value.into_owned().into_boxed_str())
-}
-
-fn parse_component(
-    expression: &str,
-    coefficients: &mut [i32; 3],
-    translation: &mut Rational,
-) -> Result<(), Diagnostic> {
-    let compact = expression
-        .chars()
-        .filter(|character| !character.is_ascii_whitespace())
-        .collect::<String>();
-    if compact.is_empty() {
-        return Err(symmetry_error(expression));
-    }
-    for (sign, term) in terms(&compact)? {
-        if let Some((axis, coefficient)) = variable_term(term)? {
-            coefficients[axis] = coefficients[axis]
-                .checked_add(sign * coefficient)
-                .ok_or_else(symmetry_capacity)?;
-        } else {
-            let value = parse_rational(term)?;
-            *translation =
-                translation.checked_add(if sign < 0 { value.negated()? } else { value })?;
-        }
-    }
-    Ok(())
-}
-
-fn terms(expression: &str) -> Result<Vec<(i32, &str)>, Diagnostic> {
-    let bytes = expression.as_bytes();
-    let mut output = Vec::new();
-    let mut start = 0usize;
-    while start < bytes.len() {
-        let (sign, term_start) = match bytes[start] {
-            b'+' => (1, start + 1),
-            b'-' => (-1, start + 1),
-            _ => (1, start),
-        };
-        let end = bytes[term_start..]
-            .iter()
-            .position(|byte| matches!(byte, b'+' | b'-'))
-            .map_or(bytes.len(), |position| term_start + position);
-        let term = expression
-            .get(term_start..end)
-            .ok_or_else(symmetry_capacity)?;
-        if term.is_empty() {
-            return Err(symmetry_error(expression));
-        }
-        output.push((sign, term));
-        start = end;
-    }
-    Ok(output)
-}
-
-fn variable_term(term: &str) -> Result<Option<(usize, i32)>, Diagnostic> {
-    let Some(variable) = term.chars().last() else {
-        return Ok(None);
-    };
-    let axis = match variable.to_ascii_lowercase() {
-        'x' => 0,
-        'y' => 1,
-        'z' => 2,
-        _ => return Ok(None),
-    };
-    let coefficient = term.strip_suffix(variable).ok_or_else(symmetry_capacity)?;
-    let coefficient = if coefficient.is_empty() {
-        1
-    } else {
-        coefficient
-            .parse::<i32>()
-            .map_err(|_| symmetry_error(term))?
-    };
-    Ok(Some((axis, coefficient)))
-}
-
-fn parse_rational(term: &str) -> Result<Rational, Diagnostic> {
-    if let Some((numerator, denominator)) = term.split_once('/') {
-        if denominator.contains('/') {
-            return Err(symmetry_error(term));
-        }
-        return Rational::new(
-            numerator.parse().map_err(|_| symmetry_error(term))?,
-            denominator.parse().map_err(|_| symmetry_error(term))?,
-        );
-    }
-    if let Some((whole, fractional)) = term.split_once('.') {
-        if fractional.is_empty() || !fractional.bytes().all(|byte| byte.is_ascii_digit()) {
-            return Err(symmetry_error(term));
-        }
-        let denominator = 10_u32
-            .checked_pow(usize_to_u32(fractional.len()))
-            .ok_or_else(symmetry_capacity)?;
-        let whole: i32 = if whole.is_empty() {
-            0
-        } else {
-            whole.parse().map_err(|_| symmetry_error(term))?
-        };
-        let fraction: u32 = fractional.parse().map_err(|_| symmetry_error(term))?;
-        let numerator = i64::from(whole) * i64::from(denominator) + i64::from(fraction);
-        return Rational::new(
-            i32::try_from(numerator).map_err(|_| symmetry_capacity())?,
-            denominator,
-        );
-    }
-    Rational::new(term.parse().map_err(|_| symmetry_error(term))?, 1)
-}
-
-fn determinant(matrix: [[i32; 3]; 3]) -> i32 {
-    matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])
-        - matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0])
-        + matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0])
-}
-
-fn gcd(mut left: u32, mut right: u32) -> u32 {
-    while right != 0 {
-        (left, right) = (right, left % right);
-    }
-    left.max(1)
 }
 
 fn symmetry_row_error(category: &Category, item: &str, row: usize) -> Diagnostic {
