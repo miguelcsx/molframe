@@ -5,7 +5,6 @@ use pdbiox_core::annotation::{AnnotationColumn, AtomAnnotation};
 use pdbiox_core::column::Presence;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::structure::{ResidueRef, StructureData};
-use pdbiox_core::{BondOrder, Element};
 
 #[derive(Clone, Copy)]
 pub(super) struct AtomChemistry {
@@ -203,69 +202,6 @@ pub(super) fn attach_annotations(
 
 fn annotation_capacity() -> Diagnostic {
     Diagnostic::new(Code::E6009).with_message("annotation exceeds the supported atom range")
-}
-
-pub(super) fn is_hydrogen_bond_donor(component: &Component, atom_name: &str) -> bool {
-    let Some(atom) = component.atom(atom_name) else {
-        return false;
-    };
-    matches!(
-        atom.element,
-        Element::NITROGEN | Element::OXYGEN | Element::SULFUR
-    ) && bonded_atoms(component, atom_name).any(|neighbour| neighbour.element.is_hydrogen())
-}
-
-pub(super) fn is_hydrogen_bond_acceptor(component: &Component, atom_name: &str) -> bool {
-    let Some(atom) = component.atom(atom_name) else {
-        return false;
-    };
-    match atom.element {
-        Element::OXYGEN | Element::SULFUR | Element::FLUORINE | Element::CHLORINE => {
-            atom.charge <= 0
-        }
-        Element::NITROGEN => {
-            atom.charge <= 0
-                && !is_amide_nitrogen(component, atom_name)
-                && !(atom.aromatic
-                    && bonded_atoms(component, atom_name)
-                        .any(|neighbour| neighbour.element.is_hydrogen()))
-        }
-        _ => false,
-    }
-}
-
-fn is_amide_nitrogen(component: &Component, atom_name: &str) -> bool {
-    bonded_atoms(component, atom_name).any(|neighbour| {
-        neighbour.element == Element::CARBON
-            && component.bonds.iter().any(|bond| {
-                let other = if bond.atom_a == neighbour.name {
-                    component.atom(&bond.atom_b)
-                } else if bond.atom_b == neighbour.name {
-                    component.atom(&bond.atom_a)
-                } else {
-                    None
-                };
-                bond.order == BondOrder::Double
-                    && other.is_some_and(|atom| {
-                        matches!(atom.element, Element::OXYGEN | Element::SULFUR)
-                    })
-            })
-    })
-}
-
-fn bonded_atoms<'a>(
-    component: &'a Component,
-    atom_name: &'a str,
-) -> impl Iterator<Item = &'a crate::ComponentAtom> + 'a {
-    component.bonds.iter().filter_map(move |bond| {
-        if bond.atom_a.as_ref() == atom_name {
-            component.atom(&bond.atom_b)
-        } else if bond.atom_b.as_ref() == atom_name {
-            component.atom(&bond.atom_a)
-        } else {
-            None
-        }
-    })
 }
 
 fn dictionary_full(_: pdbiox_core::DictionaryFull) -> Diagnostic {

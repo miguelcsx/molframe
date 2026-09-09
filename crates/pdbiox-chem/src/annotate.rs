@@ -1,12 +1,12 @@
 //! Applying component chemistry to an immutable structure snapshot.
 
 mod atom_chemistry;
+mod component_index;
+
+use component_index::ComponentIndex;
 
 use crate::{Component, ComponentKind, ComponentProvider};
-use atom_chemistry::{
-    AtomChemistry, attach_annotations, is_hydrogen_bond_acceptor, is_hydrogen_bond_donor,
-    observed_stereo,
-};
+use atom_chemistry::{AtomChemistry, attach_annotations, observed_stereo};
 use pdbiox_core::BondOrder;
 use pdbiox_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use pdbiox_core::contract::DictionaryVersion;
@@ -107,6 +107,7 @@ pub fn apply_component_chemistry(
     let mut state = Annotator {
         provider,
         components: BTreeMap::new(),
+        indices: BTreeMap::new(),
         missing: BTreeSet::new(),
         bonds,
         findings: Diagnostics::new(),
@@ -163,6 +164,11 @@ fn validate_link_policy(policy: &PolymerLinkPolicy) -> Result<(), Diagnostic> {
 struct Annotator<'a> {
     provider: &'a dyn ComponentProvider,
     components: BTreeMap<Box<str>, Arc<Component>>,
+    /// Name index and hydrogen-bonding roles, built once per component.
+    ///
+    /// Both are pure functions of the component, so every residue of the same
+    /// component shares them instead of recomputing a quadratic bond walk.
+    indices: BTreeMap<Box<str>, Arc<ComponentIndex>>,
     missing: BTreeSet<Box<str>>,
     bonds: BondTableBuilder,
     findings: Diagnostics,
@@ -194,8 +200,13 @@ impl Annotator<'_> {
             self.components
                 .entry(component_id.into())
                 .or_insert_with(|| Arc::clone(&component));
+            let index = Arc::clone(
+                self.indices
+                    .entry(component_id.into())
+                    .or_insert_with(|| Arc::new(ComponentIndex::build(Arc::clone(&component)))),
+            );
             kinds.insert(component.kind);
-            if inconsistent(&component, &atoms) {
+            if inconsistent(&index, &atoms) {
                 self.findings.push(
                     Diagnostic::new(Code::W3202)
                         .with_context("component", component_id)
@@ -204,7 +215,7 @@ impl Annotator<'_> {
                 continue;
             }
             report_missing_atoms(&component, &atoms, residue, &mut self.findings);
-            self.annotate_atoms(&component, residue, &atoms);
+            self.annotate_atoms(&index, residue, &atoms);
             add_component_bonds(&component, &atoms, &mut self.bonds);
         }
         Ok(())
@@ -212,15 +223,16 @@ impl Annotator<'_> {
 
     fn annotate_atoms(
         &mut self,
-        component: &Component,
+        index: &ComponentIndex,
         residue: ResidueRef<'_>,
         atoms: &[AtomRef<'_>],
     ) {
+        let component = index.component();
         for atom in atoms {
             let Some(name) = atom.name() else {
                 continue;
             };
-            let Some(expected) = component.atom(name) else {
+            let Some(expected) = index.atom(name) else {
                 continue;
             };
             let Some(slot) = self.chemistry.get_mut(atom.index().as_usize()) else {
@@ -230,19 +242,18 @@ impl Annotator<'_> {
                 kind: component.kind,
                 aromatic: expected.aromatic,
                 charge: expected.charge,
-                donor: is_hydrogen_bond_donor(component, name),
-                acceptor: is_hydrogen_bond_acceptor(component, name),
+                donor: index.is_donor(name),
+                acceptor: index.is_acceptor(name),
                 stereo: observed_stereo(component, residue, name, expected.stereo),
             });
         }
     }
 }
 
-fn inconsistent(component: &Component, atoms: &[AtomRef<'_>]) -> bool {
-    atoms.iter().any(|atom| {
-        atom.name()
-            .is_some_and(|name| component.atom(name).is_none())
-    })
+fn inconsistent(index: &ComponentIndex, atoms: &[AtomRef<'_>]) -> bool {
+    atoms
+        .iter()
+        .any(|atom| atom.name().is_some_and(|name| index.atom(name).is_none()))
 }
 
 fn report_missing_atoms(
@@ -272,15 +283,19 @@ fn add_component_bonds(
     atoms: &[AtomRef<'_>],
     output: &mut BondTableBuilder,
 ) {
+    // Scanning the residue's atoms once per bond endpoint costs
+    // `O(bonds x atoms^2)` name comparisons. Ordering the observed atoms by
+    // name once turns each endpoint into a binary search, and the sort is
+    // stable so atoms sharing a name keep their original relative order.
+    let mut by_name: Vec<(&str, AtomRef<'_>)> = atoms
+        .iter()
+        .filter_map(|atom| atom.name().map(|name| (name, *atom)))
+        .collect();
+    by_name.sort_by_key(|(name, _)| *name);
+
     for bond in component.bonds.iter() {
-        for atom_a in atoms
-            .iter()
-            .filter(|atom| atom.name() == Some(&bond.atom_a))
-        {
-            for atom_b in atoms
-                .iter()
-                .filter(|atom| atom.name() == Some(&bond.atom_b))
-            {
+        for (_, atom_a) in named(&by_name, &bond.atom_a) {
+            for (_, atom_b) in named(&by_name, &bond.atom_b) {
                 if alt_compatible(*atom_a, *atom_b) {
                     output.push(BondRecord {
                         atom_a: atom_a.index(),
@@ -291,6 +306,19 @@ fn add_component_bonds(
                 }
             }
         }
+    }
+}
+
+/// The contiguous run of name-ordered atoms called `name`.
+fn named<'a, 'b>(
+    by_name: &'a [(&'a str, AtomRef<'b>)],
+    name: &str,
+) -> &'a [(&'a str, AtomRef<'b>)] {
+    let start = by_name.partition_point(|(observed, _)| *observed < name);
+    let end = by_name.partition_point(|(observed, _)| *observed <= name);
+    match by_name.get(start..end) {
+        Some(run) => run,
+        None => &[],
     }
 }
 
