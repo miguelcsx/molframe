@@ -1,9 +1,17 @@
 //! Gaussian network model over explicitly selected interaction sites.
+//!
+//! Contacts and every matrix-vector product cost `O(N + E)`, where `N` is the
+//! number of selected sites and `E` is the number of cutoff contacts. Only the
+//! small-site micro-kernel materialises an `N x N` matrix.
 
-use nalgebra::{DMatrix, SymmetricEigen};
+#[path = "gnm/solver.rs"]
+mod solver;
+
+use crate::network::{ContactGraph, NetworkBudget, NetworkError};
+use pdbiox_core::ExecutionContext;
+use pdbiox_core::parallel::ReductionPolicy;
 use pdbiox_core::selection::AtomSelection;
-use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialError, pairs_within};
-use std::collections::BTreeMap;
+use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialError};
 
 /// Explicit Gaussian-network construction and solve policy.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -14,10 +22,17 @@ pub struct GnmOptions {
     pub mode_count: usize,
     /// Eigenvalues at or below this magnitude are classified as zero modes.
     pub zero_mode_tolerance: f64,
-    /// Maximum bytes allowed for the dense Kirchhoff matrix.
+    /// Maximum bytes for graph construction, eigensolver workspace, and output.
     pub memory_limit_bytes: usize,
     /// Spatial implementation used to build contacts.
     pub backend: SpatialBackend,
+    /// Whether the eigensolver may reorder its floating-point reductions.
+    ///
+    /// `Deterministic` — the default — solves sequentially, so the eigenvalues
+    /// are bit-identical on every run and machine (FR-515). `Fast` lets the
+    /// solver use the execution context's native pool and returns results that
+    /// agree to within the solver tolerance rather than exactly.
+    pub reduction: ReductionPolicy,
 }
 
 /// Non-zero Gaussian network modes in increasing eigenvalue order.
@@ -42,10 +57,10 @@ pub enum GnmError {
     /// At least two selected sites are required.
     #[error("GNM requires at least two selected sites")]
     TooFewSites,
-    /// Dense matrix allocation exceeds the caller's ceiling.
-    #[error("GNM matrix requires {required} bytes, over the {limit} byte limit")]
+    /// Sparse graph, solver workspace, and output exceed the caller's ceiling.
+    #[error("GNM workspace requires {required} bytes, over the {limit} byte limit")]
     MemoryLimit {
-        /// Required matrix bytes.
+        /// Required workspace bytes.
         required: usize,
         /// Caller-provided ceiling.
         limit: usize,
@@ -58,12 +73,20 @@ pub enum GnmError {
         /// Available non-zero modes.
         available: usize,
     },
+    /// The restarted sparse solve exhausted its convergence budget.
+    #[error("GNM sparse eigensolver converged {converged} of {requested} requested modes")]
+    Convergence {
+        /// Modes requested from the sparse solver.
+        requested: usize,
+        /// Modes that reached the residual threshold.
+        converged: usize,
+    },
     /// Spatial network construction failed.
     #[error(transparent)]
     Spatial(#[from] SpatialError),
 }
 
-/// Constructs and diagonalizes a Gaussian network Kirchhoff matrix.
+/// Constructs and diagonalizes a Gaussian network Kirchhoff operator.
 ///
 /// Every contact receives the conventional unit spring weight. Chemical site
 /// choice, contact distance, zero-mode tolerance, memory ceiling, and periodic
@@ -71,60 +94,46 @@ pub enum GnmError {
 ///
 /// # Errors
 ///
-/// Returns [`GnmError`] for invalid controls, selections, memory, or mode count.
+/// Returns [`GnmError`] for invalid controls, selections, memory, convergence,
+/// or mode count.
 pub fn gaussian_network_model(
     positions: &[[f32; 3]],
     sites: &AtomSelection,
     options: GnmOptions,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<GaussianNetworkModel, GnmError> {
     validate_options(options)?;
-    let selected: Vec<u32> = sites.into_iter().collect();
-    if selected.len() < 2 {
+    let site_count = usize::try_from(sites.len()).map_err(|_| GnmError::MemoryLimit {
+        required: usize::MAX,
+        limit: options.memory_limit_bytes,
+    })?;
+    if site_count < 2 {
         return Err(GnmError::TooFewSites);
     }
-    let required = selected
-        .len()
-        .checked_mul(selected.len())
-        .and_then(|elements| elements.checked_mul(size_of::<f64>()))
-        .ok_or(GnmError::MemoryLimit {
-            required: usize::MAX,
-            limit: options.memory_limit_bytes,
-        })?;
-    if required > options.memory_limit_bytes {
-        return Err(GnmError::MemoryLimit {
-            required,
-            limit: options.memory_limit_bytes,
-        });
-    }
-    let contacts = pairs_within(
+    let site_bytes = solver::checked_product(&[site_count, size_of::<u32>()], options)?;
+    solver::check_memory(site_bytes, options)?;
+    let selected: Vec<u32> = sites.into_iter().collect();
+    validate_site_indices(&selected, positions.len())?;
+    let graph = ContactGraph::build(
         positions,
         sites,
-        sites,
-        options.contact_distance,
-        options.backend,
+        &selected,
+        budget(options),
         periodic,
+        context,
     )?;
-    let lookup: BTreeMap<u32, usize> = selected
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(local, atom)| (atom, local))
-        .collect();
-    let mut kirchhoff = DMatrix::zeros(selected.len(), selected.len());
-    for pair in contacts {
-        let Some(&left) = lookup.get(&pair.first) else {
-            continue;
-        };
-        let Some(&right) = lookup.get(&pair.second) else {
-            continue;
-        };
-        kirchhoff[(left, right)] = -1.0;
-        kirchhoff[(right, left)] = -1.0;
-        kirchhoff[(left, left)] += 1.0;
-        kirchhoff[(right, right)] += 1.0;
+    solver::solve(&graph, selected, options)
+}
+
+fn validate_site_indices(selected: &[u32], position_count: usize) -> Result<(), GnmError> {
+    for &atom in selected {
+        let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
+        if index >= position_count {
+            return Err(SpatialError::AtomOutOfBounds(atom).into());
+        }
     }
-    modes_from_matrix(kirchhoff, selected, options)
+    Ok(())
 }
 
 fn validate_options(options: GnmOptions) -> Result<(), GnmError> {
@@ -141,48 +150,7 @@ fn validate_options(options: GnmOptions) -> Result<(), GnmError> {
     }
 }
 
-fn modes_from_matrix(
-    kirchhoff: DMatrix<f64>,
-    sites: Vec<u32>,
-    options: GnmOptions,
-) -> Result<GaussianNetworkModel, GnmError> {
-    let eigen = SymmetricEigen::new(kirchhoff);
-    let mut indexed: Vec<(f64, usize)> = eigen
-        .eigenvalues
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(index, value)| (value, index))
-        .collect();
-    indexed.sort_by(|left, right| left.0.total_cmp(&right.0));
-    let zero_modes = indexed
-        .iter()
-        .take_while(|(value, _)| value.abs() <= options.zero_mode_tolerance)
-        .count();
-    let available = indexed.len() - zero_modes;
-    if available < options.mode_count {
-        return Err(GnmError::InsufficientModes {
-            requested: options.mode_count,
-            available,
-        });
-    }
-    let chosen = &indexed[zero_modes..zero_modes + options.mode_count];
-    let eigenvalues = chosen.iter().map(|(value, _)| *value).collect();
-    let modes = chosen
-        .iter()
-        .map(|(_, column)| {
-            canonical_mode(eigen.eigenvectors.column(*column).iter().copied().collect())
-        })
-        .collect();
-    Ok(GaussianNetworkModel {
-        sites,
-        eigenvalues,
-        modes,
-        zero_modes,
-    })
-}
-
-fn canonical_mode(mut mode: Vec<f64>) -> Vec<f64> {
+pub(super) fn canonical_mode(mut mode: Vec<f64>) -> Vec<f64> {
     if mode
         .iter()
         .copied()
@@ -194,6 +162,24 @@ fn canonical_mode(mut mode: Vec<f64>) -> Vec<f64> {
         }
     }
     mode
+}
+
+/// The subset of the public options the shared contact build actually reads.
+fn budget(options: GnmOptions) -> NetworkBudget {
+    NetworkBudget {
+        contact_distance: options.contact_distance,
+        memory_limit_bytes: options.memory_limit_bytes,
+        backend: options.backend,
+    }
+}
+
+impl From<NetworkError> for GnmError {
+    fn from(error: NetworkError) -> Self {
+        match error {
+            NetworkError::MemoryLimit { required, limit } => Self::MemoryLimit { required, limit },
+            NetworkError::Spatial(error) => Self::Spatial(error),
+        }
+    }
 }
 
 #[cfg(test)]
