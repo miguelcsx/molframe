@@ -1,9 +1,26 @@
+use crate::api::{
+    a2m_match_columns, a3m_match_columns, align_global_banded, align_global_matrix,
+    align_local_matrix, align_mapping, align_region, align_semi_global_matrix,
+    analyse_assign_chains, analyse_cad_contact_areas, analyse_cad_score, analyse_ce_align,
+    analyse_ce_alignments, analyse_contact_map_similarity, analyse_dockq,
+    analyse_equivalent_atom_mappings, analyse_gdt, analyse_gdt_ha, analyse_gdt_ts, analyse_lddt,
+    analyse_ligand_symmetry_rmsd, analyse_map_chains, analyse_map_sequence_to_structure,
+    analyse_qs_score, analyse_tm_score, analyse_weighted_rmsd, assign_chains, blosum62,
+    cad_contact_areas, cad_score, ce_align, ce_alignments, chain_sequences, contact_map_similarity,
+    decide_rmsd, dockq, equivalent_atom_mappings, gdt, gdt_ha, gdt_ts, global, global_score,
+    governed_comparison_workflow, governed_interface_rmsd, governed_pocket_rmsd, interface_rmsd,
+    kmer_counts, lddt, ligand_symmetry_rmsd, load_matrix, local, map_chains,
+    map_sequence_to_structure, measure_mapping, minimizers, multiple_sequence_alignment,
+    neighbor_joining, parse_a2m, parse_a3m, parse_clustal, parse_fasta, parse_fastq, parse_phylip,
+    parse_stockholm, pocket_rmsd, progressive_msa, qs_score, read_sequence, seed_and_extend,
+    semi_global, similar_kmers, tm_score, upgma, weighted_rmsd, write_a2m, write_a3m,
+    write_clustal, write_fasta, write_fastq, write_phylip, write_sequence, write_stockholm,
+};
 use crate::atom::{PyAtom, PyAtoms};
 use crate::bonds::{
     PyBondAdjacency, PyBondOrder, PyBondProvenance, PyBondRecord, PyBondTable, PyBondTableBuilder,
     PyBonds,
 };
-use crate::compatibility::{PyPdbParser, PyUniverse};
 use crate::dms::{
     PyDmsBond, PyDmsCell, PyDmsFrame, PyDmsParticle, PyDmsSystem, PyDmsTopology, PyDmsVersion,
     read_dms, write_dms,
@@ -42,24 +59,6 @@ use crate::ml::{
     PySplitRatios, PySplitStrategy, write_atom_ipc, write_atom_ipc_with_metadata,
     write_atom_parquet, write_atom_parquet_with_metadata,
 };
-use crate::science::{
-    a2m_match_columns, a3m_match_columns, align_global_banded, align_global_matrix,
-    align_local_matrix, align_mapping, align_region, align_semi_global_matrix,
-    analyse_assign_chains, analyse_cad_contact_areas, analyse_cad_score, analyse_ce_align,
-    analyse_ce_alignments, analyse_contact_map_similarity, analyse_dockq,
-    analyse_equivalent_atom_mappings, analyse_gdt, analyse_gdt_ha, analyse_gdt_ts, analyse_lddt,
-    analyse_ligand_symmetry_rmsd, analyse_map_chains, analyse_map_sequence_to_structure,
-    analyse_qs_score, analyse_tm_score, analyse_weighted_rmsd, assign_chains, blosum62,
-    cad_contact_areas, cad_score, ce_align, ce_alignments, chain_sequences, contact_map_similarity,
-    decide_rmsd, dockq, equivalent_atom_mappings, gdt, gdt_ha, gdt_ts, global,
-    governed_comparison_workflow, governed_interface_rmsd, governed_pocket_rmsd, interface_rmsd,
-    kmer_counts, lddt, ligand_symmetry_rmsd, load_matrix, local, map_chains,
-    map_sequence_to_structure, measure_mapping, minimizers, multiple_sequence_alignment,
-    neighbor_joining, parse_a2m, parse_a3m, parse_clustal, parse_fasta, parse_fastq, parse_phylip,
-    parse_stockholm, pocket_rmsd, progressive_msa, qs_score, read_sequence, seed_and_extend,
-    semi_global, similar_kmers, tm_score, upgma, weighted_rmsd, write_a2m, write_a3m,
-    write_clustal, write_fasta, write_fastq, write_phylip, write_sequence, write_stockholm,
-};
 use crate::structure::PyStructure;
 use crate::trajectory::{
     PyTrajectory, PyTrajectoryFormat, PyTrajectoryUnits, PyTrajectoryWriteOptions,
@@ -92,7 +91,7 @@ mod query_registration;
 #[path = "core/registration/read.rs"]
 mod read_registration;
 use analysis_registration::{
-    register_analysis, register_contract_classes, register_science_classes,
+    register_analysis, register_contract_classes, register_domain_classes,
 };
 use ensemble_registration::register_ensemble;
 use facade_registration::register_facade;
@@ -138,6 +137,10 @@ fn register_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
     crate::core_annotations::register(module)?;
     crate::core_values::register(module)?;
     crate::core_storage::register(module)?;
+    crate::core::execution::register(module)?;
+    crate::core::parallel::register(module)?;
+    crate::core::provider::register(module)?;
+    crate::core::structure_batches::register(module)?;
     crate::core_columns::register(module)?;
     crate::core_data::register(module)?;
     crate::core_encoded::register(module)?;
@@ -178,8 +181,6 @@ fn register_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyResidues>()?;
     module.add_class::<PyResidue>()?;
     module.add_class::<PyResidueAtoms>()?;
-    module.add_class::<PyPdbParser>()?;
-    module.add_class::<PyUniverse>()?;
     module.add_class::<PyPeriodicAngle>()?;
     module.add_class::<PyRotation3>()?;
     module.add_class::<PySurfaceMesh>()?;
@@ -224,7 +225,7 @@ fn register_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyRigid>()?;
     module.add_class::<PySuperposition>()?;
     register_geometry_classes(module)?;
-    register_science_classes(module)
+    register_domain_classes(module)
 }
 fn register_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
     register_io_and_data_functions(module)?;
@@ -324,6 +325,7 @@ fn register_sequence_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(similar_kmers, module)?)?;
     module.add_function(wrap_pyfunction!(align_region, module)?)?;
     module.add_function(wrap_pyfunction!(align_global_banded, module)?)?;
+    module.add_function(wrap_pyfunction!(global_score, module)?)?;
     module.add_function(wrap_pyfunction!(align_global_matrix, module)?)?;
     module.add_function(wrap_pyfunction!(align_local_matrix, module)?)?;
     module.add_function(wrap_pyfunction!(align_semi_global_matrix, module)?)?;
