@@ -58,24 +58,33 @@ impl TryFrom<pdbiox::traj::GsdTrajectory> for PyGsdTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_gsd(path: PathBuf, options: PyGsdOptions) -> PyResult<PyGsdTrajectory> {
-    pdbiox::traj::parse_gsd(&path, options.into())
-        .map_err(|error| GsdError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_gsd(
+    py: Python<'_>,
+    path: PathBuf,
+    options: PyGsdOptions,
+) -> PyResult<PyGsdTrajectory> {
+    py.detach(move || -> PyResult<PyGsdTrajectory> {
+        pdbiox::traj::parse_gsd(&path, options.into())
+            .map_err(|error| GsdError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
 pub(crate) fn write_gsd(
+    py: Python<'_>,
     path: PathBuf,
     frames: Vec<PyTimestep>,
     options: PyGsdOptions,
 ) -> PyResult<()> {
-    let frames = frames
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect::<PyResult<Vec<_>>>()?;
-    pdbiox::traj::write_gsd(&path, &frames, options.into())
-        .map_err(|error| GsdError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<()> {
+        let frames = frames
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<PyResult<Vec<_>>>()?;
+        pdbiox::traj::write_gsd(&path, &frames, options.into())
+            .map_err(|error| GsdError::new_err(error.to_string()))
+    })
 }
 
 #[pyclass(name = "TngCompression", frozen, from_py_object)]
@@ -244,24 +253,29 @@ impl TryFrom<pdbiox::traj::TngTrajectory> for PyTngTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_tng(path: PathBuf) -> PyResult<PyTngTrajectory> {
-    pdbiox::traj::parse_tng(&path)
-        .map_err(|error| TngError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_tng(py: Python<'_>, path: PathBuf) -> PyResult<PyTngTrajectory> {
+    py.detach(move || -> PyResult<PyTngTrajectory> {
+        pdbiox::traj::parse_tng(&path)
+            .map_err(|error| TngError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
 pub(crate) fn write_tng(
+    py: Python<'_>,
     path: PathBuf,
     frames: Vec<PyTimestep>,
     options: PyTngWriteOptions,
 ) -> PyResult<()> {
-    let frames = frames
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect::<PyResult<Vec<_>>>()?;
-    pdbiox::traj::write_tng(&path, &frames, options.into())
-        .map_err(|error| TngError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<()> {
+        let frames = frames
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<PyResult<Vec<_>>>()?;
+        pdbiox::traj::write_tng(&path, &frames, options.into())
+            .map_err(|error| TngError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

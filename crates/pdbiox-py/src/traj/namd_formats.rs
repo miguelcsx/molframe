@@ -51,17 +51,25 @@ impl TryFrom<pdbiox::traj::NamdBinary> for PyNamdBinary {
 }
 
 #[pyfunction]
-pub(crate) fn parse_namd_binary(bytes: Vec<u8>) -> PyResult<PyNamdBinary> {
-    pdbiox::traj::parse_namd_binary(&bytes)
-        .map_err(|error| NamdError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_namd_binary(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyNamdBinary> {
+    py.detach(move || -> PyResult<PyNamdBinary> {
+        pdbiox::traj::parse_namd_binary(&bytes)
+            .map_err(|error| NamdError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_namd_binary(frame: PyTimestep, endian: PyNamdEndian) -> PyResult<Vec<u8>> {
-    let frame = frame.try_into()?;
-    pdbiox::traj::write_namd_binary(&frame, endian.into())
-        .map_err(|error| NamdError::new_err(error.to_string()))
+pub(crate) fn write_namd_binary(
+    py: Python<'_>,
+    frame: PyTimestep,
+    endian: PyNamdEndian,
+) -> PyResult<Vec<u8>> {
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frame = frame.try_into()?;
+        pdbiox::traj::write_namd_binary(&frame, endian.into())
+            .map_err(|error| NamdError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

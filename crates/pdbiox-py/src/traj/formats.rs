@@ -60,30 +60,33 @@ pub(crate) fn parse_xyz(py: Python<'_>, text: &str) -> Option<Vec<PyXyzFrame>> {
 }
 
 #[pyfunction]
-pub(crate) fn write_xyz(frames: Vec<PyXyzFrame>) -> PyResult<String> {
-    let frames = frames
-        .into_iter()
-        .map(|frame| {
-            let atoms = frame
-                .atoms
-                .into_iter()
-                .map(|atom| {
-                    let element = pdbiox::Element::from_symbol(&atom.element).ok_or_else(|| {
-                        PyValueError::new_err(format!("unknown element: {}", atom.element))
-                    })?;
-                    Ok(pdbiox::traj::format_xyz::XyzAtom {
-                        element,
-                        position: atom.position,
+pub(crate) fn write_xyz(py: Python<'_>, frames: Vec<PyXyzFrame>) -> PyResult<String> {
+    py.detach(move || -> PyResult<String> {
+        let frames = frames
+            .into_iter()
+            .map(|frame| {
+                let atoms = frame
+                    .atoms
+                    .into_iter()
+                    .map(|atom| {
+                        let element =
+                            pdbiox::Element::from_symbol(&atom.element).ok_or_else(|| {
+                                PyValueError::new_err(format!("unknown element: {}", atom.element))
+                            })?;
+                        Ok(pdbiox::traj::format_xyz::XyzAtom {
+                            element,
+                            position: atom.position,
+                        })
                     })
+                    .collect::<PyResult<Vec<_>>>()?;
+                Ok(pdbiox::traj::format_xyz::XyzFrame {
+                    comment: frame.comment,
+                    atoms,
                 })
-                .collect::<PyResult<Vec<_>>>()?;
-            Ok(pdbiox::traj::format_xyz::XyzFrame {
-                comment: frame.comment,
-                atoms,
             })
-        })
-        .collect::<PyResult<Vec<_>>>()?;
-    Ok(pdbiox::traj::format_xyz::write_xyz(&frames))
+            .collect::<PyResult<Vec<_>>>()?;
+        Ok(pdbiox::traj::format_xyz::write_xyz(&frames))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

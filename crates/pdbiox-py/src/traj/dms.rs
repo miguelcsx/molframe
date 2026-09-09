@@ -151,8 +151,8 @@ pub(crate) fn read_dms(py: Python<'_>, path: PathBuf) -> PyResult<PyDmsSystem> {
 }
 
 #[pyfunction]
-pub(crate) fn write_dms(path: PathBuf, system: &PyDmsSystem) -> PyResult<()> {
-    system.write(path)
+pub(crate) fn write_dms(py: Python<'_>, path: PathBuf, system: &PyDmsSystem) -> PyResult<()> {
+    py.detach(move || -> PyResult<()> { system.write(path) })
 }
 
 impl PyDmsSystem {

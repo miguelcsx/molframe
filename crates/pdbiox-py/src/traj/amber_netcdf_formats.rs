@@ -125,32 +125,42 @@ impl TryFrom<pdbiox::traj::AmberNetcdfTrajectory> for PyAmberNetcdfTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_amber_netcdf(bytes: Vec<u8>) -> PyResult<Vec<PyTimestep>> {
-    pdbiox::traj::parse_amber_netcdf(&bytes)
-        .map_err(|error| AmberNetcdfError::new_err(error.to_string()))?
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect()
+pub(crate) fn parse_amber_netcdf(py: Python<'_>, bytes: Vec<u8>) -> PyResult<Vec<PyTimestep>> {
+    py.detach(move || -> PyResult<Vec<PyTimestep>> {
+        pdbiox::traj::parse_amber_netcdf(&bytes)
+            .map_err(|error| AmberNetcdfError::new_err(error.to_string()))?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn parse_amber_netcdf_record(bytes: Vec<u8>) -> PyResult<PyAmberNetcdfTrajectory> {
-    pdbiox::traj::parse_amber_netcdf_record(&bytes)
-        .map_err(|error| AmberNetcdfError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_amber_netcdf_record(
+    py: Python<'_>,
+    bytes: Vec<u8>,
+) -> PyResult<PyAmberNetcdfTrajectory> {
+    py.detach(move || -> PyResult<PyAmberNetcdfTrajectory> {
+        pdbiox::traj::parse_amber_netcdf_record(&bytes)
+            .map_err(|error| AmberNetcdfError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
 pub(crate) fn write_amber_netcdf(
+    py: Python<'_>,
     frames: Vec<PyTimestep>,
     options: PyAmberNetcdfWriteOptions,
 ) -> PyResult<Vec<u8>> {
-    let frames = frames
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect::<PyResult<Vec<_>>>()?;
-    pdbiox::traj::write_amber_netcdf(&frames, options.into())
-        .map_err(|error| AmberNetcdfError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = frames
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<PyResult<Vec<_>>>()?;
+        pdbiox::traj::write_amber_netcdf(&frames, options.into())
+            .map_err(|error| AmberNetcdfError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

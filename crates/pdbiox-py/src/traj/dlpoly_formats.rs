@@ -244,29 +244,37 @@ impl From<pdbiox::traj::DlPolyHistory> for PyDlPolyHistory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_dlpoly_config(text: &str) -> PyResult<PyDlPolyConfig> {
-    pdbiox::traj::parse_dlpoly_config(text)
-        .map(Into::into)
-        .map_err(|error| DlPolyError::new_err(error.to_string()))
+pub(crate) fn parse_dlpoly_config(py: Python<'_>, text: &str) -> PyResult<PyDlPolyConfig> {
+    py.detach(move || -> PyResult<PyDlPolyConfig> {
+        pdbiox::traj::parse_dlpoly_config(text)
+            .map(Into::into)
+            .map_err(|error| DlPolyError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn parse_dlpoly_history(text: &str) -> PyResult<PyDlPolyHistory> {
-    pdbiox::traj::parse_dlpoly_history(text)
-        .map(Into::into)
-        .map_err(|error| DlPolyError::new_err(error.to_string()))
+pub(crate) fn parse_dlpoly_history(py: Python<'_>, text: &str) -> PyResult<PyDlPolyHistory> {
+    py.detach(move || -> PyResult<PyDlPolyHistory> {
+        pdbiox::traj::parse_dlpoly_history(text)
+            .map(Into::into)
+            .map_err(|error| DlPolyError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_dlpoly_config(config: PyDlPolyConfig) -> PyResult<String> {
-    pdbiox::traj::write_dlpoly_config(&config.into())
-        .map_err(|error| DlPolyError::new_err(error.to_string()))
+pub(crate) fn write_dlpoly_config(py: Python<'_>, config: PyDlPolyConfig) -> PyResult<String> {
+    py.detach(move || -> PyResult<String> {
+        pdbiox::traj::write_dlpoly_config(&config.into())
+            .map_err(|error| DlPolyError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_dlpoly_history(history: PyDlPolyHistory) -> PyResult<String> {
-    pdbiox::traj::write_dlpoly_history(&history.into())
-        .map_err(|error| DlPolyError::new_err(error.to_string()))
+pub(crate) fn write_dlpoly_history(py: Python<'_>, history: PyDlPolyHistory) -> PyResult<String> {
+    py.detach(move || -> PyResult<String> {
+        pdbiox::traj::write_dlpoly_history(&history.into())
+            .map_err(|error| DlPolyError::new_err(error.to_string()))
+    })
 }
 
 fn native_frame(frame: PyDlPolyFrame) -> pdbiox::traj::DlPolyFrame {

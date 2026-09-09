@@ -64,16 +64,20 @@ impl TryFrom<PyTrzTrajectory> for pdbiox::traj::TrzTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_trz(bytes: Vec<u8>) -> PyResult<PyTrzTrajectory> {
-    pdbiox::traj::parse_trz(&bytes)
-        .map_err(|error| TrzError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_trz(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyTrzTrajectory> {
+    py.detach(move || -> PyResult<PyTrzTrajectory> {
+        pdbiox::traj::parse_trz(&bytes)
+            .map_err(|error| TrzError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_trz(trajectory: PyTrzTrajectory) -> PyResult<Vec<u8>> {
-    pdbiox::traj::write_trz(&trajectory.try_into()?)
-        .map_err(|error| TrzError::new_err(error.to_string()))
+pub(crate) fn write_trz(py: Python<'_>, trajectory: PyTrzTrajectory) -> PyResult<Vec<u8>> {
+    py.detach(move || -> PyResult<Vec<u8>> {
+        pdbiox::traj::write_trz(&trajectory.try_into()?)
+            .map_err(|error| TrzError::new_err(error.to_string()))
+    })
 }
 
 #[pyclass(name = "GromosBoundary", frozen, eq, eq_int, from_py_object)]
@@ -129,10 +133,12 @@ impl TryFrom<pdbiox::traj::GromosTrajectory> for PyGromosTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_gromos11_trc(source: &str) -> PyResult<PyGromosTrajectory> {
-    pdbiox::traj::parse_gromos11_trc(source)
-        .map_err(|error| GromosError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_gromos11_trc(py: Python<'_>, source: &str) -> PyResult<PyGromosTrajectory> {
+    py.detach(move || -> PyResult<PyGromosTrajectory> {
+        pdbiox::traj::parse_gromos11_trc(source)
+            .map_err(|error| GromosError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

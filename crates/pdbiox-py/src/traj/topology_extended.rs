@@ -113,10 +113,12 @@ impl From<pdbiox::traj::HoomdConfiguration> for PyHoomdConfiguration {
 }
 
 #[pyfunction]
-pub(crate) fn parse_hoomd_xml(source: &str) -> PyResult<PyHoomdConfiguration> {
-    pdbiox::traj::parse_hoomd_xml(source)
-        .map(Into::into)
-        .map_err(|error| HoomdXmlError::new_err(error.to_string()))
+pub(crate) fn parse_hoomd_xml(py: Python<'_>, source: &str) -> PyResult<PyHoomdConfiguration> {
+    py.detach(move || -> PyResult<PyHoomdConfiguration> {
+        pdbiox::traj::parse_hoomd_xml(source)
+            .map(Into::into)
+            .map_err(|error| HoomdXmlError::new_err(error.to_string()))
+    })
 }
 
 #[pyclass(name = "LammpsAtomStyle", frozen, eq, eq_int, from_py_object)]
@@ -267,19 +269,23 @@ impl TryFrom<pdbiox::traj::LammpsData> for PyLammpsData {
 }
 
 #[pyfunction]
-pub(crate) fn parse_lammps_data(source: &str) -> PyResult<PyLammpsData> {
-    pdbiox::traj::parse_lammps_data(source)
-        .map_err(|error| LammpsDataError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_lammps_data(py: Python<'_>, source: &str) -> PyResult<PyLammpsData> {
+    py.detach(move || -> PyResult<PyLammpsData> {
+        pdbiox::traj::parse_lammps_data(source)
+            .map_err(|error| LammpsDataError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn parse_lammps_dump(source: &str) -> PyResult<Vec<PyTimestep>> {
-    pdbiox::traj::parse_lammps_dump(source)
-        .map_err(|error| LammpsError::new_err(error.to_string()))?
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect()
+pub(crate) fn parse_lammps_dump(py: Python<'_>, source: &str) -> PyResult<Vec<PyTimestep>> {
+    py.detach(move || -> PyResult<Vec<PyTimestep>> {
+        pdbiox::traj::parse_lammps_dump(source)
+            .map_err(|error| LammpsError::new_err(error.to_string()))?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect()
+    })
 }
 
 #[pyclass(name = "TprHeader", frozen, from_py_object)]
@@ -403,10 +409,12 @@ impl From<pdbiox::traj::TprTopology> for PyTprTopology {
 }
 
 #[pyfunction]
-pub(crate) fn parse_tpr(bytes: Vec<u8>) -> PyResult<PyTprTopology> {
-    pdbiox::traj::parse_tpr(&bytes)
-        .map(Into::into)
-        .map_err(|error| TprError::new_err(error.to_string()))
+pub(crate) fn parse_tpr(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyTprTopology> {
+    py.detach(move || -> PyResult<PyTprTopology> {
+        pdbiox::traj::parse_tpr(&bytes)
+            .map(Into::into)
+            .map_err(|error| TprError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

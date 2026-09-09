@@ -338,22 +338,26 @@ impl From<PyPsfTopology> for pdbiox::traj::PsfTopology {
 }
 
 #[pyfunction]
-pub(crate) fn parse_amber_topology(text: &str) -> PyResult<PyAmberTopology> {
-    pdbiox::traj::parse_amber_topology(text)
-        .map(Into::into)
-        .map_err(|error| AmberTopologyError::new_err(error.to_string()))
+pub(crate) fn parse_amber_topology(py: Python<'_>, text: &str) -> PyResult<PyAmberTopology> {
+    py.detach(move || -> PyResult<PyAmberTopology> {
+        pdbiox::traj::parse_amber_topology(text)
+            .map(Into::into)
+            .map_err(|error| AmberTopologyError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn parse_psf(text: &str) -> PyResult<PyPsfTopology> {
-    pdbiox::traj::parse_psf(text)
-        .map(Into::into)
-        .map_err(|error| PsfError::new_err(error.to_string()))
+pub(crate) fn parse_psf(py: Python<'_>, text: &str) -> PyResult<PyPsfTopology> {
+    py.detach(move || -> PyResult<PyPsfTopology> {
+        pdbiox::traj::parse_psf(text)
+            .map(Into::into)
+            .map_err(|error| PsfError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_psf(topology: PyPsfTopology) -> String {
-    pdbiox::traj::write_psf(&topology.into())
+pub(crate) fn write_psf(py: Python<'_>, topology: PyPsfTopology) -> String {
+    py.detach(move || -> String { pdbiox::traj::write_psf(&topology.into()) })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

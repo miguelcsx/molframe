@@ -215,10 +215,12 @@ impl TryFrom<pdbiox::traj::GromacsItp> for PyGromacsItp {
 }
 
 #[pyfunction]
-pub(crate) fn parse_gromacs_itp(text: &str) -> PyResult<PyGromacsItp> {
-    pdbiox::traj::parse_gromacs_itp(text)
-        .map_err(|error| GromacsItpError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_gromacs_itp(py: Python<'_>, text: &str) -> PyResult<PyGromacsItp> {
+    py.detach(move || -> PyResult<PyGromacsItp> {
+        pdbiox::traj::parse_gromacs_itp(text)
+            .map_err(|error| GromacsItpError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -342,71 +342,101 @@ impl TryFrom<pdbiox::traj::XtcTrajectory> for PyXtcTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_dcd(bytes: Vec<u8>) -> PyResult<PyDcdTrajectory> {
-    pdbiox::traj::parse_dcd(&bytes)
-        .map_err(|error| DcdError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_dcd(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyDcdTrajectory> {
+    py.detach(move || -> PyResult<PyDcdTrajectory> {
+        pdbiox::traj::parse_dcd(&bytes)
+            .map_err(|error| DcdError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_dcd(frames: Vec<PyTimestep>, options: PyDcdWriteOptions) -> PyResult<Vec<u8>> {
-    let frames = native_frames(frames)?;
-    pdbiox::traj::write_dcd(&frames, &options.into())
-        .map_err(|error| DcdError::new_err(error.to_string()))
+pub(crate) fn write_dcd(
+    py: Python<'_>,
+    frames: Vec<PyTimestep>,
+    options: PyDcdWriteOptions,
+) -> PyResult<Vec<u8>> {
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = native_frames(frames)?;
+        pdbiox::traj::write_dcd(&frames, &options.into())
+            .map_err(|error| DcdError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn parse_trr(bytes: Vec<u8>) -> PyResult<PyTrrTrajectory> {
-    pdbiox::traj::parse_trr(&bytes)
-        .map_err(|error| TrrError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_trr(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyTrrTrajectory> {
+    py.detach(move || -> PyResult<PyTrrTrajectory> {
+        pdbiox::traj::parse_trr(&bytes)
+            .map_err(|error| TrrError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_trr(frames: Vec<PyTimestep>, options: PyTrrWriteOptions) -> PyResult<Vec<u8>> {
-    let frames = native_frames(frames)?;
-    pdbiox::traj::write_trr(&frames, options.into())
-        .map_err(|error| TrrError::new_err(error.to_string()))
+pub(crate) fn write_trr(
+    py: Python<'_>,
+    frames: Vec<PyTimestep>,
+    options: PyTrrWriteOptions,
+) -> PyResult<Vec<u8>> {
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = native_frames(frames)?;
+        pdbiox::traj::write_trr(&frames, options.into())
+            .map_err(|error| TrrError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
 pub(crate) fn write_trr_with_precisions(
+    py: Python<'_>,
     frames: Vec<PyTimestep>,
     precisions: Vec<PyTrrPrecision>,
 ) -> PyResult<Vec<u8>> {
-    let frames = native_frames(frames)?;
-    let precisions = precisions.into_iter().map(Into::into).collect::<Vec<_>>();
-    pdbiox::traj::write_trr_with_precisions(&frames, &precisions)
-        .map_err(|error| TrrError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = native_frames(frames)?;
+        let precisions = precisions.into_iter().map(Into::into).collect::<Vec<_>>();
+        pdbiox::traj::write_trr_with_precisions(&frames, &precisions)
+            .map_err(|error| TrrError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn parse_xtc(bytes: Vec<u8>) -> PyResult<PyXtcTrajectory> {
-    pdbiox::traj::parse_xtc(&bytes)
-        .map_err(|error| XtcError::new_err(error.to_string()))?
-        .try_into()
+pub(crate) fn parse_xtc(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyXtcTrajectory> {
+    py.detach(move || -> PyResult<PyXtcTrajectory> {
+        pdbiox::traj::parse_xtc(&bytes)
+            .map_err(|error| XtcError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_xtc(frames: Vec<PyTimestep>, options: PyXtcWriteOptions) -> PyResult<Vec<u8>> {
-    let frames = native_frames(frames)?;
-    pdbiox::traj::write_xtc(
-        &frames,
-        pdbiox::traj::XtcWriteOptions {
-            precision: options.precision,
-        },
-    )
-    .map_err(|error| XtcError::new_err(error.to_string()))
+pub(crate) fn write_xtc(
+    py: Python<'_>,
+    frames: Vec<PyTimestep>,
+    options: PyXtcWriteOptions,
+) -> PyResult<Vec<u8>> {
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = native_frames(frames)?;
+        pdbiox::traj::write_xtc(
+            &frames,
+            pdbiox::traj::XtcWriteOptions {
+                precision: options.precision,
+            },
+        )
+        .map_err(|error| XtcError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
 pub(crate) fn write_xtc_with_precisions(
+    py: Python<'_>,
     frames: Vec<PyTimestep>,
     precisions: Vec<f32>,
 ) -> PyResult<Vec<u8>> {
-    let frames = native_frames(frames)?;
-    pdbiox::traj::write_xtc_with_precisions(&frames, &precisions)
-        .map_err(|error| XtcError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = native_frames(frames)?;
+        pdbiox::traj::write_xtc_with_precisions(&frames, &precisions)
+            .map_err(|error| XtcError::new_err(error.to_string()))
+    })
 }
 
 fn native_frames(frames: Vec<PyTimestep>) -> PyResult<Vec<pdbiox::traj::Timestep>> {

@@ -170,10 +170,12 @@ impl From<PyGamessTrajectory> for pdbiox::traj::GamessTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_gamess_output(text: &str) -> PyResult<PyGamessTrajectory> {
-    pdbiox::traj::parse_gamess_output(text)
-        .map(Into::into)
-        .map_err(|error| GamessError::new_err(error.to_string()))
+pub(crate) fn parse_gamess_output(py: Python<'_>, text: &str) -> PyResult<PyGamessTrajectory> {
+    py.detach(move || -> PyResult<PyGamessTrajectory> {
+        pdbiox::traj::parse_gamess_output(text)
+            .map(Into::into)
+            .map_err(|error| GamessError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

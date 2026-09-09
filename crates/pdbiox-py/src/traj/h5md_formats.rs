@@ -193,59 +193,76 @@ impl TryFrom<pdbiox::traj::H5mdTrajectory> for PyH5mdTrajectory {
 }
 
 #[pyfunction]
-pub(crate) fn parse_h5md(bytes: Vec<u8>) -> PyResult<Vec<PyTimestep>> {
-    pdbiox::traj::parse_h5md(&bytes)
-        .map_err(|error| H5mdError::new_err(error.to_string()))?
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect()
+pub(crate) fn parse_h5md(py: Python<'_>, bytes: Vec<u8>) -> PyResult<Vec<PyTimestep>> {
+    py.detach(move || -> PyResult<Vec<PyTimestep>> {
+        pdbiox::traj::parse_h5md(&bytes)
+            .map_err(|error| H5mdError::new_err(error.to_string()))?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect()
+    })
 }
 
 #[pyfunction]
 pub(crate) fn parse_h5md_with_options(
+    py: Python<'_>,
     bytes: Vec<u8>,
     options: PyH5mdOptions,
 ) -> PyResult<Vec<PyTimestep>> {
-    let options = options.inner;
-    pdbiox::traj::parse_h5md_with_options(&bytes, &options)
-        .map_err(|error| H5mdError::new_err(error.to_string()))?
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect()
+    py.detach(move || -> PyResult<Vec<PyTimestep>> {
+        let options = options.inner;
+        pdbiox::traj::parse_h5md_with_options(&bytes, &options)
+            .map_err(|error| H5mdError::new_err(error.to_string()))?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect()
+    })
 }
 
 #[pyfunction]
 pub(crate) fn parse_h5md_record_with_options(
+    py: Python<'_>,
     bytes: Vec<u8>,
     options: PyH5mdOptions,
 ) -> PyResult<PyH5mdTrajectory> {
-    let options = options.inner;
-    pdbiox::traj::parse_h5md_record_with_options(&bytes, &options)
-        .map_err(|error| H5mdError::new_err(error.to_string()))?
-        .try_into()
+    py.detach(move || -> PyResult<PyH5mdTrajectory> {
+        let options = options.inner;
+        pdbiox::traj::parse_h5md_record_with_options(&bytes, &options)
+            .map_err(|error| H5mdError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_h5md(frames: Vec<PyTimestep>, options: PyH5mdOptions) -> PyResult<Vec<u8>> {
-    let frames = frames
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect::<PyResult<Vec<_>>>()?;
-    pdbiox::traj::write_h5md(&frames, &options.inner)
-        .map_err(|error| H5mdError::new_err(error.to_string()))
+pub(crate) fn write_h5md(
+    py: Python<'_>,
+    frames: Vec<PyTimestep>,
+    options: PyH5mdOptions,
+) -> PyResult<Vec<u8>> {
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = frames
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<PyResult<Vec<_>>>()?;
+        pdbiox::traj::write_h5md(&frames, &options.inner)
+            .map_err(|error| H5mdError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
 pub(crate) fn write_h5md_with_metadata(
+    py: Python<'_>,
     frames: Vec<PyTimestep>,
     metadata: PyH5mdMetadata,
 ) -> PyResult<Vec<u8>> {
-    let frames = frames
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect::<PyResult<Vec<_>>>()?;
-    pdbiox::traj::write_h5md_with_metadata(&frames, &metadata.into())
-        .map_err(|error| H5mdError::new_err(error.to_string()))
+    py.detach(move || -> PyResult<Vec<u8>> {
+        let frames = frames
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<PyResult<Vec<_>>>()?;
+        pdbiox::traj::write_h5md_with_metadata(&frames, &metadata.into())
+            .map_err(|error| H5mdError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

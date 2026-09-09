@@ -99,44 +99,55 @@ impl TryFrom<pdbiox::traj::AmberRestart> for PyAmberRestart {
 #[pyfunction]
 #[pyo3(signature = (text, layout))]
 pub(crate) fn parse_amber_restart(
+    py: Python<'_>,
     text: &str,
     layout: PyAmberRestartLayout,
 ) -> PyResult<PyTimestep> {
-    pdbiox::traj::parse_amber_restart(text, layout.into())
-        .map_err(|error| AmberError::new_err(error.to_string()))?
-        .try_into()
+    py.detach(move || -> PyResult<PyTimestep> {
+        pdbiox::traj::parse_amber_restart(text, layout.into())
+            .map_err(|error| AmberError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
 #[pyo3(signature = (text, layout))]
 pub(crate) fn parse_amber_restart_record(
+    py: Python<'_>,
     text: &str,
     layout: PyAmberRestartLayout,
 ) -> PyResult<PyAmberRestart> {
-    pdbiox::traj::parse_amber_restart_record(text, layout.into())
-        .map_err(|error| AmberError::new_err(error.to_string()))?
-        .try_into()
+    py.detach(move || -> PyResult<PyAmberRestart> {
+        pdbiox::traj::parse_amber_restart_record(text, layout.into())
+            .map_err(|error| AmberError::new_err(error.to_string()))?
+            .try_into()
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_amber_restart(record: PyAmberRestart) -> PyResult<String> {
-    let record = record.try_into()?;
-    pdbiox::traj::write_amber_restart(&record)
-        .map_err(|error| AmberError::new_err(error.to_string()))
+pub(crate) fn write_amber_restart(py: Python<'_>, record: PyAmberRestart) -> PyResult<String> {
+    py.detach(move || -> PyResult<String> {
+        let record = record.try_into()?;
+        pdbiox::traj::write_amber_restart(&record)
+            .map_err(|error| AmberError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
 #[pyo3(signature = (text, atom_count, periodic_box))]
 pub(crate) fn parse_amber_ascii_trajectory(
+    py: Python<'_>,
     text: &str,
     atom_count: usize,
     periodic_box: bool,
 ) -> PyResult<Vec<PyTimestep>> {
-    pdbiox::traj::parse_amber_ascii_trajectory(text, atom_count, periodic_box)
-        .map_err(|error| AmberError::new_err(error.to_string()))?
-        .into_iter()
-        .map(TryInto::try_into)
-        .collect()
+    py.detach(move || -> PyResult<Vec<PyTimestep>> {
+        pdbiox::traj::parse_amber_ascii_trajectory(text, atom_count, periodic_box)
+            .map_err(|error| AmberError::new_err(error.to_string()))?
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect()
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
