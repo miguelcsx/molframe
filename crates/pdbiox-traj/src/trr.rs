@@ -4,6 +4,10 @@ use crate::Timestep;
 use crate::cell::cell_from_vectors;
 use crate::numeric::f32_from_f64;
 
+#[path = "trr_reader.rs"]
+mod reader;
+pub use reader::TrrReader;
+
 const MAGIC: i32 = 1993;
 const VERSION: &str = "GMX_trn_file";
 const NM_TO_ANGSTROM: f32 = 10.0;
@@ -122,6 +126,7 @@ pub fn parse_trr(bytes: &[u8]) -> Result<TrrTrajectory, TrrError> {
     })
 }
 
+#[derive(Debug)]
 struct Header {
     sizes: [usize; 10],
     atoms: usize,
