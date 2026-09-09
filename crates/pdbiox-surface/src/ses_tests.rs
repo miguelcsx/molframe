@@ -52,6 +52,7 @@ fn allocation_ceiling_is_caller_controlled() {
         SurfaceGridOptions {
             resolution: 0.5,
             max_cells: 1,
+            max_workspace_bytes: SurfaceGridOptions::STANDARD_WORKSPACE_BYTES,
         },
     );
 

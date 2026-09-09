@@ -1,6 +1,7 @@
 //! Deterministic tetrahedral polygonisation of an SES distance field.
 
 use super::{SolventExcludedSurface, SurfaceTriangle};
+use crate::SasaError;
 use crate::cavity::Grid;
 use crate::numeric::f64_to_f32;
 
@@ -21,13 +22,46 @@ struct TetraPartition {
     outside_len: usize,
 }
 
+/// Counts the exact topological triangle capacity without constructing output.
+///
+/// Degenerate geometric triangles may later be discarded, so this is a strict
+/// upper bound and guarantees that polygonisation never reallocates.
+pub(super) fn triangle_capacity(
+    grid: &Grid,
+    distance: &[f32],
+    level: f32,
+) -> Result<usize, SasaError> {
+    let mut count = 0usize;
+    for z in 0..grid.dims[2] - 1 {
+        for y in 0..grid.dims[1] - 1 {
+            for x in 0..grid.dims[0] - 1 {
+                let values = cube_values(grid, distance, x, y, z);
+                if !crosses_level(values, level) {
+                    continue;
+                }
+                for tetrahedron in TETRAHEDRA {
+                    count = count
+                        .checked_add(tetrahedron_triangle_count(values, level, tetrahedron))
+                        .ok_or(SasaError::GridDimensionsOverflow)?;
+                }
+            }
+        }
+    }
+    Ok(count)
+}
+
 /// Polygonises the distance field at `level`.
 ///
 /// Uniform cubes are rejected before Cartesian vertices are constructed.
 /// Triangle area is accumulated as triangles are emitted, avoiding a second
 /// full traversal of the output mesh.
-pub(super) fn polygonise(grid: &Grid, distance: &[f64], level: f64) -> SolventExcludedSurface {
-    let mut triangles = Vec::new();
+pub(super) fn polygonise(
+    grid: &Grid,
+    distance: &[f32],
+    level: f32,
+    triangle_capacity: usize,
+) -> Result<SolventExcludedSurface, SasaError> {
+    let mut triangles = crate::workspace::empty_with_capacity(triangle_capacity)?;
     let mut area = 0.0;
 
     for z in 0..grid.dims[2] - 1 {
@@ -55,13 +89,13 @@ pub(super) fn polygonise(grid: &Grid, distance: &[f64], level: f64) -> SolventEx
         }
     }
 
-    SolventExcludedSurface { triangles, area }
+    Ok(SolventExcludedSurface { triangles, area })
 }
 
 /// Returns whether one cube contains vertices on both sides of `level`.
 ///
 /// Runtime and auxiliary space are `O(8)`.
-fn crosses_level(values: [f64; 8], level: f64) -> bool {
+fn crosses_level(values: [f32; 8], level: f32) -> bool {
     let mut inside = false;
     let mut outside = false;
 
@@ -105,16 +139,19 @@ fn cube_vertices(grid: &Grid, x: usize, y: usize, z: usize) -> [[f64; 3]; 8] {
 /// Returns scalar values at the eight cube vertices.
 ///
 /// Missing internal distance entries become infinity rather than panicking.
-fn cube_values(grid: &Grid, distance: &[f64], x: usize, y: usize, z: usize) -> [f64; 8] {
+fn cube_values(grid: &Grid, distance: &[f32], x: usize, y: usize, z: usize) -> [f32; 8] {
+    let base = grid.index(x, y, z);
+    let nx = grid.dims[0];
+    let plane = nx * grid.dims[1];
     [
-        distance_at(grid, distance, x, y, z),
-        distance_at(grid, distance, x + 1, y, z),
-        distance_at(grid, distance, x, y + 1, z),
-        distance_at(grid, distance, x + 1, y + 1, z),
-        distance_at(grid, distance, x, y, z + 1),
-        distance_at(grid, distance, x + 1, y, z + 1),
-        distance_at(grid, distance, x, y + 1, z + 1),
-        distance_at(grid, distance, x + 1, y + 1, z + 1),
+        distance_at(distance, base),
+        distance_at(distance, base + 1),
+        distance_at(distance, base + nx),
+        distance_at(distance, base + nx + 1),
+        distance_at(distance, base + plane),
+        distance_at(distance, base + plane + 1),
+        distance_at(distance, base + plane + nx),
+        distance_at(distance, base + plane + nx + 1),
     ]
 }
 
@@ -122,11 +159,11 @@ fn cube_values(grid: &Grid, distance: &[f64], x: usize, y: usize, z: usize) -> [
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn distance_at(grid: &Grid, distance: &[f64], x: usize, y: usize, z: usize) -> f64 {
+fn distance_at(distance: &[f32], index: usize) -> f32 {
     distance
-        .get(grid.index(x, y, z))
+        .get(index)
         .copied()
-        .map_or(f64::INFINITY, |value| value)
+        .map_or(f32::INFINITY, |value| value)
 }
 
 /// Polygonises one tetrahedron without temporary heap vectors.
@@ -135,8 +172,8 @@ fn distance_at(grid: &Grid, distance: &[f64], x: usize, y: usize, z: usize) -> f
 /// two `Vec` allocations previously performed for every tetrahedron.
 fn polygonise_tetrahedron(
     vertices: &[[f64; 3]; 8],
-    values: [f64; 8],
-    level: f64,
+    values: [f32; 8],
+    level: f32,
     tetrahedron: [usize; 4],
     output: &mut Vec<SurfaceTriangle>,
     total_area: &mut f64,
@@ -183,10 +220,20 @@ fn polygonise_tetrahedron(
     }
 }
 
+/// Returns how many triangles one tetrahedron split can emit.
+fn tetrahedron_triangle_count(values: [f32; 8], level: f32, tetrahedron: [usize; 4]) -> usize {
+    let partition = partition_tetrahedron(values, level, tetrahedron);
+    match (partition.inside_len, partition.outside_len) {
+        (1, 3) | (3, 1) => 1,
+        (2, 2) => 2,
+        _ => 0,
+    }
+}
+
 /// Partitions tetrahedron vertices into `> level` and `<= level` sets.
 ///
 /// Runtime and auxiliary space are `O(4)`.
-fn partition_tetrahedron(values: [f64; 8], level: f64, tetrahedron: [usize; 4]) -> TetraPartition {
+fn partition_tetrahedron(values: [f32; 8], level: f32, tetrahedron: [usize; 4]) -> TetraPartition {
     let mut inside = [0usize; 4];
     let mut outside = [0usize; 4];
     let mut inside_len = 0usize;
@@ -215,8 +262,8 @@ fn partition_tetrahedron(values: [f64; 8], level: f64, tetrahedron: [usize; 4]) 
 /// Runtime and auxiliary space are `O(1)`.
 fn emit_single_side(
     vertices: &[[f64; 3]; 8],
-    values: [f64; 8],
-    level: f64,
+    values: [f32; 8],
+    level: f32,
     single: usize,
     others: [usize; 3],
     output: &mut Vec<SurfaceTriangle>,
@@ -238,8 +285,8 @@ fn emit_single_side(
 /// Runtime and auxiliary space are `O(1)`.
 fn emit_quad(
     vertices: &[[f64; 3]; 8],
-    values: [f64; 8],
-    level: f64,
+    values: [f32; 8],
+    level: f32,
     inside: [usize; 2],
     outside: [usize; 2],
     output: &mut Vec<SurfaceTriangle>,
@@ -260,10 +307,10 @@ fn emit_quad(
 #[inline]
 fn edge_intersection(
     vertices: &[[f64; 3]; 8],
-    values: [f64; 8],
+    values: [f32; 8],
     first: usize,
     second: usize,
-    level: f64,
+    level: f32,
 ) -> [f64; 3] {
     interpolate(
         vertices[first],
@@ -280,10 +327,13 @@ fn edge_intersection(
 fn interpolate(
     first: [f64; 3],
     second: [f64; 3],
-    first_value: f64,
-    second_value: f64,
-    level: f64,
+    first_value: f32,
+    second_value: f32,
+    level: f32,
 ) -> [f64; 3] {
+    let first_value = f64::from(first_value);
+    let second_value = f64::from(second_value);
+    let level = f64::from(level);
     let span = second_value - first_value;
 
     let fraction = if span.abs() <= f64::EPSILON || !span.is_finite() {

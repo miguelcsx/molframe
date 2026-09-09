@@ -9,9 +9,10 @@
 
 use crate::SurfaceGridOptions;
 use crate::accessible_area::SasaError;
-use crate::cavity::{EXTERIOR, Grid};
-use crate::numeric::isize_to_f64;
+use crate::cavity::{FloodWorkspace, Grid};
 
+#[path = "ses_distance.rs"]
+mod distance;
 #[path = "ses_mesh.rs"]
 mod mesh;
 
@@ -39,7 +40,8 @@ pub struct SolventExcludedSurface {
 ///
 /// Smaller `resolution` values converge on the continuous surface and cost more
 /// memory. Atom painting scatters only over each atom's local grid box; the
-/// remaining passes are linear in grid cells times the fixed probe stencil.
+/// exact separable Euclidean distance transform and polygonisation passes are
+/// linear in the grid size.
 /// This convenience wrapper uses [`SurfaceGridOptions::standard`]; use
 /// [`solvent_excluded_surface_with_options`] for a caller-declared cell budget.
 ///
@@ -80,16 +82,38 @@ pub fn solvent_excluded_surface_with_options(
         return Ok(SolventExcludedSurface::default());
     }
 
-    let expanded = expanded_radii(radii, probe);
-
+    crate::workspace::ensure_surface_input(positions.len(), grid_options.max_workspace_bytes)?;
+    let expanded = expanded_radii(radii, probe)?;
     let grid = Grid::new(positions, &expanded, grid_options)?;
+    let longest_line = grid
+        .dims
+        .into_iter()
+        .max()
+        .ok_or(SasaError::GridDimensionsOverflow)?;
+    crate::workspace::ensure_ses_grid(
+        positions.len(),
+        grid.cell_count(),
+        longest_line,
+        grid_options.max_workspace_bytes,
+    )?;
 
-    let mut probe_centres = grid.paint(positions, &expanded);
-    grid.flood_exterior(&mut probe_centres);
+    let mut probe_centres = grid.paint(positions, &expanded)?;
+    drop(expanded);
+    let mut flood = FloodWorkspace::new(grid.cell_count())?;
+    grid.flood_exterior(&mut probe_centres, &mut flood);
+    drop(flood);
 
-    let distance = distance_from_exterior(&grid, &probe_centres);
+    let distance = distance::distance_from_exterior(&grid, probe_centres)?;
+    let level = probe;
+    let triangle_capacity = mesh::triangle_capacity(&grid, &distance, level)?;
+    crate::workspace::ensure_ses_output(
+        positions.len(),
+        grid.cell_count(),
+        triangle_capacity,
+        grid_options.max_workspace_bytes,
+    )?;
 
-    Ok(mesh::polygonise(&grid, &distance, f64::from(probe)))
+    mesh::polygonise(&grid, &distance, level, triangle_capacity)
 }
 
 /// Validates solvent-excluded-surface input.
@@ -120,166 +144,13 @@ fn validate(positions: &[[f32; 3]], radii: &[f32], probe: f32) -> Result<(), Sas
 /// Builds double-precision probe-grown radii.
 ///
 /// Runtime and output space are `O(R)`.
-fn expanded_radii(radii: &[f32], probe: f32) -> Vec<f64> {
+fn expanded_radii(radii: &[f32], probe: f32) -> Result<Vec<f64>, SasaError> {
     let probe = f64::from(probe);
-
-    radii
-        .iter()
-        .map(|radius| f64::from(*radius) + probe)
-        .collect()
-}
-
-/// One chamfer-neighbour displacement and its Cartesian cost.
-#[derive(Clone, Copy)]
-struct ChamferOffset {
-    delta: [isize; 3],
-    cost: f64,
-}
-
-/// The thirteen previously visited neighbours in a 3×3×3 chamfer stencil.
-const FORWARD_DELTAS: [[isize; 3]; 13] = [
-    [-1, -1, -1],
-    [0, -1, -1],
-    [1, -1, -1],
-    [-1, 0, -1],
-    [0, 0, -1],
-    [1, 0, -1],
-    [-1, 1, -1],
-    [0, 1, -1],
-    [1, 1, -1],
-    [-1, -1, 0],
-    [0, -1, 0],
-    [1, -1, 0],
-    [-1, 0, 0],
-];
-
-/// Computes the chamfer distance transform from all exterior cells.
-///
-/// The two passes each visit every grid cell and a fixed thirteen-neighbour
-/// stencil, giving `O(cells)` time and `O(cells)` distance storage.
-fn distance_from_exterior(grid: &Grid, state: &[u8]) -> Vec<f64> {
-    let mut distance = initial_distances(state);
-
-    let forward = chamfer_offsets(false, grid.step);
-    relax_forward(grid, &mut distance, &forward);
-
-    let backward = chamfer_offsets(true, grid.step);
-    relax_backward(grid, &mut distance, &backward);
-
-    distance
-}
-
-/// Creates the initial distance field with exterior cells as zero.
-///
-/// Runtime and output space are `O(cells)`.
-fn initial_distances(state: &[u8]) -> Vec<f64> {
-    state
-        .iter()
-        .map(|cell| {
-            if *cell == EXTERIOR {
-                0.0
-            } else {
-                f64::INFINITY
-            }
-        })
-        .collect()
-}
-
-/// Builds the fixed thirteen-element chamfer stencil.
-///
-/// A stack-allocated array replaces the previous heap-allocated `Vec`.
-fn chamfer_offsets(reverse: bool, step: f64) -> [ChamferOffset; 13] {
-    std::array::from_fn(|index| {
-        let delta = FORWARD_DELTAS[index];
-        let delta = if reverse {
-            [-delta[0], -delta[1], -delta[2]]
-        } else {
-            delta
-        };
-
-        let squared = isize_to_f64(delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]);
-
-        ChamferOffset {
-            delta,
-            cost: squared.sqrt() * step,
-        }
-    })
-}
-
-/// Executes the forward chamfer relaxation pass.
-///
-/// Runtime is `13 · O(cells)` with `O(1)` auxiliary storage.
-fn relax_forward(grid: &Grid, distance: &mut [f64], offsets: &[ChamferOffset; 13]) {
-    for z in 0..grid.dims[2] {
-        for y in 0..grid.dims[1] {
-            for x in 0..grid.dims[0] {
-                relax(grid, distance, x, y, z, offsets);
-            }
-        }
+    let mut expanded = crate::workspace::empty_with_capacity(radii.len())?;
+    for &radius in radii {
+        expanded.push(f64::from(radius) + probe);
     }
-}
-
-/// Executes the backward chamfer relaxation pass.
-///
-/// Runtime is `13 · O(cells)` with `O(1)` auxiliary storage.
-fn relax_backward(grid: &Grid, distance: &mut [f64], offsets: &[ChamferOffset; 13]) {
-    for z in (0..grid.dims[2]).rev() {
-        for y in (0..grid.dims[1]).rev() {
-            for x in (0..grid.dims[0]).rev() {
-                relax(grid, distance, x, y, z, offsets);
-            }
-        }
-    }
-}
-
-/// Relaxes one distance-transform grid cell against a fixed stencil.
-///
-/// Runtime is `O(13)` and auxiliary space is `O(1)`.
-fn relax(
-    grid: &Grid,
-    distance: &mut [f64],
-    x: usize,
-    y: usize,
-    z: usize,
-    offsets: &[ChamferOffset; 13],
-) {
-    let index = grid.index(x, y, z);
-    let Some(&initial) = distance.get(index) else {
-        return;
-    };
-
-    let mut best = initial;
-
-    for offset in offsets {
-        let Some(neighbour) = neighbour_index(grid, x, y, z, offset.delta) else {
-            continue;
-        };
-
-        let Some(&neighbour_distance) = distance.get(neighbour) else {
-            continue;
-        };
-
-        best = best.min(neighbour_distance + offset.cost);
-    }
-
-    if let Some(cell) = distance.get_mut(index) {
-        *cell = best;
-    }
-}
-
-/// Resolves one signed neighbour displacement to a linear grid index.
-///
-/// Runtime and auxiliary space are `O(1)`.
-fn neighbour_index(grid: &Grid, x: usize, y: usize, z: usize, delta: [isize; 3]) -> Option<usize> {
-    let nx = x.checked_add_signed(delta[0])?;
-    let ny = y.checked_add_signed(delta[1])?;
-    let nz = z.checked_add_signed(delta[2])?;
-
-    if nx >= grid.dims[0] || ny >= grid.dims[1] || nz >= grid.dims[2] {
-        return None;
-    }
-
-    Some(grid.index(nx, ny, nz))
+    Ok(expanded)
 }
 
 #[cfg(test)]
