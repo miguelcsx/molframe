@@ -1,12 +1,10 @@
 //! The entry point: bytes in, structure and findings out.
 
-use super::ensemble::{ModelSpec, ragged_models};
+use super::ensemble::{CommonRecords, read_ragged};
 use super::lines::Lines;
 use super::state::ReadState;
-use crate::fixed;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::io::{Format, InputBuffer, ReadOptions, ReadResult, Reader};
-use pdbiox_core::structure::{CoordinateStore, Structure, StructureData};
 
 /// The reader for the legacy fixed-column format.
 #[derive(Clone, Copy, Debug, Default)]
@@ -57,80 +55,16 @@ fn read_as(input: &InputBuffer, options: &ReadOptions, variant: Format) -> ReadR
         ]);
     };
 
-    match ragged_models(text, options.only_first_model) {
-        Ok(Some(models)) => return read_ragged(text, options, &models, variant),
-        Ok(None) => {}
-        Err(finding) => return Err(vec![finding]),
-    }
-
+    let mut common = CommonRecords::new();
     let mut state = ReadState::new(options, variant);
     for line in Lines::new(text) {
         let line = line.map_err(|finding| vec![finding])?;
+        common.observe(&line);
         state.line(&line);
     }
-    state.finish()
-}
-
-fn read_ragged(
-    text: &str,
-    options: &ReadOptions,
-    specs: &[ModelSpec],
-    variant: Format,
-) -> ReadResult {
-    let mut models = Vec::with_capacity(specs.len());
-    let mut findings = Vec::new();
-    for spec in specs {
-        let (model, model_findings) = read_selected_model(text, options, spec.ordinal, variant)?;
-        models.push(model);
-        findings.extend(model_findings);
-    }
-
-    let mut data = StructureData::empty();
-    if let Some(first) = models.first() {
-        data.entry = first.data().entry.clone();
-        data.cell = first.data().cell;
-        data.extensions = first.data().extensions.clone();
-    }
-    for spec in specs {
-        if data.topology.models.push(spec.number, 0..0).is_err() {
-            findings.push(Diagnostic::new(Code::E3001));
-        }
-    }
-    data.coords = CoordinateStore::Ragged { models };
-    options.finish(Structure::new(data), findings)
-}
-
-fn read_selected_model(
-    text: &str,
-    options: &ReadOptions,
-    target: usize,
-    variant: Format,
-) -> ReadResult {
-    let mut state = ReadState::new(options, variant);
-    let mut ordinal = 0;
-    let mut current = None;
-    for line in Lines::new(text) {
-        let line = line.map_err(|finding| vec![finding])?;
-        match fixed::record(line.text) {
-            "MODEL" => {
-                current = Some(ordinal);
-                if ordinal == target {
-                    state.line(&line);
-                }
-                ordinal += 1;
-            }
-            "ENDMDL" => {
-                if current == Some(target) {
-                    state.line(&line);
-                }
-                current = None;
-            }
-            "ATOM" | "HETATM" | "TER" if current == Some(target) => state.line(&line),
-            record if crate::header::is_metadata_record(record) || record == "CONECT" => {
-                state.line(&line);
-            }
-            _ => {}
-        }
+    if state.requires_ragged() {
+        drop(state);
+        return read_ragged(text, options, variant, &common);
     }
     state.finish()
 }

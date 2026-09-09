@@ -10,7 +10,7 @@ mod metadata;
 mod models;
 mod variants;
 
-use models::{AtomSignature, ModelRead};
+use models::{AtomIdentity, ModelRead};
 
 use super::lines::Line;
 use crate::fixed;
@@ -45,11 +45,11 @@ pub(super) struct ReadState<'a> {
     data: StructureData,
     builder: ChunkBuilder,
     findings: Diagnostics,
+    frame: CoordinateBlock,
     frames: Vec<CoordinateBlock>,
     model_number: i32,
     model_numbers: Vec<i32>,
     model_read: ModelRead,
-    signatures: Vec<AtomSignature>,
     chain_label: Option<SymbolId>,
     chain_first_residue: u32,
     residue_key: Option<ResidueKey>,
@@ -58,6 +58,8 @@ pub(super) struct ReadState<'a> {
     entity: Option<EntityIndex>,
     saw_atoms: bool,
     topology_locked: bool,
+    expected_chunk: usize,
+    requires_ragged: bool,
     serial_to_atom: BTreeMap<u32, AtomIndex>,
     conect: Vec<(u32, u32, Position)>,
     variant: Format,
@@ -74,11 +76,11 @@ impl<'a> ReadState<'a> {
             data: StructureData::empty(),
             builder: ChunkBuilder::new(),
             findings: Diagnostics::new(),
+            frame: CoordinateBlock::new(),
             frames: Vec::new(),
             model_number: 1,
             model_numbers: Vec::new(),
             model_read: ModelRead::Before,
-            signatures: Vec::new(),
             chain_label: None,
             chain_first_residue: 0,
             residue_key: None,
@@ -87,6 +89,8 @@ impl<'a> ReadState<'a> {
             entity: None,
             saw_atoms: false,
             topology_locked: false,
+            expected_chunk: 0,
+            requires_ragged: false,
             serial_to_atom: BTreeMap::new(),
             conect: Vec::new(),
             variant,
@@ -135,10 +139,14 @@ impl<'a> ReadState<'a> {
             return;
         }
 
-        let Some(signature) = self.atom_signature(line, raw_name, element) else {
+        let Some(signature) = self.atom_identity(line, raw_name, element) else {
             return;
         };
-        let AtomSignature {
+        if self.topology_locked {
+            self.later_atom(line, signature);
+            return;
+        }
+        let AtomIdentity {
             chain,
             seq,
             ins_code,
@@ -146,45 +154,28 @@ impl<'a> ReadState<'a> {
             component_id,
             alt_id,
             element,
+            ..
         } = signature;
 
-        if !self.topology_locked {
-            self.variant_atom(line);
-        }
-
-        self.observe_signature(line, signature);
-
-        let residue = if self.topology_locked {
-            if let Some(residue) = self.data.topology.residues.containing(self.atom_position) {
-                residue
-            } else {
-                self.findings.push(
-                    Diagnostic::new(Code::E3401)
-                        .with_message("a later model has more atoms than the first")
-                        .at(ByteSpan::empty(line.at)),
-                );
-                return;
-            }
-        } else {
-            self.begin_chain_if_new(chain);
-            self.begin_residue_if_new(line, chain, seq, ins_code, component_id);
-            let Some(position) = self.residue_position.checked_sub(1) else {
-                self.findings.push(
-                    Diagnostic::new(Code::E1901)
-                        .with_message("atom row could not be assigned to a residue")
-                        .at(ByteSpan::empty(line.at)),
-                );
-                return;
-            };
-            ResidueIndex::new(position)
+        self.variant_atom(line);
+        self.begin_chain_if_new(chain);
+        self.begin_residue_if_new(line, chain, seq, ins_code, component_id);
+        let Some(position) = self.residue_position.checked_sub(1) else {
+            self.findings.push(
+                Diagnostic::new(Code::E1901)
+                    .with_message("atom row could not be assigned to a residue")
+                    .at(ByteSpan::empty(line.at)),
+            );
+            return;
         };
+        let residue = ResidueIndex::new(position);
 
         let position = self.position_of(line);
         let occupancy = self.optional_real(line, 55, 60, "occupancy", 1.0);
         let b_factor = self.optional_real(line, 61, 66, "B factor", 0.0);
         let alternate_component_id = self.alternate_component_of(line, residue, component_id);
         let serial = serial_of(line);
-        if !self.topology_locked && serial != 0 {
+        if serial != 0 {
             self.serial_to_atom
                 .entry(serial)
                 .or_insert(AtomIndex::new(self.atom_position));

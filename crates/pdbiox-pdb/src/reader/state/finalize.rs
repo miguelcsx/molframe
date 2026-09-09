@@ -21,16 +21,19 @@ impl ReadState<'_> {
 
         self.finish_bonds();
         self.finish_variant_annotations();
+        if self.topology_locked {
+            self.finish_dense_frames();
+        } else {
+            let builder = std::mem::take(&mut self.builder);
+            let (chunks, coords) = builder.finish();
+            self.data.chunks = chunks.into();
+            self.frames.push(coords);
+        }
         if !self.headers.is_empty() {
             self.data
                 .extensions
                 .insert(PDB_HEADERS_EXTENSION, self.headers);
         }
-        let (chunks, coords) = self.builder.finish();
-        if self.data.chunks.is_empty() {
-            self.data.chunks = chunks.into();
-        }
-        self.frames.push(coords);
         let mut chains = 0..0;
         if let Ok(count) = u32::try_from(self.data.topology.chains.len()) {
             chains = 0..count;

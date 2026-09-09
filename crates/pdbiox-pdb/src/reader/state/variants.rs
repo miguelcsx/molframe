@@ -14,22 +14,18 @@ use pdbiox_core::symbol::SymbolId;
 
 impl ReadState<'_> {
     pub(super) fn variant_atom(&mut self, line: &Line<'_>) {
-        let mut fields = line.text.split_ascii_whitespace().rev();
+        let fields = variant_fields(line, self.variant);
         match self.variant {
             Format::Pqr => {
-                let radius = fields.next().and_then(|value| value.parse::<f64>().ok());
-                let charge = fields.next().and_then(|value| value.parse::<f64>().ok());
-                self.partial_charges.push(real_annotation(charge));
-                self.radii.push(real_annotation(radius));
-                if charge.is_none() || radius.is_none() {
+                self.partial_charges.push(real_annotation(fields.charge));
+                self.radii.push(real_annotation(fields.radius));
+                if fields.charge.is_none() || fields.radius.is_none() {
                     self.variant_error(line, "PQR charge or radius could not be read");
                 }
             }
             Format::Pdbqt => {
-                let atom_type = fields.next().filter(|value| !value.is_empty());
-                let charge = fields.next().and_then(|value| value.parse::<f64>().ok());
-                self.partial_charges.push(real_annotation(charge));
-                match atom_type {
+                self.partial_charges.push(real_annotation(fields.charge));
+                match fields.atom_type {
                     Some(atom_type) => {
                         let symbol = self.intern(atom_type);
                         self.autodock_types.push((symbol, Presence::Present));
@@ -38,11 +34,43 @@ impl ReadState<'_> {
                         .autodock_types
                         .push((SymbolId::from_raw(0), Presence::Unknown)),
                 }
-                if charge.is_none() || atom_type.is_none() {
+                if fields.charge.is_none() || fields.atom_type.is_none() {
                     self.variant_error(line, "PDBQT charge or atom type could not be read");
                 }
             }
             _ => {}
+        }
+    }
+
+    pub(super) fn variant_atom_matches(&mut self, line: &Line<'_>) -> bool {
+        let fields = variant_fields(line, self.variant);
+        let position = self.atom_position as usize;
+        match self.variant {
+            Format::Pqr => {
+                if fields.charge.is_none() || fields.radius.is_none() {
+                    self.variant_error(line, "PQR charge or radius could not be read");
+                }
+                self.partial_charges.get(position) == Some(&real_annotation(fields.charge))
+                    && self.radii.get(position) == Some(&real_annotation(fields.radius))
+            }
+            Format::Pdbqt => {
+                if fields.charge.is_none() || fields.atom_type.is_none() {
+                    self.variant_error(line, "PDBQT charge or atom type could not be read");
+                }
+                let charge_matches =
+                    self.partial_charges.get(position) == Some(&real_annotation(fields.charge));
+                let type_matches = match self.autodock_types.get(position) {
+                    Some((symbol, Presence::Present)) => {
+                        fields.atom_type.is_some_and(|atom_type| {
+                            self.data.dictionary.resolve(*symbol) == Some(atom_type)
+                        })
+                    }
+                    Some((_, presence)) => fields.atom_type.is_none() && !presence.is_present(),
+                    None => false,
+                };
+                charge_matches && type_matches
+            }
+            _ => true,
         }
     }
 
@@ -89,6 +117,33 @@ impl ReadState<'_> {
                 .with_message(message)
                 .at(ByteSpan::empty(line.at)),
         );
+    }
+}
+
+struct VariantFields<'a> {
+    charge: Option<f64>,
+    radius: Option<f64>,
+    atom_type: Option<&'a str>,
+}
+
+fn variant_fields<'a>(line: &'a Line<'_>, variant: Format) -> VariantFields<'a> {
+    let mut fields = line.text.split_ascii_whitespace().rev();
+    match variant {
+        Format::Pqr => VariantFields {
+            radius: fields.next().and_then(|value| value.parse::<f64>().ok()),
+            charge: fields.next().and_then(|value| value.parse::<f64>().ok()),
+            atom_type: None,
+        },
+        Format::Pdbqt => VariantFields {
+            atom_type: fields.next().filter(|value| !value.is_empty()),
+            charge: fields.next().and_then(|value| value.parse::<f64>().ok()),
+            radius: None,
+        },
+        _ => VariantFields {
+            charge: None,
+            radius: None,
+            atom_type: None,
+        },
     }
 }
 

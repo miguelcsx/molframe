@@ -7,6 +7,7 @@ use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::span::Position;
 
 /// A line of the file, with where it began.
+#[derive(Clone, Copy)]
 pub(super) struct Line<'a> {
     pub(super) text: &'a str,
     pub(super) at: Position,
@@ -40,7 +41,7 @@ impl<'a> Iterator for Lines<'a> {
             None => (self.remaining, ""),
         };
         self.remaining = rest;
-        let advance = u32::try_from(line.len())
+        let advance = u64::try_from(line.len())
             .ok()
             .and_then(|length| length.checked_add(1));
         let Some((byte_offset, line_number)) = advance
