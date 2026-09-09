@@ -1,7 +1,6 @@
-//! External-system adapters and topology projections.
+//! Neutral topology-transfer and verified-download boundaries.
 
 pub(crate) mod bindings;
-pub(crate) mod compatibility;
-pub(crate) mod external;
+mod registration;
 
-pub(crate) use bindings::register;
+pub(crate) use registration::register;

@@ -1,4 +1,4 @@
-//! Typed boundary adapters for external topology projections and downloads.
+//! Typed neutral boundaries for topology transfer and verified downloads.
 
 use crate::bonds::PyBondOrder;
 use crate::query::PyNamespace;
@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyType;
 
 pyo3::create_exception!(pdbiox_adapters, DownloadError, PyRuntimeError);
-pyo3::create_exception!(pdbiox_adapters, TopologyExportError, PyValueError);
+pyo3::create_exception!(pdbiox_adapters, TopologyBatchError, PyValueError);
 
 #[pyclass(name = "DownloadOptions", frozen, skip_from_py_object)]
 #[derive(Clone, Copy, Debug)]
@@ -76,150 +76,12 @@ pub(crate) fn fetch_verified(
     })
 }
 
-#[pyclass(name = "ExportChain", frozen, skip_from_py_object)]
+#[pyclass(name = "TopologyBatch", skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyExportChain(pdbiox::adapters::ExportChain);
+pub(crate) struct PyTopologyBatch(Option<pdbiox::adapters::TopologyBatch>);
 
 #[pymethods]
-impl PyExportChain {
-    #[getter]
-    fn id(&self) -> String {
-        self.0.id.clone()
-    }
-
-    #[getter]
-    fn residues(&self) -> (usize, usize) {
-        (self.0.residues.start, self.0.residues.end)
-    }
-}
-
-#[pyclass(name = "ExportResidue", frozen, skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub(crate) struct PyExportResidue(pdbiox::adapters::ExportResidue);
-
-#[pymethods]
-impl PyExportResidue {
-    #[getter]
-    fn name(&self) -> String {
-        self.0.name.clone()
-    }
-
-    #[getter]
-    fn number(&self) -> Option<i32> {
-        self.0.number
-    }
-
-    #[getter]
-    fn insertion_code(&self) -> Option<String> {
-        self.0.insertion_code.clone()
-    }
-
-    #[getter]
-    fn is_heterogen(&self) -> bool {
-        self.0.is_heterogen
-    }
-
-    #[getter]
-    fn chain(&self) -> usize {
-        self.0.chain
-    }
-
-    #[getter]
-    fn atoms(&self) -> (usize, usize) {
-        (self.0.atoms.start, self.0.atoms.end)
-    }
-}
-
-#[pyclass(name = "ExportAtom", frozen, skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub(crate) struct PyExportAtom(pdbiox::adapters::ExportAtom);
-
-#[pymethods]
-impl PyExportAtom {
-    #[getter]
-    fn name(&self) -> String {
-        self.0.name.clone()
-    }
-
-    #[getter]
-    fn atomic_number(&self) -> u8 {
-        self.0.atomic_number
-    }
-
-    #[getter]
-    fn element_symbol(&self) -> String {
-        self.0.element_symbol.clone()
-    }
-
-    #[getter]
-    fn mass(&self) -> f64 {
-        self.0.mass
-    }
-
-    #[getter]
-    fn serial(&self) -> Option<u32> {
-        self.0.serial
-    }
-
-    #[getter]
-    fn formal_charge(&self) -> Option<i8> {
-        self.0.formal_charge
-    }
-
-    #[getter]
-    fn occupancy(&self) -> Option<f32> {
-        self.0.occupancy
-    }
-
-    #[getter]
-    fn b_factor(&self) -> Option<f32> {
-        self.0.b_factor
-    }
-
-    #[getter]
-    fn alternate_location(&self) -> Option<String> {
-        self.0.alternate_location.clone()
-    }
-
-    #[getter]
-    fn residue(&self) -> usize {
-        self.0.residue
-    }
-
-    #[getter]
-    fn position(&self) -> [f32; 3] {
-        self.0.position
-    }
-}
-
-#[pyclass(name = "ExportBond", frozen, skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub(crate) struct PyExportBond(pdbiox::adapters::ExportBond);
-
-#[pymethods]
-impl PyExportBond {
-    #[getter]
-    fn atom_a(&self) -> usize {
-        self.0.atom_a
-    }
-
-    #[getter]
-    fn atom_b(&self) -> usize {
-        self.0.atom_b
-    }
-
-    #[getter]
-    fn order(&self) -> PyBondOrder {
-        self.0.order.into()
-    }
-}
-
-#[pyclass(name = "TopologyExport", frozen, skip_from_py_object)]
-#[derive(Clone, Debug)]
-pub(crate) struct PyTopologyExport(pdbiox::adapters::TopologyExport);
-
-#[pymethods]
-impl PyTopologyExport {
+impl PyTopologyBatch {
     #[classmethod]
     fn from_model(
         _class: &Bound<'_, PyType>,
@@ -230,56 +92,213 @@ impl PyTopologyExport {
         let model = u32::try_from(model)
             .map(pdbiox::ModelIndex::new)
             .map_err(|_| PyValueError::new_err("model index exceeds the native index range"))?;
-        pdbiox::adapters::TopologyExport::from_model(structure.structure(), model, namespace.into())
-            .map(Self)
+        pdbiox::adapters::TopologyBatch::from_model(structure.structure(), model, namespace.into())
+            .map(|batch| Self(Some(batch)))
             .map_err(topology_error)
     }
 
     #[getter]
-    fn chains(&self) -> Vec<PyExportChain> {
-        self.0.chains.iter().cloned().map(PyExportChain).collect()
+    fn strings(&self) -> PyResult<Vec<String>> {
+        Ok(self.batch()?.strings.clone())
     }
 
     #[getter]
-    fn residues(&self) -> Vec<PyExportResidue> {
-        self.0
-            .residues
+    fn chain_ids(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.chain_ids.clone())
+    }
+
+    #[getter]
+    fn chain_residue_offsets(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.chain_residue_offsets.clone())
+    }
+
+    #[getter]
+    fn residue_names(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.residue_names.clone())
+    }
+
+    #[getter]
+    fn residue_numbers(&self) -> PyResult<Vec<i32>> {
+        Ok(self.batch()?.residue_numbers.clone())
+    }
+
+    #[getter]
+    fn residue_number_validity(&self) -> PyResult<Vec<bool>> {
+        Ok(validity_flags(&self.batch()?.residue_number_validity))
+    }
+
+    #[getter]
+    fn residue_insertion_codes(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.residue_insertion_codes.clone())
+    }
+
+    #[getter]
+    fn residue_chain(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.residue_chain.clone())
+    }
+
+    #[getter]
+    fn residue_is_heterogen(&self) -> PyResult<Vec<bool>> {
+        let batch = self.batch()?;
+        Ok((0..batch.residue_names.len())
+            .map(|index| {
+                u32::try_from(index).is_ok_and(|index| batch.residue_is_heterogen.test(index))
+            })
+            .collect())
+    }
+
+    #[getter]
+    fn residue_atom_offsets(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.residue_atom_offsets.clone())
+    }
+
+    #[getter]
+    fn atom_names(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.atom_names.clone())
+    }
+
+    #[getter]
+    fn atomic_numbers(&self) -> PyResult<Vec<u8>> {
+        Ok(self.batch()?.atomic_numbers.clone())
+    }
+
+    #[getter]
+    fn masses(&self) -> PyResult<Vec<f64>> {
+        Ok(self.batch()?.masses.clone())
+    }
+
+    #[getter]
+    fn atom_serials(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.atom_serials.clone())
+    }
+
+    #[getter]
+    fn atom_serial_validity(&self) -> PyResult<Vec<bool>> {
+        Ok(validity_flags(&self.batch()?.atom_serial_validity))
+    }
+
+    #[getter]
+    fn formal_charges(&self) -> PyResult<Vec<i8>> {
+        Ok(self.batch()?.formal_charges.clone())
+    }
+
+    #[getter]
+    fn formal_charge_validity(&self) -> PyResult<Vec<bool>> {
+        Ok(validity_flags(&self.batch()?.formal_charge_validity))
+    }
+
+    #[getter]
+    fn occupancies(&self) -> PyResult<Vec<f32>> {
+        Ok(self.batch()?.occupancies.clone())
+    }
+
+    #[getter]
+    fn occupancy_validity(&self) -> PyResult<Vec<bool>> {
+        Ok(validity_flags(&self.batch()?.occupancy_validity))
+    }
+
+    #[getter]
+    fn b_factors(&self) -> PyResult<Vec<f32>> {
+        Ok(self.batch()?.b_factors.clone())
+    }
+
+    #[getter]
+    fn b_factor_validity(&self) -> PyResult<Vec<bool>> {
+        Ok(validity_flags(&self.batch()?.b_factor_validity))
+    }
+
+    #[getter]
+    fn atom_alternate_locations(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.atom_alternate_locations.clone())
+    }
+
+    #[getter]
+    fn atom_residue(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.atom_residue.clone())
+    }
+
+    #[getter]
+    fn position_x(&self) -> PyResult<Vec<f32>> {
+        Ok(self.batch()?.position_x.clone())
+    }
+
+    #[getter]
+    fn position_y(&self) -> PyResult<Vec<f32>> {
+        Ok(self.batch()?.position_y.clone())
+    }
+
+    #[getter]
+    fn position_z(&self) -> PyResult<Vec<f32>> {
+        Ok(self.batch()?.position_z.clone())
+    }
+
+    #[getter]
+    fn bond_atom_a(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.bond_atom_a.clone())
+    }
+
+    #[getter]
+    fn bond_atom_b(&self) -> PyResult<Vec<u32>> {
+        Ok(self.batch()?.bond_atom_b.clone())
+    }
+
+    #[getter]
+    fn bond_orders(&self) -> PyResult<Vec<PyBondOrder>> {
+        Ok(self
+            .batch()?
+            .bond_orders
             .iter()
-            .cloned()
-            .map(PyExportResidue)
-            .collect()
+            .copied()
+            .map(Into::into)
+            .collect())
     }
 
-    #[getter]
-    fn atoms(&self) -> Vec<PyExportAtom> {
-        self.0.atoms.iter().cloned().map(PyExportAtom).collect()
+    /// Transfers the projection into native columnar storage without cloning it.
+    fn transfer_to_structure(&mut self) -> PyResult<PyStructure> {
+        let batch = self.0.take().ok_or_else(consumed_batch)?;
+        batch
+            .into_structure()
+            .map(PyStructure::new)
+            .map_err(topology_import_error)
     }
+}
 
-    #[getter]
-    fn bonds(&self) -> Vec<PyExportBond> {
-        self.0.bonds.iter().copied().map(PyExportBond).collect()
+impl PyTopologyBatch {
+    fn batch(&self) -> PyResult<&pdbiox::adapters::TopologyBatch> {
+        self.0.as_ref().ok_or_else(consumed_batch)
     }
+}
+
+fn validity_flags(validity: &pdbiox::core::ValidityMask) -> Vec<bool> {
+    (0..validity.len())
+        .map(|index| validity.get(index).is_present())
+        .collect()
 }
 
 fn download_error(error: pdbiox::adapters::DownloadError) -> PyErr {
     DownloadError::new_err(error.to_string())
 }
 
-fn topology_error(error: pdbiox::adapters::TopologyExportError) -> PyErr {
-    TopologyExportError::new_err(error.to_string())
+fn topology_error(error: pdbiox::adapters::TopologyBatchError) -> PyErr {
+    TopologyBatchError::new_err(error.to_string())
+}
+
+fn topology_import_error(error: pdbiox::adapters::TopologyImportError) -> PyErr {
+    TopologyBatchError::new_err(error.to_string())
+}
+
+fn consumed_batch() -> PyErr {
+    PyRuntimeError::new_err("topology batch has already transferred its storage")
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = module.py();
     module.add("DownloadError", py.get_type::<DownloadError>())?;
-    module.add("TopologyExportError", py.get_type::<TopologyExportError>())?;
+    module.add("TopologyBatchError", py.get_type::<TopologyBatchError>())?;
     module.add_class::<PyDownloadOptions>()?;
     module.add_class::<PyVerifiedDownload>()?;
-    module.add_class::<PyExportChain>()?;
-    module.add_class::<PyExportResidue>()?;
-    module.add_class::<PyExportAtom>()?;
-    module.add_class::<PyExportBond>()?;
-    module.add_class::<PyTopologyExport>()?;
+    module.add_class::<PyTopologyBatch>()?;
+    module.add("MISSING_STRING", pdbiox::adapters::MISSING_STRING)?;
     module.add_function(wrap_pyfunction!(fetch_verified, module)?)?;
     Ok(())
 }
