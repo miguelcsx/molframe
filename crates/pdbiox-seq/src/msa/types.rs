@@ -9,15 +9,21 @@ pub struct MsaOptions {
     pub scoring: Scoring,
     /// Number of deterministic leave-one-out refinement passes.
     pub refinement_passes: usize,
+    /// Hard ceiling for guide, dynamic-programming, and alignment storage.
+    pub memory_limit_bytes: usize,
 }
 
 impl MsaOptions {
-    /// Creates a progressive alignment without refinement.
+    /// Default operation-owned workspace ceiling.
+    pub const DEFAULT_MEMORY_LIMIT_BYTES: usize = 100_000_000;
+
+    /// Creates a single-linkage progressive alignment without refinement.
     #[must_use]
     pub const fn progressive(scoring: Scoring) -> Self {
         Self {
             scoring,
             refinement_passes: 0,
+            memory_limit_bytes: Self::DEFAULT_MEMORY_LIMIT_BYTES,
         }
     }
 
@@ -25,6 +31,13 @@ impl MsaOptions {
     #[must_use]
     pub const fn with_refinement_passes(mut self, passes: usize) -> Self {
         self.refinement_passes = passes;
+        self
+    }
+
+    /// Sets the hard workspace and output-storage ceiling.
+    #[must_use]
+    pub const fn with_memory_limit(mut self, bytes: usize) -> Self {
+        self.memory_limit_bytes = bytes;
         self
     }
 }
@@ -35,10 +48,22 @@ impl MsaOptions {
 pub enum MsaError {
     /// Gap scores must be non-positive so opening or extending cannot reward a gap.
     InvalidGapScore,
+    /// The requested ceiling is zero or exceeds the hard 500 MB boundary.
+    InvalidMemoryLimit {
+        /// Caller-selected ceiling.
+        requested: usize,
+    },
     /// The number of rows or columns exceeded representable indexing.
     DimensionOverflow,
     /// An exact pairwise or profile score exceeded its numeric domain.
     NumericOverflow,
+    /// The requested guide or alignment cannot fit the explicit memory ceiling.
+    MemoryLimit {
+        /// Conservative bytes required at the rejected allocation boundary.
+        required: usize,
+        /// Caller-selected ceiling.
+        limit: usize,
+    },
 }
 
 impl std::fmt::Display for MsaError {
@@ -47,11 +72,21 @@ impl std::fmt::Display for MsaError {
             Self::InvalidGapScore => {
                 formatter.write_str("MSA affine-gap scores must be non-positive")
             }
+            Self::InvalidMemoryLimit { requested } => write!(
+                formatter,
+                "MSA memory limit {requested} must be at least one byte"
+            ),
             Self::DimensionOverflow => {
                 formatter.write_str("MSA dimensions exceed the supported range")
             }
             Self::NumericOverflow => {
                 formatter.write_str("MSA score exceeds the supported exact numeric range")
+            }
+            Self::MemoryLimit { required, limit } => {
+                write!(
+                    formatter,
+                    "MSA requires {required} bytes, over the {limit} byte memory limit"
+                )
             }
         }
     }

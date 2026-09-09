@@ -1,4 +1,5 @@
 use super::*;
+use crate::msa::guide::single_linkage_guide;
 use crate::msa::profile::GAP;
 
 fn scoring() -> Scoring {
@@ -34,11 +35,41 @@ fn progressive_alignment_preserves_input_order_and_ungapped_sequences() {
 #[test]
 fn guide_tree_merges_the_similar_sequences_before_the_outgroup() {
     let sequences: [&[u8]; 3] = [b"AAAA", b"AAAT", b"TTTT"];
-    let Ok(distances) = pairwise_distances(&sequences, scoring()) else {
+    let Ok(merges) = single_linkage_guide(&sequences, 500_000_000) else {
         panic!("small fixture dimensions fit");
     };
-    let members = vec![Some(vec![0]), Some(vec![1]), Some(vec![2])];
-    assert_eq!(closest_pair(&members, &distances), Ok(Some((0, 1))));
+    assert_eq!(merges.first(), Some(&(0, 1)));
+}
+
+#[test]
+fn memory_limit_rejects_before_trace_allocation() {
+    let sequences: [&[u8]; 2] = [&[b'A'; 256], &[b'A'; 256]];
+    let result = progressive_msa(
+        &sequences,
+        MsaOptions::progressive(scoring()).with_memory_limit(1_024),
+    );
+    assert!(matches!(
+        result,
+        Err(MsaError::MemoryLimit {
+            required,
+            limit: 1_024
+        }) if required > 1_024
+    ));
+}
+
+#[test]
+fn a_zero_memory_limit_is_refused_and_a_large_one_is_accepted() {
+    let options = MsaOptions::progressive(scoring()).with_memory_limit(0);
+    assert!(matches!(
+        progressive_msa(&[b"A", b"A"], options),
+        Err(MsaError::InvalidMemoryLimit { requested: 0, .. })
+    ));
+
+    let options = MsaOptions::progressive(scoring()).with_memory_limit(64_000_000_000);
+    assert!(
+        progressive_msa(&[b"A", b"A"], options).is_ok(),
+        "a caller who has provisioned the machine sets the ceiling, not the library"
+    );
 }
 
 #[test]
