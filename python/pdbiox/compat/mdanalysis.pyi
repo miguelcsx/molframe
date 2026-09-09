@@ -1,9 +1,0 @@
-from os import PathLike
-from .. import Atoms, Structure
-
-class Universe:
-    def __init__(self, topology: str | PathLike[str]) -> None: ...
-    @property
-    def structure(self) -> Structure: ...
-    @property
-    def atoms(self) -> Atoms: ...

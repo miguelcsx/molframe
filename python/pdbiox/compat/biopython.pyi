@@ -1,6 +1,0 @@
-from os import PathLike
-from .. import Structure
-
-class PDBParser:
-    def __init__(self) -> None: ...
-    def get_structure(self, identifier: str, path: str | PathLike[str]) -> Structure: ...

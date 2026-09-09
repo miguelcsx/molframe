@@ -3,8 +3,10 @@ from ..core import Structure
 from ..query import Namespace
 from .._io_types import BondOrder
 
+MISSING_STRING: int
+
 class DownloadError(RuntimeError): ...
-class TopologyExportError(ValueError): ...
+class TopologyBatchError(ValueError): ...
 
 @final
 class DownloadOptions:
@@ -19,46 +21,38 @@ class VerifiedDownload:
     sha256: str
 
 @final
-class ExportChain:
-    id: str
-    residues: tuple[int, int]
-
-@final
-class ExportResidue:
-    name: str
-    number: int | None
-    insertion_code: str | None
-    is_heterogen: bool
-    chain: int
-    atoms: tuple[int, int]
-
-@final
-class ExportAtom:
-    name: str
-    atomic_number: int
-    element_symbol: str
-    mass: float
-    serial: int | None
-    formal_charge: int | None
-    occupancy: float | None
-    b_factor: float | None
-    alternate_location: str | None
-    residue: int
-    position: list[float]
-
-@final
-class ExportBond:
-    atom_a: int
-    atom_b: int
-    order: BondOrder
-
-@final
-class TopologyExport:
+class TopologyBatch:
     @classmethod
-    def from_model(cls, structure: Structure, model: int, namespace: Namespace) -> TopologyExport: ...
-    chains: list[ExportChain]
-    residues: list[ExportResidue]
-    atoms: list[ExportAtom]
-    bonds: list[ExportBond]
+    def from_model(cls, structure: Structure, model: int, namespace: Namespace) -> TopologyBatch: ...
+    strings: list[str]
+    chain_ids: list[int]
+    chain_residue_offsets: list[int]
+    residue_names: list[int]
+    residue_numbers: list[int]
+    residue_number_validity: list[bool]
+    residue_insertion_codes: list[int]
+    residue_is_heterogen: list[bool]
+    residue_chain: list[int]
+    residue_atom_offsets: list[int]
+    atom_names: list[int]
+    atomic_numbers: list[int]
+    masses: list[float]
+    atom_serials: list[int]
+    atom_serial_validity: list[bool]
+    formal_charges: list[int]
+    formal_charge_validity: list[bool]
+    occupancies: list[float]
+    occupancy_validity: list[bool]
+    b_factors: list[float]
+    b_factor_validity: list[bool]
+    atom_alternate_locations: list[int]
+    atom_residue: list[int]
+    position_x: list[float]
+    position_y: list[float]
+    position_z: list[float]
+    bond_atom_a: list[int]
+    bond_atom_b: list[int]
+    bond_orders: list[BondOrder]
+    def transfer_to_structure(self) -> Structure: ...
 
 def fetch_verified(url: str, expected_sha256: str, options: DownloadOptions) -> VerifiedDownload: ...

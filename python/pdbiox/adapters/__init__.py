@@ -1,27 +1,21 @@
-"""Explicit external-boundary adapters backed by native pdbiox projections."""
+"""Neutral topology-transfer and verified-download boundaries."""
 
 from .._native import (
     DownloadError,
     DownloadOptions,
-    ExportAtom,
-    ExportBond,
-    ExportChain,
-    ExportResidue,
-    TopologyExport,
-    TopologyExportError,
+    TopologyBatch,
+    TopologyBatchError,
     VerifiedDownload,
     fetch_verified,
+    MISSING_STRING,
 )
 
 __all__ = [
     "DownloadError",
     "DownloadOptions",
-    "ExportAtom",
-    "ExportBond",
-    "ExportChain",
-    "ExportResidue",
-    "TopologyExport",
-    "TopologyExportError",
+    "TopologyBatch",
+    "TopologyBatchError",
     "VerifiedDownload",
     "fetch_verified",
+    "MISSING_STRING",
 ]
