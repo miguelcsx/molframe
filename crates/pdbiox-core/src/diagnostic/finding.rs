@@ -63,26 +63,51 @@ impl ContextItem {
 pub struct Diagnostic {
     code: Code,
     severity: Severity,
+    row_present: bool,
+    row: u64,
     message: Option<Box<str>>,
-    span: Option<ByteSpan>,
+    span: Option<Box<ByteSpan>>,
     category: Option<Box<str>>,
     field: Option<Box<str>>,
-    row: Option<u32>,
     context: Vec<ContextItem>,
 }
 
 impl Diagnostic {
+    /// Heap bytes retained by this occurrence's owned details.
+    #[must_use]
+    pub fn retained_bytes(&self) -> usize {
+        let text = self.message.as_ref().map_or(0, |value| value.len())
+            + self.category.as_ref().map_or(0, |value| value.len())
+            + self.field.as_ref().map_or(0, |value| value.len())
+            + self
+                .context
+                .iter()
+                .map(|item| item.value.len())
+                .sum::<usize>();
+        text.saturating_add(
+            self.context
+                .capacity()
+                .saturating_mul(std::mem::size_of::<ContextItem>()),
+        )
+        .saturating_add(
+            self.span
+                .as_ref()
+                .map_or(0, |_| std::mem::size_of::<ByteSpan>()),
+        )
+    }
+
     /// Creates a finding carrying the code's registered severity and cause.
     #[must_use]
     pub fn new(code: Code) -> Self {
         Self {
             code,
             severity: code.severity(),
+            row_present: false,
+            row: 0,
             message: None,
             span: None,
             category: None,
             field: None,
-            row: None,
             context: Vec::new(),
         }
     }
@@ -109,8 +134,8 @@ impl Diagnostic {
 
     /// Records where in the source this finding was raised.
     #[must_use]
-    pub const fn at(mut self, span: ByteSpan) -> Self {
-        self.span = Some(span);
+    pub fn at(mut self, span: ByteSpan) -> Self {
+        self.span = Some(Box::new(span));
         self
     }
 
@@ -130,8 +155,9 @@ impl Diagnostic {
 
     /// Records the row this finding concerns.
     #[must_use]
-    pub const fn at_row(mut self, row: u32) -> Self {
-        self.row = Some(row);
+    pub const fn at_row(mut self, row: u64) -> Self {
+        self.row = row;
+        self.row_present = true;
         self
     }
 
@@ -171,8 +197,8 @@ impl Diagnostic {
 
     /// Where in the source this was raised, if a position was known.
     #[must_use]
-    pub const fn span(&self) -> Option<ByteSpan> {
-        self.span
+    pub fn span(&self) -> Option<ByteSpan> {
+        self.span.as_deref().copied()
     }
 
     /// The category this concerns, if any.
@@ -189,8 +215,12 @@ impl Diagnostic {
 
     /// The row this concerns, if any.
     #[must_use]
-    pub const fn row(&self) -> Option<u32> {
-        self.row
+    pub const fn row(&self) -> Option<u64> {
+        if self.row_present {
+            Some(self.row)
+        } else {
+            None
+        }
     }
 
     /// The labelled details attached to this finding.
@@ -207,8 +237,11 @@ impl Diagnostic {
 
     /// The key findings are ordered by: worst first, then earliest in the file,
     /// then by code.
-    fn order_key(&self) -> (std::cmp::Reverse<Severity>, u32, Code) {
-        let offset = self.span.map_or(u32::MAX, |span| span.start.byte_offset);
+    fn order_key(&self) -> (std::cmp::Reverse<Severity>, u64, Code) {
+        let offset = self
+            .span
+            .as_deref()
+            .map_or(u64::MAX, |span| span.start.byte_offset);
         (std::cmp::Reverse(self.severity), offset, self.code)
     }
 }
@@ -229,40 +262,100 @@ impl fmt::Display for Diagnostic {
 ///
 /// Callers push in whatever order problems are noticed; [`Diagnostics::finish`]
 /// imposes the order that makes two runs comparable.
-#[derive(Clone, Default, Debug)]
+///
+/// The list is bounded. Past its ceiling, findings are counted rather than
+/// retained, and [`Diagnostics::finish`] appends one `PDBIOX-W1901` recording
+/// how many were suppressed. The worst severity still reflects every finding
+/// pushed, retained or not, so a decision taken on severity is unaffected by
+/// the ceiling.
+#[derive(Clone, Debug)]
 pub struct Diagnostics {
     findings: Vec<Diagnostic>,
     worst: Option<Severity>,
+    ceiling: usize,
+    suppressed: u64,
+}
+
+impl Default for Diagnostics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Diagnostics {
-    /// Creates an empty list.
+    /// How many findings a list retains before it starts counting instead.
+    ///
+    /// A systematically malformed column raises one finding per row, and a
+    /// finding carries a message, a category, a field and a context vector —
+    /// roughly ninety bytes and up to four allocations each. At a hundred
+    /// million rows that is nine gigabytes of diagnostics describing a single
+    /// cause, which exhausts memory reporting a problem rather than reporting
+    /// it.
+    ///
+    /// Ten thousand is far past the point where a reader learns anything new
+    /// and far below the point where the list itself is the problem.
+    pub const DEFAULT_CEILING: usize = 10_000;
+
+    /// Creates an empty list with the default ceiling.
     #[must_use]
     pub const fn new() -> Self {
         Self {
             findings: Vec::new(),
             worst: None,
+            ceiling: Self::DEFAULT_CEILING,
+            suppressed: 0,
         }
     }
 
     /// Creates a list with room for `capacity` findings.
     ///
     /// Worth doing when a permissive parse over a known-messy file is expected
-    /// to raise many, so the list does not grow by repeated reallocation.
+    /// to raise many, so the list does not grow by repeated reallocation. The
+    /// ceiling is raised to `capacity` where that is higher than the default,
+    /// because a caller who has reserved the room has said what they want.
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             findings: Vec::with_capacity(capacity),
             worst: None,
+            ceiling: capacity.max(Self::DEFAULT_CEILING),
+            suppressed: 0,
         }
     }
 
+    /// Sets how many findings this list retains before counting instead.
+    #[must_use]
+    pub const fn with_ceiling(mut self, ceiling: usize) -> Self {
+        self.ceiling = ceiling;
+        self
+    }
+
+    /// How many findings this list retains before counting instead.
+    #[must_use]
+    pub const fn ceiling(&self) -> usize {
+        self.ceiling
+    }
+
+    /// How many findings were counted rather than retained.
+    #[must_use]
+    pub const fn suppressed(&self) -> u64 {
+        self.suppressed
+    }
+
     /// Records a finding.
+    ///
+    /// Past the ceiling the finding is counted and dropped. The severity is
+    /// recorded either way, so nothing that depends on the worst severity
+    /// changes with the ceiling.
     pub fn push(&mut self, finding: Diagnostic) {
         self.worst = Some(match self.worst {
             Some(worst) if worst >= finding.severity => worst,
             _ => finding.severity,
         });
+        if self.findings.len() >= self.ceiling {
+            self.suppressed = self.suppressed.saturating_add(1);
+            return;
+        }
         self.findings.push(finding);
     }
 
@@ -303,6 +396,13 @@ impl Diagnostics {
     #[must_use]
     pub fn finish(mut self) -> Vec<Diagnostic> {
         self.findings.sort_by_key(Diagnostic::order_key);
+        if self.suppressed != 0 {
+            self.findings.push(
+                Diagnostic::new(Code::W1901)
+                    .with_context("suppressed", self.suppressed.to_string())
+                    .with_context("retained", self.findings.len().to_string()),
+            );
+        }
         self.findings
     }
 }

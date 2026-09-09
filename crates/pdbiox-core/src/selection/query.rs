@@ -5,7 +5,7 @@ mod operations;
 mod representation;
 mod runs;
 
-pub use representation::AtomSelection;
+pub use representation::{AtomSelection, SelectionIter};
 
 #[cfg(test)]
 #[path = "query_tests.rs"]

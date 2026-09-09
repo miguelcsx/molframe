@@ -73,6 +73,15 @@ registry! {
     E1901 = Error 1901, Breaking,
         "resource limit exceeded",
         "raise the limit deliberately if the input is genuinely this large; the default guards against decompression bombs and absurd declared row counts";
+    E1902 = Error 1902, Breaking,
+        "source window exceeds the execution memory budget",
+        "reduce the requested window or deliberately raise the execution memory budget";
+    E1903 = Error 1903, Breaking,
+        "source window cannot be represented on this host",
+        "request a smaller window or use a host whose address space can represent it";
+    E1904 = Error 1904, Breaking,
+        "execution cancelled",
+        "start a new execution with an uncancelled context when the result is still needed";
     E2001 = Error 2001, Invalidating,
         "required category absent",
         "add the category, or read with a strictness that tolerates its absence";
@@ -247,6 +256,9 @@ registry! {
     W1002 = Warning 1002, Info,
         "non-standard whitespace or line ending",
         "normalise the line endings if the file is meant to be portable";
+    W1901 = Warning 1901, Info,
+        "further findings were suppressed",
+        "the retained findings describe the problem; raise the diagnostic ceiling only if you need every occurrence rather than every distinct cause";
     W2001 = Warning 2001, Info,
         "unknown category retained but not interpreted",
         "no action needed; the category survives a preserving write untouched";

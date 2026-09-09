@@ -116,15 +116,6 @@ index_newtype!(
     InstanceId,
     "instance"
 );
-index_newtype!(
-    /// Position of a chunk in a structure's chunk list.
-    ///
-    /// Chunking is internal and never appears in a public signature. This type
-    /// exists so that an edit overlay can record which chunks it replaced.
-    ChunkId,
-    "chunk"
-);
-
 #[cfg(test)]
 #[path = "typed_tests.rs"]
 mod tests;

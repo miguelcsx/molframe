@@ -134,3 +134,45 @@ fn an_empty_run_collapses_rather_than_being_stored_as_a_run() {
     assert_eq!(AtomSelection::range(high..low), AtomSelection::Empty);
     assert!(AtomSelection::from_sorted(Vec::new()).is_empty());
 }
+
+#[test]
+fn every_selection_shape_iterates_ascending_and_reports_its_exact_length() {
+    let dense = {
+        let mut mask = crate::column::BitVec::repeat(false, 200);
+        for position in [3u32, 64, 65, 199] {
+            mask.set(position, true);
+        }
+        AtomSelection::Dense(mask)
+    };
+
+    let cases = [
+        (AtomSelection::Empty, Vec::new()),
+        (AtomSelection::All(4), vec![0, 1, 2, 3]),
+        (AtomSelection::Range(2..5), vec![2, 3, 4]),
+        (
+            AtomSelection::from_sorted(vec![1, 2, 3, 9, 10]),
+            vec![1, 2, 3, 9, 10],
+        ),
+        (AtomSelection::from_sorted(vec![0, 5, 900]), vec![0, 5, 900]),
+        (dense, vec![3, 64, 65, 199]),
+    ];
+
+    for (selection, expected) in cases {
+        let iterator = selection.iter();
+        let (lower, upper) = iterator.size_hint();
+        assert_eq!(lower, expected.len(), "lower bound for {selection:?}");
+        assert_eq!(upper, Some(expected.len()), "upper bound for {selection:?}");
+
+        let collected: Vec<u32> = selection.iter().collect();
+        assert_eq!(collected, expected, "positions of {selection:?}");
+        assert!(
+            collected.windows(2).all(|pair| pair[0] < pair[1]),
+            "positions of {selection:?} must ascend"
+        );
+
+        // A fused iterator keeps returning nothing once it is finished.
+        let mut drained = selection.iter();
+        while drained.next().is_some() {}
+        assert_eq!(drained.next(), None);
+    }
+}

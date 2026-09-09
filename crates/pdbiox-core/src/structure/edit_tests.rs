@@ -1,11 +1,19 @@
 use crate::diagnostic::Code;
 use crate::index::ModelIndex;
+use crate::{ExecutionContext, MemoryBudget, ScratchPolicy};
+
+fn context() -> ExecutionContext {
+    ExecutionContext::builder()
+        .scratch_policy(ScratchPolicy::new(0))
+        .build()
+        .expect("context")
+}
 
 #[test]
 fn committing_coordinates_creates_a_new_generation_and_keeps_the_original() {
     let original = crate::structure::fixture::sample();
     let before = original.positions()[0];
-    let mut editor = original.edit_coordinates();
+    let mut editor = original.edit_coordinates(&context()).expect("edit fits");
     let Some(positions) = editor.positions_mut(ModelIndex::new(0)) else {
         panic!("first model missing")
     };
@@ -34,7 +42,7 @@ fn committing_coordinates_creates_a_new_generation_and_keeps_the_original() {
 #[test]
 fn a_non_finite_coordinate_aborts_the_transaction() {
     let original = crate::structure::fixture::sample();
-    let mut editor = original.edit_coordinates();
+    let mut editor = original.edit_coordinates(&context()).expect("edit fits");
     let Some(positions) = editor.positions_mut(ModelIndex::new(0)) else {
         panic!("first model missing")
     };
@@ -49,10 +57,48 @@ fn a_non_finite_coordinate_aborts_the_transaction() {
 #[test]
 fn checked_coordinate_access_uses_the_diagnostic_registry() {
     let original = crate::structure::fixture::sample();
-    let mut editor = original.edit_coordinates();
+    let mut editor = original.edit_coordinates(&context()).expect("edit fits");
     let result = editor.try_positions_mut(ModelIndex::new(1));
     assert_eq!(
         result.err().map(|finding| finding.code()),
         Some(Code::E6003)
     );
+}
+
+#[test]
+fn budgeted_edit_charges_the_detached_backing_until_every_snapshot_owner_drops() {
+    let original = crate::structure::fixture::sample();
+    let bytes = original
+        .data()
+        .coords
+        .block(ModelIndex::new(0))
+        .expect("model")
+        .allocated_bytes();
+    let context = ExecutionContext::builder()
+        .memory_budget(MemoryBudget::new(bytes).expect("budget"))
+        .scratch_policy(ScratchPolicy::new(0))
+        .build()
+        .expect("context");
+    let editor = original.edit_coordinates(&context).expect("copy fits");
+    assert_eq!(context.reserved_bytes(), bytes);
+    let snapshot = editor.snapshot().expect("valid snapshot");
+    drop(editor);
+    assert_eq!(context.reserved_bytes(), bytes);
+    let clone = snapshot.clone();
+    drop(snapshot);
+    assert_eq!(context.reserved_bytes(), bytes);
+    drop(clone);
+    assert_eq!(context.reserved_bytes(), 0);
+}
+
+#[test]
+fn budgeted_edit_refuses_before_detaching_coordinates() {
+    let original = crate::structure::fixture::sample();
+    let context = ExecutionContext::builder()
+        .memory_budget(MemoryBudget::new(1).expect("budget"))
+        .scratch_policy(ScratchPolicy::new(0))
+        .build()
+        .expect("context");
+    assert!(original.edit_coordinates(&context).is_err());
+    assert_eq!(context.reserved_bytes(), 0);
 }

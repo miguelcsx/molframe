@@ -133,7 +133,10 @@ impl<'a> Rendered<'a> {
         let (Some(source), Some(span)) = (self.source, self.finding.span()) else {
             return Ok(());
         };
-        let Some(line) = line_containing(source, span.start.byte_offset as usize) else {
+        let Ok(offset) = usize::try_from(span.start.byte_offset) else {
+            return Ok(());
+        };
+        let Some(line) = line_containing(source, offset) else {
             return Ok(());
         };
         let Ok(text) = str::from_utf8(line.text) else {
@@ -148,7 +151,6 @@ impl<'a> Rendered<'a> {
         write!(f, "\n {:width$} {gutter}│{reset}", "")?;
         write!(f, "\n {number} {gutter}│{reset} {}", text.trim_end())?;
 
-        let offset = usize::try_from(span.start.byte_offset).map_err(|_| fmt::Error)?;
         let column = offset.checked_sub(line.start).ok_or(fmt::Error)?;
         let available = text.len().checked_sub(column).ok_or(fmt::Error)?.max(1);
         let caret_count = span
@@ -219,7 +221,7 @@ fn line_containing(source: &[u8], offset: usize) -> Option<Line<'_>> {
     })
 }
 
-const fn decimal_width(mut value: u32) -> usize {
+const fn decimal_width(mut value: u64) -> usize {
     let mut width = 1;
     while value >= 10 {
         value /= 10;

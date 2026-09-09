@@ -3,6 +3,7 @@
 use super::{CoordinateStore, Structure, StructureData, validate};
 use crate::diagnostic::{Code, Diagnostic};
 use crate::index::ModelIndex;
+use crate::{ExecutionContext, MemoryBudgetError};
 
 /// A private coordinate copy that becomes a new structure only on commit.
 ///
@@ -15,17 +16,28 @@ pub struct CoordinateEditor {
 }
 
 impl Structure {
-    /// Starts a scoped coordinate edit.
+    /// Starts a scoped coordinate edit under the shared execution account.
     ///
     /// Coordinate storage is copied for the new snapshot; topology and atom
     /// annotations remain untouched. Call [`CoordinateEditor::commit`] to
     /// validate and publish the new snapshot.
-    #[must_use]
-    pub fn edit_coordinates(&self) -> CoordinateEditor {
-        CoordinateEditor {
+    /// Shared topology remains borrowed. Direct coordinate frames detach under
+    /// the supplied account, and their reservations follow the copied backing
+    /// buffers through committed snapshots and clones.
+    ///
+    /// # Errors
+    ///
+    /// Returns before publishing an editor when all coordinate copies cannot fit.
+    pub fn edit_coordinates(
+        &self,
+        context: &ExecutionContext,
+    ) -> Result<CoordinateEditor, MemoryBudgetError> {
+        let mut coords = self.data().coords.clone();
+        coords.make_unique_in(context)?;
+        Ok(CoordinateEditor {
             base: self.clone(),
-            coords: self.data().coords.clone(),
-        }
+            coords,
+        })
     }
 }
 

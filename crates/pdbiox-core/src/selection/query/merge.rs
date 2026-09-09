@@ -1,7 +1,7 @@
 //! Allocation-bounded position iteration and sparse merging.
 
 use super::representation::AtomSelection;
-use crate::column::BitVec;
+use crate::column::{BitVec, Ones};
 use std::iter::Peekable;
 use std::ops::Range;
 use std::slice;
@@ -15,7 +15,7 @@ enum MergeCursor<'a> {
         next: u32,
     },
     Sparse(slice::Iter<'a, u32>),
-    Dense(Box<dyn Iterator<Item = u32> + 'a>),
+    Dense(Ones<'a>),
 }
 
 impl<'a> MergeCursor<'a> {
@@ -30,7 +30,7 @@ impl<'a> MergeCursor<'a> {
                 next: runs.first().map_or(0, |run| run.start),
             },
             AtomSelection::Sparse(positions) => Self::Sparse(positions.iter()),
-            AtomSelection::Dense(mask) => Self::Dense(Box::new(mask.ones())),
+            AtomSelection::Dense(mask) => Self::Dense(mask.ones()),
         }
     }
 }

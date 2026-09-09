@@ -6,9 +6,16 @@
 use super::{AtomRef, ResidueRef, Structure};
 use crate::contract::{AltlocPolicy, Analysis, AnalysisPolicy, Coverage, Status};
 use crate::diagnostic::{Code, Diagnostic};
+use crate::hashing::IdentityBuildHasher;
 use crate::selection::AtomSelection;
 use crate::symbol::{AltId, SymbolId};
 use hashbrown::HashMap;
+
+/// Occupancy scratch keyed by an identifier the engine assigned itself.
+///
+/// The keys are altloc and symbol identifiers, never attacker-chosen, so the
+/// keyed pseudo-random default hasher buys nothing and costs a lookup each.
+type ScoreTable<K, V> = HashMap<K, V, IdentityBuildHasher>;
 
 /// Accumulated occupancy for one alternate-conformation label.
 ///
@@ -196,7 +203,7 @@ impl Structure {
     /// every chain while preserving deterministic first-seen tie breaking.
     fn conformer_consistent(&self) -> AltlocResolution {
         let mut positions = Vec::new();
-        let mut scores = HashMap::new();
+        let mut scores = ScoreTable::default();
         let mut has_altlocs = false;
 
         for chain in self.data().chains() {
@@ -224,7 +231,7 @@ impl Structure {
     /// residue resolution retains hash-table capacity instead of reallocating.
     fn per_residue(&self, chooser: &impl LabelChooser) -> AltlocResolution {
         let mut positions = Vec::new();
-        let mut scores = HashMap::new();
+        let mut scores = ScoreTable::default();
         let mut has_altlocs = false;
 
         for residue in self.data().residues() {
@@ -252,7 +259,7 @@ impl Structure {
     /// a second ordered residue traversal, avoiding a global sort of results.
     fn per_atom_occupancy(&self) -> AltlocResolution {
         let mut positions = Vec::new();
-        let mut choices: HashMap<SymbolId, AtomChoice> = HashMap::new();
+        let mut choices: ScoreTable<SymbolId, AtomChoice> = ScoreTable::default();
         let mut has_altlocs = false;
 
         for residue in self.data().residues() {
@@ -317,7 +324,7 @@ trait LabelChooser {
     fn choose(
         &self,
         residue: ResidueRef<'_>,
-        scores: &mut HashMap<AltId, LabelScore>,
+        scores: &mut ScoreTable<AltId, LabelScore>,
     ) -> LabelChoice;
 }
 
@@ -329,7 +336,7 @@ impl LabelChooser for FirstLabel {
     fn choose(
         &self,
         residue: ResidueRef<'_>,
-        _scores: &mut HashMap<AltId, LabelScore>,
+        _scores: &mut ScoreTable<AltId, LabelScore>,
     ) -> LabelChoice {
         let selected = residue
             .atoms()
@@ -351,7 +358,7 @@ impl LabelChooser for HighestOccupancy {
     fn choose(
         &self,
         residue: ResidueRef<'_>,
-        scores: &mut HashMap<AltId, LabelScore>,
+        scores: &mut ScoreTable<AltId, LabelScore>,
     ) -> LabelChoice {
         best_label(residue.atoms(), scores)
     }
@@ -364,7 +371,7 @@ impl LabelChooser for HighestOccupancy {
 /// ties or the original deterministic behavior.
 fn best_label<'a>(
     atoms: impl Iterator<Item = AtomRef<'a>>,
-    scores: &mut HashMap<AltId, LabelScore>,
+    scores: &mut ScoreTable<AltId, LabelScore>,
 ) -> LabelChoice {
     scores.clear();
 
@@ -397,7 +404,7 @@ fn best_label<'a>(
 /// Selection reproduces ordered `>` semantics exactly: ties retain the first
 /// label encountered, and a NaN accumulated by the first label continues to
 /// dominate exactly as it did under the original sequential comparison.
-fn best_scored_label(scores: &HashMap<AltId, LabelScore>) -> Option<AltId> {
+fn best_scored_label(scores: &ScoreTable<AltId, LabelScore>) -> Option<AltId> {
     let mut earliest: Option<(AltId, LabelScore)> = None;
     let mut best_finite: Option<(AltId, LabelScore)> = None;
 
@@ -431,7 +438,7 @@ fn best_scored_label(scores: &HashMap<AltId, LabelScore>) -> Option<AltId> {
 /// Equal occupancies preserve the first encountered atom because replacement
 /// occurs only for a strictly greater occupancy.
 fn record_atom_choice(
-    choices: &mut HashMap<SymbolId, AtomChoice>,
+    choices: &mut ScoreTable<SymbolId, AtomChoice>,
     name: SymbolId,
     atom: AtomRef<'_>,
 ) {

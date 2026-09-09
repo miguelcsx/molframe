@@ -85,6 +85,22 @@ pub enum CoordinateStore {
 }
 
 impl CoordinateStore {
+    pub(crate) fn make_unique_in(
+        &mut self,
+        context: &crate::ExecutionContext,
+    ) -> Result<(), crate::MemoryBudgetError> {
+        match self {
+            Self::Single(block) => block.make_unique_in(context),
+            Self::Dense { frames } => {
+                for frame in frames {
+                    frame.make_unique_in(context)?;
+                }
+                Ok(())
+            }
+            Self::Ragged { .. } => Ok(()),
+        }
+    }
+
     /// The number of models.
     #[must_use]
     pub fn model_count(&self) -> usize {
@@ -149,6 +165,7 @@ pub struct StructureData {
     pub cell: Option<UnitCell>,
     /// How many times the positions have changed.
     pub generation: CoordinateGeneration,
+    pub(crate) reservation: Option<Arc<crate::MemoryReservation>>,
 }
 
 /// An immutable structure, shared by reference.
@@ -165,6 +182,7 @@ pub struct StructureData {
 /// assert_eq!(structure.atom_count(), 0);
 /// assert_eq!(structure.model_count(), 1);
 /// ```
+#[repr(C)]
 #[derive(Clone, Debug)]
 pub struct Structure(Arc<StructureData>);
 
@@ -173,6 +191,7 @@ impl StructureData {
     #[must_use]
     pub fn empty() -> Self {
         Self {
+            reservation: None,
             entry: EntryMetadata::default(),
             topology: Topology::default(),
             chunks: Arc::new(Vec::new()),
@@ -199,6 +218,17 @@ impl Structure {
     #[must_use]
     pub fn new(data: StructureData) -> Self {
         Self(Arc::new(data))
+    }
+
+    pub(crate) fn retain_reservation(mut self, reservation: Arc<crate::MemoryReservation>) -> Self {
+        let data = Arc::make_mut(&mut self.0);
+        if let CoordinateStore::Ragged { models } = &mut data.coords {
+            for model in models {
+                *model = model.clone().retain_reservation(Arc::clone(&reservation));
+            }
+        }
+        data.reservation = Some(reservation);
+        self
     }
 
     /// The data behind the reference.

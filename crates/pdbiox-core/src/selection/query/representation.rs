@@ -1,6 +1,6 @@
 //! Selection shapes, construction, membership and iteration.
 
-use crate::column::BitVec;
+use crate::column::{BitVec, Ones};
 use smallvec::SmallVec;
 use std::ops::Range;
 
@@ -107,18 +107,96 @@ impl AtomSelection {
     }
 
     /// The selected positions, ascending.
+    ///
+    /// A concrete iterator rather than a boxed one: the boxed form cost a heap
+    /// allocation per call and a virtual call per position, which prevented the
+    /// consuming loop from inlining anything. Selection walks are the innermost
+    /// loop of every spatial and analysis pass.
     #[must_use]
-    pub fn iter(&self) -> Box<dyn Iterator<Item = u32> + '_> {
+    pub fn iter(&self) -> SelectionIter<'_> {
         match self {
-            Self::Empty => Box::new(std::iter::empty()),
-            Self::All(count) => Box::new(0..*count),
-            Self::Range(run) => Box::new(run.start..run.end),
-            Self::Ranges(runs) => Box::new(runs.iter().flat_map(|run| run.start..run.end)),
-            Self::Sparse(positions) => Box::new(positions.iter().copied()),
-            Self::Dense(mask) => Box::new(mask.ones()),
+            Self::Empty => SelectionIter::Run(0..0),
+            Self::All(count) => SelectionIter::Run(0..*count),
+            Self::Range(run) => SelectionIter::Run(run.start..run.end),
+            Self::Ranges(runs) => SelectionIter::Runs {
+                runs,
+                next: 0,
+                current: 0..0,
+            },
+            Self::Sparse(positions) => SelectionIter::Sparse(positions.iter()),
+            Self::Dense(mask) => SelectionIter::Dense(mask.ones()),
         }
     }
 }
+
+/// The positions of an [`AtomSelection`], ascending.
+#[derive(Clone, Debug)]
+pub enum SelectionIter<'a> {
+    /// One contiguous run, which also covers the empty and whole-structure
+    /// selections.
+    Run(Range<u32>),
+    /// Several runs, walked one after another.
+    Runs {
+        /// The remaining runs, including the one being walked.
+        runs: &'a [Range<u32>],
+        /// The index of the next run to start.
+        next: usize,
+        /// The unfinished part of the current run.
+        current: Range<u32>,
+    },
+    /// Scattered positions read straight from their slice.
+    Sparse(std::slice::Iter<'a, u32>),
+    /// Set bits of a dense mask.
+    Dense(Ones<'a>),
+}
+
+impl Iterator for SelectionIter<'_> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<u32> {
+        match self {
+            Self::Run(run) => run.next(),
+            Self::Runs {
+                runs,
+                next,
+                current,
+            } => loop {
+                if let Some(position) = current.next() {
+                    return Some(position);
+                }
+                let run = runs.get(*next)?;
+                *next = next.checked_add(1)?;
+                *current = run.start..run.end;
+            },
+            Self::Sparse(positions) => positions.next().copied(),
+            Self::Dense(ones) => ones.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Run(run) => run.size_hint(),
+            Self::Runs {
+                runs,
+                next,
+                current,
+            } => {
+                let remaining = match runs.get(*next..) {
+                    Some(tail) => tail.iter().map(ExactSizeIterator::len).sum::<usize>(),
+                    None => 0,
+                };
+                let total = current.len() + remaining;
+                (total, Some(total))
+            }
+            Self::Sparse(positions) => positions.size_hint(),
+            Self::Dense(ones) => ones.size_hint(),
+        }
+    }
+}
+
+impl ExactSizeIterator for SelectionIter<'_> {}
+
+impl std::iter::FusedIterator for SelectionIter<'_> {}
 
 impl FromIterator<u32> for AtomSelection {
     fn from_iter<T: IntoIterator<Item = u32>>(iter: T) -> Self {
@@ -131,7 +209,7 @@ impl FromIterator<u32> for AtomSelection {
 
 impl<'a> IntoIterator for &'a AtomSelection {
     type Item = u32;
-    type IntoIter = Box<dyn Iterator<Item = u32> + 'a>;
+    type IntoIter = SelectionIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
