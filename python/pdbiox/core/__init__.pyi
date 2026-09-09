@@ -6,7 +6,7 @@ from ..chem import Element
 from .metadata import EntityKind, PolymerKind
 from . import (
     annotation, bond, chunk, column, contract, coords, diagnostic, element,
-    index, io, limits, optional, selection, span, structure, symbol, topology,
+    execution, index, io, limits, optional, parallel, provider, selection, span, structure, symbol, topology,
 )
 from ..query import AnalysisPolicy, Selection
 
@@ -21,11 +21,13 @@ from .._native import (
     ElementMask, EncodedColumn, EntityTable, ExtensionStore, Extremes,
     BondAdjacency, BondIndex, BondOrder, BondProvenance,
     BondRecord, BondTable, BondTableBuilder, ByteSpan, ChainIndex, Compression, CoordinateBlock,
+    OutputOptions, DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES,
     Format, InputBuffer, InputKind, Limits, MissingElementPolicy, ParseMode, ReadOptions, ReadReport,
     ReadResult, ReadScope, Reader, Select, SelectAll,
     CoordinateGeneration, DictionaryFull, EntityIndex, InstanceId, Interner, ModelIndex, ModelTable,
     OptionalI32, OptionalSymbol, ParentMapping, Position, Presence, ResidueIndex, MissingResidue, ResidueRecord,
     ResidueTable, Structure, StructureData, StructureView, StructureEditor, CoordinateEditor,
+    StructureBatch, StructureBatchReader, collect_structure, open_structure_batches,
     Class, Code, ContextItem, Diagnostics, Kind, Rendered, Severity, Strictness,
     SymbolId, TARGET_CHUNK_ATOMS, Topology, ValidityMask,
     bit_width, pack, write_output,
@@ -33,4 +35,14 @@ from .._native import (
 )
 
 from .._core_primitives import *
+from .._provider import *
 from .._core_topology import *
+from .parallel import BlockPlan, ReductionPolicy, DEFAULT_BLOCK_ITEMS
+from .execution import (
+    DEFAULT_MEMORY_BUDGET_BYTES, Backpressure,
+    BatchDemand, CancellationToken, ExecutionContext, WindowedFile, MemoryBudget, MemoryLease,
+    SpillArtifact, SpillFile, SpillReader,
+    ScratchPolicy, TempStoragePolicy,
+)
+
+from .parallel import try_for_each_block_in

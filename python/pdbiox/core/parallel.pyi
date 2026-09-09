@@ -1,0 +1,29 @@
+from typing import final
+
+DEFAULT_BLOCK_ITEMS: int
+
+@final
+class BlockPlan:
+    def __init__(self, count: int, block: int = ...) -> None: ...
+    count: int
+    block: int
+    blocks: int
+    def is_empty(self) -> bool: ...
+    def range(self, index: int) -> tuple[int, int] | None: ...
+    def ranges(self) -> list[tuple[int, int]]: ...
+    def useful_workers(self, requested: int) -> int: ...
+    def __repr__(self) -> str: ...
+
+@final
+class ReductionPolicy:
+    Deterministic: ReductionPolicy
+    Fast: ReductionPolicy
+    name: str
+    def is_deterministic(self) -> bool: ...
+    def __repr__(self) -> str: ...
+
+from collections.abc import Callable
+from typing import Any
+from .execution import ExecutionContext
+
+def try_for_each_block_in(plan: BlockPlan, context: ExecutionContext, bytes_per_block: int, block: Callable[[int, tuple[int, int]], Any], consume: Callable[[Any], None]) -> None: ...
