@@ -8,15 +8,126 @@
 //! contained a space and parsed as two. The finding says so rather than leaving
 //! the reader to work it out.
 
-use crate::document::{Category, CifValue, DataBlock, Document};
+use crate::document::{Category, CifValue, CifValueRef, DataBlock, Document};
 use crate::lexer::{LexError, Lexer, Quoting, Spanned, Token};
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use pdbiox_core::io::InputBuffer;
 use pdbiox_core::span::{ByteSpan, Position};
 use std::borrow::Cow;
+use std::collections::HashSet;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
 /// A document and everything that was wrong with the file it came from.
 pub type ParseResult = Result<(Document, Vec<Diagnostic>), Vec<Diagnostic>>;
+
+/// One parsed CIF scalar borrowing text directly from the input buffer.
+///
+/// This hidden integration type lets domain projections consume parser events
+/// without building a lossless [`Document`] or allocating text per cell.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CifScalar<'input> {
+    /// Written `.`.
+    Inapplicable,
+    /// Written `?`.
+    Unknown,
+    /// Text borrowing the input buffer.
+    Text(&'input str),
+    /// An exact whole number.
+    Integer(i64),
+    /// A floating-point number.
+    Float(f64),
+}
+
+/// Compact identity of one declared column within the active loop.
+///
+/// Hot sinks resolve this ordinal once from the loop header instead of
+/// comparing category and item strings for every value.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub(crate) struct ColumnId(u32);
+
+impl ColumnId {
+    pub(crate) fn from_position(position: usize) -> Option<Self> {
+        u32::try_from(position).ok().map(Self)
+    }
+
+    /// Zero-based position within the active declaration.
+    #[must_use]
+    pub(crate) const fn position(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl<'input> From<CifValueRef<'input>> for CifScalar<'input> {
+    fn from(value: CifValueRef<'input>) -> Self {
+        match value {
+            CifValueRef::Inapplicable => Self::Inapplicable,
+            CifValueRef::Unknown => Self::Unknown,
+            CifValueRef::Text(value) => Self::Text(value),
+            CifValueRef::Integer(value) => Self::Integer(value),
+            CifValueRef::Float(value) => Self::Float(value),
+        }
+    }
+}
+
+/// Event consumer for allocation-bounded projections over CIF input.
+///
+/// Category and item names are allocated once per declaration by the parser;
+/// each cell text borrow is valid only for its [`Self::value`] callback. This
+/// deliberately prevents a projection from retaining an input or decoder
+/// buffer and allows the same sink to consume text and binary CIF streams.
+///
+/// ```compile_fail
+/// use pdbiox_cif::{CifEventSink, CifScalar};
+/// use pdbiox_core::span::ByteSpan;
+///
+/// struct RetainsText<'a>(Option<&'a str>);
+///
+/// impl CifEventSink for RetainsText<'_> {
+///     type Output = ();
+///
+///     fn block(&mut self, _name: &str) {}
+///
+///     fn value(&mut self, _category: &str, _item: &str, value: CifScalar<'_>, _span: ByteSpan) {
+///         if let CifScalar::Text(text) = value {
+///             self.0 = Some(text);
+///         }
+///     }
+///
+///     fn finish(self) {}
+/// }
+/// ```
+#[doc(hidden)]
+pub trait CifEventSink {
+    /// Completed projection.
+    type Output;
+
+    /// Starts a data block.
+    fn block(&mut self, name: &str);
+
+    /// Whether values from one category need scalar decoding and delivery.
+    fn accepts_category(&self, _category: &str) -> bool {
+        true
+    }
+
+    /// Starts a loop after all of its tags have been collected.
+    fn begin_loop(&mut self, _tags: &[(Box<str>, Box<str>)]) {}
+
+    /// Consumes one typed scalar.
+    fn value(&mut self, category: &str, item: &str, value: CifScalar<'_>, span: ByteSpan);
+
+    /// Completes one scalar or loop row.
+    fn end_row(&mut self) {}
+
+    /// Completes an active loop.
+    fn end_loop(&mut self) {}
+
+    /// Completes the projection.
+    fn finish(self) -> Self::Output;
+}
 
 /// Reads a document.
 ///
@@ -25,11 +136,113 @@ pub type ParseResult = Result<(Document, Vec<Diagnostic>), Vec<Diagnostic>>;
 /// Returns the findings that stopped the read: text that is not valid, a value
 /// or quote that never closed, or a file with no block header.
 pub fn parse(input: &InputBuffer) -> ParseResult {
+    parse_into(input, DocumentSink::all())
+}
+
+/// Parses CIF into a caller-provided event projection.
+///
+/// The same lexer, row state machine, and diagnostics as [`parse`] are used;
+/// only the destination representation differs.
+///
+/// # Errors
+///
+/// Returns the syntax findings that stopped parsing.
+#[doc(hidden)]
+pub fn parse_events<S>(
+    input: &InputBuffer,
+    sink: S,
+) -> Result<(S::Output, Vec<Diagnostic>), Vec<Diagnostic>>
+where
+    S: CifEventSink,
+{
+    parse_into(input, EventAdapter(sink))
+}
+
+struct EventAdapter<S>(S);
+
+impl<'input, S> ValueSink<'input> for EventAdapter<S>
+where
+    S: CifEventSink,
+{
+    type Output = S::Output;
+
+    fn block(&mut self, name: &str) {
+        self.0.block(name);
+    }
+
+    fn begin_loop(&mut self, tags: &[(Box<str>, Box<str>)]) {
+        self.0.begin_loop(tags);
+    }
+
+    fn value(
+        &mut self,
+        _column: ColumnId,
+        category: &str,
+        item: &str,
+        text: &'input str,
+        quoting: Quoting,
+        span: ByteSpan,
+    ) {
+        if !self.0.accepts_category(category) {
+            return;
+        }
+        self.0.value(
+            category,
+            item,
+            CifScalar::from(CifValueRef::parse(text, quoting)),
+            span,
+        );
+    }
+
+    fn end_row(&mut self) {
+        self.0.end_row();
+    }
+
+    fn end_loop(&mut self) {
+        self.0.end_loop();
+    }
+
+    fn finish(self) -> Self::Output {
+        self.0.finish()
+    }
+}
+
+pub(crate) trait ValueSink<'input> {
+    type Output;
+
+    fn block(&mut self, name: &str);
+
+    fn begin_loop(&mut self, _tags: &[(Box<str>, Box<str>)]) {}
+
+    fn value(
+        &mut self,
+        column: ColumnId,
+        category: &str,
+        item: &str,
+        text: &'input str,
+        quoting: Quoting,
+        span: ByteSpan,
+    );
+
+    fn end_row(&mut self) {}
+
+    fn end_loop(&mut self) {}
+
+    fn finish(self) -> Self::Output;
+}
+
+pub(crate) fn parse_into<'input, S>(
+    input: &'input InputBuffer,
+    sink: S,
+) -> Result<(S::Output, Vec<Diagnostic>), Vec<Diagnostic>>
+where
+    S: ValueSink<'input>,
+{
     let mut lexer = match Lexer::new(input.as_bytes()) {
         Ok(lexer) => lexer,
         Err(error) => return Err(vec![lex_finding(error)]),
     };
-    let mut state = ParseState::default();
+    let mut state = ParseState::new(sink);
 
     loop {
         match lexer.next_token() {
@@ -42,6 +255,82 @@ pub fn parse(input: &InputBuffer) -> ParseResult {
         }
     }
     state.finish()
+}
+
+pub(crate) struct DocumentSink {
+    document: Document,
+    texts: TextInterner,
+    keep: fn(&str) -> bool,
+}
+
+impl DocumentSink {
+    fn all() -> Self {
+        Self::with_filter(|_| true)
+    }
+
+    pub(crate) fn with_filter(keep: fn(&str) -> bool) -> Self {
+        Self {
+            document: Document::new(),
+            texts: TextInterner::default(),
+            keep,
+        }
+    }
+
+    pub(crate) fn block(&mut self, name: &str) {
+        self.document.push(DataBlock::new(name));
+    }
+
+    pub(crate) fn value(
+        &mut self,
+        category: &str,
+        item: &str,
+        text: &str,
+        quoting: Quoting,
+        span: ByteSpan,
+    ) {
+        if !(self.keep)(category) {
+            return;
+        }
+        let Some(block) = self.document.last_block_mut() else {
+            return;
+        };
+        block.category_mut(category, span).column_mut(item).push(
+            CifValue::parse_with_text(text, quoting, |text| self.texts.intern(text)),
+            quoting,
+        );
+    }
+
+    pub(crate) fn finish(self) -> Document {
+        self.document
+    }
+
+    pub(crate) const fn document(&self) -> &Document {
+        &self.document
+    }
+}
+
+impl<'input> ValueSink<'input> for DocumentSink {
+    type Output = Document;
+
+    fn block(&mut self, name: &str) {
+        Self::block(self, name);
+    }
+
+    fn value(
+        &mut self,
+        _column: ColumnId,
+        category: &str,
+        item: &str,
+        text: &'input str,
+        quoting: Quoting,
+        span: ByteSpan,
+    ) {
+        Self::value(self, category, item, text, quoting, span);
+    }
+
+    fn finish(self) -> Self::Output {
+        Self::finish(self)
+    }
 }
 
 /// Splits an item name into its category and its item.
@@ -60,134 +349,22 @@ pub fn split_tag(tag: &str) -> (&str, &str) {
     }
 }
 
-/// What the parser is in the middle of.
+include!("document/state.rs");
+
 #[derive(Default)]
-struct ParseState {
-    document: Document,
-    findings: Diagnostics,
-    /// Item names of the loop being read, in column order.
-    loop_tags: Vec<(Box<str>, Box<str>)>,
-    /// Where the loop header began.
-    loop_span: Option<ByteSpan>,
-    /// How many values of the current loop row have been read.
-    loop_cursor: usize,
-    /// True between `loop_` and its first value.
-    collecting_tags: bool,
-    /// The item a bare `tag value` pair is waiting on.
-    pending_tag: Option<(Box<str>, Box<str>, ByteSpan)>,
-    saw_block: bool,
+struct TextInterner {
+    values: HashSet<Arc<str>>,
 }
 
-impl ParseState {
-    fn token(&mut self, spanned: Spanned<'_>) {
-        match spanned.token {
-            Token::Block(name) => self.block(name),
-            Token::FrameStart(_) | Token::FrameEnd => self.end_loop(),
-            Token::Loop => self.begin_loop(spanned.span),
-            Token::Tag(tag) => self.tag(tag, spanned.span),
-            Token::Value(text, quoting) => self.value(text, quoting, spanned.span),
+impl TextInterner {
+    fn intern(&mut self, text: &str) -> Arc<str> {
+        if let Some(value) = self.values.get(text) {
+            return Arc::clone(value);
         }
+        let value: Arc<str> = text.into();
+        self.values.insert(Arc::clone(&value));
+        value
     }
-
-    fn block(&mut self, name: &str) {
-        self.end_loop();
-        self.saw_block = true;
-        self.document.push(DataBlock::new(name));
-    }
-
-    fn begin_loop(&mut self, span: ByteSpan) {
-        self.end_loop();
-        self.collecting_tags = true;
-        self.loop_span = Some(span);
-    }
-
-    fn tag(&mut self, tag: &str, span: ByteSpan) {
-        let (category, item) = split_tag(tag);
-        if self.collecting_tags {
-            self.loop_tags.push((category.into(), item.into()));
-            return;
-        }
-        self.end_loop();
-        self.pending_tag = Some((category.into(), item.into(), span));
-    }
-
-    fn value(&mut self, text: &str, quoting: Quoting, span: ByteSpan) {
-        if !self.saw_block {
-            self.findings.push(Diagnostic::new(Code::E1106).at(span));
-            self.saw_block = true;
-            self.document.push(DataBlock::new(""));
-        }
-        self.collecting_tags = false;
-
-        if let Some((category, item, at)) = self.pending_tag.take() {
-            store(&mut self.document, &category, &item, text, quoting, at);
-            return;
-        }
-        if self.loop_tags.is_empty() {
-            self.findings.push(Diagnostic::new(Code::E1105).at(span));
-            return;
-        }
-        let column = self.loop_cursor % self.loop_tags.len();
-        let Some((category, item)) = self.loop_tags.get(column) else {
-            return;
-        };
-        self.loop_cursor += 1;
-        store(&mut self.document, category, item, text, quoting, span);
-    }
-
-    /// Closes the loop being read, checking that its rows are whole.
-    fn end_loop(&mut self) {
-        if !self.loop_tags.is_empty() && !self.loop_cursor.is_multiple_of(self.loop_tags.len()) {
-            let columns = self.loop_tags.len();
-            let short = self.loop_cursor % columns;
-            let mut finding = Diagnostic::new(Code::E1103)
-                .with_context("items", columns.to_string())
-                .with_context("values in the final row", short.to_string());
-            if let Some(span) = self.loop_span {
-                finding = finding.at(span);
-            }
-            if let Some((category, _)) = self.loop_tags.first() {
-                finding = finding.in_category(category.to_string());
-            }
-            self.findings.push(finding);
-        }
-        self.loop_tags.clear();
-        self.loop_cursor = 0;
-        self.loop_span = None;
-        self.collecting_tags = false;
-    }
-
-    fn finish(mut self) -> ParseResult {
-        self.end_loop();
-        if self.pending_tag.is_some() {
-            self.findings.push(
-                Diagnostic::new(Code::E1105)
-                    .with_message("an item name was not followed by a value"),
-            );
-        }
-        if !self.saw_block {
-            self.findings.push(Diagnostic::new(Code::E1106));
-            return Err(self.findings.finish());
-        }
-        Ok((self.document, self.findings.finish()))
-    }
-}
-
-fn store(
-    document: &mut Document,
-    category: &str,
-    item: &str,
-    text: &str,
-    quoting: Quoting,
-    span: ByteSpan,
-) {
-    let Some(block) = document.last_block_mut() else {
-        return;
-    };
-    block
-        .category_mut(category, span)
-        .column_mut(item)
-        .push(CifValue::parse(text, quoting), quoting);
 }
 
 /// Turns a lexer refusal into a finding.

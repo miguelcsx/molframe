@@ -1,4 +1,6 @@
 use super::*;
+use std::fmt::Write as _;
+use std::sync::Arc;
 
 fn document(text: &str) -> Document {
     let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
@@ -41,6 +43,25 @@ fn a_loop_becomes_as_many_rows_as_it_has_value_groups() {
             .and_then(CifValue::as_integer),
         Some(2)
     );
+}
+
+#[test]
+fn repeated_text_values_share_one_allocation() {
+    let document = document("data_x\nloop_\n_a.name\nALA\nALA\n'ALA'\n");
+    let Some(category) = document.first_block().and_then(|block| block.category("a")) else {
+        panic!("expected a category")
+    };
+    let Some(CifValue::Text(first)) = category.value("name", 0) else {
+        panic!("expected text")
+    };
+    let Some(CifValue::Text(second)) = category.value("name", 1) else {
+        panic!("expected text")
+    };
+    let Some(CifValue::Text(quoted)) = category.value("name", 2) else {
+        panic!("expected text")
+    };
+    assert!(Arc::ptr_eq(first, second));
+    assert!(Arc::ptr_eq(first, quoted));
 }
 
 #[test]
@@ -93,4 +114,131 @@ fn an_item_a_row_does_not_carry_reads_as_absent_rather_than_as_a_guess() {
     let rows = Rows::new(category);
     assert_eq!(rows.text("absent"), None);
     assert!(!rows.is_recorded("absent"));
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum OwnedScalar {
+    Inapplicable,
+    Unknown,
+    Text(String),
+    Integer(i64),
+    Float(f64),
+}
+
+#[derive(Default)]
+struct EventProbe {
+    values: Vec<(String, String, OwnedScalar)>,
+    rows: usize,
+}
+
+impl CifEventSink for EventProbe {
+    type Output = Self;
+
+    fn block(&mut self, _name: &str) {}
+
+    fn value(&mut self, category: &str, item: &str, value: CifScalar<'_>, _span: ByteSpan) {
+        let owned = match value {
+            CifScalar::Inapplicable => OwnedScalar::Inapplicable,
+            CifScalar::Unknown => OwnedScalar::Unknown,
+            CifScalar::Text(value) => OwnedScalar::Text(value.to_owned()),
+            CifScalar::Integer(value) => OwnedScalar::Integer(value),
+            CifScalar::Float(value) => OwnedScalar::Float(value),
+        };
+        self.values
+            .push((category.to_owned(), item.to_owned(), owned));
+    }
+
+    fn end_row(&mut self) {
+        self.rows += 1;
+    }
+
+    fn finish(self) -> Self::Output {
+        self
+    }
+}
+
+#[test]
+fn event_projection_matches_scalar_loop_sentinel_and_multiline_semantics() {
+    let source = "data_x\n_entry.id 'model one'\nloop_\n_a.id\n_a.score\n_a.note\n\
+1 2.5 .\n2 ?\n;line one\nline two\n;\n";
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let (_, document_findings) = parse(&input).expect("document oracle parses");
+    let (events, event_findings) =
+        parse_events(&input, EventProbe::default()).expect("event projection parses");
+    assert_eq!(event_findings, document_findings);
+    assert_eq!(events.rows, 3);
+    assert_eq!(
+        events.values,
+        vec![
+            (
+                "entry".to_owned(),
+                "id".to_owned(),
+                OwnedScalar::Text("model one".to_owned())
+            ),
+            ("a".to_owned(), "id".to_owned(), OwnedScalar::Integer(1)),
+            ("a".to_owned(), "score".to_owned(), OwnedScalar::Float(2.5)),
+            ("a".to_owned(), "note".to_owned(), OwnedScalar::Inapplicable),
+            ("a".to_owned(), "id".to_owned(), OwnedScalar::Integer(2)),
+            ("a".to_owned(), "score".to_owned(), OwnedScalar::Unknown),
+            (
+                "a".to_owned(),
+                "note".to_owned(),
+                OwnedScalar::Text("line one\nline two".to_owned())
+            ),
+        ]
+    );
+}
+
+#[test]
+fn event_projection_and_document_report_the_same_malformed_loop() {
+    let source = "data_x\nloop_\n_a.one\n_a.two\n1 2\n3\n";
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let document = match parse(&input) {
+        Ok((_, findings)) | Err(findings) => findings,
+    };
+    let events = match parse_events(&input, EventProbe::default()) {
+        Ok((_, findings)) | Err(findings) => findings,
+    };
+    assert_eq!(
+        events.iter().map(Diagnostic::code).collect::<Vec<_>>(),
+        document.iter().map(Diagnostic::code).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn event_projection_scales_without_materialising_cells() {
+    let mut source = String::from("data_x\nloop_\n_a.id\n_a.value\n");
+    for row in 0..10_000 {
+        let _ = writeln!(source, "{row} repeated");
+    }
+    let input = InputBuffer::from_bytes(source.into_bytes());
+    let (events, findings) =
+        parse_events(&input, EventCounter::default()).expect("large event loop parses");
+    assert!(findings.is_empty());
+    assert_eq!(events.rows, 10_000);
+    assert_eq!(events.values, 20_000);
+}
+
+#[derive(Default)]
+struct EventCounter {
+    values: usize,
+    rows: usize,
+}
+
+impl CifEventSink for EventCounter {
+    type Output = Self;
+
+    fn block(&mut self, _name: &str) {}
+
+    fn value(&mut self, _category: &str, _item: &str, _value: CifScalar<'_>, _span: ByteSpan) {
+        self.values += 1;
+    }
+
+    fn end_row(&mut self) {
+        self.rows += 1;
+    }
+
+    fn finish(self) -> Self::Output {
+        self
+    }
 }
