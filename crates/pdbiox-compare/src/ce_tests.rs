@@ -86,6 +86,100 @@ fn thresholds_and_significance_are_explicit_and_validated() {
         ),
         Err(CeError::InvalidOptions)
     ));
+
+    assert!(matches!(
+        ce_align(
+            &points,
+            &points,
+            CeOptions {
+                memory_limit_bytes: 0,
+                ..CeOptions::original()
+            }
+        ),
+        Err(CeError::InvalidOptions)
+    ));
+
+    assert!(
+        !matches!(
+            ce_align(
+                &points,
+                &points,
+                CeOptions {
+                    memory_limit_bytes: 500_000_001,
+                    ..CeOptions::original()
+                }
+            ),
+            Err(CeError::InvalidOptions)
+        ),
+        "a caller who has provisioned the machine sets the ceiling, not the library"
+    );
+}
+
+#[test]
+fn minimum_workspace_is_rejected_before_allocation() {
+    let points: Vec<_> = (0_i16..16)
+        .map(|index| {
+            let value = f32::from(index);
+            [value, (value * 0.3).sin(), (value * 0.7).cos()]
+        })
+        .collect();
+    let baseline = CeOptions::original();
+    let plan = workspace::memory_plan(points.len(), points.len(), baseline)
+        .unwrap_or_else(|error| panic!("CE memory planning failed: {error}"));
+    let limit = plan.minimum_bytes - 1;
+    let constrained = CeOptions {
+        memory_limit_bytes: limit,
+        ..baseline
+    };
+    assert!(matches!(
+        ce_align(&points, &points, constrained),
+        Err(CeError::MemoryLimit {
+            required,
+            limit: actual_limit
+        }) if required == plan.minimum_bytes && actual_limit == limit
+    ));
+}
+
+#[test]
+fn million_site_search_plan_stays_below_five_hundred_megabytes() {
+    let plan = workspace::memory_plan(1_000_000, 1_000_000, CeOptions::original())
+        .unwrap_or_else(|error| panic!("large CE plan failed: {error}"));
+    assert!(plan.minimum_bytes < 100_000_000);
+    assert_eq!(plan.cache_bytes, None);
+    assert_eq!(plan.maximum_fragments, 125_000);
+}
+
+#[test]
+fn an_asymmetric_large_search_runs_without_the_rectangular_cache() {
+    let reference: Vec<_> = (0_u16..20_000)
+        .map(|index| {
+            let value = f32::from(index) * 0.019;
+            [
+                value,
+                (value * 0.73).sin() * 4.0,
+                (value * 0.41).cos() * 3.0,
+            ]
+        })
+        .collect();
+    let mobile = reference[..16].to_vec();
+    let baseline = CeOptions {
+        fragment_similarity_threshold: -1.0e-12,
+        path_similarity_threshold: -1.0e-6,
+        ..CeOptions::original()
+    };
+    let initial_plan = workspace::memory_plan(reference.len(), mobile.len(), baseline)
+        .unwrap_or_else(|error| panic!("asymmetric CE plan failed: {error}"));
+    let options = CeOptions {
+        memory_limit_bytes: initial_plan.minimum_bytes + 4_096,
+        ..baseline
+    };
+    let constrained_plan = workspace::memory_plan(reference.len(), mobile.len(), options)
+        .unwrap_or_else(|error| panic!("bounded CE plan failed: {error}"));
+    assert_eq!(constrained_plan.cache_bytes, None);
+    let alignment = ce_align(&reference, &mobile, options)
+        .unwrap_or_else(|error| panic!("bounded CE failed: {error}"));
+    assert_eq!(alignment.reference_indices, alignment.mobile_indices);
+    assert_eq!(alignment.reference_indices.len(), 16);
 }
 
 #[test]
