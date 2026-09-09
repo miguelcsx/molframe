@@ -1,10 +1,10 @@
 //! Canonical database sequence-reference output.
 
-use super::value::quote_text;
+use super::value::quoted;
 use pdbiox_core::structure::{SEQUENCE_REFERENCES_EXTENSION, SequenceReferences, Structure};
-use std::fmt::Write as _;
+use std::fmt::{self, Display, Formatter};
 
-pub(super) fn write(out: &mut String, structure: &Structure) {
+pub(super) fn write(out: &mut impl fmt::Write, structure: &Structure) {
     let Some(references) = structure
         .extensions()
         .get::<SequenceReferences>(SEQUENCE_REFERENCES_EXTENSION)
@@ -15,11 +15,11 @@ pub(super) fn write(out: &mut String, structure: &Structure) {
     write_alignments(out, references);
 }
 
-fn write_sequences(out: &mut String, references: &SequenceReferences) {
+fn write_sequences(out: &mut impl fmt::Write, references: &SequenceReferences) {
     if references.sequences.is_empty() {
         return;
     }
-    out.push_str(
+    let _ = out.write_str(
         "loop_\n\
 _struct_ref.id\n\
 _struct_ref.entity_id\n\
@@ -32,22 +32,22 @@ _struct_ref.pdbx_seq_one_letter_code\n",
         let _ = writeln!(
             out,
             "{} {} {} {} {} {}",
-            quote_text(&sequence.id),
-            quote_text(&sequence.entity_id),
+            quoted(&sequence.id),
+            quoted(&sequence.entity_id),
             optional(sequence.database_name.as_deref()),
             optional(sequence.database_code.as_deref()),
             optional(sequence.accession.as_deref()),
             optional(sequence.one_letter_code.as_deref()),
         );
     }
-    out.push_str("#\n");
+    let _ = out.write_str("#\n");
 }
 
-fn write_alignments(out: &mut String, references: &SequenceReferences) {
+fn write_alignments(out: &mut impl fmt::Write, references: &SequenceReferences) {
     if references.alignments.is_empty() {
         return;
     }
-    out.push_str(
+    let _ = out.write_str(
         "loop_\n\
 _struct_ref_seq.align_id\n\
 _struct_ref_seq.ref_id\n\
@@ -62,8 +62,8 @@ _struct_ref_seq.db_align_end\n",
         let _ = writeln!(
             out,
             "{} {} {} {} {} {} {}",
-            quote_text(&alignment.id),
-            quote_text(&alignment.reference_id),
+            quoted(&alignment.id),
+            quoted(&alignment.reference_id),
             optional((!chain_ids.is_empty()).then_some(chain_ids.as_str())),
             alignment.canonical[0],
             alignment.canonical[1],
@@ -71,12 +71,20 @@ _struct_ref_seq.db_align_end\n",
             alignment.reference[1],
         );
     }
-    out.push_str("#\n");
+    let _ = out.write_str("#\n");
 }
 
-fn optional(value: Option<&str>) -> String {
-    match value {
-        Some(value) => quote_text(value),
-        None => "?".to_owned(),
+fn optional(value: Option<&str>) -> OptionalText<'_> {
+    OptionalText(value)
+}
+
+struct OptionalText<'a>(Option<&'a str>);
+
+impl Display for OptionalText<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(value) => Display::fmt(&quoted(value), formatter),
+            None => formatter.write_str("?"),
+        }
     }
 }

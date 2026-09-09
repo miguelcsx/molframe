@@ -14,7 +14,9 @@
 
 use crate::document::{CifValue, Document};
 use crate::lexer::Quoting;
-use std::fmt::Write as _;
+use pdbiox_core::io::TextOutput;
+use std::fmt::{self, Display, Formatter, Write as _};
+use std::io::{self, Write as IoWrite};
 
 /// Writes a document back out, preserving what it held.
 ///
@@ -24,16 +26,31 @@ use std::fmt::Write as _;
 #[must_use]
 pub fn write_preserving(document: &Document) -> String {
     let mut out = String::new();
-    for block in document.blocks() {
-        let _ = writeln!(out, "data_{}", block.name());
-        for category in block.categories() {
-            write_category(&mut out, category);
-        }
-    }
+    render_preserving(document, &mut out);
     out
 }
 
-fn write_category(out: &mut String, category: &crate::document::Category) {
+/// Streams a document while preserving its retained category/value order.
+///
+/// # Errors
+///
+/// Returns the first destination I/O error.
+pub fn write_preserving_to<W: IoWrite>(document: &Document, output: &mut W) -> io::Result<()> {
+    let mut output = TextOutput::new(output);
+    render_preserving(document, &mut output);
+    output.finish()
+}
+
+fn render_preserving(document: &Document, out: &mut impl fmt::Write) {
+    for block in document.blocks() {
+        let _ = writeln!(out, "data_{}", block.name());
+        for category in block.categories() {
+            write_category(out, category);
+        }
+    }
+}
+
+fn write_category(out: &mut impl fmt::Write, category: &crate::document::Category) {
     let rows = category.row_count();
     if rows == 1 {
         for item in category.items() {
@@ -46,14 +63,14 @@ fn write_category(out: &mut String, category: &crate::document::Category) {
                 "_{}.{:<30} {}",
                 category.name(),
                 item,
-                render(value, quoting)
+                RenderedValue { value, quoting }
             );
         }
-        out.push_str("#\n");
+        let _ = out.write_str("#\n");
         return;
     }
 
-    out.push_str("loop_\n");
+    let _ = out.write_str("loop_\n");
     for item in category.items() {
         let _ = writeln!(out, "_{}.{item}", category.name());
     }
@@ -65,30 +82,36 @@ fn write_category(out: &mut String, category: &crate::document::Category) {
             };
             let quoting = category.column(item).and_then(|column| column.quoting(row));
             if !first {
-                out.push(' ');
+                let _ = out.write_char(' ');
             }
             first = false;
-            out.push_str(&render(value, quoting));
+            let _ = write!(out, "{}", RenderedValue { value, quoting });
         }
-        out.push('\n');
+        let _ = out.write_char('\n');
     }
-    out.push_str("#\n");
+    let _ = out.write_str("#\n");
 }
 
-/// Renders one value the way it was written, quoting it if it needs quoting.
-fn render(value: &CifValue, quoting: Option<Quoting>) -> String {
-    let text = match value {
-        CifValue::Inapplicable => return ".".to_owned(),
-        CifValue::Unknown => return "?".to_owned(),
-        CifValue::Integer(number) => return number.to_string(),
-        CifValue::Float(number) => return format!("{number}"),
-        CifValue::Text(text) => text,
-    };
-    match quoting {
-        Some(Quoting::Text) => format!("\n;{text}\n;"),
-        Some(Quoting::Double) => format!("\"{text}\""),
-        Some(Quoting::Single) => format!("'{text}'"),
-        _ => super::value::quote_text(text),
+struct RenderedValue<'a> {
+    value: &'a CifValue,
+    quoting: Option<Quoting>,
+}
+
+impl Display for RenderedValue<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        let text = match self.value {
+            CifValue::Inapplicable => return formatter.write_char('.'),
+            CifValue::Unknown => return formatter.write_char('?'),
+            CifValue::Integer(number) => return Display::fmt(number, formatter),
+            CifValue::Float(number) => return Display::fmt(number, formatter),
+            CifValue::Text(text) => text,
+        };
+        match self.quoting {
+            Some(Quoting::Text) => write!(formatter, "\n;{text}\n;"),
+            Some(Quoting::Double) => write!(formatter, "\"{text}\""),
+            Some(Quoting::Single) => write!(formatter, "'{text}'"),
+            _ => Display::fmt(&super::value::quoted(text), formatter),
+        }
     }
 }
 

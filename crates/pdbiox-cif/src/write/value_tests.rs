@@ -28,6 +28,34 @@ fn reserved_cif_words_are_not_rendered_bare() {
     }
 }
 
+#[test]
+fn streaming_quoting_is_exactly_equivalent_for_every_shape() {
+    for text in [
+        "",
+        "plain",
+        "two words",
+        "don't",
+        "say \"don't\"",
+        "line\nbreak",
+        "_tag",
+        "#comment",
+        ".",
+        "?",
+        "loop_",
+        "STOP_",
+        "global_",
+        "data_x",
+        "save_frame",
+        "[list]",
+        "$value",
+        ";field",
+    ] {
+        let mut streamed = String::new();
+        write_quoted(&mut streamed, text);
+        assert_eq!(streamed, quote_text(text), "text={text:?}");
+    }
+}
+
 fn value(document: &Document) -> Option<&str> {
     document.first_block()?.category("test")?.text("value", 0)
 }

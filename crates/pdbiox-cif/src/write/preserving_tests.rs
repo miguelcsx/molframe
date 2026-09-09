@@ -157,6 +157,17 @@ fn a_preserving_write_keeps_a_category_the_library_does_not_interpret() {
 }
 
 #[test]
+fn preserving_stream_matches_the_explicit_in_memory_wrapper() {
+    let document = document(SOURCE);
+    let expected = write_preserving(&document);
+    let mut streamed = Vec::new();
+    if let Err(error) = write_preserving_to(&document, &mut streamed) {
+        panic!("preserving stream failed: {error}");
+    }
+    assert_eq!(streamed, expected.as_bytes());
+}
+
+#[test]
 fn a_preserving_write_reparses_to_the_same_document() {
     let original = document(SOURCE);
     let round_tripped = document(&write_preserving(&original));

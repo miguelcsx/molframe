@@ -1,10 +1,10 @@
 //! Canonical `struct_conn` output with complete endpoint preflight.
 
 use super::options::{CifWriteError, CifWriteOptions};
-use super::value::quote_text;
+use super::value::{Quoted, quoted};
 use pdbiox_core::bond::BondOrder;
 use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
-use std::fmt::Write as _;
+use std::fmt::{self, Display, Formatter};
 
 const HEADER: &str = "loop_\n\
 _struct_conn.id\n_struct_conn.conn_type_id\n\
@@ -39,7 +39,7 @@ pub(super) fn preflight(
 }
 
 pub(super) fn write(
-    out: &mut String,
+    out: &mut impl fmt::Write,
     structure: &Structure,
     options: &CifWriteOptions,
 ) -> Result<(), CifWriteError> {
@@ -49,8 +49,8 @@ pub(super) fn write(
     let Some(connection_type) = options.connection_type_id() else {
         return Err(CifWriteError::MissingConnectionTypeId);
     };
-    let connection_type = quote_text(connection_type);
-    out.push_str(HEADER);
+    let connection_type = quoted(connection_type);
+    let _ = out.write_str(HEADER);
     for (position, bond) in structure.data().bonds.iter().enumerate() {
         let atom_a = atom(structure, position, bond.atom_a.get())?;
         let atom_b = atom(structure, position, bond.atom_b.get())?;
@@ -58,23 +58,15 @@ pub(super) fn write(
         let b = endpoint(structure, atom_b, position, 2)?;
         let _ = writeln!(
             out,
-            "{} {} {} {} {} {} {} {} {} {} {} {} {} ?",
+            "{} {} {} {} {} ?",
             position + 1,
-            connection_type,
-            a.chain,
-            a.seq,
-            a.component,
-            a.atom,
-            a.alt,
-            b.chain,
-            b.seq,
-            b.component,
-            b.atom,
-            b.alt,
+            &connection_type,
+            a,
+            b,
             order(bond.order),
         );
     }
-    out.push_str("#\n");
+    let _ = out.write_str("#\n");
     Ok(())
 }
 
@@ -115,20 +107,20 @@ const fn missing(bond: usize, endpoint: u8, field: &'static str) -> CifWriteErro
     }
 }
 
-struct Endpoint {
-    chain: String,
-    seq: String,
-    component: String,
-    atom: String,
-    alt: String,
+struct Endpoint<'a> {
+    chain: Quoted<'a>,
+    seq: Option<i32>,
+    component: Quoted<'a>,
+    atom: Quoted<'a>,
+    alt: Option<Quoted<'a>>,
 }
 
-fn endpoint(
-    structure: &Structure,
-    atom: AtomRef<'_>,
+fn endpoint<'a>(
+    structure: &'a Structure,
+    atom: AtomRef<'a>,
     bond: usize,
     side: u8,
-) -> Result<Endpoint, CifWriteError> {
+) -> Result<Endpoint<'a>, CifWriteError> {
     let Some(residue) = atom.residue() else {
         return Err(missing(bond, side, "residue"));
     };
@@ -144,21 +136,47 @@ fn endpoint(
         return Err(missing(bond, side, "label_atom_id"));
     };
     Ok(Endpoint {
-        chain: quote_text(chain),
-        seq: sequence(residue),
-        component: quote_text(component),
-        atom: quote_text(name),
-        alt: match atom.alt_label() {
-            Some(label) => quote_text(label),
-            None => ".".to_owned(),
-        },
+        chain: quoted(chain),
+        seq: residue.label_seq_id(),
+        component: quoted(component),
+        atom: quoted(name),
+        alt: atom.alt_label().map(quoted),
     })
 }
 
-fn sequence(residue: ResidueRef<'_>) -> String {
-    match residue.label_seq_id() {
-        Some(number) => number.to_string(),
-        None => ".".to_owned(),
+impl Display for Endpoint<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "{} {} {} {} {}",
+            self.chain,
+            OptionalInteger(self.seq),
+            self.component,
+            self.atom,
+            OptionalQuoted(self.alt.as_ref()),
+        )
+    }
+}
+
+struct OptionalInteger(Option<i32>);
+
+impl Display for OptionalInteger {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(value) => Display::fmt(&value, formatter),
+            None => formatter.write_str("."),
+        }
+    }
+}
+
+struct OptionalQuoted<'borrow, 'text>(Option<&'borrow Quoted<'text>>);
+
+impl Display for OptionalQuoted<'_, '_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Some(value) => Display::fmt(value, formatter),
+            None => formatter.write_str("."),
+        }
     }
 }
 

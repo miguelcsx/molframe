@@ -1,6 +1,7 @@
 //! One canonical renderer for CIF values and identifiers.
 
 use crate::document::CifValue;
+use std::fmt::{self, Display, Formatter, Write};
 
 /// Renders a typed value as one CIF token or text field.
 #[must_use]
@@ -17,16 +18,49 @@ pub fn render_value(value: &CifValue) -> String {
 /// Quotes arbitrary text without changing its value when reparsed.
 #[must_use]
 pub fn quote_text(text: &str) -> String {
+    let mut rendered = String::new();
+    write_quoted(&mut rendered, text);
+    rendered
+}
+
+/// Appends arbitrary text as one CIF token or text field without a temporary allocation.
+///
+/// This is the streaming counterpart of [`quote_text`]. It uses exactly the
+/// same canonical quoting decisions while allowing large columnar writers to
+/// reuse their destination buffer.
+pub fn write_quoted(output: &mut impl Write, text: &str) {
+    let _ = write_quoted_to(output, text);
+}
+
+pub(crate) struct Quoted<'a>(&'a str);
+
+pub(crate) const fn quoted(text: &str) -> Quoted<'_> {
+    Quoted(text)
+}
+
+impl Display for Quoted<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        write_quoted_to(formatter, self.0)
+    }
+}
+
+fn write_quoted_to(output: &mut impl Write, text: &str) -> fmt::Result {
     if text.contains('\n') || (text.contains('\'') && text.contains('"')) {
-        return format!("\n;{text}\n;");
+        output.write_str("\n;")?;
+        output.write_str(text)?;
+        return output.write_str("\n;");
     }
     if !needs_quoting(text) {
-        return text.to_owned();
+        return output.write_str(text);
     }
     if text.contains('\'') {
-        format!("\"{text}\"")
+        output.write_char('"')?;
+        output.write_str(text)?;
+        output.write_char('"')
     } else {
-        format!("'{text}'")
+        output.write_char('\'')?;
+        output.write_str(text)?;
+        output.write_char('\'')
     }
 }
 
