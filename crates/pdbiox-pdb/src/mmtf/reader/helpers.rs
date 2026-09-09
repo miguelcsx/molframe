@@ -3,21 +3,23 @@
 /// The comparison covers declared hierarchy sizes, bonds, chain metadata,
 /// residue identity fields, and atom identity fields. Coordinate-dependent
 /// properties are intentionally excluded.
-fn same_topology(left: &Structure, right: &Structure) -> bool {
-    if left.atom_count() != right.atom_count()
-        || left.residue_count() != right.residue_count()
-        || left.chain_count() != right.chain_count()
+fn same_topology(left: &StructureData, right: &StructureData) -> bool {
+    if atom_count(left) != atom_count(right)
+        || left.topology.residues.len() != right.topology.residues.len()
+        || left.topology.chains.len() != right.topology.chains.len()
     {
         return false;
     }
 
-    let left_data = left.data();
-    let right_data = right.data();
+    left.bonds.iter().eq(right.bonds.iter())
+        && same_chain_topology(left, right)
+        && same_residue_topology(left, right)
+        && same_atom_topology(left, right)
+}
 
-    left_data.bonds.iter().eq(right_data.bonds.iter())
-        && same_chain_topology(left_data, right_data)
-        && same_residue_topology(left_data, right_data)
-        && same_atom_topology(left_data, right_data)
+/// Counts atoms without traversing the chunk columns.
+fn atom_count(data: &StructureData) -> u32 {
+    data.chunks.last().map_or(0, |chunk| chunk.atoms().end)
 }
 
 /// Compares the topology-relevant metadata of every chain in two structures.
@@ -127,7 +129,7 @@ fn residue_record(
     decoded: &Decoded,
     group: &Group,
     group_index: usize,
-    chain_index: usize,
+    kind: EntityKind,
 ) -> Result<ResidueRecord, Diagnostic> {
     let component = intern(data, &group.name)?;
 
@@ -153,8 +155,6 @@ fn residue_record(
             .copied(),
     )?
     .map_or(OptionalSymbol::NONE, OptionalSymbol::some);
-
-    let kind = entity_kind_for_chain(decoded.file.entity_list.as_deref(), chain_index)?;
 
     Ok(ResidueRecord {
         label_comp_id: component,
@@ -248,8 +248,8 @@ fn atom_site_id(values: Option<&Vec<i32>>, atom: usize) -> Result<u32, Diagnosti
 
 /// Adds bonds declared within a single MMTF group.
 ///
-/// Bond endpoints are translated from group-local indices into retained
-/// normalized atom indices. Bonds touching filtered atoms are ignored.
+/// Bond endpoints are translated from group-local indices into model-local,
+/// retained normalized atom indices. Bonds touching filtered atoms are ignored.
 fn add_group_bonds(
     group: &Group,
     atom_offset: usize,
@@ -285,33 +285,20 @@ fn add_group_bonds(
 
 /// Adds global MMTF bonds belonging to the selected model.
 ///
-/// Global atom indices outside the model are ignored. Bonds touching atoms
-/// that were filtered from the normalized structure are also ignored.
+/// Global atom indices outside the model are ignored. Indices inside the model
+/// are translated to the model-local retention map, so memory is proportional
+/// to one model rather than the complete MMTF file. Bonds touching atoms that
+/// were filtered from the normalized structure are also ignored.
 fn add_global_bonds(
-    decoded: &Decoded,
-    range: ModelRange,
+    global_bonds: &[GlobalBond],
     keep_map: &[Option<AtomIndex>],
     bonds: &mut BondTableBuilder,
 ) -> Result<(), Diagnostic> {
-    if !decoded.global_bonds.len().is_multiple_of(2) {
-        return Err(schema_error("global bond endpoint list has odd length"));
-    }
-
-    let atom_end = range
-        .atom_start
-        .checked_add(range.atom_count)
-        .ok_or_else(|| schema_error("MMTF model atom range overflows"))?;
-
-    for (bond_index, pair) in decoded.global_bonds.chunks_exact(2).enumerate() {
-        let first = usize_of(pair[0])?;
-        let second = usize_of(pair[1])?;
-
-        if !index_in_range(first, range.atom_start, atom_end)
-            || !index_in_range(second, range.atom_start, atom_end)
-        {
-            continue;
-        }
-
+    for bond in global_bonds {
+        let first = usize::try_from(bond.atom_a)
+            .map_err(|_| schema_error("MMTF local bond endpoint exceeds usize"))?;
+        let second = usize::try_from(bond.atom_b)
+            .map_err(|_| schema_error("MMTF local bond endpoint exceeds usize"))?;
         let Some((atom_a, atom_b)) = retained_atoms(keep_map, first, second) else {
             continue;
         };
@@ -319,11 +306,7 @@ fn add_global_bonds(
         bonds.push(BondRecord {
             atom_a,
             atom_b,
-            order: decoded_order(
-                &decoded.global_orders,
-                &decoded.global_resonance,
-                bond_index,
-            ),
+            order: bond.order,
             provenance: BondProvenance::File,
         });
     }
@@ -354,14 +337,6 @@ fn checked_atom_offset(atom_offset: usize, local: i32) -> Result<usize, Diagnost
     atom_offset
         .checked_add(usize_of(local)?)
         .ok_or_else(|| schema_error("MMTF atom index overflows"))
-}
-
-/// Returns whether an index belongs to a prevalidated half-open interval.
-///
-/// The caller supplies `end` after checked range construction, avoiding
-/// repeated range arithmetic while processing bond endpoints.
-fn index_in_range(index: usize, start: usize, end: usize) -> bool {
-    index >= start && index < end
 }
 
 /// Decodes MMTF bond-order and resonance fields into the normalized bond order.

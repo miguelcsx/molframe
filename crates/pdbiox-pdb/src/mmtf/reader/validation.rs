@@ -172,28 +172,6 @@ fn entity_kind(entity: &Entity) -> Result<EntityKind, Diagnostic> {
     }
 }
 
-/// Determines the entity classification assigned to an MMTF chain.
-///
-/// A missing entity list or a chain not referenced by any entity is represented
-/// as `EntityKind::Unknown`.
-fn entity_kind_for_chain(
-    entities: Option<&[Entity]>,
-    chain: usize,
-) -> Result<EntityKind, Diagnostic> {
-    let Some(entities) = entities else {
-        return Ok(EntityKind::Unknown);
-    };
-
-    let Ok(chain) = i32::try_from(chain) else {
-        return Ok(EntityKind::Unknown);
-    };
-
-    entities
-        .iter()
-        .find(|entity| entity.chain_index_list.contains(&chain))
-        .map_or(Ok(EntityKind::Unknown), entity_kind)
-}
-
 /// Converts an optional encoded MMTF character into an interned symbol.
 ///
 /// Zero and absent values represent no symbol. ASCII values are interned
@@ -238,4 +216,3 @@ fn usize_of(value: i32) -> Result<usize, Diagnostic> {
 fn schema_error(message: &'static str) -> Diagnostic {
     Diagnostic::new(Code::E1102).with_message(message)
 }
-

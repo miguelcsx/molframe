@@ -56,7 +56,7 @@ pub(super) struct File {
     pub entity_list: Option<Vec<Entity>>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct Group {
     pub formal_charge_list: Vec<i32>,

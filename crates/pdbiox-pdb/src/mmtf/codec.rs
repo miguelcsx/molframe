@@ -7,47 +7,99 @@ const HEADER_BYTES: usize = 12;
 pub(super) fn decode_i32(bytes: &[u8]) -> Result<Vec<i32>, Diagnostic> {
     let header = Header::read(bytes)?;
     let payload = &bytes[HEADER_BYTES..];
-    let decoded = match header.kind {
+    let mut decoded = Vec::with_capacity(header.length);
+    match header.kind {
         2 => payload
             .iter()
-            .map(|value| i32::from(value.cast_signed()))
-            .collect(),
-        3 => read_i16(payload)?.into_iter().map(i32::from).collect(),
-        4 => read_i32(payload)?,
-        6 | 7 | 16 => run_length(&read_i32(payload)?, header.length)?,
-        8 => delta(run_length(&read_i32(payload)?, header.length)?)?,
-        14 => unpack_i16(&read_i16(payload)?, header.length)?,
-        15 => unpack_i8(payload, header.length)?,
+            .for_each(|value| decoded.push(i32::from(value.cast_signed()))),
+        3 => visit_i16(payload, |value| {
+            decoded.push(value);
+            Ok(())
+        })?,
+        4 => visit_i32(payload, |value| {
+            decoded.push(value);
+            Ok(())
+        })?,
+        6 | 7 | 16 => visit_run_length(payload, header.length, |value| {
+            decoded.push(value);
+            Ok(())
+        })?,
+        8 => {
+            let mut previous = 0i32;
+            visit_run_length(payload, header.length, |difference| {
+                previous = previous.checked_add(difference).ok_or_else(|| {
+                    Diagnostic::new(Code::E1102).with_message("MMTF delta integer overflow")
+                })?;
+                decoded.push(previous);
+                Ok(())
+            })?;
+        }
+        14 => visit_packed_i16(payload, header.length, |value| {
+            decoded.push(value);
+            Ok(())
+        })?,
+        15 => visit_packed_i8(payload, header.length, |value| {
+            decoded.push(value);
+            Ok(())
+        })?,
         _ => return Err(codec_error("integer", header.kind)),
-    };
-    exact_len(decoded, header.length)
+    }
+    exact_count(header.length, decoded.len())?;
+    Ok(decoded)
 }
 
 pub(super) fn decode_f32(bytes: &[u8]) -> Result<Vec<f32>, Diagnostic> {
     let header = Header::read(bytes)?;
     let payload = &bytes[HEADER_BYTES..];
-    let decoded = match header.kind {
-        1 => read_f32(payload)?,
-        9 => divide(
-            run_length(&read_i32(payload)?, header.length)?,
-            header.parameter,
-        )?,
-        10 => divide(
-            delta(unpack_i16(&read_i16(payload)?, header.length)?)?,
-            header.parameter,
-        )?,
-        11 => divide(
-            read_i16(payload)?.into_iter().map(i32::from).collect(),
-            header.parameter,
-        )?,
-        12 => divide(
-            unpack_i16(&read_i16(payload)?, header.length)?,
-            header.parameter,
-        )?,
-        13 => divide(unpack_i8(payload, header.length)?, header.parameter)?,
+    let mut decoded = Vec::with_capacity(header.length);
+    match header.kind {
+        1 => visit_i32(payload, |bits| {
+            decoded.push(f32::from_bits(bits.cast_unsigned()));
+            Ok(())
+        })?,
+        9 => {
+            let divisor = float_divisor(header.parameter)?;
+            visit_run_length(payload, header.length, |value| {
+                decoded.push(scaled(value, divisor)?);
+                Ok(())
+            })?;
+        }
+        10 => {
+            let divisor = float_divisor(header.parameter)?;
+            let mut previous = 0i32;
+            visit_packed_i16(payload, header.length, |difference| {
+                previous = previous.checked_add(difference).ok_or_else(|| {
+                    Diagnostic::new(Code::E1102).with_message("MMTF delta integer overflow")
+                })?;
+                decoded.push(scaled(previous, divisor)?);
+                Ok(())
+            })?;
+        }
+        11 => {
+            let divisor = float_divisor(header.parameter)?;
+            visit_i16(payload, |value| {
+                decoded.push(scaled(value, divisor)?);
+                Ok(())
+            })?;
+        }
+        12 => {
+            let divisor = float_divisor(header.parameter)?;
+            visit_packed_i16(payload, header.length, |value| {
+                decoded.push(scaled(value, divisor)?);
+                Ok(())
+            })?;
+        }
+        13 => {
+            let divisor = float_divisor(header.parameter)?;
+            visit_packed_i8(payload, header.length, |value| {
+                decoded.push(scaled(value, divisor)?);
+                Ok(())
+            })?;
+        }
         _ => return Err(codec_error("floating-point", header.kind)),
-    };
-    exact_len(decoded, header.length)
+    }
+    exact_count(header.length, decoded.len())?;
+    Ok(decoded)
 }
 
 pub(super) fn decode_chars(bytes: &[u8]) -> Result<Vec<u8>, Diagnostic> {
@@ -154,27 +206,30 @@ fn header(kind: i32, length: usize, parameter: i32) -> Result<Vec<u8>, Diagnosti
     Ok(bytes)
 }
 
-fn read_i16(bytes: &[u8]) -> Result<Vec<i16>, Diagnostic> {
+fn visit_i16(
+    bytes: &[u8],
+    mut visit: impl FnMut(i32) -> Result<(), Diagnostic>,
+) -> Result<(), Diagnostic> {
     if !bytes.len().is_multiple_of(2) {
         return Err(Diagnostic::new(Code::E1102).with_message("odd MMTF i16 payload length"));
     }
-    bytes.chunks_exact(2).map(be_i16).collect()
+    for bytes in bytes.chunks_exact(2) {
+        visit(i32::from(be_i16(bytes)?))?;
+    }
+    Ok(())
 }
 
-fn read_i32(bytes: &[u8]) -> Result<Vec<i32>, Diagnostic> {
+fn visit_i32(
+    bytes: &[u8],
+    mut visit: impl FnMut(i32) -> Result<(), Diagnostic>,
+) -> Result<(), Diagnostic> {
     if !bytes.len().is_multiple_of(4) {
         return Err(Diagnostic::new(Code::E1102).with_message("unaligned MMTF i32 payload"));
     }
-    bytes.chunks_exact(4).map(be_i32).collect()
-}
-
-fn read_f32(bytes: &[u8]) -> Result<Vec<f32>, Diagnostic> {
-    read_i32(bytes).map(|values| {
-        values
-            .into_iter()
-            .map(|value| f32::from_bits(value.cast_unsigned()))
-            .collect()
-    })
+    for bytes in bytes.chunks_exact(4) {
+        visit(be_i32(bytes)?)?;
+    }
+    Ok(())
 }
 
 fn be_i16(bytes: &[u8]) -> Result<i16, Diagnostic> {
@@ -187,100 +242,115 @@ fn be_i32(bytes: &[u8]) -> Result<i32, Diagnostic> {
     Ok(i32::from_be_bytes(array))
 }
 
-fn run_length(values: &[i32], expected: usize) -> Result<Vec<i32>, Diagnostic> {
-    if !values.len().is_multiple_of(2) {
+fn visit_run_length(
+    bytes: &[u8],
+    expected: usize,
+    mut visit: impl FnMut(i32) -> Result<(), Diagnostic>,
+) -> Result<(), Diagnostic> {
+    if !bytes.len().is_multiple_of(4) {
+        return Err(Diagnostic::new(Code::E1102).with_message("unaligned MMTF i32 payload"));
+    }
+    if !bytes.len().is_multiple_of(8) {
         return Err(Diagnostic::new(Code::E1102).with_message("odd MMTF run-length payload"));
     }
-    let mut decoded = Vec::with_capacity(expected);
-    for pair in values.chunks_exact(2) {
-        let count = usize::try_from(pair[1]).map_err(|_| length_error(expected, decoded.len()))?;
-        let expanded = decoded
-            .len()
+    let mut actual = 0usize;
+    for pair in bytes.chunks_exact(8) {
+        let value = be_i32(&pair[..4])?;
+        let count =
+            usize::try_from(be_i32(&pair[4..])?).map_err(|_| length_error(expected, actual))?;
+        let expanded = actual
             .checked_add(count)
-            .ok_or_else(|| length_error(expected, decoded.len()))?;
+            .ok_or_else(|| length_error(expected, actual))?;
         if expanded > expected {
             return Err(length_error(expected, expanded));
         }
-        decoded.resize(decoded.len() + count, pair[0]);
+        for _ in 0..count {
+            visit(value)?;
+        }
+        actual = expanded;
     }
-    Ok(decoded)
+    exact_count(expected, actual)
 }
 
-fn delta(mut values: Vec<i32>) -> Result<Vec<i32>, Diagnostic> {
-    for position in 1..values.len() {
-        values[position] = values[position - 1]
-            .checked_add(values[position])
-            .ok_or_else(|| {
-                Diagnostic::new(Code::E1102).with_message("MMTF delta integer overflow")
-            })?;
+fn visit_packed_i16(
+    bytes: &[u8],
+    expected: usize,
+    visit: impl FnMut(i32) -> Result<(), Diagnostic>,
+) -> Result<(), Diagnostic> {
+    if !bytes.len().is_multiple_of(2) {
+        return Err(Diagnostic::new(Code::E1102).with_message("odd MMTF i16 payload length"));
     }
-    Ok(values)
-}
-
-fn unpack_i16(values: &[i16], expected: usize) -> Result<Vec<i32>, Diagnostic> {
-    unpack(
-        values.iter().map(|value| i32::from(*value)),
+    visit_packed(
+        bytes
+            .chunks_exact(2)
+            .map(|bytes| i32::from(i16::from_be_bytes([bytes[0], bytes[1]]))),
         i32::from(i16::MIN),
         i32::from(i16::MAX),
         expected,
+        visit,
     )
 }
 
-fn unpack_i8(values: &[u8], expected: usize) -> Result<Vec<i32>, Diagnostic> {
-    unpack(
-        values.iter().map(|value| i32::from(value.cast_signed())),
+fn visit_packed_i8(
+    bytes: &[u8],
+    expected: usize,
+    visit: impl FnMut(i32) -> Result<(), Diagnostic>,
+) -> Result<(), Diagnostic> {
+    visit_packed(
+        bytes.iter().map(|value| i32::from(value.cast_signed())),
         i32::from(i8::MIN),
         i32::from(i8::MAX),
         expected,
+        visit,
     )
 }
 
-fn unpack(
+fn visit_packed(
     values: impl IntoIterator<Item = i32>,
     minimum: i32,
     maximum: i32,
     expected: usize,
-) -> Result<Vec<i32>, Diagnostic> {
-    let mut decoded = Vec::with_capacity(expected);
+    mut visit: impl FnMut(i32) -> Result<(), Diagnostic>,
+) -> Result<(), Diagnostic> {
+    let mut actual = 0usize;
     let mut accumulator = 0i32;
     for value in values {
         accumulator = accumulator.checked_add(value).ok_or_else(|| {
             Diagnostic::new(Code::E1102).with_message("MMTF packed integer overflow")
         })?;
         if value != minimum && value != maximum {
-            decoded.push(accumulator);
+            visit(accumulator)?;
+            actual += 1;
             accumulator = 0;
         }
     }
-    if accumulator != 0 || decoded.len() != expected {
-        return Err(length_error(expected, decoded.len()));
+    if accumulator != 0 {
+        return Err(length_error(expected, actual));
     }
-    Ok(decoded)
+    exact_count(expected, actual)
 }
 
-fn divide(values: Vec<i32>, divisor: i32) -> Result<Vec<f32>, Diagnostic> {
+fn float_divisor(divisor: i32) -> Result<f32, Diagnostic> {
     if divisor == 0 {
         return Err(Diagnostic::new(Code::E1102).with_message("zero MMTF float divisor"));
     }
-    let Some(divisor) = divisor.to_f32() else {
-        return Err(codec_error("float divisor", 0));
-    };
-    values
-        .into_iter()
-        .map(|value| {
-            value
-                .to_f32()
-                .map(|value| value / divisor)
-                .ok_or_else(|| codec_error("scaled float", 0))
-        })
-        .collect()
+    divisor
+        .to_f32()
+        .ok_or_else(|| codec_error("float divisor", 0))
 }
 
-fn exact_len<T>(values: Vec<T>, expected: usize) -> Result<Vec<T>, Diagnostic> {
-    if values.len() == expected {
-        Ok(values)
+fn scaled(value: i32, divisor: f32) -> Result<f32, Diagnostic> {
+    value
+        .to_f32()
+        .map(|value| value / divisor)
+        .ok_or_else(|| codec_error("scaled float", 0))
+}
+
+fn exact_count(expected: usize, actual: usize) -> Result<(), Diagnostic> {
+    if actual == expected {
+        Ok(())
     } else {
-        Err(length_error(expected, values.len()))
+        Err(length_error(expected, actual))
     }
 }
 

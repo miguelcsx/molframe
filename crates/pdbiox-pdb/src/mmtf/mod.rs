@@ -10,7 +10,7 @@ pub use model::{
     MMTF_METADATA_EXTENSION, MmtfEntityMetadata, MmtfGroupMetadata, MmtfMetadata, MmtfOptionalField,
 };
 pub use reader::read_mmtf;
-pub use writer::write_mmtf;
+pub use writer::{write_mmtf, write_mmtf_to};
 
 #[cfg(test)]
 #[path = "writer_tests.rs"]

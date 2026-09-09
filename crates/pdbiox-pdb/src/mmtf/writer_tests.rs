@@ -19,6 +19,32 @@ fn canonical_mmtf_round_trip_preserves_hierarchy_coordinates_and_bonds() {
 }
 
 #[test]
+fn repeated_chemistry_occupies_one_group_dictionary_entry() {
+    // Three glycines share one chemistry. MMTF stores that chemistry once and
+    // refers to it by index, so the dictionary must not grow with the residue
+    // count, and every residue must still resolve back to glycine.
+    let input = InputBuffer::from_bytes(repeated_glycine_mmtf());
+    let (structure, _) = crate::read_mmtf(&input, &ReadOptions::new()).expect("MMTF fixture");
+    assert_eq!(structure.residue_count(), 3);
+
+    let encoded = write_mmtf(&structure).expect("MMTF write");
+    let written: File = rmp_serde::from_slice(&encoded).expect("written MessagePack");
+    assert_eq!(
+        written.group_list.len(),
+        1,
+        "one chemistry should occupy one dictionary entry"
+    );
+    assert_eq!(written.num_groups, 3, "three residues are still reported");
+
+    let input = InputBuffer::from_bytes(encoded);
+    let (decoded, findings) = crate::read_mmtf(&input, &ReadOptions::new()).expect("MMTF read");
+    assert!(findings.is_empty());
+    assert_eq!(decoded.residue_count(), 3);
+    assert_eq!(decoded.atom_count(), 6);
+    assert_eq!(decoded.positions(), structure.positions());
+}
+
+#[test]
 fn writer_refuses_structure_without_explicit_mmtf_chemistry() {
     let source =
         b"ATOM      1  N   GLY A   1      11.104  13.207   9.301  1.00 20.00           N  \nEND\n";
@@ -149,4 +175,58 @@ fn official_reference_corpus_including_ragged_models_decodes() {
 
 fn official_mmtf_corpus() -> Option<std::path::PathBuf> {
     std::env::var_os("PDBIOX_MMTF_CORPUS").map(std::path::PathBuf::from)
+}
+
+fn repeated_glycine_mmtf() -> Vec<u8> {
+    let file = File {
+        mmtf_version: "1.0.0".into(),
+        mmtf_producer: "fixture".into(),
+        structure_id: Some("REPEAT".into()),
+        title: Some("repeated chemistry".into()),
+        unit_cell: None,
+        space_group: None,
+        experimental_methods: None,
+        resolution: None,
+        num_bonds: 0,
+        num_atoms: 6,
+        num_groups: 3,
+        num_chains: 1,
+        num_models: 1,
+        group_list: vec![Group {
+            formal_charge_list: vec![0, 0],
+            atom_name_list: vec!["N".into(), "CA".into()],
+            element_list: Some(vec!["N".into(), "C".into()]),
+            bond_atom_list: Vec::new(),
+            bond_order_list: Vec::new(),
+            bond_resonance_list: Vec::new(),
+            name: "GLY".into(),
+            single_letter_code: "G".into(),
+            chem_comp_type: "L-peptide linking".into(),
+        }],
+        bond_atom_list: None,
+        bond_order_list: None,
+        bond_resonance_list: None,
+        x_coord_list: encode_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).expect("encoding"),
+        y_coord_list: encode_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).expect("encoding"),
+        z_coord_list: encode_f32(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).expect("encoding"),
+        b_factor_list: None,
+        atom_id_list: Some(encode_i32(&[1, 2, 3, 4, 5, 6]).expect("encoding")),
+        alt_loc_list: None,
+        occupancy_list: None,
+        group_id_list: encode_i32(&[1, 2, 3]).expect("encoding"),
+        group_type_list: encode_i32(&[0, 0, 0]).expect("encoding"),
+        ins_code_list: None,
+        sequence_index_list: Some(encode_i32(&[0, 1, 2]).expect("encoding")),
+        chain_id_list: encode_strings(&["A".into()], 4).expect("chain encoding"),
+        chain_name_list: None,
+        groups_per_chain: vec![3],
+        chains_per_model: vec![1],
+        entity_list: Some(vec![Entity {
+            chain_index_list: vec![0],
+            description: "triglycine".into(),
+            kind: "polymer".into(),
+            sequence: "GGG".into(),
+        }]),
+    };
+    rmp_serde::to_vec_named(&file).expect("fixture MessagePack")
 }

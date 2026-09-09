@@ -7,6 +7,9 @@ use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::index::{EntityIndex, ModelIndex};
 use pdbiox_core::structure::Structure;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::io::Write;
 
 const VERSION: &str = "1.0.0";
 const PRODUCER: &str = "pdbiox 0.1.0";
@@ -19,9 +22,23 @@ const CHAIN_WIDTH: usize = 4;
 /// Refuses ragged models, absent coordinates, identifiers beyond MMTF's byte
 /// limits, non-ASCII character fields, and counts outside signed 32-bit range.
 pub fn write_mmtf(structure: &Structure) -> Result<Vec<u8>, Vec<Diagnostic>> {
+    let mut output = Vec::new();
+    write_mmtf_to(structure, &mut output)?;
+    Ok(output)
+}
+
+/// Streams deterministic MMTF `MessagePack` to a byte destination.
+///
+/// # Errors
+///
+/// Returns structure, encoding, or destination diagnostics.
+pub fn write_mmtf_to<W: Write>(
+    structure: &Structure,
+    output: &mut W,
+) -> Result<(), Vec<Diagnostic>> {
     validate_structure(structure).map_err(|finding| vec![finding])?;
     let file = build(structure).map_err(|finding| vec![finding])?;
-    rmp_serde::to_vec_named(&file).map_err(|error| {
+    rmp_serde::encode::write_named(output, &file).map_err(|error| {
         vec![
             Diagnostic::new(Code::E1102)
                 .with_message("MMTF MessagePack could not be encoded")
@@ -52,8 +69,8 @@ fn build(structure: &Structure) -> Result<File, Diagnostic> {
         .checked_mul(models)
         .ok_or_else(|| refusal("MMTF atom capacity overflows"))?;
     let mut atoms = AtomColumns::with_capacity(atom_capacity);
-    build_group_dictionary(structure, metadata, &mut group_list)?;
-    append_models(structure, models, &mut topology, &mut atoms)?;
+    let group_type_of = build_group_dictionary(structure, metadata, &mut group_list)?;
+    append_models(structure, models, &group_type_of, &mut topology, &mut atoms)?;
     let (bond_atoms, bond_orders, bond_resonance) = bonds(structure, models)?;
     let num_bonds = i32_of(bond_orders.len(), "bond count")?;
     let (bond_atom_list, bond_order_list, bond_resonance_list) =
@@ -144,22 +161,42 @@ fn build(structure: &Structure) -> Result<File, Diagnostic> {
 fn append_models(
     structure: &Structure,
     models: usize,
+    group_type_of: &[i32],
     topology: &mut TopologyColumns,
     atoms: &mut AtomColumns,
 ) -> Result<(), Diagnostic> {
     for model in 0..models {
-        topology.append(structure)?;
+        topology.append(structure, group_type_of)?;
         let model = u32::try_from(model).map_err(|_| refusal("MMTF model index exceeds u32"))?;
         atoms.append(structure, ModelIndex::new(model))?;
     }
     Ok(())
 }
 
+/// Builds the group dictionary and the residue-to-group-type mapping.
+///
+/// MMTF stores each distinct chemistry once and refers to it by index, so a
+/// structure with a million glycines carries one glycine entry. Emitting one
+/// entry per residue instead made the dictionary as large as the structure and
+/// repeated every name and element list with it.
 fn build_group_dictionary(
     structure: &Structure,
     metadata: &MmtfMetadata,
     groups: &mut Vec<Group>,
-) -> Result<(), Diagnostic> {
+) -> Result<Vec<i32>, Diagnostic> {
+    // The metadata chemistry list is searched once per residue, so it is keyed
+    // by component name first rather than scanned end to end each time.
+    let mut chemistry_by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (position, candidate) in metadata.groups.iter().enumerate() {
+        chemistry_by_name
+            .entry(candidate.name.as_ref())
+            .or_default()
+            .push(position);
+    }
+
+    let mut group_type_of = vec![0i32; structure.residue_count()];
+    let mut seen: HashMap<Group, i32> = HashMap::new();
+
     for residue in structure.data().residues() {
         let atoms: Vec<_> = residue.atoms().collect();
         let formal_charge_list = atoms
@@ -175,17 +212,19 @@ fn build_group_dictionary(
             .map(|atom| required_text(atom.name(), "atom name"))
             .collect::<Result<Vec<_>, _>>()?;
         let group_name = required_text(residue.name(), "component name")?;
-        let chemistry = metadata
-            .groups
-            .iter()
-            .find(|candidate| {
-                candidate.name.as_ref() == group_name
-                    && candidate.atom_names.len() == atom_name_list.len()
-                    && candidate
-                        .atom_names
-                        .iter()
-                        .zip(&atom_name_list)
-                        .all(|(expected, actual)| expected.as_ref() == actual)
+        let chemistry = chemistry_by_name
+            .get(group_name.as_str())
+            .and_then(|candidates| {
+                candidates.iter().find_map(|position| {
+                    let candidate = metadata.groups.get(*position)?;
+                    (candidate.atom_names.len() == atom_name_list.len()
+                        && candidate
+                            .atom_names
+                            .iter()
+                            .zip(&atom_name_list)
+                            .all(|(expected, actual)| expected.as_ref() == actual))
+                    .then_some(candidate)
+                })
             })
             .ok_or_else(|| refusal("MMTF group chemistry no longer matches the structure"))?;
         let element_list = chemistry
@@ -198,7 +237,7 @@ fn build_group_dictionary(
                 "MMTF atom and component names are limited to five bytes",
             ));
         }
-        groups.push(Group {
+        let group = Group {
             formal_charge_list,
             atom_name_list,
             element_list,
@@ -208,9 +247,24 @@ fn build_group_dictionary(
             name: group_name,
             single_letter_code: chemistry.single_letter_code.to_string(),
             chem_comp_type: chemistry.chem_comp_type.to_string(),
-        });
+        };
+
+        // First appearance order decides the identifiers, so the dictionary is
+        // the same for the same structure on every run.
+        let next = i32_of(groups.len(), "group type")?;
+        let group_type = match seen.entry(group) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                groups.push(entry.key().clone());
+                *entry.insert(next)
+            }
+        };
+
+        if let Some(slot) = group_type_of.get_mut(residue.index().as_usize()) {
+            *slot = group_type;
+        }
     }
-    Ok(())
+    Ok(group_type_of)
 }
 
 struct TopologyColumns {
@@ -236,7 +290,7 @@ impl TopologyColumns {
         }
     }
 
-    fn append(&mut self, structure: &Structure) -> Result<(), Diagnostic> {
+    fn append(&mut self, structure: &Structure, group_type_of: &[i32]) -> Result<(), Diagnostic> {
         for chain in structure.data().chains() {
             self.chain_ids
                 .push(required_text(chain.label(), "chain label")?);
@@ -251,8 +305,13 @@ impl TopologyColumns {
                 self.group_ids.push(residue.auth_seq_id().ok_or_else(|| {
                     refusal("MMTF requires an author residue sequence identifier")
                 })?);
-                self.group_types
-                    .push(i32_of(residue.index().as_usize(), "group type")?);
+                // The dictionary index, not the residue index: identical
+                // chemistries share one entry.
+                let group_type = group_type_of
+                    .get(residue.index().as_usize())
+                    .copied()
+                    .ok_or_else(|| refusal("MMTF group type is missing for a residue"))?;
+                self.group_types.push(group_type);
                 self.insertion_codes
                     .push(single_ascii(residue.ins_code(), "insertion code")?);
                 self.sequence_indices

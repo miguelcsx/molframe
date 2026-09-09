@@ -62,9 +62,9 @@ fn lower(file: File, options: &ReadOptions) -> Result<Structure, Diagnostic> {
     validate_version(&file.mmtf_version)?;
     validate_declared_counts(&file, options)?;
     let metadata = metadata(&file);
-    let decoded = decode(file)?;
+    let mut decoded = decode(file)?;
     validate_decoded_lengths(&decoded)?;
-    build(&decoded, options)
+    build(&mut decoded, options)
         .map(|structure| structure.with_extension(MMTF_METADATA_EXTENSION, metadata))
 }
 
@@ -199,31 +199,75 @@ fn decode_optional_i32(bytes: Option<&[u8]>) -> Result<Vec<i32>, Diagnostic> {
     }
 }
 
-fn build(decoded: &Decoded, options: &ReadOptions) -> Result<Structure, Diagnostic> {
+fn build(decoded: &mut Decoded, options: &ReadOptions) -> Result<Structure, Diagnostic> {
     let ranges = model_ranges(decoded)?;
     let requested = if options.only_first_model {
         1
     } else {
         ranges.len()
     };
-    let mut models = Vec::with_capacity(requested);
-    for (model, range) in ranges.into_iter().take(requested).enumerate() {
-        models.push(build_model(decoded, options, model, range)?);
+    let requested_ranges = ranges
+        .get(..requested)
+        .ok_or_else(|| schema_error("MMTF requested model range is absent"))?;
+    let first_range = *requested_ranges
+        .first()
+        .ok_or_else(|| schema_error("MMTF contains no models"))?;
+    let model_bonds = partition_global_bonds(decoded, requested_ranges)?;
+    let (base, entity_by_chain) = base_data(decoded)?;
+    let mut template = build_model_data(
+        decoded,
+        options,
+        &base,
+        &entity_by_chain,
+        &model_bonds[0],
+        0,
+        first_range,
+    )?;
+    if requested == 1 {
+        return Ok(Structure::new(template));
     }
-    if models.len() == 1 {
-        return models
-            .pop()
-            .ok_or_else(|| schema_error("MMTF model was not built"));
+
+    let mut frames = Vec::with_capacity(requested);
+    frames.push(take_frame(&mut template)?);
+    for (model, &range) in requested_ranges.iter().enumerate().skip(1) {
+        let mut candidate = build_model_data(
+            decoded,
+            options,
+            &base,
+            &entity_by_chain,
+            &model_bonds[model],
+            model,
+            range,
+        )?;
+        if same_topology(&template, &candidate) {
+            frames.push(take_frame(&mut candidate)?);
+            continue;
+        }
+        return build_ragged_after_mismatch(
+            DecodeContext {
+                decoded,
+                options,
+                base: &base,
+                entity_by_chain: &entity_by_chain,
+            },
+            &model_bonds,
+            requested_ranges,
+            &template,
+            frames,
+            model,
+            candidate,
+        );
     }
-    if models
-        .iter()
-        .skip(1)
-        .all(|model| same_topology(&models[0], model))
-    {
-        dense_ensemble(&models)
-    } else {
-        ragged_ensemble(models)
-    }
+    dense_ensemble(template, frames)
+}
+
+/// Borrowed decode context shared by every per-model build.
+#[derive(Clone, Copy)]
+struct DecodeContext<'a> {
+    decoded: &'a Decoded,
+    options: &'a ReadOptions,
+    base: &'a StructureData,
+    entity_by_chain: &'a [EntityIndex],
 }
 
 #[derive(Clone, Copy)]
@@ -280,30 +324,31 @@ fn model_ranges(decoded: &Decoded) -> Result<Vec<ModelRange>, Diagnostic> {
     Ok(ranges)
 }
 
-fn build_model(
+fn build_model_data(
     decoded: &Decoded,
     options: &ReadOptions,
+    base: &StructureData,
+    entity_by_chain: &[EntityIndex],
+    global_bonds: &[GlobalBond],
     model: usize,
     range: ModelRange,
-) -> Result<Structure, Diagnostic> {
-    let mut data = StructureData::empty();
-    data.entry.id = decoded.file.structure_id.clone().map(Into::into);
-    data.entry.title = decoded.file.title.clone().map(Into::into);
-    data.entry.method = decoded
-        .file
-        .experimental_methods
-        .as_ref()
-        .map(|methods| methods.join(", ").into_boxed_str());
-    data.entry.resolution = decoded.file.resolution;
-    data.cell = unit_cell(decoded.file.unit_cell.as_deref())?;
-    let entity_by_chain = build_entities(&mut data, decoded)?;
+) -> Result<StructureData, Diagnostic> {
+    let mut data = base.clone();
     let mut builder = ChunkBuilder::new();
-    let mut keep_map = vec![None; usize_of(decoded.file.num_atoms)?];
+    builder.reserve(range.atom_count);
+    let mut keep_map = vec![None; range.atom_count];
     let mut bond_builder = BondTableBuilder::new();
     let mut group_cursor = range.group_start;
     let mut atom_cursor = range.atom_start;
     let mut kept_atoms = 0u32;
     for chain_position in range.chain_start..range.chain_start + range.chain_count {
+        let entity = *entity_by_chain
+            .get(chain_position)
+            .ok_or_else(|| schema_error("chain has no entity mapping"))?;
+        let kind = match data.topology.entities.kind(entity) {
+            Some(kind) => kind,
+            None => EntityKind::Unknown,
+        };
         let first_residue = u32_of(data.topology.residues.len(), "residue index")?;
         let group_count = usize_of(decoded.file.groups_per_chain[chain_position])?;
         for _ in 0..group_count {
@@ -317,7 +362,13 @@ fn build_model(
                 if options.discard_hydrogens && element.is_hydrogen() {
                     continue;
                 }
-                keep_map[original] = Some(AtomIndex::new(kept_atoms));
+                let model_atom = original
+                    .checked_sub(range.atom_start)
+                    .ok_or_else(|| schema_error("MMTF model atom offset underflows"))?;
+                let slot = keep_map
+                    .get_mut(model_atom)
+                    .ok_or_else(|| schema_error("MMTF model atom offset is out of bounds"))?;
+                *slot = Some(AtomIndex::new(kept_atoms));
                 builder.push(atom_record(
                     &mut data,
                     decoded,
@@ -328,7 +379,7 @@ fn build_model(
                 )?);
                 kept_atoms += 1;
             }
-            let record = residue_record(&mut data, decoded, group, group_cursor, chain_position)?;
+            let record = residue_record(&mut data, decoded, group, group_cursor, kind)?;
             data.topology
                 .residues
                 .push(record, first_kept..kept_atoms)
@@ -336,17 +387,13 @@ fn build_model(
                     schema_error("residue table rejected a row")
                         .with_context("cause", error.to_string())
                 })?;
-            add_group_bonds(group, atom_cursor, &keep_map, &mut bond_builder)?;
+            let model_atom_offset = atom_cursor
+                .checked_sub(range.atom_start)
+                .ok_or_else(|| schema_error("MMTF group atom offset underflows"))?;
+            add_group_bonds(group, model_atom_offset, &keep_map, &mut bond_builder)?;
             atom_cursor += group.atom_name_list.len();
             group_cursor += 1;
         }
-        let entity = *entity_by_chain
-            .get(chain_position)
-            .ok_or_else(|| schema_error("chain has no entity mapping"))?;
-        let kind = match data.topology.entities.kind(entity) {
-            Some(kind) => kind,
-            None => EntityKind::Unknown,
-        };
         let label = intern(&mut data, &decoded.chain_id[chain_position])?;
         let auth = decoded
             .chain_name
@@ -381,7 +428,7 @@ fn build_model(
             "MMTF model hierarchy traversal was inconsistent",
         ));
     }
-    add_global_bonds(decoded, range, &keep_map, &mut bond_builder)?;
+    add_global_bonds(global_bonds, &keep_map, &mut bond_builder)?;
     finish_model_data(data, builder, bond_builder, model, range)
 }
 
@@ -391,7 +438,7 @@ fn finish_model_data(
     bond_builder: BondTableBuilder,
     model: usize,
     range: ModelRange,
-) -> Result<Structure, Diagnostic> {
+) -> Result<StructureData, Diagnostic> {
     let (chunks, frame) = builder.finish();
     data.chunks = chunks.into();
     data.bonds = bond_builder.finish();
@@ -405,34 +452,7 @@ fn finish_model_data(
             schema_error("model table rejected a row").with_context("cause", error.to_string())
         })?;
     data.coords = CoordinateStore::Single(frame);
-    Ok(Structure::new(data))
-}
-
-fn dense_ensemble(models: &[Structure]) -> Result<Structure, Diagnostic> {
-    let first = models
-        .first()
-        .ok_or_else(|| schema_error("MMTF contains no models"))?;
-    let mut data = first.data().clone();
-    data.topology.models = pdbiox_core::topology::ModelTable::default();
-    let mut frames = Vec::with_capacity(models.len());
-    for (position, model) in models.iter().enumerate() {
-        let mut frame = CoordinateBlock::with_capacity(model.atom_count() as usize);
-        for coordinate in model.positions() {
-            frame.push(*coordinate);
-        }
-        frames.push(frame);
-        data.topology
-            .models
-            .push(
-                i32::try_from(position + 1).map_err(|_| schema_error("too many models"))?,
-                0..u32_of(data.topology.chains.len(), "chain count")?,
-            )
-            .map_err(|error| {
-                schema_error("model table rejected a row").with_context("cause", error.to_string())
-            })?;
-    }
-    data.coords = CoordinateStore::Dense { frames };
-    Ok(Structure::new(data))
+    Ok(data)
 }
 
 fn ragged_ensemble(models: Vec<Structure>) -> Result<Structure, Diagnostic> {
@@ -451,6 +471,10 @@ fn ragged_ensemble(models: Vec<Structure>) -> Result<Structure, Diagnostic> {
     data.coords = CoordinateStore::Ragged { models };
     Ok(Structure::new(data))
 }
+
+include!("reader/ensemble.rs");
+include!("reader/base.rs");
+include!("reader/bonds.rs");
 
 fn u32_of(value: usize, field: &'static str) -> Result<u32, Diagnostic> {
     u32::try_from(value).map_err(|_| {
