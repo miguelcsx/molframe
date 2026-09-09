@@ -1,6 +1,18 @@
 //! Native pore-radius profiles from explicit atoms, radii, and search geometry.
+//!
+//! The public result remains the exhaustive circular-grid optimum. Large
+//! searches build a balanced bounding-volume tree in `O(N log N)` time and
+//! `O(N)` memory, then prune atoms whose conservative surface-clearance bound
+//! cannot improve a candidate. Query cost is `O(log N)` when bounds separate
+//! the atoms and `O(N)` in the degenerate worst case.
 
 use crate::numeric::{f32_to_usize, usize_to_f32};
+
+#[path = "pore/index.rs"]
+mod spatial_index;
+use spatial_index::{ClearanceIndex, IndexBuildError};
+
+const INDEX_MIN_DISTANCE_EVALUATIONS: usize = 65_536;
 
 /// Search cylinder and sampling resolution for a pore profile.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -21,6 +33,44 @@ pub struct PoreProfileOptions {
     pub grid_spacing: f32,
     /// Radius of a probe subtracted from the geometric clearance.
     pub probe_radius: f32,
+    /// Hard ceiling for output and spatial-search workspace.
+    pub memory_limit_bytes: usize,
+}
+
+impl PoreProfileOptions {
+    /// Default ceiling, chosen to keep the operation-owned working set near 100 MB.
+    pub const DEFAULT_MEMORY_LIMIT_BYTES: usize = 100_000_000;
+
+    /// Creates an exhaustive-grid profile request under the default 100 MB ceiling.
+    #[must_use]
+    pub const fn new(
+        axis: ([f32; 3], [f32; 3]),
+        start: f32,
+        end: f32,
+        samples: usize,
+        search_radius: f32,
+        grid_spacing: f32,
+        probe_radius: f32,
+    ) -> Self {
+        Self {
+            axis_origin: axis.0,
+            axis_direction: axis.1,
+            start,
+            end,
+            samples,
+            search_radius,
+            grid_spacing,
+            probe_radius,
+            memory_limit_bytes: Self::DEFAULT_MEMORY_LIMIT_BYTES,
+        }
+    }
+
+    /// Sets the operation-owned memory ceiling.
+    #[must_use]
+    pub const fn with_memory_limit(mut self, bytes: usize) -> Self {
+        self.memory_limit_bytes = bytes;
+        self
+    }
 }
 
 /// Best probe centre and clearance at one axial slice.
@@ -59,13 +109,23 @@ pub enum PoreError {
     /// The requested transverse grid cannot be represented.
     #[error("the transverse pore-search grid is too large")]
     GridTooLarge,
+    /// Output and exact spatial-search storage exceed the caller's ceiling.
+    #[error("pore-profile storage requires {required} bytes, over the {limit} byte limit")]
+    MemoryLimit {
+        /// Required operation-owned bytes, or `usize::MAX` after overflow or allocation refusal.
+        required: usize,
+        /// Caller-provided ceiling.
+        limit: usize,
+    },
 }
 
 /// Computes a deterministic pore-radius profile without an external executable.
 ///
-/// Each axial slice searches an explicit circular transverse grid and reports
-/// the point maximizing the minimum atom-surface clearance. Decreasing
-/// `grid_spacing` converges on the continuous plane optimization.
+/// Each axial slice searches the complete explicit circular transverse grid and
+/// reports the point maximizing the minimum atom-surface clearance. Spatial
+/// pruning changes only which atoms can be proven irrelevant, not the sampled
+/// points or their stable first-maximum tie break. Decreasing `grid_spacing`
+/// converges on the continuous plane optimization.
 ///
 /// # Errors
 ///
@@ -81,8 +141,63 @@ pub fn pore_profile(
     let second_basis = cross(axis, first_basis);
     let transverse_steps = (2.0 * options.search_radius / options.grid_spacing).ceil();
     let transverse_steps = f32_to_usize(transverse_steps).ok_or(PoreError::GridTooLarge)?;
+    let side = transverse_steps
+        .checked_add(1)
+        .ok_or(PoreError::GridTooLarge)?;
+    let candidate_upper_bound = side
+        .checked_mul(side)
+        .and_then(|count| count.checked_mul(options.samples))
+        .ok_or(PoreError::GridTooLarge)?;
+    let output_bytes =
+        options
+            .samples
+            .checked_mul(size_of::<PoreSample>())
+            .ok_or(PoreError::MemoryLimit {
+                required: usize::MAX,
+                limit: options.memory_limit_bytes,
+            })?;
+    if output_bytes > options.memory_limit_bytes {
+        return Err(PoreError::MemoryLimit {
+            required: output_bytes,
+            limit: options.memory_limit_bytes,
+        });
+    }
+    let distance_evaluations = candidate_upper_bound.saturating_mul(positions.len());
+    let should_index = positions.len() > spatial_index::LEAF_ATOMS
+        && distance_evaluations >= INDEX_MIN_DISTANCE_EVALUATIONS;
+    let clearance_index = if should_index {
+        let index_bytes =
+            ClearanceIndex::required_bytes(positions.len()).ok_or(PoreError::MemoryLimit {
+                required: usize::MAX,
+                limit: options.memory_limit_bytes,
+            })?;
+        let required = output_bytes
+            .checked_add(index_bytes)
+            .ok_or(PoreError::MemoryLimit {
+                required: usize::MAX,
+                limit: options.memory_limit_bytes,
+            })?;
+        if required > options.memory_limit_bytes {
+            return Err(PoreError::MemoryLimit {
+                required,
+                limit: options.memory_limit_bytes,
+            });
+        }
+        Some(match ClearanceIndex::build(positions, radii) {
+            Ok(index) => index,
+            Err(IndexBuildError::Dimension) => return Err(PoreError::GridTooLarge),
+            Err(IndexBuildError::Allocation) => {
+                return Err(PoreError::MemoryLimit {
+                    required: usize::MAX,
+                    limit: options.memory_limit_bytes,
+                });
+            }
+        })
+    } else {
+        None
+    };
 
-    let search = PoreSearch {
+    let mut search = PoreSearch {
         positions,
         radii,
         options,
@@ -90,10 +205,20 @@ pub fn pore_profile(
         first_basis,
         second_basis,
         transverse_steps,
+        clearance_index,
+        nearest_atom: 0,
     };
-    Ok((0..options.samples)
-        .map(|sample| search.sample_slice(sample))
-        .collect())
+    let mut profile = Vec::new();
+    profile
+        .try_reserve_exact(options.samples)
+        .map_err(|_| PoreError::MemoryLimit {
+            required: usize::MAX,
+            limit: options.memory_limit_bytes,
+        })?;
+    for sample in 0..options.samples {
+        profile.push(search.sample_slice(sample));
+    }
+    Ok(profile)
 }
 
 struct PoreSearch<'a> {
@@ -104,10 +229,12 @@ struct PoreSearch<'a> {
     first_basis: [f32; 3],
     second_basis: [f32; 3],
     transverse_steps: usize,
+    clearance_index: Option<ClearanceIndex<'a>>,
+    nearest_atom: u32,
 }
 
 impl PoreSearch<'_> {
-    fn sample_slice(&self, sample: usize) -> PoreSample {
+    fn sample_slice(&mut self, sample: usize) -> PoreSample {
         let fraction = if self.options.samples == 1 {
             0.0
         } else {
@@ -138,8 +265,7 @@ impl PoreSearch<'_> {
                     add(axis_centre, scale(self.first_basis, first)),
                     scale(self.second_basis, second),
                 );
-                let clearance = minimum_clearance(candidate, self.positions, self.radii)
-                    - self.options.probe_radius;
+                let clearance = self.minimum_clearance(candidate) - self.options.probe_radius;
                 if clearance > best_clearance {
                     best_clearance = clearance;
                     best_centre = candidate;
@@ -152,6 +278,15 @@ impl PoreSearch<'_> {
             centre: best_centre,
             radius: best_clearance.max(0.0),
         }
+    }
+
+    fn minimum_clearance(&mut self, point: [f32; 3]) -> f32 {
+        let Some(index) = self.clearance_index.as_ref() else {
+            return minimum_clearance(point, self.positions, self.radii);
+        };
+        let (clearance, nearest_atom) = index.minimum_clearance(point, self.nearest_atom);
+        self.nearest_atom = nearest_atom;
+        clearance
     }
 }
 
@@ -189,6 +324,7 @@ fn validate(
         || options.grid_spacing <= 0.0
         || !options.probe_radius.is_finite()
         || options.probe_radius < 0.0
+        || options.memory_limit_bytes == 0
     {
         return Err(PoreError::InvalidOptions);
     }
