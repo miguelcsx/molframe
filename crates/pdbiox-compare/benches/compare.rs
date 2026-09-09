@@ -10,7 +10,7 @@ use pdbiox_compare::{
     pocket_rmsd, qs_score, tm_score, weighted_rmsd,
 };
 use pdbiox_core::contract::{DictionaryVersion, Namespace};
-use pdbiox_core::{BondOrder, Element};
+use pdbiox_core::{BondOrder, Element, ExecutionContext};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -31,9 +31,10 @@ fn bench_scores(c: &mut Criterion) {
     let structure = structure(Sample::Medium);
     let reference = coordinates(&structure);
     let model = perturbed(&reference, 0.02);
+    let execution = ExecutionContext::default();
     let mut group = c.benchmark_group("compare_scores");
     group.bench_function("lddt", |b| {
-        b.iter(|| black_box(lddt(&model, &reference, 15.0)));
+        b.iter(|| black_box(lddt(&model, &reference, 15.0, &execution)));
     });
     group.bench_function("tm_score", |b| {
         b.iter(|| black_box(tm_score(&model, &reference)));
@@ -50,6 +51,14 @@ fn bench_scores(c: &mut Criterion) {
     });
     group.finish();
 
+    let local_reference: Vec<[f32; 3]> = (0_u16..10_000)
+        .map(|index| [f32::from(index) * 3.8, 0.0, 0.0])
+        .collect();
+    let local_model = perturbed(&local_reference, 0.02);
+    c.bench_function("compare_scores/lddt_local_10000", |b| {
+        b.iter(|| black_box(lddt(&local_model, &local_reference, 15.0, &execution)));
+    });
+
     let guide_count = reference.len().min(128);
     let reference_guides = &reference[..guide_count];
     let model_guides = &model[..guide_count];
@@ -61,6 +70,27 @@ fn bench_scores(c: &mut Criterion) {
                 CeOptions::original(),
             ))
         });
+    });
+
+    let long_reference: Vec<[f32; 3]> = (0_u16..50_000)
+        .map(|index| {
+            let value = f32::from(index) * 0.019;
+            [
+                value,
+                (value * 0.73).sin() * 4.0,
+                (value * 0.41).cos() * 3.0,
+            ]
+        })
+        .collect();
+    let short_mobile = long_reference[..16].to_vec();
+    let large_ce_options = CeOptions {
+        fragment_similarity_threshold: -1.0e-12,
+        path_similarity_threshold: -1.0e-6,
+        memory_limit_bytes: 3_000_000,
+        ..CeOptions::original()
+    };
+    c.bench_function("compare_alignment/ce_banded_50000x16", |b| {
+        b.iter(|| black_box(ce_align(&long_reference, &short_mobile, large_ce_options)));
     });
 
     let first_map: Vec<(u32, u32)> = (0_u32..8_192).map(|index| (index, index + 7)).collect();

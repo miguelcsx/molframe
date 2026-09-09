@@ -1,4 +1,5 @@
 use super::*;
+use pdbiox_core::ExecutionContext;
 
 #[test]
 fn identical_contact_areas_score_one() {
@@ -84,6 +85,7 @@ fn solvent_excluded_atom_patches_construct_residue_contact_areas() {
         &[4, 7],
         0.0,
         50.0,
+        &ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("CAD construction failed: {error}"));
     assert_eq!(result.len(), 1);

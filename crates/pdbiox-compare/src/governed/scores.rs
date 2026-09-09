@@ -7,6 +7,7 @@ use crate::{
     cad_contact_areas, cad_score, ce_align, ce_alignments, contact_map_similarity, gdt_ha, gdt_ts,
     gdt_with_cutoffs, lddt_with_options, tm_score, weighted_rmsd,
 };
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{Analysis, AnalysisPolicy, ParameterValue};
 
 type CoordinateScore = fn(&[[f32; 3]], &[[f32; 3]]) -> Result<f64, CompareError>;
@@ -23,8 +24,9 @@ pub fn governed_cad_contact_areas(
     probe: f32,
     density: f32,
     policy: &AnalysisPolicy,
+    context: &ExecutionContext,
 ) -> Result<Analysis<Vec<ContactArea>>, GovernedCompareError> {
-    let value = cad_contact_areas(positions, radii, residues, probe, density)?;
+    let value = cad_contact_areas(positions, radii, residues, probe, density, context)?;
     let mut result = complete(value, positions.len(), policy, "cad-contact-areas")?;
     result.provenance = result
         .provenance
@@ -51,8 +53,9 @@ pub fn governed_lddt(
     reference: &[[f32; 3]],
     options: &LddtOptions,
     policy: &AnalysisPolicy,
+    context: &ExecutionContext,
 ) -> Result<Analysis<f64>, GovernedCompareError> {
-    let value = lddt_with_options(model, reference, options)?;
+    let value = lddt_with_options(model, reference, options, context)?;
     let mut result = complete(value, reference.len(), policy, "lddt")?;
     result.provenance = result
         .provenance

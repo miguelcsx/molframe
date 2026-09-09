@@ -1,5 +1,6 @@
 //! Contact Area Difference (CAD) scoring over mapped residue contact areas.
 
+use pdbiox_core::ExecutionContext;
 use std::collections::BTreeMap;
 
 /// Area assigned to one unordered residue contact.
@@ -91,12 +92,13 @@ pub fn cad_contact_areas(
     residues: &[u32],
     probe: f32,
     density: f32,
+    context: &ExecutionContext,
 ) -> Result<Vec<ContactArea>, CadConstructionError> {
     if positions.len() != residues.len() || positions.len() != radii.len() {
         return Err(CadConstructionError::LengthMismatch);
     }
     let mut areas = BTreeMap::new();
-    for contact in pdbiox_surface::atom_contact_areas(positions, radii, probe, density)? {
+    for contact in pdbiox_surface::atom_contact_areas(positions, radii, probe, density, context)? {
         let first = residues[contact.first];
         let second = residues[contact.second];
         if first == second || contact.area == 0.0 {

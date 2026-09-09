@@ -3,6 +3,7 @@ use super::{
     governed_lddt,
 };
 use crate::{ContactArea, LddtOptions, PointMapping, PointMatch};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{AlignmentPolicy, AnalysisPolicy};
 
 #[test]
@@ -14,6 +15,7 @@ fn governed_score_records_algorithm_parameters_and_coverage() {
         &coordinates,
         &options,
         &AnalysisPolicy::default(),
+        &ExecutionContext::default(),
     ) else {
         panic!("identical coordinates are comparable");
     };

@@ -10,6 +10,7 @@ pub(crate) fn add_ce_parameters<T>(result: &mut Analysis<T>, options: CeOptions)
         .with_parameter("window_size", integer(options.window_size))
         .with_parameter("max_gap", integer(options.max_gap))
         .with_parameter("max_paths", integer(options.max_paths))
+        .with_parameter("memory_limit_bytes", integer(options.memory_limit_bytes))
         .with_parameter(
             "fragment_similarity_threshold",
             ParameterValue::Float(options.fragment_similarity_threshold.to_bits()),

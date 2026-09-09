@@ -1,6 +1,7 @@
 //! The one error the comparison scores share.
 
 use pdbiox_geom::SuperposeError;
+use pdbiox_spatial::SpatialError;
 
 /// Why a comparison could not be scored.
 #[derive(Debug, thiserror::Error)]
@@ -38,6 +39,9 @@ pub enum CompareError {
     /// A comparison received non-finite coordinates or score parameters.
     #[error("comparison coordinates and score parameters must be finite")]
     InvalidScoreInput,
+    /// A fixed-radius comparison domain could not be enumerated.
+    #[error("spatial comparison failed: {0}")]
+    Spatial(#[from] SpatialError),
     /// No pair met the caller's comparison-domain criteria.
     #[error("comparison domain contains no eligible pairs")]
     NoComparablePairs,
