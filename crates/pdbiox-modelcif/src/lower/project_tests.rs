@@ -1,4 +1,5 @@
-use super::lower;
+use super::{lower, lower_with_options};
+use crate::{ModelCifError, ModelCifOptions};
 use pdbiox_core::io::InputBuffer;
 
 pub(crate) const MODEL_CIF: &str = "data_model\n\
@@ -26,13 +27,13 @@ pub(crate) fn document() -> pdbiox_cif::Document {
 
 #[test]
 fn lowers_metadata_and_three_confidence_modes() {
-    let (model, findings) = lower(&document());
+    let (model, findings) = lower(&document()).expect("compact lowering succeeds");
     assert!(findings.is_empty());
-    assert_eq!(model.models.len(), 1);
-    assert_eq!(model.targets.len(), 1);
-    assert_eq!(model.templates.len(), 1);
-    assert_eq!(model.protocol_steps.len(), 1);
-    assert_eq!(model.software_groups.len(), 1);
+    assert_eq!(model.models().count(), 1);
+    assert_eq!(model.targets().count(), 1);
+    assert_eq!(model.templates().count(), 1);
+    assert_eq!(model.protocol_steps().count(), 1);
+    assert_eq!(model.software_groups().count(), 1);
     assert_eq!(model.confidence().plddt().count(), 1);
     assert_eq!(model.confidence().pae().count(), 1);
     assert_eq!(model.confidence().ptm().count(), 1);
@@ -45,8 +46,8 @@ fn deprecated_model_identifier_is_reported_instead_of_substituted() {
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
     let (document, _) =
         pdbiox_cif::parse(&input).unwrap_or_else(|findings| panic!("fixture failed: {findings:?}"));
-    let (model, findings) = lower(&document);
-    assert!(model.models.is_empty());
+    let (model, findings) = lower(&document).expect("compact lowering succeeds");
+    assert_eq!(model.models().count(), 0);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].code(), pdbiox_core::Code::E2002);
 }
@@ -54,10 +55,52 @@ fn deprecated_model_identifier_is_reported_instead_of_substituted() {
 #[test]
 fn missing_data_block_is_reported_instead_of_treated_as_empty_metadata() {
     let document = pdbiox_cif::Document::new();
-    let (model, findings) = lower(&document);
+    let (model, findings) = lower(&document).expect("empty lowering succeeds");
     assert!(model.categories.is_empty());
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].code(), pdbiox_core::Code::E1106);
+}
+
+#[test]
+fn compact_columns_are_exactly_equivalent_to_every_source_cell() {
+    let document = document();
+    let (model, findings) = lower(&document).expect("compact lowering succeeds");
+    assert!(findings.is_empty());
+    let block = document.first_block().expect("fixture has a block");
+    for source in block
+        .categories()
+        .filter(|category| category.name().starts_with("ma_"))
+    {
+        let compact = model
+            .category(source.name())
+            .expect("every ModelCIF category is retained");
+        assert_eq!(compact.row_count(), source.row_count());
+        assert_eq!(
+            compact.items().iter().map(Box::as_ref).collect::<Vec<_>>(),
+            source.items().collect::<Vec<_>>()
+        );
+        for item in source.items() {
+            for row in 0..source.row_count() {
+                assert_eq!(compact.value(item, row).as_ref(), source.value(item, row));
+            }
+        }
+    }
+}
+
+#[test]
+fn compact_projection_enforces_its_memory_limit_and_accepts_a_large_one() {
+    let error = lower_with_options(&document(), ModelCifOptions::new().with_memory_limit(1))
+        .expect_err("one byte cannot retain the fixture");
+    assert!(matches!(error, ModelCifError::MemoryLimit { limit: 1, .. }));
+
+    assert!(
+        lower_with_options(
+            &document(),
+            ModelCifOptions::new().with_memory_limit(64_000_000_000),
+        )
+        .is_ok(),
+        "a caller who has provisioned the machine sets the ceiling, not the library"
+    );
 }
 
 #[test]
