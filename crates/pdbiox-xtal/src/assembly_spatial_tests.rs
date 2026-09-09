@@ -1,6 +1,6 @@
 use crate::view::tests::{ENTRY, attached};
 use crate::{AssemblyExt, AssemblyNeighbor};
-use pdbiox_core::ModelIndex;
+use pdbiox_core::{ExecutionContext, ModelIndex};
 use pdbiox_spatial::SpatialBackend;
 
 #[test]
@@ -24,7 +24,12 @@ fn transformed_assembly_pairs_are_identical_across_every_backend() {
 }
 
 fn neighbors(view: &crate::AssemblyView, backend: SpatialBackend) -> Vec<AssemblyNeighbor> {
-    match view.neighbors(ModelIndex::new(0), 3.0, backend) {
+    match view.neighbors(
+        ModelIndex::new(0),
+        3.0,
+        backend,
+        &ExecutionContext::default(),
+    ) {
         Ok(neighbors) => neighbors,
         Err(finding) => panic!("spatial search failed: {finding}"),
     }

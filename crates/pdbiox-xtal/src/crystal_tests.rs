@@ -1,7 +1,7 @@
-use super::{crystal_neighbors, crystal_neighbors_with_backend, crystal_neighbors_with_limit};
+use super::{CrystalNeighborOptions, collect_crystal_neighbors};
 use crate::lower_symmetry;
 use pdbiox_cif::{parse, read};
-use pdbiox_core::{Code, InputBuffer, ModelIndex, ReadOptions, Structure};
+use pdbiox_core::{Code, ExecutionContext, InputBuffer, ModelIndex, ReadOptions, Structure};
 use pdbiox_spatial::SpatialBackend;
 
 const ATOM_AND_CELL: &str = r"data_crystal
@@ -33,7 +33,14 @@ _space_group_symop.operation_xyz
 #[test]
 fn identity_image_is_excluded_but_one_periodic_pair_is_kept() {
     let (structure, symmetry) = fixture(ATOM_AND_CELL);
-    let neighbors = match crystal_neighbors(&structure, &symmetry, ModelIndex::new(0), 10.1) {
+    let neighbors = match collect_crystal_neighbors(
+        &structure,
+        &symmetry,
+        ModelIndex::new(0),
+        10.1,
+        CrystalNeighborOptions::default(),
+        &ExecutionContext::default(),
+    ) {
         Ok(neighbors) => neighbors,
         Err(finding) => panic!("search failed: {finding}"),
     };
@@ -46,13 +53,16 @@ fn identity_image_is_excluded_but_one_periodic_pair_is_kept() {
         SpatialBackend::KdTree,
         SpatialBackend::NeighborList,
     ] {
-        let actual = crystal_neighbors_with_backend(
+        let actual = collect_crystal_neighbors(
             &structure,
             &symmetry,
             ModelIndex::new(0),
             10.1,
-            backend,
-            super::DEFAULT_CRYSTAL_IMAGE_LIMIT,
+            CrystalNeighborOptions {
+                backend,
+                ..CrystalNeighborOptions::default()
+            },
+            &ExecutionContext::default(),
         );
         assert_eq!(actual.ok().as_deref(), Some(neighbors.as_slice()));
     }
@@ -62,7 +72,14 @@ fn identity_image_is_excluded_but_one_periodic_pair_is_kept() {
 fn self_inverse_operator_is_a_contact_when_positions_differ() {
     let text = ATOM_AND_CELL.replace("1 'x,y,z'", "1 'x,y,z'\n2 '-x,-y,-z'");
     let (structure, symmetry) = fixture(&text);
-    let neighbors = match crystal_neighbors(&structure, &symmetry, ModelIndex::new(0), 2.1) {
+    let neighbors = match collect_crystal_neighbors(
+        &structure,
+        &symmetry,
+        ModelIndex::new(0),
+        2.1,
+        CrystalNeighborOptions::default(),
+        &ExecutionContext::default(),
+    ) {
         Ok(neighbors) => neighbors,
         Err(finding) => panic!("search failed: {finding}"),
     };
@@ -74,12 +91,29 @@ fn self_inverse_operator_is_a_contact_when_positions_differ() {
 #[test]
 fn invalid_inputs_and_candidate_ceiling_are_diagnostics() {
     let (structure, symmetry) = fixture(ATOM_AND_CELL);
-    let invalid = crystal_neighbors(&structure, &symmetry, ModelIndex::new(0), 0.0);
+    let invalid = collect_crystal_neighbors(
+        &structure,
+        &symmetry,
+        ModelIndex::new(0),
+        0.0,
+        CrystalNeighborOptions::default(),
+        &ExecutionContext::default(),
+    );
     assert_eq!(
         invalid.err().map(|finding| finding.code()),
         Some(Code::E6016)
     );
-    let limited = crystal_neighbors_with_limit(&structure, &symmetry, ModelIndex::new(0), 1.0, 0);
+    let limited = collect_crystal_neighbors(
+        &structure,
+        &symmetry,
+        ModelIndex::new(0),
+        1.0,
+        CrystalNeighborOptions {
+            candidate_limit: 0,
+            ..CrystalNeighborOptions::default()
+        },
+        &ExecutionContext::default(),
+    );
     assert_eq!(
         limited.err().map(|finding| finding.code()),
         Some(Code::E6017)
@@ -92,7 +126,14 @@ fn invalid_inputs_and_candidate_ceiling_are_diagnostics() {
             .collect::<Vec<_>>()
             .join("\n"),
     );
-    let missing = crystal_neighbors(&without_cell, &symmetry, ModelIndex::new(0), 1.0);
+    let missing = collect_crystal_neighbors(
+        &without_cell,
+        &symmetry,
+        ModelIndex::new(0),
+        1.0,
+        CrystalNeighborOptions::default(),
+        &ExecutionContext::default(),
+    );
     assert_eq!(
         missing.err().map(|finding| finding.code()),
         Some(Code::E5004)

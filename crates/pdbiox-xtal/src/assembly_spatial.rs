@@ -2,7 +2,7 @@
 
 use crate::AssemblyView;
 use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::{AtomIndex, Diagnostic, InstanceId, ModelIndex};
+use pdbiox_core::{AtomIndex, Diagnostic, ExecutionContext, InstanceId, ModelIndex};
 use pdbiox_spatial::{SpatialBackend, pairs_within};
 
 /// One unique unordered pair between generated assembly atoms.
@@ -33,6 +33,7 @@ impl AssemblyView {
         model: ModelIndex,
         cutoff: f32,
         backend: SpatialBackend,
+        context: &ExecutionContext,
     ) -> Result<Vec<AssemblyNeighbor>, Diagnostic> {
         let mut atoms = Vec::new();
         let mut positions = Vec::new();
@@ -52,9 +53,14 @@ impl AssemblyView {
         }
         let count = u32::try_from(positions.len())
             .map_err(|_| pdbiox_core::Diagnostic::new(pdbiox_core::Code::E1901))?;
-        let selection = AtomSelection::from_sorted((0..count).collect());
-        let pairs = pairs_within(&positions, &selection, &selection, cutoff, backend, None)
-            .map_err(pdbiox_spatial::SpatialError::into_diagnostic)?;
+        let selection = AtomSelection::All(count);
+        // Materialising is inherent here: the result is one neighbour record per
+        // pair, so streaming the intermediate would remove a constant factor and
+        // not the growth. Bounding it means changing what this returns.
+        let pairs = pairs_within(
+            &positions, &selection, &selection, cutoff, backend, None, context,
+        )
+        .map_err(pdbiox_spatial::SpatialError::into_diagnostic)?;
         pairs
             .into_iter()
             .map(|pair| {
