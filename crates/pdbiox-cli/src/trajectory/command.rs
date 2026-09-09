@@ -6,7 +6,8 @@ use crate::exit::Exit;
 use crate::report::{Context, Json, Table};
 use pdbiox::traj::{
     FrameAlignment, GsdOptions, TrajectoryData, TrajectoryFormat, TrajectoryReadOptions,
-    TrajectoryWriteOptions, TrzWriteOptions, read_trajectory, rmsd_to_reference, write_trajectory,
+    TrajectoryWriteOptions, TrzWriteOptions, read_trajectory_materialized, rmsd_to_reference,
+    write_trajectory,
 };
 use std::fmt::Write as _;
 use std::path::Path;
@@ -17,6 +18,9 @@ pub(crate) fn info(
     gsd_length_scale: Option<f64>,
     context: Context,
 ) -> Exit {
+    if super::streaming::supported(input) {
+        return super::streaming::info(input, topology, context);
+    }
     let data = match read(input, gsd_length_scale) {
         Ok(data) => data,
         Err(exit) => return exit,
@@ -91,6 +95,9 @@ pub(crate) fn rmsd(
     gsd_length_scale: Option<f64>,
     context: Context,
 ) -> Exit {
+    if super::streaming::supported(input) {
+        return super::streaming::rmsd(input, reference, no_fit, context);
+    }
     let data = match read(input, gsd_length_scale) {
         Ok(data) => data,
         Err(exit) => return exit,
@@ -190,7 +197,7 @@ fn read(path: &Path, gsd_length_scale: Option<f64>) -> Result<TrajectoryData, Ex
         gsd: gsd_options(gsd_length_scale)?,
         ..TrajectoryReadOptions::default()
     };
-    read_trajectory(path, &options).map_err(|error| {
+    read_trajectory_materialized(path, &options).map_err(|error| {
         eprintln!("could not read {}: {error}", path.display());
         Exit::Parse
     })
@@ -214,7 +221,7 @@ pub(super) fn apply_stride(data: &mut TrajectoryData, stride: usize) {
     }
 }
 
-fn emit_summary(context: Context, summary: &Summary) {
+pub(super) fn emit_summary(context: Context, summary: &Summary) {
     if context.is_json() {
         context.result(&summary_json(summary));
     } else if let Some(delimiter) = context.delimiter() {
