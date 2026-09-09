@@ -1,7 +1,17 @@
 //! Process-isolated allocation and memory measurements for representative workflows.
 
+mod arrow_bench;
+mod generated_bcif_bench;
+mod generated_structure_bench;
+mod kernel_bench;
+mod modelcif_bench;
+mod mrc_bench;
+mod stream_bench;
+mod xtc_bench;
+
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
+use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::Serialize;
@@ -116,6 +126,16 @@ fn snapshot() -> CounterSnapshot {
     }
 }
 
+fn stabilize_shared_runtime() -> Result<(), String> {
+    let context = pdbiox::ExecutionContext::default();
+    let plan = pdbiox::core::parallel::BlockPlan::new(context.worker_budget(), 1);
+    let warmed = pdbiox::core::parallel::map_blocks_in(plan, &context, |index, _| index)
+        .map_err(|error| format!("shared runtime warm-up failed: {error}"))?;
+    black_box(warmed);
+    black_box(context);
+    Ok(())
+}
+
 #[derive(Serialize)]
 struct ResourceRecord {
     schema_version: u32,
@@ -125,12 +145,15 @@ struct ResourceRecord {
     peak_live_bytes: u64,
     live_bytes_delta: i64,
     result_digest: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model_count: Option<u64>,
 }
 
 fn measure_case<F>(name: &'static str, operation: F) -> Result<ResourceRecord, String>
 where
     F: FnOnce() -> Result<u64, String>,
 {
+    stabilize_shared_runtime()?;
     let before = snapshot();
     PEAK_BYTES.store(before.current_bytes, Ordering::SeqCst);
     let result = black_box(operation());
@@ -144,7 +167,32 @@ where
         peak_live_bytes: after.peak_bytes.saturating_sub(before.current_bytes),
         live_bytes_delta: signed_difference(after.current_bytes, before.current_bytes),
         result_digest: digest,
+        model_count: None,
     })
+}
+
+fn measure_retained_case<F, T>(name: &'static str, operation: F) -> Result<ResourceRecord, String>
+where
+    F: FnOnce() -> Result<(u64, Option<u64>, T), String>,
+{
+    stabilize_shared_runtime()?;
+    let before = snapshot();
+    PEAK_BYTES.store(before.current_bytes, Ordering::SeqCst);
+    let (digest, model_count, retained) = black_box(operation())?;
+    black_box(&retained);
+    let after = snapshot();
+    let record = ResourceRecord {
+        schema_version: 1,
+        case: name,
+        allocation_count: after.allocations.saturating_sub(before.allocations),
+        allocated_bytes: after.allocated_bytes.saturating_sub(before.allocated_bytes),
+        peak_live_bytes: after.peak_bytes.saturating_sub(before.current_bytes),
+        live_bytes_delta: signed_difference(after.current_bytes, before.current_bytes),
+        result_digest: digest,
+        model_count,
+    };
+    drop(retained);
+    Ok(record)
 }
 
 fn read_mmcif(bytes: &[u8], name: &'static str) -> Result<pdbiox::Structure, String> {
@@ -186,7 +234,11 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
             let structure = pdbiox_bench::structure(pdbiox_bench::Sample::Medium);
             measure_case("selection_medium", || {
                 let evaluation = structure
-                    .select_text("within 5 of element H", &pdbiox::AnalysisPolicy::default())
+                    .select_text(
+                        "within 5 of element H",
+                        &pdbiox::AnalysisPolicy::default(),
+                        &pdbiox::ExecutionContext::default(),
+                    )
                     .map_err(|findings| format!("selection failed: {findings:?}"))?;
                 Ok(black_box(evaluation.selection.len() as u64))
             })
@@ -194,9 +246,13 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
         "contacts_medium" => {
             let structure = pdbiox_bench::structure(pdbiox_bench::Sample::Medium);
             measure_case("contacts_medium", || {
-                let contacts =
-                    pdbiox::analysis::atom_contacts(&structure, 4.0, pdbiox::SpatialBackend::Auto)
-                        .map_err(|error| format!("contacts failed: {error}"))?;
+                let contacts = pdbiox::analysis::atom_contacts(
+                    &structure,
+                    4.0,
+                    pdbiox::SpatialBackend::Auto,
+                    &pdbiox::ExecutionContext::default(),
+                )
+                .map_err(|error| format!("contacts failed: {error}"))?;
                 Ok(black_box(contacts.len() as u64))
             })
         }
@@ -205,8 +261,14 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
             let positions = structure.positions().to_vec();
             let radii = vec![1.7_f32; positions.len()];
             measure_case("sasa_medium", || {
-                let areas = pdbiox::surface::shrake_rupley(&positions, &radii, 1.4, 96)
-                    .map_err(|error| format!("SASA failed: {error}"))?;
+                let areas = pdbiox::surface::shrake_rupley(
+                    &positions,
+                    &radii,
+                    1.4,
+                    96,
+                    &pdbiox::ExecutionContext::default(),
+                )
+                .map_err(|error| format!("SASA failed: {error}"))?;
                 Ok(black_box(areas.len() as u64))
             })
         }
@@ -236,40 +298,183 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
                 Ok(black_box(u64::from(tensor.cost() as u8)))
             })
         }
-        "trajectory_contacts" => run_trajectory_contacts(),
+        _ => run_extended(name),
+    }
+}
+
+fn run_extended(name: &str) -> Result<ResourceRecord, String> {
+    match name {
+        "trajectory_contacts" => kernel_bench::run_trajectory_contacts(),
+        "pore_profile_100000" => kernel_bench::run_pore_profile_100000(),
+        "msa_eight_512" => kernel_bench::run_msa_eight_512(),
+        "msa_sixty_four_128" => kernel_bench::run_msa_sixty_four_128(),
+        "arrow_stream_large" => arrow_bench::run_arrow_stream_large(),
+        "arrow_batches_large" => arrow_bench::run_arrow_batches_large(),
+        "mrc_block_1g" => mrc_bench::run_mrc_block_1g(),
+        "stream_synthetic_256m" => stream_bench::run_stream_synthetic_256m(),
+        "stream_synthetic_1g" => stream_bench::run_stream_synthetic_1g(),
+        "lex_synthetic_1g" => stream_bench::run_lex_synthetic_1g(),
+        "scan_synthetic_256m" => stream_bench::run_scan_synthetic_256m(),
+        "scan_synthetic_1g" => stream_bench::run_scan_synthetic_1g(),
+        "file_copied_1g" => stream_bench::run_file_copied_1g(),
+        "file_mapped_1g" => stream_bench::run_file_mapped_1g(),
+        "bcif_stream_file" => measure_case("bcif_stream_file", || {
+            let path = std::env::var_os("PDBIOX_BENCH_FILE")
+                .map(std::path::PathBuf::from)
+                .ok_or_else(|| "PDBIOX_BENCH_FILE is not set".to_owned())?;
+            stream_bench::drain_structure_batches("bcif_stream_file", &path)
+        }),
         _ => Err(format!("unknown resource case: {name}")),
     }
 }
 
-fn run_trajectory_contacts() -> Result<ResourceRecord, String> {
-    let structure = pdbiox_bench::structure(pdbiox_bench::Sample::Tiny);
-    let trajectory = pdbiox::traj::Trajectory::from_frames(
-        (0_u16..64)
-            .map(|frame| pdbiox::traj::Frame {
-                positions: structure
-                    .positions()
-                    .iter()
-                    .map(|&[x, y, z]| [x + f32::from(frame) * 1.0e-4, y, z])
-                    .collect(),
-            })
-            .collect(),
-    );
-    let policy = pdbiox::AnalysisPolicy::default();
-    let kernel = pdbiox::analysis::contacts_kernel(3.0, pdbiox::SpatialBackend::Auto);
-    measure_case("trajectory_contacts", || {
-        let analysis =
-            pdbiox::analysis::analyse_trajectory(&structure, &trajectory, &policy, &kernel, 4)
-                .map_err(|error| format!("trajectory analysis failed: {error}"))?;
-        black_box(analysis.value);
-        Ok(64)
+fn read_file(
+    name: &'static str,
+    path: &Path,
+    options: &pdbiox::ReadOptions,
+) -> Result<ResourceRecord, String> {
+    measure_retained_case(name, || {
+        let structure = pdbiox::read_with_options(path, options)
+            .map(|(structure, _)| structure)
+            .map_err(|findings| format!("{} read failed: {findings:?}", path.display()))?;
+        let model_count = u64::try_from(structure.model_count())
+            .map_err(|_| "model count exceeds u64".to_owned())?;
+        let atom_rows = total_atom_rows(&structure)?;
+        Ok((atom_rows, Some(model_count), structure))
+    })
+}
+
+fn total_atom_rows(structure: &pdbiox::Structure) -> Result<u64, String> {
+    if let Some(models) = structure.ragged_models() {
+        return models.iter().try_fold(0_u64, |total, model| {
+            total
+                .checked_add(u64::from(model.atom_count()))
+                .ok_or_else(|| "total atom-row count exceeds u64".to_owned())
+        });
+    }
+    let models =
+        u64::try_from(structure.model_count()).map_err(|_| "model count exceeds u64".to_owned())?;
+    u64::from(structure.atom_count())
+        .checked_mul(models)
+        .ok_or_else(|| "total atom-row count exceeds u64".to_owned())
+}
+
+fn require_no_more_arguments(
+    arguments: &mut impl Iterator<Item = String>,
+    case: &str,
+) -> Result<(), String> {
+    if arguments.next().is_some() {
+        return Err(format!("{case} accepts exactly one path"));
+    }
+    Ok(())
+}
+
+fn write_bcif_file(path: &Path) -> Result<ResourceRecord, String> {
+    let structure = pdbiox::read_with_options(path, &pdbiox::ReadOptions::new())
+        .map(|(structure, _)| structure)
+        .map_err(|findings| format!("{} read failed: {findings:?}", path.display()))?;
+    let atom_count = u64::from(structure.atom_count());
+    let model_count =
+        u64::try_from(structure.model_count()).map_err(|_| "model count exceeds u64".to_owned())?;
+    let options = pdbiox::CifWriteOptions::new()
+        .with_generated_connection_ids()
+        .with_connection_type_id("covale");
+    measure_retained_case("file_write_bcif", || {
+        let bytes = pdbiox::write_bcif_with_options(&structure, &options)
+            .map_err(|findings| format!("BinaryCIF write failed: {findings:?}"))?;
+        black_box(bytes.len());
+        Ok((atom_count, Some(model_count), bytes))
     })
 }
 
 fn main() -> Result<(), String> {
-    let case = std::env::args()
-        .nth(1)
+    let mut arguments = std::env::args().skip(1);
+    let case = arguments
+        .next()
         .ok_or_else(|| "usage: pdbiox-resource-bench CASE".to_owned())?;
-    let record = run(&case)?;
+    let record = if case == "generated_bcif_batches" {
+        let bytes = arguments
+            .next()
+            .ok_or_else(|| format!("usage: pdbiox-resource-bench {case} LOGICAL_BYTES"))?
+            .parse::<u64>()
+            .map_err(|error| format!("{case}: invalid logical byte count: {error}"))?;
+        if arguments.next().is_some() {
+            return Err(format!("{case} accepts exactly one logical byte count"));
+        }
+        generated_bcif_bench::run(bytes)?
+    } else if let Some(format) = generated_structure_bench::GeneratedFormat::parse(&case) {
+        let bytes = arguments
+            .next()
+            .ok_or_else(|| format!("usage: pdbiox-resource-bench {case} BYTES"))?
+            .parse::<u64>()
+            .map_err(|error| format!("{case}: invalid byte count: {error}"))?;
+        if arguments.next().is_some() {
+            return Err(format!("{case} accepts exactly one byte count"));
+        }
+        generated_structure_bench::run(format, bytes)?
+    } else if matches!(
+        case.as_str(),
+        "file_read"
+            | "file_read_atomic"
+            | "file_write_bcif"
+            | "modelcif_file"
+            | "mrc_block_file"
+            | "structure_batch_file"
+            | "window_scan_file"
+    ) || case == "xtc_file"
+    {
+        let path = arguments
+            .next()
+            .ok_or_else(|| format!("usage: pdbiox-resource-bench {case} PATH"))?;
+        if case == "structure_batch_file" {
+            let maximum_spill_bytes = arguments
+                .next()
+                .ok_or_else(|| {
+                    "usage: pdbiox-resource-bench structure_batch_file PATH MAX_SPILL_BYTES"
+                        .to_owned()
+                })?
+                .parse::<u64>()
+                .map_err(|error| format!("invalid spill byte ceiling: {error}"))?;
+            if arguments.next().is_some() {
+                return Err("structure_batch_file accepts a path and spill ceiling".to_owned());
+            }
+            stream_bench::run_structure_batch_file(Path::new(&path), maximum_spill_bytes)?
+        } else if case == "window_scan_file" {
+            require_no_more_arguments(&mut arguments, &case)?;
+            stream_bench::run_window_scan_file(Path::new(&path))?
+        } else if case == "xtc_file" {
+            require_no_more_arguments(&mut arguments, &case)?;
+            xtc_bench::read_file(Path::new(&path))?
+        } else if case == "modelcif_file" {
+            require_no_more_arguments(&mut arguments, &case)?;
+            modelcif_bench::read_file(Path::new(&path))?
+        } else if case == "mrc_block_file" {
+            require_no_more_arguments(&mut arguments, &case)?;
+            mrc_bench::read_file("mrc_block_file", Path::new(&path))?
+        } else if case == "file_write_bcif" {
+            require_no_more_arguments(&mut arguments, &case)?;
+            write_bcif_file(Path::new(&path))?
+        } else {
+            require_no_more_arguments(&mut arguments, &case)?;
+            let options = pdbiox::ReadOptions::new().only_atomic_coords(case == "file_read_atomic");
+            read_file(
+                if case == "file_read" {
+                    "file_read"
+                } else {
+                    "file_read_atomic"
+                },
+                Path::new(&path),
+                &options,
+            )?
+        }
+    } else {
+        if arguments.next().is_some() {
+            return Err(format!(
+                "resource case {case} does not accept extra arguments"
+            ));
+        }
+        run(&case)?
+    };
     println!(
         "{}",
         serde_json::to_string(&record).map_err(|error| format!("resource JSON failed: {error}"))?
