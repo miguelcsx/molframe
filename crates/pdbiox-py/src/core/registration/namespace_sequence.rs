@@ -55,6 +55,7 @@ pub(super) const SEQ: &[&str] = &[
     "TraversalOrder",
     "align_global",
     "align_global_banded",
+    "global_score",
     "align_global_matrix",
     "align_local",
     "align_local_matrix",

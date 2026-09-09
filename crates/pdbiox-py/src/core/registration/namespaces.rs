@@ -3,10 +3,16 @@
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
+#[path = "namespace_analysis.rs"]
+mod namespace_analysis;
 #[path = "namespace_catalog.rs"]
 mod namespace_catalog;
-#[path = "namespace_core_science.rs"]
-mod namespace_core_science;
+#[path = "namespace_compare.rs"]
+mod namespace_compare;
+#[path = "namespace_core.rs"]
+mod namespace_core;
+#[path = "namespace_geometry.rs"]
+mod namespace_geometry;
 #[path = "namespace_overlays.rs"]
 mod namespace_overlays;
 #[path = "namespace_platform.rs"]
@@ -17,7 +23,8 @@ mod namespace_sequence;
 mod trajectory_exports;
 
 use namespace_catalog::NAMESPACES;
-use namespace_core_science::{COMPARE_REGION, COMPARE_SUPERPOSED, COMPARE_WORKFLOW};
+use namespace_compare::WORKFLOW as COMPARE_WORKFLOW;
+use namespace_compare::{REGION as COMPARE_REGION, SUPERPOSED as COMPARE_SUPERPOSED};
 use namespace_platform::ML_ALIASES;
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

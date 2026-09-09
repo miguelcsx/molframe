@@ -1,6 +1,9 @@
 //! Complete catalog of public native namespace contracts.
 
-use super::namespace_core_science::{ANALYSIS, COMPARE, CORE, GEOM};
+use super::namespace_analysis::ANALYSIS;
+use super::namespace_compare::COMPARE;
+use super::namespace_core::CORE;
+use super::namespace_geometry::GEOM;
 use super::namespace_platform::{FX, ML, SPATIAL, XTAL};
 use super::namespace_sequence::SEQ;
 use super::trajectory_exports::TRAJ;
@@ -38,6 +41,8 @@ pub(super) const SURFACE: &[&str] = &[
     "SurfaceCurvature",
     "fibonacci_sphere",
     "shrake_rupley",
+    "visit_shrake_rupley",
+    "collect_shrake_rupley",
     "lee_richards",
     "surface_points",
     "surface_points_at_density",
@@ -263,12 +268,8 @@ pub(super) const NAMESPACES: &[(&str, &[&str])] = &[
         &[
             "DownloadError",
             "DownloadOptions",
-            "ExportAtom",
-            "ExportBond",
-            "ExportChain",
-            "ExportResidue",
-            "TopologyExport",
-            "TopologyExportError",
+            "TopologyBatch",
+            "TopologyBatchError",
             "VerifiedDownload",
             "fetch_verified",
         ],

@@ -1,6 +1,11 @@
 //! Names registered under the native trajectory namespace.
 
 pub(super) const TRAJ: &[&str] = &[
+    "StreamFrame",
+    "run_analysis_stream",
+    "rmsf_stream",
+    "rmsd_stream",
+    "contact_counts_stream",
     "TrajectoryInterpolation",
     "TrajectoryInterpolationError",
     "interpolate_trajectory_frames",
@@ -58,9 +63,14 @@ pub(super) const TRAJ: &[&str] = &[
     "TrajectoryUnits",
     "TrajectoryWriteOptions",
     "TrajectoryReadOptions",
+    "TrajectoryReaderOptions",
+    "TrajectoryStreamReader",
     "AmberAsciiReadOptions",
+    "read_trajectory_materialized",
     "read_trajectory",
     "write_trajectory",
+    "XvgSeries",
+    "read_xvg",
     "MeanSquaredDisplacement",
     "MeanSquaredDisplacementSeries",
     "MeanSquaredDisplacementOp",

@@ -45,11 +45,11 @@ use crate::analysis::{
     validate_planarity, validate_plane_restraints, validate_quality, validate_valence,
     water_bridges, water_dynamics,
 };
-use crate::contract::{
-    PyAnalysis, PyAssumption, PyAssumptionSource, PyCoverage, PyDiagnostic, PyImpactEstimate,
-    PyProvenance, PyStatus,
+use crate::analysis::{
+    PyAnisotropicNetworkModel, PyAnmOptions, PyNormalMode, PyNormalModeSet,
+    anisotropic_network_model, read_nmd, write_nmd,
 };
-use crate::science::{
+use crate::api::{
     PyAlignment, PyAlignmentMode, PyCadContact, PyCadScore, PyCeAlignment, PyCeOptions,
     PyCeSignificanceProfile, PyChainAlternative, PyChainAssignment, PyChainMapping,
     PyChainSequence, PyColumn, PyComparisonAlignment, PyComparisonVerdict, PyContactArea,
@@ -59,6 +59,10 @@ use crate::science::{
     PyMsaOptions, PyPocketRmsd, PyPointMapping, PyPointMatch, PyQsOptions, PyRegionOptions,
     PyResidueMatch, PyScoring, PySequenceDocument, PySequenceDocumentKind, PySequenceFormat,
     PySimilarKmer, PySimilarKmerOptions, PySubstitutionMatrix, PyTree,
+};
+use crate::contract::{
+    PyAnalysis, PyAssumption, PyAssumptionSource, PyCoverage, PyDiagnostic, PyImpactEstimate,
+    PyProvenance, PyStatus,
 };
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -79,11 +83,11 @@ pub(crate) fn register_contract_classes(module: &Bound<'_, PyModule>) -> PyResul
     Ok(())
 }
 
-pub(crate) fn register_science_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    crate::science::register_sequence_alphabet(module)?;
-    crate::science::register_sequence_kmer(module)?;
-    crate::science::register_sequence_errors(module)?;
-    crate::science::register_tree_types(module)?;
+pub(crate) fn register_domain_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    crate::api::register_sequence_alphabet(module)?;
+    crate::api::register_sequence_kmer(module)?;
+    crate::api::register_sequence_errors(module)?;
+    crate::api::register_tree_types(module)?;
     module.add_class::<PyScoring>()?;
     module.add_class::<PyColumn>()?;
     module.add_class::<PyAlignment>()?;
@@ -138,7 +142,7 @@ pub(crate) fn register_analysis(module: &Bound<'_, PyModule>) -> PyResult<()> {
     register_ensemble(module)?;
     register_analysis_classes(module)?;
     register_extended_analysis(module)?;
-    register_analysis_functions(module)
+    register_domain_functions(module)
 }
 
 fn register_analysis_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -232,12 +236,12 @@ fn register_analysis_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-fn register_analysis_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    register_analysis_science_functions(module)?;
+fn register_domain_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    register_analysis_functions(module)?;
     register_analysis_validation_functions(module)
 }
 
-fn register_analysis_science_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
+fn register_analysis_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(polymer_statistics, module)?)?;
     module.add_function(wrap_pyfunction!(pore_profile, module)?)?;
     module.add_function(wrap_pyfunction!(linear_density, module)?)?;
@@ -258,6 +262,9 @@ fn register_analysis_science_functions(module: &Bound<'_, PyModule>) -> PyResult
     module.add_function(wrap_pyfunction!(validate_valence, module)?)?;
     module.add_function(wrap_pyfunction!(hydrogen_bonds, module)?)?;
     module.add_function(wrap_pyfunction!(gaussian_network_model, module)?)?;
+    module.add_function(wrap_pyfunction!(anisotropic_network_model, module)?)?;
+    module.add_function(wrap_pyfunction!(read_nmd, module)?)?;
+    module.add_function(wrap_pyfunction!(write_nmd, module)?)?;
     module.add_function(wrap_pyfunction!(nucleic_torsions, module)?)?;
     module.add_function(wrap_pyfunction!(atom_contacts, module)?)?;
     module.add_function(wrap_pyfunction!(atom_contacts_between, module)?)?;
@@ -353,6 +360,10 @@ fn register_extended_analysis(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyFragmentMatch>()?;
     module.add_class::<PyGnmOptions>()?;
     module.add_class::<PyGaussianNetworkModel>()?;
+    module.add_class::<PyAnmOptions>()?;
+    module.add_class::<PyAnisotropicNetworkModel>()?;
+    module.add_class::<PyNormalMode>()?;
+    module.add_class::<PyNormalModeSet>()?;
     module.add_class::<PyHalfSphereExposure>()?;
     module.add_class::<PyNativeContacts>()?;
     module.add_class::<PyNucleicTorsions>()?;
