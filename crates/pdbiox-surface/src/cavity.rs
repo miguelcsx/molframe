@@ -12,10 +12,11 @@
 
 use crate::SurfaceGridOptions;
 use crate::accessible_area::SasaError;
-use crate::numeric::{f64_to_f32, f64_to_usize, usize_to_f64};
+use crate::numeric::{f64_to_usize, usize_to_f64};
 
-/// One integer grid coordinate.
-type Cell = (usize, usize, usize);
+#[path = "cavity_flood.rs"]
+mod flood;
+pub(crate) use flood::FloodWorkspace;
 
 /// An enclosed cavity: its volume and a point inside it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,13 +78,21 @@ pub fn cavities_with_options(
         return Ok(Vec::new());
     }
 
+    crate::workspace::ensure_surface_input(positions.len(), grid_options.max_workspace_bytes)?;
     let expanded = expanded_radii(radii, probe)?;
     let grid = Grid::new(positions, &expanded, grid_options)?;
+    crate::workspace::ensure_cavity_grid(
+        positions.len(),
+        grid.cell_count(),
+        grid_options.max_workspace_bytes,
+    )?;
 
-    let mut state = grid.paint(positions, &expanded);
-    grid.flood_exterior(&mut state);
+    let mut state = grid.paint(positions, &expanded)?;
+    drop(expanded);
+    let mut flood = FloodWorkspace::new(grid.cell_count())?;
+    grid.flood_exterior(&mut state, &mut flood);
 
-    Ok(grid.collect_cavities(&mut state))
+    grid.collect_cavities(&mut state, &mut flood)
 }
 
 /// Validates cavity-analysis input dimensions and scalar parameters.
@@ -116,7 +125,7 @@ fn validate_inputs(positions: &[[f32; 3]], radii: &[f32], probe: f32) -> Result<
 /// Runtime and output space are `O(R)`.
 fn expanded_radii(radii: &[f32], probe: f32) -> Result<Vec<f64>, SasaError> {
     let probe = f64::from(probe);
-    let mut expanded = Vec::with_capacity(radii.len());
+    let mut expanded = crate::workspace::empty_with_capacity(radii.len())?;
 
     for &radius in radii {
         if !radius.is_finite() || radius < 0.0 {
@@ -138,9 +147,9 @@ pub(crate) struct Grid {
 
 /// Cell markings during the flood.
 pub(crate) const EMPTY: u8 = 0;
-const SOLID: u8 = 1;
+pub(super) const SOLID: u8 = 1;
 pub(crate) const EXTERIOR: u8 = 2;
-const CAVITY: u8 = 3;
+pub(super) const CAVITY: u8 = 3;
 
 impl Grid {
     /// Builds a grid enclosing the grown atoms with a one-cell margin.
@@ -182,8 +191,12 @@ impl Grid {
     ///
     /// Runtime is proportional to the cells in the atoms' local bounding boxes.
     /// The only allocation is the final `O(cells)` state buffer.
-    pub(crate) fn paint(&self, positions: &[[f32; 3]], expanded: &[f64]) -> Vec<u8> {
-        let mut state = vec![EMPTY; self.cell_count()];
+    pub(crate) fn paint(
+        &self,
+        positions: &[[f32; 3]],
+        expanded: &[f64],
+    ) -> Result<Vec<u8>, SasaError> {
+        let mut state = crate::workspace::filled(self.cell_count(), EMPTY)?;
 
         for (position, &radius) in positions.iter().zip(expanded) {
             if radius <= 0.0 {
@@ -193,59 +206,7 @@ impl Grid {
             self.paint_atom(&mut state, position.map(f64::from), radius);
         }
 
-        state
-    }
-
-    /// Floods the exterior inward from every empty boundary cell.
-    ///
-    /// Boundary seeding touches only the six faces rather than scanning every
-    /// grid cell. The subsequent flood is `O(cells)` and allocates only its DFS
-    /// stack.
-    pub(crate) fn flood_exterior(&self, state: &mut [u8]) {
-        let mut stack = Vec::new();
-        self.seed_boundary(state, &mut stack);
-
-        while let Some((x, y, z)) = stack.pop() {
-            self.expand_marked_cell(state, &mut stack, x, y, z, EXTERIOR);
-        }
-    }
-
-    /// Labels each connected group of unreached empty cells as one cavity.
-    ///
-    /// The input state is reused as the visitation bitmap, eliminating the
-    /// previous full-grid `state.to_vec()` allocation. Runtime is `O(cells)`.
-    fn collect_cavities(&self, state: &mut [u8]) -> Vec<Cavity> {
-        let cell_volume = self.step * self.step * self.step;
-        let mut cavities = Vec::new();
-
-        for z in 0..self.dims[2] {
-            for y in 0..self.dims[1] {
-                for x in 0..self.dims[0] {
-                    let index = self.index(x, y, z);
-
-                    if state.get(index).copied() != Some(EMPTY) {
-                        continue;
-                    }
-
-                    let count = self.label_cavity(state, (x, y, z));
-                    let representative = self.centre(x, y, z);
-
-                    cavities.push(Cavity {
-                        volume: usize_to_f64(count) * cell_volume,
-                        representative: [
-                            f64_to_f32(representative[0]),
-                            f64_to_f32(representative[1]),
-                            f64_to_f32(representative[2]),
-                        ],
-                        cells: count,
-                    });
-                }
-            }
-        }
-
-        cavities.sort_by(|left, right| right.volume.total_cmp(&left.volume));
-
-        cavities
+        Ok(state)
     }
 
     /// Returns the total number of cells in the validated grid.
@@ -253,7 +214,7 @@ impl Grid {
     /// Construction has already guaranteed that the multiplication fits the
     /// configured grid limit.
     #[inline]
-    fn cell_count(&self) -> usize {
+    pub(crate) fn cell_count(&self) -> usize {
         self.dims[0] * self.dims[1] * self.dims[2]
     }
 
@@ -275,35 +236,41 @@ impl Grid {
         };
 
         let radius_squared = radius * radius;
+        let first_x = self.axis_centre(0, lo[0]) - centre[0];
+        let first_y = self.axis_centre(1, lo[1]) - centre[1];
+        let mut dz = self.axis_centre(2, lo[2]) - centre[2];
 
         for z in lo[2]..=hi[2] {
-            let dz = self.axis_centre(2, z) - centre[2];
             let remaining_z = radius_squared - dz * dz;
 
             if remaining_z < 0.0 {
+                dz += self.step;
                 continue;
             }
 
+            let mut dy = first_y;
             for y in lo[1]..=hi[1] {
-                let dy = self.axis_centre(1, y) - centre[1];
                 let remaining_xy = remaining_z - dy * dy;
 
                 if remaining_xy < 0.0 {
+                    dy += self.step;
                     continue;
                 }
 
-                for x in lo[0]..=hi[0] {
-                    let dx = self.axis_centre(0, x) - centre[0];
-
-                    if dx * dx <= remaining_xy {
-                        let index = self.index(x, y, z);
-
-                        if let Some(cell) = state.get_mut(index) {
-                            *cell = SOLID;
-                        }
+                let mut dx = first_x;
+                let mut index = self.index(lo[0], y, z);
+                for _ in lo[0]..=hi[0] {
+                    if dx * dx <= remaining_xy
+                        && let Some(cell) = state.get_mut(index)
+                    {
+                        *cell = SOLID;
                     }
+                    dx += self.step;
+                    index += 1;
                 }
+                dy += self.step;
             }
+            dz += self.step;
         }
     }
 
@@ -352,111 +319,6 @@ impl Grid {
         };
 
         (start <= end).then_some((start, end))
-    }
-
-    /// Seeds all empty boundary cells exactly once where practical.
-    ///
-    /// Face traversal is `O(nx·ny + nx·nz + ny·nz)` instead of `O(cells)`.
-    fn seed_boundary(&self, state: &mut [u8], stack: &mut Vec<Cell>) {
-        let [nx, ny, nz] = self.dims;
-
-        for z in 0..nz {
-            for y in 0..ny {
-                self.mark_and_push(state, stack, (0, y, z), EXTERIOR);
-                self.mark_and_push(state, stack, (nx - 1, y, z), EXTERIOR);
-            }
-        }
-
-        for z in 0..nz {
-            for x in 1..nx - 1 {
-                self.mark_and_push(state, stack, (x, 0, z), EXTERIOR);
-                self.mark_and_push(state, stack, (x, ny - 1, z), EXTERIOR);
-            }
-        }
-
-        for y in 1..ny - 1 {
-            for x in 1..nx - 1 {
-                self.mark_and_push(state, stack, (x, y, 0), EXTERIOR);
-                self.mark_and_push(state, stack, (x, y, nz - 1), EXTERIOR);
-            }
-        }
-    }
-
-    /// Labels one enclosed connected component and returns its cell count.
-    ///
-    /// Each member is marked before it enters the stack, so no cell is pushed
-    /// more than once.
-    fn label_cavity(&self, state: &mut [u8], seed: Cell) -> usize {
-        let mut stack = Vec::new();
-
-        self.mark_and_push(state, &mut stack, seed, CAVITY);
-
-        let mut count = 0usize;
-
-        while let Some((x, y, z)) = stack.pop() {
-            count += 1;
-
-            self.expand_marked_cell(state, &mut stack, x, y, z, CAVITY);
-        }
-
-        count
-    }
-
-    /// Marks one empty cell and appends it to `stack`.
-    ///
-    /// Non-empty or invalid cells are ignored.
-    #[inline]
-    fn mark_and_push(&self, state: &mut [u8], stack: &mut Vec<Cell>, cell: Cell, mark: u8) {
-        let index = self.index(cell.0, cell.1, cell.2);
-
-        let Some(value) = state.get_mut(index) else {
-            return;
-        };
-
-        if *value != EMPTY {
-            return;
-        }
-
-        *value = mark;
-        stack.push(cell);
-    }
-
-    /// Visits the six in-grid neighbours of one marked cell.
-    ///
-    /// Unlike the original `neighbours()` implementation, this performs no
-    /// heap allocation for a temporary six-element vector.
-    fn expand_marked_cell(
-        &self,
-        state: &mut [u8],
-        stack: &mut Vec<Cell>,
-        x: usize,
-        y: usize,
-        z: usize,
-        mark: u8,
-    ) {
-        if x > 0 {
-            self.mark_and_push(state, stack, (x - 1, y, z), mark);
-        }
-
-        if x + 1 < self.dims[0] {
-            self.mark_and_push(state, stack, (x + 1, y, z), mark);
-        }
-
-        if y > 0 {
-            self.mark_and_push(state, stack, (x, y - 1, z), mark);
-        }
-
-        if y + 1 < self.dims[1] {
-            self.mark_and_push(state, stack, (x, y + 1, z), mark);
-        }
-
-        if z > 0 {
-            self.mark_and_push(state, stack, (x, y, z - 1), mark);
-        }
-
-        if z + 1 < self.dims[2] {
-            self.mark_and_push(state, stack, (x, y, z + 1), mark);
-        }
     }
 }
 

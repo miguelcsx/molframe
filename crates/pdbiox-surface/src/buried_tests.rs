@@ -1,10 +1,18 @@
 use super::{MoleculeRole, buried_solvent_excluded_surface, buried_surface};
+use pdbiox_core::ExecutionContext;
 
 #[test]
 fn groups_pulled_far_apart_bury_nothing() {
     let positions = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]];
     let radii = [1.5, 1.5];
-    let Ok(result) = buried_surface(&positions, &radii, 1.4, 400, &[true, false]) else {
+    let Ok(result) = buried_surface(
+        &positions,
+        &radii,
+        1.4,
+        400,
+        &[true, false],
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(result.buried.abs() < 1e-6, "buried {}", result.buried);
@@ -16,7 +24,14 @@ fn overlapping_groups_bury_a_positive_area() {
     // Two atoms whose expanded spheres overlap: forming the pair hides area.
     let positions = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]];
     let radii = [1.5, 1.5];
-    let Ok(result) = buried_surface(&positions, &radii, 0.5, 2000, &[true, false]) else {
+    let Ok(result) = buried_surface(
+        &positions,
+        &radii,
+        0.5,
+        2000,
+        &[true, false],
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(result.buried > 0.0, "expected contact to bury area");
@@ -28,7 +43,14 @@ fn an_empty_partner_buries_no_area() {
     let positions = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]];
     let radii = [1.5, 1.5];
     // Everything is in the first group; the second is empty.
-    let Ok(result) = buried_surface(&positions, &radii, 1.4, 400, &[true, true]) else {
+    let Ok(result) = buried_surface(
+        &positions,
+        &radii,
+        1.4,
+        400,
+        &[true, true],
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(result.second_alone.abs() < 1e-12);
@@ -39,7 +61,17 @@ fn an_empty_partner_buries_no_area() {
 fn a_mismatched_partition_is_rejected() {
     let positions = [[0.0, 0.0, 0.0]];
     let radii = [1.5];
-    assert!(buried_surface(&positions, &radii, 1.4, 100, &[true, false]).is_err());
+    assert!(
+        buried_surface(
+            &positions,
+            &radii,
+            1.4,
+            100,
+            &[true, false],
+            &ExecutionContext::default(),
+        )
+        .is_err()
+    );
 }
 
 #[test]

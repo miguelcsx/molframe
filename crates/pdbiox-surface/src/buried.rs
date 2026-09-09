@@ -14,6 +14,7 @@
 //! `O(atoms · points · local density)` cost of the underlying construction.
 
 use crate::accessible_area::{SasaError, shrake_rupley};
+use pdbiox_core::ExecutionContext;
 
 /// Explicit participation of an atom in a two-molecule buried-surface calculation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -77,6 +78,7 @@ pub fn buried_surface(
     probe: f32,
     points: u16,
     in_first: &[bool],
+    context: &ExecutionContext,
 ) -> Result<BuriedSurface, SasaError> {
     if positions.len() != radii.len() || positions.len() != in_first.len() {
         return Err(SasaError::LengthMismatch {
@@ -99,9 +101,9 @@ pub fn buried_surface(
         }
     }
 
-    let first_alone = total(&first_positions, &first_radii, probe, points)?;
-    let second_alone = total(&second_positions, &second_radii, probe, points)?;
-    let together = total(positions, radii, probe, points)?;
+    let first_alone = total(&first_positions, &first_radii, probe, points, context)?;
+    let second_alone = total(&second_positions, &second_radii, probe, points, context)?;
+    let together = total(positions, radii, probe, points, context)?;
     let buried = first_alone + second_alone - together;
 
     Ok(BuriedSurface {
@@ -226,8 +228,14 @@ fn select_participants(
 }
 
 /// Sums the per-atom accessible areas of one group.
-fn total(positions: &[[f32; 3]], radii: &[f32], probe: f32, points: u16) -> Result<f64, SasaError> {
-    let areas = shrake_rupley(positions, radii, probe, points)?;
+fn total(
+    positions: &[[f32; 3]],
+    radii: &[f32],
+    probe: f32,
+    points: u16,
+    context: &ExecutionContext,
+) -> Result<f64, SasaError> {
+    let areas = shrake_rupley(positions, radii, probe, points, context)?;
     Ok(areas.iter().sum())
 }
 
