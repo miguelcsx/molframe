@@ -5,8 +5,6 @@ use crate::{EncodedData, encode_floats, encode_integers, encode_strings};
 use num_traits::ToPrimitive;
 use pdbiox_cif::{CifValue, Document};
 use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::io::InputBuffer;
-use pdbiox_core::structure::Structure;
 
 /// Writes a shared CIF document as deterministic named-field `MessagePack`.
 ///
@@ -50,43 +48,7 @@ pub fn write_document(document: &Document) -> Result<Vec<u8>, Diagnostic> {
         encoder: format!("pdbiox {}", env!("CARGO_PKG_VERSION")),
         data_blocks,
     };
-    rmp_serde::to_vec_named(&file).map_err(|error| encode_error(&error))
-}
-
-/// Writes a structure by reusing the canonical mmCIF projection and parser.
-///
-/// This intentionally delegates structure semantics to `pdbiox-cif`; the
-/// `BinaryCIF` crate owns only binary column encoding.
-///
-/// # Errors
-///
-/// Returns canonical projection, parsing, or `BinaryCIF` encoding diagnostics.
-pub fn write_structure(structure: &Structure) -> Result<Vec<u8>, Vec<Diagnostic>> {
-    write_structure_with_options(structure, &pdbiox_cif::CifWriteOptions::new())
-}
-
-/// Writes a structure with explicit canonical CIF identifier decisions.
-///
-/// # Errors
-///
-/// Returns canonical projection, parsing, or `BinaryCIF` encoding diagnostics.
-pub fn write_structure_with_options(
-    structure: &Structure,
-    options: &pdbiox_cif::CifWriteOptions,
-) -> Result<Vec<u8>, Vec<Diagnostic>> {
-    let text = pdbiox_cif::write_canonical_with_options(structure, options).map_err(|error| {
-        vec![
-            Diagnostic::new(Code::E4105)
-                .with_message("structure cannot be projected to canonical BinaryCIF")
-                .with_context("reason", error.to_string()),
-        ]
-    })?;
-    let input = InputBuffer::from_bytes(text.into_bytes());
-    let (document, findings) = pdbiox_cif::parse(&input)?;
-    if !findings.is_empty() {
-        return Err(findings);
-    }
-    write_document(&document).map_err(|finding| vec![finding])
+    crate::messagepack::consume_to_vec_named(file).map_err(|error| encode_error(&error))
 }
 
 fn encode_column<'a>(
