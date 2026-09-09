@@ -12,6 +12,11 @@ use crate::numeric::f32_from_f64;
 const NM_TO_ANGSTROM: f32 = 10.0;
 const ANGSTROM_TO_NM: f32 = 1.0 / NM_TO_ANGSTROM;
 
+#[path = "xtc/reader.rs"]
+mod reader;
+
+pub use reader::XtcReader;
+
 /// Parsed XTC frames and the encoding metadata not carried by [`Timestep`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct XtcTrajectory {
@@ -49,6 +54,20 @@ pub enum XtcError {
     /// The decoder rejected contradictory internal XTC fields.
     #[error("inconsistent XTC record")]
     InconsistentRecord,
+    /// A requested memory ceiling is zero or exceeds the process hard limit.
+    #[error("invalid XTC memory limit {requested}; it must be at least one byte")]
+    InvalidMemoryLimit {
+        /// Caller-provided ceiling.
+        requested: usize,
+    },
+    /// Reader workspaces, its index and one output frame exceed the ceiling.
+    #[error("XTC frame storage requires {required} bytes, over the {limit} byte limit")]
+    MemoryLimit {
+        /// Required bytes, or `usize::MAX` when dimensions overflow.
+        required: usize,
+        /// Caller-provided ceiling.
+        limit: usize,
+    },
 }
 
 /// Parses all frames from an XTC byte stream.
