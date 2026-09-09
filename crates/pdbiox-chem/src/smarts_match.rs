@@ -4,8 +4,13 @@ use pdbiox_core::annotation::{
     AROMATIC_ATOM_ANNOTATION, AtomAnnotation, FORMAL_CHARGE_ANNOTATION,
     STEREO_CONFIGURATION_ANNOTATION,
 };
+use pdbiox_core::topology::{Csr, CsrBuilder};
 use pdbiox_core::{BondOrder, Element, Structure};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
+
+mod matcher;
+
+use matcher::Matcher;
 
 pub(crate) fn find_matches(pattern: &SmartsPattern, component: &Component) -> Vec<SmartsMatch> {
     let graph = Graph::from_component(component);
@@ -14,7 +19,7 @@ pub(crate) fn find_matches(pattern: &SmartsPattern, component: &Component) -> Ve
 
 pub(crate) fn has_match(pattern: &SmartsPattern, component: &Component) -> bool {
     let graph = Graph::from_component(component);
-    !Matcher::new(pattern, &graph).find(None).is_empty()
+    Matcher::new(pattern, &graph).has(None)
 }
 
 pub(crate) fn find_structure_matches(
@@ -42,8 +47,7 @@ struct GraphBond {
 struct Graph {
     atoms: Vec<GraphAtom>,
     bonds: Vec<GraphBond>,
-    adjacency: Vec<Vec<(usize, usize)>>,
-    edge_by_pair: BTreeMap<(usize, usize), usize>,
+    adjacency: Csr<(usize, usize)>,
 }
 
 impl Graph {
@@ -110,35 +114,47 @@ impl Graph {
         atoms: Vec<GraphAtom>,
         edges: impl IntoIterator<Item = (usize, usize, GraphBond)>,
     ) -> Self {
+        // Edges are collected once so their degrees can size a flat adjacency,
+        // which replaces one heap allocation per atom with two shared buffers.
         let mut bonds = Vec::new();
-        let mut adjacency = vec![Vec::new(); atoms.len()];
-        let mut edge_by_pair = BTreeMap::new();
+        let mut accepted = Vec::new();
+        let mut degrees = vec![0usize; atoms.len()];
         for (first, second, bond) in edges {
             if first >= atoms.len() || second >= atoms.len() {
                 continue;
             }
             let edge = bonds.len();
             bonds.push(bond);
-            adjacency[first].push((second, edge));
-            adjacency[second].push((first, edge));
-            edge_by_pair.insert(ordered(first, second), edge);
+            accepted.push((first, second, edge));
+            degrees[first] += 1;
+            degrees[second] += 1;
         }
-        for neighbours in &mut adjacency {
-            neighbours.sort_unstable();
+
+        let mut builder = CsrBuilder::with_degrees(&degrees);
+        for (first, second, edge) in accepted {
+            builder.push(first, (second, edge));
+            builder.push(second, (first, edge));
         }
+        let mut adjacency = builder.finish();
+        for atom in 0..adjacency.rows() {
+            adjacency.row_mut(atom).sort_unstable();
+        }
+
         Self {
             atoms,
             bonds,
             adjacency,
-            edge_by_pair,
         }
     }
 
     fn bond(&self, first: usize, second: usize) -> Option<GraphBond> {
-        self.edge_by_pair
-            .get(&ordered(first, second))
-            .and_then(|edge| self.bonds.get(*edge))
-            .copied()
+        let neighbours = self.adjacency.row(first);
+        let upper = neighbours.partition_point(|(other, _)| *other <= second);
+        let (other, edge) = neighbours.get(upper.checked_sub(1)?)?;
+        if *other != second {
+            return None;
+        }
+        self.bonds.get(*edge).copied()
     }
 
     fn edge_in_ring(&self, first: usize, second: usize) -> bool {
@@ -147,14 +163,15 @@ impl Graph {
     }
 
     fn ring_bond_count(&self, atom: usize) -> usize {
-        self.adjacency[atom]
+        self.adjacency
+            .row(atom)
             .iter()
             .filter(|(other, _)| self.edge_in_ring(atom, *other))
             .count()
     }
 
     fn smallest_ring(&self, atom: usize) -> Option<usize> {
-        let neighbours = &self.adjacency[atom];
+        let neighbours = self.adjacency.row(atom);
         let mut smallest = None;
         for left in 0..neighbours.len() {
             for right in left + 1..neighbours.len() {
@@ -182,14 +199,14 @@ impl Graph {
         avoided: usize,
         excluded: (usize, usize),
     ) -> Option<usize> {
-        let mut distances = vec![usize::MAX; self.adjacency.len()];
+        let mut distances = vec![usize::MAX; self.adjacency.rows()];
         let mut queue = VecDeque::from([start]);
         distances[start] = 0;
         while let Some(atom) = queue.pop_front() {
             if atom == goal {
                 return Some(distances[atom]);
             }
-            for (next, _) in &self.adjacency[atom] {
+            for (next, _) in self.adjacency.row(atom) {
                 if *next == avoided
                     || ordered(atom, *next) == excluded
                     || distances[*next] != usize::MAX
@@ -201,158 +218,6 @@ impl Graph {
             }
         }
         None
-    }
-}
-
-struct Matcher<'a> {
-    pattern: &'a SmartsPattern,
-    graph: &'a Graph,
-    pattern_adjacency: Vec<Vec<(usize, BondExpression)>>,
-}
-
-impl<'a> Matcher<'a> {
-    fn new(pattern: &'a SmartsPattern, graph: &'a Graph) -> Self {
-        let mut pattern_adjacency = vec![Vec::new(); pattern.atoms.len()];
-        for bond in &pattern.bonds {
-            pattern_adjacency[bond.first].push((bond.second, bond.expression));
-            pattern_adjacency[bond.second].push((bond.first, bond.expression));
-        }
-        Self {
-            pattern,
-            graph,
-            pattern_adjacency,
-        }
-    }
-
-    fn find(&self, anchored_first: Option<usize>) -> Vec<SmartsMatch> {
-        if self.pattern.atoms.is_empty() {
-            return Vec::new();
-        }
-        let mut mappings = BTreeSet::new();
-        let candidates: Box<dyn Iterator<Item = usize>> = match anchored_first {
-            Some(atom) => Box::new(std::iter::once(atom)),
-            None => Box::new(0..self.graph.atoms.len()),
-        };
-        for atom in candidates {
-            if !self.atom_matches(0, atom) {
-                continue;
-            }
-            let mut mapping = vec![None; self.pattern.atoms.len()];
-            let mut used = BTreeSet::from([atom]);
-            mapping[0] = Some(atom);
-            self.search(&mut mapping, &mut used, &mut mappings);
-        }
-        mappings
-            .into_iter()
-            .map(|indices| SmartsMatch {
-                atom_indices: indices.into_boxed_slice(),
-            })
-            .collect()
-    }
-
-    fn search(
-        &self,
-        mapping: &mut [Option<usize>],
-        used: &mut BTreeSet<usize>,
-        results: &mut BTreeSet<Vec<usize>>,
-    ) {
-        let Some(query) = self.next_query_atom(mapping) else {
-            results.insert(mapping.iter().flatten().copied().collect());
-            return;
-        };
-        for candidate in 0..self.graph.atoms.len() {
-            if used.contains(&candidate)
-                || !self.atom_matches(query, candidate)
-                || !self.connected_constraints_match(query, candidate, mapping)
-            {
-                continue;
-            }
-            mapping[query] = Some(candidate);
-            used.insert(candidate);
-            self.search(mapping, used, results);
-            used.remove(&candidate);
-            mapping[query] = None;
-        }
-    }
-
-    fn next_query_atom(&self, mapping: &[Option<usize>]) -> Option<usize> {
-        (0..mapping.len())
-            .filter(|query| mapping[*query].is_none())
-            .max_by_key(|query| {
-                self.pattern_adjacency[*query]
-                    .iter()
-                    .filter(|(other, _)| mapping[*other].is_some())
-                    .count()
-            })
-    }
-
-    fn connected_constraints_match(
-        &self,
-        query: usize,
-        candidate: usize,
-        mapping: &[Option<usize>],
-    ) -> bool {
-        self.pattern_adjacency[query]
-            .iter()
-            .all(|(other, expression)| {
-                let Some(mapped_other) = mapping[*other] else {
-                    return true;
-                };
-                self.graph
-                    .bond(candidate, mapped_other)
-                    .is_some_and(|bond| {
-                        bond_matches(
-                            *expression,
-                            bond,
-                            self.graph.edge_in_ring(candidate, mapped_other),
-                        )
-                    })
-            })
-    }
-
-    fn atom_matches(&self, query: usize, atom: usize) -> bool {
-        self.pattern.atoms[query]
-            .alternatives
-            .iter()
-            .any(|alternative| {
-                alternative
-                    .iter()
-                    .all(|signed| self.test_matches(&signed.test, atom) != signed.negated)
-            })
-    }
-
-    fn test_matches(&self, test: &AtomTest, atom: usize) -> bool {
-        let graph_atom = self.graph.atoms[atom];
-        match test {
-            AtomTest::Any => true,
-            AtomTest::Element(element) => graph_atom.element == *element,
-            AtomTest::Aromatic => graph_atom.aromatic == Some(true),
-            AtomTest::Aliphatic => graph_atom.aromatic == Some(false),
-            AtomTest::Degree(degree) | AtomTest::Connectivity(degree) => {
-                self.graph.adjacency[atom].len() == usize::from(*degree)
-            }
-            AtomTest::Hydrogens(count) => self.hydrogen_count(atom) == usize::from(*count),
-            AtomTest::Charge(charge) => graph_atom.charge == Some(*charge),
-            AtomTest::RingCount(None) => self.graph.ring_count(atom) > 0,
-            AtomTest::RingCount(Some(count)) => self.graph.ring_count(atom) == usize::from(*count),
-            AtomTest::RingSize(None) => self.graph.smallest_ring(atom).is_some(),
-            AtomTest::RingSize(Some(size)) => {
-                self.graph.smallest_ring(atom) == Some(usize::from(*size))
-            }
-            AtomTest::Valence(value) => valence(self.graph, atom) == u16::from(*value),
-            AtomTest::RingBonds(count) => self.graph.ring_bond_count(atom) == usize::from(*count),
-            AtomTest::Stereo(stereo) => graph_atom.stereo == Some(*stereo),
-            AtomTest::Recursive(pattern) => !Matcher::new(pattern, self.graph)
-                .find(Some(atom))
-                .is_empty(),
-        }
-    }
-
-    fn hydrogen_count(&self, atom: usize) -> usize {
-        self.graph.adjacency[atom]
-            .iter()
-            .filter(|(other, _)| self.graph.atoms[*other].element == Element::HYDROGEN)
-            .count()
     }
 }
 
@@ -446,7 +311,9 @@ fn bond_matches(expression: BondExpression, bond: GraphBond, in_ring: bool) -> b
 }
 
 fn valence(graph: &Graph, atom: usize) -> u16 {
-    graph.adjacency[atom]
+    graph
+        .adjacency
+        .row(atom)
         .iter()
         .filter_map(|(other, _)| graph.bond(atom, *other))
         .map(|bond| match bond.order {

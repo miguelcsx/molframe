@@ -33,6 +33,16 @@ fn aromatic_ring_closure_charge_and_recursive_queries_work() {
             .expect("valid")
             .matches(&component)
     );
+    assert!(
+        SmartsPattern::parse("c@c")
+            .expect("valid")
+            .matches(&component)
+    );
+    assert!(
+        !SmartsPattern::parse("c!@c")
+            .expect("valid")
+            .matches(&component)
+    );
 }
 
 #[test]
@@ -53,6 +63,27 @@ fn disconnected_negated_and_stereo_primitives_are_supported() {
             .expect("valid")
             .matches(&component)
     );
+    assert!(
+        SmartsPattern::parse("C!@C")
+            .expect("valid")
+            .matches(&component)
+    );
+}
+
+#[test]
+fn boolean_search_stops_at_the_first_mapping() {
+    let component = pyridinium();
+    let pattern = SmartsPattern::parse("*").expect("valid");
+    let graph = Graph::from_component(&component);
+    let matcher = Matcher::new(&pattern, &graph);
+    let mut visited = 0;
+    matcher.for_each_mapping(None, |_| {
+        visited += 1;
+        std::ops::ControlFlow::Break(())
+    });
+    assert_eq!(visited, 1);
+    assert!(matcher.has(None));
+    assert_eq!(matcher.find(None).len(), component.atoms.len());
 }
 
 #[test]
