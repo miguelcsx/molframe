@@ -159,7 +159,12 @@ pub(crate) fn analyse_b_factor_distribution(
                 &selection,
                 outlier_standard_deviations,
             );
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, |py, value| {
@@ -186,7 +191,12 @@ pub(crate) fn analyse_tls_b_factor_consistency(
                 maximum_absolute_deviation,
                 symmetry_tolerance,
             );
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, |py, value| {

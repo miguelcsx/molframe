@@ -44,6 +44,7 @@ pub(crate) struct PyPoreOptions(pdbiox::analysis::PoreProfileOptions);
 #[pymethods]
 impl PyPoreOptions {
     #[new]
+    #[pyo3(signature = (axis, start, end, samples, search_radius, grid_spacing, probe_radius, *, memory_limit_bytes = 100_000_000))]
     fn new(
         axis: ([f32; 3], [f32; 3]),
         start: f32,
@@ -52,6 +53,7 @@ impl PyPoreOptions {
         search_radius: f32,
         grid_spacing: f32,
         probe_radius: f32,
+        memory_limit_bytes: usize,
     ) -> Self {
         Self(pdbiox::analysis::PoreProfileOptions {
             axis_origin: axis.0,
@@ -62,6 +64,7 @@ impl PyPoreOptions {
             search_radius,
             grid_spacing,
             probe_radius,
+            memory_limit_bytes,
         })
     }
 }

@@ -1,5 +1,6 @@
 //! Fragment-library and elastic-network bindings.
 
+use crate::core::parallel::PyReductionPolicy;
 use crate::geometry::coordinates;
 use crate::graph::PySpatialBackend;
 use crate::query::PySelection;
@@ -44,12 +45,21 @@ pub(crate) struct PyGnmOptions(pdbiox::analysis::GnmOptions);
 #[pymethods]
 impl PyGnmOptions {
     #[new]
+    #[pyo3(signature = (
+        contact_distance,
+        mode_count,
+        zero_mode_tolerance,
+        memory_limit_bytes,
+        backend,
+        reduction=PyReductionPolicy::Deterministic,
+    ))]
     fn new(
         contact_distance: f32,
         mode_count: usize,
         zero_mode_tolerance: f64,
         memory_limit_bytes: usize,
         backend: PySpatialBackend,
+        reduction: PyReductionPolicy,
     ) -> Self {
         Self(pdbiox::analysis::GnmOptions {
             contact_distance,
@@ -57,7 +67,14 @@ impl PyGnmOptions {
             zero_mode_tolerance,
             memory_limit_bytes,
             backend: backend.into(),
+            reduction: reduction.into(),
         })
+    }
+
+    /// Whether the eigensolver may reorder its floating-point reductions.
+    #[getter]
+    fn reduction(&self) -> PyReductionPolicy {
+        PyReductionPolicy::from(self.0.reduction)
     }
 }
 
@@ -112,16 +129,21 @@ pub(crate) fn map_fragments(
 }
 
 #[pyfunction]
-#[pyo3(signature = (structure, sites, options, *, periodic=false))]
+#[pyo3(signature = (structure, sites, options, *, periodic=false, context=None))]
 pub(crate) fn gaussian_network_model(
     py: Python<'_>,
     structure: &PyStructure,
     sites: &PySelection,
     options: PyGnmOptions,
     periodic: bool,
+    context: Option<&crate::core::execution::PyExecutionContext>,
 ) -> PyResult<PyGaussianNetworkModel> {
     let structure = structure.structure().clone();
     let sites = sites.inner.clone();
+    let context = context.map_or_else(
+        crate::core::execution::default_context,
+        crate::core::execution::PyExecutionContext::native,
+    );
     let value = py
         .detach(move || {
             let periodic_box = periodic_box(&structure, periodic)?;
@@ -130,6 +152,7 @@ pub(crate) fn gaussian_network_model(
                 &sites,
                 options.0,
                 periodic_box.as_ref(),
+                &context,
             )
             .map_err(|error| error.to_string())
         })
@@ -139,16 +162,21 @@ pub(crate) fn gaussian_network_model(
 
 #[pymethods]
 impl PyStructure {
-    #[pyo3(signature = (sites, options, *, periodic=false))]
+    #[pyo3(signature = (sites, options, *, periodic=false, context=None))]
     fn gaussian_network_model(
         &self,
         py: Python<'_>,
         sites: &PySelection,
         options: PyGnmOptions,
         periodic: bool,
+        context: Option<&crate::core::execution::PyExecutionContext>,
     ) -> PyResult<PyGaussianNetworkModel> {
         let structure = self.structure().clone();
         let sites = sites.inner.clone();
+        let context = context.map_or_else(
+            crate::core::execution::default_context,
+            crate::core::execution::PyExecutionContext::native,
+        );
         let value = py
             .detach(move || {
                 let periodic_box = periodic_box(&structure, periodic)?;
@@ -157,6 +185,7 @@ impl PyStructure {
                     &sites,
                     options.0,
                     periodic_box.as_ref(),
+                    &context,
                 )
                 .map_err(|error| error.to_string())
             })

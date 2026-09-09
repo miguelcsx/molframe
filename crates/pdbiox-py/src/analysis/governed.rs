@@ -73,7 +73,12 @@ macro_rules! governed_list {
             let analysis = py
                 .detach(|| {
                     let kernel = $kernel;
-                    pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+                    pdbiox::analysis::analyse_structure(
+                        &structure,
+                        &policy,
+                        &kernel,
+                        &crate::core::execution::default_context(),
+                    )
                 })
                 .map_err(value_error)?;
             analysis_with_value(py, analysis, $converter)
@@ -94,7 +99,12 @@ pub(crate) fn analyse_contacts(
     let analysis = py
         .detach(|| {
             let kernel = pdbiox::analysis::contacts_kernel(cutoff, backend.into());
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, contact_list)
@@ -120,7 +130,12 @@ pub(crate) fn analyse_chain_interface(
                 cutoff,
                 backend.into(),
             );
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, index_list)
@@ -139,7 +154,12 @@ pub(crate) fn analyse_half_sphere_exposure(
     let analysis = py
         .detach(|| {
             let kernel = pdbiox::analysis::half_sphere_exposure_kernel(radius, backend.into());
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, hse_list)
@@ -165,7 +185,12 @@ pub(crate) fn validate_clashes(
     let analysis = py
         .detach(|| {
             let kernel = pdbiox::validate::clashes_kernel(tolerance, radii.into(), backend.into());
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, clash_list)
@@ -183,7 +208,12 @@ pub(crate) fn validate_bond_lengths(
     let analysis = py
         .detach(|| {
             let kernel = pdbiox::validate::bond_length_deviations_kernel(tolerance);
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, bond_list)
@@ -201,7 +231,12 @@ pub(crate) fn validate_cis_peptides(
     let analysis = py
         .detach(|| {
             let kernel = pdbiox::validate::cis_peptides_kernel(threshold_degrees);
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, cis_list)
@@ -219,7 +254,12 @@ pub(crate) fn validate_planarity(
     let analysis = py
         .detach(|| {
             let kernel = pdbiox::validate::planarity_kernel(options.0);
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, planarity_list)
@@ -248,7 +288,12 @@ pub(crate) fn validate_completeness(
     let analysis = py
         .detach(|| {
             let kernel = pdbiox::validate::completeness_kernel();
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(value_error)?;
     analysis_with_value(py, analysis, |py, values| {

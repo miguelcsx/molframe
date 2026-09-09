@@ -1,5 +1,6 @@
 //! CCD-governed chemical interactions delegated to native Rust kernels.
 
+use crate::core::execution::{PyExecutionContext, default_context};
 use crate::geometry::PyEigenOptions;
 use crate::graph::PySpatialBackend;
 use crate::structure::PyStructure;
@@ -13,7 +14,13 @@ pub(crate) struct PyHydrogenBondOptions(pdbiox::analysis::HydrogenBondOptions);
 #[pymethods]
 impl PyHydrogenBondOptions {
     #[new]
-    #[pyo3(signature = (maximum_distance, minimum_angle, *, backend=PySpatialBackend::Auto, periodic=false))]
+    #[pyo3(signature = (
+        maximum_distance,
+        minimum_angle,
+        *,
+        backend=PySpatialBackend::Auto,
+        periodic=false,
+    ))]
     fn new(
         maximum_distance: f32,
         minimum_angle: f64,
@@ -196,28 +203,33 @@ impl PyWaterBridgeOptions {
 
 #[pymethods]
 impl PyStructure {
+    #[pyo3(signature = (options, context=None))]
     fn hydrogen_bonds(
         &self,
         py: Python<'_>,
         options: &PyHydrogenBondOptions,
+        context: Option<&PyExecutionContext>,
     ) -> PyResult<Vec<PyHydrogenBond>> {
         let structure = self.structure().clone();
         let options = options.0;
-        py.detach(move || pdbiox::analysis::hydrogen_bonds(&structure, options))
+        let context = context.map_or_else(default_context, PyExecutionContext::native);
+        py.detach(move || pdbiox::analysis::hydrogen_bonds(&structure, options, &context))
             .map(|values| values.into_iter().map(PyHydrogenBond::from).collect())
             .map_err(value_error)
     }
 
-    #[pyo3(signature = (maximum_distance, *, backend=PySpatialBackend::Auto))]
+    #[pyo3(signature = (maximum_distance, *, backend=PySpatialBackend::Auto, context=None))]
     fn salt_bridges(
         &self,
         py: Python<'_>,
         maximum_distance: f32,
         backend: PySpatialBackend,
+        context: Option<&PyExecutionContext>,
     ) -> PyResult<Vec<PySaltBridge>> {
         let structure = self.structure().clone();
+        let context = context.map_or_else(default_context, PyExecutionContext::native);
         py.detach(move || {
-            pdbiox::analysis::salt_bridges(&structure, maximum_distance, backend.into())
+            pdbiox::analysis::salt_bridges(&structure, maximum_distance, backend.into(), &context)
         })
         .map(|values| values.into_iter().map(PySaltBridge::from).collect())
         .map_err(value_error)
@@ -243,19 +255,23 @@ impl PyStructure {
             .map_err(value_error)
     }
 
+    #[pyo3(signature = (options, context=None))]
     fn water_bridges(
         &self,
         py: Python<'_>,
         options: &PyHydrogenBondOptions,
+        context: Option<&PyExecutionContext>,
     ) -> PyResult<Vec<PyWaterBridge>> {
         let structure = self.structure().clone();
         let options = options.0;
+        let context = context.map_or_else(default_context, PyExecutionContext::native);
         py.detach(move || {
             pdbiox::analysis::water_bridges(
                 &structure,
                 pdbiox::analysis::WaterBridgeOptions {
                     hydrogen_bonds: options,
                 },
+                &context,
             )
         })
         .map(|values| values.into_iter().map(PyWaterBridge::from).collect())
@@ -265,29 +281,37 @@ impl PyStructure {
 
 /// Runs the native hydrogen-bond kernel without exposing a Python atom loop.
 #[pyfunction]
+#[pyo3(signature = (structure, options, context=None))]
 pub(crate) fn hydrogen_bonds(
     py: Python<'_>,
     structure: &PyStructure,
     options: &PyHydrogenBondOptions,
+    context: Option<&PyExecutionContext>,
 ) -> PyResult<Vec<PyHydrogenBond>> {
     let structure = structure.structure().clone();
     let options = options.0;
-    py.detach(move || pdbiox::analysis::hydrogen_bonds(&structure, options))
+    let context = context.map_or_else(default_context, PyExecutionContext::native);
+    py.detach(move || pdbiox::analysis::hydrogen_bonds(&structure, options, &context))
         .map(|values| values.into_iter().map(PyHydrogenBond::from).collect())
         .map_err(value_error)
 }
 
 #[pyfunction]
+#[pyo3(signature = (structure, maximum_distance, backend, context=None))]
 pub(crate) fn salt_bridges(
     py: Python<'_>,
     structure: &PyStructure,
     maximum_distance: f32,
     backend: PySpatialBackend,
+    context: Option<&PyExecutionContext>,
 ) -> PyResult<Vec<PySaltBridge>> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::analysis::salt_bridges(&structure, maximum_distance, backend.into()))
-        .map(|values| values.into_iter().map(PySaltBridge::from).collect())
-        .map_err(value_error)
+    let context = context.map_or_else(default_context, PyExecutionContext::native);
+    py.detach(move || {
+        pdbiox::analysis::salt_bridges(&structure, maximum_distance, backend.into(), &context)
+    })
+    .map(|values| values.into_iter().map(PySaltBridge::from).collect())
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -317,19 +341,23 @@ pub(crate) fn cation_pi(
 }
 
 #[pyfunction]
+#[pyo3(signature = (structure, options, context=None))]
 pub(crate) fn water_bridges(
     py: Python<'_>,
     structure: &PyStructure,
     options: &PyWaterBridgeOptions,
+    context: Option<&PyExecutionContext>,
 ) -> PyResult<Vec<PyWaterBridge>> {
     let structure = structure.structure().clone();
     let options = options.0.0;
+    let context = context.map_or_else(default_context, PyExecutionContext::native);
     py.detach(move || {
         pdbiox::analysis::water_bridges(
             &structure,
             pdbiox::analysis::WaterBridgeOptions {
                 hydrogen_bonds: options,
             },
+            &context,
         )
     })
     .map(|values| values.into_iter().map(PyWaterBridge::from).collect())

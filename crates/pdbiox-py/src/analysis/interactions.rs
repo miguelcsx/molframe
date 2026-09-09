@@ -178,8 +178,13 @@ impl PyStructure {
     ) -> PyResult<PyContactTable> {
         let structure = self.structure().clone();
         py.detach(move || {
-            pdbiox::analysis::atom_contacts(&structure, cutoff, backend.into())
-                .map(PyContactTable::from)
+            pdbiox::analysis::atom_contacts(
+                &structure,
+                cutoff,
+                backend.into(),
+                &crate::core::execution::default_context(),
+            )
+            .map(PyContactTable::from)
         })
         .map_err(|error| PyValueError::new_err(error.to_string()))
     }
@@ -215,8 +220,13 @@ pub(crate) fn atom_contacts(
 ) -> PyResult<PyContactTable> {
     let structure = structure.structure().clone();
     py.detach(move || {
-        pdbiox::analysis::atom_contacts(&structure, cutoff, backend.into())
-            .map(PyContactTable::from)
+        pdbiox::analysis::atom_contacts(
+            &structure,
+            cutoff,
+            backend.into(),
+            &crate::core::execution::default_context(),
+        )
+        .map(PyContactTable::from)
     })
     .map_err(value_error)
 }
@@ -235,8 +245,15 @@ pub(crate) fn atom_contacts_between(
     let left = left.inner.clone();
     let right = right.inner.clone();
     py.detach(move || {
-        pdbiox::analysis::atom_contacts_between(&structure, &left, &right, cutoff, backend.into())
-            .map(PyContactTable::from)
+        pdbiox::analysis::atom_contacts_between(
+            &structure,
+            &left,
+            &right,
+            cutoff,
+            backend.into(),
+            &crate::core::execution::default_context(),
+        )
+        .map(PyContactTable::from)
     })
     .map_err(value_error)
 }

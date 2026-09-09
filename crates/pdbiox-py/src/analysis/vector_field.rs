@@ -117,12 +117,15 @@ pub(crate) enum PyVectorFieldError {
 
 #[pyfunction]
 fn integrate_streamlines(
+    py: Python<'_>,
     field: &PyVectorFieldGrid,
     seeds: Vec<[f32; 3]>,
     options: &PyStreamlineOptions,
 ) -> PyResult<Vec<Vec<[f32; 3]>>> {
-    pdbiox::analysis::integrate_streamlines(&field.native, &seeds, options.native)
-        .map_err(value_error)
+    py.detach(move || -> PyResult<Vec<Vec<[f32; 3]>>> {
+        pdbiox::analysis::integrate_streamlines(&field.native, &seeds, options.native)
+            .map_err(value_error)
+    })
 }
 
 fn value_error(error: pdbiox::analysis::VectorFieldError) -> PyErr {

@@ -5,6 +5,7 @@ mod bfactor;
 mod chemical_validation;
 mod chemistry;
 mod distributions;
+mod distributions_conversions;
 mod dssp_binary;
 mod dynamics;
 mod fields;
@@ -16,11 +17,13 @@ mod governed;
 mod helical;
 mod interactions;
 mod networks;
+mod normal_modes;
 mod nucleic;
 mod periodic;
 mod physical;
 mod reference;
 mod structural;
+mod structural_conversions;
 #[path = "../validate/validation.rs"]
 mod validation;
 #[path = "../validate/validation_direct.rs"]
@@ -90,6 +93,10 @@ pub(crate) use interactions::{
 pub(crate) use networks::{
     PyFragmentMatch, PyFragmentReference, PyGaussianNetworkModel, PyGnmOptions,
     gaussian_network_model, map_fragments,
+};
+pub(crate) use normal_modes::{
+    PyAnisotropicNetworkModel, PyAnmOptions, PyNormalMode, PyNormalModeSet,
+    anisotropic_network_model, read_nmd, write_nmd,
 };
 pub(crate) use nucleic::{PyNucleicTorsions, PyPucker, nucleic_torsions, sugar_pucker};
 pub(crate) use physical::{

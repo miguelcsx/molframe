@@ -1,6 +1,7 @@
 //! Explicit site distributions and membrane components.
 
 use crate::contract::{PyAnalysis, analysis_with_value};
+use crate::core::execution::{PyExecutionContext, default_context};
 use crate::graph::PySpatialBackend;
 use crate::query::PyAnalysisPolicy;
 use crate::query::PySelection;
@@ -62,13 +63,13 @@ impl PyRadialOptions {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PyRadialBin {
     #[pyo3(get)]
-    lower: f32,
+    pub(super) lower: f32,
     #[pyo3(get)]
-    upper: f32,
+    pub(super) upper: f32,
     #[pyo3(get)]
-    count: u64,
+    pub(super) count: u64,
     #[pyo3(get)]
-    distribution: f64,
+    pub(super) distribution: f64,
 }
 
 #[pyclass(name = "CentreGroup", frozen, from_py_object)]
@@ -131,24 +132,7 @@ impl PyLeafletOptions {
 #[derive(Clone, Debug)]
 pub(crate) struct PyLeaflet {
     #[pyo3(get)]
-    sites: Vec<u32>,
-}
-
-impl From<pdbiox::analysis::RadialBin> for PyRadialBin {
-    fn from(bin: pdbiox::analysis::RadialBin) -> Self {
-        Self {
-            lower: bin.lower,
-            upper: bin.upper,
-            count: bin.count,
-            distribution: bin.distribution,
-        }
-    }
-}
-
-impl From<pdbiox::analysis::Leaflet> for PyLeaflet {
-    fn from(value: pdbiox::analysis::Leaflet) -> Self {
-        Self { sites: value.sites }
-    }
+    pub(super) sites: Vec<u32>,
 }
 
 pub(crate) fn radial_analysis(
@@ -215,6 +199,7 @@ impl PyStructure {
                     backend: options.backend.into(),
                 },
                 periodic_box.as_ref(),
+                &crate::core::execution::default_context(),
             )
             .map_err(|error| error.to_string())
         })
@@ -245,6 +230,7 @@ impl PyStructure {
                 &right,
                 options,
                 periodic_box.as_ref(),
+                &crate::core::execution::default_context(),
             )
             .map_err(|error| error.to_string())
         })
@@ -252,7 +238,7 @@ impl PyStructure {
         .map_err(PyValueError::new_err)
     }
 
-    #[pyo3(signature = (left, right, shell, *, backend=PySpatialBackend::Auto, periodic=false))]
+    #[pyo3(signature = (left, right, shell, *, backend=PySpatialBackend::Auto, periodic=false, context=None))]
     fn coordination_numbers(
         &self,
         py: Python<'_>,
@@ -261,20 +247,25 @@ impl PyStructure {
         shell: (f32, f32),
         backend: PySpatialBackend,
         periodic: bool,
+        context: Option<&PyExecutionContext>,
     ) -> PyResult<Vec<u32>> {
         let structure = self.structure().clone();
         let left = left.inner.clone();
         let right = right.inner.clone();
+        let context = context.map_or_else(default_context, PyExecutionContext::native);
         py.detach(move || {
             let periodic_box = periodic_box(&structure, periodic)?;
             pdbiox::analysis::coordination_numbers(
                 structure.positions(),
                 &left,
                 &right,
-                shell.0,
-                shell.1,
-                backend.into(),
+                pdbiox::analysis::CoordinationOptions {
+                    minimum_distance: shell.0,
+                    maximum_distance: shell.1,
+                    backend: backend.into(),
+                },
                 periodic_box.as_ref(),
+                &context,
             )
             .map_err(|error| error.to_string())
         })
@@ -302,6 +293,7 @@ impl PyStructure {
                     backend: backend.into(),
                 },
                 periodic_box.as_ref(),
+                &crate::core::execution::default_context(),
             )
             .map(|values| values.into_iter().map(|leaflet| leaflet.sites).collect())
             .map_err(|error| error.to_string())
@@ -332,6 +324,7 @@ pub(crate) fn radial_distribution(
             &right,
             options,
             periodic_box.as_ref(),
+            &crate::core::execution::default_context(),
         )
         .map_err(|error| error.to_string())
     })
@@ -363,6 +356,7 @@ pub(crate) fn centre_of_mass_radial_distribution(
             &right,
             options,
             periodic_box.as_ref(),
+            &crate::core::execution::default_context(),
         )
         .map_err(|error| error.to_string())
     })
@@ -371,7 +365,7 @@ pub(crate) fn centre_of_mass_radial_distribution(
 }
 
 #[pyfunction]
-#[pyo3(signature = (structure, left, right, shell, *, backend=PySpatialBackend::Auto, periodic=false))]
+#[pyo3(signature = (structure, left, right, shell, *, backend=PySpatialBackend::Auto, periodic=false, context=None))]
 pub(crate) fn coordination_numbers(
     py: Python<'_>,
     structure: &PyStructure,
@@ -380,20 +374,25 @@ pub(crate) fn coordination_numbers(
     shell: (f32, f32),
     backend: PySpatialBackend,
     periodic: bool,
+    context: Option<&PyExecutionContext>,
 ) -> PyResult<Vec<u32>> {
     let structure = structure.structure().clone();
     let left = left.inner.clone();
     let right = right.inner.clone();
+    let context = context.map_or_else(default_context, PyExecutionContext::native);
     py.detach(move || {
         let periodic_box = periodic_box(&structure, periodic)?;
         pdbiox::analysis::coordination_numbers(
             structure.positions(),
             &left,
             &right,
-            shell.0,
-            shell.1,
-            backend.into(),
+            pdbiox::analysis::CoordinationOptions {
+                minimum_distance: shell.0,
+                maximum_distance: shell.1,
+                backend: backend.into(),
+            },
             periodic_box.as_ref(),
+            &context,
         )
         .map_err(|error| error.to_string())
     })
@@ -421,6 +420,7 @@ pub(crate) fn identify_leaflets(
                 backend: options.backend.into(),
             },
             periodic_box.as_ref(),
+            &crate::core::execution::default_context(),
         )
         .map_err(|error| error.to_string())
     })
@@ -453,7 +453,12 @@ pub(crate) fn analyse_centre_of_mass_radial_distribution(
             let kernel = pdbiox::analysis::centre_of_mass_radial_distribution_kernel(
                 &masses, &left, &right, options,
             );
-            pdbiox::analysis::analyse_structure(&structure, &policy, &kernel)
+            pdbiox::analysis::analyse_structure(
+                &structure,
+                &policy,
+                &kernel,
+                &crate::core::execution::default_context(),
+            )
         })
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     analysis_with_value(py, analysis, |py, values| {
