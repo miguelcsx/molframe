@@ -12,7 +12,7 @@ class CartesianFit:
     def reference(coordinates: NDArray[float32]) -> CartesianFit: ...
     @staticmethod
     def iterative_mean(max_iterations: int, tolerance: float) -> CartesianFit: ...
-from ._trajectory_dispatch import AmberAsciiReadOptions, TrajectoryReadOptions, read_trajectory, write_trajectory
+from ._trajectory_dispatch import AmberAsciiReadOptions, TrajectoryReadOptions, read_trajectory_materialized, write_trajectory
 DEFAULT_PAIRWISE_MEMORY_LIMIT: int
 DEFAULT_PROCRUSTES_TOLERANCE: float
 DEFAULT_PROCRUSTES_MAXIMUM_ITERATIONS: int
@@ -20,3 +20,4 @@ DEFAULT_PROCRUSTES_MAXIMUM_ITERATIONS: int
 from ._trajectory_format_models import *
 from ._trajectory_runtime import *
 from ._trajectory_operations import *
+from .traj.xvg import XvgSeries, read_xvg

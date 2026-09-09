@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 from numpy.ma import MaskedArray
 from .surface import SurfaceGridOptions
 from ._native import CartesianFit
-from ._trajectory_dispatch import AmberAsciiReadOptions, TrajectoryReadOptions, read_trajectory, write_trajectory
+from ._trajectory_dispatch import AmberAsciiReadOptions, TrajectoryReadOptions, read_trajectory_materialized, write_trajectory
 DEFAULT_PAIRWISE_MEMORY_LIMIT: int
 
 @final

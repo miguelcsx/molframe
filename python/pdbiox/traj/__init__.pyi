@@ -1,6 +1,7 @@
 from .._native.traj import *
 from .._native.traj import __all__
 from .._native.traj import TrajectoryInterpolation, TrajectoryInterpolationError
+from .xvg import XvgSeries, read_xvg
 from ._dimensionality import *
 from .._trajectory import MeanSquaredDisplacementOp, PipelineReader, RmsdToReference
 from .dielectric import DielectricEstimate, DielectricOptions, dielectric_from_dipoles
@@ -29,6 +30,7 @@ from . import (
     statistics_ensemble, tng, topology_amber, topology_minimal, tpr,
     trajectory, trajectory_stream, transform, trc, trr, trz, txyz,
     xtc, xyz,
+    xvg,
 )
 
 def interpolate_trajectory_frames(
@@ -39,3 +41,5 @@ def interpolate_trajectory_frames(
 
 # Module/function collisions use centroid_clustering, similarity_path, and
 # solvent_dynamics so the package-level native functions remain callable.
+
+from .._trajectory_dispatch import StreamFrame, run_analysis_stream, rmsf_stream, rmsd_stream, contact_counts_stream

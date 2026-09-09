@@ -10,7 +10,7 @@ from .._trajectory import (
     TrajectoryReadOptions,
     TrajectoryWriteOptions,
     TrzWriteOptions,
-    read_trajectory,
+    read_trajectory_materialized,
     write_trajectory,
 )
 
@@ -24,6 +24,6 @@ __all__ = [
     "TrajectoryReadOptions",
     "TrajectoryWriteOptions",
     "TrzWriteOptions",
-    "read_trajectory",
+    "read_trajectory_materialized",
     "write_trajectory",
 ]

@@ -100,6 +100,7 @@ from . import (
     txyz,
     xtc,
     xyz,
+    xvg,
 )
 from .dielectric import DielectricOptions
 
