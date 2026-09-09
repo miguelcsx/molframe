@@ -96,6 +96,14 @@ pub fn sampled_real_space_correlation(
     positions: &[[f64; 3]],
     boundary: MapBoundary,
 ) -> Result<RealSpaceCorrelation, RealSpaceCorrelationError> {
+    // Both maps build their cell transform once here rather than once per
+    // sampled coordinate, which is where nearly all the time went.
+    // A degenerate cell previously made every sample return nothing, which
+    // reached the caller as an empty sample set; that outcome is preserved.
+    let (Some(observed), Some(calculated)) = (observed.sampler(), calculated.sampler()) else {
+        return Err(RealSpaceCorrelationError::InsufficientSamples);
+    };
+
     correlate_pairs(positions.iter().filter_map(|position| {
         observed
             .sample_cartesian(*position, boundary)

@@ -10,10 +10,12 @@
 //! come from the shared spatial search bounded by the widest radius in play.
 
 use pdbiox_chem::{RadiusSet, vdw_radius};
-use pdbiox_core::index::AtomIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within};
+use pdbiox_core::{ExecutionContext, index::AtomIndex};
+use pdbiox_spatial::{
+    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, reduce_pairs_within_unsorted,
+};
 
 use crate::numeric::f64_to_f32;
 
@@ -44,6 +46,7 @@ pub fn clashes(
     tolerance: f32,
     radius_set: RadiusSet,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<Vec<Clash>, SpatialError> {
     let count = structure.atom_count() as usize;
     let mut radii = vec![f32::NAN; count];
@@ -61,46 +64,66 @@ pub fn clashes(
     }
 
     let positions = structure.positions();
-    let all = AtomSelection::from_sorted((0..structure.atom_count()).collect());
+    let all = AtomSelection::All(structure.atom_count());
     let cutoff = 2.0 * widest - tolerance;
     if cutoff <= 0.0 {
         return Ok(Vec::new());
     }
-    let pairs = pairs_within(positions, &all, &all, cutoff, backend, None)?;
-
     let bonds = structure.data().bonds.adjacency(structure.atom_count());
-    let mut result = Vec::new();
-    for pair in pairs {
+
+    // Clashes are rare relative to candidate pairs, so pairs are reduced as they
+    // are produced rather than collected: retained bytes track the clash count,
+    // not the quadratic candidate count.
+    let query = PairQuery {
+        positions,
+        left: &all,
+        right: &all,
+        cutoff,
+        options: SpatialSearchOptions::with_backend(backend),
+        periodic: None,
+        context,
+    };
+    let parts = reduce_pairs_within_unsorted(&query, Vec::new, |result: &mut Vec<Clash>, pair| {
         let first = AtomIndex::new(pair.first);
         let second = AtomIndex::new(pair.second);
         let (Some(&radius_a), Some(&radius_b)) = (
             radii.get(pair.first as usize),
             radii.get(pair.second as usize),
         ) else {
-            continue;
+            return;
         };
         if radius_a.is_nan() || radius_b.is_nan() {
-            continue;
+            return;
         }
         let (Some(&a), Some(&b)) = (
             positions.get(pair.first as usize),
             positions.get(pair.second as usize),
         ) else {
-            continue;
+            return;
         };
         let overlap = (radius_a + radius_b) - f64_to_f32(pdbiox_geom::distance(a, b));
         if overlap <= tolerance {
-            continue;
+            return;
         }
         if bonds.neighbours(first).binary_search(&second).is_ok() {
-            continue;
+            return;
         }
         result.push(Clash {
             first,
             second,
             overlap,
         });
+    })?;
+
+    let mut result: Vec<Clash> = Vec::new();
+    for part in parts {
+        result.extend(part);
     }
+
+    // The streaming query does not order its pairs, so the clashes are ordered
+    // here. Sorting the survivors is far cheaper than materialising and sorting
+    // every candidate.
+    result.sort_by_key(|clash| (clash.first.get(), clash.second.get()));
     Ok(result)
 }
 

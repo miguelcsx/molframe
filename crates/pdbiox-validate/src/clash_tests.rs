@@ -1,8 +1,10 @@
 use super::clashes;
 use pdbiox_chem::RadiusSet;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_core::structure::Structure;
 use pdbiox_spatial::SpatialBackend;
+use std::fmt::Write;
 
 const HEADER: &str = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -30,6 +32,7 @@ ATOM 2 C C2 LIG A 2 2 0 0\n"
         0.4,
         RadiusSet::Bondi,
         SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
     ) else {
         panic!("valid");
     };
@@ -51,6 +54,7 @@ ATOM 2 C C2 LIG A 2 3.2 0 0\n"
         0.4,
         RadiusSet::Bondi,
         SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
     ) else {
         panic!("valid");
     };
@@ -71,13 +75,74 @@ ATOM 3 C C3 LIG A 3 2 2 0\n"
         0.4,
         RadiusSet::Bondi,
         SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
     ) else {
         panic!("valid");
     };
     for backend in [SpatialBackend::CellList, SpatialBackend::KdTree] {
-        let Ok(other) = clashes(&structure, 0.4, RadiusSet::Bondi, backend) else {
+        let Ok(other) = clashes(
+            &structure,
+            0.4,
+            RadiusSet::Bondi,
+            backend,
+            &ExecutionContext::default(),
+        ) else {
             panic!("valid");
         };
         assert_eq!(baseline, other, "backend {backend:?} disagreed");
+    }
+}
+
+#[test]
+fn the_clash_list_is_identical_at_every_worker_count() {
+    // A dense lattice guarantees many overlapping pairs across several cell
+    // blocks, so the parallel path is genuinely exercised.
+    // Built through the same mmCIF path the other tests use, at a spacing that
+    // guarantees many overlapping pairs across several cell blocks.
+    let mut source = String::from(HEADER);
+    let mut serial_id = 0;
+    for x in 0..6i16 {
+        for y in 0..6i16 {
+            for z in 0..6i16 {
+                serial_id += 1;
+                let _ = writeln!(
+                    source,
+                    "ATOM {serial_id} C C{serial_id} LIG A {serial_id} {:.3} {:.3} {:.3}",
+                    f32::from(x) * 1.2,
+                    f32::from(y) * 1.2,
+                    f32::from(z) * 1.2
+                );
+            }
+        }
+    }
+    let structure = structure(&source);
+
+    let serial = clashes(
+        &structure,
+        0.1,
+        RadiusSet::Bondi,
+        SpatialBackend::CellList,
+        &ExecutionContext::default(),
+    )
+    .expect("serial clash search");
+    assert!(!serial.is_empty(), "the fixture must actually clash");
+
+    for workers in [2, 4, 8, 16] {
+        let context = ExecutionContext::builder()
+            .worker_budget(workers)
+            .build()
+            .expect("worker context is valid");
+        let parallel = clashes(
+            &structure,
+            0.1,
+            RadiusSet::Bondi,
+            SpatialBackend::CellList,
+            &context,
+        )
+        .expect("parallel clash search");
+        assert_eq!(
+            parallel, serial,
+            "worker count {workers} changed the result"
+        );
     }
 }

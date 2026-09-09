@@ -8,7 +8,7 @@ use crate::{
 use pdbiox_analysis::{AnalysisDescriptor, FrameKernelResult, StructureKernel, structure_kernel};
 use pdbiox_chem::{ComponentProvider, PolymerRoleProfile};
 use pdbiox_core::contract::{AltlocPolicy, AnalysisPolicy, Coverage, ParameterValue, Status};
-use pdbiox_core::{Code, Diagnostic, Structure};
+use pdbiox_core::{Code, Diagnostic, ExecutionContext, Structure};
 
 fn float(value: f64) -> ParameterValue {
     ParameterValue::Float(value.to_bits())
@@ -58,7 +58,7 @@ pub fn nucleic_geometry_kernel<'a>(
                 "plane_fit_maximum_sweeps",
                 integer(options.plane_fit.maximum_sweeps),
             ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             nucleic_acid_geometry(structure, provider, roles, options)
                 .map(|value| FrameKernelResult::complete(value, structure.atom_count()))
         },
@@ -194,7 +194,7 @@ pub fn chirality_kernel(
     structure_kernel(
         AnalysisDescriptor::new("chirality", "1")
             .with_parameter("minimum_abs_volume", float(options.minimum_abs_volume)),
-        move |structure: &Structure, policy: &AnalysisPolicy| {
+        move |structure: &Structure, policy: &AnalysisPolicy, _context: &ExecutionContext| {
             chirality_outliers(structure, provider, &resolved_policy(policy), options)
                 .and_then(chirality_result)
         },
@@ -217,7 +217,7 @@ pub fn reference_geometry_kernel(
                 "maximum_angle_deviation_degrees",
                 float(options.maximum_angle_deviation_degrees),
             ),
-        move |structure: &Structure, policy: &AnalysisPolicy| {
+        move |structure: &Structure, policy: &AnalysisPolicy, _context: &ExecutionContext| {
             reference_geometry(structure, provider, policy.identifiers, options)
                 .and_then(reference_geometry_result)
         },
@@ -240,7 +240,7 @@ pub fn ramachandran_kernel(
                 "reference_version",
                 ParameterValue::Text(options.references().version().into()),
             ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             ramachandran(structure, &options)
                 .and_then(|value| ramachandran_result(structure, value))
         },
@@ -263,7 +263,7 @@ pub fn ramachandran_outliers_kernel(
                 "reference_version",
                 ParameterValue::Text(options.references().version().into()),
             ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             let assessed = ramachandran(structure, &options)?;
             let outliers = assessed
                 .iter()
@@ -298,7 +298,7 @@ pub fn rotamer_kernel<'a>(
                 "profile_version",
                 ParameterValue::Text(profile.version().into()),
             ),
-        move |structure: &Structure, policy: &AnalysisPolicy| {
+        move |structure: &Structure, policy: &AnalysisPolicy, _context: &ExecutionContext| {
             rotamer_outliers(
                 structure,
                 provider,

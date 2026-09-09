@@ -8,7 +8,7 @@ use pdbiox_analysis::{
     AnalysisDescriptor, FrameKernelResult, StructureKernel, mapped_structure_kernel,
 };
 use pdbiox_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Status};
-use pdbiox_core::{AtomSelection, Structure};
+use pdbiox_core::{AtomSelection, ExecutionContext, Structure};
 
 /// Plane fitting or coverage failure.
 #[derive(Debug, thiserror::Error)]
@@ -32,7 +32,10 @@ pub fn plane_restraint_outliers_kernel(
             "maximum_deviation",
             ParameterValue::Float(options.maximum_deviation.to_bits()),
         ),
-        move |structure: &Structure, _policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              _policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              _context: &ExecutionContext| {
             let projected: Vec<_> = restraints
                 .iter()
                 .map(|restraint| project(restraint, source_atoms))

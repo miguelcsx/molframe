@@ -3,6 +3,7 @@
 use criterion::{BenchmarkGroup, Criterion, black_box, measurement::WallTime};
 use pdbiox_bench::{Sample, structure};
 use pdbiox_chem::RadiusSet;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::Namespace;
 use pdbiox_core::index::AtomIndex;
 use pdbiox_core::selection::AtomSelection;
@@ -29,6 +30,7 @@ fn bench_validation(c: &mut Criterion) {
                 0.4,
                 RadiusSet::Bondi,
                 SpatialBackend::CellList,
+                &ExecutionContext::default(),
             ))
         });
     });

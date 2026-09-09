@@ -9,7 +9,7 @@ use crate::{
 use pdbiox_analysis::{AnalysisDescriptor, FrameKernelResult, StructureKernel, structure_kernel};
 use pdbiox_chem::RadiusSet;
 use pdbiox_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Status};
-use pdbiox_core::{Diagnostic, Structure};
+use pdbiox_core::{Diagnostic, ExecutionContext, Structure};
 use pdbiox_spatial::{SpatialBackend, SpatialError};
 use std::convert::Infallible;
 
@@ -86,8 +86,9 @@ pub fn clashes_kernel(
                 "spatial_backend",
                 ParameterValue::Text(format!("{spatial:?}").into()),
             ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            clashes(structure, tolerance, radii, spatial).map(|value| complete(structure, value))
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            clashes(structure, tolerance, radii, spatial, context)
+                .map(|value| complete(structure, value))
         },
     )
 }
@@ -99,7 +100,7 @@ pub fn bond_length_deviations_kernel(
 ) -> impl StructureKernel<Output = Vec<BondDeviation>, Error = Infallible> {
     structure_kernel(
         descriptor("bond-length-deviations").with_parameter("tolerance", float(tolerance)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok(complete(
                 structure,
                 bond_length_deviations(structure, tolerance),
@@ -115,7 +116,7 @@ pub fn ligand_geometry_kernel(
 ) -> impl StructureKernel<Output = LigandGeometryReport, Error = LigandGeometryKernelError> {
     structure_kernel(
         descriptor("ligand-geometry").with_parameter("tolerance", float(tolerance)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             let value = ligand_geometry(structure, tolerance);
             let intended = u32::try_from(value.intended)
                 .map_err(|_| LigandGeometryKernelError::CoverageOverflow)?;
@@ -149,7 +150,7 @@ pub fn cis_peptides_kernel(
 ) -> impl StructureKernel<Output = Vec<CisPeptide>, Error = Diagnostic> {
     structure_kernel(
         descriptor("cis-peptides").with_parameter("threshold_degrees", float(threshold_degrees)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             cis_peptides(structure, threshold_degrees).map(|value| complete(structure, value))
         },
     )
@@ -171,7 +172,7 @@ pub fn planarity_kernel(
                 "plane_fit_maximum_sweeps",
                 integer(options.plane_fit.maximum_sweeps),
             ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             nonplanar_aromatic_rings(structure, options).map(|value| complete(structure, value))
         },
     )
@@ -183,7 +184,7 @@ pub fn quality_flags_kernel() -> impl StructureKernel<Output = Vec<QualityFlag>,
 {
     structure_kernel(
         descriptor("coordinate-quality-flags"),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok(complete(structure, quality_flags(structure)))
         },
     )
@@ -198,7 +199,7 @@ pub fn altloc_occupancy_sums_kernel(
         descriptor("altloc-occupancy-sums")
             .with_parameter("expected_sum", float(options.expected_sum))
             .with_parameter("tolerance", float(options.tolerance)),
-        move |structure: &Structure, policy: &AnalysisPolicy| {
+        move |structure: &Structure, policy: &AnalysisPolicy, _context: &ExecutionContext| {
             let value = altloc_occupancy_sums(structure, policy.identifiers, options)?;
             let intended = u32::try_from(value.intended)
                 .map_err(|_| AltlocOccupancyKernelError::CoverageOverflow)?;
@@ -232,7 +233,7 @@ pub fn ccd_missing_atoms_kernel(
 ) -> impl StructureKernel<Output = CcdCompletenessReport, Error = CcdCompletenessKernelError> + '_ {
     structure_kernel(
         descriptor("ccd-missing-atoms"),
-        move |structure: &Structure, policy: &AnalysisPolicy| {
+        move |structure: &Structure, policy: &AnalysisPolicy, _context: &ExecutionContext| {
             let value = ccd_missing_atoms(structure, provider, policy)?;
             let intended = u32::try_from(value.intended)
                 .map_err(|_| CcdCompletenessKernelError::CoverageOverflow)?;
@@ -268,7 +269,7 @@ pub fn completeness_kernel()
 -> impl StructureKernel<Output = Vec<ChainCompleteness>, Error = CompletenessError> {
     structure_kernel(
         descriptor("chain-completeness"),
-        move |structure: &Structure, policy: &AnalysisPolicy| {
+        move |structure: &Structure, policy: &AnalysisPolicy, _context: &ExecutionContext| {
             completeness(structure, policy.identifiers).map(|value| complete(structure, value))
         },
     )
@@ -279,7 +280,7 @@ pub fn completeness_kernel()
 pub fn valence_kernel() -> impl StructureKernel<Output = Vec<ValenceError>, Error = Infallible> {
     structure_kernel(
         descriptor("overvalent-atoms"),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok(complete(structure, overvalent_atoms(structure)))
         },
     )

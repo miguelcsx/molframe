@@ -8,7 +8,7 @@ use pdbiox_analysis::{
     AnalysisDescriptor, FrameKernelResult, StructureKernel, mapped_structure_kernel,
 };
 use pdbiox_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Status};
-use pdbiox_core::{AtomSelection, Structure};
+use pdbiox_core::{AtomSelection, ExecutionContext, Structure};
 
 /// B-factor kernel or coverage failure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -32,7 +32,10 @@ pub fn b_factor_distribution_kernel(
             "outlier_standard_deviations",
             ParameterValue::Float(outlier_standard_deviations.to_bits()),
         ),
-        move |structure: &Structure, _policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              _policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              _context: &ExecutionContext| {
             let value = b_factor_distribution(
                 structure,
                 &project(selection, source_atoms),
@@ -61,7 +64,10 @@ pub fn tls_b_factor_consistency_kernel(
                 ParameterValue::Float(symmetry_tolerance.to_bits()),
             )
             .with_parameter("groups", ParameterValue::Text(format!("{groups:?}").into())),
-        move |structure: &Structure, _policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              _policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              _context: &ExecutionContext| {
             let projected: Vec<_> = groups
                 .iter()
                 .map(|group| TlsGroup {
