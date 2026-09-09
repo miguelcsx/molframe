@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::index::AtomIndex;
 use pdbiox_core::structure::Structure;
 
@@ -36,8 +37,9 @@ pub struct WaterBridge {
 pub fn water_bridges(
     structure: &Structure,
     options: WaterBridgeOptions,
+    context: &ExecutionContext,
 ) -> Result<Vec<WaterBridge>, HydrogenBondError> {
-    let bonds = hydrogen_bonds(structure, options.hydrogen_bonds)?;
+    let bonds = hydrogen_bonds(structure, options.hydrogen_bonds, context)?;
     let mut partners: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
     for bond in bonds {
         let donor_water = crate::chemistry::component_kind(structure, bond.donor.get())

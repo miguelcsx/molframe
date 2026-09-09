@@ -6,7 +6,7 @@ use pdbiox_chem::{
 };
 use pdbiox_core::contract::DictionaryVersion;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
-use pdbiox_core::{BondOrder, Element};
+use pdbiox_core::{BondOrder, Element, ExecutionContext};
 use pdbiox_spatial::SpatialBackend;
 use std::sync::Arc;
 
@@ -21,7 +21,12 @@ ATOM 3 O A URA B 1 2.8 0 0\n";
 #[test]
 fn ccd_identity_and_oriented_bond_define_a_pair() {
     let structure = annotated_structure();
-    let Ok(pairs) = base_pairs(&structure, &provider(b'U'), options()) else {
+    let Ok(pairs) = base_pairs(
+        &structure,
+        &provider(b'U'),
+        options(),
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid base-pair analysis");
     };
     assert_eq!(pairs.len(), 1);
@@ -31,7 +36,12 @@ fn ccd_identity_and_oriented_bond_define_a_pair() {
 #[test]
 fn non_complementary_ccd_codes_do_not_pair() {
     let structure = annotated_structure();
-    let Ok(pairs) = base_pairs(&structure, &provider(b'G'), options()) else {
+    let Ok(pairs) = base_pairs(
+        &structure,
+        &provider(b'G'),
+        options(),
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid non-complementary analysis");
     };
     assert!(pairs.is_empty());
@@ -42,7 +52,12 @@ fn supporting_bond_count_is_an_explicit_policy() {
     let structure = annotated_structure();
     let mut options = options();
     options.minimum_hydrogen_bonds = 2;
-    let Ok(pairs) = base_pairs(&structure, &provider(b'U'), options) else {
+    let Ok(pairs) = base_pairs(
+        &structure,
+        &provider(b'U'),
+        options,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid stringent analysis");
     };
     assert!(pairs.is_empty());

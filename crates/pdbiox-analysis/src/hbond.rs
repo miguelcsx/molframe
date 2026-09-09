@@ -1,11 +1,14 @@
 //! CCD-perceived hydrogen bonds with explicit hydrogen geometry.
 
-use pdbiox_core::annotation::AtomAnnotation;
 use pdbiox_core::column::Presence;
 use pdbiox_core::index::AtomIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::{AtomRef, Structure};
-use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialError, pairs_within};
+use pdbiox_core::{ExecutionContext, annotation::AtomAnnotation};
+use pdbiox_spatial::{
+    PairQuery, PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions,
+    reduce_pairs_within_unsorted,
+};
 
 use crate::numeric::f64_to_f32;
 
@@ -69,6 +72,7 @@ pub enum HydrogenBondError {
 pub fn hydrogen_bonds(
     structure: &Structure,
     options: HydrogenBondOptions,
+    context: &ExecutionContext,
 ) -> Result<Vec<HydrogenBond>, HydrogenBondError> {
     validate_options(options)?;
     if !structure.data().bonds.is_available() {
@@ -87,36 +91,46 @@ pub fn hydrogen_bonds(
         None
     };
     let periodic_box = cell.map(PeriodicBox::from_cell).transpose()?;
-    let pairs = pairs_within(
-        structure.positions(),
-        &donors,
-        &acceptors,
-        options.maximum_donor_acceptor_distance,
-        options.backend,
-        periodic_box.as_ref(),
-    )?;
     let adjacency = structure.data().bonds.adjacency(structure.atom_count());
     let mut output = Vec::new();
-    for pair in pairs {
-        for (donor, acceptor) in orientations(pair.first, pair.second, &donors, &acceptors) {
-            if donor == acceptor
-                || adjacency
-                    .neighbours(AtomIndex::new(donor))
-                    .binary_search(&AtomIndex::new(acceptor))
-                    .is_ok()
-            {
-                continue;
-            }
-            for hydrogen in donor_hydrogens(structure, adjacency, donor) {
-                if let Some(bond) =
-                    measure(structure, donor, hydrogen, acceptor, periodic_box.as_ref())
-                    && bond.angle_degrees >= options.minimum_angle_degrees
+
+    // Only geometrically valid bonds survive, so candidate pairs are consumed as
+    // they arrive instead of being collected first.
+    let query = PairQuery {
+        positions: structure.positions(),
+        left: &donors,
+        right: &acceptors,
+        cutoff: options.maximum_donor_acceptor_distance,
+        options: SpatialSearchOptions::with_backend(options.backend),
+        periodic: periodic_box.as_ref(),
+        context,
+    };
+    let parts =
+        reduce_pairs_within_unsorted(&query, Vec::new, |output: &mut Vec<HydrogenBond>, pair| {
+            for (donor, acceptor) in orientations(pair.first, pair.second, &donors, &acceptors) {
+                if donor == acceptor
+                    || adjacency
+                        .neighbours(AtomIndex::new(donor))
+                        .binary_search(&AtomIndex::new(acceptor))
+                        .is_ok()
                 {
-                    output.push(bond);
+                    continue;
+                }
+                for hydrogen in donor_hydrogens(structure, adjacency, donor) {
+                    if let Some(bond) =
+                        measure(structure, donor, hydrogen, acceptor, periodic_box.as_ref())
+                        && bond.angle_degrees >= options.minimum_angle_degrees
+                    {
+                        output.push(bond);
+                    }
                 }
             }
-        }
+        })?;
+
+    for part in parts {
+        output.extend(part);
     }
+
     output.sort_by_key(|bond| (bond.donor.get(), bond.hydrogen.get(), bond.acceptor.get()));
     output.dedup_by_key(|bond| (bond.donor.get(), bond.hydrogen.get(), bond.acceptor.get()));
     Ok(output)

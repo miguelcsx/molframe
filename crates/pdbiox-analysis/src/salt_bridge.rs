@@ -8,10 +8,12 @@
 //! Only anion–cation pairs are searched, so two carboxylates or two amines are
 //! never reported. Results are sorted by `(anion, cation)`.
 
-use pdbiox_core::index::AtomIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within};
+use pdbiox_core::{ExecutionContext, index::AtomIndex};
+use pdbiox_spatial::{
+    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, reduce_pairs_within_unsorted,
+};
 
 use crate::numeric::f64_to_f32;
 
@@ -37,6 +39,7 @@ pub fn salt_bridges(
     structure: &Structure,
     max_distance: f32,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<Vec<SaltBridge>, SpatialError> {
     let positions = structure.positions();
     let mut anions = Vec::new();
@@ -53,36 +56,45 @@ pub fn salt_bridges(
 
     let anion_set = AtomSelection::from_sorted(anions);
     let cation_set = AtomSelection::from_sorted(cations);
-    let pairs = pairs_within(
+    // The reduction keeps only the bridges, so pairs are visited as they are
+    // produced rather than collected into a vector sized by the candidate count.
+    let query = PairQuery {
         positions,
-        &anion_set,
-        &cation_set,
-        max_distance,
-        backend,
-        None,
-    )?;
+        left: &anion_set,
+        right: &cation_set,
+        cutoff: max_distance,
+        options: SpatialSearchOptions::with_backend(backend),
+        periodic: None,
+        context,
+    };
+    let parts =
+        reduce_pairs_within_unsorted(&query, Vec::new, |result: &mut Vec<SaltBridge>, pair| {
+            // A pair joins one atom from each set; whichever is the anion is
+            // `first` only when it happened to have the lower index, so classify
+            // explicitly.
+            let (anion, cation) = if anion_set.contains(pair.first) {
+                (pair.first, pair.second)
+            } else {
+                (pair.second, pair.first)
+            };
+            let (Some(&a), Some(&b)) = (
+                positions.get(anion as usize),
+                positions.get(cation as usize),
+            ) else {
+                return;
+            };
+            result.push(SaltBridge {
+                anion: AtomIndex::new(anion),
+                cation: AtomIndex::new(cation),
+                distance: f64_to_f32(pdbiox_geom::distance(a, b)),
+            });
+        })?;
 
-    let mut result = Vec::with_capacity(pairs.len());
-    for pair in pairs {
-        // A pair joins one atom from each set; whichever is the anion is `first`
-        // only when it happened to have the lower index, so classify explicitly.
-        let (anion, cation) = if anion_set.contains(pair.first) {
-            (pair.first, pair.second)
-        } else {
-            (pair.second, pair.first)
-        };
-        let (Some(&a), Some(&b)) = (
-            positions.get(anion as usize),
-            positions.get(cation as usize),
-        ) else {
-            continue;
-        };
-        result.push(SaltBridge {
-            anion: AtomIndex::new(anion),
-            cation: AtomIndex::new(cation),
-            distance: f64_to_f32(pdbiox_geom::distance(a, b)),
-        });
+    let mut result: Vec<SaltBridge> = Vec::new();
+    for part in parts {
+        result.extend(part);
     }
+
     result.sort_by_key(|bridge| (bridge.anion.get(), bridge.cation.get()));
     Ok(result)
 }

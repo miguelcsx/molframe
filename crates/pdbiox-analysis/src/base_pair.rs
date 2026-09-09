@@ -3,7 +3,7 @@
 use crate::{HydrogenBondError, HydrogenBondOptions, hydrogen_bonds};
 use pdbiox_chem::{ComponentKind, ComponentProvider};
 use pdbiox_core::index::ResidueIndex;
-use pdbiox_core::{AtomAnnotation, Diagnostic, Presence, Structure};
+use pdbiox_core::{AtomAnnotation, Diagnostic, ExecutionContext, Presence, Structure};
 use std::collections::BTreeMap;
 
 /// Explicit chemical and geometric policy for canonical base pairing.
@@ -95,12 +95,13 @@ pub fn base_pairs(
     structure: &Structure,
     provider: &dyn ComponentProvider,
     options: BasePairOptions,
+    context: &ExecutionContext,
 ) -> Result<Vec<BasePair>, BasePairError> {
     if options.minimum_hydrogen_bonds == 0 {
         return Err(BasePairError::InvalidOptions);
     }
     let bases = base_identities(structure, provider)?;
-    let bonds = hydrogen_bonds(structure, options.hydrogen_bonds)?;
+    let bonds = hydrogen_bonds(structure, options.hydrogen_bonds, context)?;
     let mut support: BTreeMap<(ResidueIndex, ResidueIndex), Vec<f32>> = BTreeMap::new();
     for bond in bonds {
         let Some(donor_residue) = structure

@@ -3,7 +3,7 @@ use crate::HydrogenBondOptions;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_core::{
     AnnotationColumn, AtomAnnotation, BondOrder, BondProvenance, BondRecord, BondTableBuilder,
-    Presence,
+    ExecutionContext, Presence,
 };
 use pdbiox_spatial::SpatialBackend;
 
@@ -27,6 +27,7 @@ fn two_oriented_hydrogen_bonds_form_one_water_bridge() {
                 periodic: false,
             },
         },
+        &ExecutionContext::default(),
     )
     .expect("valid bridge network");
     assert_eq!(bridges.len(), 1);

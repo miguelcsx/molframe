@@ -1,7 +1,9 @@
 use super::salt_bridges;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_core::structure::Structure;
 use pdbiox_spatial::SpatialBackend;
+use std::fmt::Write;
 
 fn structure(source: &str) -> Structure {
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
@@ -24,7 +26,12 @@ ATOM 1 O OD1 ASP A 1 0 0 0\n\
 ATOM 2 N NZ LYS A 2 3.5 0 0\n"
     );
     let structure = crate::chemistry_test_support::charges(&structure(&source), &[(0, -1), (1, 1)]);
-    let Ok(bridges) = salt_bridges(&structure, 4.0, SpatialBackend::BruteForce) else {
+    let Ok(bridges) = salt_bridges(
+        &structure,
+        4.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert_eq!(bridges.len(), 1);
@@ -41,7 +48,12 @@ ATOM 1 O OD1 ASP A 1 0 0 0\n\
 ATOM 2 N NZ LYS A 2 5 0 0\n"
     );
     let structure = crate::chemistry_test_support::charges(&structure(&source), &[(0, -1), (1, 1)]);
-    let Ok(bridges) = salt_bridges(&structure, 4.0, SpatialBackend::BruteForce) else {
+    let Ok(bridges) = salt_bridges(
+        &structure,
+        4.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(bridges.is_empty());
@@ -56,7 +68,12 @@ ATOM 2 O OE1 GLU A 2 3 0 0\n"
     );
     let structure =
         crate::chemistry_test_support::charges(&structure(&source), &[(0, -1), (1, -1)]);
-    let Ok(bridges) = salt_bridges(&structure, 4.0, SpatialBackend::BruteForce) else {
+    let Ok(bridges) = salt_bridges(
+        &structure,
+        4.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(bridges.is_empty(), "like charges do not bridge");
@@ -71,8 +88,65 @@ ATOM 1 C CB ASP A 1 0 0 0\n\
 ATOM 2 N NZ LYS A 2 3 0 0\n"
     );
     let structure = crate::chemistry_test_support::charges(&structure(&source), &[(1, 1)]);
-    let Ok(bridges) = salt_bridges(&structure, 4.0, SpatialBackend::BruteForce) else {
+    let Ok(bridges) = salt_bridges(
+        &structure,
+        4.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(bridges.is_empty());
+}
+
+#[test]
+fn the_bridge_list_is_identical_at_every_worker_count() {
+    // Alternating charged atoms across a lattice, dense enough that the search
+    // spans several query blocks.
+    let mut source = String::from(HEADER);
+    let mut charges = Vec::new();
+    let mut serial_id = 0u32;
+    for x in 0..7i16 {
+        for y in 0..7i16 {
+            for z in 0..7i16 {
+                let anion = serial_id.is_multiple_of(2);
+                let (name, element) = if anion { ("OD1", "O") } else { ("NZ", "N") };
+                serial_id += 1;
+                writeln!(
+                    source,
+                    "ATOM {serial_id} {element} {name} LIG A {serial_id} {:.3} {:.3} {:.3}",
+                    f32::from(x) * 3.0,
+                    f32::from(y) * 3.0,
+                    f32::from(z) * 3.0
+                )
+                .expect("fixture row");
+                charges.push((serial_id - 1, if anion { -1 } else { 1 }));
+            }
+        }
+    }
+
+    let structure = crate::chemistry_test_support::charges(&structure(&source), &charges);
+    let Ok(serial) = salt_bridges(
+        &structure,
+        4.0,
+        SpatialBackend::CellList,
+        &ExecutionContext::default(),
+    ) else {
+        panic!("valid lattice");
+    };
+    assert!(!serial.is_empty(), "the fixture must produce bridges");
+
+    for workers in [2, 4, 8, 16] {
+        let context = match ExecutionContext::builder().worker_budget(workers).build() {
+            Ok(context) => context,
+            Err(error) => panic!("valid execution context: {error}"),
+        };
+        let Ok(parallel) = salt_bridges(&structure, 4.0, SpatialBackend::CellList, &context) else {
+            panic!("valid lattice");
+        };
+        assert_eq!(
+            parallel, serial,
+            "worker count {workers} changed the result"
+        );
+    }
 }
