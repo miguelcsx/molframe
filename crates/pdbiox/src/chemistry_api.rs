@@ -63,6 +63,7 @@ pub struct BondInferenceReport {
 pub fn infer_bonds(
     structure: &Structure,
     options: BondInference,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<BondInferenceReport, Diagnostic> {
     if !options.scale.is_finite()
         || options.scale <= 0.0
@@ -103,15 +104,6 @@ pub fn infer_bonds(
             Diagnostic::new(Code::E4002).with_context("parameter", BOND_INFERENCE_PARAMETER)
         );
     }
-    let pairs = pdbiox_spatial::pairs_within(
-        structure.positions(),
-        &AtomSelection::All(structure.atom_count()),
-        &AtomSelection::All(structure.atom_count()),
-        maximum,
-        options.backend,
-        None,
-    )
-    .map_err(|error| Diagnostic::new(Code::E9001).with_message(error.to_string()))?;
     let chains = atom_chains(structure);
     let existing: BTreeSet<_> = structure
         .data()
@@ -123,17 +115,34 @@ pub fn infer_bonds(
     for bond in structure.data().bonds.iter() {
         output.push(bond);
     }
-    for pair in pairs {
-        if reject_pair(&pair, &radii, &chains, &existing, options, lower_squared) {
-            continue;
-        }
-        output.push(BondRecord {
-            atom_a: AtomIndex::new(pair.first),
-            atom_b: AtomIndex::new(pair.second),
-            order: BondOrder::Single,
-            provenance: BondProvenance::InferredDistance,
-        });
-    }
+    // Only pairs that become bonds survive, a small fraction of the candidates,
+    // so the candidates are filtered as they are produced rather than collected
+    // into a vector sized by the quadratic candidate count.
+    let selection = AtomSelection::All(structure.atom_count());
+    pdbiox_spatial::for_each_pairs_within_unsorted(
+        &pdbiox_spatial::PairQuery {
+            positions: structure.positions(),
+            left: &selection,
+            right: &selection,
+            cutoff: maximum,
+            options: pdbiox_spatial::SpatialSearchOptions::with_backend(options.backend),
+            periodic: None,
+            context,
+        },
+        |pair| {
+            if reject_pair(&pair, &radii, &chains, &existing, options, lower_squared) {
+                return;
+            }
+            output.push(BondRecord {
+                atom_a: AtomIndex::new(pair.first),
+                atom_b: AtomIndex::new(pair.second),
+                order: BondOrder::Single,
+                provenance: BondProvenance::InferredDistance,
+            });
+        },
+    )
+    .map_err(|error| Diagnostic::new(Code::E9001).with_message(error.to_string()))?;
+
     let mut data = structure.data().clone();
     data.bonds = output.finish();
     Ok(BondInferenceReport {

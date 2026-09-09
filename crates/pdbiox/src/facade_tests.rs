@@ -3,6 +3,11 @@ use super::*;
 #[cfg(feature = "pdb")]
 use crate::PdbOptions;
 
+#[path = "facade_namespace_tests.rs"]
+mod namespace_tests;
+#[path = "facade_plddt_tests.rs"]
+mod plddt_tests;
+
 const DIPEPTIDE: &str = "\
 ATOM      1  N   GLY A   1      27.340  24.430   2.614  1.00 10.00           N
 ATOM      2  CA  GLY A   1      26.266  25.413   2.842  1.00 11.00           C
@@ -97,14 +102,36 @@ fn structured_text_is_dispatched_to_the_reader_its_content_names() {
 fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
     use crate::{AssemblyExt, NcsExt, SymmetryExt};
 
-    let structure = match read_bytes(
+    let (structure, direct_findings) = match read_bytes(
         MMCIF_XTAL.as_bytes().to_vec(),
         Some("entry.cif"),
         &ReadOptions::new(),
     ) {
-        Ok((structure, _)) => structure,
+        Ok(result) => result,
         Err(findings) => panic!("read failed: {findings:?}"),
     };
+
+    let input = InputBuffer::from_bytes(MMCIF_XTAL.as_bytes().to_vec());
+    let options = ReadOptions::new();
+    let (document, base, base_findings) =
+        pdbiox_cif::read_with_document(&input, &options).expect("lossless read should succeed");
+    let (lossless, lossless_findings) = super::extensions::attach_materialized_cif_metadata(
+        &document,
+        base,
+        base_findings,
+        &options,
+    )
+    .expect("lossless metadata lowering should succeed");
+    let difference = crate::structure_difference(
+        &structure,
+        &lossless,
+        crate::StructureDifferenceOptions {
+            coordinate_tolerance: 0.0,
+        },
+    )
+    .expect("zero is a valid coordinate tolerance");
+    assert!(difference.is_empty(), "difference: {difference:?}");
+    assert_eq!(direct_findings, lossless_findings);
 
     assert_eq!(
         structure.assembly_set().map(crate::AssemblySet::len),
@@ -128,32 +155,83 @@ fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
     );
     assert!(
         structure
-            .crystal_neighbors(1.0)
+            .collect_crystal_neighbors(1.0, &pdbiox_core::ExecutionContext::default())
             .is_ok_and(|neighbors| neighbors.is_empty())
+    );
+    assert_eq!(
+        structure.assembly_set().and_then(|set| set.get("1")),
+        lossless.assembly_set().and_then(|set| set.get("1")),
+    );
+    assert_eq!(
+        structure.ncs_set().and_then(|set| set.get("ncs-1")),
+        lossless.ncs_set().and_then(|set| set.get("ncs-1")),
+    );
+    assert_eq!(
+        structure
+            .symmetry_set()
+            .map(pdbiox_xtal::SymmetrySet::operations),
+        lossless
+            .symmetry_set()
+            .map(pdbiox_xtal::SymmetrySet::operations),
     );
 
     #[cfg(feature = "bcif")]
-    {
-        let input = InputBuffer::from_bytes(MMCIF_XTAL.as_bytes().to_vec());
-        let document = match pdbiox_cif::parse(&input) {
-            Ok((document, _)) => document,
-            Err(findings) => panic!("fixture parse failed: {findings:?}"),
-        };
-        let bytes = match pdbiox_bcif::write_document(&document) {
-            Ok(bytes) => bytes,
-            Err(finding) => panic!("fixture BCIF write failed: {finding}"),
-        };
-        let binary = match read_bytes(bytes, Some("entry.bcif"), &ReadOptions::new()) {
-            Ok((structure, _)) => structure,
-            Err(findings) => panic!("BCIF read failed: {findings:?}"),
-        };
-        assert_eq!(binary.assembly_set().map(crate::AssemblySet::len), Some(1));
-        assert_eq!(binary.ncs_set().map(crate::NcsSet::len), Some(1));
-        assert_eq!(
-            binary.symmetry_set().map(|set| set.operations().len()),
-            Some(1)
-        );
-    }
+    assert_bcif_roundtrip_matches(&lossless, &lossless_findings, &options);
+}
+
+#[cfg(feature = "bcif")]
+fn assert_bcif_roundtrip_matches(
+    lossless: &crate::Structure,
+    lossless_findings: &[Diagnostic],
+    options: &ReadOptions,
+) {
+    use crate::{AssemblyExt, NcsExt, SymmetryExt};
+
+    let input = InputBuffer::from_bytes(MMCIF_XTAL.as_bytes().to_vec());
+    let document = match pdbiox_cif::parse(&input) {
+        Ok((document, _)) => document,
+        Err(findings) => panic!("fixture parse failed: {findings:?}"),
+    };
+    let bytes = match pdbiox_bcif::write_document(&document) {
+        Ok(bytes) => bytes,
+        Err(finding) => panic!("fixture BCIF write failed: {finding}"),
+    };
+    let (binary, binary_findings) = match read_bytes(bytes, Some("entry.bcif"), options) {
+        Ok(result) => result,
+        Err(findings) => panic!("BCIF read failed: {findings:?}"),
+    };
+    let difference = crate::structure_difference(
+        &binary,
+        lossless,
+        crate::StructureDifferenceOptions {
+            coordinate_tolerance: 0.0,
+        },
+    )
+    .expect("zero is a valid coordinate tolerance");
+    assert!(difference.is_empty(), "BCIF difference: {difference:?}");
+    assert_eq!(binary_findings.as_slice(), lossless_findings);
+    assert_eq!(binary.assembly_set().map(crate::AssemblySet::len), Some(1));
+    assert_eq!(binary.ncs_set().map(crate::NcsSet::len), Some(1));
+    assert_eq!(
+        binary.symmetry_set().map(|set| set.operations().len()),
+        Some(1)
+    );
+    assert_eq!(
+        binary.assembly_set().and_then(|set| set.get("1")),
+        lossless.assembly_set().and_then(|set| set.get("1")),
+    );
+    assert_eq!(
+        binary.ncs_set().and_then(|set| set.get("ncs-1")),
+        lossless.ncs_set().and_then(|set| set.get("ncs-1")),
+    );
+    assert_eq!(
+        binary
+            .symmetry_set()
+            .map(pdbiox_xtal::SymmetrySet::operations),
+        lossless
+            .symmetry_set()
+            .map(pdbiox_xtal::SymmetrySet::operations),
+    );
 }
 
 #[test]
@@ -234,13 +312,19 @@ fn mmtf_is_dispatched_by_content_and_suffix() {
         &ReadOptions::new(),
     )
     .unwrap_or_else(|findings| panic!("fixture read failed: {findings:?}"));
-    let rendered = render(&structure, Format::Mmtf);
+    let mut output = Vec::new();
+    let rendered = write_stream(
+        &mut output,
+        &structure,
+        Format::Mmtf,
+        OutputOptions::default().memory_limit_bytes,
+    );
     assert!(rendered.is_err());
 }
 
 #[cfg(feature = "mmcif")]
 #[test]
-fn pdbml_is_dispatched_by_content_and_roundtrips() {
+fn pdbml_input_remains_supported_without_an_eager_generic_writer() {
     let (structure, _) = read_bytes(
         DIPEPTIDE.as_bytes().to_vec(),
         Some("test.pdb"),
@@ -248,11 +332,27 @@ fn pdbml_is_dispatched_by_content_and_roundtrips() {
     )
     .unwrap_or_else(|findings| panic!("fixture read failed: {findings:?}"));
     let structure = with_entry_id(&structure, "test");
-    let rendered = render(&structure, Format::Pdbml).expect("PDBML render");
+    let canonical = pdbiox_cif::write_canonical(&structure).expect("canonical CIF render");
+    let input = InputBuffer::from_bytes(canonical.into_bytes());
+    let (document, _) = pdbiox_cif::parse(&input).expect("canonical CIF parse");
+    let rendered = pdbiox_cif::write_pdbml(&document)
+        .expect("explicit PDBML render")
+        .into_bytes();
     let (decoded, findings) =
         read_bytes(rendered, None, &ReadOptions::new()).expect("PDBML content dispatch");
     assert!(findings.is_empty());
     assert_eq!(decoded.atom_count(), structure.atom_count());
+    let mut output = Vec::new();
+    assert!(
+        write_stream(
+            &mut output,
+            &structure,
+            Format::Pdbml,
+            OutputOptions::default().memory_limit_bytes,
+        )
+        .is_err()
+    );
+    assert!(output.is_empty());
 }
 
 #[cfg(feature = "geom")]
@@ -331,90 +431,36 @@ loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.l
         &ReadOptions::new(),
     )
     .unwrap_or_else(|findings| panic!("read failed: {findings:?}"));
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let (document, _) = pdbiox_cif::parse(&input)
+        .unwrap_or_else(|findings| panic!("lossless parse failed: {findings:?}"));
+    let (expected_model, expected_findings) =
+        pdbiox_modelcif::lower(&document).expect("ModelCIF lowering succeeds");
+    assert!(expected_findings.is_empty());
+    assert_eq!(structure.model_cif(), Some(&expected_model));
     assert_eq!(
         structure
             .confidence()
             .map(|confidence| confidence.plddt().count()),
         Some(1)
     );
-    let rendered = render(&structure, Format::Mmcif)
-        .unwrap_or_else(|findings| panic!("write failed: {findings:?}"));
+    let mut rendered = Vec::new();
+    write_mmcif_to(&structure, &mut rendered)
+        .unwrap_or_else(|error| panic!("write failed: {error}"));
     assert!(String::from_utf8_lossy(&rendered).contains("_ma_qa_metric_local.metric_value"));
-}
 
-#[test]
-fn core_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::core::Structure>();
-}
-
-#[cfg(feature = "chem")]
-#[test]
-fn chemistry_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::chem::Component>();
-}
-
-#[cfg(feature = "geom")]
-#[test]
-fn geometry_namespace_exposes_native_kernels() {
-    let _ = crate::geom::distance;
-}
-
-#[cfg(feature = "xtal")]
-#[test]
-fn crystallography_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::xtal::Operator>();
-}
-
-#[cfg(feature = "query")]
-#[test]
-fn query_namespace_exposes_native_builder() {
-    let _ = crate::query::col::all();
-}
-
-#[cfg(feature = "spatial")]
-#[test]
-fn spatial_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::spatial::SpatialPlan>();
-}
-
-#[cfg(feature = "ic")]
-#[test]
-fn internal_coordinate_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::ic::Hedron>();
-}
-
-#[cfg(feature = "mmcif")]
-#[test]
-fn cif_namespace_exposes_native_document() {
-    let _ = std::mem::size_of::<crate::cif::Document>();
-}
-
-#[cfg(feature = "pdb")]
-#[test]
-fn pdb_namespace_exposes_native_options() {
-    let _ = std::mem::size_of::<crate::pdb::PdbOptions>();
-}
-
-#[cfg(feature = "modelcif")]
-#[test]
-fn modelcif_namespace_exposes_native_model() {
-    let _ = std::mem::size_of::<crate::modelcif::ModelCif>();
-}
-
-#[cfg(feature = "bcif")]
-#[test]
-fn binary_cif_namespace_exposes_native_document() {
-    let _ = std::mem::size_of::<crate::bcif::BinaryDocument>();
+    #[cfg(feature = "bcif")]
+    {
+        let bytes = pdbiox_bcif::write_document(&document).expect("fixture BCIF writes");
+        let (binary, _) = read_bytes(bytes, Some("model.bcif"), &ReadOptions::new())
+            .unwrap_or_else(|findings| panic!("BCIF read failed: {findings:?}"));
+        assert_eq!(binary.model_cif(), Some(&expected_model));
+        assert_eq!(binary.confidence(), structure.confidence());
+    }
 }
 
 fn with_entry_id(structure: &Structure, id: &str) -> Structure {
     let mut data = structure.data().clone();
     data.entry.id = Some(id.into());
     Structure::from(data)
-}
-
-#[cfg(feature = "ml")]
-#[test]
-fn machine_learning_namespace_exposes_native_dataset() {
-    let _ = std::mem::size_of::<crate::ml::Dataset>();
 }
