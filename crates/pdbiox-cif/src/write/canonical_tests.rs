@@ -1,5 +1,6 @@
 use super::*;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
+use std::io::{self, Write};
 
 const SOURCE: &str = "data_source\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -55,6 +56,58 @@ fn bond_identifiers_require_explicit_generation_permission() {
         write_canonical_with_options(&structure, &options),
         Err(CifWriteError::ConnectionIdsNotEnabled)
     );
+}
+
+#[derive(Default)]
+struct CountingWriter {
+    bytes: usize,
+    writes: usize,
+    largest_write: usize,
+}
+
+impl Write for CountingWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.bytes += bytes.len();
+        self.writes += 1;
+        self.largest_write = self.largest_write.max(bytes.len());
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn canonical_writer_emits_bounded_fragments_without_a_full_file() {
+    let structure = read(SOURCE);
+    let options = CifWriteOptions::new().with_block_id("chosen");
+    let expected = match write_canonical_with_options(&structure, &options) {
+        Ok(output) => output,
+        Err(error) => panic!("in-memory write failed: {error}"),
+    };
+    let mut writer = CountingWriter::default();
+    if let Err(error) = write_canonical_to(&structure, &options, &mut writer) {
+        panic!("stream write failed: {error}");
+    }
+    assert_eq!(writer.bytes, expected.len());
+    assert!(writer.writes > 1);
+    assert!(writer.largest_write < expected.len());
+}
+
+#[test]
+fn canonical_preflight_refuses_before_touching_the_destination() {
+    let structure = pdbiox_core::Structure::new(pdbiox_core::StructureData::empty());
+    let mut writer = CountingWriter::default();
+    assert!(
+        matches!(
+            write_canonical_to(&structure, &CifWriteOptions::new(), &mut writer),
+            Err(CifWriteToError::Projection(CifWriteError::MissingBlockId))
+        ),
+        "missing identity must remain a projection error"
+    );
+    assert_eq!(writer.bytes, 0);
+    assert_eq!(writer.writes, 0);
 }
 
 fn read(source: &str) -> pdbiox_core::Structure {

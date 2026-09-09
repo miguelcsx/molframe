@@ -5,12 +5,16 @@
 //! sentinels; identifiers required to address atoms, models, and bond endpoints
 //! are never invented implicitly.
 
-use super::options::{CifWriteError, CifWriteOptions, valid_block_id};
-use super::value::quote_text;
-use pdbiox_core::index::ModelIndex;
-use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
+use super::options::{CifWriteError, CifWriteOptions, CifWriteToError};
+use super::projection::{
+    CanonicalAtomRow, CanonicalProjection, CanonicalValue, canonical_projection,
+};
+use super::value::quoted;
+use pdbiox_core::io::TextOutput;
+use pdbiox_core::structure::Structure;
 use pdbiox_core::topology::EntityKind;
-use std::fmt::Write as _;
+use std::fmt::{self, Display, Formatter, Write as _};
+use std::io::Write as IoWrite;
 
 /// Writes a structure using only identifiers retained in the structure.
 ///
@@ -32,92 +36,63 @@ pub fn write_canonical_with_options(
     structure: &Structure,
     options: &CifWriteOptions,
 ) -> Result<String, CifWriteError> {
-    let block_id = preflight(structure, options)?;
     let mut out = String::with_capacity(structure.atom_count() as usize * 100);
-    let _ = writeln!(out, "data_{block_id}");
-    out.push_str("#\n");
-    write_entry_metadata(&mut out, structure);
-    write_cell(&mut out, structure);
-    write_entities(&mut out, structure);
-    super::references::write(&mut out, structure);
-    write_atoms(&mut out, structure)?;
-    super::bonds::write(&mut out, structure, options)?;
+    render_canonical(&mut out, structure, options)?;
     Ok(out)
 }
 
-fn preflight<'a>(
-    structure: &'a Structure,
-    options: &'a CifWriteOptions,
-) -> Result<&'a str, CifWriteError> {
-    let Some(block_id) = options.block_id().or(structure.data().entry.id.as_deref()) else {
-        return Err(CifWriteError::MissingBlockId);
-    };
-    if !valid_block_id(block_id) {
-        return Err(CifWriteError::InvalidBlockId(block_id.to_owned()));
-    }
-    for position in 0..structure.model_count() {
-        let index = model_index(position)?;
-        if structure
-            .model(index)
-            .and_then(pdbiox_core::structure::ModelRef::number)
-            .is_none()
-        {
-            return Err(CifWriteError::MissingModelNumber { model: index.get() });
-        }
-    }
-    for position in 0..structure.atom_count() {
-        let Some(atom) = structure.atom(pdbiox_core::index::AtomIndex::new(position)) else {
-            return Err(CifWriteError::MissingAtomField {
-                atom: position,
-                field: "atom row",
-            });
-        };
-        validate_atom(structure, atom)?;
-    }
-    super::bonds::preflight(structure, options)?;
-    Ok(block_id)
+/// Streams canonical mmCIF directly to a byte destination.
+///
+/// Projection validation completes before the first write. The writer retains
+/// no atom rows and uses only formatting-sized temporary storage.
+///
+/// # Errors
+///
+/// Returns a canonical projection refusal or the destination I/O error.
+pub fn write_canonical_to<W: IoWrite>(
+    structure: &Structure,
+    options: &CifWriteOptions,
+    output: &mut W,
+) -> Result<(), CifWriteToError> {
+    let mut output = TextOutput::new(output);
+    render_canonical(&mut output, structure, options)?;
+    output.finish().map_err(CifWriteToError::Output)
 }
 
-fn validate_atom(structure: &Structure, atom: AtomRef<'_>) -> Result<(), CifWriteError> {
-    let atom_index = atom.index().get();
-    if atom.atom_site_id().is_none_or(|id| id == 0) {
-        return Err(CifWriteError::MissingAtomSiteId { atom: atom_index });
-    }
-    required(atom.name(), atom_index, "label_atom_id")?;
-    required(atom.component_name(), atom_index, "label_comp_id")?;
-    let chain = atom
-        .residue()
-        .and_then(|residue| chain_of(structure, residue))
-        .and_then(pdbiox_core::structure::ChainRef::label);
-    required(chain, atom_index, "label_asym_id")?;
+fn render_canonical(
+    out: &mut impl fmt::Write,
+    structure: &Structure,
+    options: &CifWriteOptions,
+) -> Result<(), CifWriteError> {
+    let projection = canonical_projection(structure, options)?;
+    let _ = writeln!(out, "data_{}", projection.block_id());
+    let _ = out.write_str("#\n");
+    write_entry_metadata(out, structure);
+    write_cell(out, structure);
+    write_entities(out, structure);
+    super::references::write(out, structure);
+    write_atoms(out, projection)?;
+    super::bonds::write(out, structure, options)?;
     Ok(())
 }
 
-fn required(value: Option<&str>, atom: u32, field: &'static str) -> Result<(), CifWriteError> {
-    if value.is_some_and(|text| !text.is_empty()) {
-        Ok(())
-    } else {
-        Err(CifWriteError::MissingAtomField { atom, field })
-    }
-}
-
-fn write_entry_metadata(out: &mut String, structure: &Structure) {
+fn write_entry_metadata(out: &mut impl fmt::Write, structure: &Structure) {
     let entry = &structure.data().entry;
     if let Some(id) = &entry.id {
-        let _ = writeln!(out, "_entry.id   {}\n#", quote_text(id));
+        let _ = writeln!(out, "_entry.id   {}\n#", quoted(id));
     }
     if let Some(title) = &entry.title {
-        let _ = writeln!(out, "_struct.title   {}\n#", quote_text(title));
+        let _ = writeln!(out, "_struct.title   {}\n#", quoted(title));
     }
     if let Some(method) = &entry.method {
-        let _ = writeln!(out, "_exptl.method   {}\n#", quote_text(method));
+        let _ = writeln!(out, "_exptl.method   {}\n#", quoted(method));
     }
     if let Some(resolution) = entry.resolution {
         let _ = writeln!(out, "_refine.ls_d_res_high   {resolution:.4}\n#");
     }
 }
 
-fn write_cell(out: &mut String, structure: &Structure) {
+fn write_cell(out: &mut impl fmt::Write, structure: &Structure) {
     let Some(cell) = structure.data().cell else {
         return;
     };
@@ -134,12 +109,12 @@ fn write_cell(out: &mut String, structure: &Structure) {
     );
 }
 
-fn write_entities(out: &mut String, structure: &Structure) {
+fn write_entities(out: &mut impl fmt::Write, structure: &Structure) {
     let entities = &structure.data().topology.entities;
     if entities.is_empty() {
         return;
     }
-    out.push_str("loop_\n_entity.id\n_entity.type\n_entity.pdbx_description\n");
+    let _ = out.write_str("loop_\n_entity.id\n_entity.type\n_entity.pdbx_description\n");
     for entity in entities.iter() {
         let id = symbol_or_dot(structure, entities.id(entity));
         let kind = match entities.kind(entity) {
@@ -152,11 +127,11 @@ fn write_entities(out: &mut String, structure: &Structure) {
         let description = symbol_or_dot(structure, entities.description(entity));
         let _ = writeln!(out, "{id} {kind} {description}");
     }
-    out.push_str("#\n");
+    let _ = out.write_str("#\n");
     write_entity_sequences(out, structure);
 }
 
-fn write_entity_sequences(out: &mut String, structure: &Structure) {
+fn write_entity_sequences(out: &mut impl fmt::Write, structure: &Structure) {
     let entities = &structure.data().topology.entities;
     if !entities
         .iter()
@@ -164,7 +139,7 @@ fn write_entity_sequences(out: &mut String, structure: &Structure) {
     {
         return;
     }
-    out.push_str(
+    let _ = out.write_str(
         "loop_\n_entity_poly_seq.entity_id\n_entity_poly_seq.num\n_entity_poly_seq.mon_id\n",
     );
     for entity in entities.iter() {
@@ -174,7 +149,7 @@ fn write_entity_sequences(out: &mut String, structure: &Structure) {
             let _ = writeln!(out, "{id} {} {component}", position + 1);
         }
     }
-    out.push_str("#\n");
+    let _ = out.write_str("#\n");
 }
 
 const ATOM_SITE_HEADER: &str = "loop_\n\
@@ -186,185 +161,135 @@ _atom_site.Cartn_z\n_atom_site.occupancy\n_atom_site.B_iso_or_equiv\n\
 _atom_site.auth_seq_id\n_atom_site.auth_comp_id\n_atom_site.auth_asym_id\n\
 _atom_site.auth_atom_id\n_atom_site.pdbx_PDB_model_num\n";
 
-fn write_atoms(out: &mut String, structure: &Structure) -> Result<(), CifWriteError> {
-    out.push_str(ATOM_SITE_HEADER);
-    for position in 0..structure.model_count() {
-        let model = model_index(position)?;
-        let Some((snapshot, local_model)) = structure.model_snapshot(model) else {
-            return Err(CifWriteError::MissingModelNumber { model: model.get() });
-        };
-        let Some(model_number) = snapshot
-            .model(local_model)
-            .and_then(pdbiox_core::structure::ModelRef::number)
-        else {
-            return Err(CifWriteError::MissingModelNumber { model: model.get() });
-        };
-        write_model(out, &snapshot, local_model, model_number)?;
-    }
-    out.push_str("#\n");
+fn write_atoms(
+    out: &mut impl fmt::Write,
+    projection: CanonicalProjection<'_>,
+) -> Result<(), CifWriteError> {
+    let _ = out.write_str(ATOM_SITE_HEADER);
+    projection.visit_atom_rows(|row| {
+        let _ = write_atom(out, row);
+    })?;
+    let _ = out.write_str("#\n");
     Ok(())
 }
 
-fn model_index(position: usize) -> Result<ModelIndex, CifWriteError> {
-    u32::try_from(position)
-        .map(ModelIndex::new)
-        .map_err(|_| CifWriteError::ModelIndexOverflow { model: position })
+fn write_atom(out: &mut impl fmt::Write, row: CanonicalAtomRow<'_>) -> fmt::Result {
+    let element = match row.element() {
+        CanonicalValue::Present(item) => ElementValue::Present(item.symbol()),
+        CanonicalValue::Inapplicable => ElementValue::Inapplicable,
+        CanonicalValue::Unknown => ElementValue::Unknown,
+    };
+    writeln!(
+        out,
+        "{} {} {element} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
+        row.group(),
+        row.atom_site_id(),
+        quoted(row.label_atom_id()),
+        text_value(row.label_alt_id()),
+        quoted(row.label_comp_id()),
+        quoted(row.label_asym_id()),
+        text_value(row.label_entity_id()),
+        integer_value(row.label_seq_id()),
+        text_value(row.insertion_code()),
+        float_value(row.coordinate(0), 3),
+        float_value(row.coordinate(1), 3),
+        float_value(row.coordinate(2), 3),
+        float_value(row.occupancy(), 2),
+        float_value(row.b_factor(), 2),
+        integer_value(row.auth_seq_id()),
+        text_value(row.auth_comp_id()),
+        text_value(row.auth_asym_id()),
+        text_value(row.auth_atom_id()),
+        row.model_number(),
+    )
 }
 
-fn write_model(
-    out: &mut String,
+fn text_value(value: CanonicalValue<&str>) -> TextValue<'_> {
+    TextValue(value)
+}
+
+fn integer_value(value: CanonicalValue<i64>) -> IntegerValue {
+    IntegerValue(value)
+}
+
+fn float_value(value: CanonicalValue<f64>, precision: usize) -> FloatValue {
+    FloatValue { value, precision }
+}
+
+fn symbol_or_dot(
     structure: &Structure,
-    model: ModelIndex,
-    model_number: i32,
-) -> Result<(), CifWriteError> {
-    for chain in structure.data().chains() {
-        let chain_label = chain.label().map(quote_text);
-        let auth_label = optional_unknown(chain.auth_label());
-        let entity = chain
-            .entity()
-            .and_then(|entity| structure.data().topology.entities.id(entity));
-        let entity = symbol_or_dot(structure, entity);
-        let context = AtomSiteContext {
-            chain: chain_label.as_deref(),
-            entity: &entity,
-            auth_chain: &auth_label,
-            model_number,
-        };
-        for residue in chain.residues() {
-            for atom in residue.atoms() {
-                let position = structure
-                    .model_positions(model)
-                    .and_then(|positions| positions.get(atom.index().as_usize()).copied());
-                write_atom(out, structure, atom, residue, position, &context)?;
-            }
+    symbol: Option<pdbiox_core::symbol::SymbolId>,
+) -> TextValue<'_> {
+    match symbol.and_then(|id| structure.resolve(id)) {
+        Some(text) if !text.is_empty() => TextValue(CanonicalValue::Present(text)),
+        Some(_) | None => TextValue(CanonicalValue::Inapplicable),
+    }
+}
+
+struct TextValue<'a>(CanonicalValue<&'a str>);
+
+impl Display for TextValue<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            CanonicalValue::Present(text) => Display::fmt(&quoted(text), formatter),
+            CanonicalValue::Inapplicable => formatter.write_str("."),
+            CanonicalValue::Unknown => formatter.write_str("?"),
         }
     }
-    Ok(())
 }
 
-struct AtomSiteContext<'a> {
-    chain: Option<&'a str>,
-    entity: &'a str,
-    auth_chain: &'a str,
-    model_number: i32,
-}
+struct IntegerValue(CanonicalValue<i64>);
 
-fn write_atom(
-    out: &mut String,
-    structure: &Structure,
-    atom: AtomRef<'_>,
-    residue: ResidueRef<'_>,
-    position: Option<[f32; 3]>,
-    context: &AtomSiteContext<'_>,
-) -> Result<(), CifWriteError> {
-    let atom_index = atom.index().get();
-    let Some(atom_id) = atom.atom_site_id() else {
-        return Err(CifWriteError::MissingAtomSiteId { atom: atom_index });
-    };
-    let Some(atom_name) = atom.name() else {
-        return Err(CifWriteError::MissingAtomField {
-            atom: atom_index,
-            field: "label_atom_id",
-        });
-    };
-    let Some(component_name) = atom.component_name() else {
-        return Err(CifWriteError::MissingAtomField {
-            atom: atom_index,
-            field: "label_comp_id",
-        });
-    };
-    let Some(chain_label) = context.chain else {
-        return Err(CifWriteError::MissingAtomField {
-            atom: atom_index,
-            field: "label_asym_id",
-        });
-    };
-    let group = if residue.is_het() { "HETATM" } else { "ATOM" };
-    let element = atom
-        .element()
-        .map_or_else(|| "?".to_owned(), |item| item.symbol().to_uppercase());
-    let [x, y, z] = position.map_or_else(
-        || ["?".to_owned(), "?".to_owned(), "?".to_owned()],
-        |point| point.map(|axis| format!("{:.3}", f64::from(axis))),
-    );
-    let _ = writeln!(
-        out,
-        "{group} {} {element} {} {} {} {} {} {} {} {x} {y} {z} {} {} {} {} {} {} {}",
-        atom_id,
-        quote_text(atom_name),
-        alternate(structure, atom),
-        quote_text(component_name),
-        chain_label,
-        context.entity,
-        sequence(residue.label_seq_id()),
-        insertion(residue),
-        optional_number(atom.occupancy()),
-        optional_number(atom.b_factor()),
-        sequence(residue.auth_seq_id()),
-        optional_unknown(residue.auth_name()),
-        context.auth_chain,
-        optional_unknown(atom.auth_name()),
-        context.model_number,
-    );
-    Ok(())
-}
-
-fn symbol_or_dot(structure: &Structure, symbol: Option<pdbiox_core::symbol::SymbolId>) -> String {
-    match symbol.and_then(|id| structure.resolve(id)) {
-        Some(text) if !text.is_empty() => quote_text(text),
-        Some(_) | None => ".".to_owned(),
+impl Display for IntegerValue {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            CanonicalValue::Present(number) => Display::fmt(&number, formatter),
+            CanonicalValue::Inapplicable => formatter.write_str("."),
+            CanonicalValue::Unknown => formatter.write_str("?"),
+        }
     }
 }
 
-fn optional_unknown(value: Option<&str>) -> String {
-    match value {
-        Some(text) if !text.is_empty() => quote_text(text),
-        Some(_) | None => "?".to_owned(),
+struct FloatValue {
+    value: CanonicalValue<f64>,
+    precision: usize,
+}
+
+impl Display for FloatValue {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self.value {
+            CanonicalValue::Present(number) => {
+                write!(
+                    formatter,
+                    "{number:.precision$}",
+                    precision = self.precision
+                )
+            }
+            CanonicalValue::Inapplicable => formatter.write_str("."),
+            CanonicalValue::Unknown => formatter.write_str("?"),
+        }
     }
 }
 
-fn alternate(structure: &Structure, atom: AtomRef<'_>) -> String {
-    let value = atom
-        .alt_id()
-        .and_then(pdbiox_core::symbol::AltId::symbol)
-        .and_then(|id| structure.resolve(id));
-    match value {
-        Some(text) if !text.is_empty() => quote_text(text),
-        Some(_) | None => ".".to_owned(),
-    }
+enum ElementValue<'a> {
+    Present(&'a str),
+    Inapplicable,
+    Unknown,
 }
 
-fn insertion(residue: ResidueRef<'_>) -> String {
-    match residue.ins_code() {
-        Some(code) if !code.is_empty() => quote_text(code),
-        Some(_) | None => "?".to_owned(),
+impl Display for ElementValue<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Present(symbol) => {
+                for byte in symbol.bytes() {
+                    formatter.write_char(char::from(byte.to_ascii_uppercase()))?;
+                }
+                Ok(())
+            }
+            Self::Inapplicable => formatter.write_str("."),
+            Self::Unknown => formatter.write_str("?"),
+        }
     }
-}
-
-fn sequence(value: Option<i32>) -> String {
-    match value {
-        Some(value) => value.to_string(),
-        None => ".".to_owned(),
-    }
-}
-
-fn optional_number(value: Option<f32>) -> String {
-    match value {
-        Some(value) => format!("{value:.2}"),
-        None => "?".to_owned(),
-    }
-}
-
-fn chain_of<'a>(
-    structure: &'a Structure,
-    residue: ResidueRef<'_>,
-) -> Option<pdbiox_core::structure::ChainRef<'a>> {
-    let index = structure
-        .data()
-        .topology
-        .chains
-        .containing(residue.index().get())?;
-    structure.chain(index)
 }
 
 #[cfg(test)]

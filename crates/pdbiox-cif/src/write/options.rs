@@ -1,6 +1,7 @@
 //! Explicit decisions and failures for canonical CIF projection.
 
 use std::fmt::{Display, Formatter};
+use std::io;
 
 /// Decisions that cannot be recovered from a lowered structure.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -78,6 +79,8 @@ pub enum CifWriteError {
         /// Zero-based model position.
         model: usize,
     },
+    /// The total number of atom-site rows exceeds the platform index space.
+    AtomRowCountOverflow,
     /// A required atom-site item is unavailable.
     MissingAtomField {
         /// Zero-based atom position.
@@ -131,6 +134,9 @@ impl Display for CifWriteError {
                     "model position {model} exceeds the supported index range"
                 )
             }
+            Self::AtomRowCountOverflow => {
+                formatter.write_str("canonical atom-site row count exceeds the platform range")
+            }
             Self::MissingAtomField { atom, field } => {
                 write!(formatter, "atom {atom} has no required `{field}`")
             }
@@ -159,6 +165,39 @@ impl Display for CifWriteError {
 }
 
 impl std::error::Error for CifWriteError {}
+
+/// A canonical projection or output-stream failure.
+#[derive(Debug)]
+pub enum CifWriteToError {
+    /// The semantic structure cannot be represented canonically.
+    Projection(CifWriteError),
+    /// The destination stopped accepting bytes.
+    Output(io::Error),
+}
+
+impl Display for CifWriteToError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Projection(error) => Display::fmt(error, formatter),
+            Self::Output(error) => write!(formatter, "output stream failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for CifWriteToError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Projection(error) => Some(error),
+            Self::Output(error) => Some(error),
+        }
+    }
+}
+
+impl From<CifWriteError> for CifWriteToError {
+    fn from(error: CifWriteError) -> Self {
+        Self::Projection(error)
+    }
+}
 
 pub(crate) fn valid_block_id(id: &str) -> bool {
     !id.is_empty()
