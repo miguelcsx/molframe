@@ -5,8 +5,9 @@
 //! species — is read when present and reported as absent when not, rather than
 //! being invented.
 
-use super::atoms::AtomBuilder;
+use super::atoms::{AtomBuilder, AtomSiteRowSink};
 use super::ensemble::ragged_model_numbers;
+use super::ragged::{RaggedBuilder, RaggedParts};
 use crate::document::{CifValue, Document};
 use num_traits::ToPrimitive;
 use pdbiox_core::diagnostic::{Code, Diagnostic, Diagnostics};
@@ -53,7 +54,22 @@ fn lower_model(
     options: &ReadOptions,
     model: Option<i64>,
 ) -> (Structure, Vec<Diagnostic>) {
-    let mut findings = Diagnostics::new();
+    let (data, findings, asym_entities) = prepare_model(block, options, Vec::new());
+    let builder = AtomBuilder::new(data, findings, options, asym_entities);
+    let (data, findings, coords) = match model {
+        Some(model) => builder.only_model(model).read(atom_site),
+        None => builder.read(atom_site),
+    };
+    finish_model(block, data, findings, coords)
+}
+
+pub(super) fn prepare_model(
+    block: &crate::document::DataBlock,
+    options: &ReadOptions,
+    initial_findings: Vec<Diagnostic>,
+) -> (StructureData, Diagnostics, Vec<AsymEntity>) {
+    let mut findings = Diagnostics::with_capacity(initial_findings.len());
+    findings.extend(initial_findings);
     let mut data = StructureData::empty();
     if !options.only_atomic_coords {
         read_entry(block, &mut data, &mut findings);
@@ -64,12 +80,15 @@ fn lower_model(
     // from the chemical species declared by the file.
     read_entities(block, &mut data, &mut findings);
     let asym_entities = read_asym_entities(block, &mut data, &mut findings);
+    (data, findings, asym_entities)
+}
 
-    let builder = AtomBuilder::new(&mut data, &mut findings, options, &asym_entities);
-    let coords = match model {
-        Some(model) => builder.only_model(model).read(atom_site),
-        None => builder.read(atom_site),
-    };
+pub(super) fn finish_model(
+    block: &crate::document::DataBlock,
+    mut data: StructureData,
+    mut findings: Diagnostics,
+    coords: CoordinateStore,
+) -> (Structure, Vec<Diagnostic>) {
     data.coords = coords;
     super::bonds::read(block, &mut data, &mut findings);
 
@@ -89,6 +108,112 @@ fn lower_model(
     (structure, findings.finish())
 }
 
+/// Lowers borrowed coordinate rows against a metadata-only CIF document.
+///
+/// The caller must feed complete rows in deposition order. Every row and every
+/// string it returns need remain valid only for the duration of one synchronous
+/// [`AtomSiteRowSink::feed`] call. The metadata document must contain the first
+/// data block and any categories needed for entry, entity, bond and reference
+/// interpretation; it does not need to retain `atom_site`.
+///
+/// This seam is shared with binary readers so dictionary-indexed columns can be
+/// lowered without allocating a [`CifValue`] for every cell.
+///
+/// # Errors
+///
+/// Returns parser or container findings from `feed`, a missing data block, or
+/// findings rejected by the selected read mode.
+#[doc(hidden)]
+pub fn lower_atom_site_with(
+    metadata: &Document,
+    options: &ReadOptions,
+    initial_findings: Vec<Diagnostic>,
+    feed: impl FnOnce(&mut dyn AtomSiteRowSink) -> Result<(), Vec<Diagnostic>>,
+) -> ReadResult {
+    let Some(block) = metadata.first_block() else {
+        return Err(vec![Diagnostic::new(Code::E1106)]);
+    };
+    let (data, findings, asym_entities) = prepare_model(block, options, initial_findings);
+    let mut builder = AtomBuilder::new(data, findings, options, asym_entities);
+    if let Err(errors) = feed(&mut builder) {
+        let mut findings = builder.abort();
+        findings.extend(errors);
+        return Err(findings.finish());
+    }
+    let (data, findings, coords) = builder.finish();
+    let (structure, findings) = finish_model(block, data, findings, coords);
+    options.finish(structure, findings)
+}
+
+/// Lowers one externally classified model without retaining atom signatures.
+///
+/// The caller must guarantee that `feed` presents at most one selected model.
+/// This contract lets the lowerer avoid an atom-sized identity side buffer.
+///
+/// # Errors
+///
+/// Returns parser or container findings from `feed`, a missing data block, or
+/// findings rejected by the selected read mode.
+#[doc(hidden)]
+pub fn lower_single_atom_site_with(
+    metadata: &Document,
+    options: &ReadOptions,
+    initial_findings: Vec<Diagnostic>,
+    atom_capacity: usize,
+    feed: impl FnOnce(&mut dyn AtomSiteRowSink) -> Result<(), Vec<Diagnostic>>,
+) -> ReadResult {
+    let Some(block) = metadata.first_block() else {
+        return Err(vec![Diagnostic::new(Code::E1106)]);
+    };
+    let (data, findings, asym_entities) = prepare_model(block, options, initial_findings);
+    let mut builder =
+        AtomBuilder::new(data, findings, options, asym_entities).without_identity_tracking();
+    builder.reserve_atoms(atom_capacity);
+    if let Err(errors) = feed(&mut builder) {
+        let mut findings = builder.abort();
+        findings.extend(errors);
+        return Err(findings.finish());
+    }
+    let (data, findings, coords) = builder.finish();
+    let (structure, findings) = finish_model(block, data, findings, coords);
+    options.finish(structure, findings)
+}
+
+/// Lowers borrowed rows whose models carry independent atom topology.
+///
+/// Rows must be grouped by deposited model number and fed in deposition order.
+/// The sink finalises one model as the next starts, so auxiliary memory does not
+/// grow with the number of source rows beyond the structures retained in the
+/// ragged result itself.
+///
+/// # Errors
+///
+/// Returns parser or container findings from `feed`, a missing data block, or
+/// findings rejected by the selected read mode.
+#[doc(hidden)]
+pub fn lower_ragged_atom_site_with(
+    metadata: &Document,
+    options: &ReadOptions,
+    initial_findings: Vec<Diagnostic>,
+    model_capacity: usize,
+    feed: impl FnOnce(&mut dyn AtomSiteRowSink) -> Result<(), Vec<Diagnostic>>,
+) -> ReadResult {
+    let Some(block) = metadata.first_block() else {
+        return Err(vec![Diagnostic::new(Code::E1106)]);
+    };
+    let mut findings = Diagnostics::with_capacity(initial_findings.len());
+    findings.extend(initial_findings);
+    let mut builder = RaggedBuilder::new(block, options, findings, model_capacity);
+    if let Err(errors) = feed(&mut builder) {
+        let mut findings = builder.abort();
+        findings.extend(errors);
+        return Err(findings.finish());
+    }
+    let parts = builder.finish();
+    let (structure, findings) = assemble_ragged(block, options, parts);
+    options.finish(structure, findings)
+}
+
 fn lower_ragged(
     block: &crate::document::DataBlock,
     atom_site: &crate::document::Category,
@@ -103,13 +228,34 @@ fn lower_ragged(
         models.push(model);
     }
 
+    assemble_ragged(
+        block,
+        options,
+        RaggedParts {
+            models,
+            model_numbers: model_numbers.to_vec(),
+            findings,
+        },
+    )
+}
+
+pub(super) fn assemble_ragged(
+    block: &crate::document::DataBlock,
+    options: &ReadOptions,
+    parts: RaggedParts,
+) -> (Structure, Vec<Diagnostic>) {
+    let RaggedParts {
+        models,
+        model_numbers,
+        mut findings,
+    } = parts;
     let mut data = StructureData::empty();
     if !options.only_atomic_coords {
         read_entry(block, &mut data, &mut findings);
         read_cell(block, &mut data);
     }
     for number in model_numbers {
-        let deposited = if let Ok(number) = i32::try_from(*number) {
+        let deposited = if let Ok(number) = i32::try_from(number) {
             number
         } else {
             findings.push(
@@ -135,7 +281,7 @@ pub(super) struct AsymEntity {
 }
 
 /// Reads the explicit chain-to-entity relation.
-fn read_asym_entities(
+pub(super) fn read_asym_entities(
     block: &crate::document::DataBlock,
     data: &mut StructureData,
     findings: &mut Diagnostics,
@@ -177,7 +323,7 @@ fn read_asym_entities(
 }
 
 /// Reads what the entry says about itself.
-fn read_entry(
+pub(super) fn read_entry(
     block: &crate::document::DataBlock,
     data: &mut StructureData,
     findings: &mut Diagnostics,
@@ -220,7 +366,7 @@ fn read_entry(
 }
 
 /// Reads the crystallographic cell.
-fn read_cell(block: &crate::document::DataBlock, data: &mut StructureData) {
+pub(super) fn read_cell(block: &crate::document::DataBlock, data: &mut StructureData) {
     let Some(cell) = block.category("cell") else {
         return;
     };
@@ -240,7 +386,7 @@ fn read_cell(block: &crate::document::DataBlock, data: &mut StructureData) {
 }
 
 /// Reads the distinct chemical species, and the sequence each should have.
-fn read_entities(
+pub(super) fn read_entities(
     block: &crate::document::DataBlock,
     data: &mut StructureData,
     findings: &mut Diagnostics,

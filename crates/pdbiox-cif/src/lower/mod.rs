@@ -10,6 +10,16 @@ mod diagnostics;
 mod ensemble;
 mod entry;
 mod keys;
+mod metadata;
+mod ragged;
 mod references;
+mod stream;
 
-pub use entry::lower;
+pub use atoms::{AtomSiteRow, AtomSiteRowSink, Field};
+pub use entry::{
+    lower, lower_atom_site_with, lower_ragged_atom_site_with, lower_single_atom_site_with,
+};
+pub(crate) use stream::{
+    StreamFrameParts, StreamModelBuilder, StreamModelParts, StreamedModels, finish_streamed,
+    share_model_topology,
+};

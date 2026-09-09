@@ -98,7 +98,7 @@ fn boxed(value: Option<std::borrow::Cow<'_, str>>) -> Option<Box<str>> {
 fn row_error(category: &Category, row: usize) -> Diagnostic {
     Diagnostic::new(Code::E2001)
         .in_category(category.name())
-        .at_row(u32::try_from(row).map_or(u32::MAX, |value| value))
+        .at_row(row as u64)
 }
 
 #[cfg(test)]
