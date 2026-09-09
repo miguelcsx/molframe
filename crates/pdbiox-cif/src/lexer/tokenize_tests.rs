@@ -148,6 +148,45 @@ fn every_token_carries_the_line_it_was_found_on() {
 }
 
 #[test]
+fn positions_are_exact_for_lf_crlf_and_multibyte_bare_words() {
+    let mut lexer = match Lexer::new("data_α\r\n_entry.id β\r\nloop_\n_a.x 1\n".as_bytes()) {
+        Ok(lexer) => lexer,
+        Err(error) => panic!("{error:?}"),
+    };
+    let expected = [
+        Spanned {
+            token: Token::Block("α"),
+            span: ByteSpan::new(Position::new(0, 1, 1), 7),
+        },
+        Spanned {
+            token: Token::Tag("_entry.id"),
+            span: ByteSpan::new(Position::new(9, 2, 1), 18),
+        },
+        Spanned {
+            token: Token::Value("β", Quoting::Bare),
+            span: ByteSpan::new(Position::new(19, 2, 11), 21),
+        },
+        Spanned {
+            token: Token::Loop,
+            span: ByteSpan::new(Position::new(23, 3, 1), 28),
+        },
+        Spanned {
+            token: Token::Tag("_a.x"),
+            span: ByteSpan::new(Position::new(29, 4, 1), 33),
+        },
+        Spanned {
+            token: Token::Value("1", Quoting::Bare),
+            span: ByteSpan::new(Position::new(34, 4, 6), 35),
+        },
+    ];
+    for expected in expected {
+        assert_eq!(lexer.next_token(), Ok(Some(expected)));
+    }
+    assert_eq!(lexer.next_token(), Ok(None));
+    assert_eq!(lexer.position(), Position::new(36, 5, 1));
+}
+
+#[test]
 fn input_that_is_not_text_is_refused_rather_than_guessed_at() {
     assert!(matches!(Lexer::new(&[0xff, 0xfe]), Err(LexError::NotText)));
 }

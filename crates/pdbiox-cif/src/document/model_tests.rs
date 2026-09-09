@@ -96,3 +96,11 @@ fn a_category_the_library_has_no_interpretation_for_is_kept_all_the_same() {
         Some("kept")
     );
 }
+
+#[test]
+fn declined_shapes_still_parse_through_the_general_path() {
+    let value = CifValue::parse("1.5e-3", Quoting::Bare);
+    assert_eq!(value.as_float(), Some(0.0015));
+    let value = CifValue::parse("1e5", Quoting::Bare);
+    assert_eq!(value.as_float(), Some(100_000.0));
+}

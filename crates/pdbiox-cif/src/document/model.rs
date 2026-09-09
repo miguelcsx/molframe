@@ -11,11 +11,13 @@
 //! collapsing them into one absent value throws away a statement the depositor
 //! made deliberately.
 
+use super::number::fixed_point;
 use crate::lexer::Quoting;
 use indexmap::IndexMap;
 use num_traits::ToPrimitive;
 use pdbiox_core::span::ByteSpan;
 use std::borrow::Cow;
+use std::sync::Arc;
 
 /// One value of one item.
 #[derive(Clone, PartialEq, Debug)]
@@ -25,7 +27,7 @@ pub enum CifValue {
     /// Written `?` — the value exists but was not recorded.
     Unknown,
     /// Text.
-    Text(Box<str>),
+    Text(Arc<str>),
     /// A whole number.
     ///
     /// Kept as an integer rather than as a float: a serial number past two to
@@ -36,16 +38,19 @@ pub enum CifValue {
     Float(f64),
 }
 
-impl CifValue {
-    /// Interprets a lexed value, deciding what kind of thing it is.
-    ///
-    /// Only a bare value can be a number or a sentinel. `'.'` written in quotes
-    /// is the one-character string, not the sentinel, and the format is explicit
-    /// about the difference.
-    #[must_use]
-    pub fn parse(text: &str, quoting: Quoting) -> Self {
+#[derive(Clone, Copy)]
+pub(crate) enum CifValueRef<'a> {
+    Inapplicable,
+    Unknown,
+    Text(&'a str),
+    Integer(i64),
+    Float(f64),
+}
+
+impl<'a> CifValueRef<'a> {
+    pub(crate) fn parse(text: &'a str, quoting: Quoting) -> Self {
         if quoting != Quoting::Bare {
-            return Self::Text(text.into());
+            return Self::Text(text);
         }
         match text {
             "." => Self::Inapplicable,
@@ -56,6 +61,9 @@ impl CifValue {
                     .iter()
                     .any(|byte| matches!(byte, b'.' | b'e' | b'E'));
                 if fractional {
+                    if let Some(value) = fixed_point(text) {
+                        return Self::Float(value);
+                    }
                     if let Ok(value) = text.parse::<f64>() {
                         return Self::Float(value);
                     }
@@ -70,8 +78,69 @@ impl CifValue {
                         return Self::Float(value);
                     }
                 }
-                Self::Text(text.into())
+                Self::Text(text)
             }
+        }
+    }
+
+    pub(crate) const fn as_str(self) -> Option<&'a str> {
+        match self {
+            Self::Text(text) => Some(text),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_identifier(self) -> Option<Cow<'a, str>> {
+        match self {
+            Self::Text(text) => Some(Cow::Borrowed(text)),
+            Self::Integer(value) => Some(Cow::Owned(value.to_string())),
+            Self::Float(value) => Some(Cow::Owned(value.to_string())),
+            Self::Inapplicable | Self::Unknown => None,
+        }
+    }
+
+    pub(crate) const fn as_integer(self) -> Option<i64> {
+        match self {
+            Self::Integer(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_float(self) -> Option<f64> {
+        match self {
+            Self::Integer(value) => value.to_f64(),
+            Self::Float(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub(crate) const fn is_recorded(self) -> bool {
+        !matches!(self, Self::Inapplicable | Self::Unknown)
+    }
+}
+
+impl CifValue {
+    /// Interprets a lexed value, deciding what kind of thing it is.
+    ///
+    /// Only a bare value can be a number or a sentinel. `'.'` written in quotes
+    /// is the one-character string, not the sentinel, and the format is explicit
+    /// about the difference.
+    #[must_use]
+    pub fn parse(text: &str, quoting: Quoting) -> Self {
+        Self::parse_with_text(text, quoting, |text| Arc::from(text))
+    }
+
+    pub(crate) fn parse_with_text(
+        text: &str,
+        quoting: Quoting,
+        retain: impl FnOnce(&str) -> Arc<str>,
+    ) -> Self {
+        match CifValueRef::parse(text, quoting) {
+            CifValueRef::Inapplicable => Self::Inapplicable,
+            CifValueRef::Unknown => Self::Unknown,
+            CifValueRef::Text(text) => Self::Text(retain(text)),
+            CifValueRef::Integer(value) => Self::Integer(value),
+            CifValueRef::Float(value) => Self::Float(value),
         }
     }
 

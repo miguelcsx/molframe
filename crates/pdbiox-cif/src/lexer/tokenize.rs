@@ -10,7 +10,7 @@
 //! quoting style travels alongside so that a later stage can tell a value that
 //! was written `.` from one that was written `'.'`.
 
-use memchr::memchr;
+use memchr::{memchr, memchr_iter, memrchr};
 use pdbiox_core::span::{ByteSpan, Position};
 
 /// How a value was written, which decides what it means.
@@ -131,18 +131,31 @@ impl<'a> Lexer<'a> {
     /// A bare word, which may be a keyword or an ordinary value.
     fn keyword_or_value(&mut self) -> Result<Token<'a>, LexError> {
         let word = self.take_bare()?;
-        if let Some(name) = strip_prefix_ignore_case(word, "data_") {
-            return Ok(Token::Block(name));
-        }
-        if let Some(name) = strip_prefix_ignore_case(word, "save_") {
-            return Ok(if name.is_empty() {
-                Token::FrameEnd
-            } else {
-                Token::FrameStart(name)
-            });
-        }
-        if word.eq_ignore_ascii_case("loop_") {
-            return Ok(Token::Loop);
+
+        // Nearly every bare word in a coordinate loop is a value, and the three
+        // keywords begin with three distinct letters. Deciding on the first
+        // byte turns three prefix comparisons per value into one.
+        match word.as_bytes().first() {
+            Some(b'd' | b'D') => {
+                if let Some(name) = strip_prefix_ignore_case(word, "data_") {
+                    return Ok(Token::Block(name));
+                }
+            }
+            Some(b's' | b'S') => {
+                if let Some(name) = strip_prefix_ignore_case(word, "save_") {
+                    return Ok(if name.is_empty() {
+                        Token::FrameEnd
+                    } else {
+                        Token::FrameStart(name)
+                    });
+                }
+            }
+            Some(b'l' | b'L') => {
+                if word.eq_ignore_ascii_case("loop_") {
+                    return Ok(Token::Loop);
+                }
+            }
+            _ => {}
         }
         Ok(Token::Value(word, Quoting::Bare))
     }
@@ -152,18 +165,107 @@ impl<'a> Lexer<'a> {
     }
 
     fn remaining(&self) -> &'a str {
-        slice_from(self.input, self.at.byte_offset as usize)
+        match usize::try_from(self.at.byte_offset) {
+            Ok(offset) => slice_from(self.input, offset),
+            Err(_) => "",
+        }
     }
 
     /// Advances over `count` bytes, keeping the line and column right.
+    ///
+    /// A long run has its newlines found with a vectorised search; a short one
+    /// walks its bytes. The threshold is not a micro-optimisation but the whole
+    /// point: most advances in an `atom_site` loop are a single separating
+    /// space, and setting up a vectorised search over one byte costs more than
+    /// inspecting it.
     fn advance(&mut self, count: usize) -> Result<(), LexError> {
+        /// Shortest run for which a vectorised newline search pays for itself.
+        const BULK_THRESHOLD: usize = 32;
+
         let text = self.remaining();
-        for byte in text.as_bytes().iter().take(count) {
+        let skipped = match text.as_bytes().get(..count) {
+            Some(skipped) => skipped,
+            None => text.as_bytes(),
+        };
+        if skipped.len() < BULK_THRESHOLD {
+            return self.advance_bytewise(skipped);
+        }
+        self.advance_all(skipped)
+    }
+
+    /// Advances over a short run one byte at a time.
+    fn advance_bytewise(&mut self, skipped: &[u8]) -> Result<(), LexError> {
+        for byte in skipped {
             self.at = self
                 .at
                 .advance(*byte)
                 .ok_or(LexError::PositionOverflow(self.at))?;
         }
+        Ok(())
+    }
+
+    /// Advances over exactly `skipped`, updating the position in bulk.
+    fn advance_all(&mut self, skipped: &[u8]) -> Result<(), LexError> {
+        let Ok(length) = u64::try_from(skipped.len()) else {
+            return Err(LexError::PositionOverflow(self.at));
+        };
+        let Some(byte_offset) = self.at.byte_offset.checked_add(length) else {
+            return Err(LexError::PositionOverflow(self.at));
+        };
+
+        let newlines = memchr_iter(b'\n', skipped).count();
+        if newlines == 0 {
+            let Ok(narrow) = u64::try_from(skipped.len()) else {
+                return Err(LexError::PositionOverflow(self.at));
+            };
+            let Some(column) = self.at.column.checked_add(narrow) else {
+                return Err(LexError::PositionOverflow(self.at));
+            };
+            self.at.byte_offset = byte_offset;
+            self.at.column = column;
+            return Ok(());
+        }
+
+        let Ok(newlines) = u64::try_from(newlines) else {
+            return Err(LexError::PositionOverflow(self.at));
+        };
+        let Some(line) = self.at.line.checked_add(newlines) else {
+            return Err(LexError::PositionOverflow(self.at));
+        };
+        let Some(last) = memrchr(b'\n', skipped) else {
+            return Err(LexError::PositionOverflow(self.at));
+        };
+        let Ok(after) = u64::try_from(skipped.len() - last - 1) else {
+            return Err(LexError::PositionOverflow(self.at));
+        };
+        let Some(column) = after.checked_add(1) else {
+            return Err(LexError::PositionOverflow(self.at));
+        };
+
+        self.at.byte_offset = byte_offset;
+        self.at.line = line;
+        self.at.column = column;
+        Ok(())
+    }
+
+    /// Advances a run the caller has already established holds no newline.
+    ///
+    /// Bare values are scanned once to find their end, and that scan proves the
+    /// absence of a newline. Re-deriving it here would walk the same bytes a
+    /// second time, so this is pure arithmetic — which matters because in an
+    /// `atom_site` loop nearly every token takes this path.
+    fn advance_non_newline(&mut self, count: usize) -> Result<(), LexError> {
+        let Ok(narrow) = u64::try_from(count) else {
+            return self.advance(count);
+        };
+        let Some(byte_offset) = self.at.byte_offset.checked_add(narrow) else {
+            return self.advance(count);
+        };
+        let Some(column) = self.at.column.checked_add(narrow) else {
+            return self.advance(count);
+        };
+        self.at.byte_offset = byte_offset;
+        self.at.column = column;
         Ok(())
     }
 
@@ -174,8 +276,17 @@ impl<'a> Lexer<'a> {
     fn skip_trivia(&mut self) -> Result<(), LexError> {
         loop {
             let text = self.remaining();
-            let spaces = text.bytes().take_while(u8::is_ascii_whitespace).count();
-            self.advance(spaces)?;
+            let bytes = text.as_bytes();
+            let spaces = match bytes.iter().position(|byte| !byte.is_ascii_whitespace()) {
+                Some(spaces) => spaces,
+                None => bytes.len(),
+            };
+            // Advance over the run already located, rather than counting it
+            // here and letting `advance` walk the same bytes a second time.
+            match bytes.get(..spaces) {
+                Some(run) => self.advance_all(run)?,
+                None => self.advance(spaces)?,
+            }
 
             if self.peek() != Some(b'#') {
                 return Ok(());
@@ -196,7 +307,7 @@ impl<'a> Lexer<'a> {
             .bytes()
             .take_while(|byte| !byte.is_ascii_whitespace())
             .count();
-        self.advance(end)?;
+        self.advance_non_newline(end)?;
         Ok(slice_to(text, end))
     }
 
