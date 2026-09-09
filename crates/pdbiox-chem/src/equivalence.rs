@@ -8,7 +8,8 @@
 use crate::numeric::usize_to_u32;
 use crate::{Component, ComponentBond};
 use pdbiox_core::contract::DictionaryVersion;
-use std::collections::{BTreeMap, BTreeSet};
+use pdbiox_core::topology::{Csr, CsrBuilder};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// Atom-position orbits under element- and bond-labelled graph automorphisms.
@@ -286,39 +287,78 @@ impl Graph {
     }
 }
 
+/// Neighbour lists keyed by atom, built once from the edge map.
+///
+/// A refinement round otherwise asks the edge map about every ordered atom
+/// pair, which is quadratic in the atom count before the map lookup is even
+/// counted. With neighbours to hand, a round costs one pass over the bonds.
+fn adjacency_of(count: usize, edges: &BTreeMap<(usize, usize), u8>) -> Csr<(u32, u8)> {
+    let mut degrees = vec![0usize; count];
+    for (atom, _) in edges.keys() {
+        if let Some(degree) = degrees.get_mut(*atom) {
+            *degree += 1;
+        }
+    }
+
+    let mut builder = CsrBuilder::with_degrees(&degrees);
+    for ((atom, other), label) in edges {
+        if let Ok(other) = u32::try_from(*other) {
+            builder.push(*atom, (other, *label));
+        }
+    }
+    builder.finish()
+}
+
+/// Refines atom colours until the partition stops splitting.
+///
+/// Each round builds a signature from an atom's own colour and its sorted
+/// neighbour `(bond label, colour)` pairs, then renumbers the signatures in
+/// their canonical order. Ordering the atoms by signature and numbering the
+/// runs assigns exactly the identifiers a set-then-map pass would, without
+/// cloning every signature into a tree each round.
 fn refine_colours(elements: &[u8], edges: &BTreeMap<(usize, usize), u8>) -> Vec<u32> {
     let count = elements.len();
+    let adjacency = adjacency_of(count, edges);
     let mut colours: Vec<u32> = elements.iter().map(|element| u32::from(*element)).collect();
+    let mut signatures: Vec<Vec<(u8, u32)>> = vec![Vec::new(); count];
+    let mut order: Vec<usize> = (0..count).collect();
+    let mut refined = vec![0u32; count];
+
     loop {
-        let signatures: Vec<(u32, Vec<(u8, u32)>)> = (0..count)
-            .map(|atom| {
-                let mut neighbours: Vec<(u8, u32)> = (0..count)
-                    .filter_map(|other| {
-                        let edge = match edges.get(&(atom, other)) {
-                            Some(edge) => *edge,
-                            None => 0,
-                        };
-                        (edge != 0).then_some((edge, colours[other]))
-                    })
-                    .collect();
-                neighbours.sort_unstable();
-                (colours[atom], neighbours)
-            })
-            .collect();
-        let unique: BTreeSet<_> = signatures.iter().cloned().collect();
-        let ids: BTreeMap<_, _> = unique
-            .into_iter()
-            .enumerate()
-            .map(|(position, signature)| (signature, usize_to_u32(position)))
-            .collect();
-        let refined: Vec<u32> = signatures
-            .iter()
-            .filter_map(|signature| ids.get(signature).copied())
-            .collect();
+        for (atom, signature) in signatures.iter_mut().enumerate() {
+            signature.clear();
+            for (other, label) in adjacency.row(atom) {
+                if *label == 0 {
+                    continue;
+                }
+                if let Some(colour) = colours.get(*other as usize) {
+                    signature.push((*label, *colour));
+                }
+            }
+            signature.sort_unstable();
+        }
+
+        order.sort_by(|left, right| {
+            (colours[*left], &signatures[*left]).cmp(&(colours[*right], &signatures[*right]))
+        });
+
+        let mut next = 0u32;
+        for position in 0..order.len() {
+            let atom = order[position];
+            if position > 0 {
+                let previous = order[position - 1];
+                if (colours[previous], &signatures[previous]) != (colours[atom], &signatures[atom])
+                {
+                    next += 1;
+                }
+            }
+            refined[atom] = next;
+        }
+
         if refined == colours {
             return colours;
         }
-        colours = refined;
+        colours.copy_from_slice(&refined);
     }
 }
 

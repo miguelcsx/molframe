@@ -3,7 +3,7 @@
 use criterion::{Criterion, black_box};
 use pdbiox_bench::{ccd_atp, ccd_hem, input};
 use pdbiox_chem::{
-    ComponentProvider, PeoeAtom, PeoeAtomType, PeoeBond, PeoeOptions, RadiusSet,
+    ComponentProvider, PeoeAtom, PeoeAtomType, PeoeBond, PeoeOptions, RadiusSet, SmartsPattern,
     component_peoe_charges, element_properties, equivalence_classes, peoe_charges, read_ccd,
     vdw_radius,
 };
@@ -48,12 +48,22 @@ fn bench_component_kernels(c: &mut Criterion) {
     if let Err(error) = component_peoe_charges(&component, PeoeOptions::default()) {
         panic!("ATP PEOE benchmark setup failed: {error}");
     }
+    let carbon_path = match SmartsPattern::parse("C-C-O") {
+        Ok(pattern) => pattern,
+        Err(error) => panic!("SMARTS benchmark pattern failed: {error}"),
+    };
     let mut group = c.benchmark_group("chem_component_kernels");
     group.bench_function("equivalence_classes/ATP", |b| {
         b.iter(|| black_box(equivalence_classes(&component)));
     });
     group.bench_function("peoe/ATP", |b| {
         b.iter(|| black_box(component_peoe_charges(&component, PeoeOptions::default())));
+    });
+    group.bench_function("smarts_exists/ATP", |b| {
+        b.iter(|| black_box(carbon_path.matches(&component)));
+    });
+    group.bench_function("smarts_find_all/ATP", |b| {
+        b.iter(|| black_box(carbon_path.find_matches(&component)));
     });
     group.finish();
 
