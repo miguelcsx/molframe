@@ -11,8 +11,10 @@
 
 use pdbiox_core::index::ResidueIndex;
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within_unsorted};
-use std::collections::HashMap;
+use pdbiox_core::{ExecutionContext, hashing::IdentityHashMap};
+use pdbiox_spatial::{
+    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, reduce_pairs_within_unsorted,
+};
 
 use crate::numeric::f64_to_f32;
 
@@ -66,40 +68,53 @@ pub fn residue_contact_map(
     cutoff: f32,
     min_separation: u32,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<ContactMap, SpatialError> {
     let residue_of = atom_to_residue(structure);
-    let all =
-        pdbiox_core::selection::AtomSelection::from_sorted((0..structure.atom_count()).collect());
-    let atom_pairs =
-        pairs_within_unsorted(structure.positions(), &all, &all, cutoff, backend, None)?;
+    let all = pdbiox_core::selection::AtomSelection::All(structure.atom_count());
+    // Each residue pair keeps only its minimum atom distance, so blocks reduce
+    // into their own maps and nothing pair-proportional is retained. Minimum is
+    // associative and commutative, so the merge below is worker-count
+    // independent.
+    let query = PairQuery {
+        positions: structure.positions(),
+        left: &all,
+        right: &all,
+        cutoff,
+        options: SpatialSearchOptions::with_backend(backend),
+        periodic: None,
+        context,
+    };
+    let parts = reduce_pairs_within_unsorted(
+        &query,
+        IdentityHashMap::<(u32, u32), f32>::default,
+        |closest, pair| {
+            let (Some(&Some(first)), Some(&Some(second))) = (
+                residue_of.get(pair.first as usize),
+                residue_of.get(pair.second as usize),
+            ) else {
+                return;
+            };
+            if first == second {
+                return;
+            }
+            let (low, high) = if first <= second {
+                (first, second)
+            } else {
+                (second, first)
+            };
+            if high - low < min_separation {
+                return;
+            }
+            keep_closest(closest, (low, high), pair.distance_squared);
+        },
+    )?;
 
-    let mut closest: HashMap<(u32, u32), f32> = HashMap::new();
-    for pair in atom_pairs {
-        let (Some(&Some(first)), Some(&Some(second))) = (
-            residue_of.get(pair.first as usize),
-            residue_of.get(pair.second as usize),
-        ) else {
-            continue;
-        };
-        if first == second {
-            continue;
+    let mut closest: IdentityHashMap<(u32, u32), f32> = IdentityHashMap::default();
+    for part in parts {
+        for (residues, distance_squared) in part {
+            keep_closest(&mut closest, residues, distance_squared);
         }
-        let (low, high) = if first <= second {
-            (first, second)
-        } else {
-            (second, first)
-        };
-        if high - low < min_separation {
-            continue;
-        }
-        closest
-            .entry((low, high))
-            .and_modify(|distance| {
-                if pair.distance_squared < *distance {
-                    *distance = pair.distance_squared;
-                }
-            })
-            .or_insert(pair.distance_squared);
     }
 
     let mut contacts: Vec<_> = closest
@@ -138,3 +153,21 @@ fn atom_to_residue(structure: &Structure) -> Vec<Option<u32>> {
 #[cfg(test)]
 #[path = "contact_map_tests.rs"]
 mod tests;
+
+/// Keeps the smaller of a residue pair's recorded and candidate distances.
+///
+/// Shared by the per-block fold and the merge so both apply the same rule.
+fn keep_closest(
+    closest: &mut IdentityHashMap<(u32, u32), f32>,
+    residues: (u32, u32),
+    distance_squared: f32,
+) {
+    closest
+        .entry(residues)
+        .and_modify(|recorded| {
+            if distance_squared < *recorded {
+                *recorded = distance_squared;
+            }
+        })
+        .or_insert(distance_squared);
+}

@@ -10,8 +10,10 @@
 //! factor of the reference cutoff, so a modest expansion still counts while a
 //! broken contact does not.
 
-use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within_unsorted};
+use pdbiox_core::{ExecutionContext, structure::Structure};
+use pdbiox_spatial::{
+    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, reduce_pairs_within_unsorted,
+};
 
 use crate::numeric::usize_to_f64;
 
@@ -61,6 +63,7 @@ pub fn native_contact_fraction(
     cutoff: f32,
     tolerance: f32,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<NativeContacts, NativeError> {
     if reference.atom_count() != target.atom_count() {
         return Err(NativeError::AtomCountMismatch {
@@ -69,32 +72,52 @@ pub fn native_contact_fraction(
         });
     }
 
-    let all =
-        pdbiox_core::selection::AtomSelection::from_sorted((0..reference.atom_count()).collect());
-    let native_contacts =
-        pairs_within_unsorted(reference.positions(), &all, &all, cutoff, backend, None)?;
-    let native = native_contacts.len();
+    let all = pdbiox_core::selection::AtomSelection::All(reference.atom_count());
+    let target_positions = target.positions();
+    let kept_cutoff_squared = f64::from(tolerance * cutoff).powi(2);
+
+    // Both totals are sums over pairs, so each block keeps its own counters and
+    // nothing pair-proportional is ever retained. Integer addition is exact and
+    // the blocks merge in plan order, so the result is worker-count independent.
+    let query = PairQuery {
+        positions: reference.positions(),
+        left: &all,
+        right: &all,
+        cutoff,
+        options: SpatialSearchOptions::with_backend(backend),
+        periodic: None,
+        context,
+    };
+    let counts = reduce_pairs_within_unsorted(
+        &query,
+        || (0usize, 0usize),
+        |totals, pair| {
+            totals.0 += 1;
+            let (Some(&a), Some(&b)) = (
+                target_positions.get(pair.first as usize),
+                target_positions.get(pair.second as usize),
+            ) else {
+                return;
+            };
+            if pdbiox_geom::distance_squared(a, b) <= kept_cutoff_squared {
+                totals.1 += 1;
+            }
+        },
+    )?;
+
+    let mut native = 0usize;
+    let mut kept = 0usize;
+    for (block_native, block_kept) in counts {
+        native += block_native;
+        kept += block_kept;
+    }
+
     if native == 0 {
         return Ok(NativeContacts {
             native: 0,
             kept: 0,
             fraction: 1.0,
         });
-    }
-
-    let target_positions = target.positions();
-    let kept_cutoff_squared = f64::from(tolerance * cutoff).powi(2);
-    let mut kept = 0usize;
-    for pair in native_contacts {
-        let (Some(&a), Some(&b)) = (
-            target_positions.get(pair.first as usize),
-            target_positions.get(pair.second as usize),
-        ) else {
-            continue;
-        };
-        if pdbiox_geom::distance_squared(a, b) <= kept_cutoff_squared {
-            kept += 1;
-        }
     }
 
     Ok(NativeContacts {

@@ -1,4 +1,5 @@
-use super::atom_contacts;
+use super::{atom_contacts, visit_atom_contacts};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_core::structure::Structure;
 use pdbiox_spatial::SpatialBackend;
@@ -25,7 +26,12 @@ fn structure() -> Structure {
 #[test]
 fn a_cutoff_reports_exactly_the_near_pairs_in_order() {
     let structure = structure();
-    let Ok(contacts) = atom_contacts(&structure, 2.0, SpatialBackend::BruteForce) else {
+    let Ok(contacts) = atom_contacts(
+        &structure,
+        2.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid cutoff");
     };
     let pairs: Vec<(u32, u32)> = contacts
@@ -38,7 +44,12 @@ fn a_cutoff_reports_exactly_the_near_pairs_in_order() {
 #[test]
 fn the_reported_distance_matches_the_geometry() {
     let structure = structure();
-    let Ok(contacts) = atom_contacts(&structure, 2.0, SpatialBackend::BruteForce) else {
+    let Ok(contacts) = atom_contacts(
+        &structure,
+        2.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid cutoff");
     };
     // C2-C3 are 0.5 Å apart.
@@ -54,12 +65,18 @@ fn the_reported_distance_matches_the_geometry() {
 #[test]
 fn every_backend_agrees_on_the_contacts() {
     let structure = structure();
-    let baseline = atom_contacts(&structure, 2.0, SpatialBackend::BruteForce);
+    let baseline = atom_contacts(
+        &structure,
+        2.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    );
     let Ok(baseline) = baseline else {
         panic!("valid");
     };
     for backend in [SpatialBackend::CellList, SpatialBackend::KdTree] {
-        let Ok(other) = atom_contacts(&structure, 2.0, backend) else {
+        let Ok(other) = atom_contacts(&structure, 2.0, backend, &ExecutionContext::default())
+        else {
             panic!("valid");
         };
         assert_eq!(baseline, other, "backend {backend:?} disagreed");
@@ -69,5 +86,62 @@ fn every_backend_agrees_on_the_contacts() {
 #[test]
 fn a_negative_cutoff_is_rejected() {
     let structure = structure();
-    assert!(atom_contacts(&structure, -1.0, SpatialBackend::BruteForce).is_err());
+    assert!(
+        atom_contacts(
+            &structure,
+            -1.0,
+            SpatialBackend::BruteForce,
+            &ExecutionContext::default(),
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn visitor_emits_the_materialized_contact_set_without_retaining_it() {
+    let structure = structure();
+    let context = ExecutionContext::default();
+    let expected = match atom_contacts(&structure, 2.0, SpatialBackend::CellList, &context) {
+        Ok(contacts) => contacts,
+        Err(error) => panic!("materialized contacts failed: {error}"),
+    };
+    let mut observed = Vec::new();
+    let visited = visit_atom_contacts(
+        &structure,
+        2.0,
+        SpatialBackend::CellList,
+        &context,
+        |contact| observed.push(contact),
+    );
+    assert!(visited.is_ok());
+    observed.sort_unstable_by_key(|contact| (contact.first, contact.second));
+    assert_eq!(observed, expected);
+}
+
+#[test]
+fn worker_count_does_not_change_the_contacts() {
+    let structure = structure();
+    let serial = match atom_contacts(
+        &structure,
+        2.0,
+        SpatialBackend::CellList,
+        &ExecutionContext::default(),
+    ) {
+        Ok(contacts) => contacts,
+        Err(error) => panic!("serial contacts failed: {error}"),
+    };
+    for workers in [1, 2, 4, 8] {
+        let context = match ExecutionContext::builder().worker_budget(workers).build() {
+            Ok(context) => context,
+            Err(error) => panic!("valid execution context: {error}"),
+        };
+        let parallel = match atom_contacts(&structure, 2.0, SpatialBackend::CellList, &context) {
+            Ok(contacts) => contacts,
+            Err(error) => panic!("parallel contacts failed: {error}"),
+        };
+        assert_eq!(
+            serial, parallel,
+            "worker count {workers} changed the contacts"
+        );
+    }
 }

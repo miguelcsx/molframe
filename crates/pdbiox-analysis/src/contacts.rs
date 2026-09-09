@@ -8,10 +8,13 @@
 //! The pairs come from the shared spatial search, so the cost tracks the local
 //! density rather than the square of the atom count.
 
-use pdbiox_core::index::AtomIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{SpatialBackend, SpatialError, StructureSpatial, pairs_within};
+use pdbiox_core::{ExecutionContext, index::AtomIndex};
+use pdbiox_spatial::{
+    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, StructureSpatial,
+    for_each_pairs_within_unsorted,
+};
 
 use crate::numeric::f64_to_f32;
 
@@ -41,9 +44,10 @@ pub fn atom_contacts(
     structure: &Structure,
     cutoff: f32,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<Vec<Contact>, SpatialError> {
-    let all = AtomSelection::from_sorted((0..structure.atom_count()).collect());
-    atom_contacts_between(structure, &all, &all, cutoff, backend)
+    let all = AtomSelection::All(structure.atom_count());
+    collect_contacts(structure, &all, &all, cutoff, backend, context)
 }
 
 /// Finds contacts between two arbitrary atom selections.
@@ -62,9 +66,64 @@ pub fn atom_contacts_between(
     right: &AtomSelection,
     cutoff: f32,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<Vec<Contact>, SpatialError> {
-    let pairs = pairs_within(structure.positions(), left, right, cutoff, backend, None)?;
-    Ok(contacts_from_pairs(structure, pairs))
+    collect_contacts(structure, left, right, cutoff, backend, context)
+}
+
+/// Visits every unique contact without retaining an output vector.
+///
+/// Emission order is deterministic for a fixed backend. Callers that require
+/// globally sorted output should use [`atom_contacts`], which is the explicit
+/// materialising operation.
+///
+/// # Errors
+///
+/// Returns [`SpatialError`] when the cutoff, selections or spatial plan are
+/// invalid.
+pub fn visit_atom_contacts(
+    structure: &Structure,
+    cutoff: f32,
+    backend: SpatialBackend,
+    context: &ExecutionContext,
+    emit: impl FnMut(Contact),
+) -> Result<(), SpatialError> {
+    let all = AtomSelection::All(structure.atom_count());
+    visit_atom_contacts_between(structure, &all, &all, cutoff, backend, context, emit)
+}
+
+/// Visits contacts between two selections without retaining them.
+///
+/// # Errors
+///
+/// Returns [`SpatialError`] when the cutoff, selections or spatial plan are
+/// invalid.
+pub fn visit_atom_contacts_between(
+    structure: &Structure,
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    backend: SpatialBackend,
+    context: &ExecutionContext,
+    mut emit: impl FnMut(Contact),
+) -> Result<(), SpatialError> {
+    let positions = structure.positions();
+    for_each_pairs_within_unsorted(
+        &PairQuery {
+            positions,
+            left,
+            right,
+            cutoff,
+            options: SpatialSearchOptions::with_backend(backend),
+            periodic: None,
+            context,
+        },
+        |pair| {
+            if let Some(contact) = contact_from_pair(positions, pair) {
+                emit(contact);
+            }
+        },
+    )
 }
 
 /// Finds contacts between two selections using a reusable structure-bound
@@ -87,29 +146,52 @@ pub fn atom_contacts_between_with_spatial(
     spatial: &StructureSpatial<'_>,
 ) -> Result<Vec<Contact>, pdbiox_core::diagnostic::Diagnostic> {
     let pairs = spatial.pairs_with_backend(left, right, cutoff, backend)?;
-    Ok(contacts_from_pairs(structure, pairs))
+    let positions = structure.positions();
+    Ok(pairs
+        .into_iter()
+        .filter_map(|pair| contact_from_pair(positions, pair))
+        .collect())
 }
 
-fn contacts_from_pairs(
+fn collect_contacts(
     structure: &Structure,
-    pairs: Vec<pdbiox_spatial::NeighborPair>,
-) -> Vec<Contact> {
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    backend: SpatialBackend,
+    context: &ExecutionContext,
+) -> Result<Vec<Contact>, SpatialError> {
     let positions = structure.positions();
+    let mut contacts = Vec::new();
+    visit_atom_contacts_between(
+        structure,
+        left,
+        right,
+        cutoff,
+        backend,
+        context,
+        |contact| contacts.push(contact),
+    )?;
+    contacts.sort_unstable_by_key(|contact| (contact.first, contact.second));
+    debug_assert!(contacts.iter().all(|contact| {
+        positions.get(contact.first.get() as usize).is_some()
+            && positions.get(contact.second.get() as usize).is_some()
+    }));
+    Ok(contacts)
+}
 
-    let mut contacts = Vec::with_capacity(pairs.len());
-    for pair in pairs {
-        let first = pair.first as usize;
-        let second = pair.second as usize;
-        let (Some(&a), Some(&b)) = (positions.get(first), positions.get(second)) else {
-            continue;
-        };
-        contacts.push(Contact {
-            first: AtomIndex::new(pair.first),
-            second: AtomIndex::new(pair.second),
-            distance: f64_to_f32(pdbiox_geom::distance(a, b)),
-        });
-    }
-    contacts
+fn contact_from_pair(
+    positions: &[[f32; 3]],
+    pair: pdbiox_spatial::NeighborPair,
+) -> Option<Contact> {
+    let first = pair.first as usize;
+    let second = pair.second as usize;
+    let (&a, &b) = (positions.get(first)?, positions.get(second)?);
+    Some(Contact {
+        first: AtomIndex::new(pair.first),
+        second: AtomIndex::new(pair.second),
+        distance: f64_to_f32(pdbiox_geom::distance(a, b)),
+    })
 }
 
 #[cfg(test)]

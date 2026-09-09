@@ -1,4 +1,5 @@
 use super::native_contact_fraction;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_core::structure::Structure;
 use pdbiox_spatial::SpatialBackend;
@@ -26,9 +27,14 @@ fn a_structure_keeps_all_of_its_own_contacts() {
     let source = format!("{HEADER}{COMPACT}");
     let reference = structure(&source);
     let target = structure(&source);
-    let Ok(result) =
-        native_contact_fraction(&reference, &target, 1.5, 1.0, SpatialBackend::BruteForce)
-    else {
+    let Ok(result) = native_contact_fraction(
+        &reference,
+        &target,
+        1.5,
+        1.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(result.native > 0);
@@ -44,9 +50,14 @@ ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 2 50 0 0\n\
 ATOM 3 C C3 LIG A 3 100 0 0\n";
     let target = structure(&format!("{HEADER}{spread}"));
-    let Ok(result) =
-        native_contact_fraction(&reference, &target, 1.5, 1.0, SpatialBackend::BruteForce)
-    else {
+    let Ok(result) = native_contact_fraction(
+        &reference,
+        &target,
+        1.5,
+        1.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(result.native > 0);
@@ -60,6 +71,50 @@ fn structures_of_different_size_cannot_be_compared() {
     let smaller = "ATOM 1 C C1 LIG A 1 0 0 0\n";
     let target = structure(&format!("{HEADER}{smaller}"));
     assert!(
-        native_contact_fraction(&reference, &target, 1.5, 1.0, SpatialBackend::BruteForce).is_err()
+        native_contact_fraction(
+            &reference,
+            &target,
+            1.5,
+            1.0,
+            SpatialBackend::BruteForce,
+            &ExecutionContext::default(),
+        )
+        .is_err()
     );
+}
+
+#[test]
+fn worker_count_does_not_change_q() {
+    let source = format!("{HEADER}{COMPACT}");
+    let reference = structure(&source);
+    let target = structure(&source);
+    let serial = match native_contact_fraction(
+        &reference,
+        &target,
+        1.5,
+        1.0,
+        SpatialBackend::CellList,
+        &ExecutionContext::default(),
+    ) {
+        Ok(result) => result,
+        Err(error) => panic!("serial Q failed: {error}"),
+    };
+    for workers in [1, 2, 4, 8] {
+        let context = match ExecutionContext::builder().worker_budget(workers).build() {
+            Ok(context) => context,
+            Err(error) => panic!("valid execution context: {error}"),
+        };
+        let parallel = match native_contact_fraction(
+            &reference,
+            &target,
+            1.5,
+            1.0,
+            SpatialBackend::CellList,
+            &context,
+        ) {
+            Ok(result) => result,
+            Err(error) => panic!("parallel Q failed: {error}"),
+        };
+        assert_eq!(serial, parallel, "worker count {workers} changed Q");
+    }
 }

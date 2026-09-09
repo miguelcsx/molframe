@@ -1,4 +1,5 @@
 use super::residue_contact_map;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_core::structure::Structure;
 use pdbiox_spatial::SpatialBackend;
@@ -23,7 +24,13 @@ fn structure() -> Structure {
 #[test]
 fn adjacent_residues_touch_at_their_closest_atoms() {
     let structure = structure();
-    let Ok(map) = residue_contact_map(&structure, 2.0, 0, SpatialBackend::BruteForce) else {
+    let Ok(map) = residue_contact_map(
+        &structure,
+        2.0,
+        0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert_eq!(map.residue_count(), 2);
@@ -38,7 +45,13 @@ fn adjacent_residues_touch_at_their_closest_atoms() {
 #[test]
 fn a_separation_filter_drops_neighbouring_residues() {
     let structure = structure();
-    let Ok(map) = residue_contact_map(&structure, 2.0, 2, SpatialBackend::BruteForce) else {
+    let Ok(map) = residue_contact_map(
+        &structure,
+        2.0,
+        2,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(
@@ -52,11 +65,44 @@ fn intra_residue_contacts_are_never_reported() {
     // A cutoff that also captures the C1-C2 intra-residue pair must still yield
     // just the one inter-residue contact.
     let structure = structure();
-    let Ok(map) = residue_contact_map(&structure, 2.0, 0, SpatialBackend::BruteForce) else {
+    let Ok(map) = residue_contact_map(
+        &structure,
+        2.0,
+        0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(
         map.contacts().iter().all(|c| c.first != c.second),
         "a residue cannot contact itself"
     );
+}
+
+#[test]
+fn worker_count_does_not_change_the_map() {
+    let structure = structure();
+    let serial = match residue_contact_map(
+        &structure,
+        2.0,
+        0,
+        SpatialBackend::CellList,
+        &ExecutionContext::default(),
+    ) {
+        Ok(map) => map,
+        Err(error) => panic!("serial map failed: {error}"),
+    };
+    for workers in [1, 2, 4, 8] {
+        let context = match ExecutionContext::builder().worker_budget(workers).build() {
+            Ok(context) => context,
+            Err(error) => panic!("valid execution context: {error}"),
+        };
+        let parallel =
+            match residue_contact_map(&structure, 2.0, 0, SpatialBackend::CellList, &context) {
+                Ok(map) => map,
+                Err(error) => panic!("parallel map failed: {error}"),
+            };
+        assert_eq!(serial, parallel, "worker count {workers} changed the map");
+    }
 }
