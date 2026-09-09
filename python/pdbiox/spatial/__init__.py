@@ -17,6 +17,7 @@ from .._native import (
     SpatialOption,
     SpatialPlan,
     SpatialSearchOptions,
+    count_pairs_within,
     atoms_within,
     atoms_within_with_options,
     nearest_neighbors,
@@ -26,6 +27,7 @@ from .._native import (
 from .._native import SpatialBackend
 
 __all__ = [
+    "count_pairs_within",
     "AtomsWithin",
     "AutoBackendProfile",
     "CellGridOptions",

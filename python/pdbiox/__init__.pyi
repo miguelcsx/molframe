@@ -10,6 +10,7 @@ from .cif import CifWriteError, CifWriteOptions
 from .core.metadata import EntityKind, EntryMetadata, PolymerKind, ReferenceAlignment, ReferenceSequence, SEQUENCE_REFERENCES_EXTENSION, SequenceMapping, SequenceReferences
 from .modelcif import MODEL_CIF_EXTENSION
 from ._io_types import *
+from ._provider import *
 from ._native import classify_ramachandran
 from .compare import GdtHa, GdtTs, Lddt, TmScore
 from .core import (
@@ -22,12 +23,13 @@ from .core import (
     CoordinateStore, EncodedColumn, ElementMask, EntityTable, ExtensionStore, Extremes,
     BondAdjacency, BondIndex, BondOrder, BondProvenance,
     BondRecord, BondTable, BondTableBuilder, ByteSpan, ChainIndex, CoordinateBlock,
-    CoordinateGeneration, DictionaryFull, DictionaryVersion, DifferenceError, EntityIndex, Fingerprint, InstanceId, Interner, ModelIndex,
+    CoordinateGeneration, DictionaryFull, DictionaryVersion, DifferenceError, EntityIndex, ExecutionContext, Fingerprint, InstanceId, Interner, ModelIndex,
     MissingResidue, ModelTable, OptionalI32, OptionalSymbol, ParameterValue, ParentMapping, Position, Presence, ProfileId, ResidueIndex, SourceRef,
     ResidueRecord, ResidueTable, Structure, StructureData, StructureView, StructureEditor,
     CoordinateEditor, CoordinateStore, StructureDifferenceOptions, SymbolId, TARGET_CHUNK_ATOMS, Topology, ValidityMask, ValueDifference,
     AtomSelection, Class, Code, ContextItem, Diagnostics, Kind, Rendered, Severity, Strictness,
     bit_width, pack, unpack_one, write_output,
+    OutputOptions, DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES,
 )
 from .analysis import (
     BasePair, BasePairOptions, CartesianAxis, CationPi, CationPiOptions,
@@ -61,7 +63,7 @@ from .validate import (
 )
 from .chem import AutomorphismLimit, ChemistryReport, CifProvider, Component, ComponentAtom, ComponentBond, ComponentCoverage, ComponentDictionary, ComponentKind, ComponentProvider, DEFAULT_BOND_RADIUS_SCALE, DEFAULT_MINIMUM_BOND_DISTANCE, Element, ElementProperties, EquivalenceCache, EquivalenceClasses, IonicRadius, IonicSpin, MemoryProvider, PeoeAtom, PeoeAtomType, PeoeBond, PeoeError, PeoeOptions, PeoeParameterProfile, PolymerAtomRole, PolymerLinkPolicy, PolymerLinkRule, PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, RadiusSet, RadiiSet, RadiusTable, SideChainDefinition, SideChainRoles, SmartsDataError, SmartsError, SmartsMatch, SmartsPattern, StereoConfiguration, MolAtom, MolBond, Molecule, MolVersion, MolAtomMetadata, MolBondMetadata, SdfProperty, MolRecord, Mol2AtomMetadata, Mol2BondMetadata, Mol2Section, Mol2Record, MolError, Mol2Error, apply_component_chemistry, apply_polymer_role_profile, automorphisms, component_coverage, component_peoe_charges, element_properties, equivalence_classes, ionic_radii, parse_mol_record, parse_sdf_records, parse_smarts, read_ccd, side_chain_definition, vdw_radius, write_mol, write_sdf, parse_mol2_record, write_mol2, peoe_charges
 from .xtal import DEFAULT_CRYSTAL_IMAGE_LIMIT, DEFAULT_INSTANCE_LIMIT, SpaceGroup, SymmetryOperation, UnitCell, space_group_by_hall, space_group_by_number, space_group_by_symbol, space_group_setting, space_group_settings
-from .xtal import ASSEMBLIES_EXTENSION, AffineTransform, AssemblyDef, AssemblyNeighbor, AssemblySet, AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalNeighbor, Generator, INSTANCE_ID_ANNOTATION, NCS_EXTENSION, NcsCode, NcsOperator, NcsSet, NcsView, OperExpression, Operator, Rational, SpaceGroupSetting, SymmetrySet, SYMMETRY_EXTENSION, crystal_neighbors, crystal_neighbors_with_backend, crystal_neighbors_with_limit, lower_assemblies, lower_ncs, lower_symmetry
+from .xtal import ASSEMBLIES_EXTENSION, AffineTransform, AssemblyDef, AssemblyNeighbor, AssemblySet, AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalNeighbor, Generator, INSTANCE_ID_ANNOTATION, NCS_EXTENSION, NcsCode, NcsOperator, NcsSet, NcsView, OperExpression, Operator, Rational, SpaceGroupSetting, SymmetrySet, SYMMETRY_EXTENSION, collect_crystal_neighbors, lower_assemblies, lower_ncs, lower_symmetry
 from .ml.graph import EdgeDirection, EdgeFeature, EdgeKind, Graph, GraphOptions, MissingFeaturePolicy, NodeFeature, NodeLevel, SpatialBackend
 from .geom import Asphericity, Axes, BackboneCoordinates, BackboneFrame, BackboneResidue, BackboneTorsions, Centroid, CentreOfMass, CircularSummary, Decomposition, DistanceMatrix, DistanceMatrixBetween, DistanceMatrixOp, EigenError, EigenOptions, FluctuationError, GyrationAxes, HelixGeometry, InertiaTensor, MatrixError, PeriodicError, Plane, PrincipalAxes, RadiusOfGyration, Rigid, Rmsf, RotationError, RotationMeanOptions, RotationOptions, Superposition, SuperposeError, SuperposeOptions, TorusMetric, angle, asphericity, asphericity_with_options, backbone_frames, backbone_torsions, best_fit_plane, best_fit_plane_with_options, centre_of_mass, centroid, circular_summary, cross, degrees, dihedral, displacement, distance, distance_matrix, distance_matrix_between, distance_squared, dot, gyration_axes, gyration_axes_with_options, helix_geometry, helix_geometry_with_options, inertia_tensor, norm, normalise, path_torsions, plane_deviation, plane_deviation_with_options, principal_axes, principal_axes_with_options, radius_of_gyration, rmsd, rmsd_flat, rmsf, rotation_mean, rotation_mean_with_options, superpose, superpose_with_options, symmetric, symmetric_with_options, torus_summary
 from .ml import ArrowStream, AtomArrowTable, AtomTable, BondArrowTable, BondTable, ChainArrowTable, ChainTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset, DatasetEntry, DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, DlpackError, DlpackTensor, ExportCost, GraphError, LoadError, ManifestEntry, PdbioxExtension, ResidueArrowTable, ResidueTable, SplitOptions, SplitRatios, SplitStrategy, TableFileError, build_graph, extension_name, write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet, write_atom_parquet_with_metadata
@@ -75,6 +77,7 @@ from .spatial import AtomsWithin, AutoBackendProfile, CellGridOptions, KdPeriodi
 from .core.contract import Analysis, Assumption, AssumptionSource, Coverage, Diagnostic, ImpactEstimate, Provenance, Status
 from .analysis import analyse_chain_interface, analyse_contacts, analyse_half_sphere_exposure, analyse_nucleic_torsions
 from .surface import SurfaceWorkflowOptions, SurfaceWorkflowResult, analyse_surface_geometry
+from .traj import contact_counts_stream
 from .traj import CartesianFit, analyse_diffusion, analyse_pca, analyse_torsion_pca
 from .validate import validate_bond_lengths, validate_cis_peptides, validate_clashes, validate_completeness, validate_planarity, validate_quality, validate_valence
 from ._trajectory import DiffusionMap, DmsBond, DmsCell, DmsFrame, DmsParticle, DmsSystem, DmsTopology, DmsVersion, PcaResult, PeriodicAngle, Rotation3, SurfaceMesh, Trajectory, TrajectoryFormat, TrajectoryUnits, TrajectoryWriteOptions, read_dms, write_dms
@@ -85,4 +88,4 @@ from ._facade_models import *
 from ._facade_structure_io import *
 from .analysis import StreamlineDirection, StreamlineOptions, VectorFieldError, VectorFieldGrid, integrate_streamlines
 from .surface import SurfaceComponent, SurfaceComponentError, SurfaceComponentFilter, filter_surface_components, surface_components
-from .traj import TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames
+from .traj import StreamFrame, run_analysis_stream, rmsf_stream, rmsd_stream, TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames

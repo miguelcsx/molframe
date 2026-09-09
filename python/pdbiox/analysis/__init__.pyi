@@ -260,8 +260,9 @@ class SurfaceContacts(_StructureOperation):
 from ._analysis_models import (
     BasePair, BasePairOptions, CentreGroup, Clustering, Contact, ContactMap,
     ConvergenceBlock, DsspOptions, DsspSegment, EnsembleDistanceMatrix,
-    FragmentMatch, FragmentReference, FrameAlignment, GaussianNetworkModel,
-    GnmOptions, GroupVariance, HalfSphereExposure, HarmonicSimilarity,
+    AnisotropicNetworkModel, AnmOptions, FragmentMatch, FragmentReference,
+    FrameAlignment, GaussianNetworkModel, GnmOptions, GroupVariance,
+    HalfSphereExposure, HarmonicSimilarity, NormalMode, NormalModeSet,
     HarmonicSimilarityOptions, KMeans, KMeansOptions, Leaflet, LeafletOptions,
     LinearDensityOptions, Linkage, NativeContacts,
     NucleicTorsions, PolymerStatistics, PoreOptions, PoreProfileOptions,
@@ -287,7 +288,8 @@ from ._analysis_operations import (
     analyse_rmsd_to_reference, analyse_water_dynamics, atom_contacts,
     atom_contacts_between, base_pairs, cation_pi, centre_of_mass_radial_distribution,
     chain_interface, coordination_numbers, density_map,
-    dielectric_from_dipoles, gaussian_network_model, half_sphere_exposure,
+    dielectric_from_dipoles, gaussian_network_model, anisotropic_network_model,
+    read_nmd, write_nmd, half_sphere_exposure,
     helical_parameters, helical_steps, identify_leaflets, linear_density,
     linear_density_with_options, map_fragments, native_contact_fraction,
     nucleic_torsions, parse_dssp_output, pi_stacking, polymer_statistics,
@@ -304,3 +306,14 @@ from .._trajectory_runtime import (
     cluster_population_similarity, dbscan_clustering,
     group_coordinate_variance, harmonic_ensemble_similarity, medoid,
 )
+
+from collections.abc import Callable
+from os import PathLike
+from numpy import float32
+from numpy.typing import NDArray
+from ..core.execution import ExecutionContext
+from .._io_types import PdbioxError
+
+class SasaStreamError(PdbioxError): ...
+
+def sasa_stream(path: str | PathLike[str], radii: NDArray[float32], probe: float, samples: int, emit: Callable[[int, float | None, float], None], context: ExecutionContext, *, frame_workspace_bytes: int = 8_000_000) -> int: ...

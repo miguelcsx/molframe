@@ -5,3 +5,5 @@ from . import (
     hierarchical_clustering, kmer, matrix, msa, nj, phylip, scoring, seed,
     stockholm, tree,
 )
+
+from .._sequence_compare_operations import global_score

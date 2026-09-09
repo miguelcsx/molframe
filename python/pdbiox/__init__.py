@@ -33,13 +33,19 @@ from .core import (
     CoordinateStore, EncodedColumn, ElementMask, EntityTable, ExtensionStore, Extremes,
     BondOrder, BondProvenance, BondRecord, BondTable,
     BondTableBuilder, ByteSpan, CoordinateBlock,
-    CoordinateGeneration, DictionaryFull, DictionaryVersion, DifferenceError, Fingerprint,
+    CoordinateGeneration, DictionaryFull, DictionaryVersion, DifferenceError, ExecutionContext, Fingerprint,
+    DatasetId, ChunkId, LogicalRow, LocalRow, PayloadKind, ChunkLayout,
+    ChunkDescriptor, DatasetDescriptor, DatasetCatalog, PropertyKind, PropertyValue,
+    AtomEndpoint, BondChunk, BondChunkRecord, StructureChunk, PropertyChunk, FrameChunk,
+    BondChunkProvider, StructureChunkProvider,
+    PropertyChunkProvider, FrameChunkProvider, ProviderError,
     Interner, MissingResidue, ModelTable, OptionalI32, OptionalSymbol, ParameterValue, ParentMapping, Position, Presence,
     ProfileId, SourceRef, StructureDifferenceOptions, ValueDifference,
     ResidueRecord, ResidueTable, StructureData, StructureView, StructureEditor, CoordinateEditor,
     AtomSelection, Class, Code, ContextItem, Diagnostics, Kind, Rendered, Severity, Strictness,
-    SymbolId, TARGET_CHUNK_ATOMS, Topology, ValidityMask,
+    SymbolId, TARGET_CHUNK_ATOMS, TARGET_CHUNK_BONDS, Topology, ValidityMask,
     bit_width, pack, unpack_one, write_output,
+    OutputOptions, DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES,
 )
 from .audit import (
     AlignmentPolicy, AuditPlan, AuditReport, AuditRun, ContactDefinition,
@@ -227,13 +233,14 @@ from ._native import (
     read_policy,
     read_policy_overrides,
     lower_model_cif,
-    crystal_neighbors,
+    collect_crystal_neighbors,
     lower_assemblies,
     lower_ncs,
     lower_symmetry,
     read_with_diagnostics,
     read_with_options,
     write,
+    write_with_options,
     write_bcif,
     write_bcif_with_options,
     write_mmcif,
@@ -253,8 +260,9 @@ from ._native import (
     structure_side_chain_torsions,
 )
 from .analysis import StreamlineDirection, StreamlineOptions, VectorFieldError, VectorFieldGrid, integrate_streamlines
+from ._native import StructureBatch, StructureBatchReader, collect_structure, open_structure_batches
 from .surface import SurfaceComponent, SurfaceComponentError, SurfaceComponentFilter, filter_surface_components, surface_components
-from .traj import TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames
+from .traj import contact_counts_stream, StreamFrame, run_analysis_stream, rmsf_stream, rmsd_stream, TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames
 
 from .analysis import (
     BasePair, BasePairOptions, CartesianAxis, CationPi, CationPiOptions, ContactMap,
@@ -308,7 +316,7 @@ from .chem import (
 )
 from .xtal import (
     DEFAULT_CRYSTAL_IMAGE_LIMIT, DEFAULT_INSTANCE_LIMIT, SpaceGroup, SymmetryOperation,
-    UnitCell, crystal_neighbors_with_backend, crystal_neighbors_with_limit,
+    UnitCell, collect_crystal_neighbors,
     space_group_by_hall, space_group_by_number, space_group_by_symbol, space_group_setting,
     space_group_settings,
 )
@@ -390,9 +398,10 @@ from ._native import (
     WaterDynamicsError,
 )
 __all__ = [
+    "StructureBatch", "StructureBatchReader", "collect_structure", "open_structure_batches",
     "StreamlineDirection", "StreamlineOptions", "VectorFieldError", "VectorFieldGrid", "integrate_streamlines",
     "SurfaceComponent", "SurfaceComponentError", "SurfaceComponentFilter", "filter_surface_components", "surface_components",
-    "TrajectoryInterpolation", "TrajectoryInterpolationError", "interpolate_trajectory_frames",
+    "contact_counts_stream", "StreamFrame", "run_analysis_stream", "rmsf_stream", "rmsd_stream", "TrajectoryInterpolation", "TrajectoryInterpolationError", "interpolate_trajectory_frames",
     "adapters", "analysis", "audit", "bcif", "cif", "chem", "compare", "core", "fx", "geom", "ic", "ml", "modelcif", "pdb", "query", "seq", "spatial", "surface", "traj", "validate", "xtal",
     "Plan", "PlanResult", "Contacts", "Rmsd", "Lddt", "TmScore", "GdtTs", "GdtHa", "Sasa", "BuriedSurfaceOp",
     "RadialDistribution", "CoordinationNumbers", "Leaflets", "LinearDensity", "PoreProfile", "SurfaceContacts",
@@ -411,12 +420,18 @@ __all__ = [
     "BondAdjacency", "BondOrder", "BondProvenance", "BondRecord",
     "BondTable", "BondTableBuilder", "ByteSpan",
     "CoordinateBlock", "CoordinateGeneration",
+    "ExecutionContext",
+    "DatasetId", "ChunkId", "LogicalRow", "LocalRow", "PayloadKind", "ChunkLayout",
+    "ChunkDescriptor", "DatasetDescriptor", "DatasetCatalog", "PropertyKind", "PropertyValue",
+    "AtomEndpoint", "BondChunk", "BondChunkRecord", "StructureChunk", "PropertyChunk", "FrameChunk",
+    "BondChunkProvider", "StructureChunkProvider", "PropertyChunkProvider", "FrameChunkProvider", "ProviderError",
     "DictionaryFull", "DictionaryVersion", "DifferenceError", "Fingerprint", "Interner", "OptionalI32", "OptionalSymbol", "ParameterValue", "Position", "Presence", "ProfileId", "SourceRef",
     "SymbolId", "MissingResidue", "ModelTable", "ParentMapping", "ResidueRecord", "ResidueTable",
-    "TARGET_CHUNK_ATOMS", "Topology", "StructureData", "StructureView", "StructureEditor",
+    "TARGET_CHUNK_ATOMS", "TARGET_CHUNK_BONDS", "Topology", "StructureData", "StructureView", "StructureEditor",
     "CoordinateEditor", "CoordinateStore", "AtomSelection", "Class", "Code", "ContextItem", "Diagnostics",
     "Kind", "Rendered", "Severity", "Strictness", "StructureDifferenceOptions", "ValueDifference",
-    "ValidityMask", "bit_width", "pack", "unpack_one", "write_output",
+    "ValidityMask", "bit_width", "pack", "unpack_one", "write_output", "OutputOptions",
+    "DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES",
     "Analysis", "Assumption", "AssumptionSource", "Coverage", "Diagnostic", "ImpactEstimate", "Provenance", "Status", "AlignmentPolicy", "AuditPlan", "AuditReport", "AuditRun", "ContactDefinition", "DimensionSensitivity", "EquivalencePolicy", "HydrogenPolicy", "PeriodicPolicy", "PlanError", "PolicyDimension", "PolicyField", "PolicySpace", "PolicyValue", "Precision", "SensitiveItem", "SymmetryPolicy", "Tolerance", "CartesianFit", "SurfaceWorkflowResult", "SurfaceWorkflowOptions", "analyse_diffusion",
     "analyse_pca", "analyse_surface_geometry", "analyse_torsion_pca", "analyse_chain_interface", "analyse_contacts", "analyse_half_sphere_exposure", "analyse_nucleic_torsions", "validate_bond_lengths", "validate_cis_peptides", "validate_clashes", "validate_completeness", "validate_planarity",
     "validate_quality", "validate_valence", "AmbiguousResidueBoundaryPolicy", "Atom", "Atoms", "BackboneTorsionRecord", "BondInference", "BondInferenceReport", "InferBonds", "Bonds",
@@ -425,7 +440,7 @@ __all__ = [
     "AltlocOccupancyError", "AltlocOccupancyKernelError", "AtomDepthError", "BFactorError", "BFactorKernelError", "BasePairError", "BuriedSurfaceError", "CapacityError", "CationPiError", "CcdCompletenessKernelError", "CompletenessError", "DensityError", "DielectricError", "DmsError", "DsspBinaryError", "DsspError", "DynamicsError", "EnsembleGeometryError", "EnsembleSimilarityError", "EnsembleStatisticsError", "FragmentMappingError", "GnmError", "GovernedAnalysisError", "GovernedEnsembleError", "GovernedMapError", "GovernedNativeError", "HelicalError", "HseError", "HydrogenBondError", "ImdError", "KMeansError", "LigandGeometryKernelError", "MapStatisticsError", "MonomerLibraryReadError", "MrcError", "MsdError", "NativeError", "NucleicGeometryError", "NucleicTorsionError", "PathSimilarityError", "PhysicalKernelError", "PiStackingError", "PlanarityError", "PlaneRestraintKernelError", "PolymerError", "PoreError", "RadialError", "RamachandranError", "RealSpaceCorrelationError", "ReexecutionError", "ReferenceError", "ReflectionError", "RestraintError", "RotamerError", "SasaError", "StandaloneAnalysisError", "SurfaceGeometryError", "SurfaceWorkflowError", "TableError", "TrajectoryError", "TrajectoryIoError", "UpdatingSelectionError", "WaterDynamicsError",
     "Trajectory", "TrajectoryFormat", "TrajectoryUnits", "TrajectoryWriteOptions", "XyzAtom", "XyzFrame", "PcaResult", "DiffusionMap", "BatFrame", "BcifReader", "BinaryDocument", "Dihedron", "DmsBond", "DmsCell", "DmsFrame", "DmsParticle", "DmsSystem", "DmsTopology", "DmsVersion", "read_dms", "write_dms", "Document", "DataBlock", "GlobalMetric", "Hedron", "InternalAtom", "InternalCoordinates", "LocalMetric", "MetricDefinition", "ModelCategory", "ModelCif", "ModelDescription", "ModelRow", "NcsCode", "NcsOperator", "NcsSet", "NcsView", "OperExpression", "Operator", "OutputConfiguration", "PairwiseMetric", "PolicyOverrides", "ProtocolStep", "QualityMetrics", "Rational", "Residue", "ResidueAtoms", "Residues", "ReadOptions", "SoftwareGroup", "SymmetrySet", "Target", "Template",
     "ReadReport", "ReadScope", "SchemaError", "Structure", "EntityKind", "EntryMetadata", "PolymerKind", "ReferenceAlignment", "ReferenceSequence", "SequenceMapping", "SequenceReferences", "SEQUENCE_REFERENCES_EXTENSION", "cartesian_pca", "default_limits", "diffusion_map", "infer_bonds", "internal_coordinates", "place_atom", "read_component_dictionary", "read_configuration", "read", "read_mmtf", "read_pdb", "read_pdbqt", "read_pqr",
-    "read_bytes", "read_document", "read_policy", "read_policy_overrides", "lower_model_cif", "crystal_neighbors", "crystal_neighbors_with_backend", "crystal_neighbors_with_limit", "lower_assemblies", "lower_ncs", "lower_symmetry", "mmtf_metadata", "read_with_diagnostics", "read_with_options", "with_mmtf_metadata", "write", "write_bcif", "write_bcif_with_options", "write_mmcif", "write_mmtf", "write_mmtf_with_metadata", "write_pdb", "write_pdbqt", "write_pqr", "write_preserving", "surface_mesh", "torsion_pca",
+    "read_bytes", "read_document", "read_policy", "read_policy_overrides", "lower_model_cif", "collect_crystal_neighbors", "lower_assemblies", "lower_ncs", "lower_symmetry", "mmtf_metadata", "read_with_diagnostics", "read_with_options", "with_mmtf_metadata", "write", "write_with_options", "write_bcif", "write_bcif_with_options", "write_mmcif", "write_mmtf", "write_mmtf_with_metadata", "write_pdb", "write_pdbqt", "write_pqr", "write_preserving", "surface_mesh", "torsion_pca",
     "structure_backbone_torsions", "structure_backbone_torsions_model", "structure_protein_alpha_traces", "structure_side_chain_torsions", "EdgeDirection", "EdgeFeature", "EdgeKind", "Graph", "GraphOptions", "MissingFeaturePolicy", "NodeFeature", "NodeLevel",
     "SpatialBackend", "ArrowStream", "AtomArrowTable", "BondArrowTable", "ChainArrowTable", "ResidueArrowTable", "DLDataType", "DLDevice", "DLManagedTensor", "DLTensor", "DlpackError", "DlpackTensor", "Dataset", "DatasetEntry", "ManifestEntry", "DatasetError", "DatasetFilter", "DatasetSplit", "DatasetWarning", "ExportCost", "GraphError", "LoadError", "PdbioxExtension", "SplitOptions", "SplitRatios", "SplitStrategy", "TableFileError", "build_graph", "extension_name", "graph", "write_atom_ipc", "write_atom_ipc_with_metadata", "write_atom_parquet", "write_atom_parquet_with_metadata", "AltlocPolicy", "AnalysisPolicy", "AssemblyChoice", "MissingPolicy",
     "ModelChoice", "Namespace", "Query", "QueryBuilder", "col", "Selection", "Evaluation", "LogicalPlan", "PhysicalQuery", "SelectQuery", "Rigid", "Superposition", "Axes", "BackboneCoordinates", "BackboneResidue", "Plane", "CircularSummary", "Decomposition", "DistanceMatrix", "Centroid", "CentreOfMass", "RadiusOfGyration", "InertiaTensor", "PrincipalAxes", "Asphericity", "GyrationAxes", "DistanceMatrixOp", "DistanceMatrixBetween", "Rmsf", "EigenError", "EigenOptions", "FluctuationError", "MatrixError", "PeriodicError", "RotationError", "RotationMeanOptions", "RotationOptions", "SuperposeError", "SuperposeOptions", "TorusMetric", "BackboneFrame",
@@ -437,7 +452,7 @@ __all__ = [
     "equivalent_atom_mappings", "ligand_symmetry_rmsd", "analyse_cad_score", "analyse_contact_map_similarity", "analyse_equivalent_atom_mappings", "analyse_ligand_symmetry_rmsd", "analyse_gdt", "analyse_ce_align", "analyse_ce_alignments", "analyse_map_chains", "ChainSequence", "ChainMapping",
     "ResidueMatch", "chain_sequences", "map_chains", "map_sequence_to_structure", "analyse_map_sequence_to_structure", "ce_align", "ce_alignments", "qs_score", "dockq", "gdt", "gdt_with_cutoffs", "lddt_with_options", "qs_score_in_namespace", "dockq_in_namespace", "align_mapping", "measure_mapping", "decide_rmsd", "interface_rmsd", "pocket_rmsd", "analyse_dockq", "analyse_gdt_ha",
     "analyse_gdt_ts", "analyse_lddt", "analyse_qs_score", "analyse_tm_score", "weighted_rmsd", "analyse_weighted_rmsd", "FastaRecord", "FastqRecord", "SequenceFormat", "SequenceDocumentKind", "SequenceDocument", "read_sequence",
-    "write_sequence", "LadderDirection", "MatrixProfile", "MsaOptions", "RegionOptions", "SimilarKmer", "SimilarKmerOptions", "SubstitutionMatrix", "Tree", "a3m_match_columns", "align_global_banded", "align_global_matrix",
+    "write_sequence", "LadderDirection", "MatrixProfile", "MsaOptions", "RegionOptions", "SimilarKmer", "SimilarKmerOptions", "SubstitutionMatrix", "Tree", "a3m_match_columns", "align_global_banded", "global_score", "align_global_matrix",
     "align_local_matrix", "align_semi_global_matrix", "blosum62", "kmer_counts", "minimizers", "multiple_sequence_alignment", "align_region", "load_matrix", "parse_a2m", "a2m_match_columns", "parse_fastq", "similar_kmers",
     "write_a2m", "write_a3m", "write_fastq", "neighbor_joining", "parse_a3m", "parse_clustal", "parse_fasta", "parse_phylip", "parse_stockholm", "progressive_msa", "seed_and_extend", "upgma",
     "write_clustal", "write_fasta", "write_phylip", "write_stockholm", "Contact", "ContactTable", "BasePairOptions", "BasePair", "ResidueContact", "ContactMap", "FragmentReference", "FragmentMatch", "GnmOptions",

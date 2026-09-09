@@ -121,7 +121,9 @@ class FragmentMatch:
 
 @final
 class GnmOptions:
-    def __init__(self, contact_distance: float, mode_count: int, zero_mode_tolerance: float, memory_limit_bytes: int, backend: object) -> None: ...
+    def __init__(self, contact_distance: float, mode_count: int, zero_mode_tolerance: float, memory_limit_bytes: int, backend: object, reduction: object = ...) -> None: ...
+    @property
+    def reduction(self) -> object: ...
 
 @final
 class GaussianNetworkModel:
@@ -129,6 +131,40 @@ class GaussianNetworkModel:
     eigenvalues: NDArray[float64]
     modes: NDArray[float64]
     zero_modes: int
+
+@final
+class AnmOptions:
+    def __init__(self, contact_distance: float, mode_count: int, zero_mode_tolerance: float, memory_limit_bytes: int, backend: object) -> None: ...
+
+@final
+class AnisotropicNetworkModel:
+    sites: NDArray
+    eigenvalues: NDArray[float64]
+    modes: NDArray[float64]
+    zero_modes: int
+    def fluctuations(self) -> NDArray[float64]: ...
+    def project(self, values: NDArray[float64]) -> NDArray[float64]: ...
+    def displace(self, positions: NDArray[float32], amplitudes: NDArray[float64]) -> NDArray[float32]: ...
+
+@final
+class NormalMode:
+    def __init__(self, index: int, scale: float, displacements: NDArray[float64]) -> None: ...
+    index: int
+    scale: float
+    displacements: NDArray[float64]
+
+@final
+class NormalModeSet:
+    name: str | None
+    atom_names: list[str]
+    residue_names: list[str]
+    residue_ids: list[int]
+    chain_ids: list[str]
+    b_factors: list[float]
+    coordinates: NDArray[float64]
+    modes: list[NormalMode]
+    def __len__(self) -> int: ...
+    def displace(self, amplitudes: NDArray[float64]) -> NDArray[float64]: ...
 
 @final
 class HalfSphereExposure:
@@ -383,7 +419,7 @@ class PolymerStatistics:
 
 @final
 class PoreOptions:
-    def __init__(self, axis: tuple[list[float], list[float]], start: float, end: float, samples: int, search_radius: float, grid_spacing: float, probe_radius: float) -> None: ...
+    def __init__(self, axis: tuple[list[float], list[float]], start: float, end: float, samples: int, search_radius: float, grid_spacing: float, probe_radius: float, *, memory_limit_bytes: int = ...) -> None: ...
 
 PoreProfileOptions = PoreOptions
 
