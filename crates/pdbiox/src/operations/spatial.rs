@@ -2,6 +2,7 @@
 
 use super::requests::{CoordinateInput, ExecutionPlanError, PlanInput};
 use super::spatial_cache::SpatialContext;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::selection::AtomSelection;
 
 /// A reusable fixed-radius spatial request over one borrowed coordinate array.
@@ -53,6 +54,7 @@ pub(super) fn execute(
     request: &SpatialRequest,
     input: PlanInput<'_>,
     context: Option<&mut SpatialContext<'_>>,
+    execution: &ExecutionContext,
 ) -> Result<SpatialValue, ExecutionPlanError> {
     match request {
         SpatialRequest::NeighborPairs {
@@ -64,7 +66,7 @@ pub(super) fn execute(
             periodic,
         } => {
             let result = match context {
-                Some(context) => context.pairs(left, right, *cutoff),
+                Some(context) => context.pairs(left, right, *cutoff, execution),
                 None => pdbiox_spatial::pairs_within_with_options(
                     coordinates(operation, input.arrays, *positions)?,
                     left,
@@ -72,6 +74,7 @@ pub(super) fn execute(
                     *cutoff,
                     *options,
                     periodic.as_ref(),
+                    execution,
                 ),
             };
             result
@@ -87,7 +90,7 @@ pub(super) fn execute(
             periodic,
         } => {
             let result = match context {
-                Some(context) => context.within(query, target, *cutoff),
+                Some(context) => context.within(query, target, *cutoff, execution),
                 None => pdbiox_spatial::within_with_options(
                     coordinates(operation, input.arrays, *positions)?,
                     query,
@@ -95,6 +98,7 @@ pub(super) fn execute(
                     *cutoff,
                     *options,
                     periodic.as_ref(),
+                    execution,
                 ),
             };
             result

@@ -106,10 +106,13 @@ fn execute_trajectory_plan(
     input: &[FrameInput<'_>],
 ) -> std::collections::BTreeMap<Box<str>, crate::PlanValue> {
     let result = plan
-        .execute(PlanInput {
-            frames: input,
-            ..Default::default()
-        })
+        .execute(
+            PlanInput {
+                frames: input,
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native trajectory plan");
     result
         .entries

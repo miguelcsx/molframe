@@ -121,6 +121,7 @@ pub fn execute(
     request: &PhysicalRequest,
     structure: &Structure,
     input: PlanInput<'_>,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     match request {
         PhysicalRequest::RadialDistribution {
@@ -132,7 +133,7 @@ pub fn execute(
         } => {
             let policy = effective_policy(policy, *periodic);
             let kernel = pdbiox_analysis::radial_distribution_kernel(left, right, *options);
-            pdbiox_analysis::analyse_structure(structure, &policy, &kernel)
+            pdbiox_analysis::analyse_structure(structure, &policy, &kernel, context)
                 .map(PhysicalValue::RadialDistribution)
                 .map_err(governed_error)
         }
@@ -153,7 +154,7 @@ pub fn execute(
                 *maximum_distance,
                 *backend,
             );
-            pdbiox_analysis::analyse_structure(structure, &policy, &kernel)
+            pdbiox_analysis::analyse_structure(structure, &policy, &kernel, context)
                 .map(PhysicalValue::CoordinationNumbers)
                 .map_err(governed_error)
         }
@@ -165,7 +166,7 @@ pub fn execute(
         } => {
             let policy = effective_policy(policy, *periodic);
             let kernel = pdbiox_analysis::leaflets_kernel(sites, *options);
-            pdbiox_analysis::analyse_structure(structure, &policy, &kernel)
+            pdbiox_analysis::analyse_structure(structure, &policy, &kernel, context)
                 .map(PhysicalValue::Leaflets)
                 .map_err(governed_error)
         }
@@ -173,17 +174,23 @@ pub fn execute(
             weights,
             options,
             policy,
-        } => execute_linear_density(operation, structure, input, *weights, *options, policy),
+        } => execute_linear_density(
+            operation, structure, input, *weights, *options, policy, context,
+        ),
         PhysicalRequest::DensityMap {
             weights,
             spec,
             policy,
-        } => execute_density_map(operation, structure, input, *weights, *spec, policy),
+        } => execute_density_map(
+            operation, structure, input, *weights, *spec, policy, context,
+        ),
         PhysicalRequest::PoreProfile {
             radii,
             options,
             policy,
-        } => execute_pore_profile(operation, structure, input, *radii, *options, policy),
+        } => execute_pore_profile(
+            operation, structure, input, *radii, *options, policy, context,
+        ),
         PhysicalRequest::SurfaceContacts {
             radii,
             tolerance,
@@ -205,6 +212,7 @@ pub fn execute(
                 backend: *backend,
             },
             policy,
+            context,
         ),
     }
 }
@@ -216,10 +224,11 @@ fn execute_linear_density(
     slot: usize,
     options: pdbiox_analysis::LinearDensityOptions,
     policy: &AnalysisPolicy,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let weights = scalar_slot(operation, input, slot)?;
     let kernel = pdbiox_analysis::linear_density_kernel(weights.values, options);
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel)
+    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::LinearDensity)
         .map_err(governed_error)
 }
@@ -231,10 +240,11 @@ fn execute_density_map(
     slot: usize,
     spec: pdbiox_analysis::DensityGridSpec,
     policy: &AnalysisPolicy,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let weights = scalar_slot(operation, input, slot)?;
     let kernel = pdbiox_analysis::density_map_kernel(weights.values, spec);
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel)
+    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::DensityMap)
         .map_err(governed_error)
 }
@@ -246,10 +256,11 @@ fn execute_pore_profile(
     slot: usize,
     options: pdbiox_analysis::PoreProfileOptions,
     policy: &AnalysisPolicy,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let radii = float_slot(operation, input, slot)?;
     let kernel = pdbiox_analysis::pore_profile_kernel(radii.values, options);
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel)
+    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::PoreProfile)
         .map_err(governed_error)
 }
@@ -270,17 +281,20 @@ fn execute_surface_contacts(
     slot: usize,
     parameters: SurfaceContactParameters,
     policy: &AnalysisPolicy,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let radii = float_slot(operation, input, slot)?;
     let kernel = pdbiox_analysis::surface_contacts_kernel(
         radii.values,
-        parameters.tolerance,
-        parameters.probe,
-        parameters.density,
-        parameters.minimum_area,
-        parameters.backend,
+        pdbiox_analysis::SurfaceContactOptions {
+            tolerance: parameters.tolerance,
+            probe: parameters.probe,
+            surface_density: parameters.density,
+            minimum_area: parameters.minimum_area,
+            backend: parameters.backend,
+        },
     );
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel)
+    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::SurfaceContacts)
         .map_err(governed_error)
 }

@@ -1,6 +1,7 @@
 //! Typed surface requests executed by the native facade plan.
 
 use super::requests::{ExecutionPlanError, PlanInput};
+use pdbiox_core::ExecutionContext;
 
 /// A reusable surface calculation over borrowed plan inputs.
 #[derive(Clone, Debug)]
@@ -44,6 +45,7 @@ pub(super) fn execute(
     operation: &str,
     request: &SurfaceRequest,
     input: PlanInput<'_>,
+    context: &ExecutionContext,
 ) -> Result<SurfaceValue, ExecutionPlanError> {
     match request {
         SurfaceRequest::SolventAccessibleSurface {
@@ -56,6 +58,7 @@ pub(super) fn execute(
             floats(operation, input.floats, *radii)?,
             *probe,
             *sample_points,
+            context,
         )
         .map(SurfaceValue::SolventAccessibleSurface)
         .map_err(|error| ExecutionPlanError::SurfaceKernel(error.to_string().into())),
@@ -71,6 +74,7 @@ pub(super) fn execute(
             *probe,
             *sample_points,
             masks(operation, input.masks, *first)?,
+            context,
         )
         .map(SurfaceValue::BuriedSurface)
         .map_err(|error| ExecutionPlanError::SurfaceKernel(error.to_string().into())),

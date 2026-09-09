@@ -13,6 +13,7 @@ mod requests;
 mod spatial;
 mod spatial_cache;
 mod structure;
+mod structure_support;
 #[cfg(feature = "surface")]
 mod surface;
 #[cfg(feature = "traj")]

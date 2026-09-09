@@ -92,6 +92,7 @@ fn options() -> PhysicalOptions {
             search_radius: 4.0,
             grid_spacing: 1.0,
             probe_radius: 1.0,
+            memory_limit_bytes: 100_000_000,
         },
     }
 }
@@ -118,27 +119,64 @@ fn direct_analyses(
     let pore_kernel = pdbiox_analysis::pore_profile_kernel(radii, options.pore);
     let contacts_kernel = pdbiox_analysis::surface_contacts_kernel(
         radii,
-        0.5,
-        1.0,
-        32.0,
-        0.2,
-        SpatialBackend::BruteForce,
+        pdbiox_analysis::SurfaceContactOptions {
+            tolerance: 0.5,
+            probe: 1.0,
+            surface_density: 32.0,
+            minimum_area: 0.2,
+            backend: SpatialBackend::BruteForce,
+        },
     );
     DirectPhysicalAnalyses {
-        radial: pdbiox_analysis::analyse_structure(structure, policy, &radial_kernel)
-            .expect("direct radial analysis"),
-        coordination: pdbiox_analysis::analyse_structure(structure, policy, &coordination_kernel)
-            .expect("direct coordination analysis"),
-        leaflets: pdbiox_analysis::analyse_structure(structure, policy, &leaflets_kernel)
-            .expect("direct leaflet analysis"),
-        linear: pdbiox_analysis::analyse_structure(structure, policy, &linear_kernel)
-            .expect("direct linear density analysis"),
-        density: pdbiox_analysis::analyse_structure(structure, policy, &density_kernel)
-            .expect("direct density analysis"),
-        pore: pdbiox_analysis::analyse_structure(structure, policy, &pore_kernel)
-            .expect("direct pore analysis"),
-        surface_contacts: pdbiox_analysis::analyse_structure(structure, policy, &contacts_kernel)
-            .expect("direct surface contacts analysis"),
+        radial: pdbiox_analysis::analyse_structure(
+            structure,
+            policy,
+            &radial_kernel,
+            &pdbiox_core::ExecutionContext::default(),
+        )
+        .expect("direct radial analysis"),
+        coordination: pdbiox_analysis::analyse_structure(
+            structure,
+            policy,
+            &coordination_kernel,
+            &pdbiox_core::ExecutionContext::default(),
+        )
+        .expect("direct coordination analysis"),
+        leaflets: pdbiox_analysis::analyse_structure(
+            structure,
+            policy,
+            &leaflets_kernel,
+            &pdbiox_core::ExecutionContext::default(),
+        )
+        .expect("direct leaflet analysis"),
+        linear: pdbiox_analysis::analyse_structure(
+            structure,
+            policy,
+            &linear_kernel,
+            &pdbiox_core::ExecutionContext::default(),
+        )
+        .expect("direct linear density analysis"),
+        density: pdbiox_analysis::analyse_structure(
+            structure,
+            policy,
+            &density_kernel,
+            &pdbiox_core::ExecutionContext::default(),
+        )
+        .expect("direct density analysis"),
+        pore: pdbiox_analysis::analyse_structure(
+            structure,
+            policy,
+            &pore_kernel,
+            &pdbiox_core::ExecutionContext::default(),
+        )
+        .expect("direct pore analysis"),
+        surface_contacts: pdbiox_analysis::analyse_structure(
+            structure,
+            policy,
+            &contacts_kernel,
+            &pdbiox_core::ExecutionContext::default(),
+        )
+        .expect("direct surface contacts analysis"),
     }
 }
 
@@ -235,12 +273,15 @@ fn plan_values(
 ) -> std::collections::BTreeMap<String, PlanValue> {
     let scalars = [ScalarInput { values: weights }];
     let floats = [FloatInput { values: radii }];
-    plan.execute(PlanInput {
-        structure: Some(structure),
-        scalars: &scalars,
-        floats: &floats,
-        ..Default::default()
-    })
+    plan.execute(
+        PlanInput {
+            structure: Some(structure),
+            scalars: &scalars,
+            floats: &floats,
+            ..Default::default()
+        },
+        &pdbiox_core::ExecutionContext::default(),
+    )
     .expect("physical plan")
     .entries
     .into_iter()

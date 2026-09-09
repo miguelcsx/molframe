@@ -15,11 +15,23 @@ fn surface_operations_match_the_facade_surface_kernels() {
     let masks = [MaskInput { values: &first }];
     let probe = 1.4_f32;
     let sample_points = 400_u16;
-    let direct_sasa = pdbiox_surface::shrake_rupley(&positions, &radii, probe, sample_points)
-        .expect("direct SASA");
-    let direct_buried =
-        pdbiox_surface::buried_surface(&positions, &radii, probe, sample_points, &first)
-            .expect("direct buried surface");
+    let direct_sasa = pdbiox_surface::shrake_rupley(
+        &positions,
+        &radii,
+        probe,
+        sample_points,
+        &pdbiox_core::ExecutionContext::default(),
+    )
+    .expect("direct SASA");
+    let direct_buried = pdbiox_surface::buried_surface(
+        &positions,
+        &radii,
+        probe,
+        sample_points,
+        &first,
+        &pdbiox_core::ExecutionContext::default(),
+    )
+    .expect("direct buried surface");
 
     let mut plan = Plan::new();
     plan.add(
@@ -44,12 +56,15 @@ fn surface_operations_match_the_facade_surface_kernels() {
     )
     .expect("buried surface operation");
     let result = plan
-        .execute(crate::PlanInput {
-            arrays: &arrays,
-            floats: &floats,
-            masks: &masks,
-            ..Default::default()
-        })
+        .execute(
+            crate::PlanInput {
+                arrays: &arrays,
+                floats: &floats,
+                masks: &masks,
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native surface plan");
     let values = result
         .entries

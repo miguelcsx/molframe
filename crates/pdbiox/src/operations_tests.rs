@@ -91,11 +91,14 @@ fn array_operations_execute_in_native_sorted_order() {
         .expect("second RMSD");
 
     let result = plan
-        .execute(super::PlanInput {
-            structure: None,
-            arrays: &arrays,
-            ..Default::default()
-        })
+        .execute(
+            super::PlanInput {
+                structure: None,
+                arrays: &arrays,
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native plan");
     let ids = result
         .entries
@@ -158,13 +161,16 @@ fn geometry_operations_match_direct_kernels_without_python_data_loops() {
     .expect("RMSF operation");
 
     let result = plan
-        .execute(super::PlanInput {
-            structure: None,
-            arrays: &arrays,
-            scalars: &scalars,
-            frames: &frames,
-            ..Default::default()
-        })
+        .execute(
+            super::PlanInput {
+                structure: None,
+                arrays: &arrays,
+                scalars: &scalars,
+                frames: &frames,
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native geometry plan");
 
     let direct_centroid = pdbiox_geom::centroid(&positions);
@@ -209,18 +215,25 @@ fn selection_operations_match_the_facade_query_kernel() {
     .expect("structure fixture");
     let request = SelectionRequest::new("name CA", AnalysisPolicy::default())
         .expect("compiled selection request");
-    let direct =
-        crate::QueryStructure::select_text(&structure, "name CA", &AnalysisPolicy::default())
-            .expect("direct query selection");
+    let direct = crate::QueryStructure::select_text(
+        &structure,
+        "name CA",
+        &AnalysisPolicy::default(),
+        &pdbiox_core::ExecutionContext::default(),
+    )
+    .expect("direct query selection");
     let mut plan = Plan::new();
     plan.add_selection("selected", request)
         .expect("selection operation");
     let result = plan
-        .execute(super::PlanInput {
-            structure: Some(&structure),
-            arrays: &[],
-            ..Default::default()
-        })
+        .execute(
+            super::PlanInput {
+                structure: Some(&structure),
+                arrays: &[],
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native selection plan");
     let Some(PlanValue::Selection(value)) = result.entries.first().map(|entry| &entry.value) else {
         panic!("unexpected selection result type");
@@ -242,27 +255,8 @@ fn spatial_operations_match_the_facade_spatial_kernel() {
     let left = crate::AtomSelection::from_sorted(vec![0, 1]);
     let right = crate::AtomSelection::from_sorted(vec![1, 2]);
     let options = SpatialSearchOptions::with_backend(SpatialBackend::CellList);
-    let direct_pairs =
-        crate::pairs_within_with_options(&positions, &left, &right, 1.5, options, None)
-            .expect("direct spatial pairs");
-    let direct_again = crate::pairs_within_with_options(
-        &positions,
-        &crate::AtomSelection::from_sorted(vec![0]),
-        &right,
-        1.5,
-        options,
-        None,
-    )
-    .expect("direct repeated spatial pairs");
-    let direct_within = crate::within_with_options(
-        &positions,
-        &crate::AtomSelection::All(3),
-        &crate::AtomSelection::from_sorted(vec![0]),
-        1.5,
-        options,
-        None,
-    )
-    .expect("direct spatial within");
+    let (direct_pairs, direct_again, direct_within) =
+        direct_spatial_results(&positions, &left, &right, options);
 
     let mut plan = Plan::new();
     plan.add(
@@ -303,10 +297,13 @@ fn spatial_operations_match_the_facade_spatial_kernel() {
     .expect("within operation");
 
     let result = plan
-        .execute(super::PlanInput {
-            arrays: &arrays,
-            ..Default::default()
-        })
+        .execute(
+            super::PlanInput {
+                arrays: &arrays,
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("spatial plan");
     assert_eq!(result.cached_index_count, 2);
     let values = result
@@ -331,6 +328,37 @@ fn spatial_operations_match_the_facade_spatial_kernel() {
     ));
 }
 
+fn direct_spatial_results(
+    positions: &[[f32; 3]],
+    left: &crate::AtomSelection,
+    right: &crate::AtomSelection,
+    options: SpatialSearchOptions,
+) -> (
+    Vec<crate::NeighborPair>,
+    Vec<crate::NeighborPair>,
+    crate::AtomSelection,
+) {
+    let context = pdbiox_core::ExecutionContext::default();
+    let pairs =
+        crate::pairs_within_with_options(positions, left, right, 1.5, options, None, &context)
+            .expect("direct spatial pairs");
+    let origin = crate::AtomSelection::from_sorted(vec![0]);
+    let again =
+        crate::pairs_within_with_options(positions, &origin, right, 1.5, options, None, &context)
+            .expect("direct repeated spatial pairs");
+    let within = crate::within_with_options(
+        positions,
+        &crate::AtomSelection::All(3),
+        &origin,
+        1.5,
+        options,
+        None,
+        &context,
+    )
+    .expect("direct spatial within");
+    (pairs, again, within)
+}
+
 #[test]
 fn chemistry_operations_use_the_same_native_kernel_as_direct_calls() {
     let (structure, _) = read_bytes(
@@ -340,16 +368,24 @@ fn chemistry_operations_use_the_same_native_kernel_as_direct_calls() {
     )
     .expect("structure fixture");
     let options = BondInference::default();
-    let direct = super::super::infer_bonds(&structure, options).expect("direct inference");
+    let direct = super::super::infer_bonds(
+        &structure,
+        options,
+        &pdbiox_core::ExecutionContext::default(),
+    )
+    .expect("direct inference");
     let mut plan = Plan::new();
     plan.add_bond_inference("bonds", options)
         .expect("bond inference operation");
     let result = plan
-        .execute(super::PlanInput {
-            structure: Some(&structure),
-            arrays: &[],
-            ..Default::default()
-        })
+        .execute(
+            super::PlanInput {
+                structure: Some(&structure),
+                arrays: &[],
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native chemistry plan");
     let Some(entry) = result.entries.first() else {
         panic!("missing bond inference result");
@@ -384,11 +420,14 @@ fn structure_operations_return_governed_native_analysis() {
     .expect("quality operation");
 
     let result = plan
-        .execute(super::PlanInput {
-            structure: Some(&structure),
-            arrays: &[],
-            ..Default::default()
-        })
+        .execute(
+            super::PlanInput {
+                structure: Some(&structure),
+                arrays: &[],
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native structure operation");
     let Some(entry) = result.entries.first() else {
         panic!("missing structure result");
@@ -439,11 +478,14 @@ fn comparison_operations_share_borrowed_coordinate_inputs() {
     .expect("GDT operation");
 
     let result = plan
-        .execute(super::PlanInput {
-            structure: None,
-            arrays: &arrays,
-            ..Default::default()
-        })
+        .execute(
+            super::PlanInput {
+                structure: None,
+                arrays: &arrays,
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("native comparison plan");
     assert_eq!(result.entries.len(), 3);
     assert!(result.entries.iter().all(|entry| {

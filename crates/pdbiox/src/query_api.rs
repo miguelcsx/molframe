@@ -1,5 +1,6 @@
 //! Structure-facing selection API over the query and spatial crates.
 
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::AnalysisPolicy;
 use pdbiox_core::diagnostic::Diagnostic;
 use pdbiox_core::structure::Structure;
@@ -18,6 +19,7 @@ pub trait QueryStructure {
         query: &Query,
         policy: &AnalysisPolicy,
         groups: &Groups,
+        context: &ExecutionContext,
     ) -> Result<Evaluation, Vec<Diagnostic>>;
 
     /// Compiles and evaluates textual syntax in one call.
@@ -31,6 +33,7 @@ pub trait QueryStructure {
         &self,
         source: &str,
         policy: &AnalysisPolicy,
+        context: &ExecutionContext,
     ) -> Result<Evaluation, Vec<Diagnostic>>;
 }
 
@@ -40,6 +43,7 @@ impl QueryStructure for Structure {
         query: &Query,
         policy: &AnalysisPolicy,
         groups: &Groups,
+        context: &ExecutionContext,
     ) -> Result<Evaluation, Vec<Diagnostic>> {
         #[cfg(feature = "spatial")]
         {
@@ -47,6 +51,7 @@ impl QueryStructure for Structure {
                 self,
                 policy,
                 pdbiox_spatial::SpatialBackend::Auto,
+                context,
             )
             .map_err(|finding| vec![finding])?;
             query.evaluate(self, policy, groups, Some(&resolver))
@@ -61,9 +66,10 @@ impl QueryStructure for Structure {
         &self,
         source: &str,
         policy: &AnalysisPolicy,
+        context: &ExecutionContext,
     ) -> Result<Evaluation, Vec<Diagnostic>> {
         let query = Query::compile(source)?;
-        self.select(&query, policy, &Groups::new())
+        self.select(&query, policy, &Groups::new(), context)
     }
 }
 

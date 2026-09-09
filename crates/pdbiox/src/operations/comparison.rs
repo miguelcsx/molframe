@@ -76,12 +76,14 @@ pub(crate) fn execute(
     request: &ComparisonRequest,
     mobile: &[[f32; 3]],
     reference: &[[f32; 3]],
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<ComparisonResult, pdbiox_compare::CompareError> {
     let value = match request.metric {
         ComparisonMetric::Lddt { inclusion_radius } => pdbiox_compare::lddt_with_options(
             mobile,
             reference,
             &pdbiox_compare::LddtOptions::standard(inclusion_radius),
+            context,
         )?,
         ComparisonMetric::TmScore => pdbiox_compare::tm_score(mobile, reference)?,
         ComparisonMetric::GdtTs => pdbiox_compare::gdt_ts(mobile, reference)?,

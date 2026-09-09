@@ -46,10 +46,16 @@ fn gaussian_network_plan_matches_direct_kernel() {
         zero_mode_tolerance: 1e-10,
         memory_limit_bytes: 1_024,
         backend: crate::SpatialBackend::BruteForce,
+        reduction: pdbiox_core::parallel::ReductionPolicy::Deterministic,
     };
-    let direct =
-        pdbiox_analysis::gaussian_network_model(structure.positions(), &sites, options, None)
-            .expect("direct GNM");
+    let direct = pdbiox_analysis::gaussian_network_model(
+        structure.positions(),
+        &sites,
+        options,
+        None,
+        &pdbiox_core::ExecutionContext::default(),
+    )
+    .expect("direct GNM");
     let mut plan = Plan::new();
     plan.add(
         "gnm",
@@ -62,10 +68,13 @@ fn gaussian_network_plan_matches_direct_kernel() {
     )
     .expect("GNM operation");
     let result = plan
-        .execute(PlanInput {
-            structure: Some(&structure),
-            ..Default::default()
-        })
+        .execute(
+            PlanInput {
+                structure: Some(&structure),
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("GNM plan");
     let Some(PlanValue::Structure(value)) = result.entries.first().map(|entry| &entry.value) else {
         panic!("missing GNM result");
@@ -121,8 +130,13 @@ fn base_pair_plan_matches_direct_kernel_with_an_explicit_ccd_provider() {
         },
         minimum_hydrogen_bonds: 1,
     };
-    let direct = crate::analysis::base_pairs(&structure, provider.as_ref(), options)
-        .expect("direct base-pair kernel");
+    let direct = crate::analysis::base_pairs(
+        &structure,
+        provider.as_ref(),
+        options,
+        &pdbiox_core::ExecutionContext::default(),
+    )
+    .expect("direct base-pair kernel");
     let mut plan = Plan::new();
     plan.add(
         "base_pairs",
@@ -134,10 +148,13 @@ fn base_pair_plan_matches_direct_kernel_with_an_explicit_ccd_provider() {
     )
     .expect("base-pair operation");
     let result = plan
-        .execute(PlanInput {
-            structure: Some(&structure),
-            ..Default::default()
-        })
+        .execute(
+            PlanInput {
+                structure: Some(&structure),
+                ..Default::default()
+            },
+            &pdbiox_core::ExecutionContext::default(),
+        )
         .expect("base-pair plan");
     let Some(PlanValue::Structure(value)) = result.entries.first().map(|entry| &entry.value) else {
         panic!("missing base-pair result");

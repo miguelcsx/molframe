@@ -149,7 +149,11 @@ impl Plan {
     ///
     /// Returns a typed setup or native-kernel error without publishing partial
     /// results.
-    pub fn execute(&self, input: PlanInput<'_>) -> Result<PlanResult, ExecutionPlanError> {
+    pub fn execute(
+        &self,
+        input: PlanInput<'_>,
+        context: &pdbiox_core::ExecutionContext,
+    ) -> Result<PlanResult, ExecutionPlanError> {
         let has_contacts = self.operations.values().any(|operation| {
             matches!(
                 operation,
@@ -157,7 +161,8 @@ impl Plan {
             )
         });
         let default_policy = AnalysisPolicy::default();
-        let reusable_spatial = reusable_spatial(input.structure, has_contacts, &default_policy)?;
+        let reusable_spatial =
+            reusable_spatial(input.structure, has_contacts, &default_policy, context)?;
         let mut coordinate_contexts = coordinate_contexts(&self.operations, input.arrays)?;
         let mut entries = Vec::with_capacity(self.operations.len());
         for (id, operation) in &self.operations {
@@ -167,6 +172,7 @@ impl Plan {
                 input,
                 reusable_spatial.as_ref(),
                 &mut coordinate_contexts,
+                context,
             )?;
             entries.push(PlanResultEntry {
                 id: id.clone(),
@@ -192,6 +198,7 @@ impl Plan {
         input: PlanInput<'_>,
         spatial: Option<&StructureSpatial<'_>>,
         coordinate_contexts: &mut [SpatialContext<'_>],
+        context: &pdbiox_core::ExecutionContext,
     ) -> Result<PlanValue, ExecutionPlanError> {
         match operation {
             PlanOperation::Selection(request) => {
@@ -206,10 +213,10 @@ impl Plan {
                             Some(spatial),
                         )
                     } else {
-                        structure.select(request.query(), request.policy(), &groups)
+                        structure.select(request.query(), request.policy(), &groups, context)
                     }
                 } else {
-                    structure.select(request.query(), request.policy(), &groups)
+                    structure.select(request.query(), request.policy(), &groups, context)
                 };
                 evaluation
                     .map(|value| PlanValue::Selection(Box::new(value)))
@@ -219,7 +226,7 @@ impl Plan {
                 let structure = required_structure(id, input.structure)?;
                 let spatial = spatial.filter(|_| request.policy() == &AnalysisPolicy::default());
                 Ok(PlanValue::Contacts(Box::new(execute_contacts(
-                    request, structure, spatial,
+                    request, structure, spatial, context,
                 )?)))
             }
             PlanOperation::Rmsd(request) => {
@@ -233,13 +240,13 @@ impl Plan {
             PlanOperation::Structure(request) => {
                 let structure = required_structure(id, input.structure)?;
                 Ok(PlanValue::Structure(Box::new(structure::execute(
-                    request, structure,
+                    request, structure, context,
                 )?)))
             }
             PlanOperation::Physical(request) => {
                 let structure = required_structure(id, input.structure)?;
                 Ok(PlanValue::Physical(Box::new(physical::execute(
-                    id, request, structure, input,
+                    id, request, structure, input, context,
                 )?)))
             }
             PlanOperation::Geometry(request) => Ok(PlanValue::Geometry(Box::new(
@@ -252,14 +259,15 @@ impl Plan {
                 coordinate_contexts
                     .iter_mut()
                     .find(|context| context.matches(request)),
+                context,
             )?))),
             #[cfg(feature = "surface")]
             PlanOperation::Surface(request) => Ok(PlanValue::Surface(Box::new(surface::execute(
-                id, request, input,
+                id, request, input, context,
             )?))),
             PlanOperation::BondInference(options) => {
                 let structure = required_structure(id, input.structure)?;
-                crate::infer_bonds(structure, *options)
+                crate::infer_bonds(structure, *options, context)
                     .map(|report| PlanValue::BondInference(Box::new(report)))
                     .map_err(ExecutionPlanError::Chemistry)
             }
@@ -271,6 +279,7 @@ impl Plan {
                     request,
                     mobile.positions,
                     reference.positions,
+                    context,
                 )?))
             }
             #[cfg(feature = "traj")]
@@ -335,6 +344,7 @@ fn reusable_spatial<'a>(
     structure: Option<&'a Structure>,
     needed: bool,
     policy: &AnalysisPolicy,
+    context: &'a pdbiox_core::ExecutionContext,
 ) -> Result<Option<StructureSpatial<'a>>, ExecutionPlanError> {
     let Some(structure) = structure.filter(|_| needed) else {
         return Ok(None);
@@ -347,6 +357,7 @@ fn reusable_spatial<'a>(
         structure,
         policy,
         SpatialSearchOptions::with_backend(SpatialBackend::Auto),
+        context,
     )
     .map(Some)
     .map_err(ExecutionPlanError::Spatial)
@@ -406,6 +417,7 @@ fn execute_contacts(
     request: &ContactsRequest,
     structure: &Structure,
     spatial: Option<&StructureSpatial<'_>>,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<Analysis<Vec<Contact>>, ExecutionPlanError> {
     let groups = Groups::new();
     let (left, right, contacts) = if let Some(spatial) = spatial {
@@ -429,10 +441,10 @@ fn execute_contacts(
         (left, right, contacts)
     } else {
         let left = structure
-            .select(request.left_query(), request.policy(), &groups)
+            .select(request.left_query(), request.policy(), &groups, context)
             .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
         let right = structure
-            .select(request.right_query(), request.policy(), &groups)
+            .select(request.right_query(), request.policy(), &groups, context)
             .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
         let contacts = pdbiox_analysis::atom_contacts_between(
             structure,
@@ -440,6 +452,7 @@ fn execute_contacts(
             &right.selection,
             request.cutoff(),
             request.backend(),
+            context,
         )
         .map_err(|error| ExecutionPlanError::Governed(error.to_string().into()))?;
         (left, right, contacts)

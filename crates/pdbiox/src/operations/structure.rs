@@ -5,7 +5,7 @@ use pdbiox_core::contract::{Analysis, AnalysisPolicy};
 use pdbiox_core::index::ResidueIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::Structure;
-use pdbiox_spatial::{PeriodicBox, SpatialBackend};
+use pdbiox_spatial::SpatialBackend;
 use std::fmt;
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ use std::sync::Arc;
 pub enum StructureRequest {
     /// Canonical nucleotide base-pair detection backed by an explicit CCD provider.
     BasePairs {
-        /// Component provider retained by the request.
+        /// Retained component provider.
         provider: Arc<dyn pdbiox_chem::ComponentProvider>,
         /// Hydrogen-bond and canonical-pair controls.
         options: pdbiox_analysis::BasePairOptions,
@@ -23,14 +23,14 @@ pub enum StructureRequest {
     },
     /// CCD-annotated hydrogen-bond detection.
     HydrogenBonds {
-        /// Geometric hydrogen-bond options.
+        /// Hydrogen-bond options.
         options: pdbiox_analysis::HydrogenBondOptions,
         /// Data and model policy.
         policy: AnalysisPolicy,
     },
     /// Oppositely charged atom pairs within a cutoff.
     SaltBridges {
-        /// Maximum anion-cation distance.
+        /// Maximum distance.
         maximum_distance: f32,
         /// Spatial implementation.
         backend: SpatialBackend,
@@ -39,28 +39,28 @@ pub enum StructureRequest {
     },
     /// Aromatic ring stacking.
     PiStacking {
-        /// Aromatic plane and distance policy.
+        /// Plane and distance policy.
         options: pdbiox_analysis::PiStackingOptions,
         /// Data and model policy.
         policy: AnalysisPolicy,
     },
     /// Cation-pi interaction detection.
     CationPi {
-        /// Cation and aromatic-plane policy.
+        /// Interaction policy.
         options: pdbiox_analysis::CationPiOptions,
         /// Data and model policy.
         policy: AnalysisPolicy,
     },
     /// Solvent-mediated hydrogen-bond bridges.
     WaterBridges {
-        /// Hydrogen-bond policy used to build the bridge graph.
+        /// Bridge graph policy.
         options: pdbiox_analysis::WaterBridgeOptions,
         /// Data and model policy.
         policy: AnalysisPolicy,
     },
     /// Residue-level contact map.
     ContactMap {
-        /// Atom distance cutoff.
+        /// Distance cutoff.
         cutoff: f32,
         /// Minimum residue separation.
         minimum_separation: u32,
@@ -257,12 +257,13 @@ pub enum StructureValue {
 pub(crate) fn execute(
     request: &StructureRequest,
     structure: &Structure,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<StructureValue, ExecutionPlanError> {
-    if let Some(value) = execute_analysis(request, structure)? {
+    if let Some(value) = execute_analysis(request, structure, context)? {
         return Ok(value);
     }
     #[cfg(feature = "validate")]
-    if let Some(value) = execute_validation(request, structure)? {
+    if let Some(value) = execute_validation(request, structure, context)? {
         return Ok(value);
     }
     Err(ExecutionPlanError::Governed(
@@ -273,15 +274,16 @@ pub(crate) fn execute(
 fn execute_analysis(
     request: &StructureRequest,
     structure: &Structure,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<Option<StructureValue>, ExecutionPlanError> {
-    if let Some(value) = execute_interactions(request, structure)? {
+    if let Some(value) = execute_interactions(request, structure, context)? {
         return Ok(Some(value));
     }
     match request {
         StructureRequest::SecondaryStructure { options, policy } => {
             let kernel = pdbiox_analysis::secondary_structure_kernel(options);
             Ok(Some(StructureValue::SecondaryStructure(run(
-                structure, policy, &kernel,
+                structure, policy, &kernel, context,
             )?)))
         }
         StructureRequest::HalfSphereExposure {
@@ -292,12 +294,14 @@ fn execute_analysis(
             structure,
             policy,
             &pdbiox_analysis::half_sphere_exposure_kernel(*radius, *backend),
+            context,
         )?))),
         StructureRequest::NucleicTorsions { policy } => {
             Ok(Some(StructureValue::NucleicTorsions(run(
                 structure,
                 policy,
                 &pdbiox_analysis::nucleic_torsions_kernel(),
+                context,
             )?)))
         }
         StructureRequest::GaussianNetworkModel {
@@ -306,10 +310,10 @@ fn execute_analysis(
             periodic,
             policy,
         } => {
-            let periodic_box = periodic_box(structure, *periodic)?;
+            let periodic_box = super::structure_support::periodic_box(structure, *periodic)?;
             let kernel = pdbiox_analysis::gnm_kernel(sites, *options, periodic_box.as_ref());
             Ok(Some(StructureValue::GaussianNetworkModel(run(
-                structure, policy, &kernel,
+                structure, policy, &kernel, context,
             )?)))
         }
         _ => Ok(None),
@@ -319,6 +323,7 @@ fn execute_analysis(
 fn execute_interactions(
     request: &StructureRequest,
     structure: &Structure,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<Option<StructureValue>, ExecutionPlanError> {
     match request {
         StructureRequest::BasePairs {
@@ -329,12 +334,14 @@ fn execute_interactions(
             structure,
             policy,
             &pdbiox_analysis::base_pairs_kernel(provider.as_ref(), *options),
+            context,
         )?))),
         StructureRequest::HydrogenBonds { options, policy } => {
             Ok(Some(StructureValue::HydrogenBonds(run(
                 structure,
                 policy,
                 &pdbiox_analysis::hydrogen_bonds_kernel(*options),
+                context,
             )?)))
         }
         StructureRequest::SaltBridges {
@@ -345,24 +352,28 @@ fn execute_interactions(
             structure,
             policy,
             &pdbiox_analysis::salt_bridges_kernel(*maximum_distance, *backend),
+            context,
         )?))),
         StructureRequest::PiStacking { options, policy } => {
             Ok(Some(StructureValue::PiStacking(run(
                 structure,
                 policy,
                 &pdbiox_analysis::pi_stacking_kernel(*options),
+                context,
             )?)))
         }
         StructureRequest::CationPi { options, policy } => Ok(Some(StructureValue::CationPi(run(
             structure,
             policy,
             &pdbiox_analysis::cation_pi_kernel(*options),
+            context,
         )?))),
         StructureRequest::WaterBridges { options, policy } => {
             Ok(Some(StructureValue::WaterBridges(run(
                 structure,
                 policy,
                 &pdbiox_analysis::water_bridges_kernel(*options),
+                context,
             )?)))
         }
         StructureRequest::ContactMap {
@@ -374,6 +385,7 @@ fn execute_interactions(
             structure,
             policy,
             &pdbiox_analysis::contact_map_kernel(*cutoff, *minimum_separation, *backend),
+            context,
         )?))),
         StructureRequest::ChainInterface {
             first_chain,
@@ -385,31 +397,17 @@ fn execute_interactions(
             structure,
             policy,
             &pdbiox_analysis::chain_interface_kernel(first_chain, second_chain, *cutoff, *backend),
+            context,
         )?))),
         _ => Ok(None),
     }
-}
-
-fn periodic_box(
-    structure: &Structure,
-    periodic: bool,
-) -> Result<Option<PeriodicBox>, ExecutionPlanError> {
-    if !periodic {
-        return Ok(None);
-    }
-    let cell = structure
-        .data()
-        .cell
-        .ok_or_else(|| ExecutionPlanError::Governed("periodic GNM requires a unit cell".into()))?;
-    PeriodicBox::from_cell(cell)
-        .map(Some)
-        .map_err(|error| ExecutionPlanError::Governed(error.to_string().into()))
 }
 
 #[cfg(feature = "validate")]
 fn execute_validation(
     request: &StructureRequest,
     structure: &Structure,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<Option<StructureValue>, ExecutionPlanError> {
     match request {
         #[cfg(feature = "validate")]
@@ -422,6 +420,7 @@ fn execute_validation(
             structure,
             policy,
             &pdbiox_validate::clashes_kernel(*tolerance, *radii, *backend),
+            context,
         )?))),
         #[cfg(feature = "validate")]
         StructureRequest::BondLengthDeviations { tolerance, policy } => {
@@ -429,6 +428,7 @@ fn execute_validation(
                 structure,
                 policy,
                 &pdbiox_validate::bond_length_deviations_kernel(*tolerance),
+                context,
             )?)))
         }
         #[cfg(feature = "validate")]
@@ -439,6 +439,7 @@ fn execute_validation(
             structure,
             policy,
             &pdbiox_validate::cis_peptides_kernel(*threshold_degrees),
+            context,
         )?))),
         #[cfg(feature = "validate")]
         StructureRequest::Planarity { options, policy } => {
@@ -446,6 +447,7 @@ fn execute_validation(
                 structure,
                 policy,
                 &pdbiox_validate::planarity_kernel(*options),
+                context,
             )?)))
         }
         #[cfg(feature = "validate")]
@@ -453,18 +455,21 @@ fn execute_validation(
             structure,
             policy,
             &pdbiox_validate::quality_flags_kernel(),
+            context,
         )?))),
         #[cfg(feature = "validate")]
         StructureRequest::Valence { policy } => Ok(Some(StructureValue::Valence(run(
             structure,
             policy,
             &pdbiox_validate::valence_kernel(),
+            context,
         )?))),
         #[cfg(feature = "validate")]
         StructureRequest::Completeness { policy } => Ok(Some(StructureValue::Completeness(run(
             structure,
             policy,
             &pdbiox_validate::completeness_kernel(),
+            context,
         )?))),
         _ => Ok(None),
     }
@@ -474,11 +479,12 @@ fn run<K>(
     structure: &Structure,
     policy: &AnalysisPolicy,
     kernel: &K,
+    context: &pdbiox_core::ExecutionContext,
 ) -> Result<Analysis<K::Output>, ExecutionPlanError>
 where
     K: pdbiox_analysis::StructureKernel,
     K::Error: fmt::Display,
 {
-    pdbiox_analysis::analyse_structure(structure, policy, kernel)
+    pdbiox_analysis::analyse_structure(structure, policy, kernel, context)
         .map_err(|error| ExecutionPlanError::Governed(error.to_string().into()))
 }

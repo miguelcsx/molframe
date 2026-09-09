@@ -1,7 +1,21 @@
 //! Reusable coordinate-array spatial indexes for one native plan execution.
+//!
+//! A cached entry is keyed on the target atom list it was built for, and that
+//! list is as long as the selection. Comparing it element by element against
+//! every cached entry would make a cache *hit* cost more than rebuilding the
+//! index — sixty-four full-length comparisons to avoid one build. Entries
+//! therefore carry a length and a fingerprint of their targets, and the
+//! element-wise comparison runs only when both agree, which is once.
+//!
+//! The retained target lists are still proportional to the selection size,
+//! so a context holding many large distinct selections holds them all. That
+//! bound belongs with the selection representation rather than here: the cache
+//! is handed `&[u32]`, and it cannot store a selection more compactly than the
+//! caller materialised it.
 
 use super::requests::ExecutionPlanError;
 use super::spatial::SpatialRequest;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_spatial::{
     CellList, KdTree, NeighborPair, PeriodicBox, SpatialBackend, SpatialSearchOptions,
@@ -21,13 +35,45 @@ pub(super) struct SpatialContext<'a> {
 enum CachedIndex<'a> {
     Cell {
         cutoff: f32,
+        key: TargetKey,
         targets: Box<[u32]>,
         index: CellList<'a>,
     },
     Kd {
+        key: TargetKey,
         targets: Box<[u32]>,
         index: KdTree<'a>,
     },
+}
+
+/// A cheap summary of a target list, compared before the list itself.
+///
+/// Two different lists can share a key, which is why a match here is a licence
+/// to compare rather than a conclusion. What it buys is that the comparison
+/// happens once instead of once per cached entry.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct TargetKey {
+    len: usize,
+    fingerprint: u64,
+}
+
+impl TargetKey {
+    /// The offset basis and prime of FNV-1a, which is fixed so that a key is
+    /// the same in every run.
+    const BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    fn of(targets: &[u32]) -> Self {
+        let mut fingerprint = Self::BASIS;
+        for &target in targets {
+            fingerprint ^= u64::from(target);
+            fingerprint = fingerprint.wrapping_mul(Self::PRIME);
+        }
+        Self {
+            len: targets.len(),
+            fingerprint,
+        }
+    }
 }
 
 impl<'a> SpatialContext<'a> {
@@ -75,6 +121,7 @@ impl<'a> SpatialContext<'a> {
         left: &AtomSelection,
         right: &AtomSelection,
         cutoff: f32,
+        context: &ExecutionContext,
     ) -> Result<Vec<NeighborPair>, pdbiox_spatial::SpatialError> {
         let plan = self.options.plan(
             left_count(left)?,
@@ -90,6 +137,7 @@ impl<'a> SpatialContext<'a> {
                 cutoff,
                 self.options,
                 self.periodic.as_ref(),
+                context,
             );
         }
 
@@ -114,6 +162,7 @@ impl<'a> SpatialContext<'a> {
                     ..self.options
                 },
                 None,
+                context,
             ),
         }
     }
@@ -123,8 +172,9 @@ impl<'a> SpatialContext<'a> {
         query: &AtomSelection,
         target: &AtomSelection,
         cutoff: f32,
+        context: &ExecutionContext,
     ) -> Result<AtomSelection, pdbiox_spatial::SpatialError> {
-        let pairs = self.pairs(query, target, cutoff)?;
+        let pairs = self.pairs(query, target, cutoff, context)?;
         let mut matched = vec![false; self.positions.len()];
         for pair in pairs {
             mark_pair(&mut matched, query, target, pair)?;
@@ -152,12 +202,16 @@ impl<'a> SpatialContext<'a> {
         right: &[u32],
         cutoff: f32,
     ) -> Result<Vec<NeighborPair>, pdbiox_spatial::SpatialError> {
+        let key = TargetKey::of(right);
         if let Some(index) = self.cache.iter().find_map(|entry| match entry {
             CachedIndex::Cell {
                 cutoff: built_cutoff,
+                key: built_key,
                 targets,
                 index,
-            } if targets.as_ref() == right && *built_cutoff >= cutoff => Some(index),
+            } if *built_key == key && *built_cutoff >= cutoff && targets.as_ref() == right => {
+                Some(index)
+            }
             CachedIndex::Cell { .. } | CachedIndex::Kd { .. } => None,
         }) {
             return index.pairs(left, cutoff);
@@ -172,6 +226,7 @@ impl<'a> SpatialContext<'a> {
         let pairs = index.pairs(left, cutoff)?;
         self.retain(CachedIndex::Cell {
             cutoff,
+            key,
             targets: right.to_vec().into_boxed_slice(),
             index,
         });
@@ -184,8 +239,13 @@ impl<'a> SpatialContext<'a> {
         right: &[u32],
         cutoff: f32,
     ) -> Result<Vec<NeighborPair>, pdbiox_spatial::SpatialError> {
+        let key = TargetKey::of(right);
         if let Some(index) = self.cache.iter().find_map(|entry| match entry {
-            CachedIndex::Kd { targets, index } if targets.as_ref() == right => Some(index),
+            CachedIndex::Kd {
+                key: built_key,
+                targets,
+                index,
+            } if *built_key == key && targets.as_ref() == right => Some(index),
             CachedIndex::Cell { .. } | CachedIndex::Kd { .. } => None,
         }) {
             return index.pairs(left, cutoff);
@@ -194,6 +254,7 @@ impl<'a> SpatialContext<'a> {
             KdTree::build_with_options(self.positions, right, None, self.options.kd_periodic)?;
         let pairs = index.pairs(left, cutoff)?;
         self.retain(CachedIndex::Kd {
+            key,
             targets: right.to_vec().into_boxed_slice(),
             index,
         });
