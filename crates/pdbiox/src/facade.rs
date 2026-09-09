@@ -5,9 +5,20 @@
 //! between them.
 
 use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::io::{Format, InputBuffer, Limits, ReadOptions, ReadResult, write_output};
+use pdbiox_core::io::{
+    Format, InputBuffer, Limits, OutputOptions, OutputSink, ReadOptions, ReadResult,
+};
 use pdbiox_core::structure::Structure;
+#[cfg(feature = "mmcif")]
+use std::io;
+use std::io::Write;
 use std::path::Path;
+
+#[cfg(feature = "mmcif")]
+mod extensions;
+mod structure_batches;
+
+pub use structure_batches::{StructureBatchReader, open_structure_batches};
 
 #[cfg(feature = "chem")]
 use pdbiox_core::contract::DictionaryVersion;
@@ -75,6 +86,24 @@ pub fn read_bytes(bytes: Vec<u8>, name: Option<&str>, options: &ReadOptions) -> 
 /// structure cannot be represented, compression is unavailable, or the
 /// destination cannot be written.
 pub fn write(path: impl AsRef<Path>, structure: &Structure) -> Result<(), Vec<Diagnostic>> {
+    write_with_options(path, structure, OutputOptions::default())
+}
+
+/// Streams a structure under an explicit output-memory policy.
+///
+/// The default policy is 100 MB and no policy above 500 MB is accepted. The
+/// file sink itself retains at most 64 KiB; format writers receive rows or
+/// columns incrementally and never construct a complete file buffer.
+///
+/// # Errors
+///
+/// Returns format, projection, memory-policy, compression, or destination
+/// diagnostics.
+pub fn write_with_options(
+    path: impl AsRef<Path>,
+    structure: &Structure,
+    options: OutputOptions,
+) -> Result<(), Vec<Diagnostic>> {
     let path = path.as_ref();
     let name = path.file_name().and_then(|name| name.to_str());
     let Some(format) = name.and_then(Format::from_name) else {
@@ -82,45 +111,45 @@ pub fn write(path: impl AsRef<Path>, structure: &Structure) -> Result<(), Vec<Di
             Diagnostic::new(Code::E1001).with_context("name", path.display().to_string()),
         ]);
     };
-    let rendered = render(structure, format)?;
-    write_output(path, &rendered).map_err(|finding| vec![finding])
+    let mut output = OutputSink::create(path, options).map_err(|finding| vec![finding])?;
+    write_stream(&mut output, structure, format, options.memory_limit_bytes)?;
+    output.finish().map_err(|finding| vec![finding])
 }
 
-fn render(structure: &Structure, format: Format) -> Result<Vec<u8>, Vec<Diagnostic>> {
+fn write_stream<W: Write>(
+    output: &mut W,
+    structure: &Structure,
+    format: Format,
+    memory_limit_bytes: usize,
+) -> Result<(), Vec<Diagnostic>> {
+    #[cfg(not(feature = "bcif"))]
+    let _ = memory_limit_bytes;
+    #[cfg(not(any(feature = "mmcif", feature = "bcif", feature = "pdb")))]
+    let _ = (output, structure);
     match format {
         #[cfg(feature = "mmcif")]
         Format::Mmcif => {
-            #[cfg(feature = "modelcif")]
-            if let Some(model) = structure
-                .extensions()
-                .get::<pdbiox_modelcif::ModelCif>(pdbiox_modelcif::MODEL_CIF_EXTENSION)
-            {
-                return pdbiox_modelcif::write_canonical(structure, model)
-                    .map(String::into_bytes)
-                    .map_err(|error| cif_write_findings(&error));
-            }
-            pdbiox_cif::write_canonical(structure)
-                .map(String::into_bytes)
+            write_mmcif_to_with_options(structure, &pdbiox_cif::CifWriteOptions::new(), output)
                 .map_err(|error| cif_write_findings(&error))
         }
-        #[cfg(feature = "mmcif")]
-        Format::Pdbml => write_pdbml_structure(structure),
         #[cfg(feature = "bcif")]
-        Format::BinaryCif => pdbiox_bcif::write_structure(structure),
+        Format::BinaryCif => pdbiox_bcif::write_structure_to_with_memory_limit(
+            structure,
+            &pdbiox_cif::CifWriteOptions::new(),
+            memory_limit_bytes,
+            output,
+        ),
         #[cfg(feature = "pdb")]
-        Format::Pdb => {
-            pdbiox_pdb::write(structure, &pdbiox_pdb::PdbOptions::new()).map(String::into_bytes)
+        Format::Pdb => pdbiox_pdb::write_to(structure, &pdbiox_pdb::PdbOptions::new(), output),
+        #[cfg(feature = "pdb")]
+        Format::Mmtf => pdbiox_pdb::write_mmtf_to(structure, output),
+        #[cfg(feature = "pdb")]
+        Format::Pqr => pdbiox_pdb::write_pqr_to(structure, &pdbiox_pdb::PdbOptions::new(), output),
+        #[cfg(feature = "pdb")]
+        Format::Pdbqt => {
+            pdbiox_pdb::write_pdbqt_to(structure, &pdbiox_pdb::PdbOptions::new(), output)
         }
-        #[cfg(feature = "pdb")]
-        Format::Mmtf => pdbiox_pdb::write_mmtf(structure),
-        #[cfg(feature = "pdb")]
-        Format::Pqr => {
-            pdbiox_pdb::write_pqr(structure, &pdbiox_pdb::PdbOptions::new()).map(String::into_bytes)
-        }
-        #[cfg(feature = "pdb")]
-        Format::Pdbqt => pdbiox_pdb::write_pdbqt(structure, &pdbiox_pdb::PdbOptions::new())
-            .map(String::into_bytes),
-        other => Err(vec![unsupported(other)]),
+        other => Err(vec![unsupported_writer(other)]),
     }
 }
 
@@ -149,7 +178,7 @@ fn read_buffer(input: &InputBuffer, name: Option<&str>, options: &ReadOptions) -
 fn read_pdbml_buffer(input: &InputBuffer, options: &ReadOptions) -> ReadResult {
     match pdbiox_cif::read_pdbml(input.as_bytes(), options) {
         Ok((document, structure, findings)) => {
-            attach_cif_metadata(&document, structure, findings, options)
+            extensions::attach_materialized_cif_metadata(&document, structure, findings, options)
         }
         Err(pdbiox_cif::PdbmlReadError::Findings(findings)) => Err(findings),
         Err(pdbiox_cif::PdbmlReadError::Pdbml(error)) => Err(vec![
@@ -165,100 +194,68 @@ fn read_pdbml_buffer(input: &InputBuffer, options: &ReadOptions) -> ReadResult {
     }
 }
 
-#[cfg(feature = "mmcif")]
-fn write_pdbml_structure(structure: &Structure) -> Result<Vec<u8>, Vec<Diagnostic>> {
-    let canonical =
-        pdbiox_cif::write_canonical(structure).map_err(|error| cif_write_findings(&error))?;
-    let input = InputBuffer::from_bytes(canonical.into_bytes());
-    let (document, _) = pdbiox_cif::parse(&input)?;
-    pdbiox_cif::write_pdbml(&document)
-        .map(String::into_bytes)
-        .map_err(|error| {
-            vec![
-                Diagnostic::new(Code::E1102)
-                    .with_message("PDBML/XML could not be encoded")
-                    .with_context("encoder", error.to_string()),
-            ]
-        })
-}
-
 #[cfg(feature = "bcif")]
 fn read_bcif_buffer(input: &InputBuffer, options: &ReadOptions) -> ReadResult {
-    let (document, structure, findings) = pdbiox_bcif::read_with_document(input, options)?;
     if options.only_atomic_coords {
-        return Ok((structure, findings));
+        return pdbiox_bcif::read(input, options);
     }
-    attach_cif_metadata(&document, structure, findings, options)
+    #[cfg(feature = "modelcif")]
+    {
+        let projection =
+            match pdbiox_modelcif::ModelCifProjection::new(pdbiox_modelcif::ModelCifOptions::new())
+            {
+                Ok(projection) => projection,
+                Err(error) => return Err(vec![extensions::model_error(&error)]),
+            };
+        let (document, structure, projected, findings) = pdbiox_bcif::read_with_projection(
+            input,
+            options,
+            extensions::keep_non_model_extension_category,
+            projection,
+        )?;
+        extensions::attach_projected_metadata(&document, structure, findings, projected, options)
+    }
+    #[cfg(not(feature = "modelcif"))]
+    {
+        let (document, structure, findings) = pdbiox_bcif::read_with_metadata(
+            input,
+            options,
+            extensions::keep_non_model_extension_category,
+        )?;
+        extensions::attach_materialized_cif_metadata(&document, structure, findings, options)
+    }
 }
 
 #[cfg(feature = "mmcif")]
 fn read_mmcif_buffer(input: &InputBuffer, options: &ReadOptions) -> ReadResult {
-    let (document, structure, findings) = pdbiox_cif::read_with_document(input, options)?;
     if options.only_atomic_coords {
-        return Ok((structure, findings));
+        return pdbiox_cif::read(input, options);
     }
-    attach_cif_metadata(&document, structure, findings, options)
-}
-
-#[cfg(any(feature = "mmcif", feature = "bcif"))]
-fn attach_cif_metadata(
-    document: &pdbiox_cif::Document,
-    structure: Structure,
-    findings: Vec<Diagnostic>,
-    options: &ReadOptions,
-) -> ReadResult {
-    let (structure, findings) = attach_optional_extensions(document, structure, findings);
-    options.finish(structure, findings)
-}
-
-#[cfg(any(feature = "modelcif", feature = "xtal"))]
-fn attach_optional_extensions(
-    document: &pdbiox_cif::Document,
-    mut structure: Structure,
-    mut findings: Vec<Diagnostic>,
-) -> (Structure, Vec<Diagnostic>) {
     #[cfg(feature = "modelcif")]
     {
-        let (model, model_findings) = pdbiox_modelcif::lower(document);
-        findings.extend(model_findings);
-        if !model.is_empty() {
-            structure = structure.with_extension(pdbiox_modelcif::MODEL_CIF_EXTENSION, model);
-        }
+        let projection =
+            match pdbiox_modelcif::ModelCifProjection::new(pdbiox_modelcif::ModelCifOptions::new())
+            {
+                Ok(projection) => projection,
+                Err(error) => return Err(vec![extensions::model_error(&error)]),
+            };
+        let (document, structure, projected, findings) = pdbiox_cif::read_with_projection(
+            input,
+            options,
+            extensions::keep_non_model_extension_category,
+            projection,
+        )?;
+        extensions::attach_projected_metadata(&document, structure, findings, projected, options)
     }
-    #[cfg(feature = "xtal")]
+    #[cfg(not(feature = "modelcif"))]
     {
-        match pdbiox_xtal::lower_assemblies(document) {
-            Ok(assemblies) if !assemblies.is_empty() => {
-                structure = structure.with_extension(pdbiox_xtal::ASSEMBLIES_EXTENSION, assemblies);
-            }
-            Ok(_) => {}
-            Err(assembly_findings) => findings.extend(assembly_findings),
-        }
-        match pdbiox_xtal::lower_ncs(document) {
-            Ok(ncs) if !ncs.is_empty() => {
-                structure = structure.with_extension(pdbiox_xtal::NCS_EXTENSION, ncs);
-            }
-            Ok(_) => {}
-            Err(ncs_findings) => findings.extend(ncs_findings),
-        }
-        match pdbiox_xtal::lower_symmetry(document) {
-            Ok(symmetry) if !symmetry.is_empty() => {
-                structure = structure.with_extension(pdbiox_xtal::SYMMETRY_EXTENSION, symmetry);
-            }
-            Ok(_) => {}
-            Err(symmetry_findings) => findings.extend(symmetry_findings),
-        }
+        let (document, structure, findings) = pdbiox_cif::read_with_metadata(
+            input,
+            options,
+            extensions::keep_non_model_extension_category,
+        )?;
+        extensions::attach_materialized_cif_metadata(&document, structure, findings, options)
     }
-    (structure, findings)
-}
-
-#[cfg(not(any(feature = "modelcif", feature = "xtal")))]
-fn attach_optional_extensions(
-    _document: &pdbiox_cif::Document,
-    structure: Structure,
-    findings: Vec<Diagnostic>,
-) -> (Structure, Vec<Diagnostic>) {
-    (structure, findings)
 }
 
 /// Writes a structure in the legacy fixed-column format, or explains why it
@@ -279,6 +276,13 @@ pub fn write_pdb(
 fn unsupported(format: Format) -> Diagnostic {
     Diagnostic::new(Code::E1001)
         .with_message("this build does not include a reader for the detected format")
+        .with_context("format", format.name())
+        .with_context("crate", crate_for(format))
+}
+
+fn unsupported_writer(format: Format) -> Diagnostic {
+    Diagnostic::new(Code::E1001)
+        .with_message("this format has no bounded incremental writer")
         .with_context("format", format.name())
         .with_context("crate", crate_for(format))
 }
@@ -336,37 +340,68 @@ pub fn read_component_dictionary(
     pdbiox_chem::read_ccd(&input, version)
 }
 
-/// Writes a structure as a valid, self-consistent mmCIF file.
+/// Renders a structure as valid, self-consistent mmCIF in memory.
 ///
 /// # Errors
 ///
-/// Returns the canonical preflight error without returning partial output.
+/// Returns the canonical preflight or in-memory destination error.
 #[cfg(feature = "mmcif")]
-pub fn write_mmcif(structure: &Structure) -> Result<String, pdbiox_cif::CifWriteError> {
+pub fn write_mmcif(structure: &Structure) -> Result<String, pdbiox_cif::CifWriteToError> {
     write_mmcif_with_options(structure, &pdbiox_cif::CifWriteOptions::new())
 }
 
-/// Writes a structure as mmCIF with explicit identifier decisions.
+/// Renders mmCIF in memory with explicit identifier decisions.
 ///
 /// # Errors
 ///
-/// Returns the canonical preflight error without returning partial output.
+/// Returns the canonical preflight or in-memory destination error.
 #[cfg(feature = "mmcif")]
 pub fn write_mmcif_with_options(
     structure: &Structure,
     options: &pdbiox_cif::CifWriteOptions,
-) -> Result<String, pdbiox_cif::CifWriteError> {
+) -> Result<String, pdbiox_cif::CifWriteToError> {
+    let mut output = Vec::with_capacity(structure.atom_count() as usize * 100);
+    write_mmcif_to_with_options(structure, options, &mut output)?;
+    String::from_utf8(output).map_err(|error| {
+        pdbiox_cif::CifWriteToError::Output(io::Error::new(io::ErrorKind::InvalidData, error))
+    })
+}
+
+/// Streams canonical mmCIF to a byte destination.
+///
+/// # Errors
+///
+/// Returns canonical projection or destination errors.
+#[cfg(feature = "mmcif")]
+pub fn write_mmcif_to<W: Write>(
+    structure: &Structure,
+    output: &mut W,
+) -> Result<(), pdbiox_cif::CifWriteToError> {
+    write_mmcif_to_with_options(structure, &pdbiox_cif::CifWriteOptions::new(), output)
+}
+
+/// Streams canonical mmCIF with explicit identifier decisions.
+///
+/// # Errors
+///
+/// Returns canonical projection or destination errors.
+#[cfg(feature = "mmcif")]
+pub fn write_mmcif_to_with_options<W: Write>(
+    structure: &Structure,
+    options: &pdbiox_cif::CifWriteOptions,
+    output: &mut W,
+) -> Result<(), pdbiox_cif::CifWriteToError> {
     #[cfg(feature = "modelcif")]
     if let Some(model) = structure
         .extensions()
         .get::<pdbiox_modelcif::ModelCif>(pdbiox_modelcif::MODEL_CIF_EXTENSION)
     {
-        return pdbiox_modelcif::write_canonical_with_options(structure, model, options);
+        return pdbiox_modelcif::write_canonical_to(structure, model, options, output);
     }
-    pdbiox_cif::write_canonical_with_options(structure, options)
+    pdbiox_cif::write_canonical_to(structure, options, output)
 }
 
-/// Writes a structure as deterministic `BinaryCIF` bytes.
+/// Renders deterministic `BinaryCIF` bytes in memory.
 ///
 /// # Errors
 ///
@@ -376,7 +411,7 @@ pub fn write_bcif(structure: &Structure) -> Result<Vec<u8>, Vec<Diagnostic>> {
     pdbiox_bcif::write_structure(structure)
 }
 
-/// Writes deterministic `BinaryCIF` with explicit canonical identifier decisions.
+/// Renders deterministic `BinaryCIF` in memory with explicit identifier decisions.
 ///
 /// # Errors
 ///
@@ -396,12 +431,16 @@ pub fn default_limits() -> Limits {
 }
 
 #[cfg(feature = "mmcif")]
-fn cif_write_findings(error: &pdbiox_cif::CifWriteError) -> Vec<Diagnostic> {
-    vec![
-        Diagnostic::new(Code::E4105)
+fn cif_write_findings(error: &pdbiox_cif::CifWriteToError) -> Vec<Diagnostic> {
+    let finding = match error {
+        pdbiox_cif::CifWriteToError::Projection(error) => Diagnostic::new(Code::E4105)
             .with_message("structure cannot be projected to canonical CIF")
             .with_context("reason", error.to_string()),
-    ]
+        pdbiox_cif::CifWriteToError::Output(error) => Diagnostic::new(Code::E7901)
+            .with_message("canonical CIF output failed")
+            .with_context("reason", error.to_string()),
+    };
+    vec![finding]
 }
 
 /// Applies one rigid transform to selected atoms in every dense model.

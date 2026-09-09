@@ -52,12 +52,21 @@ pub use pdbiox_core::diagnostic::{
     Class, Code, ContextItem, Diagnostic, Diagnostics, Kind, Rendered, Severity, Strictness,
 };
 pub use pdbiox_core::element::Element;
+pub use pdbiox_core::execution::ExecutionContext;
 pub use pdbiox_core::index::{
     AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
 };
 pub use pdbiox_core::io::{
-    AmbiguousResidueBoundaryPolicy, Compression, Format, InputBuffer, InputKind, Limits,
-    MissingElementPolicy, ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll,
+    AmbiguousResidueBoundaryPolicy, BatchContinuity, Compression, ContinuityLevel, Format,
+    InputBuffer, InputKind, Limits, MissingElementPolicy, OutputOptions, ParseMode, ReadOptions,
+    ReadResult, Reader, Select, SelectAll, StructureAtomRecord, StructureBatch,
+    StructureBatchBuilder, StructureBatchError, collect_structure,
+};
+pub use pdbiox_core::provider::{
+    AtomEndpoint, BondChunk, BondChunkProvider, BondChunkRecord, ChunkDescriptor, ChunkId,
+    ChunkLayout, DatasetCatalog, DatasetDescriptor, DatasetId, FrameChunk, FrameChunkProvider,
+    LocalRow, LogicalRow, PayloadKind, PropertyChunk, PropertyChunkProvider, PropertyKind,
+    PropertyValue, ProviderError, StructureChunk, StructureChunkProvider, TARGET_CHUNK_BONDS,
 };
 pub use pdbiox_core::selection::AtomSelection;
 pub use pdbiox_core::span::{ByteSpan, Position};
@@ -122,8 +131,8 @@ pub use pdbiox_chem::{
 pub use pdbiox_cif as cif;
 #[cfg(feature = "mmcif")]
 pub use pdbiox_cif::{
-    Category, CifValue, CifWriteError, CifWriteOptions, Column, DataBlock, Document,
-    write_preserving,
+    Category, CifValue, CifWriteError, CifWriteOptions, CifWriteToError, Column, DataBlock,
+    Document, write_preserving, write_preserving_to,
 };
 
 #[cfg(feature = "modelcif")]
@@ -144,17 +153,18 @@ pub use pdbiox_bcif::{BcifReader, BinaryDocument};
 pub use pdbiox_geom as geom;
 #[cfg(feature = "geom")]
 pub use pdbiox_geom::{
-    BackboneFrame, BackboneResidue, BackboneTorsions, CircularSummary, Decomposition,
-    DistanceMatrix, EigenError, EigenOptions, FluctuationError, HelixGeometry, MatrixError,
-    PeriodicAngle, PeriodicError, Plane, Rigid, Rotation3, RotationError, RotationMeanOptions,
-    RotationOptions, SuperposeError, SuperposeOptions, Superposition, TorusMetric, angle,
-    asphericity, asphericity_with_options, backbone_frames, backbone_torsions, best_fit_plane,
-    best_fit_plane_with_options, centre_of_mass, centroid, circular_summary, cross, degrees,
-    dihedral, displacement, distance, distance_matrix, distance_matrix_between, distance_squared,
-    dot, gyration_axes, gyration_axes_with_options, helix_geometry, helix_geometry_with_options,
-    inertia_tensor, norm, normalise, path_torsions, plane_deviation, plane_deviation_with_options,
-    principal_axes, principal_axes_with_options, radius_of_gyration, rmsd, rmsd_flat, rmsf,
-    rotation_mean, rotation_mean_with_options, superpose, superpose_with_options, torus_summary,
+    BackboneFrame, BackboneResidue, BackboneTorsions, BatchGeometryError, CircularSummary,
+    Decomposition, DistanceMatrix, EigenError, EigenOptions, FluctuationError, HelixGeometry,
+    MatrixError, PeriodicAngle, PeriodicError, Plane, Rigid, Rotation3, RotationError,
+    RotationMeanOptions, RotationOptions, SuperposeError, SuperposeOptions, Superposition,
+    TorusMetric, angle, angles_into, asphericity, asphericity_with_options, backbone_frames,
+    backbone_torsions, best_fit_plane, best_fit_plane_with_options, centre_of_mass, centroid,
+    circular_summary, cross, degrees, dihedral, displacement, distance, distance_matrix,
+    distance_matrix_between, distance_squared, distances_into, dot, gyration_axes,
+    gyration_axes_with_options, helix_geometry, helix_geometry_with_options, inertia_tensor, norm,
+    normalise, path_torsions, plane_deviation, plane_deviation_with_options, principal_axes,
+    principal_axes_with_options, radius_of_gyration, rmsd, rmsd_flat, rmsf, rotation_mean,
+    rotation_mean_with_options, superpose, superpose_with_options, torsions_into, torus_summary,
 };
 
 #[cfg(feature = "ic")]
@@ -169,7 +179,8 @@ pub use pdbiox_pdb as pdb;
 #[cfg(feature = "pdb")]
 pub use pdbiox_pdb::{
     PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbHeadersExt, PdbIdentifierNamespace,
-    PdbOptions, read_mmtf, write_mmtf, write_pdbqt, write_pqr,
+    PdbOptions, read_mmtf, write_mmtf, write_mmtf_to, write_pdbqt, write_pdbqt_to, write_pqr,
+    write_pqr_to,
 };
 
 #[cfg(feature = "spatial")]
@@ -192,16 +203,17 @@ pub use pdbiox_xtal as xtal;
 #[cfg(feature = "xtal")]
 pub use pdbiox_xtal::{
     ASSEMBLIES_EXTENSION, AffineTransform, AssemblyDef, AssemblyExt, AssemblyNeighbor, AssemblySet,
-    AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalNeighbor,
+    AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalImage, CrystalImageBatch,
+    CrystalImageBatchOptions, CrystalNeighbor, CrystalNeighborBatch, CrystalNeighborOptions,
     DEFAULT_CRYSTAL_IMAGE_LIMIT, DEFAULT_INSTANCE_LIMIT, Generator, INSTANCE_ID_ANNOTATION,
     NCS_EXTENSION, NcsAtomInstance, NcsCode, NcsExt, NcsOperator, NcsSet, NcsView, OperExpression,
     Operator, Rational, SYMMETRY_EXTENSION, SpaceGroupSetting, SymmetryExt, SymmetryOperation,
-    SymmetrySet, crystal_neighbors, crystal_neighbors_with_backend, crystal_neighbors_with_limit,
+    SymmetrySet, collect_crystal_neighbors, crystal_image_batches, crystal_neighbor_batches,
     lower_assemblies, lower_ncs, lower_symmetry, space_group_by_hall, space_group_setting,
-    space_group_settings,
+    space_group_settings, visit_crystal_images, visit_crystal_neighbors,
 };
 
-// The analysis-science crates carry many small, related items, so they are
+// The analysis crates carry many small, related items, so they are
 // re-exported under their own namespace rather than flattened into the root.
 #[cfg(feature = "analysis")]
 pub use pdbiox_analysis as analysis;
@@ -247,7 +259,8 @@ mod query_api;
 mod side_chain_api;
 
 pub use facade::{
-    default_limits, read, read_bytes, read_with_diagnostics, read_with_options, write,
+    StructureBatchReader, default_limits, open_structure_batches, read, read_bytes,
+    read_with_diagnostics, read_with_options, write, write_with_options,
 };
 pub use policy_config::{
     ApplicationConfiguration, ChemistryConfiguration, OutputConfiguration, PolicyConfigError,
@@ -285,7 +298,10 @@ pub use side_chain_api::{
 };
 
 #[cfg(feature = "mmcif")]
-pub use facade::{read_document, write_mmcif, write_mmcif_with_options};
+pub use facade::{
+    read_document, write_mmcif, write_mmcif_to, write_mmcif_to_with_options,
+    write_mmcif_with_options,
+};
 
 #[cfg(feature = "bcif")]
 pub use facade::{write_bcif, write_bcif_with_options};
