@@ -61,3 +61,37 @@ fn fluctuation_is_independent_of_frame_order() {
     };
     assert!((forward[0] - reversed[0]).abs() < 1e-9);
 }
+
+#[test]
+fn vector_blocks_and_tail_match_the_scalar_welford_order_bit_for_bit() {
+    let frames = (0..4_i16)
+        .map(|frame| {
+            (0..7_i16)
+                .map(|atom| {
+                    let value = f32::from(frame * 7 + atom) * 0.125;
+                    [value, value.mul_add(-0.5, 1.0), value * value]
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let views = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let actual = rmsf(&views).expect("SIMD RMSF");
+    let mut mean = [[0.0_f64; 3]; 7];
+    let mut square = [0.0_f64; 7];
+    for (frame_index, frame) in frames.iter().enumerate() {
+        let inverse = f64::from(u32::try_from(frame_index + 1).expect("small frame count")).recip();
+        for (atom, point) in frame.iter().enumerate() {
+            let point = point.map(f64::from);
+            let before = core::array::from_fn::<_, 3, _>(|axis| point[axis] - mean[atom][axis]);
+            for axis in 0..3 {
+                mean[atom][axis] += before[axis] * inverse;
+            }
+            let after = core::array::from_fn::<_, 3, _>(|axis| point[axis] - mean[atom][axis]);
+            square[atom] += before[0] * after[0] + before[1] * after[1] + before[2] * after[2];
+        }
+    }
+    for (actual, square) in actual.iter().zip(square) {
+        let expected = (square / 4.0).sqrt();
+        assert_eq!(actual.to_bits(), expected.to_bits());
+    }
+}

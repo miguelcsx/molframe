@@ -72,28 +72,7 @@ pub fn rmsf(frames: &[&[[f32; 3]]]) -> Result<Vec<f64>, FluctuationError> {
         let inverse_seen = exact_u64(seen)
             .ok_or(FluctuationError::TooManyFrames)?
             .recip();
-        for (atom, &position) in frame.iter().enumerate() {
-            let point = [
-                f64::from(position[0]),
-                f64::from(position[1]),
-                f64::from(position[2]),
-            ];
-            let before = [
-                point[0] - mean[atom][0],
-                point[1] - mean[atom][1],
-                point[2] - mean[atom][2],
-            ];
-            mean[atom][0] += before[0] * inverse_seen;
-            mean[atom][1] += before[1] * inverse_seen;
-            mean[atom][2] += before[2] * inverse_seen;
-            let after = [
-                point[0] - mean[atom][0],
-                point[1] - mean[atom][1],
-                point[2] - mean[atom][2],
-            ];
-            summed_square[atom] +=
-                before[0] * after[0] + before[1] * after[1] + before[2] * after[2];
-        }
+        crate::simd::rmsf_update(frame, &mut mean, &mut summed_square, inverse_seen);
     }
 
     let inverse_frames = exact_u64(seen)

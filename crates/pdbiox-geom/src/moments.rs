@@ -10,7 +10,6 @@
 //! able to state, so it is a parameter rather than a convention.
 
 use crate::eigen;
-use crate::measure::dot;
 use crate::numeric::exact_count;
 
 /// The unweighted centre of a set of positions.
@@ -68,15 +67,7 @@ fn centre_and_total(positions: &[[f32; 3]], masses: Option<&[f64]>) -> Option<([
 /// The caller guarantees that `positions` is non-empty. Runs in `O(n)` time
 /// and `O(1)` auxiliary space.
 fn uniform_centre_and_total(positions: &[[f32; 3]]) -> Option<([f64; 3], f64)> {
-    let mut sum_x = 0.0;
-    let mut sum_y = 0.0;
-    let mut sum_z = 0.0;
-
-    for position in positions {
-        sum_x += f64::from(position[0]);
-        sum_y += f64::from(position[1]);
-        sum_z += f64::from(position[2]);
-    }
+    let [sum_x, sum_y, sum_z] = crate::simd::sum_positions(positions);
 
     let total = exact_count(positions.len())?;
     if !total.is_finite() || total <= 0.0 {
@@ -95,17 +86,7 @@ fn weighted_centre_and_total(positions: &[[f32; 3]], masses: &[f64]) -> Option<(
         return None;
     }
 
-    let mut sum_x = 0.0;
-    let mut sum_y = 0.0;
-    let mut sum_z = 0.0;
-    let mut total = 0.0;
-
-    for (position, &weight) in positions.iter().zip(masses) {
-        sum_x += f64::from(position[0]) * weight;
-        sum_y += f64::from(position[1]) * weight;
-        sum_z += f64::from(position[2]) * weight;
-        total += weight;
-    }
+    let ([sum_x, sum_y, sum_z], total) = crate::simd::weighted_position_sum(positions, masses);
 
     if !total.is_finite() || total <= 0.0 {
         return None;
@@ -149,14 +130,7 @@ pub fn radius_of_gyration(positions: &[[f32; 3]], masses: &[f64]) -> Option<f64>
 ///
 /// Runs in `O(n)` time and `O(1)` auxiliary space.
 fn uniform_squared_radius(positions: &[[f32; 3]], centre: [f64; 3]) -> f64 {
-    let mut sum = 0.0;
-
-    for &position in positions {
-        let offset = offset_from(position, centre);
-        sum += dot(offset, offset);
-    }
-
-    sum
+    crate::simd::squared_radius_sum(positions, centre, None)
 }
 
 /// Accumulates the mass-weighted squared distance from `centre`.
@@ -172,13 +146,11 @@ fn weighted_squared_radius(
         return None;
     }
 
-    let mut sum = 0.0;
-    for (&position, &weight) in positions.iter().zip(masses) {
-        let offset = offset_from(position, centre);
-        sum += weight * dot(offset, offset);
-    }
-
-    Some(sum)
+    Some(crate::simd::squared_radius_sum(
+        positions,
+        centre,
+        Some(masses),
+    ))
 }
 
 /// The inertia tensor about the centre.
@@ -196,45 +168,20 @@ pub fn inertia_tensor(positions: &[[f32; 3]], masses: &[f64]) -> Option<[[f64; 3
     };
     let (centre, _) = centre_and_total(positions, use_masses)?;
 
-    let mut tensor = [[0.0; 3]; 3];
-
-    match use_masses {
-        Some(masses) => {
-            if masses.len() < positions.len() {
-                return None;
-            }
-
-            for (&position, &weight) in positions.iter().zip(masses) {
-                accumulate_inertia(&mut tensor, offset_from(position, centre), weight);
-            }
-        }
-        None => {
-            for &position in positions {
-                accumulate_inertia(&mut tensor, offset_from(position, centre), 1.0);
-            }
-        }
+    if let Some(masses) = use_masses
+        && masses.len() < positions.len()
+    {
+        return None;
     }
+    let components = crate::simd::inertia_components(positions, use_masses, centre);
+    let mut tensor = [
+        [components[0], components[1], components[2]],
+        [0.0, components[3], components[4]],
+        [0.0, 0.0, components[5]],
+    ];
 
     mirror_upper_triangle(&mut tensor);
     Some(tensor)
-}
-
-/// Adds one weighted point's six independent inertia components.
-///
-/// Runs in `O(1)` time and writes only the upper triangle.
-#[inline]
-fn accumulate_inertia(tensor: &mut [[f64; 3]; 3], r: [f64; 3], weight: f64) {
-    let [x, y, z] = r;
-    let xx = x * x;
-    let yy = y * y;
-    let zz = z * z;
-
-    tensor[0][0] += weight * (yy + zz);
-    tensor[0][1] -= weight * x * y;
-    tensor[0][2] -= weight * x * z;
-    tensor[1][1] += weight * (xx + zz);
-    tensor[1][2] -= weight * y * z;
-    tensor[2][2] += weight * (xx + yy);
 }
 
 /// Copies the strict upper triangle into the strict lower triangle.

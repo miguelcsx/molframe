@@ -135,17 +135,19 @@ fn centred_scatter(points: &[[f32; 3]]) -> Option<([f64; 3], [[f64; 3]; 3], f64)
 
     let mut scatter = [[0.0f64; 3]; 3];
     for point in points {
-        let delta = [
-            f64::from(point[0]) - mean[0],
-            f64::from(point[1]) - mean[1],
-            f64::from(point[2]) - mean[2],
-        ];
-        for row in 0..3 {
-            for column in 0..3 {
-                scatter[row][column] += delta[row] * delta[column];
-            }
-        }
+        let x = f64::from(point[0]) - mean[0];
+        let y = f64::from(point[1]) - mean[1];
+        let z = f64::from(point[2]) - mean[2];
+        scatter[0][0] += x * x;
+        scatter[0][1] += x * y;
+        scatter[0][2] += x * z;
+        scatter[1][1] += y * y;
+        scatter[1][2] += y * z;
+        scatter[2][2] += z * z;
     }
+    scatter[1][0] = scatter[0][1];
+    scatter[2][0] = scatter[0][2];
+    scatter[2][1] = scatter[1][2];
     Some((mean, scatter, count))
 }
 

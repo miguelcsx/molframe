@@ -79,9 +79,7 @@ impl Rigid {
     ///
     /// Runs in `O(n)` time and `O(1)` auxiliary space.
     pub fn apply_all(&self, positions: &mut [[f32; 3]]) {
-        for position in positions {
-            *position = self.apply(*position);
-        }
+        crate::simd::transform_all(positions, self.rotation, self.translation);
     }
 
     /// The transform that undoes this one.
