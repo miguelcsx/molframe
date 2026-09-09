@@ -7,12 +7,14 @@
 //! search, and no allocation per residue.
 
 mod chain;
+mod csr;
 mod entity;
 mod hierarchy;
 mod model;
 mod residue;
 
 pub use chain::{ChainRecord, ChainTable, PolymerKind};
+pub use csr::{Csr, CsrBuilder};
 pub use entity::{EntityKind, EntityTable};
 pub use hierarchy::Topology;
 pub use model::ModelTable;
