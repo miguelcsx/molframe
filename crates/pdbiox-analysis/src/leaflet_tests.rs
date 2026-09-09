@@ -1,5 +1,5 @@
 use super::{LeafletOptions, identify_leaflets};
-use pdbiox_core::selection::AtomSelection;
+use pdbiox_core::{ExecutionContext, selection::AtomSelection};
 use pdbiox_spatial::SpatialBackend;
 
 #[test]
@@ -19,6 +19,7 @@ fn separated_site_graphs_form_two_leaflets() {
             backend: SpatialBackend::BruteForce,
         },
         None,
+        &ExecutionContext::default(),
     ) else {
         panic!("valid leaflet graph");
     };
@@ -39,6 +40,7 @@ fn caller_selection_controls_chemical_membership() {
             backend: SpatialBackend::BruteForce,
         },
         None,
+        &ExecutionContext::default(),
     ) else {
         panic!("valid selection");
     };

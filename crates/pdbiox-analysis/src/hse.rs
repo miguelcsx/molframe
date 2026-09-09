@@ -14,9 +14,11 @@
 
 use pdbiox_chem::PolymerAtomRole;
 use pdbiox_core::index::{AtomIndex, ResidueIndex};
-use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::{ResidueRef, Structure};
-use pdbiox_spatial::{SpatialBackend, SpatialError, pairs_within};
+use pdbiox_core::{ExecutionContext, selection::AtomSelection};
+use pdbiox_spatial::{
+    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, for_each_pairs_within_unsorted,
+};
 
 /// Why half-sphere exposure could not be evaluated.
 #[derive(Clone, Copy, Debug, PartialEq, thiserror::Error)]
@@ -75,6 +77,7 @@ pub fn half_sphere_exposure(
     structure: &Structure,
     radius: f32,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<Vec<HalfSphereExposure>, HseError> {
     require_role_annotation(structure)?;
     let mut centres = Vec::new();
@@ -110,25 +113,37 @@ pub fn half_sphere_exposure(
     let mut sorted = alpha_atoms;
     sorted.sort_unstable();
     let selection = AtomSelection::from_sorted(sorted);
-    let pairs = pairs_within(
-        structure.positions(),
-        &selection,
-        &selection,
-        radius,
-        backend,
-        None,
+    // Every pair collapses into two per-residue counters, so nothing is gained
+    // by holding the pairs: they are classified as they are produced.
+    //
+    // Deliberately serial. A blocked reduction allocates one accumulator per
+    // block, and this accumulator is one counter pair per residue — so parallel
+    // execution would cost residues x blocks, which for a large structure is
+    // far more memory than the search saves in time. A sparse per-block map
+    // would fix the memory and add a hash lookup to every pair, which is most
+    // of the per-pair work here. The decomposition this kernel wants is over
+    // residues, not over cells.
+    for_each_pairs_within_unsorted(
+        &PairQuery {
+            positions: structure.positions(),
+            left: &selection,
+            right: &selection,
+            cutoff: radius,
+            options: SpatialSearchOptions::with_backend(backend),
+            periodic: None,
+            context,
+        },
+        |pair| {
+            let (Some(&Some(a)), Some(&Some(b))) = (
+                centre_of_atom.get(pair.first as usize),
+                centre_of_atom.get(pair.second as usize),
+            ) else {
+                return;
+            };
+            classify(&mut centres, a, b);
+            classify(&mut centres, b, a);
+        },
     )?;
-
-    for pair in pairs {
-        let (Some(&Some(a)), Some(&Some(b))) = (
-            centre_of_atom.get(pair.first as usize),
-            centre_of_atom.get(pair.second as usize),
-        ) else {
-            continue;
-        };
-        classify(&mut centres, a, b);
-        classify(&mut centres, b, a);
-    }
 
     let mut result: Vec<HalfSphereExposure> = centres
         .iter()

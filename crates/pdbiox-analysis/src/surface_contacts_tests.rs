@@ -1,4 +1,5 @@
-use super::surface_contacts;
+use super::{SurfaceContactOptions, surface_contacts};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_spatial::SpatialBackend;
 
@@ -24,11 +25,14 @@ fn exposed_facing_patches_support_a_contact() {
     let contacts = surface_contacts(
         &structure,
         &[1.7, 1.7],
-        0.5,
-        1.4,
-        20.0,
-        0.2,
-        SpatialBackend::BruteForce,
+        SurfaceContactOptions {
+            tolerance: 0.5,
+            probe: 1.4,
+            surface_density: 20.0,
+            minimum_area: 0.2,
+            backend: SpatialBackend::BruteForce,
+        },
+        &ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("surface failed: {error}"));
     assert_eq!(contacts.len(), 1);
@@ -40,11 +44,14 @@ fn an_occluding_atom_removes_the_facing_surface_support() {
     let contacts = surface_contacts(
         &structure,
         &[1.7, 1.7, 2.2],
-        0.5,
-        1.4,
-        20.0,
-        0.2,
-        SpatialBackend::BruteForce,
+        SurfaceContactOptions {
+            tolerance: 0.5,
+            probe: 1.4,
+            surface_density: 20.0,
+            minimum_area: 0.2,
+            backend: SpatialBackend::BruteForce,
+        },
+        &ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("surface failed: {error}"));
     assert!(

@@ -1,9 +1,9 @@
 use super::half_sphere_exposure;
 use pdbiox_chem::PolymerAtomRole;
-use pdbiox_core::Presence;
 use pdbiox_core::annotation::{AnnotationColumn, AtomAnnotation};
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_core::structure::Structure;
+use pdbiox_core::{ExecutionContext, Presence};
 use pdbiox_spatial::SpatialBackend;
 
 // Residue 1's side chain points along +x. Residue 2 sits on the +x side (upper),
@@ -50,7 +50,12 @@ fn with_roles(structure: &Structure) -> Structure {
 
 #[test]
 fn a_residue_counts_neighbours_on_each_side_of_its_side_chain() {
-    let Ok(exposure) = half_sphere_exposure(&structure(), 13.0, SpatialBackend::BruteForce) else {
+    let Ok(exposure) = half_sphere_exposure(
+        &structure(),
+        13.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert_eq!(exposure.len(), 3);
@@ -72,9 +77,12 @@ ATOM 1 C CA GLY A 1 0 0 0\n";
         Ok(result) => result,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     };
-    let Ok(exposure) =
-        half_sphere_exposure(&with_roles(&structure), 13.0, SpatialBackend::BruteForce)
-    else {
+    let Ok(exposure) = half_sphere_exposure(
+        &with_roles(&structure),
+        13.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     assert!(exposure.is_empty());

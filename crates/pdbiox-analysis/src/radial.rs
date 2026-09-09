@@ -1,9 +1,10 @@
 //! Radial distributions and coordination shells over explicit site selections.
 
 use core::f64::consts::PI;
-use pdbiox_core::selection::AtomSelection;
+use pdbiox_core::{ExecutionContext, selection::AtomSelection};
 use pdbiox_spatial::{
-    PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions, for_each_pairs_within_unsorted,
+    PairQuery, PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions,
+    for_each_pairs_within_unsorted,
 };
 
 use crate::numeric::{f32_to_usize, f64_to_f32, u64_to_f64, usize_to_f32};
@@ -19,6 +20,17 @@ pub struct RadialDistributionOptions {
     pub bins: usize,
     /// Sample volume used to normalize shell counts into `g(r)`.
     pub volume: f64,
+    /// Spatial implementation to use.
+    pub backend: SpatialBackend,
+}
+
+/// Distance shell and backend for coordination counts.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CoordinationOptions {
+    /// Inclusive lower shell bound.
+    pub minimum_distance: f32,
+    /// Inclusive upper shell bound.
+    pub maximum_distance: f32,
     /// Spatial implementation to use.
     pub backend: SpatialBackend,
 }
@@ -81,6 +93,7 @@ pub fn centre_of_mass_radial_distribution(
     right: &[CentreGroup],
     options: RadialDistributionOptions,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<RadialBin>, RadialError> {
     if positions.len() != masses.len() || left.is_empty() || right.is_empty() {
         return Err(RadialError::InvalidGroups);
@@ -103,6 +116,7 @@ pub fn centre_of_mass_radial_distribution(
         &right_selection,
         options,
         periodic,
+        context,
     )
 }
 
@@ -156,17 +170,21 @@ pub fn radial_distribution(
     right: &AtomSelection,
     options: RadialDistributionOptions,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<RadialBin>, RadialError> {
     validate_options(options)?;
     let mut counts = vec![0_u64; options.bins];
     let width = (options.maximum_distance - options.minimum_distance) / usize_to_f32(options.bins);
     for_each_pairs_within_unsorted(
-        positions,
-        left,
-        right,
-        options.maximum_distance,
-        SpatialSearchOptions::with_backend(options.backend),
-        periodic,
+        &PairQuery {
+            positions,
+            left,
+            right,
+            cutoff: options.maximum_distance,
+            options: SpatialSearchOptions::with_backend(options.backend),
+            periodic,
+            context,
+        },
         |pair| {
             let distance = pair.distance_squared.sqrt();
             if distance >= options.minimum_distance {
@@ -200,22 +218,24 @@ pub fn coordination_numbers(
     positions: &[[f32; 3]],
     left: &AtomSelection,
     right: &AtomSelection,
-    minimum_distance: f32,
-    maximum_distance: f32,
-    backend: SpatialBackend,
+    options: CoordinationOptions,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<u32>, RadialError> {
-    validate_bounds(minimum_distance, maximum_distance)?;
-    let minimum_squared = minimum_distance * minimum_distance;
+    validate_bounds(options.minimum_distance, options.maximum_distance)?;
+    let minimum_squared = options.minimum_distance * options.minimum_distance;
     let same_selection = left == right;
     let mut by_atom = vec![0_u32; positions.len()];
     for_each_pairs_within_unsorted(
-        positions,
-        left,
-        right,
-        maximum_distance,
-        SpatialSearchOptions::with_backend(backend),
-        periodic,
+        &PairQuery {
+            positions,
+            left,
+            right,
+            cutoff: options.maximum_distance,
+            options: SpatialSearchOptions::with_backend(options.backend),
+            periodic,
+            context,
+        },
         |pair| {
             if pair.distance_squared < minimum_squared {
                 return;

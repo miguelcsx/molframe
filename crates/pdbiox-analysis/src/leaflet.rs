@@ -1,7 +1,10 @@
 //! Membrane leaflet identification from an explicit lipid-site graph.
 
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialError, pairs_within};
+use pdbiox_core::{ExecutionContext, selection::AtomSelection};
+use pdbiox_spatial::{
+    PairQuery, PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions,
+    for_each_pairs_within_unsorted,
+};
 use std::collections::BTreeMap;
 
 /// Explicit graph construction policy for leaflet identification.
@@ -35,15 +38,8 @@ pub fn identify_leaflets(
     lipid_sites: &AtomSelection,
     options: LeafletOptions,
     periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
 ) -> Result<Vec<Leaflet>, SpatialError> {
-    let pairs = pairs_within(
-        positions,
-        lipid_sites,
-        lipid_sites,
-        options.connection_distance,
-        options.backend,
-        periodic,
-    )?;
     let sites: Vec<u32> = lipid_sites.into_iter().collect();
     let mut disjoint = DisjointSet::new(sites.len());
     let lookup: BTreeMap<u32, usize> = sites
@@ -53,15 +49,33 @@ pub fn identify_leaflets(
         .map(|(local, atom)| (atom, local))
         .collect();
 
-    for pair in pairs {
-        let Some(&left) = lookup.get(&pair.first) else {
-            continue;
-        };
-        let Some(&right) = lookup.get(&pair.second) else {
-            continue;
-        };
-        disjoint.join(left, right);
-    }
+    // Union is commutative, so the connectivity does not depend on the order
+    // pairs arrive in and they need never be collected.
+    //
+    // Deliberately serial. A blocked reduction allocates one accumulator per
+    // block, and this accumulator is a disjoint set over every site — so
+    // parallel execution would cost sites x blocks. A periodic membrane, the
+    // usual case here, has no block decomposition either.
+    for_each_pairs_within_unsorted(
+        &PairQuery {
+            positions,
+            left: lipid_sites,
+            right: lipid_sites,
+            cutoff: options.connection_distance,
+            options: SpatialSearchOptions::with_backend(options.backend),
+            periodic,
+            context,
+        },
+        |pair| {
+            let Some(&left) = lookup.get(&pair.first) else {
+                return;
+            };
+            let Some(&right) = lookup.get(&pair.second) else {
+                return;
+            };
+            disjoint.join(left, right);
+        },
+    )?;
 
     let mut components: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
     for (local, atom) in sites.into_iter().enumerate() {

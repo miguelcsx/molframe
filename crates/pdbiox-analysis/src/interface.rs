@@ -8,10 +8,13 @@
 //! The atom pairs come from the shared spatial search restricted to the two
 //! chains, so the cost tracks the size of the smaller chain's neighbourhood.
 
-use pdbiox_core::index::ResidueIndex;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::{AtomRef, ChainRef, Structure};
-use pdbiox_spatial::{SpatialBackend, SpatialError, StructureSpatial, pairs_within};
+use pdbiox_core::{ExecutionContext, index::ResidueIndex};
+use pdbiox_spatial::{
+    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, StructureSpatial,
+    reduce_pairs_within_unsorted,
+};
 
 /// Returns the residues at the interface between the two named chains.
 ///
@@ -30,15 +33,32 @@ pub fn chain_interface(
     second: &str,
     cutoff: f32,
     backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<Vec<ResidueIndex>, SpatialError> {
     let first_atoms = chain_atoms(structure, first);
     let second_atoms = chain_atoms(structure, second);
     let positions = structure.positions();
     let left = AtomSelection::from_sorted(first_atoms);
     let right = AtomSelection::from_sorted(second_atoms);
-    let pairs = pairs_within(positions, &left, &right, cutoff, backend, None)?;
+    let query = PairQuery {
+        positions,
+        left: &left,
+        right: &right,
+        cutoff,
+        options: SpatialSearchOptions::with_backend(backend),
+        periodic: None,
+        context,
+    };
+    let parts = reduce_pairs_within_unsorted(&query, Vec::new, |residues: &mut Vec<u32>, pair| {
+        push_interface_residues(structure, pair, residues);
+    })?;
 
-    Ok(interface_residues(structure, pairs))
+    let mut residues: Vec<u32> = Vec::new();
+    for part in parts {
+        residues.extend(part);
+    }
+
+    Ok(finish_interface_residues(residues))
 }
 
 /// Returns interface residues through a structure-bound spatial resolver.
@@ -75,13 +95,33 @@ fn interface_residues(
 ) -> Vec<ResidueIndex> {
     let mut residues = Vec::new();
     for pair in pairs {
-        if let Some(residue) = residue_of(structure, pair.first) {
-            residues.push(residue);
-        }
-        if let Some(residue) = residue_of(structure, pair.second) {
-            residues.push(residue);
-        }
+        push_interface_residues(structure, pair, &mut residues);
     }
+    finish_interface_residues(residues)
+}
+
+/// Records both endpoints' residues for one contact pair.
+///
+/// Splitting the accumulation from the finish lets a streaming query feed the
+/// same reduction without first materialising a pair vector.
+fn push_interface_residues(
+    structure: &Structure,
+    pair: pdbiox_spatial::NeighborPair,
+    residues: &mut Vec<u32>,
+) {
+    if let Some(residue) = residue_of(structure, pair.first) {
+        residues.push(residue);
+    }
+    if let Some(residue) = residue_of(structure, pair.second) {
+        residues.push(residue);
+    }
+}
+
+/// Orders and deduplicates accumulated residues.
+///
+/// The sort makes the result independent of the order pairs arrived in, so a
+/// streaming query and a materialising one agree exactly.
+fn finish_interface_residues(mut residues: Vec<u32>) -> Vec<ResidueIndex> {
     residues.sort_unstable();
     residues.dedup();
     residues.into_iter().map(ResidueIndex::new).collect()

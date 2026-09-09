@@ -1,8 +1,8 @@
 use super::{
-    CentreGroup, RadialDistributionOptions, centre_of_mass_radial_distribution,
-    coordination_numbers, radial_distribution,
+    CentreGroup, CoordinationOptions, RadialDistributionOptions,
+    centre_of_mass_radial_distribution, coordination_numbers, radial_distribution,
 };
-use pdbiox_core::selection::AtomSelection;
+use pdbiox_core::{ExecutionContext, selection::AtomSelection};
 use pdbiox_spatial::SpatialBackend;
 
 fn selection(indices: &[u32]) -> AtomSelection {
@@ -20,7 +20,14 @@ fn radial_bins_count_unique_pairs_and_normalize() {
         volume: 1_000.0,
         backend: SpatialBackend::BruteForce,
     };
-    let Ok(bins) = radial_distribution(&positions, &sites, &sites, options, None) else {
+    let Ok(bins) = radial_distribution(
+        &positions,
+        &sites,
+        &sites,
+        options,
+        None,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid RDF");
     };
 
@@ -40,10 +47,13 @@ fn coordination_is_reported_in_left_selection_order() {
         &positions,
         &left,
         &right,
-        0.5,
-        2.0,
-        SpatialBackend::BruteForce,
+        CoordinationOptions {
+            minimum_distance: 0.5,
+            maximum_distance: 2.0,
+            backend: SpatialBackend::BruteForce,
+        },
         None,
+        &ExecutionContext::default(),
     ) else {
         panic!("valid coordination shell");
     };
@@ -59,7 +69,17 @@ fn radial_policy_rejects_implicit_normalization() {
         volume: 0.0,
         backend: SpatialBackend::Auto,
     };
-    assert!(radial_distribution(&[], &selection(&[]), &selection(&[]), options, None).is_err());
+    assert!(
+        radial_distribution(
+            &[],
+            &selection(&[]),
+            &selection(&[]),
+            options,
+            None,
+            &ExecutionContext::default(),
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -91,6 +111,7 @@ fn centre_of_mass_rdf_reuses_site_distribution_over_explicit_groups() {
             backend: SpatialBackend::BruteForce,
         },
         None,
+        &ExecutionContext::default(),
     ) else {
         panic!("valid centre-of-mass RDF");
     };
