@@ -50,19 +50,17 @@ pub(super) fn resolve_beyond_request(
     Ok(universe.difference(&close))
 }
 
-pub(super) fn update_nearest_distances(
+pub(super) fn update_nearest_distance(
     nearest: &mut [f32],
     universe: &AtomSelection,
     target: &AtomSelection,
-    pairs: Vec<NeighborPair>,
+    pair: NeighborPair,
 ) -> Result<(), Diagnostic> {
-    for pair in pairs {
-        if universe.contains(pair.first) && target.contains(pair.second) {
-            keep_nearest(nearest, pair.first, pair.distance_squared)?;
-        }
-        if universe.contains(pair.second) && target.contains(pair.first) {
-            keep_nearest(nearest, pair.second, pair.distance_squared)?;
-        }
+    if universe.contains(pair.first) && target.contains(pair.second) {
+        keep_nearest(nearest, pair.first, pair.distance_squared)?;
+    }
+    if universe.contains(pair.second) && target.contains(pair.first) {
+        keep_nearest(nearest, pair.second, pair.distance_squared)?;
     }
     Ok(())
 }
@@ -92,19 +90,17 @@ pub(super) fn select_iso_layer(
     Ok(AtomSelection::from_sorted(selected))
 }
 
-pub(super) fn mark_pair_matches(
+pub(super) fn mark_pair_match(
     matched: &mut [bool],
     query: &AtomSelection,
     target: &AtomSelection,
-    pairs: Vec<NeighborPair>,
+    pair: NeighborPair,
 ) -> Result<(), Diagnostic> {
-    for pair in pairs {
-        if query.contains(pair.first) && target.contains(pair.second) {
-            mark_atom(matched, pair.first)?;
-        }
-        if query.contains(pair.second) && target.contains(pair.first) {
-            mark_atom(matched, pair.second)?;
-        }
+    if query.contains(pair.first) && target.contains(pair.second) {
+        mark_atom(matched, pair.first)?;
+    }
+    if query.contains(pair.second) && target.contains(pair.first) {
+        mark_atom(matched, pair.second)?;
     }
     Ok(())
 }

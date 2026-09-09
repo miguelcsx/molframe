@@ -19,6 +19,7 @@ pub use planning::{
     NeighborSkinProfile, SpatialPlan, SpatialSearchOptions, StructureSpatial,
 };
 pub use queries::{
-    for_each_pairs_within_unsorted, pairs_within, pairs_within_unsorted,
-    pairs_within_unsorted_with_options, pairs_within_with_options, within, within_with_options,
+    PairQuery, count_pairs_within, for_each_pairs_within_unsorted, pairs_within,
+    pairs_within_unsorted, pairs_within_unsorted_with_options, pairs_within_with_options,
+    reduce_pairs_within_unsorted, within, within_with_options,
 };

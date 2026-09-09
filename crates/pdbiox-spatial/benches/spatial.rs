@@ -2,11 +2,13 @@
 
 use criterion::{Criterion, Throughput, black_box};
 use pdbiox_bench::{Sample, coordinates, structure};
+use pdbiox_core::execution::ExecutionContext;
 use pdbiox_core::selection::AtomSelection;
 use pdbiox_core::structure::UnitCell;
 use pdbiox_spatial::{PeriodicBox, SpatialBackend, pairs_within, pairs_within_unsorted, within};
 
 fn bench_backends(c: &mut Criterion) {
+    let context = ExecutionContext::default();
     let structure = structure(Sample::Medium);
     let positions = coordinates(&structure);
     let atom_count = match u32::try_from(positions.len()) {
@@ -25,7 +27,7 @@ fn bench_backends(c: &mut Criterion) {
         group.bench_function(format!("{backend:?}"), |b| {
             b.iter(|| {
                 black_box(pairs_within(
-                    &positions, &selection, &selection, 4.0, backend, None,
+                    &positions, &selection, &selection, 4.0, backend, None, &context,
                 ))
             });
         });
@@ -39,6 +41,7 @@ fn bench_backends(c: &mut Criterion) {
                 4.0,
                 SpatialBackend::Auto,
                 None,
+                &context,
             ))
         });
     });
@@ -51,6 +54,7 @@ fn bench_backends(c: &mut Criterion) {
                 4.0,
                 SpatialBackend::CellList,
                 None,
+                &context,
             ))
         });
     });
@@ -101,6 +105,7 @@ fn bench_periodic_geometry(c: &mut Criterion) {
 }
 
 fn bench_large_scaling(c: &mut Criterion) {
+    let context = ExecutionContext::default();
     let mut group = c.benchmark_group("spatial_scaling");
     for sample in [Sample::Medium, Sample::Large] {
         let structure = structure(sample);
@@ -116,6 +121,7 @@ fn bench_large_scaling(c: &mut Criterion) {
                     4.0,
                     SpatialBackend::CellList,
                     None,
+                    &context,
                 ))
             });
         });
@@ -128,6 +134,7 @@ fn bench_large_scaling(c: &mut Criterion) {
                     4.0,
                     SpatialBackend::Auto,
                     None,
+                    &context,
                 ))
             });
         });
@@ -135,10 +142,51 @@ fn bench_large_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_streaming_reduction(c: &mut Criterion) {
+    let context = ExecutionContext::default();
+    let (positions, query, target) = sparse_paired_positions(50_000);
+    let mut group = c.benchmark_group("spatial_reduction");
+    group.throughput(Throughput::Elements(100_000));
+    group.bench_function("within_cell_list_sparse_100k", |b| {
+        b.iter(|| {
+            black_box(within(
+                &positions,
+                &query,
+                &target,
+                0.75,
+                SpatialBackend::CellList,
+                None,
+                &context,
+            ))
+        });
+    });
+    group.finish();
+}
+
+fn sparse_paired_positions(pair_count: u16) -> (Vec<[f32; 3]>, AtomSelection, AtomSelection) {
+    let mut positions = Vec::with_capacity(usize::from(pair_count) * 2);
+    let mut query = Vec::with_capacity(usize::from(pair_count));
+    let mut target = Vec::with_capacity(usize::from(pair_count));
+    for pair in 0..pair_count {
+        let base = f32::from(pair) * 4.0;
+        let target_atom = u32::from(pair) * 2;
+        positions.push([base, 0.0, 0.0]);
+        positions.push([base + 0.5, 0.0, 0.0]);
+        target.push(target_atom);
+        query.push(target_atom + 1);
+    }
+    (
+        positions,
+        AtomSelection::from_sorted(query),
+        AtomSelection::from_sorted(target),
+    )
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_backends(&mut criterion);
     bench_periodic_geometry(&mut criterion);
     bench_large_scaling(&mut criterion);
+    bench_streaming_reduction(&mut criterion);
     criterion.final_summary();
 }

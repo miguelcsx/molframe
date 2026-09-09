@@ -5,6 +5,7 @@ use crate::{
     CellList, KdTree, NeighborPair, PeriodicBox, SpatialBackend, SpatialSearchOptions,
     pairs_within_with_options,
 };
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::AnalysisPolicy;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::selection::AtomSelection;
@@ -16,10 +17,12 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 mod helpers;
 #[path = "resolver_dispatch.rs"]
 mod resolver_dispatch;
+#[path = "resolver_visit.rs"]
+mod resolver_visit;
 use helpers::{
     atom_out_of_bounds, backend_key, cacheable_backend, collect_selection_indices, collect_within,
-    index_cutoff_key, mark_pair_matches, periodic_box, radial_squared, select_iso_layer,
-    spatial_diagnostic, update_nearest_distances, validate_shell, z_matches,
+    index_cutoff_key, mark_pair_match, periodic_box, radial_squared, select_iso_layer,
+    spatial_diagnostic, update_nearest_distance, validate_shell, z_matches,
 };
 
 /// Maximum number of spatial indices retained by one resolver.
@@ -33,6 +36,7 @@ const MAX_CACHED_INDICES: usize = 64;
 #[derive(Debug)]
 pub struct StructureSpatial<'a> {
     structure: &'a Structure,
+    context: &'a ExecutionContext,
     options: SpatialSearchOptions,
     periodic: Option<PeriodicBox>,
     cache: RwLock<HashMap<IndexKey, Arc<CachedIndex<'a>>>>,
@@ -66,11 +70,13 @@ impl<'a> StructureSpatial<'a> {
         structure: &'a Structure,
         policy: &AnalysisPolicy,
         backend: SpatialBackend,
+        context: &'a ExecutionContext,
     ) -> Result<Self, Diagnostic> {
         Self::new_with_options(
             structure,
             policy,
             SpatialSearchOptions::with_backend(backend),
+            context,
         )
     }
 
@@ -83,12 +89,14 @@ impl<'a> StructureSpatial<'a> {
         structure: &'a Structure,
         policy: &AnalysisPolicy,
         options: SpatialSearchOptions,
+        context: &'a ExecutionContext,
     ) -> Result<Self, Diagnostic> {
         options.validate().map_err(spatial_diagnostic)?;
         let periodic = periodic_box(structure, policy)?;
 
         Ok(Self {
             structure,
+            context,
             options,
             periodic,
             cache: RwLock::new(HashMap::new()),
@@ -240,10 +248,18 @@ impl<'a> StructureSpatial<'a> {
     ) -> Result<AtomSelection, Diagnostic> {
         validate_shell(inner, outer)?;
 
-        let pairs = self.pairs(universe, target, outer)?;
         let mut nearest = vec![f32::INFINITY; self.positions().len()];
-
-        update_nearest_distances(&mut nearest, universe, target, pairs)?;
+        let mut reduction_error = None;
+        self.for_each_pair(universe, target, outer, |pair| {
+            if reduction_error.is_none()
+                && let Err(error) = update_nearest_distance(&mut nearest, universe, target, pair)
+            {
+                reduction_error = Some(error);
+            }
+        })?;
+        if let Some(error) = reduction_error {
+            return Err(error);
+        }
 
         select_iso_layer(universe, target, &nearest, inner * inner, outer * outer)
     }
@@ -258,25 +274,20 @@ impl<'a> StructureSpatial<'a> {
         target: &AtomSelection,
         cutoff: f32,
     ) -> Result<AtomSelection, Diagnostic> {
-        let pairs = self.pairs(query, target, cutoff)?;
         let mut matched = vec![false; self.positions().len()];
-
-        mark_pair_matches(&mut matched, query, target, pairs)?;
+        let mut reduction_error = None;
+        self.for_each_pair(query, target, cutoff, |pair| {
+            if reduction_error.is_none()
+                && let Err(error) = mark_pair_match(&mut matched, query, target, pair)
+            {
+                reduction_error = Some(error);
+            }
+        })?;
+        if let Some(error) = reduction_error {
+            return Err(error);
+        }
 
         collect_within(query, target, &matched)
-    }
-
-    /// Dispatches pair search through periodic, cached or uncached backends.
-    ///
-    /// Non-periodic cell and k-d indices are eligible for reuse when the
-    /// selected backend supports structure-bound indexing.
-    fn pairs(
-        &self,
-        query: &AtomSelection,
-        target: &AtomSelection,
-        cutoff: f32,
-    ) -> Result<Vec<NeighborPair>, Diagnostic> {
-        self.pairs_with_backend(query, target, cutoff, self.options.backend)
     }
 
     /// Searches one pair workload while retaining indices in this resolver.
@@ -308,6 +319,7 @@ impl<'a> StructureSpatial<'a> {
                     ..self.options
                 },
                 self.periodic.as_ref(),
+                self.context,
             )
             .map_err(spatial_diagnostic);
         }
@@ -329,8 +341,16 @@ impl<'a> StructureSpatial<'a> {
                     ..self.options
                 };
 
-                pairs_within_with_options(self.positions(), query, target, cutoff, options, None)
-                    .map_err(spatial_diagnostic)
+                pairs_within_with_options(
+                    self.positions(),
+                    query,
+                    target,
+                    cutoff,
+                    options,
+                    None,
+                    self.context,
+                )
+                .map_err(spatial_diagnostic)
             }
         }
     }

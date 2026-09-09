@@ -44,6 +44,10 @@ impl NeighborPair {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[non_exhaustive]
 pub enum SpatialError {
+    /// Shared execution memory cannot admit the complete spatial workspace.
+    Memory(pdbiox_core::MemoryBudgetError),
+    /// Cooperative cancellation stopped the spatial operation.
+    Cancelled,
     /// The cutoff was negative or non-finite.
     InvalidCutoff,
     /// A selection named an atom outside the coordinate array.
@@ -63,6 +67,8 @@ pub enum SpatialError {
     },
     /// A derived coordinate or index cannot be represented by the public type.
     NumericRangeExceeded,
+    /// A scoped worker thread panicked during a parallel search.
+    WorkerPanicked,
 }
 
 /// Identifies an invalid field in a spatial planning profile.
@@ -94,6 +100,12 @@ impl SpatialError {
     #[must_use]
     pub fn into_diagnostic(self) -> Diagnostic {
         match self {
+            Self::Memory(error) => {
+                Diagnostic::new(Code::E1901).with_context("execution_memory", error.to_string())
+            }
+            Self::Cancelled => {
+                Diagnostic::new(Code::E1904).with_context("spatial_operation", "cancelled")
+            }
             Self::InvalidCutoff => Diagnostic::new(Code::E4002),
             Self::AtomOutOfBounds(atom) => {
                 Diagnostic::new(Code::E6009).with_context("atom", atom.to_string())
@@ -109,6 +121,9 @@ impl SpatialError {
             Self::NumericRangeExceeded => {
                 Diagnostic::new(Code::E4002).with_context("spatial_numeric_range", "exceeded")
             }
+            Self::WorkerPanicked => {
+                Diagnostic::new(Code::E4002).with_context("spatial_worker", "panicked")
+            }
         }
     }
 }
@@ -116,6 +131,8 @@ impl SpatialError {
 impl fmt::Display for SpatialError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Memory(error) => error.fmt(f),
+            Self::Cancelled => f.write_str("spatial operation cancelled"),
             Self::InvalidCutoff => f.write_str("cutoff must be finite and non-negative"),
             Self::AtomOutOfBounds(atom) => write!(f, "atom {atom} is outside the coordinate array"),
             Self::InvalidCell => f.write_str("unit cell is degenerate or non-finite"),
@@ -130,6 +147,7 @@ impl fmt::Display for SpatialError {
             Self::NumericRangeExceeded => {
                 f.write_str("a derived spatial value exceeds its representable numeric range")
             }
+            Self::WorkerPanicked => f.write_str("a spatial worker thread panicked"),
         }
     }
 }
@@ -151,3 +169,13 @@ impl fmt::Display for SpatialOption {
         })
     }
 }
+
+impl From<pdbiox_core::MemoryBudgetError> for SpatialError {
+    fn from(error: pdbiox_core::MemoryBudgetError) -> Self {
+        Self::Memory(error)
+    }
+}
+
+#[cfg(test)]
+#[path = "types_tests.rs"]
+mod tests;

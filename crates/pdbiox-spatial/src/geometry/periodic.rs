@@ -97,18 +97,28 @@ impl PeriodicBox {
     /// are visited in a fixed order, so the selected image is deterministic.
     #[must_use]
     pub fn minimum_image(&self, left: [f32; 3], right: [f32; 3]) -> PeriodicImage {
-        let cartesian = cartesian_delta(left, right);
-        let fractional = multiply(self.inverse, cartesian);
-
-        let (best, lattice_shift) = if self.orthogonal {
-            orthogonal_image(self.basis, cartesian, fractional)
-        } else {
-            triclinic_image(self.basis, cartesian, fractional)
-        };
+        let (best, lattice_shift) = self.image_f64(left.map(f64::from), right.map(f64::from));
 
         PeriodicImage {
             displacement: best.map(f64_f32),
             lattice_shift,
+        }
+    }
+
+    /// Minimum-image displacement without rounding generated sample positions
+    /// to stored-coordinate precision. Image selection matches `minimum_image`.
+    #[must_use]
+    pub fn displacement_f64(&self, left: [f64; 3], right: [f64; 3]) -> [f64; 3] {
+        self.image_f64(left, right).0
+    }
+
+    fn image_f64(&self, left: [f64; 3], right: [f64; 3]) -> ([f64; 3], [i64; 3]) {
+        let cartesian = cartesian_delta(left, right);
+        let fractional = multiply(self.inverse, cartesian);
+        if self.orthogonal {
+            orthogonal_image(self.basis, cartesian, fractional)
+        } else {
+            triclinic_image(self.basis, cartesian, fractional)
         }
     }
 
@@ -243,12 +253,8 @@ fn basis_from_cell(cell: &UnitCell) -> Result<[[f64; 3]; 3], SpatialError> {
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn cartesian_delta(left: [f32; 3], right: [f32; 3]) -> [f64; 3] {
-    [
-        f64::from(right[0]) - f64::from(left[0]),
-        f64::from(right[1]) - f64::from(left[1]),
-        f64::from(right[2]) - f64::from(left[2]),
-    ]
+fn cartesian_delta(left: [f64; 3], right: [f64; 3]) -> [f64; 3] {
+    [right[0] - left[0], right[1] - left[1], right[2] - left[2]]
 }
 
 /// Computes the minimum image for an orthogonal cell.
