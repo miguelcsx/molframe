@@ -133,10 +133,15 @@ impl PyMonomerLibrary {
 }
 
 #[pyfunction]
-pub(crate) fn lower_monomer_library(document: &PyCifDocument) -> PyResult<PyMonomerLibrary> {
-    pdbiox::xtal::lower_monomer_library(&document.inner)
-        .map(PyMonomerLibrary)
-        .map_err(value_error)
+pub(crate) fn lower_monomer_library(
+    py: Python<'_>,
+    document: &PyCifDocument,
+) -> PyResult<PyMonomerLibrary> {
+    py.detach(move || -> PyResult<PyMonomerLibrary> {
+        pdbiox::xtal::lower_monomer_library(&document.inner)
+            .map(PyMonomerLibrary)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
@@ -159,15 +164,23 @@ pub(crate) fn read_monomer_library(
 }
 
 #[pyfunction]
-pub(crate) fn lower_structure_factor_cif(document: &PyCifDocument) -> PyResult<PyReflectionTable> {
-    pdbiox::xtal::lower_structure_factor_cif(&document.inner)
-        .map(PyReflectionTable)
-        .map_err(value_error)
+pub(crate) fn lower_structure_factor_cif(
+    py: Python<'_>,
+    document: &PyCifDocument,
+) -> PyResult<PyReflectionTable> {
+    py.detach(|| {
+        pdbiox::xtal::lower_structure_factor_cif(&document.inner)
+            .map(PyReflectionTable)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn write_structure_factor_cif(table: &PyReflectionTable) -> PyResult<String> {
-    pdbiox::xtal::write_structure_factor_cif(&table.0).map_err(value_error)
+pub(crate) fn write_structure_factor_cif(
+    py: Python<'_>,
+    table: &PyReflectionTable,
+) -> PyResult<String> {
+    py.detach(|| pdbiox::xtal::write_structure_factor_cif(&table.0).map_err(value_error))
 }
 
 impl From<&pdbiox::xtal::MonomerRestraints> for PyMonomerRestraints {

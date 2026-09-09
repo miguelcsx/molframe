@@ -20,10 +20,7 @@ use pyo3::prelude::*;
 pub(crate) use assembly::{
     PyAssemblyNeighbor, PyAssemblySet, PyAssemblyView, PyAtomInstance, PyChainInstance,
 };
-pub(crate) use functions::{
-    crystal_neighbors, crystal_neighbors_with_backend, crystal_neighbors_with_limit,
-    lower_assemblies, lower_symmetry,
-};
+pub(crate) use functions::{collect_crystal_neighbors, lower_assemblies, lower_symmetry};
 pub(crate) use ncs::{PyCrystalNeighbor, PyNcsCode, PyNcsOperator, PyNcsSet, PyNcsView, lower_ncs};
 pub(crate) use types::{
     PyAffineTransform, PyAssemblyDef, PyGenerator, PyOperExpression, PyOperator, PyRational,
@@ -56,9 +53,9 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(lower_assemblies, module)?)?;
     module.add_function(wrap_pyfunction!(lower_ncs, module)?)?;
     module.add_function(wrap_pyfunction!(lower_symmetry, module)?)?;
-    module.add_function(wrap_pyfunction!(crystal_neighbors, module)?)?;
-    module.add_function(wrap_pyfunction!(crystal_neighbors_with_backend, module)?)?;
-    module.add_function(wrap_pyfunction!(crystal_neighbors_with_limit, module)?)?;
+    module.add_function(wrap_pyfunction!(collect_crystal_neighbors, module)?)?;
     reflection::register(module)?;
+    super::grids::register(module)?;
+    super::bricks::register(module)?;
     Ok(())
 }

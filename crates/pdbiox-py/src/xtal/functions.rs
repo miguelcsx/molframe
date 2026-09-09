@@ -14,21 +14,37 @@ pub(crate) fn lower_assemblies(
     py: Python<'_>,
     document: &PyCifDocument,
 ) -> PyResult<PyAssemblySet> {
-    pdbiox::xtal::lower_assemblies(&document.inner)
+    // Only the diagnostic conversion needs the interpreter.
+    py.detach(|| pdbiox::xtal::lower_assemblies(&document.inner))
         .map(PyAssemblySet)
         .map_err(|findings| read_error(py, &findings))
 }
 
 #[pyfunction]
 pub(crate) fn lower_symmetry(py: Python<'_>, document: &PyCifDocument) -> PyResult<PySymmetrySet> {
-    pdbiox::xtal::lower_symmetry(&document.inner)
+    // Only the diagnostic conversion needs the interpreter, so the lowering
+    // itself runs with the lock released.
+    py.detach(|| pdbiox::xtal::lower_symmetry(&document.inner))
         .map(PySymmetrySet)
         .map_err(|findings| read_error(py, &findings))
 }
 
 #[pyfunction]
 #[pyo3(signature = (structure, symmetry, model=0, cutoff=5.0, *, limit=None, backend=PySpatialBackend::Auto))]
-pub(crate) fn crystal_neighbors(
+pub(crate) fn collect_crystal_neighbors(
+    py: Python<'_>,
+    structure: &PyStructure,
+    symmetry: &PySymmetrySet,
+    model: usize,
+    cutoff: f64,
+    limit: Option<usize>,
+    backend: PySpatialBackend,
+) -> PyResult<Vec<PyCrystalNeighbor>> {
+    py.detach(move || neighbors_of(structure, symmetry, model, cutoff, limit, backend))
+}
+
+/// Native crystal-neighbour search kept outside the interpreter attachment.
+fn neighbors_of(
     structure: &PyStructure,
     symmetry: &PySymmetrySet,
     model: usize,
@@ -37,57 +53,26 @@ pub(crate) fn crystal_neighbors(
     backend: PySpatialBackend,
 ) -> PyResult<Vec<PyCrystalNeighbor>> {
     let model = model_index(model)?;
-    let result = match limit {
-        Some(limit) => pdbiox::xtal::crystal_neighbors_with_limit(
-            structure.structure(),
-            &symmetry.0,
-            model,
-            cutoff,
-            limit,
-        ),
-        None => pdbiox::xtal::crystal_neighbors_with_backend(
-            structure.structure(),
-            &symmetry.0,
-            model,
-            cutoff,
-            backend.into(),
-            pdbiox::xtal::DEFAULT_CRYSTAL_IMAGE_LIMIT,
-        ),
+    let candidate_limit = match limit {
+        Some(limit) => limit,
+        None => pdbiox::xtal::DEFAULT_CRYSTAL_IMAGE_LIMIT,
     };
+    let options = pdbiox::xtal::CrystalNeighborOptions {
+        backend: backend.into(),
+        candidate_limit,
+        ..pdbiox::xtal::CrystalNeighborOptions::default()
+    };
+    let result = pdbiox::xtal::collect_crystal_neighbors(
+        structure.structure(),
+        &symmetry.0,
+        model,
+        cutoff,
+        options,
+        &crate::core::execution::default_context(),
+    );
     result
         .map(|values| values.into_iter().map(Into::into).collect())
         .map_err(value_error)
-}
-
-#[pyfunction]
-#[pyo3(signature = (structure, symmetry, model=0, cutoff=5.0, *, limit))]
-pub(crate) fn crystal_neighbors_with_limit(
-    structure: &PyStructure,
-    symmetry: &PySymmetrySet,
-    model: usize,
-    cutoff: f64,
-    limit: usize,
-) -> PyResult<Vec<PyCrystalNeighbor>> {
-    crystal_neighbors(
-        structure,
-        symmetry,
-        model,
-        cutoff,
-        Some(limit),
-        PySpatialBackend::Auto,
-    )
-}
-
-#[pyfunction]
-#[pyo3(signature = (structure, symmetry, model=0, cutoff=5.0, backend=PySpatialBackend::Auto))]
-pub(crate) fn crystal_neighbors_with_backend(
-    structure: &PyStructure,
-    symmetry: &PySymmetrySet,
-    model: usize,
-    cutoff: f64,
-    backend: PySpatialBackend,
-) -> PyResult<Vec<PyCrystalNeighbor>> {
-    crystal_neighbors(structure, symmetry, model, cutoff, None, backend)
 }
 
 fn model_index(model: usize) -> PyResult<pdbiox::ModelIndex> {

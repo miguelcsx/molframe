@@ -113,7 +113,12 @@ impl PyAssemblyView {
         backend: PySpatialBackend,
     ) -> PyResult<Vec<PyAssemblyNeighbor>> {
         self.0
-            .neighbors(model_index(model)?, cutoff, backend.into())
+            .neighbors(
+                model_index(model)?,
+                cutoff,
+                backend.into(),
+                &crate::core::execution::default_context(),
+            )
             .map(|values| values.into_iter().map(Into::into).collect())
             .map_err(value_error)
     }

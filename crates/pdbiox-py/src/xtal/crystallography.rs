@@ -151,34 +151,51 @@ pub(crate) struct PySpaceGroup {
 }
 
 #[pyfunction]
-pub(crate) fn space_group_by_number(hall_number: u16) -> PyResult<PySpaceGroup> {
-    pdbiox::space_group_setting(hall_number)
-        .map(PySpaceGroup::from)
-        .map_err(value_error)
+pub(crate) fn space_group_by_number(py: Python<'_>, hall_number: u16) -> PyResult<PySpaceGroup> {
+    py.detach(move || -> PyResult<PySpaceGroup> {
+        pdbiox::space_group_setting(hall_number)
+            .map(PySpaceGroup::from)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn space_group_by_symbol(hall_symbol: &str) -> PyResult<PySpaceGroup> {
-    pdbiox::space_group_by_hall(hall_symbol)
-        .map(PySpaceGroup::from)
-        .map_err(value_error)
+pub(crate) fn space_group_by_symbol(py: Python<'_>, hall_symbol: &str) -> PyResult<PySpaceGroup> {
+    py.detach(move || -> PyResult<PySpaceGroup> {
+        pdbiox::space_group_by_hall(hall_symbol)
+            .map(PySpaceGroup::from)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn space_group_setting(hall_number: u16) -> PyResult<PySpaceGroup> {
-    space_group_by_number(hall_number)
+pub(crate) fn space_group_setting(py: Python<'_>, hall_number: u16) -> PyResult<PySpaceGroup> {
+    py.detach(move || -> PyResult<PySpaceGroup> {
+        pdbiox::space_group_setting(hall_number)
+            .map(PySpaceGroup::from)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn space_group_by_hall(hall_symbol: &str) -> PyResult<PySpaceGroup> {
-    space_group_by_symbol(hall_symbol)
+pub(crate) fn space_group_by_hall(py: Python<'_>, hall_symbol: &str) -> PyResult<PySpaceGroup> {
+    py.detach(move || -> PyResult<PySpaceGroup> {
+        pdbiox::space_group_by_hall(hall_symbol)
+            .map(PySpaceGroup::from)
+            .map_err(value_error)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn space_group_settings(international_number: u16) -> PyResult<Vec<PySpaceGroup>> {
-    pdbiox::space_group_settings(international_number)
-        .map(|values| values.into_iter().map(PySpaceGroup::from).collect())
-        .map_err(value_error)
+pub(crate) fn space_group_settings(
+    py: Python<'_>,
+    international_number: u16,
+) -> PyResult<Vec<PySpaceGroup>> {
+    py.detach(move || -> PyResult<Vec<PySpaceGroup>> {
+        pdbiox::space_group_settings(international_number)
+            .map(|values| values.into_iter().map(PySpaceGroup::from).collect())
+            .map_err(value_error)
+    })
 }
 
 #[pymethods]

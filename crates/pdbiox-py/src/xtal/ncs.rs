@@ -137,7 +137,8 @@ impl PyStructure {
 
 #[pyfunction]
 pub(crate) fn lower_ncs(py: Python<'_>, document: &PyCifDocument) -> PyResult<PyNcsSet> {
-    pdbiox::xtal::lower_ncs(&document.inner)
+    // Only the diagnostic conversion needs the interpreter.
+    py.detach(|| pdbiox::xtal::lower_ncs(&document.inner))
         .map(PyNcsSet)
         .map_err(|findings| crate::errors::read_error(py, &findings))
 }
