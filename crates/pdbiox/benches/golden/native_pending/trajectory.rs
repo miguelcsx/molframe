@@ -71,7 +71,12 @@ fn bench_gw_024(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                         .pairs_positions(&frame, None)
                         .required("GW-024 neighbour query failed");
                     pdbiox::analysis::radial_distribution(
-                        &frame, &selection, &selection, options, None,
+                        &frame,
+                        &selection,
+                        &selection,
+                        options,
+                        None,
+                        &pdbiox::ExecutionContext::default(),
                     )
                     .required("GW-024 RDF failed")
                     .iter()
@@ -113,7 +118,8 @@ fn bench_gw_026(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                     .collect(),
             })
             .collect(),
-    );
+    )
+    .required("GW-026 trajectory construction failed");
     let policy = AnalysisPolicy::default();
     let kernel = pdbiox::analysis::contacts_kernel(3.0, SpatialBackend::Auto);
     group.throughput(Throughput::Elements(128));
@@ -122,12 +128,16 @@ fn bench_gw_026(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
             let outputs: Vec<_> = [1_usize, 2, 4, 16]
                 .into_iter()
                 .map(|workers| {
+                    let context = pdbiox::ExecutionContext::builder()
+                        .worker_budget(workers)
+                        .build()
+                        .required("GW-026 execution context failed");
                     pdbiox::analysis::analyse_trajectory(
                         &structure,
                         &trajectory,
                         &policy,
                         &kernel,
-                        workers,
+                        &context,
                     )
                     .required("GW-026 failed")
                     .value

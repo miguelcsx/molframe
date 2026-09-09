@@ -123,9 +123,13 @@ fn bench_gw_018(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
         b.iter(|| {
             let view = structure.assembly("1").required("GW-018 view failed");
             let materialized = view.materialize().required("GW-018 materialisation failed");
-            let contacts =
-                pdbiox::analysis::atom_contacts(&materialized, 3.0, SpatialBackend::BruteForce)
-                    .required("GW-018 contacts failed");
+            let contacts = pdbiox::analysis::atom_contacts(
+                &materialized,
+                3.0,
+                SpatialBackend::BruteForce,
+                &pdbiox::ExecutionContext::default(),
+            )
+            .required("GW-018 contacts failed");
             black_box((materialized.chain_count(), contacts.len()));
         });
     });
@@ -137,12 +141,21 @@ fn bench_gw_019(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
         b.iter(|| {
             let view = structure.assembly("1").required("GW-019 view failed");
             let lazy = view
-                .neighbors(ModelIndex::new(0), 3.0, SpatialBackend::BruteForce)
+                .neighbors(
+                    ModelIndex::new(0),
+                    3.0,
+                    SpatialBackend::BruteForce,
+                    &pdbiox::ExecutionContext::default(),
+                )
                 .required("GW-019 lazy query failed");
             let materialized = view.materialize().required("GW-019 materialisation failed");
-            let eager =
-                pdbiox::analysis::atom_contacts(&materialized, 3.0, SpatialBackend::BruteForce)
-                    .required("GW-019 eager query failed");
+            let eager = pdbiox::analysis::atom_contacts(
+                &materialized,
+                3.0,
+                SpatialBackend::BruteForce,
+                &pdbiox::ExecutionContext::default(),
+            )
+            .required("GW-019 eager query failed");
             black_box((lazy.len(), eager.len()));
         });
     });
@@ -153,7 +166,9 @@ fn bench_gw_020(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-020", |b| {
         b.iter(|| {
-            let neighbors = structure.crystal_neighbors(10.1).required("GW-020 failed");
+            let neighbors = structure
+                .collect_crystal_neighbors(10.1, &pdbiox::ExecutionContext::default())
+                .required("GW-020 failed");
             black_box(neighbors.len());
         });
     });

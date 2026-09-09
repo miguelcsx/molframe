@@ -100,8 +100,13 @@ fn gw_018_materialises_a_biological_assembly_and_finds_its_interface() {
     let materialized = view
         .materialize()
         .unwrap_or_else(|findings| panic!("assembly materialisation failed: {findings:?}"));
-    let contacts = pdbiox::analysis::atom_contacts(&materialized, 3.0, SpatialBackend::BruteForce)
-        .unwrap_or_else(|error| panic!("assembly interface failed: {error}"));
+    let contacts = pdbiox::analysis::atom_contacts(
+        &materialized,
+        3.0,
+        SpatialBackend::BruteForce,
+        &pdbiox::ExecutionContext::default(),
+    )
+    .unwrap_or_else(|error| panic!("assembly interface failed: {error}"));
     assert_eq!(materialized.chain_count(), 2);
     assert!(contacts.iter().any(|contact| contact.distance < 3.0));
 }
@@ -113,13 +118,23 @@ fn gw_019_lazy_and_materialised_assembly_interface_queries_agree() {
         .assembly("1")
         .unwrap_or_else(|finding| panic!("assembly view failed: {finding}"));
     let lazy = view
-        .neighbors(ModelIndex::new(0), 3.0, SpatialBackend::BruteForce)
+        .neighbors(
+            ModelIndex::new(0),
+            3.0,
+            SpatialBackend::BruteForce,
+            &pdbiox::ExecutionContext::default(),
+        )
         .unwrap_or_else(|finding| panic!("lazy assembly query failed: {finding}"));
     let materialized = view
         .materialize()
         .unwrap_or_else(|findings| panic!("assembly materialisation failed: {findings:?}"));
-    let eager = pdbiox::analysis::atom_contacts(&materialized, 3.0, SpatialBackend::BruteForce)
-        .unwrap_or_else(|error| panic!("eager assembly query failed: {error}"));
+    let eager = pdbiox::analysis::atom_contacts(
+        &materialized,
+        3.0,
+        SpatialBackend::BruteForce,
+        &pdbiox::ExecutionContext::default(),
+    )
+    .unwrap_or_else(|error| panic!("eager assembly query failed: {error}"));
     assert_eq!(lazy.len(), eager.len());
     assert!(lazy.iter().zip(&eager).all(|(left, right)| {
         (f64::from(left.distance_squared).sqrt() - f64::from(right.distance)).abs() < 1.0e-5
@@ -130,7 +145,7 @@ fn gw_019_lazy_and_materialised_assembly_interface_queries_agree() {
 fn gw_020_finds_crystal_contacts_across_symmetry_images() {
     let structure = crystal_structure();
     let neighbors = structure
-        .crystal_neighbors(10.1)
+        .collect_crystal_neighbors(10.1, &pdbiox::ExecutionContext::default())
         .unwrap_or_else(|finding| panic!("crystal neighbour search failed: {finding}"));
     assert_eq!(neighbors.len(), 1);
     assert_eq!(neighbors[0].lattice, [-1, 0, 0]);

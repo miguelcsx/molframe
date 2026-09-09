@@ -138,6 +138,7 @@ fn bench_gw_015(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                     backend: pdbiox::SpatialBackend::BruteForce,
                     periodic: false,
                 },
+                &pdbiox::ExecutionContext::default(),
             )
             .required("GW-015 failed");
             black_box(bonds.len());
@@ -209,6 +210,7 @@ ATOM 2 C CA ALA B 1 2.5 0 0
                                 &structure,
                                 2.5 + tolerance,
                                 pdbiox::SpatialBackend::BruteForce,
+                                &pdbiox::ExecutionContext::default(),
                             )
                             .required("GW-038 distance failed")
                             .len()
@@ -217,11 +219,14 @@ ATOM 2 C CA ALA B 1 2.5 0 0
                             pdbiox::analysis::surface_contacts(
                                 &structure,
                                 &[1.7, 1.7],
-                                0.5,
-                                probe,
-                                2.0,
-                                0.1,
-                                pdbiox::SpatialBackend::BruteForce,
+                                pdbiox::analysis::SurfaceContactOptions {
+                                    tolerance: 0.5,
+                                    probe,
+                                    surface_density: 2.0,
+                                    minimum_area: 0.1,
+                                    backend: pdbiox::SpatialBackend::BruteForce,
+                                },
+                                &pdbiox::ExecutionContext::default(),
                             )
                             .required("GW-038 surface failed")
                             .len()

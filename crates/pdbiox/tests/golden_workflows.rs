@@ -108,7 +108,11 @@ fn gw_008_evaluates_a_spatial_binding_pocket_selection() {
 
     let structure = structure(Sample::Tiny);
     let evaluation = structure
-        .select_text("within 4 of element C", &AnalysisPolicy::default())
+        .select_text(
+            "within 4 of element C",
+            &AnalysisPolicy::default(),
+            &pdbiox::ExecutionContext::default(),
+        )
         .unwrap_or_else(|findings| panic!("selection failed: {findings:?}"));
     let selected = evaluation.selection.iter().count();
     assert!(selected > 0);
@@ -153,12 +157,22 @@ fn gw_010_classifies_backbone_torsions_against_versioned_reference_data() {
 #[test]
 fn gw_012_contact_maps_are_monotonic_across_cutoffs() {
     let structure = structure(Sample::Tiny);
-    let narrow =
-        pdbiox::analysis::residue_contact_map(&structure, 4.0, 1, pdbiox::SpatialBackend::Auto)
-            .unwrap_or_else(|error| panic!("narrow contact map failed: {error}"));
-    let broad =
-        pdbiox::analysis::residue_contact_map(&structure, 8.0, 1, pdbiox::SpatialBackend::Auto)
-            .unwrap_or_else(|error| panic!("broad contact map failed: {error}"));
+    let narrow = pdbiox::analysis::residue_contact_map(
+        &structure,
+        4.0,
+        1,
+        pdbiox::SpatialBackend::Auto,
+        &pdbiox::ExecutionContext::default(),
+    )
+    .unwrap_or_else(|error| panic!("narrow contact map failed: {error}"));
+    let broad = pdbiox::analysis::residue_contact_map(
+        &structure,
+        8.0,
+        1,
+        pdbiox::SpatialBackend::Auto,
+        &pdbiox::ExecutionContext::default(),
+    )
+    .unwrap_or_else(|error| panic!("broad contact map failed: {error}"));
     assert_eq!(narrow.residue_count(), structure.residue_count());
     assert!(broad.contacts().len() >= narrow.contacts().len());
     assert!(
@@ -174,8 +188,14 @@ fn gw_013_reports_per_atom_sasa_with_finite_areas() {
     let structure = structure(Sample::Tiny);
     let positions = coordinates(&structure);
     let radii = vec![1.7; positions.len()];
-    let areas = pdbiox::surface::shrake_rupley(&positions, &radii, 1.4, 96)
-        .unwrap_or_else(|error| panic!("SASA failed: {error}"));
+    let areas = pdbiox::surface::shrake_rupley(
+        &positions,
+        &radii,
+        1.4,
+        96,
+        &pdbiox::ExecutionContext::default(),
+    )
+    .unwrap_or_else(|error| panic!("SASA failed: {error}"));
     assert_eq!(areas.len(), positions.len());
     assert!(areas.iter().all(|area| area.is_finite() && *area >= 0.0));
     assert!(areas.iter().sum::<f64>() > 0.0);
@@ -185,8 +205,15 @@ fn gw_013_reports_per_atom_sasa_with_finite_areas() {
 fn gw_014_agrees_on_buried_and_solvent_excluded_surface() {
     let positions = [[0.0, 0.0, 0.0], [2.5, 0.0, 0.0]];
     let radii = [1.5, 1.5];
-    let buried = pdbiox::surface::buried_surface(&positions, &radii, 1.4, 96, &[true, false])
-        .unwrap_or_else(|error| panic!("buried surface failed: {error}"));
+    let buried = pdbiox::surface::buried_surface(
+        &positions,
+        &radii,
+        1.4,
+        96,
+        &[true, false],
+        &pdbiox::ExecutionContext::default(),
+    )
+    .unwrap_or_else(|error| panic!("buried surface failed: {error}"));
     assert!(buried.buried > 0.0);
     assert!(buried.first_alone + buried.second_alone >= buried.together);
 
@@ -220,6 +247,31 @@ fn gw_022_round_trips_xyz_and_measures_streamed_rmsd() {
     assert_eq!(rmsd.len(), 2);
     assert!(rmsd[0].abs() < 1.0e-6);
     assert!(rmsd[1] > 0.0);
+
+    let directory = tempfile::tempdir().expect("trajectory directory");
+    let path = directory.path().join("frames.trr");
+    let encoded = pdbiox::traj::write_trr(&timesteps, pdbiox::traj::TrrWriteOptions::default())
+        .expect("TRR encode");
+    std::fs::write(&path, encoded).expect("TRR fixture");
+    let mut reader =
+        pdbiox::traj::read_trajectory(&path, &pdbiox::traj::TrajectoryReaderOptions::default())
+            .expect("pull reader");
+    let context = pdbiox::ExecutionContext::default();
+    let mut streamed = Vec::new();
+    pdbiox::traj::rmsd_stream(
+        &mut *reader,
+        &timesteps[0].positions,
+        pdbiox::traj::FrameAlignment::None,
+        &context,
+        16384,
+        |_, _, value| {
+            streamed.push(value);
+            Ok(())
+        },
+    )
+    .expect("streamed RMSD");
+    assert_eq!(streamed, rmsd);
+    assert_eq!(context.reserved_bytes(), 0);
 }
 
 #[test]
@@ -246,8 +298,13 @@ fn gw_023_rmsf_and_cartesian_pca_are_deterministic() {
 fn gw_028_structure_scores_are_perfect_for_identical_coordinates() {
     let structure = structure(Sample::Tiny);
     let coordinates = coordinates(&structure);
-    let lddt = pdbiox::compare::lddt(&coordinates, &coordinates, 15.0)
-        .unwrap_or_else(|error| panic!("lDDT failed: {error}"));
+    let lddt = pdbiox::compare::lddt(
+        &coordinates,
+        &coordinates,
+        15.0,
+        &pdbiox::core::ExecutionContext::default(),
+    )
+    .unwrap_or_else(|error| panic!("lDDT failed: {error}"));
     let tm = pdbiox::compare::tm_score(&coordinates, &coordinates)
         .unwrap_or_else(|error| panic!("TM-score failed: {error}"));
     let ts = pdbiox::compare::gdt_ts(&coordinates, &coordinates)
@@ -271,6 +328,7 @@ fn gw_030_validation_report_is_stable_and_structured() {
         0.4,
         pdbiox::RadiusSet::Bondi,
         pdbiox::SpatialBackend::Auto,
+        &pdbiox::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("clash report failed: {error}"));
     assert!(clashes.iter().all(|clash| clash.overlap.is_finite()));
@@ -310,6 +368,7 @@ fn gw_035_radius_graph_has_typed_nodes_and_edges() {
             backend: pdbiox::SpatialBackend::Auto,
             periodic: false,
         },
+        &pdbiox::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("radius graph failed: {error}"));
     assert_eq!(graph.node_count, structure.atom_count() as usize);

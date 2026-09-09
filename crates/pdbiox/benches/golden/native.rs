@@ -113,7 +113,11 @@ fn bench_gw_008(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
         b.iter(|| {
             black_box(
                 structure
-                    .select_text("within 4 of element C", &AnalysisPolicy::default())
+                    .select_text(
+                        "within 4 of element C",
+                        &AnalysisPolicy::default(),
+                        &pdbiox::ExecutionContext::default(),
+                    )
                     .is_ok(),
             );
         });
@@ -130,6 +134,7 @@ fn bench_gw_012(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                 4.0,
                 1,
                 pdbiox::SpatialBackend::Auto,
+                &pdbiox::ExecutionContext::default(),
             ) {
                 Ok(map) => map,
                 Err(error) => panic!("GW-012 narrow map failed: {error}"),
@@ -139,6 +144,7 @@ fn bench_gw_012(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                 8.0,
                 1,
                 pdbiox::SpatialBackend::Auto,
+                &pdbiox::ExecutionContext::default(),
             ) {
                 Ok(map) => map,
                 Err(error) => panic!("GW-012 broad map failed: {error}"),
@@ -155,7 +161,16 @@ fn bench_gw_013(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(positions.len() as u64));
     group.bench_function("GW-013", |b| {
         b.iter(|| {
-            black_box(pdbiox::surface::shrake_rupley(&positions, &radii, 1.4, 96).is_ok());
+            black_box(
+                pdbiox::surface::shrake_rupley(
+                    &positions,
+                    &radii,
+                    1.4,
+                    96,
+                    &pdbiox::ExecutionContext::default(),
+                )
+                .is_ok(),
+            );
         });
     });
 }
@@ -166,8 +181,14 @@ fn bench_gw_014(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(positions.len() as u64));
     group.bench_function("GW-014", |b| {
         b.iter(|| {
-            let buried =
-                pdbiox::surface::buried_surface(&positions, &radii, 1.4, 96, &[true, false]);
+            let buried = pdbiox::surface::buried_surface(
+                &positions,
+                &radii,
+                1.4,
+                96,
+                &[true, false],
+                &pdbiox::ExecutionContext::default(),
+            );
             let ses = pdbiox::surface::solvent_excluded_surface(&positions, &radii, 1.4, 1.0);
             black_box((buried.is_ok(), ses.is_ok()));
         });
@@ -235,7 +256,12 @@ fn bench_gw_028(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(coordinates.len() as u64));
     group.bench_function("GW-028", |b| {
         b.iter(|| {
-            let lddt = pdbiox::compare::lddt(&coordinates, &coordinates, 15.0);
+            let lddt = pdbiox::compare::lddt(
+                &coordinates,
+                &coordinates,
+                15.0,
+                &pdbiox::core::ExecutionContext::default(),
+            );
             let tm = pdbiox::compare::tm_score(&coordinates, &coordinates);
             let ts = pdbiox::compare::gdt_ts(&coordinates, &coordinates);
             let ha = pdbiox::compare::gdt_ha(&coordinates, &coordinates);
@@ -257,6 +283,7 @@ fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                 0.4,
                 pdbiox::RadiusSet::Bondi,
                 pdbiox::SpatialBackend::Auto,
+                &pdbiox::ExecutionContext::default(),
             );
             black_box((
                 first_flags.len(),
@@ -295,7 +322,13 @@ fn bench_gw_035(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     };
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-035", |b| {
-        b.iter(|| black_box(pdbiox::graph(&structure, &options)));
+        b.iter(|| {
+            black_box(pdbiox::graph(
+                &structure,
+                &options,
+                &pdbiox::ExecutionContext::default(),
+            ))
+        });
     });
 }
 

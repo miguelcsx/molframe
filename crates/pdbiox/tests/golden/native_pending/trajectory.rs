@@ -21,11 +21,18 @@ fn gw_024_reuses_a_neighbour_list_across_trajectory_frames() {
             .pairs_positions(&frame, None)
             .unwrap_or_else(|error| panic!("neighbour-list query failed: {error}"));
         radial_counts.push(
-            pdbiox::analysis::radial_distribution(&frame, &selection, &selection, options, None)
-                .unwrap_or_else(|error| panic!("RDF failed: {error}"))
-                .iter()
-                .map(|bin| bin.count)
-                .sum::<u64>(),
+            pdbiox::analysis::radial_distribution(
+                &frame,
+                &selection,
+                &selection,
+                options,
+                None,
+                &pdbiox::ExecutionContext::default(),
+            )
+            .unwrap_or_else(|error| panic!("RDF failed: {error}"))
+            .iter()
+            .map(|bin| bin.count)
+            .sum::<u64>(),
         );
     }
     assert_eq!(radial_counts, [1, 1]);
@@ -74,14 +81,26 @@ fn gw_026_parallel_trajectory_analysis_is_byte_identical() {
                     .collect(),
             })
             .collect(),
-    );
+    )
+    .unwrap_or_else(|error| panic!("trajectory construction failed: {error}"));
     let policy = AnalysisPolicy::default();
     let kernel = pdbiox::analysis::contacts_kernel(3.0, SpatialBackend::Auto);
-    let results: Vec<_> = [1_usize, 2, 4, 16]
+    let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    let results: Vec<_> = [1_usize, 2, 4, 8, available]
         .into_iter()
         .map(|workers| {
-            pdbiox::analysis::analyse_trajectory(&structure, &trajectory, &policy, &kernel, workers)
-                .unwrap_or_else(|error| panic!("parallel analysis failed at {workers}: {error}"))
+            let context = pdbiox::ExecutionContext::builder()
+                .worker_budget(workers)
+                .build()
+                .unwrap_or_else(|error| panic!("execution context failed: {error}"));
+            pdbiox::analysis::analyse_trajectory(
+                &structure,
+                &trajectory,
+                &policy,
+                &kernel,
+                &context,
+            )
+            .unwrap_or_else(|error| panic!("parallel analysis failed at {workers}: {error}"))
         })
         .collect();
     assert!(results.windows(2).all(|pair| {

@@ -53,6 +53,7 @@ fn gw_015_detects_oriented_hydrogen_bonds_from_explicit_chemistry() {
             backend: pdbiox::SpatialBackend::BruteForce,
             periodic: false,
         },
+        &pdbiox::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("hydrogen-bond workflow failed: {error}"));
     assert_eq!(bonds.len(), 1);
@@ -130,6 +131,7 @@ ATOM 2 C CA ALA B 1 2.5 0 0
                     &structure,
                     2.5 + tolerance,
                     pdbiox::SpatialBackend::BruteForce,
+                    &pdbiox::ExecutionContext::default(),
                 )
                 .unwrap_or_else(|error| panic!("distance contact workflow failed: {error}"))
                 .len()
@@ -138,11 +140,14 @@ ATOM 2 C CA ALA B 1 2.5 0 0
                 pdbiox::analysis::surface_contacts(
                     &structure,
                     &[1.7, 1.7],
-                    0.5,
-                    probe,
-                    2.0,
-                    0.1,
-                    pdbiox::SpatialBackend::BruteForce,
+                    pdbiox::analysis::SurfaceContactOptions {
+                        tolerance: 0.5,
+                        probe,
+                        surface_density: 2.0,
+                        minimum_area: 0.1,
+                        backend: pdbiox::SpatialBackend::BruteForce,
+                    },
+                    &pdbiox::ExecutionContext::default(),
                 )
                 .unwrap_or_else(|error| panic!("surface contact workflow failed: {error}"))
                 .len()
