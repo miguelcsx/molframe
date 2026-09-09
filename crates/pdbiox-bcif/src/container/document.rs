@@ -7,6 +7,7 @@ use pdbiox_core::diagnostic::{Code, Diagnostic};
 use pdbiox_core::io::Limits;
 use pdbiox_core::span::ByteSpan;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct EncodedFile {
@@ -173,8 +174,11 @@ fn decode_category(encoded: &EncodedCategory) -> Result<Category, Diagnostic> {
                     }
                 }
                 Decoded::Strings(values) => {
-                    for value in values {
-                        target.push(CifValue::Text(value.into_boxed_str()), Quoting::Bare);
+                    for row in 0..values.len() {
+                        let Some(value) = values.get_shared(row) else {
+                            return Err(length_error(row, values.len()));
+                        };
+                        target.push(CifValue::Text(Arc::clone(value)), Quoting::Bare);
                     }
                 }
             }
@@ -207,13 +211,11 @@ fn masked_value(
                 .get(row)
                 .ok_or_else(|| length_error(row, values.len()))?,
         )),
-        Decoded::Strings(values) => Ok(CifValue::Text(
+        Decoded::Strings(values) => Ok(CifValue::Text(Arc::clone(
             values
-                .get(row)
-                .ok_or_else(|| length_error(row, values.len()))?
-                .clone()
-                .into(),
-        )),
+                .get_shared(row)
+                .ok_or_else(|| length_error(row, values.len()))?,
+        ))),
     }
 }
 
