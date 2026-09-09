@@ -12,6 +12,7 @@
 
 /// Discrete geometry of ordered backbone traces.
 pub mod backbone;
+mod batch_measure;
 /// Deterministic symmetric eigendecomposition.
 pub mod eigen;
 /// Per-atom positional fluctuation across frames.
@@ -28,6 +29,8 @@ pub mod planar;
 pub mod polymer;
 /// Validated three-dimensional rotations.
 pub mod rotation;
+mod simd;
+mod simd_measure;
 /// Rigid least-squares superposition.
 pub mod superpose;
 pub mod transform;
@@ -35,6 +38,7 @@ pub mod transform;
 pub use backbone::{
     BackboneFrame, HelixGeometry, backbone_frames, helix_geometry, helix_geometry_with_options,
 };
+pub use batch_measure::{BatchGeometryError, angles_into, distances_into, torsions_into};
 pub use eigen::{Decomposition, EigenError, EigenOptions, symmetric, symmetric_with_options};
 pub use fluctuation::{FluctuationError, rmsf};
 pub use matrix::{DistanceMatrix, MatrixError, distance_matrix, distance_matrix_between};
