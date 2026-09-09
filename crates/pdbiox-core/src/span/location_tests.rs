@@ -37,3 +37,31 @@ fn an_empty_span_marks_a_point_without_covering_a_byte() {
     assert!(span.is_empty());
     assert_eq!(span.slice(b"abcdef"), Some(&b""[..]));
 }
+
+#[test]
+fn a_position_addresses_offsets_past_four_gibibytes() {
+    let beyond = u64::from(u32::MAX) + 1;
+    let at = Position::new(beyond, 1, 1);
+    assert_eq!(at.byte_offset, beyond);
+
+    let Some(next) = at.advance(b'x') else {
+        panic!("advancing past four gibibytes must not overflow")
+    };
+    assert_eq!(next.byte_offset, beyond + 1);
+    assert_eq!(next.column, 2);
+}
+
+#[test]
+fn a_span_covers_a_range_past_four_gibibytes() {
+    let start = Position::new(u64::from(u32::MAX) + 1, 7, 1);
+    let span = ByteSpan::new(start, start.byte_offset + 12);
+    assert_eq!(span.len(), Some(12));
+    assert!(!span.is_empty());
+}
+
+#[test]
+fn findings_order_by_offset_across_the_four_gibibyte_boundary() {
+    let early = ByteSpan::empty(Position::new(u64::from(u32::MAX) - 1, 1, 1));
+    let late = ByteSpan::empty(Position::new(u64::from(u32::MAX) + 1, 1, 1));
+    assert!(early.start.byte_offset < late.start.byte_offset);
+}

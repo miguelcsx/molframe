@@ -89,3 +89,16 @@ fn the_arena_holds_local_strings_once_rather_than_one_allocation_each() -> Resul
     assert_eq!(interner.arena_len(), 5);
     Ok(())
 }
+
+#[test]
+fn resolving_an_existing_symbol_in_a_clone_keeps_the_dictionary_shared()
+-> Result<(), DictionaryFull> {
+    let mut original = Interner::new();
+    let expected = original.intern("shared-model-identifier")?;
+    let mut clone = original.clone();
+    let storage = Arc::clone(&original.storage);
+
+    assert_eq!(clone.intern("shared-model-identifier")?, expected);
+    assert!(Arc::ptr_eq(&storage, &clone.storage));
+    Ok(())
+}

@@ -98,3 +98,36 @@ fn a_symbol_column_encodes_like_any_other_narrow_integer() {
     assert_eq!(column.get(0), Some(SymbolId::from_raw(3)));
     assert_eq!(column.get(4), Some(SymbolId::from_raw(7)));
 }
+
+#[test]
+fn a_delta_column_reads_the_same_value_at_every_position_as_it_iterates() {
+    // Long enough to cross several checkpoints, so a read resuming from a
+    // checkpoint is compared against the plain sequential walk.
+    // Values this large cannot be narrowed by bit packing, so the encoder
+    // reaches the delta rule; the steps between them stay tiny.
+    let values: Vec<u32> = (0..500).map(|index| 4_000_000_000 + index * 3).collect();
+    let column = EncodedColumn::encode(&values);
+
+    assert!(
+        matches!(column, EncodedColumn::Delta { .. }),
+        "monotone values should choose delta encoding"
+    );
+
+    for (position, expected) in values.iter().enumerate() {
+        let position = u32::try_from(position).expect("test position fits in u32");
+        assert_eq!(column.get(position), Some(*expected), "position {position}");
+    }
+    assert_eq!(column.iter().collect::<Vec<u32>>(), values);
+    assert_eq!(column.get(u32::try_from(values.len()).expect("fits")), None);
+}
+
+#[test]
+fn a_delta_column_shorter_than_one_checkpoint_stride_still_reads_correctly() {
+    let values: Vec<u32> = (0..7).map(|index| 4_000_000_000 + index * 3).collect();
+    let column = EncodedColumn::encode(&values);
+
+    for (position, expected) in values.iter().enumerate() {
+        let position = u32::try_from(position).expect("test position fits in u32");
+        assert_eq!(column.get(position), Some(*expected));
+    }
+}

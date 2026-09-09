@@ -134,13 +134,37 @@ pub struct Interner {
 }
 
 impl Interner {
+    // Retains allocations so the next batch can reuse the dictionary.
+    pub(crate) fn clear(&mut self) {
+        let storage = Arc::make_mut(&mut self.storage);
+        storage.arena.clear();
+        storage.extents.clear();
+        storage.table.clear();
+    }
+
+    /// Bytes retained by local arena, extent and lookup-table capacities.
+    #[must_use]
+    pub fn retained_bytes(&self) -> usize {
+        let storage = &self.storage;
+        let extents = storage
+            .extents
+            .capacity()
+            .saturating_mul(std::mem::size_of::<Extent>());
+        let table = storage
+            .table
+            .capacity()
+            .saturating_mul(std::mem::size_of::<LocalOrdinal>());
+        storage
+            .arena
+            .capacity()
+            .saturating_add(extents)
+            .saturating_add(table)
+    }
     /// The largest number of local identifiers one structure may issue.
     ///
-    /// This is a guard, not a design target. A real structure uses a few
-    /// hundred; reaching this many means the input is generating identifiers
+    /// This is a guard, not a design target. Reaching it means input-generated identifiers
     /// rather than naming things.
     pub const DEFAULT_LIMIT: u32 = 1_000_000;
-
     /// Creates an empty dictionary over the canonical one.
     ///
     /// Runs in `O(1)` time and creates no local-string allocation.
@@ -197,6 +221,13 @@ impl Interner {
     pub fn intern(&mut self, text: &str) -> Result<SymbolId, DictionaryFull> {
         if let Some(ordinal) = canonical::ordinal_of(text) {
             return Ok(SymbolId(ordinal));
+        }
+
+        // Resolve existing local symbols before copy-on-write detaches a clone.
+        if Arc::strong_count(&self.storage) > 1
+            && let Some(id) = self.get(text)
+        {
+            return Ok(id);
         }
 
         let Self {
@@ -403,10 +434,7 @@ fn extent_for_append(arena_len: usize, text_len: usize) -> Option<Extent> {
     })
 }
 
-/// Finds a local ordinal matching `text`.
-///
-/// Expected running time is `O(L)`, where `L` is `text.len()`. The operation
-/// performs no allocation.
+/// Finds a local ordinal in expected `O(text.len())` time without allocation.
 #[inline]
 fn find_local(
     table: &HashTable<LocalOrdinal>,
@@ -422,12 +450,7 @@ fn find_local(
         .copied()
 }
 
-/// Converts a local ordinal into its globally stored identifier.
-///
-/// Returns `None` if the canonical offset would overflow or produce the
-/// reserved `u32::MAX` value.
-///
-/// Runs in `O(1)` time and allocates no memory.
+/// Converts a local ordinal to an identifier, rejecting reserved overflow.
 #[inline]
 fn local_to_id(local: LocalOrdinal) -> Option<SymbolId> {
     let canonical_count = u32::try_from(canonical::CANONICAL.len()).ok()?;
@@ -440,12 +463,7 @@ fn local_to_id(local: LocalOrdinal) -> Option<SymbolId> {
     }
 }
 
-/// Converts a non-canonical identifier into its local ordinal.
-///
-/// Returns `None` for canonical identifiers, the reserved maximum value, or
-/// identifiers that cannot be represented by the current dictionary layout.
-///
-/// Runs in `O(1)` time and allocates no memory.
+/// Converts a non-canonical identifier into its local ordinal in `O(1)`.
 #[inline]
 fn id_to_local(id: SymbolId) -> Option<LocalOrdinal> {
     if id.0 > SymbolId::MAX_VALID_RAW {
@@ -456,12 +474,7 @@ fn id_to_local(id: SymbolId) -> Option<LocalOrdinal> {
     id.0.checked_sub(canonical_count).map(LocalOrdinal)
 }
 
-/// Returns the arena slice represented by a local ordinal.
-///
-/// Invalid ordinals, invalid UTF-8 boundaries, and malformed extents produce
-/// `None` rather than panicking.
-///
-/// Runs in `O(1)` time and allocates no memory.
+/// Returns an arena slice, declining invalid ordinals or malformed extents.
 #[inline]
 fn extent_text<'a>(arena: &'a str, extents: &[Extent], local: LocalOrdinal) -> Option<&'a str> {
     let local_index = usize::try_from(local.0).ok()?;

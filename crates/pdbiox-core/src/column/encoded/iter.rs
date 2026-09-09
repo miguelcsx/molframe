@@ -39,7 +39,7 @@ impl<T: ColumnValue> Iterator for ColumnIter<'_, T> {
             EncodedColumn::BitPacked { data, width, .. } => {
                 T::from_bits(unpack_one(data, *width, self.position)?)?
             }
-            EncodedColumn::Delta { first, deltas } => {
+            EncodedColumn::Delta { first, deltas, .. } => {
                 next_delta(*first, deltas, self.position, &mut self.running)?
             }
         };

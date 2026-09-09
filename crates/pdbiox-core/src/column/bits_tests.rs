@@ -81,3 +81,30 @@ fn reading_past_the_end_of_a_packed_buffer_yields_nothing() {
     assert_eq!(unpack_one(&packed, 8, 2), Some(3));
     assert_eq!(unpack_one(&packed, 8, 3), None);
 }
+
+#[test]
+fn every_packed_value_reads_back_unchanged_at_every_width() {
+    // Every width from 1 to 64 exercises a different byte span and bit offset,
+    // including the nine-byte straddle that only a 64-bit value can reach.
+    for width in 1..=64u8 {
+        let mask = if width == 64 {
+            u64::MAX
+        } else {
+            (1u64 << width) - 1
+        };
+        let values: Vec<u64> = (0..37u64)
+            .map(|index| index.wrapping_mul(0x9E37_79B9_7F4A_7C15) & mask)
+            .collect();
+
+        let packed = pack(&values, width).expect("values pack");
+
+        for (index, expected) in values.iter().enumerate() {
+            let index = u32::try_from(index).expect("test index fits in u32");
+            assert_eq!(
+                unpack_one(&packed, width, index),
+                Some(*expected),
+                "width {width}, index {index}"
+            );
+        }
+    }
+}

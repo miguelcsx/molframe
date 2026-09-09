@@ -15,11 +15,15 @@ use std::fmt;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
 pub struct Position {
     /// Offset from the start of the input, in bytes.
-    pub byte_offset: u32,
+    ///
+    /// Sixty-four bits, because a reader that streams a window at a time is not
+    /// bounded by what fits in memory and an offset past four gibibytes is
+    /// ordinary rather than exceptional.
+    pub byte_offset: u64,
     /// 1-based line number.
-    pub line: u32,
+    pub line: u64,
     /// 1-based column number, counted in bytes.
-    pub column: u32,
+    pub column: u64,
 }
 
 impl Position {
@@ -41,7 +45,7 @@ impl Position {
     /// assert_eq!(at.line, 3);
     /// ```
     #[must_use]
-    pub const fn new(byte_offset: u32, line: u32, column: u32) -> Self {
+    pub const fn new(byte_offset: u64, line: u64, column: u64) -> Self {
         Self {
             byte_offset,
             line,
@@ -99,7 +103,7 @@ pub struct ByteSpan {
     /// Where the span begins.
     pub start: Position,
     /// Offset one past the last byte of the span.
-    pub end: u32,
+    pub end: u64,
 }
 
 impl ByteSpan {
@@ -114,7 +118,7 @@ impl ByteSpan {
     /// assert_eq!(span.len(), Some(4));
     /// ```
     #[must_use]
-    pub const fn new(start: Position, end: u32) -> Self {
+    pub const fn new(start: Position, end: u64) -> Self {
         Self { start, end }
     }
 
@@ -130,7 +134,7 @@ impl ByteSpan {
     /// Returns the length of the span in bytes.
     ///
     #[must_use]
-    pub const fn len(self) -> Option<u32> {
+    pub const fn len(self) -> Option<u64> {
         self.end.checked_sub(self.start.byte_offset)
     }
 

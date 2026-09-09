@@ -167,27 +167,15 @@ impl BitVec {
     /// million bits costs a scan of sixteen thousand words rather than a
     /// million tests.
     ///
-    /// # Panics
-    /// Panics if the bit-vector position space exceeds `u32`.
-    pub fn ones(&self) -> impl Iterator<Item = u32> + '_ {
-        self.words.iter().enumerate().flat_map(|(index, word)| {
-            let base = u32::try_from(index)
-                .ok()
-                .and_then(|index| index.checked_mul(BITS));
-            let mut remaining = *word;
-
-            std::iter::from_fn(move || {
-                let base = base?;
-                if remaining == 0 {
-                    return None;
-                }
-
-                let bit = remaining.trailing_zeros();
-                remaining &= remaining - 1;
-
-                Some(base + bit)
-            })
-        })
+    /// A position space beyond `u32` ends the walk rather than panicking.
+    #[must_use]
+    pub fn ones(&self) -> Ones<'_> {
+        Ones {
+            words: &self.words,
+            word: 0,
+            remaining: 0,
+            started: false,
+        }
     }
 
     /// Keeps only the bits also set in `other`.
@@ -359,8 +347,10 @@ fn write_packed_value(packed: &mut [u8], width: u32, index: u32, value: u64) {
 /// Returns `None` when the value would run past the end of the buffer, which is
 /// the only way a malformed input can reach this code.
 ///
-/// # Panics
-/// The checked conversion receives a value masked to 64 bits.
+/// A value is at most 64 bits and starts at most 7 bits into a byte, so it
+/// spans at most nine bytes. Reading those as one little-endian word plus, when
+/// the value straddles the ninth byte, that byte's low bits, replaces a
+/// nine-step 128-bit fold with two loads and a shift.
 #[must_use]
 pub fn unpack_one(packed: &[u8], width: u8, index: u32) -> Option<u64> {
     let width = u32::from(width.clamp(1, 64));
@@ -368,15 +358,22 @@ pub fn unpack_one(packed: &[u8], width: u8, index: u32) -> Option<u64> {
     let end = byte.checked_add(bytes)?;
     let source = packed.get(byte..end)?;
 
-    let accumulator = source
-        .iter()
-        .enumerate()
-        .fold(0u128, |accumulator, (step, value)| {
-            accumulator | (u128::from(*value) << (8 * step))
-        });
+    let mut window = [0u8; 8];
+    let take = source.len().min(8);
+    let (Some(head), Some(front)) = (window.get_mut(..take), source.get(..take)) else {
+        return None;
+    };
+    head.copy_from_slice(front);
+    let low = u64::from_le_bytes(window) >> offset;
 
-    let word = u64::try_from((accumulator >> offset) & u128::from(u64::MAX)).ok()?;
-    Some(word & low_mask(width))
+    // A ninth byte exists only when the value straddles it, which requires a
+    // non-zero bit offset, so the complementary shift below is never 64.
+    let high = match source.get(8) {
+        Some(spill) if offset > 0 => u64::from(*spill) << (64 - offset),
+        _ => 0,
+    };
+
+    Some((low | high) & low_mask(width))
 }
 
 fn narrow_width(width: u32) -> u8 {
@@ -386,3 +383,63 @@ fn narrow_width(width: u32) -> u8 {
 #[cfg(test)]
 #[path = "bits_tests.rs"]
 mod tests;
+
+/// The set positions of a [`BitVec`], ascending.
+///
+/// A concrete type rather than an opaque one so callers can store it in their
+/// own iterators without boxing, which is what keeps a selection walk free of
+/// a heap allocation and open to inlining.
+#[derive(Clone, Debug)]
+pub struct Ones<'a> {
+    /// The mask's backing words.
+    words: &'a [u64],
+    /// The word currently being drained.
+    word: usize,
+    /// The undelivered bits of that word.
+    remaining: u64,
+    /// Whether `remaining` has been loaded from `word` yet.
+    started: bool,
+}
+
+impl Iterator for Ones<'_> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<u32> {
+        loop {
+            if self.remaining != 0 {
+                let bit = self.remaining.trailing_zeros();
+                self.remaining &= self.remaining - 1;
+                let base = u32::try_from(self.word).ok()?.checked_mul(BITS)?;
+                return Some(base + bit);
+            }
+
+            // Whole empty words are skipped a word at a time, so a mask with
+            // one member in a million bits costs sixteen thousand loads rather
+            // than a million tests.
+            if self.started {
+                self.word = self.word.checked_add(1)?;
+            }
+            self.started = true;
+            self.remaining = *self.words.get(self.word)?;
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // Before the first `next`, the current word has not been loaded into
+        // `remaining` yet, so it is still part of the untouched tail.
+        let counted = self.remaining.count_ones() as usize;
+        let from = if self.started {
+            self.word.saturating_add(1)
+        } else {
+            self.word
+        };
+        let rest: usize = match self.words.get(from..) {
+            Some(tail) => tail.iter().map(|word| word.count_ones() as usize).sum(),
+            None => 0,
+        };
+        let total = counted + rest;
+        (total, Some(total))
+    }
+}
+
+impl std::iter::FusedIterator for Ones<'_> {}

@@ -28,7 +28,21 @@ fn the_slice_stops_at_the_position_count_not_at_the_lane_boundary() {
     let mut block = CoordinateBlock::new();
     block.push([1.0, 1.0, 1.0]);
     assert_eq!(block.as_slice().len(), 1);
-    assert_eq!(block.allocated_bytes(), 192);
+    assert_eq!(block.allocated_bytes(), block.lanes.capacity() * 192);
+}
+
+#[test]
+fn allocated_bytes_include_reserved_lanes_before_positions_are_written() {
+    let mut block = CoordinateBlock::with_capacity(1000);
+    let bytes = block.allocated_bytes();
+    assert!(bytes >= 1000 * size_of::<[f32; 3]>());
+    assert!(block.is_empty());
+    block.push([1.0; 3]);
+    assert_eq!(block.allocated_bytes(), bytes);
+    let shared = block.clone();
+    assert_eq!(shared.allocated_bytes(), bytes);
+    drop(block);
+    assert_eq!(shared.allocated_bytes(), bytes);
 }
 
 #[test]

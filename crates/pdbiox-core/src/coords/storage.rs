@@ -22,6 +22,8 @@ use std::mem::size_of;
 use std::ops::Range;
 use std::sync::Arc;
 
+use crate::{ExecutionContext, MemoryBudgetError, MemoryReservation};
+
 /// Positions per lane. Sixteen triples is 192 bytes — three cache lines exactly,
 /// which is what lets the lane demand 64-byte alignment without padding.
 const LANE: usize = 16;
@@ -179,6 +181,7 @@ impl Default for Aabb {
 pub struct CoordinateBlock {
     lanes: Arc<Vec<CoordLane>>,
     len: u32,
+    reservation: Option<Arc<MemoryReservation>>,
 }
 
 impl CoordinateBlock {
@@ -188,6 +191,7 @@ impl CoordinateBlock {
         Self {
             lanes: Arc::new(Vec::new()),
             len: 0,
+            reservation: None,
         }
     }
 
@@ -197,6 +201,7 @@ impl CoordinateBlock {
         Self {
             lanes: Arc::new(Vec::with_capacity(lanes_for_positions(positions))),
             len: 0,
+            reservation: None,
         }
     }
 
@@ -252,6 +257,33 @@ impl CoordinateBlock {
         visible_mut_slice(all, self.len)
     }
 
+    /// Detaches shared coordinates only after charging their complete backing capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns a budget error without changing this block when the copy cannot fit.
+    pub(crate) fn make_unique_in(
+        &mut self,
+        context: &ExecutionContext,
+    ) -> Result<(), MemoryBudgetError> {
+        if Arc::strong_count(&self.lanes) == 1 {
+            return Ok(());
+        }
+        let bytes = self.allocated_bytes();
+        let mut reservation = context.try_reserve(bytes)?;
+        let mut lanes = Vec::with_capacity(self.lanes.capacity());
+        lanes.extend_from_slice(&self.lanes);
+        let retained = lanes.capacity().saturating_mul(size_of::<CoordLane>());
+        if retained > bytes {
+            reservation.try_grow(retained - bytes)?;
+        } else {
+            reservation.shrink_to(retained);
+        }
+        self.lanes = Arc::new(lanes);
+        self.reservation = Some(Arc::new(reservation));
+        Ok(())
+    }
+
     /// The positions a chunk covers, or `None` if the range runs past the end.
     #[must_use]
     #[inline]
@@ -276,10 +308,10 @@ impl CoordinateBlock {
         bounds
     }
 
-    /// Bytes the block occupies, including the unused tail of the last lane.
+    /// Backing allocation bytes, including spare capacity and unused lane tails.
     #[must_use]
     pub fn allocated_bytes(&self) -> usize {
-        self.lanes.len() * size_of::<CoordLane>()
+        self.lanes.capacity() * size_of::<CoordLane>()
     }
 }
 
@@ -327,6 +359,7 @@ impl FromIterator<[f32; 3]> for CoordinateBlock {
         Self {
             lanes: Arc::new(lanes),
             len,
+            reservation: None,
         }
     }
 }

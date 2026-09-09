@@ -5,7 +5,6 @@
 //! adjacency allocation on structures whose analyses never traverse bonds.
 
 use crate::index::{AtomIndex, BondIndex};
-use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::{Arc, OnceLock};
 
@@ -135,9 +134,14 @@ impl BondTable {
 }
 
 /// Deterministic bond-table construction with endpoint deduplication.
+///
+/// Records accumulate in insertion order and are sorted and deduplicated once
+/// at `finish`. A tree keyed on the endpoint pair would allocate a node per
+/// bond, which at billions of bonds dominates the build; an amortised push plus
+/// a single sort produces the same ordering for a fraction of the work.
 #[derive(Debug, Default)]
 pub struct BondTableBuilder {
-    records: BTreeMap<(u32, u32), BondRecord>,
+    records: Vec<BondRecord>,
 }
 
 impl BondTableBuilder {
@@ -145,7 +149,7 @@ impl BondTableBuilder {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            records: BTreeMap::new(),
+            records: Vec::new(),
         }
     }
 
@@ -157,9 +161,7 @@ impl BondTableBuilder {
         if record.atom_b < record.atom_a {
             std::mem::swap(&mut record.atom_a, &mut record.atom_b);
         }
-        self.records
-            .entry((record.atom_a.get(), record.atom_b.get()))
-            .or_insert(record);
+        self.records.push(record);
     }
 
     /// Packs records into immutable columns.
@@ -173,12 +175,20 @@ impl BondTableBuilder {
     /// A merge can retain explicit edges from one input while marking the
     /// combined graph unavailable because another input carried no connectivity.
     #[must_use]
-    pub fn finish_with_availability(self, available: bool) -> BondTable {
+    pub fn finish_with_availability(mut self, available: bool) -> BondTable {
+        // The sort is stable and `dedup_by_key` keeps the first of each run, so
+        // the earliest record for a pair wins exactly as an insert-if-absent
+        // would, and the output stays in ascending endpoint order.
+        self.records
+            .sort_by_key(|record| (record.atom_a.get(), record.atom_b.get()));
+        self.records
+            .dedup_by_key(|record| (record.atom_a.get(), record.atom_b.get()));
+
         let mut atom_a = Vec::with_capacity(self.records.len());
         let mut atom_b = Vec::with_capacity(self.records.len());
         let mut order = Vec::with_capacity(self.records.len());
         let mut provenance = Vec::with_capacity(self.records.len());
-        for record in self.records.into_values() {
+        for record in self.records {
             atom_a.push(record.atom_a);
             atom_b.push(record.atom_b);
             order.push(record.order);

@@ -170,6 +170,14 @@ pub enum EncodedColumn<T> {
         first: T,
         /// Differences between successive values.
         deltas: Vec<i32>,
+        /// The absolute value at every `DELTA_CHECKPOINT_STRIDE`-th position.
+        ///
+        /// Without these, reading position `p` sums `p` deltas, so walking a
+        /// column by index costs `O(n^2)`. Entry `k` holds the value at
+        /// position `(k + 1) * DELTA_CHECKPOINT_STRIDE`, which bounds any read
+        /// to one stride of additions. At four bytes per delta and eight per
+        /// checkpoint the table adds about three percent to the encoding.
+        checkpoints: Vec<i64>,
     },
 }
 
@@ -232,7 +240,11 @@ impl<T: ColumnValue> EncodedColumn<T> {
             Self::BitPacked { data, width, .. } => {
                 unpack_one(data, *width, position).and_then(T::from_bits)
             }
-            Self::Delta { first, deltas } => delta_at(*first, deltas, position),
+            Self::Delta {
+                first,
+                deltas,
+                checkpoints,
+            } => delta_at(*first, deltas, checkpoints, position),
         }
     }
 
@@ -366,7 +378,20 @@ impl<T: ColumnValue> EncodedColumn<T> {
             deltas.push(i32::try_from(step).ok()?);
         }
 
-        Some(Self::Delta { first, deltas })
+        let mut checkpoints = Vec::with_capacity(deltas.len() / DELTA_CHECKPOINT_STRIDE);
+        let mut running = first.to_bits().cast_signed();
+        for (index, delta) in deltas.iter().enumerate() {
+            running = running.checked_add(i64::from(*delta))?;
+            if (index + 1).is_multiple_of(DELTA_CHECKPOINT_STRIDE) {
+                checkpoints.push(running);
+            }
+        }
+
+        Some(Self::Delta {
+            first,
+            deltas,
+            checkpoints,
+        })
     }
 }
 
@@ -392,15 +417,35 @@ fn copied_at<T: Copy>(values: &[T], position: u32) -> Option<T> {
         .copied()
 }
 
-fn delta_at<T: ColumnValue>(first: T, deltas: &[i32], position: u32) -> Option<T> {
+/// Positions between stored absolute values in a delta-encoded column.
+///
+/// Small enough that a read sums at most this many deltas, large enough that
+/// the checkpoint table stays a small fraction of the deltas themselves.
+const DELTA_CHECKPOINT_STRIDE: usize = 64;
+
+fn delta_at<T: ColumnValue>(
+    first: T,
+    deltas: &[i32],
+    checkpoints: &[i64],
+    position: u32,
+) -> Option<T> {
     let end = usize::try_from(position).ok()?;
-    let deltas = deltas.get(..end)?;
+    if end > deltas.len() {
+        return None;
+    }
+
+    // Resume from the last checkpoint at or before `position` rather than from
+    // the head of the column, bounding the walk to one stride.
+    let block = end / DELTA_CHECKPOINT_STRIDE;
+    let (start, base) = match block.checked_sub(1).and_then(|slot| checkpoints.get(slot)) {
+        Some(checkpoint) => (block * DELTA_CHECKPOINT_STRIDE, *checkpoint),
+        None => (0, first.to_bits().cast_signed()),
+    };
 
     let value = deltas
+        .get(start..end)?
         .iter()
-        .fold(first.to_bits().cast_signed(), |value, delta| {
-            value + i64::from(*delta)
-        });
+        .fold(base, |value, delta| value + i64::from(*delta));
 
     T::from_bits(value.cast_unsigned())
 }
