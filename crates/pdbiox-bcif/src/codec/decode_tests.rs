@@ -1,5 +1,6 @@
 use super::*;
 use proptest::prelude::*;
+use std::sync::Arc;
 
 #[test]
 fn typed_array_codes_are_messagepack_integers_for_external_interoperability() {
@@ -63,9 +64,61 @@ fn string_arrays_decode_dictionary_offsets_indices_and_empty_sentinel() {
         }],
         data: int32(&[0, 1, -1, 0]),
     };
+    let Decoded::Strings(values) = decode(&encoded).expect("strings decode") else {
+        panic!("expected strings")
+    };
+    assert_eq!(values.iter().collect::<Vec<_>>(), ["a", "AB", "", "a"]);
+    assert_eq!(values.indices(), [0, 1, 2, 0]);
+    assert_eq!(values.dictionary().len(), 3);
+}
+
+#[test]
+fn repeated_string_rows_use_one_shared_value_and_four_byte_indices() {
+    const ROWS: usize = 100_000;
+
+    let encoded = EncodedData {
+        encoding: vec![Encoding::StringArray {
+            data_encoding: vec![Encoding::ByteArray {
+                r#type: DataType::Int32,
+            }],
+            string_data: "ALA".to_owned(),
+            offset_encoding: vec![Encoding::ByteArray {
+                r#type: DataType::Int32,
+            }],
+            offsets: int32(&[0, 3]),
+        }],
+        data: int32(&vec![0; ROWS]),
+    };
+    let Decoded::Strings(values) = decode(&encoded).expect("strings decode") else {
+        panic!("expected strings")
+    };
+
+    assert_eq!(values.len(), ROWS);
+    assert_eq!(values.dictionary().len(), 1);
+    assert_eq!(Arc::strong_count(&values.dictionary()[0]), 1);
     assert_eq!(
-        decode(&encoded).expect("strings decode"),
-        Decoded::Strings(vec!["a".into(), "AB".into(), String::new(), "a".into()])
+        std::mem::size_of_val(values.indices()),
+        ROWS * std::mem::size_of::<u32>()
+    );
+    assert!(values.iter().all(|value| value == "ALA"));
+}
+
+#[test]
+fn public_string_column_canonicalises_dictionary_and_exposes_rows() {
+    let dictionary = vec![
+        Arc::<str>::from("ALA"),
+        Arc::<str>::from("GLY"),
+        Arc::<str>::from("ALA"),
+    ];
+    let values =
+        DecodedStringColumn::new(dictionary, vec![2, 1, 0]).expect("valid dictionary indices");
+
+    assert_eq!(values.dictionary().len(), 2);
+    assert_eq!(values.indices(), [0, 1, 0]);
+    assert_eq!(values.get(1), Some("GLY"));
+    assert_eq!(
+        values.iter().rev().collect::<Vec<_>>(),
+        ["ALA", "GLY", "ALA"]
     );
 }
 

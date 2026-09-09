@@ -5,8 +5,8 @@
 
 use criterion::{Criterion, Throughput, black_box};
 use pdbiox_bcif::{
-    BinaryDocument, decode, encode_floats, encode_integers, encode_interval, encode_strings, read,
-    write_structure,
+    BinaryDocument, DataType, EncodedData, Encoding, decode, encode_floats, encode_integers,
+    encode_interval, encode_strings, read, write_structure,
 };
 use pdbiox_bench::{Sample, input, structure};
 use pdbiox_core::io::{Limits, ReadOptions};
@@ -56,12 +56,26 @@ fn bench_column_decode(c: &mut Criterion) {
             let _ = black_box(decode(&encoded));
         });
     });
+
+    let wide_data: Vec<u8> = (0_i32..8_000_000).flat_map(i32::to_le_bytes).collect();
+    let wide_encoded = EncodedData {
+        encoding: vec![Encoding::ByteArray {
+            r#type: DataType::Int32,
+        }],
+        data: wide_data,
+    };
+    group.throughput(Throughput::Elements(8_000_000));
+    group.bench_function("wide_payload", |b| {
+        b.iter(|| {
+            let _ = black_box(decode(&wide_encoded));
+        });
+    });
     group.finish();
 }
 
 fn bench_write(c: &mut Criterion) {
     let mut group = c.benchmark_group("bcif_write_structure");
-    for sample in [Sample::Tiny, Sample::Small, Sample::Medium] {
+    for sample in [Sample::Tiny, Sample::Small, Sample::Medium, Sample::Large] {
         let structure = structure(sample);
         group.throughput(Throughput::Elements(u64::from(structure.atom_count())));
         group.bench_function(sample.label(), |b| {

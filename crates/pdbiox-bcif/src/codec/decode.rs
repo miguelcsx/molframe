@@ -1,9 +1,13 @@
 //! Complete `BinaryCIF` column codec chains.
 
+use super::DecodedStringColumn;
+use indexmap::IndexMap;
 use num_traits::ToPrimitive;
 use pdbiox_core::diagnostic::{Code, Diagnostic};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::borrow::Cow;
+use std::sync::Arc;
 
 /// `BinaryCIF` typed-array code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
@@ -120,15 +124,15 @@ pub enum Decoded {
     Integers(Vec<i64>),
     /// Floating-point values.
     Floats(Vec<f64>),
-    /// UTF-8 string values.
-    Strings(Vec<String>),
+    /// Dictionary-shared UTF-8 string values.
+    Strings(DecodedStringColumn),
 }
 
-enum Stage {
-    Bytes(Vec<u8>),
+enum Stage<'a> {
+    Bytes(Cow<'a, [u8]>),
     Integers(Vec<i64>),
     Floats(Vec<f64>),
-    Strings(Vec<String>),
+    Strings(DecodedStringColumn),
 }
 
 /// Decodes a full chain in reverse order.
@@ -138,8 +142,15 @@ enum Stage {
 /// Returns `E1401` for inconsistent lengths and `E1403` when adjacent codecs
 /// disagree on their value type.
 pub fn decode(encoded: &EncodedData) -> Result<Decoded, Diagnostic> {
-    let mut stage = Stage::Bytes(encoded.data.clone());
-    for encoding in encoded.encoding.iter().rev() {
+    decode_borrowed(&encoded.encoding, &encoded.data)
+}
+
+pub(crate) fn decode_borrowed(encoding: &[Encoding], data: &[u8]) -> Result<Decoded, Diagnostic> {
+    decode_stage(Stage::Bytes(Cow::Borrowed(data)), encoding)
+}
+
+fn decode_stage(mut stage: Stage<'_>, encoding: &[Encoding]) -> Result<Decoded, Diagnostic> {
+    for encoding in encoding.iter().rev() {
         stage = decode_step(stage, encoding)?;
     }
     match stage {
@@ -150,7 +161,7 @@ pub fn decode(encoded: &EncodedData) -> Result<Decoded, Diagnostic> {
     }
 }
 
-fn decode_step(stage: Stage, encoding: &Encoding) -> Result<Stage, Diagnostic> {
+fn decode_step<'a>(stage: Stage<'a>, encoding: &Encoding) -> Result<Stage<'a>, Diagnostic> {
     match encoding {
         Encoding::ByteArray { r#type } => byte_array(stage, *r#type),
         Encoding::FixedPoint { factor, src_type } => fixed_point(stage, *factor, *src_type),
@@ -176,18 +187,21 @@ fn decode_step(stage: Stage, encoding: &Encoding) -> Result<Stage, Diagnostic> {
     }
 }
 
-fn byte_array(stage: Stage, data_type: DataType) -> Result<Stage, Diagnostic> {
+fn byte_array(stage: Stage<'_>, data_type: DataType) -> Result<Stage<'_>, Diagnostic> {
     let Stage::Bytes(bytes) = stage else {
         return Err(type_error("ByteArray requires bytes"));
     };
     match data_type {
         DataType::Int8 => Ok(Stage::Integers(
             bytes
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|value| i64::from(value.cast_signed()))
                 .collect(),
         )),
-        DataType::Uint8 => Ok(Stage::Integers(bytes.into_iter().map(i64::from).collect())),
+        DataType::Uint8 => Ok(Stage::Integers(
+            bytes.iter().copied().map(i64::from).collect(),
+        )),
         DataType::Int16 => integers(&bytes, 2, |chunk| {
             i64::from(i16::from_le_bytes([chunk[0], chunk[1]]))
         }),
@@ -211,7 +225,11 @@ fn byte_array(stage: Stage, data_type: DataType) -> Result<Stage, Diagnostic> {
     }
 }
 
-fn integers(bytes: &[u8], width: usize, read: impl Fn(&[u8]) -> i64) -> Result<Stage, Diagnostic> {
+fn integers<'a>(
+    bytes: &[u8],
+    width: usize,
+    read: impl Fn(&[u8]) -> i64,
+) -> Result<Stage<'a>, Diagnostic> {
     if !bytes.len().is_multiple_of(width) {
         return Err(length_error(bytes.len(), width));
     }
@@ -220,14 +238,18 @@ fn integers(bytes: &[u8], width: usize, read: impl Fn(&[u8]) -> i64) -> Result<S
     ))
 }
 
-fn floats(bytes: &[u8], width: usize, read: impl Fn(&[u8]) -> f64) -> Result<Stage, Diagnostic> {
+fn floats<'a>(
+    bytes: &[u8],
+    width: usize,
+    read: impl Fn(&[u8]) -> f64,
+) -> Result<Stage<'a>, Diagnostic> {
     if !bytes.len().is_multiple_of(width) {
         return Err(length_error(bytes.len(), width));
     }
     Ok(Stage::Floats(bytes.chunks_exact(width).map(read).collect()))
 }
 
-fn fixed_point(stage: Stage, factor: f64, src_type: DataType) -> Result<Stage, Diagnostic> {
+fn fixed_point(stage: Stage<'_>, factor: f64, src_type: DataType) -> Result<Stage<'_>, Diagnostic> {
     let Stage::Integers(values) = stage else {
         return Err(type_error("FixedPoint requires integers"));
     };
@@ -247,12 +269,12 @@ fn fixed_point(stage: Stage, factor: f64, src_type: DataType) -> Result<Stage, D
 }
 
 fn interval(
-    stage: Stage,
+    stage: Stage<'_>,
     min: f64,
     max: f64,
     steps: u32,
     src_type: DataType,
-) -> Result<Stage, Diagnostic> {
+) -> Result<Stage<'_>, Diagnostic> {
     let Stage::Integers(values) = stage else {
         return Err(type_error("IntervalQuantization requires integers"));
     };
@@ -272,7 +294,7 @@ fn interval(
     Ok(Stage::Floats(values))
 }
 
-fn run_length(stage: Stage, src_type: DataType, size: usize) -> Result<Stage, Diagnostic> {
+fn run_length(stage: Stage<'_>, src_type: DataType, size: usize) -> Result<Stage<'_>, Diagnostic> {
     let Stage::Integers(values) = stage else {
         return Err(type_error("RunLength requires integers"));
     };
@@ -300,7 +322,7 @@ fn run_length(stage: Stage, src_type: DataType, size: usize) -> Result<Stage, Di
     Ok(Stage::Integers(output))
 }
 
-fn delta(stage: Stage, origin: i64, src_type: DataType) -> Result<Stage, Diagnostic> {
+fn delta(stage: Stage<'_>, origin: i64, src_type: DataType) -> Result<Stage<'_>, Diagnostic> {
     let Stage::Integers(mut values) = stage else {
         return Err(type_error("Delta requires integers"));
     };
@@ -319,11 +341,11 @@ fn delta(stage: Stage, origin: i64, src_type: DataType) -> Result<Stage, Diagnos
 }
 
 fn integer_packing(
-    stage: Stage,
+    stage: Stage<'_>,
     byte_count: u8,
     unsigned: bool,
     size: usize,
-) -> Result<Stage, Diagnostic> {
+) -> Result<Stage<'_>, Diagnostic> {
     let Stage::Integers(values) = stage else {
         return Err(type_error("IntegerPacking requires integers"));
     };
@@ -358,35 +380,31 @@ fn integer_packing(
     Ok(Stage::Integers(output))
 }
 
-fn string_array(
-    stage: Stage,
+fn string_array<'a>(
+    stage: Stage<'a>,
     data_encoding: &[Encoding],
     string_data: &str,
     offset_encoding: &[Encoding],
     offsets: &[u8],
-) -> Result<Stage, Diagnostic> {
+) -> Result<Stage<'a>, Diagnostic> {
     let Stage::Bytes(data) = stage else {
         return Err(type_error("StringArray requires bytes"));
     };
-    let Decoded::Integers(indices) = decode(&EncodedData {
-        encoding: data_encoding.to_vec(),
-        data,
-    })?
-    else {
+    let Decoded::Integers(indices) = decode_stage(Stage::Bytes(data), data_encoding)? else {
         return Err(type_error("StringArray indices are not integers"));
     };
-    let Decoded::Integers(offsets) = decode(&EncodedData {
-        encoding: offset_encoding.to_vec(),
-        data: offsets.to_vec(),
-    })?
+    let Decoded::Integers(offsets) =
+        decode_stage(Stage::Bytes(Cow::Borrowed(offsets)), offset_encoding)?
     else {
         return Err(type_error("StringArray offsets are not integers"));
     };
-    let dictionary_capacity = match offsets.len().checked_sub(1) {
+    let source_capacity = match offsets.len().checked_sub(1) {
         Some(capacity) => capacity,
         None => 0,
     };
-    let mut dictionary = Vec::with_capacity(dictionary_capacity);
+    let mut lookup = IndexMap::<&str, u32>::with_capacity(source_capacity);
+    let mut dictionary = Vec::with_capacity(source_capacity);
+    let mut source_to_compact = Vec::with_capacity(source_capacity);
     for pair in offsets.windows(2) {
         let (Ok(start), Ok(end)) = (usize::try_from(pair[0]), usize::try_from(pair[1])) else {
             return Err(length_error(offsets.len(), string_data.len()));
@@ -394,23 +412,44 @@ fn string_array(
         let Some(value) = string_data.get(start..end) else {
             return Err(length_error(end, string_data.len()));
         };
-        dictionary.push(value);
+        let compact = intern_string(value, &mut lookup, &mut dictionary)?;
+        source_to_compact.push(compact);
     }
     let mut output = Vec::with_capacity(indices.len());
     for index in indices {
         if index == -1 {
-            output.push(String::new());
+            output.push(intern_string("", &mut lookup, &mut dictionary)?);
             continue;
         }
         let Ok(index) = usize::try_from(index) else {
-            return Err(length_error(output.len(), dictionary.len()));
+            return Err(length_error(output.len(), source_to_compact.len()));
         };
-        let Some(value) = dictionary.get(index) else {
-            return Err(length_error(index, dictionary.len()));
+        let Some(compact) = source_to_compact.get(index) else {
+            return Err(length_error(index, source_to_compact.len()));
         };
-        output.push((*value).to_owned());
+        output.push(*compact);
     }
-    Ok(Stage::Strings(output))
+    Ok(Stage::Strings(DecodedStringColumn::from_validated_parts(
+        dictionary, output,
+    )))
+}
+
+fn intern_string<'a>(
+    value: &'a str,
+    lookup: &mut IndexMap<&'a str, u32>,
+    dictionary: &mut Vec<Arc<str>>,
+) -> Result<u32, Diagnostic> {
+    if let Some(index) = lookup.get(value) {
+        return Ok(*index);
+    }
+    let Ok(index) = u32::try_from(dictionary.len()) else {
+        return Err(
+            Diagnostic::new(Code::E1401).with_message("string dictionary exceeds u32 indices")
+        );
+    };
+    lookup.insert(value, index);
+    dictionary.push(Arc::from(value));
+    Ok(index)
 }
 
 const fn is_integer(data_type: DataType) -> bool {
