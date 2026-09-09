@@ -7,6 +7,8 @@ use std::collections::{BTreeMap, BinaryHeap};
 
 #[path = "kd_periodic.rs"]
 mod periodic_helpers;
+#[path = "kd_stream.rs"]
+mod stream;
 use periodic_helpers::{for_each_shift, periodic_image_limits, validate_image_budget};
 
 #[derive(Clone, Copy, Debug)]
@@ -29,6 +31,7 @@ pub struct KdTree<'a> {
     root: Option<usize>,
     periodic: Option<&'a PeriodicBox>,
     periodic_options: KdPeriodicOptions,
+    reservation: Option<pdbiox_core::MemoryReservation>,
 }
 
 impl<'a> KdTree<'a> {
@@ -69,6 +72,7 @@ impl<'a> KdTree<'a> {
             root,
             periodic,
             periodic_options,
+            reservation: None,
         })
     }
 
@@ -146,7 +150,7 @@ impl<'a> KdTree<'a> {
             return Ok(());
         };
         let Some(periodic) = self.periodic else {
-            self.radius_search(root, position, cutoff_squared, &mut |target, squared| {
+            self.radius_search(root, position, cutoff_squared, &mut |_, target, squared| {
                 if atom != target {
                     found.push(NeighborPair::new(atom, target, squared));
                 }
@@ -159,7 +163,7 @@ impl<'a> KdTree<'a> {
         let wrapped = periodic.wrap(position);
         for_each_shift(limits, |shift| {
             let image = periodic.translated(wrapped, shift)?;
-            self.radius_search(root, image, cutoff_squared, &mut |target, _| {
+            self.radius_search(root, image, cutoff_squared, &mut |_, target, _| {
                 if atom == target {
                     return;
                 }
@@ -188,7 +192,7 @@ impl<'a> KdTree<'a> {
         node_index: usize,
         point: [f32; 3],
         cutoff_squared: f32,
-        visit: &mut impl FnMut(u32, f32),
+        visit: &mut impl FnMut(usize, u32, f32),
     ) {
         let Some(node) = self.nodes.get(node_index).copied() else {
             return;
@@ -199,7 +203,7 @@ impl<'a> KdTree<'a> {
         let squared = distance_squared(point, position, None);
 
         if squared <= cutoff_squared {
-            visit(node.atom, squared);
+            visit(node_index, node.atom, squared);
         }
 
         let delta = point[node.axis] - position[node.axis];
@@ -315,21 +319,20 @@ fn finite_entries(
     targets: &[u32],
     periodic: Option<&PeriodicBox>,
 ) -> Vec<Entry> {
-    targets
-        .iter()
-        .filter_map(|&atom| {
-            let index = usize::try_from(atom).ok()?;
-            let position = positions.get(index).copied()?;
-            if !finite(position) {
-                return None;
-            }
-            let position = match periodic {
-                Some(periodic) => periodic.wrap(position),
-                None => position,
-            };
-            Some(Entry { atom, position })
-        })
-        .collect()
+    let mut entries = Vec::with_capacity(targets.len());
+    entries.extend(targets.iter().filter_map(|&atom| {
+        let index = usize::try_from(atom).ok()?;
+        let position = positions.get(index).copied()?;
+        if !finite(position) {
+            return None;
+        }
+        let position = match periodic {
+            Some(periodic) => periodic.wrap(position),
+            None => position,
+        };
+        Some(Entry { atom, position })
+    }));
+    entries
 }
 
 /// Builds one balanced k-d subtree by median partitioning.
