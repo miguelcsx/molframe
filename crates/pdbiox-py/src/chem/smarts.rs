@@ -77,8 +77,8 @@ impl PySmartsPattern {
 }
 
 #[pyfunction]
-pub(crate) fn parse_smarts(text: &str) -> PyResult<PySmartsPattern> {
-    PySmartsPattern::new(text)
+pub(crate) fn parse_smarts(py: Python<'_>, text: &str) -> PyResult<PySmartsPattern> {
+    py.detach(move || -> PyResult<PySmartsPattern> { PySmartsPattern::new(text) })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

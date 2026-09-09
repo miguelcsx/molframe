@@ -335,11 +335,30 @@ fn decoded_into_python(py: Python<'_>, decoded: pdbiox::bcif::Decoded) -> PyResu
         pdbiox::bcif::Decoded::Floats(values) => {
             ("floats", values.into_pyarray(py).into_any().unbind())
         }
-        pdbiox::bcif::Decoded::Strings(values) => {
-            ("strings", PyList::new(py, values)?.into_any().unbind())
-        }
+        pdbiox::bcif::Decoded::Strings(values) => ("strings", strings_into_python(py, &values)?),
     };
     Ok(PyDecoded { kind, values })
+}
+
+fn strings_into_python(
+    py: Python<'_>,
+    values: &pdbiox::bcif::DecodedStringColumn,
+) -> PyResult<Py<PyAny>> {
+    let mut rows = Vec::with_capacity(values.indices().len());
+    for index in values.indices() {
+        let Ok(index) = usize::try_from(*index) else {
+            return Err(PyValueError::new_err(
+                "decoded string index exceeds the platform address space",
+            ));
+        };
+        let Some(value) = values.dictionary().get(index) else {
+            return Err(PyValueError::new_err(
+                "decoded string index is outside the dictionary",
+            ));
+        };
+        rows.push(value.as_ref());
+    }
+    Ok(PyList::new(py, rows)?.into_any().unbind())
 }
 
 fn codec_error(error: impl std::fmt::Display) -> PyErr {

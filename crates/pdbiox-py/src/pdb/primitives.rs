@@ -15,43 +15,48 @@ impl pdbiox::Select for SelectionFilter {
 }
 
 #[pyfunction]
-pub(crate) fn pdb_field_text(line: &str, start: usize, stop: usize) -> String {
-    pdbiox::pdb::fixed::text(line, start, stop).to_owned()
+pub(crate) fn pdb_field_text(py: Python<'_>, line: &str, start: usize, stop: usize) -> String {
+    py.detach(move || -> String { pdbiox::pdb::fixed::text(line, start, stop).to_owned() })
 }
 
 #[pyfunction]
-pub(crate) fn pdb_field_raw(line: &str, start: usize, stop: usize) -> String {
-    pdbiox::pdb::fixed::raw(line, start, stop).to_owned()
+pub(crate) fn pdb_field_raw(py: Python<'_>, line: &str, start: usize, stop: usize) -> String {
+    py.detach(move || -> String { pdbiox::pdb::fixed::raw(line, start, stop).to_owned() })
 }
 
 #[pyfunction]
-pub(crate) fn pdb_field_record(line: &str) -> String {
-    pdbiox::pdb::fixed::record(line).to_owned()
+pub(crate) fn pdb_field_record(py: Python<'_>, line: &str) -> String {
+    py.detach(move || -> String { pdbiox::pdb::fixed::record(line).to_owned() })
 }
 
 #[pyfunction]
-pub(crate) fn pdb_field_integer(line: &str, start: usize, stop: usize) -> Option<i64> {
-    pdbiox::pdb::fixed::integer(line, start, stop)
+pub(crate) fn pdb_field_integer(
+    py: Python<'_>,
+    line: &str,
+    start: usize,
+    stop: usize,
+) -> Option<i64> {
+    py.detach(move || -> Option<i64> { pdbiox::pdb::fixed::integer(line, start, stop) })
 }
 
 #[pyfunction]
-pub(crate) fn pdb_field_real(line: &str, start: usize, stop: usize) -> Option<f64> {
-    pdbiox::pdb::fixed::real(line, start, stop)
+pub(crate) fn pdb_field_real(py: Python<'_>, line: &str, start: usize, stop: usize) -> Option<f64> {
+    py.detach(move || -> Option<f64> { pdbiox::pdb::fixed::real(line, start, stop) })
 }
 
 #[pyfunction]
-pub(crate) fn hybrid36_decode(field: &str, width: u32) -> Option<i64> {
-    pdbiox::pdb::hybrid36::decode(field, width)
+pub(crate) fn hybrid36_decode(py: Python<'_>, field: &str, width: u32) -> Option<i64> {
+    py.detach(move || -> Option<i64> { pdbiox::pdb::hybrid36::decode(field, width) })
 }
 
 #[pyfunction]
-pub(crate) fn hybrid36_encode(value: i64, width: u32) -> Option<String> {
-    pdbiox::pdb::hybrid36::encode(value, width)
+pub(crate) fn hybrid36_encode(py: Python<'_>, value: i64, width: u32) -> Option<String> {
+    py.detach(move || -> Option<String> { pdbiox::pdb::hybrid36::encode(value, width) })
 }
 
 #[pyfunction]
-pub(crate) fn hybrid36_needs_encoding(value: i64, width: u32) -> bool {
-    pdbiox::pdb::hybrid36::needs_encoding(value, width)
+pub(crate) fn hybrid36_needs_encoding(py: Python<'_>, value: i64, width: u32) -> bool {
+    py.detach(move || -> bool { pdbiox::pdb::hybrid36::needs_encoding(value, width) })
 }
 
 #[pyfunction(name = "pdb_write_selected")]

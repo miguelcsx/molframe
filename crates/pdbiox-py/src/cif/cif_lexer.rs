@@ -4,8 +4,8 @@ use crate::cif_document::PyCifQuoting;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-type PositionTuple = (u32, u32, u32);
-type SpanTuple = (u32, u32, u32, u32);
+type PositionTuple = (u64, u64, u64);
+type SpanTuple = (u64, u64, u64, u64);
 
 #[pyclass(name = "CifToken", frozen, from_py_object)]
 #[derive(Clone, Debug)]

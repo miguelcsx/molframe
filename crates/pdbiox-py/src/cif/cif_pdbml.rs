@@ -11,10 +11,12 @@ create_exception!(_native, PdbmlError, PyValueError);
 create_exception!(_native, PdbmlReadError, PyValueError);
 
 #[pyfunction]
-pub(crate) fn parse_pdbml_document(bytes: Vec<u8>) -> PyResult<PyCifDocument> {
-    pdbiox::cif::parse_pdbml_document(&bytes)
-        .map(Into::into)
-        .map_err(|error| PdbmlError::new_err(error.to_string()))
+pub(crate) fn parse_pdbml_document(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyCifDocument> {
+    py.detach(move || -> PyResult<PyCifDocument> {
+        pdbiox::cif::parse_pdbml_document(&bytes)
+            .map(Into::into)
+            .map_err(|error| PdbmlError::new_err(error.to_string()))
+    })
 }
 
 #[pyfunction]
@@ -46,9 +48,11 @@ pub(crate) fn read_pdbml(
 }
 
 #[pyfunction]
-pub(crate) fn write_pdbml(document: &PyCifDocument) -> PyResult<String> {
-    pdbiox::cif::write_pdbml(&document.inner)
-        .map_err(|error| PdbmlError::new_err(error.to_string()))
+pub(crate) fn write_pdbml(py: Python<'_>, document: &PyCifDocument) -> PyResult<String> {
+    py.detach(move || -> PyResult<String> {
+        pdbiox::cif::write_pdbml(&document.inner)
+            .map_err(|error| PdbmlError::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

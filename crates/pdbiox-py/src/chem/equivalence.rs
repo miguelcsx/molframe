@@ -10,16 +10,25 @@ create_exception!(_native, AutomorphismLimit, PyValueError);
 
 #[pyfunction]
 pub(crate) fn equivalence_classes(
+    py: Python<'_>,
     component: &PyComponent,
 ) -> super::components::PyEquivalenceClasses {
-    super::components::PyEquivalenceClasses(pdbiox::equivalence_classes(&component.0))
+    py.detach(move || -> super::components::PyEquivalenceClasses {
+        super::components::PyEquivalenceClasses(pdbiox::equivalence_classes(&component.0))
+    })
 }
 
 #[pyfunction]
-pub(crate) fn automorphisms(component: &PyComponent, limit: usize) -> PyResult<Vec<Vec<u32>>> {
-    pdbiox::automorphisms(&component.0, limit)
-        .map(|mappings| mappings.into_iter().map(<[u32]>::into_vec).collect())
-        .map_err(|error| AutomorphismLimit::new_err(error.to_string()))
+pub(crate) fn automorphisms(
+    py: Python<'_>,
+    component: &PyComponent,
+    limit: usize,
+) -> PyResult<Vec<Vec<u32>>> {
+    py.detach(move || -> PyResult<Vec<Vec<u32>>> {
+        pdbiox::automorphisms(&component.0, limit)
+            .map(|mappings| mappings.into_iter().map(<[u32]>::into_vec).collect())
+            .map_err(|error| AutomorphismLimit::new_err(error.to_string()))
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

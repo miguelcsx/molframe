@@ -234,14 +234,17 @@ pub(crate) fn measure_mapping(
 
 #[pyfunction]
 pub(crate) fn decide_rmsd(
+    py: Python<'_>,
     measurement: &PyDistanceMeasurement,
     maximum_rmsd: f64,
 ) -> PyComparisonVerdict {
-    let native = pdbiox::compare::DistanceMeasurement {
-        distances: measurement.distances.clone().into_boxed_slice(),
-        rmsd: measurement.rmsd,
-    };
-    pdbiox::compare::decide_rmsd(&native, maximum_rmsd).into()
+    py.detach(move || -> PyComparisonVerdict {
+        let native = pdbiox::compare::DistanceMeasurement {
+            distances: measurement.distances.clone().into_boxed_slice(),
+            rmsd: measurement.rmsd,
+        };
+        pdbiox::compare::decide_rmsd(&native, maximum_rmsd).into()
+    })
 }
 
 #[pyfunction]

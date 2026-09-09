@@ -5,44 +5,53 @@ use crate::structure::PyStructure;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyCapsule};
+use std::sync::{Mutex, MutexGuard};
 
-#[pyclass(name = "ArrowStream", unsendable, skip_from_py_object)]
+#[pyclass(name = "ArrowStream", skip_from_py_object)]
 pub(crate) struct PyArrowStream {
-    inner: Option<pdbiox::ArrowStream>,
+    inner: Mutex<Option<pdbiox::ArrowStream>>,
 }
 
 #[pymethods]
 impl PyArrowStream {
     #[getter]
-    fn consumed(&self) -> bool {
-        self.inner.is_none()
+    fn consumed(&self) -> PyResult<bool> {
+        Ok(self.lock()?.is_none())
     }
 
     #[pyo3(signature = (_requested_schema=None))]
     fn __arrow_c_stream__<'py>(
-        &mut self,
+        &self,
         py: Python<'py>,
         _requested_schema: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyCapsule>> {
         let stream = self
-            .inner
+            .lock()?
             .take()
             .ok_or_else(|| PyRuntimeError::new_err("Arrow stream has already been consumed"))?;
         capsule(py, Ok::<_, std::convert::Infallible>(stream))
     }
 
-    fn __repr__(&self) -> &'static str {
-        if self.inner.is_some() {
-            "ArrowStream(consumed=False)"
+    fn __repr__(&self) -> PyResult<&'static str> {
+        if self.lock()?.is_some() {
+            Ok("ArrowStream(consumed=False)")
         } else {
-            "ArrowStream(consumed=True)"
+            Ok("ArrowStream(consumed=True)")
         }
     }
 }
 
 impl PyArrowStream {
-    pub(crate) const fn from_native(inner: pdbiox::ArrowStream) -> Self {
-        Self { inner: Some(inner) }
+    pub(crate) fn from_native(inner: pdbiox::ArrowStream) -> Self {
+        Self {
+            inner: Mutex::new(Some(inner)),
+        }
+    }
+
+    fn lock(&self) -> PyResult<MutexGuard<'_, Option<pdbiox::ArrowStream>>> {
+        self.inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("Arrow stream state is poisoned"))
     }
 }
 

@@ -129,7 +129,14 @@ pub(crate) fn cad_contact_areas(
     let radius_values = radii.as_slice()?;
     let residue_values = residues.as_slice()?;
     py.detach(move || {
-        pdbiox::compare::cad_contact_areas(positions, radius_values, residue_values, probe, density)
+        pdbiox::compare::cad_contact_areas(
+            positions,
+            radius_values,
+            residue_values,
+            probe,
+            density,
+            &crate::core::execution::default_context(),
+        )
     })
     .map(|values| values.into_iter().map(Into::into).collect())
     .map_err(|error| cad_construction_error(&error))
@@ -216,6 +223,7 @@ pub(crate) fn analyse_cad_contact_areas(
                 probe,
                 density,
                 &policy,
+                &crate::core::execution::default_context(),
             )
         })
         .map_err(value_error)?;

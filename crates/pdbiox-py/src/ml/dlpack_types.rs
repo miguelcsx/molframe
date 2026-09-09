@@ -167,9 +167,9 @@ impl PyDLManagedTensor {
     }
 }
 
-#[pyclass(name = "DlpackTensor", unsendable, skip_from_py_object)]
+#[pyclass(name = "DlpackTensor", skip_from_py_object)]
 pub(crate) struct PyDlpackTensor {
-    inner: Option<pdbiox::DlpackTensor>,
+    inner: std::sync::Mutex<Option<pdbiox::DlpackTensor>>,
 }
 
 #[pymethods]
@@ -177,40 +177,52 @@ impl PyDlpackTensor {
     #[staticmethod]
     fn coordinates(structure: &PyStructure) -> PyResult<Self> {
         pdbiox::DlpackTensor::coordinates(structure.structure())
-            .map(|inner| Self { inner: Some(inner) })
+            .map(|inner| Self {
+                inner: std::sync::Mutex::new(Some(inner)),
+            })
             .map_err(|error| crate::errors::dlpack_error(&error))
     }
 
     #[getter]
-    fn cost(&self) -> PyExportCost {
-        self.inner
+    fn cost(&self) -> PyResult<PyExportCost> {
+        Ok(self
+            .lock()?
             .as_ref()
             .map_or(PyExportCost::Copy, |tensor| match tensor.cost() {
                 pdbiox::ExportCost::ZeroCopy => PyExportCost::ZeroCopy,
                 pdbiox::ExportCost::Decode => PyExportCost::Decode,
                 pdbiox::ExportCost::Copy => PyExportCost::Copy,
-            })
+            }))
     }
 
     #[getter]
-    fn managed(&self) -> Option<PyDLManagedTensor> {
-        self.inner
+    fn managed(&self) -> PyResult<Option<PyDLManagedTensor>> {
+        Ok(self
+            .lock()?
             .as_ref()
             .and_then(pdbiox::DlpackTensor::as_managed)
-            .and_then(PyDLManagedTensor::from_native)
+            .and_then(PyDLManagedTensor::from_native))
     }
 
-    fn capsule<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyCapsule>> {
+    fn capsule<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyCapsule>> {
         let tensor = self
-            .inner
+            .lock()?
             .take()
             .ok_or_else(|| PyBufferError::new_err("DLPack tensor has already been consumed"))?;
         tensor_capsule(py, tensor)
     }
 
     #[getter]
-    fn consumed(&self) -> bool {
-        self.inner.is_none()
+    fn consumed(&self) -> PyResult<bool> {
+        Ok(self.lock()?.is_none())
+    }
+}
+
+impl PyDlpackTensor {
+    fn lock(&self) -> PyResult<std::sync::MutexGuard<'_, Option<pdbiox::DlpackTensor>>> {
+        self.inner
+            .lock()
+            .map_err(|_| PyBufferError::new_err("DLPack tensor state is poisoned"))
     }
 }
 

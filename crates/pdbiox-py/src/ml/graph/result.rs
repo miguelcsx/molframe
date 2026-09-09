@@ -37,9 +37,13 @@ pub(crate) fn build_graph(
     structure: &PyStructure,
     options: &PyGraphOptions,
 ) -> PyResult<PyGraph> {
-    pdbiox::graph(structure.structure(), &options.inner)
-        .map_err(|error| crate::errors::graph_error(&error))
-        .and_then(|graph| PyGraph::new(py, graph))
+    pdbiox::graph(
+        structure.structure(),
+        &options.inner,
+        &crate::core::execution::default_context(),
+    )
+    .map_err(|error| crate::errors::graph_error(&error))
+    .and_then(|graph| PyGraph::new(py, graph))
 }
 
 #[pymethods]

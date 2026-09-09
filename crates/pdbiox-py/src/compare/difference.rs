@@ -103,12 +103,15 @@ impl PyStructure {
 #[pyfunction]
 #[pyo3(signature = (left, right, coordinate_tolerance=0.0, options=None))]
 pub(crate) fn structure_difference(
+    py: Python<'_>,
     left: &PyStructure,
     right: &PyStructure,
     coordinate_tolerance: f32,
     options: Option<&PyStructureDifferenceOptions>,
 ) -> PyResult<PyStructureDifference> {
-    structure_difference_with_options(left, right, coordinate_tolerance, options)
+    py.detach(move || -> PyResult<PyStructureDifference> {
+        structure_difference_with_options(left, right, coordinate_tolerance, options)
+    })
 }
 
 fn structure_difference_with_options(

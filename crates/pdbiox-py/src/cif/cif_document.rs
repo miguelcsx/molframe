@@ -206,7 +206,7 @@ pub(crate) struct PyCifCategory {
 impl PyCifCategory {
     #[new]
     #[pyo3(signature = (name, span=None))]
-    fn new(name: String, span: Option<(u32, u32, u32, u32)>) -> Self {
+    fn new(name: String, span: Option<(u64, u64, u64, u64)>) -> Self {
         Self {
             inner: pdbiox::Category::new(name, span.map_or_else(default_span, span_value)),
         }
@@ -233,7 +233,7 @@ impl PyCifCategory {
     }
 
     #[getter]
-    fn span(&self) -> (u32, u32, u32, u32) {
+    fn span(&self) -> (u64, u64, u64, u64) {
         span_tuple(self.inner.span())
     }
 
@@ -343,7 +343,7 @@ impl PyCifDataBlock {
         item: &str,
         value: PyCifValue,
         quoting: PyCifQuoting,
-        span: Option<(u32, u32, u32, u32)>,
+        span: Option<(u64, u64, u64, u64)>,
     ) {
         self.inner
             .category_mut(category, span.map_or_else(default_span, span_value))
@@ -406,8 +406,8 @@ pub(crate) fn read_document(py: Python<'_>, path: PathBuf) -> PyResult<PyCifDocu
 }
 
 #[pyfunction]
-pub(crate) fn write_preserving(document: &PyCifDocument) -> String {
-    pdbiox::write_preserving(&document.inner)
+pub(crate) fn write_preserving(py: Python<'_>, document: &PyCifDocument) -> String {
+    py.detach(move || -> String { pdbiox::write_preserving(&document.inner) })
 }
 
 impl From<pdbiox::CifValue> for PyCifValue {
@@ -444,11 +444,11 @@ fn default_span() -> pdbiox::ByteSpan {
     pdbiox::ByteSpan::default()
 }
 
-fn span_value(value: (u32, u32, u32, u32)) -> pdbiox::ByteSpan {
+fn span_value(value: (u64, u64, u64, u64)) -> pdbiox::ByteSpan {
     pdbiox::ByteSpan::new(pdbiox::Position::new(value.0, value.1, value.2), value.3)
 }
 
-fn span_tuple(value: pdbiox::ByteSpan) -> (u32, u32, u32, u32) {
+fn span_tuple(value: pdbiox::ByteSpan) -> (u64, u64, u64, u64) {
     (
         value.start.byte_offset,
         value.start.line,

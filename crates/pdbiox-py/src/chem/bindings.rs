@@ -46,7 +46,9 @@ pub(crate) fn read_component_dictionary(
     path: PathBuf,
     version: &str,
 ) -> PyResult<PyComponentDictionary> {
-    pdbiox::read_component_dictionary(path, pdbiox::DictionaryVersion::new(version))
+    // Reading a component dictionary is file-bound work that never touches the
+    // interpreter, so other Python threads run while it proceeds.
+    py.detach(|| pdbiox::read_component_dictionary(path, pdbiox::DictionaryVersion::new(version)))
         .map(|(provider, _)| PyComponentDictionary(Arc::new(provider)))
         .map_err(|findings| crate::errors::read_error(py, &findings))
 }

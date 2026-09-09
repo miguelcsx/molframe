@@ -110,13 +110,13 @@ pub(crate) fn write_canonical_with_options(
 }
 
 #[pyfunction]
-pub(crate) fn quote_text(text: &str) -> String {
-    pdbiox::cif::quote_text(text)
+pub(crate) fn quote_text(py: Python<'_>, text: &str) -> String {
+    py.detach(move || -> String { pdbiox::cif::quote_text(text) })
 }
 
 #[pyfunction]
-pub(crate) fn render_value(value: &PyCifValue) -> String {
-    pdbiox::cif::render_value(&value.inner)
+pub(crate) fn render_value(py: Python<'_>, value: &PyCifValue) -> String {
+    py.detach(move || -> String { pdbiox::cif::render_value(&value.inner) })
 }
 
 fn write_native(

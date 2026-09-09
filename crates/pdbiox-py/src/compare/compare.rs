@@ -1,6 +1,7 @@
 //! Vectorized structure scores delegated to `pdbiox-compare`.
 
 use crate::contract::{PyAnalysis, analysis_with_value};
+use crate::core::execution::PyExecutionContext;
 use crate::errors::ce_error;
 use crate::geometry::borrowed_coordinates;
 use crate::query::{PyAnalysisPolicy, PyNamespace};
@@ -43,6 +44,12 @@ pub(crate) struct PyLddtOptions(pdbiox::compare::LddtOptions);
 #[pymethods]
 impl PyLddtOptions {
     #[new]
+    #[pyo3(signature = (
+        inclusion_radius,
+        minimum_reference_distance,
+        tolerances,
+        empty_policy,
+    ))]
     fn new(
         inclusion_radius: f64,
         minimum_reference_distance: f64,
@@ -63,17 +70,21 @@ impl PyLddtOptions {
     }
 }
 
-#[pyfunction]
+#[pyfunction(signature = (model, reference, options, *, context=None))]
 pub(crate) fn lddt(
     py: Python<'_>,
     model: PyReadonlyArray2<'_, f32>,
     reference: PyReadonlyArray2<'_, f32>,
     options: &PyLddtOptions,
+    context: Option<&PyExecutionContext>,
 ) -> PyResult<f64> {
     let model = borrowed_coordinates(&model)?;
     let reference = borrowed_coordinates(&reference)?;
     let options = options.0.clone();
-    py.detach(|| pdbiox::compare::lddt_with_options(model, reference, &options))
+    let execution = context.map_or_else(pdbiox::core::ExecutionContext::default, |value| {
+        value.native()
+    });
+    py.detach(|| pdbiox::compare::lddt_with_options(model, reference, &options, &execution))
         .map_err(value_error)
 }
 
@@ -110,6 +121,15 @@ impl PyCeOptions {
 #[pymethods]
 impl PyCeOptions {
     #[new]
+    #[pyo3(signature = (
+        window_size,
+        max_gap,
+        max_paths,
+        fragment_similarity_threshold,
+        path_similarity_threshold,
+        significance,
+        memory_limit_bytes=100_000_000
+    ))]
     fn new(
         window_size: usize,
         max_gap: usize,
@@ -117,6 +137,7 @@ impl PyCeOptions {
         fragment_similarity_threshold: f64,
         path_similarity_threshold: f64,
         significance: Option<PyCeSignificanceProfile>,
+        memory_limit_bytes: usize,
     ) -> Self {
         Self(pdbiox::compare::CeOptions {
             window_size,
@@ -125,6 +146,7 @@ impl PyCeOptions {
             fragment_similarity_threshold,
             path_similarity_threshold,
             significance: significance.map(Into::into),
+            memory_limit_bytes,
         })
     }
 
@@ -303,20 +325,24 @@ pub(crate) fn weighted_rmsd(
         .map_err(value_error)
 }
 
-#[pyfunction]
+#[pyfunction(signature = (model, reference, options, policy, *, context=None))]
 pub(crate) fn analyse_lddt(
     py: Python<'_>,
     model: PyReadonlyArray2<'_, f32>,
     reference: PyReadonlyArray2<'_, f32>,
     options: &PyLddtOptions,
     policy: &PyAnalysisPolicy,
+    context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
     let model = borrowed_coordinates(&model)?;
     let reference = borrowed_coordinates(&reference)?;
     let options = options.0.clone();
     let policy = policy.inner.clone();
+    let execution = context.map_or_else(pdbiox::core::ExecutionContext::default, |value| {
+        value.native()
+    });
     let analysis = py
-        .detach(|| pdbiox::compare::governed_lddt(model, reference, &options, &policy))
+        .detach(|| pdbiox::compare::governed_lddt(model, reference, &options, &policy, &execution))
         .map_err(value_error)?;
     scalar_analysis(py, analysis)
 }

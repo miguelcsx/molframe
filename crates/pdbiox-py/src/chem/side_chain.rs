@@ -45,20 +45,23 @@ impl PySideChainDefinition {
 
 #[pyfunction]
 pub(crate) fn side_chain_definition(
+    py: Python<'_>,
     component: &PyComponent,
     roles: &PySideChainRoles,
 ) -> Option<PySideChainDefinition> {
-    let atoms = roles
-        .side_chain_atoms
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let roles = pdbiox::SideChainRoles {
-        nitrogen: &roles.nitrogen,
-        alpha_carbon: &roles.alpha_carbon,
-        side_chain_atoms: &atoms,
-    };
-    pdbiox::side_chain_definition(&component.0, &roles).map(PySideChainDefinition)
+    py.detach(move || -> Option<PySideChainDefinition> {
+        let atoms = roles
+            .side_chain_atoms
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        let roles = pdbiox::SideChainRoles {
+            nitrogen: &roles.nitrogen,
+            alpha_carbon: &roles.alpha_carbon,
+            side_chain_atoms: &atoms,
+        };
+        pdbiox::side_chain_definition(&component.0, &roles).map(PySideChainDefinition)
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

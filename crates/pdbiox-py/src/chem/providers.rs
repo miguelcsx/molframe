@@ -110,20 +110,27 @@ pub(crate) fn read_ccd(
 }
 
 #[pyfunction]
-pub(crate) fn element_properties(element: &PyElement) -> Option<PyElementProperties> {
-    pdbiox::element_properties(element.0).map(PyElementProperties::from)
+pub(crate) fn element_properties(
+    py: Python<'_>,
+    element: &PyElement,
+) -> Option<PyElementProperties> {
+    py.detach(move || -> Option<PyElementProperties> {
+        pdbiox::element_properties(element.0).map(PyElementProperties::from)
+    })
 }
 
 #[pyfunction]
-pub(crate) fn vdw_radius(element: &PyElement, set: PyRadiusSet) -> Option<f32> {
-    pdbiox::vdw_radius(element.0, set.into())
+pub(crate) fn vdw_radius(py: Python<'_>, element: &PyElement, set: PyRadiusSet) -> Option<f32> {
+    py.detach(move || -> Option<f32> { pdbiox::vdw_radius(element.0, set.into()) })
 }
 
 #[pyfunction]
-pub(crate) fn ionic_radii(element: &PyElement) -> PyResult<Vec<PyIonicRadius>> {
-    pdbiox::ionic_radii(element.0)
-        .map(|values| values.iter().cloned().map(PyIonicRadius::from).collect())
-        .map_err(value_error)
+pub(crate) fn ionic_radii(py: Python<'_>, element: &PyElement) -> PyResult<Vec<PyIonicRadius>> {
+    py.detach(move || -> PyResult<Vec<PyIonicRadius>> {
+        pdbiox::ionic_radii(element.0)
+            .map(|values| values.iter().cloned().map(PyIonicRadius::from).collect())
+            .map_err(value_error)
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

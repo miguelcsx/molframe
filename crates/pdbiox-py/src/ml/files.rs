@@ -57,13 +57,11 @@ pub(crate) fn write_atom_parquet_with_metadata(
 }
 
 fn metadata_map(metadata: Option<&Bound<'_, PyDict>>) -> PyResult<BTreeMap<String, String>> {
+    let Some(metadata) = metadata else {
+        return Ok(BTreeMap::new());
+    };
     metadata
-        .map(|metadata| {
-            metadata
-                .iter()
-                .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<String>()?)))
-                .collect()
-        })
-        .transpose()
-        .map(Option::unwrap_or_default)
+        .iter()
+        .map(|(key, value)| Ok((key.extract::<String>()?, value.extract::<String>()?)))
+        .collect()
 }
