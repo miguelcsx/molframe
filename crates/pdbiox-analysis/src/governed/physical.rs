@@ -10,7 +10,7 @@ use crate::{
     radial_distribution,
 };
 use pdbiox_core::contract::{AnalysisPolicy, ParameterValue, PeriodicPolicy};
-use pdbiox_core::{AtomSelection, Structure};
+use pdbiox_core::{AtomSelection, ExecutionContext, Structure};
 use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialError};
 
 /// Policy projection or scientific-kernel failure.
@@ -87,7 +87,10 @@ pub fn linear_density_kernel(
             .with_parameter("minimum", float(options.minimum))
             .with_parameter("maximum", float(options.maximum))
             .with_parameter("bins", integer(options.bins)),
-        move |structure: &Structure, _policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              _policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              _context: &ExecutionContext| {
             let weights =
                 aligned(weights, source_atoms).ok_or(PhysicalKernelError::SideInputLength)?;
             linear_density(structure.positions(), &weights, options)
@@ -117,7 +120,10 @@ pub fn density_map_kernel(
                 "shape",
                 ParameterValue::Text(format!("{:?}", spec.shape).into()),
             ),
-        move |structure: &Structure, _policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              _policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              _context: &ExecutionContext| {
             let weights =
                 aligned(weights, source_atoms).ok_or(PhysicalKernelError::SideInputLength)?;
             density_map(structure.positions(), &weights, spec)
@@ -137,12 +143,21 @@ pub fn leaflets_kernel(
         descriptor("membrane-leaflets")
             .with_parameter("connection_distance", float(options.connection_distance))
             .with_parameter("spatial_backend", backend(options.backend)),
-        move |structure: &Structure, policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              context: &ExecutionContext| {
             let sites = selection(sites, source_atoms);
             let periodic = periodic(structure, policy)?;
-            identify_leaflets(structure.positions(), &sites, options, periodic.as_ref())
-                .map(|value| complete(structure, value))
-                .map_err(PhysicalKernelError::Kernel)
+            identify_leaflets(
+                structure.positions(),
+                &sites,
+                options,
+                periodic.as_ref(),
+                context,
+            )
+            .map(|value| complete(structure, value))
+            .map_err(PhysicalKernelError::Kernel)
         },
     )
 }
@@ -158,8 +173,12 @@ pub fn pore_profile_kernel(
             .with_parameter("samples", integer(options.samples))
             .with_parameter("search_radius", float(options.search_radius))
             .with_parameter("grid_spacing", float(options.grid_spacing))
-            .with_parameter("probe_radius", float(options.probe_radius)),
-        move |structure: &Structure, _policy: &AnalysisPolicy, source_atoms: &[usize]| {
+            .with_parameter("probe_radius", float(options.probe_radius))
+            .with_parameter("memory_limit_bytes", integer(options.memory_limit_bytes)),
+        move |structure: &Structure,
+              _policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              _context: &ExecutionContext| {
             let radii = aligned(radii, source_atoms).ok_or(PhysicalKernelError::SideInputLength)?;
             pore_profile(structure.positions(), &radii, options)
                 .map(|value| complete(structure, value))
@@ -182,7 +201,10 @@ pub fn radial_distribution_kernel<'a>(
             .with_parameter("bins", integer(options.bins))
             .with_parameter("volume", float(options.volume))
             .with_parameter("spatial_backend", backend(options.backend)),
-        move |structure: &Structure, policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              context: &ExecutionContext| {
             let left = selection(left, source_atoms);
             let right = selection(right, source_atoms);
             let periodic = periodic(structure, policy)?;
@@ -192,6 +214,7 @@ pub fn radial_distribution_kernel<'a>(
                 &right,
                 options,
                 periodic.as_ref(),
+                context,
             )
             .map(|value| complete(structure, value))
             .map_err(PhysicalKernelError::Kernel)
@@ -218,7 +241,10 @@ pub fn centre_of_mass_radial_distribution_kernel<'a>(
                 "group_imaging",
                 ParameterValue::Text("coordinates-already-whole".into()),
             ),
-        move |structure: &Structure, policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              context: &ExecutionContext| {
             let masses =
                 aligned(masses, source_atoms).ok_or(PhysicalKernelError::SideInputLength)?;
             let left = left
@@ -241,6 +267,7 @@ pub fn centre_of_mass_radial_distribution_kernel<'a>(
                 &right,
                 options,
                 periodic.as_ref(),
+                context,
             )
             .map(|value| complete(structure, value))
             .map_err(PhysicalKernelError::Kernel)
@@ -262,7 +289,10 @@ pub fn coordination_numbers_kernel<'a>(
             .with_parameter("minimum_distance", float(minimum_distance))
             .with_parameter("maximum_distance", float(maximum_distance))
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |structure: &Structure,
+              policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              context: &ExecutionContext| {
             let left = selection(left, source_atoms);
             let right = selection(right, source_atoms);
             let periodic = periodic(structure, policy)?;
@@ -270,10 +300,13 @@ pub fn coordination_numbers_kernel<'a>(
                 structure.positions(),
                 &left,
                 &right,
-                minimum_distance,
-                maximum_distance,
-                spatial,
+                crate::CoordinationOptions {
+                    minimum_distance,
+                    maximum_distance,
+                    backend: spatial,
+                },
                 periodic.as_ref(),
+                context,
             )
             .map(|value| complete(structure, value))
             .map_err(PhysicalKernelError::Kernel)

@@ -1,6 +1,7 @@
 use super::{analyse_structure, analyse_trajectory};
 use crate::numeric::usize_to_f32;
 use crate::policy_execution::{AnalysisDescriptor, FrameKernelResult, structure_kernel};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{
     AnalysisPolicy, AssemblyChoice, Coverage, MissingPolicy, ParameterValue, Status,
 };
@@ -29,7 +30,7 @@ fn x_sum_kernel() -> impl crate::policy_execution::StructureKernel<Output = f64,
     structure_kernel(
         AnalysisDescriptor::new("coordinate-x-sum", "1")
             .with_parameter("axis", ParameterValue::Text("x".into())),
-        |structure: &Structure, _policy: &AnalysisPolicy| {
+        |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             let sum = structure
                 .positions()
                 .iter()
@@ -46,7 +47,12 @@ fn unmaterialized_assembly_policy_is_rejected() {
         assembly: AssemblyChoice::Biological("1".into()),
         ..AnalysisPolicy::default()
     };
-    let result = analyse_structure(&structure(), &policy, &x_sum_kernel());
+    let result = analyse_structure(
+        &structure(),
+        &policy,
+        &x_sum_kernel(),
+        &ExecutionContext::default(),
+    );
     assert!(matches!(
         result,
         Err(super::GovernedAnalysisError::UnsupportedPolicyValue(
@@ -60,13 +66,21 @@ fn a_structure_is_the_one_frame_case_of_the_same_adapter() {
     let structure = structure();
     let policy = AnalysisPolicy::default();
     let kernel = x_sum_kernel();
-    let Ok(single) = analyse_structure(&structure, &policy, &kernel) else {
+    let Ok(single) = analyse_structure(&structure, &policy, &kernel, &ExecutionContext::default())
+    else {
         panic!("single-frame execution should succeed");
     };
     let trajectory = Trajectory::from_frames(vec![Frame {
         positions: structure.positions().to_vec(),
-    }]);
-    let Ok(series) = analyse_trajectory(&structure, &trajectory, &policy, &kernel, 1) else {
+    }])
+    .expect("fixed-width trajectory");
+    let Ok(series) = analyse_trajectory(
+        &structure,
+        &trajectory,
+        &policy,
+        &kernel,
+        &ExecutionContext::default(),
+    ) else {
         panic!("trajectory execution should succeed");
     };
     assert_eq!(single.value.to_bits(), series.value[0].to_bits());
@@ -86,13 +100,19 @@ fn serial_and_parallel_series_are_bit_identical_with_the_same_provenance() {
                 positions: vec![[usize_to_f32(index), 0.0, 0.0], [0.25, 0.0, 0.0]],
             })
             .collect(),
-    );
+    )
+    .expect("fixed-width trajectory");
     let policy = AnalysisPolicy::default();
     let kernel = x_sum_kernel();
     let outputs: Vec<_> = [1, 2, 4, 16]
         .into_iter()
         .map(|workers| {
-            let Ok(result) = analyse_trajectory(&structure, &trajectory, &policy, &kernel, workers)
+            let context = ExecutionContext::builder()
+                .worker_budget(workers)
+                .build()
+                .expect("worker context is valid");
+            let Ok(result) =
+                analyse_trajectory(&structure, &trajectory, &policy, &kernel, &context)
             else {
                 panic!("valid deterministic execution");
             };
@@ -115,7 +135,8 @@ fn provenance_contains_the_kernel_identity_parameters_and_frame_count() {
     let structure = structure();
     let policy = AnalysisPolicy::default();
     let kernel = x_sum_kernel();
-    let Ok(result) = analyse_structure(&structure, &policy, &kernel) else {
+    let Ok(result) = analyse_structure(&structure, &policy, &kernel, &ExecutionContext::default())
+    else {
         panic!("analysis should succeed");
     };
     let Some(algorithm) = &result.provenance.algorithm else {
@@ -139,7 +160,7 @@ fn missing_data_policy_is_enforced_without_discarding_coverage() {
     let structure = structure();
     let kernel = structure_kernel(
         AnalysisDescriptor::new("incomplete", "1"),
-        |_structure: &Structure, _policy: &AnalysisPolicy| {
+        |_structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok::<_, Infallible>(FrameKernelResult::governed(
                 3_u8,
                 Status::Complete,
@@ -153,14 +174,15 @@ fn missing_data_policy_is_enforced_without_discarding_coverage() {
         },
     );
     let report = AnalysisPolicy::default().with_missing_atoms(MissingPolicy::Report);
-    let Ok(result) = analyse_structure(&structure, &report, &kernel) else {
+    let Ok(result) = analyse_structure(&structure, &report, &kernel, &ExecutionContext::default())
+    else {
         panic!("report policy computes a partial value");
     };
     assert_eq!(result.status, Status::Partial);
     assert_eq!(result.coverage.missing, 1);
 
     let fail = AnalysisPolicy::default().with_missing_atoms(MissingPolicy::Fail);
-    assert!(analyse_structure(&structure, &fail, &kernel).is_err());
+    assert!(analyse_structure(&structure, &fail, &kernel, &ExecutionContext::default()).is_err());
 }
 
 #[test]
@@ -168,7 +190,7 @@ fn inconsistent_kernel_coverage_is_rejected_before_publication() {
     let structure = structure();
     let kernel = structure_kernel(
         AnalysisDescriptor::new("invalid-coverage", "1"),
-        |_structure: &Structure, _policy: &AnalysisPolicy| {
+        |_structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok::<_, Infallible>(FrameKernelResult::governed(
                 0_u8,
                 Status::Complete,
@@ -181,5 +203,13 @@ fn inconsistent_kernel_coverage_is_rejected_before_publication() {
             ))
         },
     );
-    assert!(analyse_structure(&structure, &AnalysisPolicy::default(), &kernel).is_err());
+    assert!(
+        analyse_structure(
+            &structure,
+            &AnalysisPolicy::default(),
+            &kernel,
+            &ExecutionContext::default(),
+        )
+        .is_err()
+    );
 }

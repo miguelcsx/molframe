@@ -5,11 +5,12 @@ use super::{StructureKernel, structure_kernel};
 use crate::{
     BasePair, BasePairError, BasePairOptions, CationPi, CationPiError, CationPiOptions, Contact,
     ContactMap, HydrogenBond, HydrogenBondError, HydrogenBondOptions, PiStacking, PiStackingError,
-    PiStackingOptions, SaltBridge, WaterBridge, WaterBridgeOptions, atom_contacts, base_pairs,
-    cation_pi, hydrogen_bonds, pi_stacking, residue_contact_map, salt_bridges, surface_contacts,
-    water_bridges,
+    PiStackingOptions, SaltBridge, SurfaceContactOptions, WaterBridge, WaterBridgeOptions,
+    atom_contacts, base_pairs, cation_pi, hydrogen_bonds, pi_stacking, residue_contact_map,
+    salt_bridges, surface_contacts, water_bridges,
 };
 use pdbiox_chem::ComponentProvider;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{AnalysisPolicy, ParameterValue};
 use pdbiox_core::structure::Structure;
 use pdbiox_spatial::{SpatialBackend, SpatialError};
@@ -54,8 +55,9 @@ pub fn contacts_kernel(
         descriptor("atom-contacts")
             .with_parameter("cutoff", float(cutoff))
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            atom_contacts(structure, cutoff, spatial).map(|value| complete(structure, value))
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            atom_contacts(structure, cutoff, spatial, context)
+                .map(|value| complete(structure, value))
         },
     )
 }
@@ -75,8 +77,8 @@ pub fn contact_map_kernel(
                 ParameterValue::Integer(i64::from(minimum_separation)),
             )
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            residue_contact_map(structure, cutoff, minimum_separation, spatial)
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            residue_contact_map(structure, cutoff, minimum_separation, spatial, context)
                 .map(|value| complete(structure, value))
         },
     )
@@ -89,8 +91,8 @@ pub fn hydrogen_bonds_kernel(
 ) -> impl StructureKernel<Output = Vec<HydrogenBond>, Error = HydrogenBondError> {
     structure_kernel(
         with_hydrogen_bond_parameters(descriptor("hydrogen-bonds"), options),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            hydrogen_bonds(structure, options).map(|value| complete(structure, value))
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            hydrogen_bonds(structure, options, context).map(|value| complete(structure, value))
         },
     )
 }
@@ -105,8 +107,8 @@ pub fn salt_bridges_kernel(
         descriptor("salt-bridges")
             .with_parameter("maximum_distance", float(maximum_distance))
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            salt_bridges(structure, maximum_distance, spatial)
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            salt_bridges(structure, maximum_distance, spatial, context)
                 .map(|value| complete(structure, value))
         },
     )
@@ -134,7 +136,7 @@ pub fn pi_stacking_kernel(
                 ),
             options.plane_fit,
         ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             pi_stacking(structure, options).map(|value| complete(structure, value))
         },
     )
@@ -152,7 +154,7 @@ pub fn cation_pi_kernel(
                 .with_parameter("maximum_face_angle", float(options.maximum_face_angle)),
             options.plane_fit,
         ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             cation_pi(structure, options).map(|value| complete(structure, value))
         },
     )
@@ -165,8 +167,8 @@ pub fn water_bridges_kernel(
 ) -> impl StructureKernel<Output = Vec<WaterBridge>, Error = HydrogenBondError> {
     structure_kernel(
         with_hydrogen_bond_parameters(descriptor("water-bridges"), options.hydrogen_bonds),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            water_bridges(structure, options).map(|value| complete(structure, value))
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            water_bridges(structure, options, context).map(|value| complete(structure, value))
         },
     )
 }
@@ -185,8 +187,9 @@ pub fn base_pairs_kernel(
             ),
             options.hydrogen_bonds,
         ),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            base_pairs(structure, provider, options).map(|value| complete(structure, value))
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            base_pairs(structure, provider, options, context)
+                .map(|value| complete(structure, value))
         },
     )
 }
@@ -195,30 +198,18 @@ pub fn base_pairs_kernel(
 #[must_use]
 pub fn surface_contacts_kernel(
     radii: &[f32],
-    tolerance: f32,
-    probe: f32,
-    density: f32,
-    minimum_area: f32,
-    spatial: SpatialBackend,
+    options: SurfaceContactOptions,
 ) -> impl StructureKernel<Output = Vec<Contact>, Error = SasaError> + '_ {
     structure_kernel(
         descriptor("surface-contacts")
-            .with_parameter("tolerance", float(tolerance))
-            .with_parameter("probe", float(probe))
-            .with_parameter("surface_density", float(density))
-            .with_parameter("minimum_area", float(minimum_area))
-            .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            surface_contacts(
-                structure,
-                radii,
-                tolerance,
-                probe,
-                density,
-                minimum_area,
-                spatial,
-            )
-            .map(|value| complete(structure, value))
+            .with_parameter("tolerance", float(options.tolerance))
+            .with_parameter("probe", float(options.probe))
+            .with_parameter("surface_density", float(options.surface_density))
+            .with_parameter("minimum_area", float(options.minimum_area))
+            .with_parameter("spatial_backend", backend(options.backend)),
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            surface_contacts(structure, radii, options, context)
+                .map(|value| complete(structure, value))
         },
     )
 }

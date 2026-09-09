@@ -3,6 +3,7 @@ use super::{
     contacts_kernel, linear_density_kernel, native_contact_fraction_kernel,
 };
 use crate::{CartesianAxis, LinearDensityOptions};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{AnalysisPolicy, PeriodicPolicy};
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_spatial::SpatialBackend;
@@ -21,7 +22,12 @@ fn concrete_contact_adapter_records_identity_and_parameters() {
         panic!("valid structure fixture");
     };
     let kernel = contacts_kernel(1.5, SpatialBackend::BruteForce);
-    let Ok(result) = analyse_structure(&structure, &AnalysisPolicy::default(), &kernel) else {
+    let Ok(result) = analyse_structure(
+        &structure,
+        &AnalysisPolicy::default(),
+        &kernel,
+        &ExecutionContext::default(),
+    ) else {
         panic!("contact analysis should succeed");
     };
     assert_eq!(result.value.len(), 1);
@@ -58,7 +64,12 @@ fn atom_aligned_side_inputs_are_never_padded() {
             bins: 2,
         },
     );
-    let error = analyse_structure(&structure, &AnalysisPolicy::default(), &kernel);
+    let error = analyse_structure(
+        &structure,
+        &AnalysisPolicy::default(),
+        &kernel,
+        &ExecutionContext::default(),
+    );
     assert!(matches!(
         error,
         Err(GovernedAnalysisError::Kernel(
@@ -75,7 +86,7 @@ fn native_q_rejects_unimplemented_periodic_semantics() {
         periodic: PeriodicPolicy::MinimumImage,
         ..AnalysisPolicy::default()
     };
-    let error = analyse_structure(&structure, &policy, &kernel);
+    let error = analyse_structure(&structure, &policy, &kernel, &ExecutionContext::default());
     assert!(matches!(
         error,
         Err(GovernedAnalysisError::Kernel(

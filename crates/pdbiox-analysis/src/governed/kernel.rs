@@ -1,6 +1,7 @@
 //! Typed kernel outputs and a closure adapter.
 
 use super::AnalysisDescriptor;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{AnalysisPolicy, Assumption, Coverage, Status};
 use pdbiox_core::diagnostic::Diagnostic;
 use pdbiox_core::structure::Structure;
@@ -81,6 +82,7 @@ pub trait StructureKernel: Sync {
         &self,
         structure: &Structure,
         policy: &AnalysisPolicy,
+        context: &ExecutionContext,
     ) -> Result<FrameKernelResult<Self::Output>, Self::Error>;
 
     /// Executes on a policy-materialized frame with its target-to-source atom map.
@@ -96,8 +98,9 @@ pub trait StructureKernel: Sync {
         structure: &Structure,
         policy: &AnalysisPolicy,
         _source_atoms: &[usize],
+        context: &ExecutionContext,
     ) -> Result<FrameKernelResult<Self::Output>, Self::Error> {
-        self.analyse(structure, policy)
+        self.analyse(structure, policy, context)
     }
 }
 
@@ -116,7 +119,13 @@ pub fn mapped_structure_kernel<F, T, E>(
     run: F,
 ) -> MappedClosureStructureKernel<F, T, E>
 where
-    F: Fn(&Structure, &AnalysisPolicy, &[usize]) -> Result<FrameKernelResult<T>, E> + Sync,
+    F: Fn(
+            &Structure,
+            &AnalysisPolicy,
+            &[usize],
+            &ExecutionContext,
+        ) -> Result<FrameKernelResult<T>, E>
+        + Sync,
     T: Send,
     E: Send,
 {
@@ -142,7 +151,7 @@ pub fn structure_kernel<F, T, E>(
     run: F,
 ) -> ClosureStructureKernel<F, T, E>
 where
-    F: Fn(&Structure, &AnalysisPolicy) -> Result<FrameKernelResult<T>, E> + Sync,
+    F: Fn(&Structure, &AnalysisPolicy, &ExecutionContext) -> Result<FrameKernelResult<T>, E> + Sync,
     T: Send,
     E: Send,
 {
@@ -155,7 +164,7 @@ where
 
 impl<F, T, E> StructureKernel for ClosureStructureKernel<F, T, E>
 where
-    F: Fn(&Structure, &AnalysisPolicy) -> Result<FrameKernelResult<T>, E> + Sync,
+    F: Fn(&Structure, &AnalysisPolicy, &ExecutionContext) -> Result<FrameKernelResult<T>, E> + Sync,
     T: Send,
     E: Send,
 {
@@ -170,14 +179,21 @@ where
         &self,
         structure: &Structure,
         policy: &AnalysisPolicy,
+        context: &ExecutionContext,
     ) -> Result<FrameKernelResult<T>, E> {
-        (self.run)(structure, policy)
+        (self.run)(structure, policy, context)
     }
 }
 
 impl<F, T, E> StructureKernel for MappedClosureStructureKernel<F, T, E>
 where
-    F: Fn(&Structure, &AnalysisPolicy, &[usize]) -> Result<FrameKernelResult<T>, E> + Sync,
+    F: Fn(
+            &Structure,
+            &AnalysisPolicy,
+            &[usize],
+            &ExecutionContext,
+        ) -> Result<FrameKernelResult<T>, E>
+        + Sync,
     T: Send,
     E: Send,
 {
@@ -192,9 +208,10 @@ where
         &self,
         structure: &Structure,
         policy: &AnalysisPolicy,
+        context: &ExecutionContext,
     ) -> Result<FrameKernelResult<T>, E> {
         let identity: Vec<usize> = (0..structure.atom_count() as usize).collect();
-        (self.run)(structure, policy, &identity)
+        (self.run)(structure, policy, &identity, context)
     }
 
     fn analyse_mapped(
@@ -202,7 +219,8 @@ where
         structure: &Structure,
         policy: &AnalysisPolicy,
         source_atoms: &[usize],
+        context: &ExecutionContext,
     ) -> Result<FrameKernelResult<T>, E> {
-        (self.run)(structure, policy, source_atoms)
+        (self.run)(structure, policy, source_atoms, context)
     }
 }

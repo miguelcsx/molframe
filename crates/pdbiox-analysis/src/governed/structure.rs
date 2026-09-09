@@ -7,6 +7,7 @@ use crate::{
     HseError, NucleicTorsionError, NucleicTorsions, SseRecord, chain_interface,
     gaussian_network_model, half_sphere_exposure, nucleic_torsions, secondary_structure,
 };
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{AnalysisPolicy, ParameterValue};
 use pdbiox_core::index::ResidueIndex;
 use pdbiox_core::selection::AtomSelection;
@@ -27,9 +28,16 @@ pub fn chain_interface_kernel<'a>(
             .with_parameter("second_chain", ParameterValue::Text(second_chain.into()))
             .with_parameter("cutoff", float(cutoff))
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            chain_interface(structure, first_chain, second_chain, cutoff, spatial)
-                .map(|value| complete(structure, value))
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            chain_interface(
+                structure,
+                first_chain,
+                second_chain,
+                cutoff,
+                spatial,
+                context,
+            )
+            .map(|value| complete(structure, value))
         },
     )
 }
@@ -57,7 +65,7 @@ pub fn secondary_structure_kernel(
             .with_parameter("helix_offset", integer(options.helix_offset))
             .with_parameter("turn_offset_start", integer(*options.turn_offsets.start()))
             .with_parameter("turn_offset_end", integer(*options.turn_offsets.end())),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             secondary_structure(structure, options).map(|value| complete(structure, value))
         },
     )
@@ -73,8 +81,9 @@ pub fn half_sphere_exposure_kernel(
         descriptor("half-sphere-exposure")
             .with_parameter("radius", float(radius))
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            half_sphere_exposure(structure, radius, spatial).map(|value| complete(structure, value))
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            half_sphere_exposure(structure, radius, spatial, context)
+                .map(|value| complete(structure, value))
         },
     )
 }
@@ -85,7 +94,7 @@ pub fn nucleic_torsions_kernel()
 -> impl StructureKernel<Output = Vec<NucleicTorsions>, Error = NucleicTorsionError> {
     structure_kernel(
         descriptor("nucleic-acid-torsions"),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
+        move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             nucleic_torsions(structure).map(|value| complete(structure, value))
         },
     )
@@ -110,8 +119,8 @@ pub fn gnm_kernel<'a>(
             .with_parameter("memory_limit_bytes", integer(options.memory_limit_bytes))
             .with_parameter("spatial_backend", backend(options.backend))
             .with_parameter("periodic", ParameterValue::Boolean(periodic.is_some())),
-        move |structure: &Structure, _policy: &AnalysisPolicy| {
-            gaussian_network_model(structure.positions(), sites, options, periodic)
+        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
+            gaussian_network_model(structure.positions(), sites, options, periodic, context)
                 .map(|value| complete(structure, value))
         },
     )

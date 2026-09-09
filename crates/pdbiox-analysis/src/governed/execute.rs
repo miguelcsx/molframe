@@ -7,6 +7,7 @@ use pdbiox_core::contract::{
 };
 use pdbiox_core::index::ModelIndex;
 use pdbiox_core::structure::Structure;
+use pdbiox_core::{ExecutionContext, MemoryBudgetError};
 use pdbiox_traj::{Frame, FrameAnalysis, Timestep, Trajectory, TrajectoryError, run_analysis};
 
 /// An existing structure kernel bound to topology, policy and altloc selection.
@@ -83,6 +84,7 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
         &self,
         timestep: &Timestep,
         partial: &mut Self::Partial,
+        context: &ExecutionContext,
     ) -> Result<(), Self::Error> {
         if timestep.positions.len() != self.source_atom_count {
             return Err(TrajectoryError::AtomCountMismatch {
@@ -91,7 +93,10 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
             }
             .into());
         }
-        let mut editor = self.template.edit_coordinates();
+        let mut editor = self
+            .template
+            .edit_coordinates(context)
+            .map_err(|error| GovernedAnalysisError::Trajectory(memory_limit(error, context)))?;
         let Some(positions) = editor.positions_mut(ModelIndex::new(0)) else {
             return Err(TrajectoryError::AtomCountMismatch {
                 expected: self.selected_atoms.len(),
@@ -114,7 +119,7 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
             .map_err(GovernedAnalysisError::InvalidStructure)?;
         let mut result = self
             .kernel
-            .analyse_mapped(&frame, &self.policy, &self.selected_atoms)
+            .analyse_mapped(&frame, &self.policy, &self.selected_atoms, context)
             .map_err(GovernedAnalysisError::Kernel)?;
         enforce_missing_policy(&mut result, self.policy.missing_atoms)?;
         partial.push((timestep.frame, result));
@@ -132,6 +137,17 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
     }
 }
 
+fn memory_limit(error: MemoryBudgetError, context: &ExecutionContext) -> TrajectoryError {
+    let required = match error {
+        MemoryBudgetError::Zero => 1,
+        MemoryBudgetError::Exhausted { requested, .. } => requested,
+    };
+    TrajectoryError::MemoryLimit {
+        required,
+        limit: context.memory_budget().bytes(),
+    }
+}
+
 /// Runs one selected model through the same adapter used for trajectories.
 ///
 /// # Errors
@@ -143,6 +159,7 @@ pub fn analyse_structure<K: StructureKernel>(
     structure: &Structure,
     policy: &AnalysisPolicy,
     kernel: &K,
+    context: &ExecutionContext,
 ) -> Result<Analysis<K::Output>, GovernedAnalysisError<K::Error>> {
     let positions = match policy.model {
         ModelChoice::First => structure.model_positions(ModelIndex::new(0)),
@@ -161,8 +178,9 @@ pub fn analyse_structure<K: StructureKernel>(
     };
     let trajectory = Trajectory::from_frames(vec![Frame {
         positions: positions.to_vec(),
-    }]);
-    let result = analyse_trajectory(structure, &trajectory, policy, kernel, 1)?;
+    }])
+    .map_err(TrajectoryError::from)?;
+    let result = analyse_trajectory(structure, &trajectory, policy, kernel, context)?;
     let mut values = result.value;
     if values.len() != 1 {
         return Err(GovernedAnalysisError::MissingFrameOutput);
@@ -189,10 +207,10 @@ pub fn analyse_trajectory<K: StructureKernel>(
     trajectory: &Trajectory,
     policy: &AnalysisPolicy,
     kernel: &K,
-    workers: usize,
+    context: &ExecutionContext,
 ) -> Result<Analysis<Vec<K::Output>>, GovernedAnalysisError<K::Error>> {
     let analysis = GovernedStructureAnalysis::new(topology, policy, kernel)?;
-    run_analysis(trajectory, &analysis, workers)
+    run_analysis(trajectory, &analysis, context)
 }
 
 fn enforce_missing_policy<T, E>(

@@ -5,12 +5,15 @@ use super::{StructureKernel, mapped_structure_kernel};
 use crate::{NativeContacts, NativeError, native_contact_fraction};
 use pdbiox_core::contract::{AnalysisPolicy, ModelChoice, PeriodicPolicy};
 use pdbiox_core::index::ModelIndex;
-use pdbiox_core::{AtomSelection, Diagnostic, Structure};
+use pdbiox_core::{AtomSelection, Diagnostic, ExecutionContext, Structure};
 use pdbiox_spatial::SpatialBackend;
 
 /// Setup or scientific failure for a governed native-contact comparison.
 #[derive(Debug, thiserror::Error)]
 pub enum GovernedNativeError {
+    /// Coordinate copy-on-write could not fit the shared execution account.
+    #[error("target coordinate copy exceeds the execution memory budget: {0}")]
+    Memory(#[from] pdbiox_core::MemoryBudgetError),
     /// The native-contact kernel refused the prepared structures.
     #[error(transparent)]
     Native(#[from] NativeError),
@@ -57,6 +60,7 @@ fn prepare_target(
     target: &Structure,
     source_atoms: &[usize],
     policy: &AnalysisPolicy,
+    context: &ExecutionContext,
 ) -> Result<Structure, GovernedNativeError> {
     let model = target_model(policy)?;
     let positions = target
@@ -83,7 +87,7 @@ fn prepare_target(
     let selected = target
         .materialize(&AtomSelection::from_sorted(selection))
         .map_err(GovernedNativeError::InvalidTarget)?;
-    let mut editor = selected.edit_coordinates();
+    let mut editor = selected.edit_coordinates(context)?;
     let output = editor
         .positions_mut(ModelIndex::new(0))
         .ok_or(GovernedNativeError::MissingTargetModel(0))?;
@@ -108,12 +112,16 @@ pub fn native_contact_fraction_kernel(
             .with_parameter("cutoff", float(cutoff))
             .with_parameter("tolerance", float(tolerance))
             .with_parameter("spatial_backend", backend(spatial)),
-        move |reference: &Structure, policy: &AnalysisPolicy, source_atoms: &[usize]| {
+        move |reference: &Structure,
+              policy: &AnalysisPolicy,
+              source_atoms: &[usize],
+              context: &ExecutionContext| {
             if !matches!(policy.periodic, PeriodicPolicy::None) {
                 return Err(GovernedNativeError::PeriodicUnsupported);
             }
-            let target = prepare_target(target, source_atoms, policy)?;
-            let value = native_contact_fraction(reference, &target, cutoff, tolerance, spatial)?;
+            let target = prepare_target(target, source_atoms, policy, context)?;
+            let value =
+                native_contact_fraction(reference, &target, cutoff, tolerance, spatial, context)?;
             Ok(complete(reference, value))
         },
     )
