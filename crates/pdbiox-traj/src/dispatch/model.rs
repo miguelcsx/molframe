@@ -90,6 +90,29 @@ impl TrajectoryFormat {
     }
 }
 
+/// Resource ceiling and format selection for pull-based trajectory readers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TrajectoryReaderOptions {
+    /// Override suffix-based format inference.
+    pub format: Option<TrajectoryFormat>,
+    /// Maximum bytes used by reader workspaces, indexes and one output frame.
+    pub memory_limit_bytes: usize,
+}
+
+impl TrajectoryReaderOptions {
+    /// Conservative default suitable for long-running analysis processes.
+    pub const DEFAULT_MEMORY_LIMIT_BYTES: usize = 100_000_000;
+}
+
+impl Default for TrajectoryReaderOptions {
+    fn default() -> Self {
+        Self {
+            format: None,
+            memory_limit_bytes: Self::DEFAULT_MEMORY_LIMIT_BYTES,
+        }
+    }
+}
+
 /// Source-specific metadata required for faithful inspection and rewriting.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]

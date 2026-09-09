@@ -39,8 +39,8 @@ fn xtc_path_round_trip_preserves_steps() {
         },
     )
     .expect("write trajectory");
-    let decoded =
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read trajectory");
+    let decoded = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("read trajectory");
     assert_eq!(decoded.metadata.steps, Some(vec![10, 20]));
 }
 
@@ -55,8 +55,8 @@ fn xtc_rewrite_preserves_per_frame_precision() {
         },
     );
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write trajectory");
-    let decoded =
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read trajectory");
+    let decoded = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("read trajectory");
     assert_eq!(
         decoded.metadata.format,
         FormatMetadata::Xtc {
@@ -76,8 +76,8 @@ fn trr_rewrite_preserves_steps_and_per_frame_precision() {
         },
     );
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write trajectory");
-    let decoded =
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read trajectory");
+    let decoded = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("read trajectory");
     assert_eq!(decoded.metadata.steps, Some(vec![10, 20]));
     assert_eq!(decoded.metadata.format, data.metadata.format);
 }
@@ -187,7 +187,7 @@ fn frame_selection_keeps_text_format_records_aligned() {
 #[test]
 fn gsd_refuses_implicit_units() {
     let path = Path::new("trajectory.gsd");
-    let error = read_trajectory(path, &TrajectoryReadOptions::default())
+    let error = read_trajectory_materialized(path, &TrajectoryReadOptions::default())
         .expect_err("GSD units must be explicit");
     assert!(matches!(error, TrajectoryIoError::MissingUnitOptions));
 }
@@ -208,7 +208,8 @@ fn namd_path_roundtrip_preserves_endian_and_requires_one_frame() {
         },
     };
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write NAMD");
-    let decoded = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read NAMD");
+    let decoded =
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default()).expect("read NAMD");
     assert_eq!(decoded.frames, data.frames);
     assert_eq!(decoded.metadata.format, data.metadata.format);
 }
@@ -219,9 +220,11 @@ fn gro_dispatch_preserves_topology_velocities_and_box() {
     let path = directory.path().join("frame.gro");
     let source = "title\n1\n    1WAT     OW    1   1.000   2.000   3.000  0.1000  0.2000  0.3000\n   5.00000   6.00000   7.00000\n";
     std::fs::write(&path, source).expect("fixture write");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read GRO");
+    let data =
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default()).expect("read GRO");
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write GRO");
-    let decoded = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("re-read GRO");
+    let decoded = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("re-read GRO");
     assert_eq!(decoded, data);
 }
 
@@ -230,9 +233,11 @@ fn xyz_dispatch_preserves_elements_and_comments() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let path = directory.path().join("frames.xyz");
     std::fs::write(&path, "2\ncomment\nC 0 1 2\nO 3 4 5\n").expect("fixture write");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read XYZ");
+    let data =
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default()).expect("read XYZ");
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write XYZ");
-    let decoded = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("re-read XYZ");
+    let decoded = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("re-read XYZ");
     assert_eq!(decoded, data);
 }
 
@@ -241,10 +246,12 @@ fn txyz_dispatch_preserves_types_and_connectivity() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let path = directory.path().join("molecule.txyz");
     std::fs::write(&path, "2 water\n1 O 0 0 0 10 2\n2 H 1 0 0 11 1\n").expect("fixture write");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read TXYZ");
+    let data =
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default()).expect("read TXYZ");
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write TXYZ");
     assert_eq!(
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("re-read TXYZ"),
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+            .expect("re-read TXYZ"),
         data
     );
 }
@@ -256,10 +263,12 @@ fn aims_dispatch_preserves_species_and_lattice() {
     let source =
         "lattice_vector 10 0 0\nlattice_vector 0 10 0\nlattice_vector 0 0 10\natom 1 2 3 C\n";
     std::fs::write(&path, source).expect("fixture write");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read aims");
+    let data =
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default()).expect("read aims");
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write aims");
     assert_eq!(
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("re-read aims"),
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+            .expect("re-read aims"),
         data
     );
 }
@@ -269,10 +278,12 @@ fn dlpoly_config_dispatch_preserves_identity_and_controls() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let path = directory.path().join("state.config");
     std::fs::write(&path, "title\n0 0 1\nC 7\n1.0 2.0 3.0\n").expect("fixture write");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read CONFIG");
+    let data = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("read CONFIG");
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write CONFIG");
     assert_eq!(
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("re-read CONFIG"),
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+            .expect("re-read CONFIG"),
         data
     );
 }
@@ -287,10 +298,12 @@ C 7 12.011 -0.2\n1 2 3\n0.1 0.2 0.3\n100 200 300\n\
 timestep 20 1 2 3 1.0\n10 0 0\n0 10 0\n0 0 10\n\
 C 7 12.011 -0.2\n2 3 4\n0.2 0.3 0.4\n200 300 400\n";
     std::fs::write(&path, source).expect("fixture write");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read HISTORY");
+    let data = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("read HISTORY");
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write HISTORY");
     assert_eq!(
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("re-read HISTORY"),
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+            .expect("re-read HISTORY"),
         data
     );
 }
@@ -301,10 +314,12 @@ fn charmm_card_dispatch_preserves_all_atom_identity_fields() {
     let path = directory.path().join("coordinates.crd");
     let source = "* coordinate title\n* generated test\n    1\n    1    1 MOL  CA  -123.45600   2.50000  99.00000 SYS  1      0.00000\n";
     std::fs::write(&path, source).expect("fixture write");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("read CARD");
+    let data =
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default()).expect("read CARD");
     write_trajectory(&path, &data, &TrajectoryWriteOptions::default()).expect("write CARD");
     assert_eq!(
-        read_trajectory(&path, &TrajectoryReadOptions::default()).expect("re-read CARD"),
+        read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+            .expect("re-read CARD"),
         data
     );
 }
@@ -356,11 +371,11 @@ fn amber_ascii_dispatch_requires_and_uses_explicit_topology() {
         "AMBER trajectory\n   1.000   2.000   3.000   4.000   5.000   6.000\n  10.000  11.000  12.000\n",
     )
     .expect("fixture write");
-    let error = read_trajectory(&path, &TrajectoryReadOptions::default())
+    let error = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
         .expect_err("headerless trajectory needs its topology");
     assert!(matches!(error, TrajectoryIoError::MissingTopologyOptions));
 
-    let data = read_trajectory(
+    let data = read_trajectory_materialized(
         &path,
         &TrajectoryReadOptions {
             amber_ascii: Some(AmberAsciiReadOptions {
@@ -405,7 +420,8 @@ fn dms_dispatch_retains_complete_topology_in_format_metadata() {
         version: None,
     };
     crate::write_dms(&path, &source).expect("write DMS fixture");
-    let data = read_trajectory(&path, &TrajectoryReadOptions::default()).expect("dispatch DMS");
+    let data = read_trajectory_materialized(&path, &TrajectoryReadOptions::default())
+        .expect("dispatch DMS");
     assert_eq!(data.frames[0].positions, vec![[1.0, 2.0, 3.0]]);
     assert!(matches!(
         data.metadata.format,
@@ -460,11 +476,13 @@ fn tng_dispatch_preserves_lossy_codec_and_precision() {
         },
     )
     .expect("write source TNG");
-    let data = read_trajectory(&source_path, &TrajectoryReadOptions::default()).expect("read TNG");
+    let data = read_trajectory_materialized(&source_path, &TrajectoryReadOptions::default())
+        .expect("read TNG");
     write_trajectory(&rewritten_path, &data, &TrajectoryWriteOptions::default())
         .expect("rewrite TNG");
-    let rewritten = read_trajectory(&rewritten_path, &TrajectoryReadOptions::default())
-        .expect("read rewritten TNG");
+    let rewritten =
+        read_trajectory_materialized(&rewritten_path, &TrajectoryReadOptions::default())
+            .expect("read rewritten TNG");
     assert!(matches!(
         rewritten.metadata.format,
         FormatMetadata::Tng {

@@ -4,6 +4,9 @@
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum TrajectoryIoError {
+    /// A bounded frame reader refused the operation.
+    #[error(transparent)]
+    Reader(#[from] crate::TrajectoryError),
     /// The path has no recognised trajectory suffix and no format was selected.
     #[error("trajectory format cannot be inferred from the path")]
     UnknownFormat,
@@ -22,9 +25,22 @@ pub enum TrajectoryIoError {
     /// The selected format is intentionally read-only in the public contract.
     #[error("selected trajectory format is read-only")]
     ReadOnlyFormat,
+    /// The selected container does not yet expose a bounded pull reader.
+    #[error("{format:?} does not expose a pull-based trajectory reader")]
+    PullReaderUnavailable {
+        /// Selected container.
+        format: crate::TrajectoryFormat,
+    },
     /// Filesystem access failed.
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// The shared input abstraction refused the source.
+    ///
+    /// Boxed because a diagnostic carries its own context and is much larger
+    /// than every other variant here; inlining it would grow the error type for
+    /// every caller of every trajectory operation.
+    #[error("trajectory input could not be read: {0:?}")]
+    Input(Box<pdbiox_core::diagnostic::Diagnostic>),
     /// XTC decoding or encoding failed.
     #[error(transparent)]
     Xtc(#[from] crate::XtcError),
