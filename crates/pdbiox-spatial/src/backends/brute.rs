@@ -1,7 +1,6 @@
 //! Direct fixed-radius comparison.
 
 use crate::{NeighborPair, PeriodicBox};
-use wide::f32x4;
 
 /// Finds all unique pairs between `left` and `right` within `cutoff_squared`.
 ///
@@ -54,6 +53,45 @@ pub(crate) fn pairs_same_selection_unordered(
     )
 }
 
+/// Visits oriented cross-selection candidates without allocating.
+pub(crate) fn for_each_candidate(
+    positions: &[[f32; 3]],
+    left: &[u32],
+    right: &[u32],
+    cutoff_squared: f32,
+    periodic: Option<&PeriodicBox>,
+    mut emit: impl FnMut(u32, u32, f32),
+) {
+    for_each_candidate_with_mode::<false>(
+        positions,
+        left,
+        right,
+        cutoff_squared,
+        periodic,
+        &mut emit,
+    );
+}
+
+/// Visits each same-selection unordered pair once without allocation.
+pub(crate) fn for_each_pair_same_selection(
+    positions: &[[f32; 3]],
+    selection: &[u32],
+    cutoff_squared: f32,
+    periodic: Option<&PeriodicBox>,
+    mut emit: impl FnMut(NeighborPair),
+) {
+    for_each_candidate_with_mode::<true>(
+        positions,
+        selection,
+        selection,
+        cutoff_squared,
+        periodic,
+        &mut |left_atom, right_atom, squared| {
+            emit(NeighborPair::new(left_atom, right_atom, squared));
+        },
+    );
+}
+
 /// Dispatches direct comparison with compile-time pair-emission semantics.
 fn pairs_with_mode<const UNIQUE: bool>(
     positions: &[[f32; 3]],
@@ -63,32 +101,58 @@ fn pairs_with_mode<const UNIQUE: bool>(
     periodic: Option<&PeriodicBox>,
     sort_result: bool,
 ) -> Vec<NeighborPair> {
+    let mut found = Vec::with_capacity(left.len());
+    for_each_candidate_with_mode::<UNIQUE>(
+        positions,
+        left,
+        right,
+        cutoff_squared,
+        periodic,
+        &mut |left_atom, right_atom, squared| {
+            found.push(NeighborPair::new(left_atom, right_atom, squared));
+        },
+    );
+    if sort_result {
+        canonicalise(&mut found);
+    }
+    found
+}
+
+/// Dispatches direct comparison without retaining emitted pairs.
+fn for_each_candidate_with_mode<const UNIQUE: bool>(
+    positions: &[[f32; 3]],
+    left: &[u32],
+    right: &[u32],
+    cutoff_squared: f32,
+    periodic: Option<&PeriodicBox>,
+    emit: &mut impl FnMut(u32, u32, f32),
+) {
     match periodic {
-        Some(periodic) => pairs_periodic::<UNIQUE>(
-            positions,
-            left,
-            right,
-            cutoff_squared,
-            periodic,
-            sort_result,
-        ),
-        None => pairs_simd::<UNIQUE>(positions, left, right, cutoff_squared, sort_result),
+        Some(periodic) => {
+            for_each_pair_periodic::<UNIQUE>(
+                positions,
+                left,
+                right,
+                cutoff_squared,
+                periodic,
+                emit,
+            );
+        }
+        None => for_each_pair_simd::<UNIQUE>(positions, left, right, cutoff_squared, emit),
     }
 }
 
 /// Performs direct periodic pair comparison.
 ///
-/// Runtime is `O(L * R)` and only the result vector is allocated.
-fn pairs_periodic<const UNIQUE: bool>(
+/// Runtime is `O(L * R)` with `O(1)` auxiliary space.
+fn for_each_pair_periodic<const UNIQUE: bool>(
     positions: &[[f32; 3]],
     left: &[u32],
     right: &[u32],
     cutoff_squared: f32,
     periodic: &PeriodicBox,
-    sort_result: bool,
-) -> Vec<NeighborPair> {
-    let mut found = Vec::with_capacity(left.len());
-
+    emit: &mut impl FnMut(u32, u32, f32),
+) {
     for &left_atom in left {
         let Some(left_position) = valid_position(positions, left_atom) else {
             continue;
@@ -102,19 +166,14 @@ fn pairs_periodic<const UNIQUE: bool>(
             candidates,
             cutoff_squared,
             periodic,
-            &mut found,
+            emit,
         );
     }
-
-    if sort_result {
-        canonicalise(&mut found);
-    }
-    found
 }
 
 /// Compares one valid left atom against all periodic right-side atoms.
 ///
-/// Runtime is `O(R)` and no allocation occurs except growth of `found`.
+/// Runtime is `O(R)` and no allocation occurs.
 fn append_periodic_pairs<const UNIQUE: bool>(
     positions: &[[f32; 3]],
     left_atom: u32,
@@ -122,7 +181,7 @@ fn append_periodic_pairs<const UNIQUE: bool>(
     right: &[u32],
     cutoff_squared: f32,
     periodic: &PeriodicBox,
-    found: &mut Vec<NeighborPair>,
+    emit: &mut impl FnMut(u32, u32, f32),
 ) {
     for &right_atom in right {
         if !allowed_pair::<UNIQUE>(left_atom, right_atom) {
@@ -136,7 +195,7 @@ fn append_periodic_pairs<const UNIQUE: bool>(
         let squared = periodic.distance_squared(left_position, right_position);
 
         if squared <= cutoff_squared {
-            found.push(NeighborPair::new(left_atom, right_atom, squared));
+            emit(left_atom, right_atom, squared);
         }
     }
 }
@@ -144,36 +203,29 @@ fn append_periodic_pairs<const UNIQUE: bool>(
 /// Performs non-periodic direct comparison using four-wide SIMD.
 ///
 /// Runtime is `O(L * R / 4)` SIMD batches plus scalar remainder work.
-/// Additional space is `O(M)` for the returned matches.
-fn pairs_simd<const UNIQUE: bool>(
+/// Auxiliary space is `O(1)` outside the caller-provided reducer.
+fn for_each_pair_simd<const UNIQUE: bool>(
     positions: &[[f32; 3]],
     left: &[u32],
     right: &[u32],
     cutoff_squared: f32,
-    sort_result: bool,
-) -> Vec<NeighborPair> {
-    let mut found = Vec::with_capacity(left.len());
-
+    emit: &mut impl FnMut(u32, u32, f32),
+) {
     for &left_atom in left {
         let Some(left_position) = valid_position(positions, left_atom) else {
             continue;
         };
         let candidates = right_for_left::<UNIQUE>(right, left_atom);
 
-        append_simd_pairs::<UNIQUE>(
+        super::brute_simd::append_pairs::<UNIQUE>(
             positions,
             left_atom,
             left_position,
             candidates,
             cutoff_squared,
-            &mut found,
+            emit,
         );
     }
-
-    if sort_result {
-        canonicalise(&mut found);
-    }
-    found
 }
 
 /// Restricts a same-selection query to the ascending suffix with larger atom
@@ -188,134 +240,9 @@ fn right_for_left<const UNIQUE: bool>(right: &[u32], left_atom: u32) -> &[u32] {
     }
 }
 
-/// Compares one valid left atom against all non-periodic right atoms.
-///
-/// Four targets are processed per SIMD batch and the final remainder is
-/// evaluated scalarly. No temporary heap allocation is performed.
-fn append_simd_pairs<const UNIQUE: bool>(
-    positions: &[[f32; 3]],
-    left_atom: u32,
-    left_position: [f32; 3],
-    right: &[u32],
-    cutoff_squared: f32,
-    found: &mut Vec<NeighborPair>,
-) {
-    let mut batches = right.chunks_exact(4);
-
-    for atoms in &mut batches {
-        compare_four::<UNIQUE>(
-            positions,
-            left_atom,
-            left_position,
-            atoms,
-            cutoff_squared,
-            found,
-        );
-    }
-
-    for &right_atom in batches.remainder() {
-        compare_one::<UNIQUE>(
-            positions,
-            left_atom,
-            left_position,
-            right_atom,
-            cutoff_squared,
-            found,
-        );
-    }
-}
-
-/// Compares four target atoms with one left position using SIMD.
-///
-/// Missing/non-finite target positions are represented by NaN lanes, which
-/// cannot satisfy the cutoff comparison.
-fn compare_four<const UNIQUE: bool>(
-    positions: &[[f32; 3]],
-    left_atom: u32,
-    left: [f32; 3],
-    atoms: &[u32],
-    cutoff_squared: f32,
-    found: &mut Vec<NeighborPair>,
-) {
-    // The sentinel remains inside SIMD lanes: every comparison with it is false,
-    // and only pairs whose comparison mask is true are emitted below.
-    const MASKED_POSITION: [f32; 3] = [f32::NAN; 3];
-    let Ok(atom_ids) = <&[u32; 4]>::try_from(atoms) else {
-        return;
-    };
-
-    let right = atom_ids.map(|atom| {
-        match usize::try_from(atom)
-            .ok()
-            .and_then(|index| positions.get(index))
-            .copied()
-            .filter(|position| finite(*position) && allowed_pair::<UNIQUE>(left_atom, atom))
-        {
-            Some(position) => position,
-            None => MASKED_POSITION,
-        }
-    });
-
-    let dx = f32x4::from(right.map(|position| position[0])) - f32x4::splat(left[0]);
-    let dy = f32x4::from(right.map(|position| position[1])) - f32x4::splat(left[1]);
-    let dz = f32x4::from(right.map(|position| position[2])) - f32x4::splat(left[2]);
-
-    let squared = (dx * dx + dy * dy + dz * dz).to_array();
-
-    for lane in 0..4 {
-        append_if_within::<UNIQUE>(
-            left_atom,
-            atom_ids[lane],
-            squared[lane],
-            cutoff_squared,
-            found,
-        );
-    }
-}
-
-/// Compares one scalar target atom against a valid left position.
-///
-/// Runtime and auxiliary space are `O(1)`.
-fn compare_one<const UNIQUE: bool>(
-    positions: &[[f32; 3]],
-    left_atom: u32,
-    left: [f32; 3],
-    right_atom: u32,
-    cutoff_squared: f32,
-    found: &mut Vec<NeighborPair>,
-) {
-    if !allowed_pair::<UNIQUE>(left_atom, right_atom) {
-        return;
-    }
-
-    let Some(right) = valid_position(positions, right_atom) else {
-        return;
-    };
-
-    let squared = euclidean_distance_squared(left, right);
-
-    append_if_within::<UNIQUE>(left_atom, right_atom, squared, cutoff_squared, found);
-}
-
-/// Adds one non-self pair when its squared distance satisfies the cutoff.
-///
-/// Runtime and additional space are `O(1)` apart from result-vector growth.
-#[inline]
-fn append_if_within<const UNIQUE: bool>(
-    left_atom: u32,
-    right_atom: u32,
-    squared: f32,
-    cutoff_squared: f32,
-    found: &mut Vec<NeighborPair>,
-) {
-    if allowed_pair::<UNIQUE>(left_atom, right_atom) && squared <= cutoff_squared {
-        found.push(NeighborPair::new(left_atom, right_atom, squared));
-    }
-}
-
 /// Returns whether a candidate satisfies the selected pair-emission contract.
 #[inline]
-fn allowed_pair<const UNIQUE: bool>(left_atom: u32, right_atom: u32) -> bool {
+pub(super) fn allowed_pair<const UNIQUE: bool>(left_atom: u32, right_atom: u32) -> bool {
     if UNIQUE {
         left_atom < right_atom
     } else {
@@ -327,7 +254,7 @@ fn allowed_pair<const UNIQUE: bool>(left_atom: u32, right_atom: u32) -> bool {
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn valid_position(positions: &[[f32; 3]], atom: u32) -> Option<[f32; 3]> {
+pub(super) fn valid_position(positions: &[[f32; 3]], atom: u32) -> Option<[f32; 3]> {
     let index = usize::try_from(atom).ok()?;
     positions
         .get(index)
@@ -354,7 +281,7 @@ pub(crate) fn distance_squared(
 ///
 /// The scalar expression avoids iterator machinery in this hot path.
 #[inline]
-fn euclidean_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
+pub(super) fn euclidean_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
     let dx = left[0] - right[0];
     let dy = left[1] - right[1];
     let dz = left[2] - right[2];
