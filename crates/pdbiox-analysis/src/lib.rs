@@ -10,6 +10,8 @@
 
 #![forbid(unsafe_code)]
 
+#[path = "anm.rs"]
+mod anisotropic_network;
 #[path = "pi_stacking.rs"]
 mod aromatic_stacking;
 #[path = "contacts.rs"]
@@ -36,8 +38,11 @@ pub mod hbond;
 mod helix_geometry;
 #[path = "leaflet.rs"]
 mod membrane_layers;
+#[path = "nmd.rs"]
+mod mode_interchange;
 #[path = "dynamics.rs"]
 mod motion_statistics;
+mod network;
 #[path = "nucleic.rs"]
 mod nucleic_torsion;
 mod numeric;
@@ -56,6 +61,7 @@ pub mod salt_bridge;
 mod secondary_structure_assignment;
 #[path = "density.rs"]
 mod spatial_density;
+mod stream_surface;
 #[path = "pucker.rs"]
 mod sugar_conformation;
 pub mod surface_contacts;
@@ -68,11 +74,15 @@ mod water_mediation;
 #[cfg(test)]
 mod chemistry_test_support;
 
+pub use anisotropic_network::{
+    AnisotropicNetworkModel, AnmError, AnmOptions, anisotropic_network_model,
+};
 pub use aromatic_stacking::{
     PiStacking, PiStackingError, PiStackingOptions, StackingKind, pi_stacking,
 };
 pub use atom_pairs::{
     Contact, atom_contacts, atom_contacts_between, atom_contacts_between_with_spatial,
+    visit_atom_contacts, visit_atom_contacts_between,
 };
 pub use cation_aromatic::{CationPi, CationPiError, CationPiOptions, cation_pi};
 pub use chain_boundary::{chain_interface, chain_interface_with_spatial};
@@ -87,13 +97,14 @@ pub use helix_geometry::{
     BaseFrame, HelicalError, HelicalOptions, HelicalParameters, helical_parameters, helical_steps,
 };
 pub use membrane_layers::{Leaflet, LeafletOptions, identify_leaflets};
+pub use mode_interchange::{NmdError, NormalMode, NormalModeSet, read_nmd, write_nmd};
 pub use motion_statistics::{
     DielectricOptions, DielectricResult, DynamicsError, WaterDynamicsOptions, WaterLag,
     dielectric_from_dipoles, water_dynamics,
 };
 pub use nucleic_torsion::{NucleicTorsionError, NucleicTorsions, nucleic_torsions};
 pub use pair_distribution::{
-    CentreGroup, RadialBin, RadialDistributionOptions, RadialError,
+    CentreGroup, CoordinationOptions, RadialBin, RadialDistributionOptions, RadialError,
     centre_of_mass_radial_distribution, coordination_numbers, radial_distribution,
 };
 pub use paired_bases::{BasePair, BasePairError, BasePairOptions, base_pairs};
@@ -122,7 +133,7 @@ pub use spatial_density::{
     LinearDensityOptions, density_map, linear_density,
 };
 pub use sugar_conformation::{Pucker, sugar_pucker};
-pub use surface_contacts::surface_contacts;
+pub use surface_contacts::{SurfaceContactOptions, surface_contacts};
 pub use trajectory_ensemble::{
     Clustering, ConvergenceBlock, EnsembleDistanceMatrix, EnsembleGeometryError,
     EnsembleSimilarityError, EnsembleStatisticsError, FrameAlignment, GovernedEnsembleError,
@@ -142,3 +153,5 @@ pub use vector_field::{
     integrate_streamlines,
 };
 pub use water_mediation::{WaterBridge, WaterBridgeOptions, water_bridges};
+
+pub use stream_surface::{SasaStreamError, sasa_stream};
