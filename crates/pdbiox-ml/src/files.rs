@@ -1,8 +1,11 @@
 //! Standard file serialisation for the Arrow atom table.
 
 use crate::AtomTable;
+use crate::stream::ArrowTableExport;
+use arrow::datatypes::{Schema, SchemaRef};
 use arrow::error::ArrowError;
 use arrow::ipc::writer::FileWriter;
+use arrow::record_batch::RecordBatch;
 use parquet::arrow::ArrowWriter;
 use pdbiox_core::Structure;
 use std::collections::BTreeMap;
@@ -45,12 +48,13 @@ pub fn write_atom_ipc_with_metadata(
     metadata: BTreeMap<String, String>,
 ) -> Result<(), TableFileError> {
     let table = AtomTable::new(structure);
-    let (schema, batches) = batches_with_metadata(&table, metadata)?;
+    let schema = schema_with_metadata(&table, metadata);
     let file = File::create(path)?;
     let mut writer = FileWriter::try_new(file, &schema)?;
-    for batch in &batches {
+    visit_batches(&table, &schema, |batch| {
         writer.write(batch)?;
-    }
+        Ok(())
+    })?;
     writer.finish()?;
     Ok(())
 }
@@ -79,39 +83,36 @@ pub fn write_atom_parquet_with_metadata(
     metadata: BTreeMap<String, String>,
 ) -> Result<(), TableFileError> {
     let table = AtomTable::new(structure);
-    let (schema, batches) = batches_with_metadata(&table, metadata)?;
+    let schema = schema_with_metadata(&table, metadata);
     let file = File::create(path)?;
-    let mut writer = ArrowWriter::try_new(file, schema, None)?;
-    for batch in &batches {
+    let mut writer = ArrowWriter::try_new(file, schema.clone(), None)?;
+    visit_batches(&table, &schema, |batch| {
         writer.write(batch)?;
-    }
+        Ok(())
+    })?;
     let _ = writer.close()?;
     Ok(())
 }
 
-fn batches_with_metadata(
-    table: &AtomTable,
-    metadata: BTreeMap<String, String>,
-) -> Result<
-    (
-        arrow::datatypes::SchemaRef,
-        Vec<arrow::record_batch::RecordBatch>,
-    ),
-    ArrowError,
-> {
+fn schema_with_metadata(table: &AtomTable, metadata: BTreeMap<String, String>) -> SchemaRef {
     let base = table.schema();
-    let schema = Arc::new(arrow::datatypes::Schema::new_with_metadata(
+    Arc::new(Schema::new_with_metadata(
         base.fields().clone(),
         metadata.into_iter().collect(),
-    ));
-    let batches = table
-        .record_batches()?
-        .into_iter()
-        .map(|batch| {
-            arrow::record_batch::RecordBatch::try_new(schema.clone(), batch.columns().to_vec())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok((schema, batches))
+    ))
+}
+
+/// Writes each table chunk before materialising the next one.
+fn visit_batches(
+    table: &AtomTable,
+    schema: &SchemaRef,
+    mut visit: impl FnMut(&RecordBatch) -> Result<(), TableFileError>,
+) -> Result<(), TableFileError> {
+    for index in 0..table.batch_count() {
+        let batch = table.batch(index)?.with_schema(schema.clone())?;
+        visit(&batch)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

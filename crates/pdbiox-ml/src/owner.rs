@@ -8,15 +8,34 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 #[derive(Debug)]
-struct SnapshotOwner {
+struct SnapshotAllocation {
     _structure: Structure,
 }
 
-pub(crate) fn f32_buffer(values: &[f32], owner: &Structure) -> Result<ScalarBuffer<f32>> {
+/// Shared owner for every zero-copy buffer exported from one table snapshot.
+#[derive(Clone, Debug)]
+pub(crate) struct SnapshotOwner(Arc<SnapshotAllocation>);
+
+impl SnapshotOwner {
+    pub(crate) fn new(structure: &Structure) -> Self {
+        Self(Arc::new(SnapshotAllocation {
+            _structure: structure.clone(),
+        }))
+    }
+
+    fn allocation(&self) -> Arc<dyn arrow::alloc::Allocation> {
+        self.0.clone()
+    }
+}
+
+pub(crate) fn f32_buffer(values: &[f32], owner: &SnapshotOwner) -> Result<ScalarBuffer<f32>> {
     typed_buffer(values, owner)
 }
 
-pub(crate) fn symbol_buffer(values: &[SymbolId], owner: &Structure) -> Result<ScalarBuffer<u32>> {
+pub(crate) fn symbol_buffer(
+    values: &[SymbolId],
+    owner: &SnapshotOwner,
+) -> Result<ScalarBuffer<u32>> {
     let bytes = values
         .len()
         .checked_mul(std::mem::size_of::<u32>())
@@ -25,7 +44,10 @@ pub(crate) fn symbol_buffer(values: &[SymbolId], owner: &Structure) -> Result<Sc
     Ok(ScalarBuffer::new(buffer, 0, values.len()))
 }
 
-fn typed_buffer<T: ArrowNativeType>(values: &[T], owner: &Structure) -> Result<ScalarBuffer<T>> {
+fn typed_buffer<T: ArrowNativeType>(
+    values: &[T],
+    owner: &SnapshotOwner,
+) -> Result<ScalarBuffer<T>> {
     let bytes = values
         .len()
         .checked_mul(std::mem::size_of::<T>())
@@ -34,14 +56,12 @@ fn typed_buffer<T: ArrowNativeType>(values: &[T], owner: &Structure) -> Result<S
     Ok(ScalarBuffer::new(buffer, 0, values.len()))
 }
 
-fn custom_buffer(pointer: *const u8, bytes: usize, owner: &Structure) -> Result<Buffer> {
+fn custom_buffer(pointer: *const u8, bytes: usize, owner: &SnapshotOwner) -> Result<Buffer> {
     let pointer = NonNull::new(pointer.cast_mut())
         .ok_or_else(|| ArrowError::MemoryError("null pdbiox buffer".to_owned()))?;
-    let owner: Arc<dyn arrow::alloc::Allocation> = Arc::new(SnapshotOwner {
-        _structure: owner.clone(),
-    });
+    let owner = owner.allocation();
     // SAFETY: the pointer and byte length come from a live immutable slice.
-    // `SnapshotOwner` retains the Structure allocation until Arrow drops the
-    // final buffer, and public structure snapshots never mutate in place.
+    // The shared snapshot owner retains the Structure allocation until Arrow
+    // drops the final buffer, and public snapshots never mutate in place.
     Ok(unsafe { Buffer::from_custom_allocation(pointer, bytes, owner) })
 }

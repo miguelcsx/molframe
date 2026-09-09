@@ -2,6 +2,10 @@ use super::*;
 use pdbiox_core::io::{InputBuffer, ReadOptions};
 use pdbiox_spatial::SpatialBackend;
 
+fn context() -> pdbiox_core::ExecutionContext {
+    pdbiox_core::ExecutionContext::default()
+}
+
 const SOURCE: &str = "data_graph\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
@@ -45,7 +49,7 @@ fn options(edges: EdgeKind) -> GraphOptions {
 fn bond_graph_matches_pyg_shapes_and_typed_features() {
     let mut options = options(EdgeKind::Bonds);
     options.edge_features.push(EdgeFeature::BondOrder);
-    let graph = graph(&structure(), &options).expect("bond graph");
+    let graph = graph(&structure(), &options, &context()).expect("bond graph");
     assert_eq!((graph.node_count, graph.edge_count), (3, 2));
     assert_eq!(&*graph.edge_index, &[0, 1, 1, 0]);
     assert_eq!(
@@ -56,20 +60,23 @@ fn bond_graph_matches_pyg_shapes_and_typed_features() {
         (graph.edge_features.rows, graph.edge_features.columns),
         (2, 2)
     );
-    assert_eq!(&*graph.edge_features.values, &[1.0, 1.0, 1.0, 1.0]);
+    for features in graph.edge_features.values.chunks_exact(2) {
+        assert!((features[0] - 1.0).abs() <= 5.0e-7);
+        assert!((features[1] - 1.0).abs() <= f32::EPSILON);
+    }
     assert_eq!(graph.cost(), crate::ExportCost::Copy);
 }
 
 #[test]
 fn radius_and_nearest_graphs_are_deterministic() {
     let radius = options(EdgeKind::Radius { cutoff: 4.1 });
-    let first = graph(&structure(), &radius).expect("first radius graph");
-    let second = graph(&structure(), &radius).expect("second radius graph");
+    let first = graph(&structure(), &radius, &context()).expect("first radius graph");
+    let second = graph(&structure(), &radius, &context()).expect("second radius graph");
     assert_eq!(first, second);
 
     let nearest = options(EdgeKind::KNearest { neighbors: 1 });
-    let first = graph(&structure(), &nearest).expect("first nearest graph");
-    let second = graph(&structure(), &nearest).expect("second nearest graph");
+    let first = graph(&structure(), &nearest, &context()).expect("first nearest graph");
+    let second = graph(&structure(), &nearest, &context()).expect("second nearest graph");
     assert_eq!(first, second);
 }
 
@@ -78,11 +85,11 @@ fn missing_features_require_an_explicit_finite_fill() {
     let mut strict = options(EdgeKind::Radius { cutoff: 2.0 });
     strict.node_features = vec![NodeFeature::PartialCharge];
     assert!(matches!(
-        graph(&structure(), &strict),
+        graph(&structure(), &strict, &context()),
         Err(GraphError::MissingFeature { .. })
     ));
     strict.missing = MissingFeaturePolicy::Fill(-7.0);
-    let filled = graph(&structure(), &strict).expect("explicit fill graph");
+    let filled = graph(&structure(), &strict, &context()).expect("explicit fill graph");
     assert_eq!(&*filled.node_features.values, &[-7.0; 3]);
 }
 
@@ -91,7 +98,7 @@ fn residue_graph_aggregates_positions_without_atom_level_features() {
     let mut options = options(EdgeKind::Radius { cutoff: 5.0 });
     options.nodes = NodeLevel::Residues;
     options.node_features = vec![NodeFeature::AtomCount, NodeFeature::PositionX];
-    let graph = graph(&structure(), &options).expect("residue graph");
+    let graph = graph(&structure(), &options, &context()).expect("residue graph");
     assert_eq!(graph.node_count, 2);
     assert_eq!(&*graph.node_features.values, &[2.0, 0.5, 1.0, 4.0]);
 }

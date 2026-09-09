@@ -49,6 +49,35 @@ fn sequence_identity_keeps_connected_sequences_together() {
 }
 
 #[test]
+fn duplicate_sequences_group_together_and_join_what_they_match() {
+    // The duplicate of "a" is joined without being aligned, so this also
+    // checks the shortcut leaves the transitive grouping intact: "b" matches
+    // "a" at 0.75, so all three belong to one group.
+    let dataset = Dataset::new(vec![
+        entry("a", "AAAA", "x", "2020-01-01", 1.0),
+        entry("a_copy", "AAAA", "y", "2020-02-01", 1.0),
+        entry("b", "AAAT", "z", "2020-03-01", 1.0),
+        entry("c", "CCCC", "w", "2020-04-01", 1.0),
+    ])
+    .expect("valid dataset");
+    let split = dataset
+        .split(&SplitOptions {
+            strategy: SplitStrategy::SequenceIdentity { threshold: 0.75 },
+            ratios: SplitRatios::new(0.5, 0.25, 0.25).expect("valid ratios"),
+        })
+        .expect("sequence split");
+    let partition = |id: &str| {
+        [&split.train, &split.validation, &split.test]
+            .iter()
+            .position(|part| part.entries().any(|entry| entry.id.as_ref() == id))
+    };
+
+    assert_eq!(partition("a"), partition("a_copy"));
+    assert_eq!(partition("a"), partition("b"));
+    assert_ne!(partition("a"), partition("c"));
+}
+
+#[test]
 fn structural_clusters_are_atomic_and_random_split_warns() {
     let dataset = Dataset::new(vec![
         entry("a", "AAAA", "same", "2020-01-01", 1.0),

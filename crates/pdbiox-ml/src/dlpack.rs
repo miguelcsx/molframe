@@ -81,6 +81,12 @@ pub struct DlpackTensor {
     managed: Option<NonNull<DLManagedTensor>>,
 }
 
+// SAFETY: this producer handle owns the only pointer to its managed tensor.
+// Moving the handle between threads does not dereference the pointer, and
+// ownership can be transferred or released exactly once through `&mut self`
+// or `Drop`. The foreign consumer receives ownership only after `into_raw`.
+unsafe impl Send for DlpackTensor {}
+
 impl DlpackTensor {
     /// Exports model-zero coordinates as a compact `(atoms, 3)` CPU `float32`
     /// tensor using one contiguous copy isolated from the immutable snapshot.

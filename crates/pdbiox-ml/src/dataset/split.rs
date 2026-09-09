@@ -162,8 +162,32 @@ fn sequence_groups(dataset: &Dataset, threshold: f64) -> Result<Vec<Vec<usize>>,
         })
         .collect::<Result<Vec<_>, _>>()?;
     let mut components = DisjointSet::new(indices.len());
+
+    // Identical sequences align to identity 1.0, so they can be joined without
+    // aligning them. Structural datasets repeat the same chain many times, and
+    // every duplicate removed here removes a whole row and column of quadratic
+    // alignment work.
+    if threshold <= 1.0 {
+        let mut first_seen: BTreeMap<&str, usize> = BTreeMap::new();
+        for (position, sequence) in sequences.iter().enumerate() {
+            match first_seen.entry(sequence.as_ref()) {
+                std::collections::btree_map::Entry::Occupied(entry) => {
+                    components.union(*entry.get(), position);
+                }
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(position);
+                }
+            }
+        }
+    }
+
     for left in 0..sequences.len() {
         for right in left + 1..sequences.len() {
+            // Single linkage only asks whether the two end up connected, so a
+            // pair already in one component needs no alignment at all.
+            if components.find(left) == components.find(right) {
+                continue;
+            }
             if sequence_identity(sequences[left].as_bytes(), sequences[right].as_bytes())?
                 >= threshold
             {

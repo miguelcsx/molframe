@@ -1,8 +1,8 @@
 //! Spatial and topological edge construction with stable ordering.
 
 use super::nodes::Nodes;
-use super::{EdgeDirection, EdgeKind, GraphError, NodeLevel};
-use pdbiox_core::{AtomSelection, BondOrder, Structure};
+use super::{EdgeDirection, EdgeKind, GraphError, GraphOptions, NodeLevel};
+use pdbiox_core::{AtomSelection, BondOrder, ExecutionContext, Structure};
 use pdbiox_spatial::{KdTree, NeighborPair, PeriodicBox, SpatialBackend, pairs_within};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,24 +21,33 @@ pub(super) struct Edge {
 pub(super) fn build(
     structure: &Structure,
     nodes: &Nodes,
-    level: NodeLevel,
-    kind: EdgeKind,
-    direction: EdgeDirection,
-    backend: SpatialBackend,
-    periodic: bool,
+    options: &GraphOptions,
+    context: &ExecutionContext,
 ) -> Result<Vec<Edge>, GraphError> {
-    let periodic = periodic_box(structure, periodic)?;
-    let base = match kind {
-        EdgeKind::Bonds => bonds(structure, nodes, level, periodic.as_ref())?,
-        EdgeKind::Contacts { cutoff } => {
-            geometric(structure, nodes, cutoff, backend, periodic.as_ref(), true)?
-        }
-        EdgeKind::Radius { cutoff } => {
-            geometric(structure, nodes, cutoff, backend, periodic.as_ref(), false)?
-        }
+    let periodic = periodic_box(structure, options.periodic)?;
+    let base = match options.edges {
+        EdgeKind::Bonds => bonds(structure, nodes, options.nodes, periodic.as_ref())?,
+        EdgeKind::Contacts { cutoff } => geometric(
+            structure,
+            nodes,
+            cutoff,
+            options.backend,
+            periodic.as_ref(),
+            true,
+            context,
+        )?,
+        EdgeKind::Radius { cutoff } => geometric(
+            structure,
+            nodes,
+            cutoff,
+            options.backend,
+            periodic.as_ref(),
+            false,
+            context,
+        )?,
         EdgeKind::KNearest { neighbors } => nearest(nodes, neighbors, periodic.as_ref())?,
     };
-    orient(base, direction, kind)
+    orient(base, options.direction, options.edges)
 }
 
 fn bonds(
@@ -81,6 +90,7 @@ fn geometric(
     backend: SpatialBackend,
     periodic: Option<&PeriodicBox>,
     exclude_bonds: bool,
+    context: &ExecutionContext,
 ) -> Result<Vec<Edge>, GraphError> {
     if exclude_bonds && !structure.data().bonds.is_available() {
         return Err(GraphError::MissingFeature {
@@ -97,6 +107,7 @@ fn geometric(
         cutoff,
         backend,
         periodic,
+        context,
     )?;
     let excluded = exclude_bonds.then(|| bonded_nodes(structure, nodes));
     Ok(pairs

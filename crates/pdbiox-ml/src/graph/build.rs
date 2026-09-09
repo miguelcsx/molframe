@@ -3,7 +3,7 @@
 use super::features;
 use super::nodes;
 use super::{EdgeFeature, EdgeKind, Graph, GraphError, GraphOptions, NodeFeature, NodeLevel};
-use pdbiox_core::Structure;
+use pdbiox_core::{ExecutionContext, Structure};
 use std::collections::BTreeSet;
 
 /// Materialises graph indices and selected feature matrices.
@@ -17,18 +17,14 @@ use std::collections::BTreeSet;
 ///
 /// Returns an error for contradictory options, absent requested features,
 /// unusable periodic cells, invalid geometric parameters or index overflow.
-pub fn graph(structure: &Structure, options: &GraphOptions) -> Result<Graph, GraphError> {
+pub fn graph(
+    structure: &Structure,
+    options: &GraphOptions,
+    context: &ExecutionContext,
+) -> Result<Graph, GraphError> {
     validate(options)?;
     let nodes = nodes::project(structure, options.nodes)?;
-    let edges = super::edges::build(
-        structure,
-        &nodes,
-        options.nodes,
-        options.edges,
-        options.direction,
-        options.backend,
-        options.periodic,
-    )?;
+    let edges = super::edges::build(structure, &nodes, options, context)?;
     let node_features = features::nodes(
         structure,
         &nodes,

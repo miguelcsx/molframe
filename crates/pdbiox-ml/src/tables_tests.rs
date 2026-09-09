@@ -25,9 +25,30 @@ fn every_normalised_table_exports_a_c_stream() {
     assert!(bonds.arrow_stream().is_ok());
 }
 
+#[test]
+fn topology_exports_are_split_into_bounded_batches() {
+    let mut data = pdbiox_core::StructureData::empty();
+    let mut bonds = pdbiox_core::BondTableBuilder::new();
+    let batch_rows = u32::try_from(TABLE_BATCH_ROWS).expect("batch rows fit u32");
+    for atom in 0..=batch_rows {
+        bonds.push(pdbiox_core::BondRecord {
+            atom_a: pdbiox_core::AtomIndex::new(atom),
+            atom_b: pdbiox_core::AtomIndex::new(atom + 1),
+            order: pdbiox_core::BondOrder::Single,
+            provenance: pdbiox_core::BondProvenance::User,
+        });
+    }
+    data.bonds = bonds.finish();
+    let table = BondTable::new(&Structure::new(data));
+    let batches = table.record_batches().expect("bounded bond batches");
+    assert_eq!(batches.len(), 2);
+    assert_eq!(batches[0].num_rows(), TABLE_BATCH_ROWS);
+    assert_eq!(batches[1].num_rows(), 1);
+}
+
 fn rows(result: Result<Vec<RecordBatch>>) -> usize {
     match result {
-        Ok(batches) => batches.first().map_or(0, RecordBatch::num_rows),
+        Ok(batches) => batches.iter().map(RecordBatch::num_rows).sum(),
         Err(error) => panic!("Arrow export failed: {error}"),
     }
 }

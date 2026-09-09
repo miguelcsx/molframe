@@ -55,3 +55,44 @@ fn transferred_tensor_retains_its_copy_until_consumer_deletes_it() {
     // SAFETY: the transferred consumer calls the deleter exactly once.
     unsafe { deleter(raw) };
 }
+
+#[test]
+fn managed_tensor_uses_the_c_abi_layout_and_aligned_storage() {
+    let tensor = DlpackTensor::coordinates(&structure()).expect("dense tensor");
+    let managed = tensor.as_managed().expect("managed tensor");
+
+    assert_eq!(std::mem::offset_of!(DLTensor, data), 0);
+    assert!(std::mem::offset_of!(DLTensor, device) >= std::mem::size_of::<*mut std::ffi::c_void>());
+    assert_eq!(std::mem::offset_of!(DLManagedTensor, dl_tensor), 0);
+    assert!(std::mem::offset_of!(DLManagedTensor, manager_ctx) >= std::mem::size_of::<DLTensor>());
+    assert!(!managed.manager_ctx.is_null());
+    assert_eq!(managed.dl_tensor.byte_offset, 0);
+    assert_eq!(
+        managed.dl_tensor.data.addr() % std::mem::align_of::<f32>(),
+        0
+    );
+    assert!(managed.deleter.is_some());
+}
+
+#[test]
+fn consumer_metadata_mutation_does_not_break_the_published_deleter() {
+    let raw = DlpackTensor::coordinates(&structure())
+        .expect("dense tensor")
+        .into_raw();
+    assert!(!raw.is_null());
+    // SAFETY: ownership was transferred above; shape points to two writable
+    // entries retained by the manager context until its deleter runs.
+    let managed = unsafe { &mut *raw };
+    // SAFETY: the producer publishes exactly two shape entries.
+    let shape = unsafe { std::slice::from_raw_parts_mut(managed.dl_tensor.shape, 2) };
+    shape.copy_from_slice(&[1, 6]);
+    let deleter = managed.deleter.expect("consumer deleter");
+    // SAFETY: this is the sole deleter call for the transferred tensor.
+    unsafe { deleter(raw) };
+}
+
+#[test]
+fn managed_deleter_accepts_the_protocol_null_sentinel() {
+    // SAFETY: the deleter explicitly accepts null as a no-op sentinel.
+    unsafe { delete_managed(std::ptr::null_mut()) };
+}

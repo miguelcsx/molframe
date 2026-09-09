@@ -6,13 +6,16 @@ use arrow::array::{ArrayRef, Int32Array, UInt8Array, UInt32Array};
 use arrow::datatypes::{DataType, Schema, SchemaRef};
 use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
-use pdbiox_core::{BondOrder, BondProvenance, ChainIndex, ResidueIndex, Structure};
+use pdbiox_core::{BondIndex, BondOrder, BondProvenance, ChainIndex, ResidueIndex, Structure};
+use std::ops::Range;
 use std::sync::Arc;
 
 use crate::numeric::usize_to_u32;
 
+const TABLE_BATCH_ROWS: usize = 65_536;
+
 macro_rules! table_type {
-    ($name:ident, $schema:ident, $batch:ident, $description:literal) => {
+    ($name:ident, $schema:ident, $count:ident, $batch:ident, $description:literal) => {
         #[doc = $description]
         #[derive(Clone, Debug)]
         pub struct $name {
@@ -47,9 +50,12 @@ macro_rules! table_type {
 
             /// Creates a consumable Arrow C Stream Interface value.
             ///
+            /// The derived table is converted only when the consumer pulls its
+            /// batch. A conversion error is reported by that pull.
+            ///
             /// # Errors
             ///
-            /// Returns the same errors as `record_batches`.
+            /// Reserved for failures constructing the stream adapter.
             pub fn arrow_stream(&self) -> Result<ArrowStream> {
                 <Self as ArrowTableExport>::arrow_stream(self)
             }
@@ -60,8 +66,25 @@ macro_rules! table_type {
                 self.schema.clone()
             }
 
-            fn record_batches(&self) -> Result<Vec<RecordBatch>> {
-                Ok(vec![$batch(&self.structure, self.schema.clone())?])
+            fn batch_count(&self) -> usize {
+                $count(&self.structure).div_ceil(TABLE_BATCH_ROWS)
+            }
+
+            fn batch(&self, index: usize) -> Result<RecordBatch> {
+                let count = $count(&self.structure);
+                let start = index.checked_mul(TABLE_BATCH_ROWS).ok_or_else(|| {
+                    ArrowError::InvalidArgumentError("table batch index overflows".to_owned())
+                })?;
+                if start >= count {
+                    return Err(ArrowError::InvalidArgumentError(
+                        "table batch index is out of bounds".to_owned(),
+                    ));
+                }
+                $batch(
+                    &self.structure,
+                    self.schema.clone(),
+                    start..start.saturating_add(TABLE_BATCH_ROWS).min(count),
+                )
             }
         }
     };
@@ -70,25 +93,36 @@ macro_rules! table_type {
 table_type!(
     ResidueTable,
     residue_schema,
+    residue_count,
     residue_batch,
     "Arrow view of the residue table."
 );
 table_type!(
     ChainTable,
     chain_schema,
+    chain_count,
     chain_batch,
     "Arrow view of the chain table."
 );
 table_type!(
     BondTable,
     bond_schema,
+    bond_count,
     bond_batch,
     "Arrow view of the chemical bond table."
 );
 
-fn residue_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> {
+fn residue_count(structure: &Structure) -> usize {
+    structure.data().topology.residues.len()
+}
+
+fn residue_batch(
+    structure: &Structure,
+    schema: SchemaRef,
+    range: Range<usize>,
+) -> Result<RecordBatch> {
     let residues = &structure.data().topology.residues;
-    let positions = 0..usize_to_u32(residues.len());
+    let positions = usize_to_u32(range.start)..usize_to_u32(range.end);
     let index = UInt32Array::from_iter_values(positions.clone());
     let chain = UInt32Array::from_iter_values(
         positions
@@ -134,9 +168,17 @@ fn residue_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch
     )
 }
 
-fn chain_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> {
+fn chain_count(structure: &Structure) -> usize {
+    structure.data().topology.chains.len()
+}
+
+fn chain_batch(
+    structure: &Structure,
+    schema: SchemaRef,
+    range: Range<usize>,
+) -> Result<RecordBatch> {
     let chains = &structure.data().topology.chains;
-    let positions = 0..usize_to_u32(chains.len());
+    let positions = usize_to_u32(range.start)..usize_to_u32(range.end);
     let index = UInt32Array::from_iter_values(positions.clone());
     let label = UInt32Array::from_iter_values(positions.clone().filter_map(|position| {
         chains
@@ -177,14 +219,31 @@ fn range_width(range: std::ops::Range<u32>) -> Result<u32> {
     })
 }
 
-fn bond_batch(structure: &Structure, schema: SchemaRef) -> Result<RecordBatch> {
+fn bond_count(structure: &Structure) -> usize {
+    structure.data().bonds.len()
+}
+
+fn bond_batch(
+    structure: &Structure,
+    schema: SchemaRef,
+    range: Range<usize>,
+) -> Result<RecordBatch> {
     let bonds = &structure.data().bonds;
-    let index = UInt32Array::from_iter_values(0..usize_to_u32(bonds.len()));
-    let atom_a = UInt32Array::from_iter_values(bonds.iter().map(|bond| bond.atom_a.get()));
-    let atom_b = UInt32Array::from_iter_values(bonds.iter().map(|bond| bond.atom_b.get()));
-    let order = UInt8Array::from_iter_values(bonds.iter().map(|bond| order_code(bond.order)));
+    let start = usize_to_u32(range.start);
+    let end = usize_to_u32(range.end);
+    let records = (start..end)
+        .map(|raw| {
+            bonds
+                .get(BondIndex::new(raw))
+                .ok_or_else(|| ArrowError::InvalidArgumentError("bond row is absent".to_owned()))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let index = UInt32Array::from_iter_values(start..end);
+    let atom_a = UInt32Array::from_iter_values(records.iter().map(|bond| bond.atom_a.get()));
+    let atom_b = UInt32Array::from_iter_values(records.iter().map(|bond| bond.atom_b.get()));
+    let order = UInt8Array::from_iter_values(records.iter().map(|bond| order_code(bond.order)));
     let provenance =
-        UInt8Array::from_iter_values(bonds.iter().map(|bond| provenance_code(bond.provenance)));
+        UInt8Array::from_iter_values(records.iter().map(|bond| provenance_code(bond.provenance)));
     RecordBatch::try_new(
         schema,
         vec![
