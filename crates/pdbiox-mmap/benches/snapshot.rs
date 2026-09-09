@@ -1,4 +1,4 @@
-//! Criterion coverage for the safe read-only mmap snapshot constructor.
+//! Criterion coverage for safe snapshots and unchecked file-backed mappings.
 
 use criterion::{Criterion, black_box};
 use pdbiox_mmap::MappedFile;
@@ -18,7 +18,14 @@ fn bench_snapshot(c: &mut Criterion) -> io::Result<()> {
     output.write_all(&vec![17_u8; SNAPSHOT_BYTES])?;
     output.flush()?;
     c.bench_function("mmap_snapshot", |b| {
-        b.iter(|| black_box(MappedFile::new(&output)));
+        b.iter(|| black_box(MappedFile::snapshot(&output)));
+    });
+    c.bench_function("mmap_file_backed_unchecked", |b| {
+        b.iter(|| {
+            // SAFETY: the private fixture is not modified until Criterion has
+            // dropped every mapping created by the iteration.
+            black_box(unsafe { MappedFile::map_file_unchecked(&output) })
+        });
     });
     std::fs::remove_file(path)
 }

@@ -1,8 +1,8 @@
 //! Owned read-only snapshots and explicitly unsafe file-backed mappings.
 
-use memmap2::{Mmap, MmapMut, MmapOptions};
+use memmap2::{Advice, Mmap, MmapMut, MmapOptions};
 use std::fs::File;
-use std::io;
+use std::io::{self, Read, Seek, Write};
 use std::ops::Deref;
 
 #[derive(Debug)]
@@ -12,34 +12,74 @@ enum Mapping {
     FileBacked { mapping: Mmap, _file: File },
 }
 
-/// Read-only bytes backed by an owned snapshot or an explicitly unsafe file map.
+/// Read-only bytes backed by an owned snapshot or an unchecked file mapping.
 ///
-/// [`Self::new`] is the safe default: it copies the current file contents into
-/// anonymous memory before publishing a read-only mapping. Later changes to the
-/// source file cannot invalidate or alter that snapshot.
+/// [`Self::new`] and [`Self::snapshot`] are safe because they copy the current
+/// contents into private anonymous memory. Zero-copy access to an external file
+/// is available only through [`Self::map_file_unchecked`], whose caller must
+/// uphold the backing-file stability contract required by `memmap2`.
 #[derive(Debug)]
 pub struct MappedFile {
     mapping: Mapping,
 }
 
 impl MappedFile {
-    /// Copies the complete current file into an owned, read-only anonymous map.
+    /// Streams bytes into a private temporary file and maps the finished snapshot.
     ///
-    /// This is a snapshot operation, not a zero-copy file mapping. A concurrent
-    /// writer can make the read fail or produce bytes from different writes, but
-    /// cannot cause undefined behaviour or mutate the returned snapshot.
+    /// The temporary object has no caller-visible path and its only retained
+    /// descriptor is owned by the returned mapping. This keeps resident memory
+    /// proportional to the copy buffer while preserving immutable byte-slice
+    /// semantics for parsers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the temporary file cannot be created, filled,
+    /// rewound, or mapped.
+    pub fn private_snapshot_from_reader(mut reader: impl Read) -> io::Result<Self> {
+        let mut file = tempfile::tempfile()?;
+        let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
+        loop {
+            let count = match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(count) => count,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
+            };
+            file.write_all(&buffer[..count])?;
+        }
+        file.flush()?;
+        file.rewind()?;
+        // SAFETY: `tempfile()` creates a private object without a caller-visible
+        // path. No descriptor escaped before this mapping, and the mapping
+        // retains its sole live descriptor for its complete lifetime.
+        unsafe { Self::map_file_unchecked(&file) }
+    }
+
+    /// Creates a private, read-only snapshot of the complete current file.
+    ///
+    /// This compatibility constructor is equivalent to [`Self::snapshot`]. Use
+    /// the named constructor when the distinction from an unchecked zero-copy
+    /// file mapping should be explicit at the call site.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same operating-system errors as [`Self::snapshot`].
+    pub fn new(file: &File) -> io::Result<Self> {
+        Self::snapshot(file)
+    }
+
+    /// Copies the complete current file into private, read-only anonymous pages.
+    ///
+    /// A concurrent writer can make the read fail or produce bytes assembled
+    /// from different writes, but it cannot mutate or invalidate the returned
+    /// snapshot.
     ///
     /// # Errors
     ///
     /// Returns an operating-system error when the length cannot be represented,
     /// the complete snapshot cannot be read, or anonymous mapping fails.
-    pub fn new(file: &File) -> io::Result<Self> {
-        let length = usize::try_from(file.metadata()?.len()).map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "file length exceeds the platform address space",
-            )
-        })?;
+    pub fn snapshot(file: &File) -> io::Result<Self> {
+        let length = file_length(file)?;
         if length == 0 {
             return Ok(Self {
                 mapping: Mapping::Empty,
@@ -56,34 +96,63 @@ impl MappedFile {
 
     /// Maps a file directly without copying it.
     ///
-    /// This operation is separated from [`Self::new`] because Rust cannot stop
-    /// another handle, process, or filesystem actor from mutating a file-backed
-    /// mapping.
+    /// The returned value retains a cloned descriptor, so its lifetime does not
+    /// borrow `file`. Descriptor ownership alone does not make the mapping safe:
+    /// other handles and processes can still mutate the backing object.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that the mapped byte range is not modified,
-    /// truncated, replaced through the same inode, or otherwise invalidated for
-    /// the complete lifetime of the returned value. That guarantee must cover
-    /// every handle and process able to mutate the backing object. Read-only
-    /// mapping permissions and retaining this descriptor do not establish that
-    /// invariant by themselves.
+    /// truncated, or otherwise invalidated for the complete lifetime of the
+    /// returned value. The guarantee must cover every handle and process able to
+    /// mutate the backing object. Read-only permissions on this descriptor and
+    /// retaining it inside the returned value do not establish that invariant.
     ///
     /// # Errors
     ///
-    /// Returns the operating-system error when the descriptor cannot be cloned
-    /// or the mapping cannot be created.
+    /// Returns an operating-system error when the descriptor cannot be cloned,
+    /// the length cannot be represented, or the mapping cannot be created.
     pub unsafe fn map_file_unchecked(file: &File) -> io::Result<Self> {
+        let length = file_length(file)?;
+        if length == 0 {
+            return Ok(Self {
+                mapping: Mapping::Empty,
+            });
+        }
+
         let retained = file.try_clone()?;
         // SAFETY: the caller accepts the complete file-stability contract
-        // documented on this unsafe constructor for the returned lifetime.
-        let mapping = unsafe { MmapOptions::new().map(file)? };
+        // documented on this constructor for the returned mapping's lifetime.
+        let mapping = unsafe { MmapOptions::new().len(length).map(&retained)? };
         Ok(Self {
             mapping: Mapping::FileBacked {
                 mapping,
                 _file: retained,
             },
         })
+    }
+
+    /// Tells the kernel this mapping will be read front to back, once.
+    ///
+    /// Every parser above this crate walks its input strictly forwards and
+    /// never returns to it. Saying so lets the kernel read ahead further and
+    /// stop retaining pages that have been passed, which is the difference
+    /// between a hundred-gigabyte scan that fits in page cache and one that
+    /// evicts everything else on the machine.
+    ///
+    /// Advice is a hint, and a platform that declines it has not failed to
+    /// read the file. Callers are expected to ignore a refusal.
+    ///
+    /// # Errors
+    ///
+    /// Returns the operating system's error when it refuses the advice.
+    pub fn advise_sequential(&self) -> io::Result<()> {
+        match &self.mapping {
+            Mapping::Empty => Ok(()),
+            Mapping::Snapshot(mapping) | Mapping::FileBacked { mapping, .. } => {
+                mapping.advise(Advice::Sequential)
+            }
+        }
     }
 
     /// The mapped bytes.
@@ -110,6 +179,15 @@ impl Deref for MappedFile {
     }
 }
 
+fn file_length(file: &File) -> io::Result<usize> {
+    usize::try_from(file.metadata()?.len()).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "file length exceeds the platform address space",
+        )
+    })
+}
+
 #[cfg(unix)]
 fn read_at(file: &File, destination: &mut [u8]) -> io::Result<()> {
     use std::os::unix::fs::FileExt;
@@ -133,6 +211,7 @@ fn read_at(file: &File, destination: &mut [u8]) -> io::Result<()> {
     retained.read_exact(destination)
 }
 
+#[cfg(any(unix, windows))]
 fn read_chunks(
     mut destination: &mut [u8],
     mut read: impl FnMut(&mut [u8], u64) -> io::Result<usize>,
