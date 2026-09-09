@@ -2,18 +2,21 @@
 
 use criterion::{Criterion, black_box};
 use pdbiox_bench::{Sample, structure};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::AnalysisPolicy;
 use pdbiox_query::{Groups, Query, col};
 use pdbiox_spatial::{SpatialBackend, StructureSpatial};
 
 fn bench_queries(c: &mut Criterion) {
+    let context = ExecutionContext::default();
     let structure = structure(Sample::Medium);
     let policy = AnalysisPolicy::default();
     let groups = Groups::new();
-    let spatial = match StructureSpatial::new(&structure, &policy, SpatialBackend::CellList) {
-        Ok(spatial) => spatial,
-        Err(error) => panic!("query spatial benchmark fixture failed: {error:?}"),
-    };
+    let spatial =
+        match StructureSpatial::new(&structure, &policy, SpatialBackend::CellList, &context) {
+            Ok(spatial) => spatial,
+            Err(error) => panic!("query spatial benchmark fixture failed: {error:?}"),
+        };
     let typed = Query::from_builder(col::bfactor().gt(20.0));
     let geometric = Query::from_builder(col::within(5.0, col::chain().eq("A")));
     let residue_expansion = Query::from_builder(col::by_residue(col::name().eq("CA")));
