@@ -82,6 +82,8 @@ pub mod format_trz;
 pub mod format_txyz;
 #[path = "xtc.rs"]
 pub mod format_xtc;
+#[path = "xvg.rs"]
+pub mod format_xvg;
 #[path = "xyz.rs"]
 pub mod format_xyz;
 #[path = "transform.rs"]
@@ -93,6 +95,13 @@ mod frame_view;
 #[path = "ensemble.rs"]
 pub mod geometry_ensemble;
 mod interpolation;
+mod stream_consume;
+mod stream_contacts;
+mod stream_metrics;
+pub use format_trr::TrrReader;
+pub use stream_consume::run_analysis_stream;
+pub use stream_contacts::contact_counts_stream;
+pub use stream_metrics::{rmsd_stream, rmsf_stream};
 #[path = "dispatch/mod.rs"]
 pub mod io_dispatch;
 #[path = "diffusion.rs"]
@@ -118,6 +127,8 @@ pub mod statistics_ensemble;
 pub mod topology_amber;
 #[path = "minimal.rs"]
 pub mod topology_minimal;
+#[path = "batch.rs"]
+mod trajectory_batch;
 #[path = "reader.rs"]
 pub mod trajectory_stream;
 
@@ -158,6 +169,7 @@ pub use format_trr as trr;
 pub use format_trz as trz;
 pub use format_txyz as txyz;
 pub use format_xtc as xtc;
+pub use format_xvg as xvg;
 pub use format_xyz as xyz;
 pub use frame_ops as transform;
 pub use frame_store as trajectory;
@@ -195,7 +207,7 @@ pub use charmm::{
     CharmmAtom, CharmmCard, CharmmCardFormat, CharmmError, parse_charmm_record, write_charmm_card,
 };
 pub use clustering::{Clustering, Linkage, agglomerative_clustering, dbscan_clustering, medoid};
-pub use dcd::{DcdEndian, DcdError, DcdHeader, DcdTrajectory, parse_dcd};
+pub use dcd::{DcdEndian, DcdError, DcdHeader, DcdReader, DcdTrajectory, parse_dcd};
 pub use dcd_write::{DcdWriteOptions, write_dcd};
 pub use dielectric::{
     DielectricError, DielectricEstimate, DielectricOptions, dielectric_from_dipoles,
@@ -203,8 +215,9 @@ pub use dielectric::{
 pub use diffusion::{DiffusionMap, diffusion_map};
 pub use dispatch::{
     AmberAsciiReadOptions, FormatMetadata, TrajectoryData, TrajectoryFormat, TrajectoryIoError,
-    TrajectoryMetadata, TrajectoryReadOptions, TrajectoryWriteOptions, TrzWriteOptions,
-    read_trajectory, write_trajectory,
+    TrajectoryMetadata, TrajectoryReadOptions, TrajectoryReaderOptions, TrajectoryWriteOptions,
+    TrzWriteOptions, read_trajectory, read_trajectory_in, read_trajectory_materialized,
+    write_trajectory,
 };
 pub use dlpoly::{
     DlPolyAtom, DlPolyConfig, DlPolyError, DlPolyFrame, DlPolyHistory, parse_dlpoly_config,
@@ -289,7 +302,8 @@ pub use reader::{
 pub use selection::{UpdatingSelection, UpdatingSelectionError};
 pub use tng::{TngCompression, TngError, TngTrajectory, TngWriteOptions, parse_tng, write_tng};
 pub use tpr::{TprAtom, TprBond, TprError, TprHeader, TprResidue, TprTopology, parse_tpr};
-pub use trajectory::{Frame, Trajectory};
+pub use trajectory::{Frame, FrameRef, Trajectory, TrajectoryBuildError};
+pub use trajectory_batch::{TrajectoryBatch, TrajectoryBatchSource};
 pub use transform::{Center, Fit, FrameTransform, PipelineReader, RigidTransform};
 pub use trc::{GromosBoundary, GromosError, GromosTrajectory, parse_gromos11_trc};
 pub use trr::{TrrError, TrrPrecision, TrrTrajectory, parse_trr};
@@ -301,6 +315,7 @@ pub use water_dynamics::{
     SurvivalMode, WaterDynamics, WaterDynamicsError, WaterSurvival, water_dynamics,
 };
 pub use xtc::{
-    XtcError, XtcTrajectory, XtcWriteOptions, parse_xtc, write_xtc, write_xtc_with_precisions,
+    XtcError, XtcReader, XtcTrajectory, XtcWriteOptions, parse_xtc, write_xtc,
+    write_xtc_with_precisions,
 };
 pub use xyz::{XyzAtom, XyzFrame, parse_xyz, write_xyz};

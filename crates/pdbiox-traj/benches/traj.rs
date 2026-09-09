@@ -1,11 +1,11 @@
 //! Criterion coverage for trajectory parsing and ensemble operations.
 
-use criterion::{Criterion, black_box};
+use criterion::{BatchSize, Criterion, black_box};
 use pdbiox_bench::{Sample, coordinates, perturbed, structure};
 use pdbiox_traj::{
-    CartesianFit, DcdWriteOptions, DielectricOptions, EnsembleDistanceMatrix, FrameAlignment,
-    H5mdOptions, HarmonicSimilarityOptions, KMeansOptions, Linkage, NamdEndian, PathFrameMetric,
-    RemainderPolicy, SurvivalMode, Timestep, TrrWriteOptions, XtcWriteOptions,
+    CartesianFit, DcdReader, DcdWriteOptions, DielectricOptions, EnsembleDistanceMatrix,
+    FrameAlignment, H5mdOptions, HarmonicSimilarityOptions, KMeansOptions, Linkage, NamdEndian,
+    PathFrameMetric, RemainderPolicy, SurvivalMode, Timestep, TrrWriteOptions, XtcWriteOptions,
     agglomerative_clustering, block_convergence, cartesian_pca, cluster_population_similarity,
     dbscan_clustering, dielectric_from_dipoles, diffusion_map, generalized_procrustes_mean,
     group_coordinate_variance, harmonic_ensemble_similarity, kmeans, mean_squared_displacement,
@@ -17,7 +17,7 @@ use pdbiox_traj::{
     write_txyz, write_xtc, write_xyz,
 };
 
-use std::fmt::Debug;
+use std::{fmt::Debug, mem::size_of};
 
 trait BenchRequired<T> {
     fn required(self, context: &str) -> T;
@@ -94,6 +94,8 @@ fn bench_ensemble(c: &mut Criterion) {
     });
 
     let coordinate_frames = synthetic_frames(&reference[..reference.len().min(32)], 16);
+    let streaming_path_frames = synthetic_frames(&[[0.0, 0.0, 0.0]], 1_024);
+    let streaming_path_workspace = 2 * 512 * size_of::<f64>();
     let mut group = c.benchmark_group("traj_ensemble_kernels");
     group.bench_function("mean_squared_displacement", |b| {
         b.iter(|| black_box(mean_squared_displacement(&coordinate_frames, &[], 8)));
@@ -126,6 +128,19 @@ fn bench_ensemble(c: &mut Criterion) {
                 PathFrameMetric::FittedRmsd,
                 1_024 * 1_024,
             ))
+        });
+    });
+    group.bench_function("path_similarity/cartesian_streaming_512x512x1", |b| {
+        b.iter(|| {
+            black_box(
+                path_similarity(
+                    &streaming_path_frames[..512],
+                    &streaming_path_frames[512..],
+                    PathFrameMetric::CartesianRmsd,
+                    streaming_path_workspace,
+                )
+                .required("streaming path workspace exceeded its linear ceiling"),
+            )
         });
     });
     group.finish();
@@ -345,6 +360,50 @@ fn bench_extended_formats(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_dcd_streaming(c: &mut Criterion) {
+    let sample = structure(Sample::Small);
+    let frames = synthetic_frames(&coordinates(&sample), 256)
+        .into_iter()
+        .enumerate()
+        .map(|(frame, positions)| Timestep {
+            frame,
+            positions,
+            ..Timestep::default()
+        })
+        .collect::<Vec<_>>();
+    let bytes = write_dcd(&frames, &DcdWriteOptions::default()).required("DCD fixture failed");
+    let file = tempfile::NamedTempFile::new().required("DCD temporary file failed");
+    std::fs::write(file.path(), &bytes).required("DCD fixture write failed");
+    let path = file.path().to_path_buf();
+    let mut group = c.benchmark_group("traj_dcd_bounded");
+    group.sample_size(60);
+    group.bench_function("materialized/256_frames", |b| {
+        b.iter(|| {
+            let input = std::fs::read(&path).required("DCD benchmark read failed");
+            black_box(parse_dcd(&input).required("DCD materialized parse failed"));
+        });
+    });
+    group.bench_function("streaming/256_frames", |b| {
+        b.iter_batched(
+            || DcdReader::open(&path).required("DCD streaming open failed"),
+            |mut reader| {
+                let mut frame = Timestep::default();
+                let mut count = 0_usize;
+                while reader
+                    .read_next_frame(&mut frame)
+                    .required("DCD streaming read failed")
+                {
+                    count += 1;
+                    black_box(&frame.positions);
+                }
+                black_box(count);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+    group.finish();
+}
+
 fn distance_matrix(size: usize) -> EnsembleDistanceMatrix {
     let values: Vec<f64> = (0..size)
         .flat_map(|left| {
@@ -403,5 +462,6 @@ fn main() {
     bench_clustering(&mut criterion);
     bench_extended_ensemble(&mut criterion);
     bench_extended_formats(&mut criterion);
+    bench_dcd_streaming(&mut criterion);
     criterion.final_summary();
 }

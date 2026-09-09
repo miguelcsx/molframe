@@ -1,10 +1,15 @@
 //! Typed frame analyses with worker-count-independent reduction order.
 
 use crate::{Timestep, Trajectory, TrajectoryError};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::Analysis;
+use pdbiox_core::parallel::{BlockPlan, map_blocks_in};
 use std::ops::Range;
 
 /// Fixed leaf size keeps floating-point grouping independent of worker count.
+///
+/// Changing it changes the numerical result, which is why it is a named
+/// constant rather than a tuning parameter.
 const CANONICAL_BLOCK_SIZE: usize = 64;
 
 /// Analysis lifecycle over trajectory frames.
@@ -38,6 +43,7 @@ pub trait FrameAnalysis: Sync {
         &self,
         timestep: &Timestep,
         partial: &mut Self::Partial,
+        context: &ExecutionContext,
     ) -> Result<(), Self::Error>;
 
     /// Merges canonical blocks in ascending block order.
@@ -67,83 +73,29 @@ pub trait FrameAnalysis: Sync {
 pub fn run_analysis<A: FrameAnalysis>(
     trajectory: &Trajectory,
     analysis: &A,
-    workers: usize,
+    context: &ExecutionContext,
 ) -> Result<Analysis<A::Output>, A::Error> {
-    if workers == 0 {
-        return Err(TrajectoryError::InvalidWorkerCount.into());
-    }
-    if workers > 1 && !A::PARALLELIZABLE {
+    if context.worker_budget() > 1 && !A::PARALLELIZABLE {
         return Err(TrajectoryError::AnalysisNotParallel.into());
     }
-    let blocks = blocks(trajectory.len());
-    let partials = if blocks.is_empty() {
+    let plan = BlockPlan::new(trajectory.len(), CANONICAL_BLOCK_SIZE);
+    let partials = if plan.is_empty() {
         vec![analysis.prepare(trajectory)?]
-    } else if workers == 1 {
-        sequential_blocks(trajectory, analysis, &blocks)?
     } else {
-        parallel_blocks(trajectory, analysis, &blocks, workers)?
+        let produced = map_blocks_in(plan, context, |_, range| {
+            process_block(trajectory, analysis, range, context)
+        })
+        .map_err(|_| TrajectoryError::WorkerPanicked)?;
+        produced.into_iter().collect::<Result<Vec<_>, A::Error>>()?
     };
     analysis.conclude(analysis.merge(partials)?)
-}
-
-fn blocks(frame_count: usize) -> Vec<Range<usize>> {
-    (0..frame_count)
-        .step_by(CANONICAL_BLOCK_SIZE)
-        .map(|start| start..(start + CANONICAL_BLOCK_SIZE).min(frame_count))
-        .collect()
-}
-
-fn sequential_blocks<A: FrameAnalysis>(
-    trajectory: &Trajectory,
-    analysis: &A,
-    blocks: &[Range<usize>],
-) -> Result<Vec<A::Partial>, A::Error> {
-    blocks
-        .iter()
-        .map(|range| process_block(trajectory, analysis, range.clone()))
-        .collect()
-}
-
-fn parallel_blocks<A: FrameAnalysis>(
-    trajectory: &Trajectory,
-    analysis: &A,
-    blocks: &[Range<usize>],
-    workers: usize,
-) -> Result<Vec<A::Partial>, A::Error> {
-    let worker_count = workers.min(blocks.len());
-    let gathered = std::thread::scope(|scope| {
-        let mut handles = Vec::with_capacity(worker_count);
-        for worker in 0..worker_count {
-            handles.push(scope.spawn(move || {
-                let mut output = Vec::new();
-                for block_index in (worker..blocks.len()).step_by(worker_count) {
-                    output.push((
-                        block_index,
-                        process_block(trajectory, analysis, blocks[block_index].clone())?,
-                    ));
-                }
-                Ok::<_, A::Error>(output)
-            }));
-        }
-        let mut output = Vec::with_capacity(blocks.len());
-        for handle in handles {
-            output.extend(
-                handle
-                    .join()
-                    .map_err(|_| A::Error::from(TrajectoryError::WorkerPanicked))??,
-            );
-        }
-        Ok::<_, A::Error>(output)
-    })?;
-    let mut ordered = gathered;
-    ordered.sort_unstable_by_key(|(block_index, _)| *block_index);
-    Ok(ordered.into_iter().map(|(_, partial)| partial).collect())
 }
 
 fn process_block<A: FrameAnalysis>(
     trajectory: &Trajectory,
     analysis: &A,
     range: Range<usize>,
+    context: &ExecutionContext,
 ) -> Result<A::Partial, A::Error> {
     let mut partial = analysis.prepare(trajectory)?;
     let mut timestep = Timestep::default();
@@ -153,8 +105,8 @@ fn process_block<A: FrameAnalysis>(
         };
         timestep.frame = frame_index;
         timestep.positions.clear();
-        timestep.positions.extend_from_slice(&frame.positions);
-        analysis.single_frame(&timestep, &mut partial)?;
+        timestep.positions.extend_from_slice(frame.positions);
+        analysis.single_frame(&timestep, &mut partial, context)?;
     }
     Ok(partial)
 }

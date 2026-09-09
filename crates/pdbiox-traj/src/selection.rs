@@ -1,6 +1,7 @@
 //! Reusable structure-bound queries evaluated against changing frame coordinates.
 
 use crate::Timestep;
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::AnalysisPolicy;
 use pdbiox_core::diagnostic::{Diagnostic, Strictness};
 use pdbiox_core::index::ModelIndex;
@@ -12,6 +13,9 @@ use pdbiox_spatial::{SpatialBackend, StructureSpatial};
 #[derive(Clone, Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum UpdatingSelectionError {
+    /// Coordinate copy-on-write could not fit the shared execution account.
+    #[error("frame coordinate copy exceeds the execution memory budget: {0}")]
+    Memory(#[from] pdbiox_core::MemoryBudgetError),
     /// The fixed topology atom count cannot be represented on this platform.
     #[error("topology atom count exceeds the platform index range")]
     AtomCountOverflow,
@@ -70,7 +74,11 @@ impl UpdatingSelection {
     ///
     /// Refuses atom-count mismatches, invalid coordinates, unavailable periodic
     /// metadata and query evaluation failures.
-    pub fn evaluate(&self, timestep: &Timestep) -> Result<Evaluation, UpdatingSelectionError> {
+    pub fn evaluate(
+        &self,
+        timestep: &Timestep,
+        context: &ExecutionContext,
+    ) -> Result<Evaluation, UpdatingSelectionError> {
         let expected = usize::try_from(self.topology.atom_count())
             .map_err(|_| UpdatingSelectionError::AtomCountOverflow)?;
         if timestep.positions.len() != expected {
@@ -79,7 +87,7 @@ impl UpdatingSelection {
                 found: timestep.positions.len(),
             });
         }
-        let mut editor = self.topology.edit_coordinates();
+        let mut editor = self.topology.edit_coordinates(context)?;
         let positions = editor
             .positions_mut(ModelIndex::new(0))
             .ok_or_else(|| UpdatingSelectionError::Coordinates(Vec::new()))?;
@@ -88,7 +96,7 @@ impl UpdatingSelection {
             .commit()
             .map_err(UpdatingSelectionError::Coordinates)?;
         let structure = with_frame_cell(structure, timestep.cell)?;
-        let spatial = StructureSpatial::new(&structure, &self.policy, self.backend)
+        let spatial = StructureSpatial::new(&structure, &self.policy, self.backend, context)
             .map_err(UpdatingSelectionError::Spatial)?;
         self.plan
             .evaluate(&structure, &self.policy, &self.groups, Some(&spatial))

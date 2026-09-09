@@ -173,7 +173,9 @@ impl<R> PipelineReader<R> {
 }
 
 impl<R: TrajectoryReader> TrajectoryReader for PipelineReader<R> {
-    const FORMAT: &'static str = R::FORMAT;
+    fn format(&self) -> &'static str {
+        self.source.format()
+    }
 
     fn n_atoms(&self) -> usize {
         self.source.n_atoms()

@@ -5,7 +5,8 @@ use crate::{Frame, MemoryReader, Trajectory, TrajectoryError};
 fn atom_count_is_checked_before_a_coordinate_frame_is_consumed() {
     let trajectory = Trajectory::from_frames(vec![Frame {
         positions: vec![[0.0; 3]; 3],
-    }]);
+    }])
+    .expect("fixed-width trajectory");
     let reader = MemoryReader::new(&trajectory);
     assert_eq!(MinimalTopology::new(3).validate_reader(&reader), Ok(()));
     assert_eq!(

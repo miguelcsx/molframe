@@ -1,5 +1,6 @@
 use super::{FrameAnalysis, run_analysis};
 use crate::{Frame, Timestep, Trajectory, TrajectoryError};
+use pdbiox_core::ExecutionContext;
 use pdbiox_core::contract::{Analysis, AnalysisPolicy, Coverage};
 
 struct SumX {
@@ -23,6 +24,7 @@ impl FrameAnalysis for SumX {
         &self,
         timestep: &Timestep,
         partial: &mut Self::Partial,
+        _context: &ExecutionContext,
     ) -> Result<(), TrajectoryError> {
         *partial += f64::from(timestep.positions[0][0]);
         Ok(())
@@ -48,14 +50,18 @@ fn merge_is_bit_identical_at_every_worker_count() {
             positions: vec![[if index % 3 == 0 { 1.0e10 } else { 0.1 }, 0.0, 0.0]],
         })
         .collect();
-    let trajectory = Trajectory::from_frames(frames);
+    let trajectory = Trajectory::from_frames(frames).expect("fixed-width trajectory");
     let analysis = SumX {
         policy: AnalysisPolicy::default(),
     };
     let outputs: Vec<_> = [1, 2, 4, 16]
         .into_iter()
         .map(|workers| {
-            run_analysis(&trajectory, &analysis, workers).map_or_else(
+            let context = ExecutionContext::builder()
+                .worker_budget(workers)
+                .build()
+                .expect("worker context is valid");
+            run_analysis(&trajectory, &analysis, &context).map_or_else(
                 |error| panic!("analysis failed: {error}"),
                 |result| result.value.to_bits(),
             )
@@ -81,6 +87,7 @@ impl FrameAnalysis for Ordered {
         &self,
         _timestep: &Timestep,
         _partial: &mut Self::Partial,
+        _context: &ExecutionContext,
     ) -> Result<(), TrajectoryError> {
         Ok(())
     }
@@ -101,8 +108,12 @@ impl FrameAnalysis for Ordered {
 #[test]
 fn order_dependent_analysis_cannot_accidentally_run_in_parallel() {
     let trajectory = Trajectory::default();
+    let context = ExecutionContext::builder()
+        .worker_budget(2)
+        .build()
+        .expect("worker context is valid");
     assert!(matches!(
-        run_analysis(&trajectory, &Ordered, 2),
+        run_analysis(&trajectory, &Ordered, &context),
         Err(TrajectoryError::AnalysisNotParallel)
     ));
 }

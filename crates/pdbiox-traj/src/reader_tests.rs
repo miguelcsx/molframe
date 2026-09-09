@@ -39,7 +39,8 @@ fn stream_is_forward_only_and_reuses_the_caller_buffer() {
 
 #[test]
 fn memory_source_declares_and_performs_random_access() {
-    let trajectory = Trajectory::from_frames(vec![frame(0.0), frame(1.0)]);
+    let trajectory =
+        Trajectory::from_frames(vec![frame(0.0), frame(1.0)]).expect("fixed-width trajectory");
     let mut reader = MemoryReader::new(&trajectory);
     let mut timestep = Timestep::default();
     reader
@@ -52,8 +53,9 @@ fn memory_source_declares_and_performs_random_access() {
 
 #[test]
 fn chained_sources_are_validated_and_numbered_globally() {
-    let first = Trajectory::from_frames(vec![frame(0.0)]);
-    let second = Trajectory::from_frames(vec![frame(1.0), frame(2.0)]);
+    let first = Trajectory::from_frames(vec![frame(0.0)]).expect("fixed-width trajectory");
+    let second =
+        Trajectory::from_frames(vec![frame(1.0), frame(2.0)]).expect("fixed-width trajectory");
     let mut chain = ChainedReader::new(vec![MemoryReader::new(&first), MemoryReader::new(&second)])
         .unwrap_or_else(|error| panic!("chain failed: {error}"));
     let mut timestep = Timestep::default();
@@ -66,10 +68,11 @@ fn chained_sources_are_validated_and_numbered_globally() {
 
 #[test]
 fn chain_refuses_misaligned_atom_counts() {
-    let first = Trajectory::from_frames(vec![frame(0.0)]);
+    let first = Trajectory::from_frames(vec![frame(0.0)]).expect("fixed-width trajectory");
     let second = Trajectory::from_frames(vec![Frame {
         positions: vec![[0.0; 3]; 2],
-    }]);
+    }])
+    .expect("fixed-width trajectory");
     let result = ChainedReader::new(vec![MemoryReader::new(&first), MemoryReader::new(&second)]);
     assert!(matches!(
         result,
@@ -78,4 +81,35 @@ fn chain_refuses_misaligned_atom_counts() {
             found: 2
         })
     ));
+}
+
+#[test]
+fn an_unrepresentable_chain_length_is_reported_as_unknown_instead_of_wrapping() {
+    struct DeclaredReader(usize);
+    impl TrajectoryReader for DeclaredReader {
+        fn format(&self) -> &'static str {
+            "declared"
+        }
+        fn n_atoms(&self) -> usize {
+            0
+        }
+        fn n_frames(&self) -> Option<usize> {
+            Some(self.0)
+        }
+        fn units(&self) -> super::Units {
+            super::Units::CANONICAL
+        }
+        fn random_access(&self) -> RandomAccess {
+            RandomAccess::None
+        }
+        fn read_next(&mut self, _: &mut Timestep) -> Result<bool, TrajectoryError> {
+            Ok(false)
+        }
+        fn seek(&mut self, _: usize) -> Result<(), TrajectoryError> {
+            Err(TrajectoryError::RandomAccessUnavailable)
+        }
+    }
+    let chain = ChainedReader::new(vec![DeclaredReader(usize::MAX), DeclaredReader(1)])
+        .expect("matching topology");
+    assert_eq!(chain.n_frames(), None);
 }

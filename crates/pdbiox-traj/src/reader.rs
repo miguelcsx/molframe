@@ -1,6 +1,6 @@
 //! Reusable-buffer trajectory reader contract and concrete sources.
 
-use crate::{Frame, Trajectory};
+use crate::{Frame, Trajectory, TrajectoryBuildError};
 use pdbiox_core::structure::UnitCell;
 use std::collections::BTreeMap;
 
@@ -88,6 +88,9 @@ impl Timestep {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum TrajectoryError {
+    /// An owned fixed-width trajectory could not be constructed.
+    #[error(transparent)]
+    Build(#[from] TrajectoryBuildError),
     /// Seeking was requested from a forward-only source.
     #[error("trajectory source does not support random access")]
     RandomAccessUnavailable,
@@ -143,12 +146,40 @@ pub enum TrajectoryError {
         /// Duplicated atom index.
         index: usize,
     },
+    /// A format reader encountered an operating-system I/O failure.
+    #[error("{format} trajectory I/O failed: {kind:?}")]
+    SourceIo {
+        /// Stable source format name.
+        format: &'static str,
+        /// Portable I/O failure class.
+        kind: std::io::ErrorKind,
+    },
+    /// A format reader rejected a malformed or contradictory frame.
+    #[error("invalid {format} trajectory record")]
+    InvalidSource {
+        /// Stable source format name.
+        format: &'static str,
+    },
+    /// Reader-owned and caller-output storage would exceed the explicit ceiling.
+    #[error("trajectory frame storage requires {required} bytes, over the {limit} byte limit")]
+    MemoryLimit {
+        /// Required bytes, or `usize::MAX` when the dimension overflows.
+        required: usize,
+        /// Caller-provided ceiling.
+        limit: usize,
+    },
+    /// Cooperative cancellation stopped the pull before consuming another frame.
+    #[error("trajectory batch source was cancelled")]
+    Cancelled,
+    /// A global frame or chunk identity reached the end of its 64-bit domain.
+    #[error("trajectory batch identity overflow")]
+    IdentityOverflow,
 }
 
 /// Coordinate source that fills a caller-owned timestep buffer.
-pub trait TrajectoryReader {
+pub trait TrajectoryReader: Send {
     /// Stable format or source name.
-    const FORMAT: &'static str;
+    fn format(&self) -> &'static str;
 
     /// Number of atoms in every frame.
     fn n_atoms(&self) -> usize;
@@ -164,6 +195,25 @@ pub trait TrajectoryReader {
     ///
     /// Returns a source or atom-count error without publishing a partial frame.
     fn read_next(&mut self, timestep: &mut Timestep) -> Result<bool, TrajectoryError>;
+    /// Reads after validating the complete frame workspace against a byte ceiling.
+    ///
+    /// Readers without a bounded decoder refuse before advancing. The ceiling
+    /// includes retained output capacity and decoder workspace, not the source
+    /// object supplied by the caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns a resource or capability error before an unsupported read.
+    fn read_next_bounded(
+        &mut self,
+        _timestep: &mut Timestep,
+        _bytes: usize,
+    ) -> Result<bool, TrajectoryError> {
+        Err(TrajectoryError::InvalidSource {
+            format: "reader has no bounded decoder",
+        })
+    }
+
     /// Positions the next read at one frame.
     ///
     /// # Errors
@@ -177,6 +227,44 @@ pub trait TrajectoryReader {
     /// Returns [`TrajectoryError::RandomAccessUnavailable`] for streams.
     fn rewind(&mut self) -> Result<(), TrajectoryError> {
         self.seek(0)
+    }
+}
+
+impl<R: TrajectoryReader + ?Sized> TrajectoryReader for Box<R> {
+    fn format(&self) -> &'static str {
+        (**self).format()
+    }
+
+    fn n_atoms(&self) -> usize {
+        (**self).n_atoms()
+    }
+
+    fn n_frames(&self) -> Option<usize> {
+        (**self).n_frames()
+    }
+
+    fn units(&self) -> Units {
+        (**self).units()
+    }
+
+    fn random_access(&self) -> RandomAccess {
+        (**self).random_access()
+    }
+
+    fn read_next(&mut self, timestep: &mut Timestep) -> Result<bool, TrajectoryError> {
+        (**self).read_next(timestep)
+    }
+
+    fn read_next_bounded(
+        &mut self,
+        timestep: &mut Timestep,
+        bytes: usize,
+    ) -> Result<bool, TrajectoryError> {
+        (**self).read_next_bounded(timestep, bytes)
+    }
+
+    fn seek(&mut self, frame: usize) -> Result<(), TrajectoryError> {
+        (**self).seek(frame)
     }
 }
 
@@ -201,7 +289,9 @@ impl<'a> MemoryReader<'a> {
 }
 
 impl TrajectoryReader for MemoryReader<'_> {
-    const FORMAT: &'static str = "memory";
+    fn format(&self) -> &'static str {
+        "memory"
+    }
 
     fn n_atoms(&self) -> usize {
         self.atoms
@@ -223,9 +313,18 @@ impl TrajectoryReader for MemoryReader<'_> {
         let Some(frame) = self.trajectory.frame(self.next) else {
             return Ok(false);
         };
-        timestep.replace_positions(self.next, &frame.positions);
+        timestep.replace_positions(self.next, frame.positions);
         self.next += 1;
         Ok(true)
+    }
+
+    fn read_next_bounded(
+        &mut self,
+        timestep: &mut Timestep,
+        bytes: usize,
+    ) -> Result<bool, TrajectoryError> {
+        super::stream_consume::prepare_positions(timestep, self.n_atoms(), bytes)?;
+        self.read_next(timestep)
     }
 
     fn seek(&mut self, frame: usize) -> Result<(), TrajectoryError> {
@@ -254,8 +353,10 @@ impl<I> StreamingReader<I> {
     }
 }
 
-impl<I: Iterator<Item = Frame>> TrajectoryReader for StreamingReader<I> {
-    const FORMAT: &'static str = "stream";
+impl<I: Iterator<Item = Frame> + Send> TrajectoryReader for StreamingReader<I> {
+    fn format(&self) -> &'static str {
+        "stream"
+    }
 
     fn n_atoms(&self) -> usize {
         self.atoms
@@ -286,6 +387,15 @@ impl<I: Iterator<Item = Frame>> TrajectoryReader for StreamingReader<I> {
         timestep.replace_positions(self.next, &frame.positions);
         self.next += 1;
         Ok(true)
+    }
+
+    fn read_next_bounded(
+        &mut self,
+        timestep: &mut Timestep,
+        bytes: usize,
+    ) -> Result<bool, TrajectoryError> {
+        super::stream_consume::prepare_positions(timestep, self.n_atoms(), bytes)?;
+        self.read_next(timestep)
     }
 
     fn seek(&mut self, _frame: usize) -> Result<(), TrajectoryError> {
@@ -329,7 +439,9 @@ impl<R: TrajectoryReader> ChainedReader<R> {
 }
 
 impl<R: TrajectoryReader> TrajectoryReader for ChainedReader<R> {
-    const FORMAT: &'static str = "chain";
+    fn format(&self) -> &'static str {
+        "chain"
+    }
 
     fn n_atoms(&self) -> usize {
         self.atoms
@@ -337,7 +449,7 @@ impl<R: TrajectoryReader> TrajectoryReader for ChainedReader<R> {
 
     fn n_frames(&self) -> Option<usize> {
         self.readers.iter().try_fold(0usize, |total, reader| {
-            reader.n_frames().map(|count| total + count)
+            reader.n_frames().and_then(|count| total.checked_add(count))
         })
     }
 

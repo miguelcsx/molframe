@@ -154,8 +154,9 @@ fn declarative_dispatch_preserves_creator_metadata() {
         write_h5md_with_metadata(&frames(), &metadata).expect("source encode"),
     )
     .expect("source file");
-    let trajectory = crate::read_trajectory(&source_path, &crate::TrajectoryReadOptions::default())
-        .expect("dispatch read");
+    let trajectory =
+        crate::read_trajectory_materialized(&source_path, &crate::TrajectoryReadOptions::default())
+            .expect("dispatch read");
     crate::write_trajectory(
         &rewritten_path,
         &trajectory,

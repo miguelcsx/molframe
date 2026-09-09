@@ -148,8 +148,9 @@ fn declarative_dispatch_preserves_precision_and_producer_metadata() {
         write_amber_netcdf(&source_frames, source_options.clone()).expect("source encode"),
     )
     .expect("source file");
-    let trajectory = crate::read_trajectory(&source_path, &crate::TrajectoryReadOptions::default())
-        .expect("dispatch read");
+    let trajectory =
+        crate::read_trajectory_materialized(&source_path, &crate::TrajectoryReadOptions::default())
+            .expect("dispatch read");
     crate::write_trajectory(
         &rewritten_path,
         &trajectory,
