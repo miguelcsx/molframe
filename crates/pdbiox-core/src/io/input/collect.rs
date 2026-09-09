@@ -38,7 +38,7 @@ impl OutputLimit {
         }
     }
 
-    const fn maximum(self) -> u64 {
+    pub(super) const fn maximum(self) -> u64 {
         match self {
             Self::Uncompressed { maximum } => maximum,
             #[cfg(any(feature = "gzip", feature = "zstd"))]
@@ -46,7 +46,7 @@ impl OutputLimit {
         }
     }
 
-    fn validate(self, expanded: u64) -> Result<(), Diagnostic> {
+    pub(super) fn validate(self, expanded: u64) -> Result<(), Diagnostic> {
         match self {
             Self::Uncompressed { maximum } if expanded > maximum => {
                 Err(Limits::exceeded("decompressed bytes", expanded))
@@ -58,6 +58,25 @@ impl OutputLimit {
             } => check_expansion(expanded, compressed, limits),
         }
     }
+}
+
+#[cfg(feature = "mmap")]
+pub(super) fn map_checked<R: Read>(
+    reader: R,
+    limit: OutputLimit,
+    failure_message: &'static str,
+    path: Option<&Path>,
+) -> Result<pdbiox_mmap::MappedFile, Diagnostic> {
+    let read_limit = match limit.maximum().checked_add(1) {
+        Some(value) => value,
+        None => u64::MAX,
+    };
+    let mapped = pdbiox_mmap::MappedFile::private_snapshot_from_reader(reader.take(read_limit))
+        .map_err(|error| read_failure(failure_message, path, &error))?;
+    let expanded = u64::try_from(mapped.as_bytes().len())
+        .map_err(|_| Limits::exceeded("decompressed bytes", "more than u64::MAX"))?;
+    limit.validate(expanded)?;
+    Ok(mapped)
 }
 
 pub(super) fn collect_checked<R: Read>(

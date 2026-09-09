@@ -2,16 +2,23 @@
 
 use crate::diagnostic::{Code, Diagnostic};
 
-const DEFAULT_DECOMPRESSED_BYTES: u64 = 4_u64 << 30;
+const DEFAULT_DECOMPRESSED_BYTES: u64 = u64::MAX;
 const DEFAULT_COMPRESSION_RATIO: u64 = 1_000;
-const DEFAULT_ROWS_PER_CATEGORY: u64 = 100_000_000;
 const DEFAULT_NESTING_DEPTH: u32 = 64;
-const DEFAULT_DICTIONARY_ENTRIES: u32 = 1_000_000;
 
 /// Ceilings that turn hostile input into diagnostics rather than exhaustion.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Limits {
     /// Largest accepted size after decompression, in bytes.
+    ///
+    /// Unbounded by default. The ceiling exists to stop a small compressed
+    /// input expanding without limit, and that job is done by
+    /// [`Self::compression_ratio`], which bounds expansion against the bytes
+    /// actually supplied. An absolute ceiling additionally refuses large
+    /// *uncompressed* input, where there is nothing to defend against: the
+    /// file is already that size, and reading it cannot multiply it.
+    ///
+    /// A caller who wants an absolute ceiling sets one.
     pub decompressed_bytes: u64,
     /// Largest accepted ratio of decompressed to compressed size.
     pub compression_ratio: u64,
@@ -28,9 +35,9 @@ impl Default for Limits {
         Self {
             decompressed_bytes: DEFAULT_DECOMPRESSED_BYTES,
             compression_ratio: DEFAULT_COMPRESSION_RATIO,
-            rows_per_category: DEFAULT_ROWS_PER_CATEGORY,
+            rows_per_category: u64::MAX,
             nesting_depth: DEFAULT_NESTING_DEPTH,
-            dictionary_entries: DEFAULT_DICTIONARY_ENTRIES,
+            dictionary_entries: u32::MAX - 1,
         }
     }
 }

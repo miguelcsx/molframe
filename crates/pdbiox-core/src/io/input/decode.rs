@@ -1,5 +1,7 @@
 //! Compression-prefix replay and bounded gzip/Zstandard decoding.
 
+#[cfg(all(feature = "mmap", any(feature = "gzip", feature = "zstd")))]
+use super::collect::map_checked;
 use super::collect::read_failure;
 #[cfg(any(feature = "gzip", feature = "zstd"))]
 use super::collect::{OutputLimit, collect_checked};
@@ -78,6 +80,7 @@ pub(super) fn compressed_file_size(
     Ok(size)
 }
 
+#[cfg(not(feature = "mmap"))]
 pub(super) fn read_bounded(mut reader: impl Read, limits: Limits) -> std::io::Result<Vec<u8>> {
     let mut raw = Vec::new();
     match limits.decompressed_bytes.checked_add(1) {
@@ -98,6 +101,7 @@ pub(super) fn read_bounded(mut reader: impl Read, limits: Limits) -> std::io::Re
     Ok(raw)
 }
 
+#[cfg(not(feature = "mmap"))]
 pub(super) fn decompress(raw: Vec<u8>, limits: Limits) -> Result<Vec<u8>, Diagnostic> {
     let Ok(compressed) = u64::try_from(raw.len()) else {
         return Err(Limits::exceeded("decompressed bytes", raw.len()));
@@ -109,12 +113,12 @@ pub(super) fn decompress(raw: Vec<u8>, limits: Limits) -> Result<Vec<u8>, Diagno
     }
 }
 
-#[cfg(feature = "gzip")]
+#[cfg(all(feature = "gzip", not(feature = "mmap")))]
 fn expand_gzip(raw: &[u8], compressed: u64, limits: Limits) -> Result<Vec<u8>, Diagnostic> {
     expand_gzip_reader(raw, compressed, limits, None)
 }
 
-#[cfg(not(feature = "gzip"))]
+#[cfg(all(not(feature = "gzip"), not(feature = "mmap")))]
 fn expand_gzip(_: &[u8], _: u64, _: Limits) -> Result<Vec<u8>, Diagnostic> {
     Err(unsupported("gzip"))
 }
@@ -134,6 +138,21 @@ pub(super) fn expand_gzip_reader<R: Read>(
     )
 }
 
+#[cfg(all(feature = "gzip", feature = "mmap"))]
+pub(super) fn map_gzip_reader<R: Read>(
+    reader: R,
+    compressed: u64,
+    limits: Limits,
+    path: Option<&Path>,
+) -> Result<pdbiox_mmap::MappedFile, Diagnostic> {
+    map_checked(
+        flate2::read::GzDecoder::new(reader),
+        OutputLimit::expanded(compressed, limits),
+        "gzip stream could not be decoded",
+        path,
+    )
+}
+
 #[cfg(not(feature = "gzip"))]
 pub(super) fn expand_gzip_reader<R: Read>(
     _: R,
@@ -144,12 +163,12 @@ pub(super) fn expand_gzip_reader<R: Read>(
     Err(unsupported("gzip"))
 }
 
-#[cfg(feature = "zstd")]
+#[cfg(all(feature = "zstd", not(feature = "mmap")))]
 fn expand_zstd(raw: &[u8], compressed: u64, limits: Limits) -> Result<Vec<u8>, Diagnostic> {
     expand_zstd_reader(raw, compressed, limits, None)
 }
 
-#[cfg(not(feature = "zstd"))]
+#[cfg(all(not(feature = "zstd"), not(feature = "mmap")))]
 fn expand_zstd(_: &[u8], _: u64, _: Limits) -> Result<Vec<u8>, Diagnostic> {
     Err(unsupported("zstd"))
 }
@@ -171,6 +190,23 @@ pub(super) fn expand_zstd_reader<R: Read>(
     )
 }
 
+#[cfg(all(feature = "zstd", feature = "mmap"))]
+pub(super) fn map_zstd_reader<R: Read>(
+    reader: R,
+    compressed: u64,
+    limits: Limits,
+    path: Option<&Path>,
+) -> Result<pdbiox_mmap::MappedFile, Diagnostic> {
+    let decoder = zstd::stream::read::Decoder::new(reader)
+        .map_err(|error| read_failure("zstd stream could not be decoded", path, &error))?;
+    map_checked(
+        decoder,
+        OutputLimit::expanded(compressed, limits),
+        "zstd stream could not be decoded",
+        path,
+    )
+}
+
 #[cfg(not(feature = "zstd"))]
 pub(super) fn expand_zstd_reader<R: Read>(
     _: R,
@@ -182,7 +218,7 @@ pub(super) fn expand_zstd_reader<R: Read>(
 }
 
 #[cfg(any(not(feature = "gzip"), not(feature = "zstd")))]
-fn unsupported(container: &'static str) -> Diagnostic {
+pub(super) fn unsupported(container: &'static str) -> Diagnostic {
     Diagnostic::new(Code::E1901)
         .with_message("input is compressed with a container this build does not include")
         .with_context("container", container)
