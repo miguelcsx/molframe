@@ -11,6 +11,8 @@
 //! the atom count. The double-precision point tests keep the result stable
 //! regardless of the order neighbours arrive in.
 
+use pdbiox_core::ExecutionContext;
+use pdbiox_core::parallel::{BlockPlan, map_blocks_in};
 use pdbiox_spatial::SpatialError;
 
 use crate::neighbourhood::{self, Neighbourhood};
@@ -60,9 +62,27 @@ pub enum SasaError {
     /// Grid dimensions overflow the host index domain before allocation.
     #[error("the requested grid dimensions exceed the host index domain")]
     GridDimensionsOverflow,
+    /// The complete peak allocation for a voxel operation exceeds the hard
+    /// operation-memory budget.
+    #[error("the surface operation needs {bytes} bytes at peak, over the {limit}-byte limit")]
+    WorkspaceTooLarge {
+        /// Conservative peak byte count, including inputs and returned output.
+        bytes: usize,
+        /// Hard upper bound applied to voxel operations.
+        limit: usize,
+    },
+    /// A bounded allocation was refused by the allocator.
+    #[error("the allocator refused a bounded {bytes}-byte surface workspace")]
+    AllocationFailed {
+        /// Bytes requested for the single refused allocation.
+        bytes: usize,
+    },
     /// The neighbour search rejected the input.
     #[error(transparent)]
     Spatial(#[from] SpatialError),
+    /// A scoped surface worker panicked before returning its atoms.
+    #[error("a surface worker thread panicked")]
+    WorkerPanicked,
 }
 
 /// Per-atom solvent-accessible surface area, in the squared unit of the radii.
@@ -83,11 +103,14 @@ pub enum SasaError {
 /// # Examples
 ///
 /// ```
+/// use pdbiox_core::ExecutionContext;
 /// use pdbiox_surface::shrake_rupley;
 /// use core::f64::consts::PI;
 ///
 /// // A lone atom is fully exposed: its area is that of the expanded sphere.
-/// let areas = shrake_rupley(&[[0.0, 0.0, 0.0]], &[2.0], 1.0, 200)?;
+/// let areas = shrake_rupley(
+///     &[[0.0, 0.0, 0.0]], &[2.0], 1.0, 200, &ExecutionContext::default()
+/// )?;
 /// let expanded = 2.0 + 1.0;
 /// assert!((areas[0] - 4.0 * PI * expanded * expanded).abs() < 1e-6);
 /// # Ok::<(), pdbiox_surface::SasaError>(())
@@ -97,20 +120,50 @@ pub fn shrake_rupley(
     radii: &[f32],
     probe: f32,
     points: u16,
+    context: &ExecutionContext,
 ) -> Result<Vec<f64>, SasaError> {
-    let Some(geometry) = prepare(positions, radii, probe, points)? else {
+    let Some(geometry) = prepare(positions, radii, probe, points, context)? else {
         return Ok(Vec::new());
     };
 
     let per_point = 4.0 * core::f64::consts::PI / f64::from(points);
 
-    let mut areas = Vec::with_capacity(positions.len());
+    mapped_ranges(positions.len(), context, |range| {
+        range
+            .map(|atom| atom_area(atom, &geometry, per_point))
+            .collect()
+    })
+}
 
-    for atom in 0..positions.len() {
-        areas.push(atom_area(atom, &geometry, per_point));
+/// Runs `worker` over every block of `0..count` and concatenates the results.
+///
+/// Block boundaries come from the item count and a fixed block size, never from
+/// the worker count, and the results are returned in block order — so the output
+/// equals the serial run for any worker count.
+///
+/// Blocks are much smaller than one worker's share deliberately. Per-atom cost
+/// varies by an order of magnitude between an exposed atom, which takes the
+/// exact area, and a buried one, which tests every sampling direction against
+/// every neighbour; and atoms arrive in file order, which correlates with
+/// burial. One contiguous range per worker would leave threads idle while one
+/// finishes a buried run.
+fn mapped_ranges<T: Send>(
+    count: usize,
+    context: &ExecutionContext,
+    worker: impl Fn(core::ops::Range<usize>) -> Vec<T> + Sync,
+) -> Result<Vec<T>, SasaError> {
+    /// Atoms per block. Small enough to even out the spread in per-atom cost.
+    const BLOCK_ATOMS: usize = 512;
+
+    let plan = BlockPlan::new(count, BLOCK_ATOMS);
+    let produced = map_blocks_in(plan, context, |_, range| worker(range))
+        .map_err(|_| SasaError::WorkerPanicked)?;
+
+    let mut output = Vec::with_capacity(count);
+    for part in produced {
+        output.extend(part);
     }
-
-    Ok(areas)
+    Ok(output)
 }
 
 /// Computes sampled solvent-accessible area for one atom.
@@ -124,7 +177,7 @@ fn atom_area(atom: usize, geometry: &Geometry, per_point: f64) -> f64 {
         return 0.0;
     }
 
-    if geometry.hood.adjacency[atom].is_empty() {
+    if geometry.hood.adjacency.row(atom).is_empty() {
         return 4.0 * core::f64::consts::PI * radius * radius;
     }
 
@@ -164,18 +217,19 @@ pub fn surface_points(
     radii: &[f32],
     probe: f32,
     samples: u16,
+    context: &ExecutionContext,
 ) -> Result<Vec<SurfacePoint>, SasaError> {
-    let Some(geometry) = prepare(positions, radii, probe, samples)? else {
+    let Some(geometry) = prepare(positions, radii, probe, samples, context)? else {
         return Ok(Vec::new());
     };
 
-    let mut points = Vec::new();
-
-    for atom in 0..positions.len() {
-        append_fixed_surface_points(&geometry, atom, &mut points);
-    }
-
-    Ok(points)
+    mapped_ranges(positions.len(), context, |range| {
+        let mut points = Vec::new();
+        for atom in range {
+            append_fixed_surface_points(&geometry, atom, &mut points);
+        }
+        points
+    })
 }
 
 /// Appends all fixed-sampling exposed points for one atom.
@@ -189,7 +243,7 @@ fn append_fixed_surface_points(geometry: &Geometry, atom: usize, output: &mut Ve
         return;
     }
 
-    let centre = geometry.hood.centres[atom];
+    let centre = geometry.hood.centre(atom);
 
     geometry.for_each_exposed(atom, |direction| {
         output.push(surface_point(atom, centre, radius, direction));
@@ -212,10 +266,11 @@ pub fn surface_points_at_density(
     radii: &[f32],
     probe: f32,
     density: f32,
+    context: &ExecutionContext,
 ) -> Result<Vec<SurfacePoint>, SasaError> {
     validate_density(density)?;
 
-    let Some(hood) = neighbourhood::build(positions, radii, probe)? else {
+    let Some(hood) = neighbourhood::build(positions, radii, probe, context)? else {
         return Ok(Vec::new());
     };
 
@@ -247,7 +302,7 @@ fn append_density_surface_points(
     }
 
     let samples = samples_for_density(radius, density)?;
-    let centre = hood.centres[atom];
+    let centre = hood.centre(atom);
 
     let directions = directions
         .entry(samples)
@@ -314,7 +369,7 @@ fn surface_point(atom: usize, centre: [f64; 3], radius: f64, direction: [f64; 3]
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn point_on_sphere(centre: [f64; 3], radius: f64, direction: [f64; 3]) -> [f64; 3] {
+pub(crate) fn point_on_sphere(centre: [f64; 3], radius: f64, direction: [f64; 3]) -> [f64; 3] {
     [
         centre[0] + radius * direction[0],
         centre[1] + radius * direction[1],
@@ -324,14 +379,14 @@ fn point_on_sphere(centre: [f64; 3], radius: f64, direction: [f64; 3]) -> [f64; 
 
 /// The shared geometry a point-sampling surface needs: the probe-grown
 /// neighbourhood plus the fixed set of sampling directions.
-pub(crate) struct Geometry {
+pub(crate) struct Geometry<'a> {
     /// Grown radii, centres and overlap adjacency, shared with other passes.
-    pub(crate) hood: Neighbourhood,
+    pub(crate) hood: Neighbourhood<'a>,
     /// The near-uniform directions each sphere is dusted with.
     directions: Vec<[f64; 3]>,
 }
 
-impl Geometry {
+impl Geometry<'_> {
     /// Calls `visit` with the direction of each of an atom's exposed points.
     ///
     /// Atoms without neighbours bypass point construction and occlusion tests.
@@ -342,7 +397,7 @@ impl Geometry {
             return;
         }
 
-        if self.hood.adjacency[atom].is_empty() {
+        if self.hood.adjacency.row(atom).is_empty() {
             for &direction in &self.directions {
                 visit(direction);
             }
@@ -350,7 +405,7 @@ impl Geometry {
             return;
         }
 
-        let centre = self.hood.centres[atom];
+        let centre = self.hood.centre(atom);
 
         for &direction in &self.directions {
             let point = point_on_sphere(centre, radius, direction);
@@ -368,17 +423,18 @@ impl Geometry {
 ///
 /// Runtime consists of the shared neighbourhood build plus `O(samples)`
 /// deterministic direction generation.
-pub(crate) fn prepare(
-    positions: &[[f32; 3]],
+pub(crate) fn prepare<'a>(
+    positions: &'a [[f32; 3]],
     radii: &[f32],
     probe: f32,
     samples: u16,
-) -> Result<Option<Geometry>, SasaError> {
+    context: &ExecutionContext,
+) -> Result<Option<Geometry<'a>>, SasaError> {
     if samples == 0 {
         return Err(SasaError::NoPoints);
     }
 
-    let Some(hood) = neighbourhood::build(positions, radii, probe)? else {
+    let Some(hood) = neighbourhood::build(positions, radii, probe, context)? else {
         return Ok(None);
     };
 

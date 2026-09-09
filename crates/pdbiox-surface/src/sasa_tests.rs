@@ -1,5 +1,10 @@
 use super::{SasaError, shrake_rupley, surface_points};
 use core::f64::consts::PI;
+use pdbiox_core::ExecutionContext;
+
+fn context() -> ExecutionContext {
+    ExecutionContext::default()
+}
 
 fn sphere_area(radius: f64) -> f64 {
     4.0 * PI * radius * radius
@@ -13,7 +18,7 @@ fn expanded(radius: f32, probe: f32) -> f64 {
 
 #[test]
 fn a_lone_atom_exposes_its_whole_expanded_sphere() {
-    let Ok(areas) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.5], 1.4, 400) else {
+    let Ok(areas) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.5], 1.4, 400, &context()) else {
         panic!("a single atom is valid");
     };
     assert!((areas[0] - sphere_area(expanded(1.5, 1.4))).abs() < 1e-6);
@@ -23,7 +28,7 @@ fn a_lone_atom_exposes_its_whole_expanded_sphere() {
 fn a_small_atom_buried_inside_a_larger_one_has_no_accessible_area() {
     // Concentric: the small sphere lies wholly within the large one.
     let positions = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
-    let Ok(areas) = shrake_rupley(&positions, &[1.0, 3.0], 0.0, 400) else {
+    let Ok(areas) = shrake_rupley(&positions, &[1.0, 3.0], 0.0, 400, &context()) else {
         panic!("valid");
     };
     assert!(areas[0].abs() < 1e-9, "buried atom kept area {}", areas[0]);
@@ -33,7 +38,7 @@ fn a_small_atom_buried_inside_a_larger_one_has_no_accessible_area() {
 #[test]
 fn atoms_far_apart_do_not_shade_each_other() {
     let positions = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]];
-    let Ok(areas) = shrake_rupley(&positions, &[1.5, 1.5], 1.4, 400) else {
+    let Ok(areas) = shrake_rupley(&positions, &[1.5, 1.5], 1.4, 400, &context()) else {
         panic!("valid");
     };
     let full = sphere_area(expanded(1.5, 1.4));
@@ -48,7 +53,7 @@ fn touching_atoms_lose_area_and_share_the_loss() {
     // lattice only reproduces that to within its sampling, so the two match
     // closely rather than exactly, and both sit below a full sphere.
     let positions = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]];
-    let Ok(areas) = shrake_rupley(&positions, &[1.5, 1.5], 0.0, 2000) else {
+    let Ok(areas) = shrake_rupley(&positions, &[1.5, 1.5], 0.0, 2000, &context()) else {
         panic!("valid");
     };
     let full = sphere_area(1.5);
@@ -64,7 +69,7 @@ fn touching_atoms_lose_area_and_share_the_loss() {
 
 #[test]
 fn a_mismatched_radius_count_is_rejected() {
-    let Err(error) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.0, 2.0], 1.4, 100) else {
+    let Err(error) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.0, 2.0], 1.4, 100, &context()) else {
         panic!("mismatch should be rejected");
     };
     assert!(matches!(error, SasaError::LengthMismatch { .. }));
@@ -72,7 +77,7 @@ fn a_mismatched_radius_count_is_rejected() {
 
 #[test]
 fn a_negative_probe_is_rejected() {
-    let Err(error) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.0], -1.0, 100) else {
+    let Err(error) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.0], -1.0, 100, &context()) else {
         panic!("negative probe should be rejected");
     };
     assert!(matches!(error, SasaError::InvalidProbe));
@@ -80,7 +85,7 @@ fn a_negative_probe_is_rejected() {
 
 #[test]
 fn zero_test_points_is_rejected() {
-    let Err(error) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.0], 1.4, 0) else {
+    let Err(error) = shrake_rupley(&[[0.0, 0.0, 0.0]], &[1.0], 1.4, 0, &context()) else {
         panic!("zero points should be rejected");
     };
     assert!(matches!(error, SasaError::NoPoints));
@@ -88,7 +93,7 @@ fn zero_test_points_is_rejected() {
 
 #[test]
 fn an_empty_set_has_no_areas() {
-    let Ok(areas) = shrake_rupley(&[], &[], 1.4, 100) else {
+    let Ok(areas) = shrake_rupley(&[], &[], 1.4, 100, &context()) else {
         panic!("an empty set is valid");
     };
     assert!(areas.is_empty());
@@ -96,7 +101,7 @@ fn an_empty_set_has_no_areas() {
 
 #[test]
 fn a_lone_atom_yields_one_surface_point_per_sample() {
-    let Ok(points) = surface_points(&[[0.0, 0.0, 0.0]], &[1.5], 1.4, 200) else {
+    let Ok(points) = surface_points(&[[0.0, 0.0, 0.0]], &[1.5], 1.4, 200, &context()) else {
         panic!("valid");
     };
     assert_eq!(points.len(), 200);
@@ -116,11 +121,80 @@ fn a_lone_atom_yields_one_surface_point_per_sample() {
 fn a_buried_atom_contributes_no_surface_points() {
     // A small atom concentric inside a large one is fully buried.
     let positions = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
-    let Ok(points) = surface_points(&positions, &[1.0, 3.0], 0.0, 400) else {
+    let Ok(points) = surface_points(&positions, &[1.0, 3.0], 0.0, 400, &context()) else {
         panic!("valid");
     };
     assert!(
         points.iter().all(|point| point.atom != 0),
         "atom 0 is buried"
     );
+}
+
+// A packed grid so most atoms have neighbours and the parallel partition
+// crosses buried, exposed and boundary atoms.
+fn packed_grid() -> (Vec<[f32; 3]>, Vec<f32>) {
+    let mut positions = Vec::new();
+    for x in 0_u8..7 {
+        for y in 0_u8..7 {
+            for z in 0_u8..7 {
+                positions.push([f32::from(x) * 1.6, f32::from(y) * 1.6, f32::from(z) * 1.6]);
+            }
+        }
+    }
+    let radii = vec![1.7; positions.len()];
+    (positions, radii)
+}
+
+#[test]
+fn shrake_rupley_is_bit_identical_across_worker_counts() {
+    let (positions, radii) = packed_grid();
+    let Ok(serial) = shrake_rupley(&positions, &radii, 1.4, 200, &context()) else {
+        panic!("serial run is valid");
+    };
+    for workers in [2, 3, 4, 8, 16] {
+        let worker_context = ExecutionContext::builder()
+            .worker_budget(workers)
+            .build()
+            .expect("worker context is valid");
+        let Ok(parallel) = shrake_rupley(&positions, &radii, 1.4, 200, &worker_context) else {
+            panic!("parallel run with {workers} workers is valid");
+        };
+        assert_eq!(
+            serial.to_bits_vec(),
+            parallel.to_bits_vec(),
+            "worker count {workers} changed the result"
+        );
+    }
+}
+
+#[test]
+fn surface_points_are_identical_across_worker_counts() {
+    let (positions, radii) = packed_grid();
+    let Ok(serial) = surface_points(&positions, &radii, 1.4, 96, &context()) else {
+        panic!("serial run is valid");
+    };
+    for workers in [2, 4, 8, 16] {
+        let worker_context = ExecutionContext::builder()
+            .worker_budget(workers)
+            .build()
+            .expect("worker context is valid");
+        let Ok(parallel) = surface_points(&positions, &radii, 1.4, 96, &worker_context) else {
+            panic!("parallel run with {workers} workers is valid");
+        };
+        assert_eq!(
+            serial, parallel,
+            "worker count {workers} changed the points"
+        );
+    }
+}
+
+// Exact bit comparison so a reordered floating-point sum would fail, not round away.
+trait ToBitsVec {
+    fn to_bits_vec(&self) -> Vec<u64>;
+}
+
+impl ToBitsVec for Vec<f64> {
+    fn to_bits_vec(&self) -> Vec<u64> {
+        self.iter().map(|value| value.to_bits()).collect()
+    }
 }

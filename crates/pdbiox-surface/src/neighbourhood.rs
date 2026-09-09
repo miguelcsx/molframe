@@ -12,25 +12,46 @@
 //! all-pairs scan, so building it costs `O(atoms · local density)` rather than
 //! quadratic in the atom count.
 
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_spatial::{NeighborPair, SpatialBackend, SpatialError, pairs_within};
+use pdbiox_core::topology::{Csr, CsrBuilder};
+use pdbiox_core::{ExecutionContext, selection::AtomSelection};
+use pdbiox_spatial::{
+    NeighborPair, SpatialBackend, SpatialError, SpatialSearchOptions,
+    pairs_within_unsorted_with_options,
+};
 
 use crate::accessible_area::SasaError;
 use crate::numeric::{f64_to_f32, usize_to_u32};
 
 /// Probe-grown radii, atom centres, and the overlap adjacency they imply.
-pub(crate) struct Neighbourhood {
-    /// Atom centres promoted to double precision, indexed by atom.
-    pub(crate) centres: Vec<[f64; 3]>,
+pub(crate) struct Neighbourhood<'a> {
+    /// The stored coordinates, borrowed rather than promoted into a copy.
+    ///
+    /// A double-precision copy costs twenty-four bytes per atom on top of the
+    /// twelve the coordinates already occupy, which at a billion atoms is more
+    /// memory than the whole surface calculation needs. Promoting one centre
+    /// when it is read is three conversions and touches no extra cache line
+    /// (ADR-0025).
+    positions: &'a [[f32; 3]],
     /// Each atom's radius grown by the probe, indexed by atom.
     pub(crate) expanded: Vec<f64>,
     /// Squared grown radii, kept beside `expanded` for hot point tests.
     pub(crate) expanded_squared: Vec<f64>,
     /// For each atom, the atoms whose grown spheres can reach it.
-    pub(crate) adjacency: Vec<Vec<u32>>,
+    pub(crate) adjacency: Csr<u32>,
 }
 
-impl Neighbourhood {
+impl Neighbourhood<'_> {
+    /// One atom's centre in double precision.
+    ///
+    /// Out-of-range atoms return the origin, which no finite sphere contains
+    /// at a positive radius, so a malformed index cannot report a false burial.
+    pub(crate) fn centre(&self, atom: usize) -> [f64; 3] {
+        match self.positions.get(atom) {
+            Some(position) => promote(*position),
+            None => [0.0; 3],
+        }
+    }
+
     /// Whether `point` lies outside every one of `atom`'s neighbours' grown
     /// spheres, and so is not buried by any of them.
     ///
@@ -50,14 +71,14 @@ impl Neighbourhood {
         atom: usize,
         excluded: Option<usize>,
     ) -> bool {
-        for &neighbour in &self.adjacency[atom] {
+        for &neighbour in self.adjacency.row(atom) {
             let other = neighbour as usize;
 
             if excluded == Some(other) {
                 continue;
             }
 
-            if point_inside_sphere(point, self.centres[other], self.expanded_squared[other]) {
+            if point_inside_sphere(point, self.centre(other), self.expanded_squared[other]) {
                 return false;
             }
         }
@@ -78,11 +99,12 @@ impl Neighbourhood {
 /// [`SasaError::InvalidProbe`] for a non-finite or negative probe,
 /// [`SasaError::InvalidRadius`] for a non-finite or negative radius, and
 /// [`SasaError::Spatial`] when the neighbour search rejects the input.
-pub(crate) fn build(
-    positions: &[[f32; 3]],
+pub(crate) fn build<'a>(
+    positions: &'a [[f32; 3]],
     radii: &[f32],
     probe: f32,
-) -> Result<Option<Neighbourhood>, SasaError> {
+    context: &ExecutionContext,
+) -> Result<Option<Neighbourhood<'a>>, SasaError> {
     validate_input(positions, radii, probe)?;
 
     if positions.is_empty() {
@@ -91,12 +113,11 @@ pub(crate) fn build(
 
     let (expanded, widest) = expand_radii(radii, probe)?;
     let expanded_squared = expanded.iter().map(|radius| radius * radius).collect();
-    let centres = promote_centres(positions);
 
-    let adjacency = neighbours(positions, &centres, &expanded, widest)?;
+    let adjacency = neighbours(positions, &expanded, widest, context)?;
 
     Ok(Some(Neighbourhood {
-        centres,
+        positions,
         expanded,
         expanded_squared,
         adjacency,
@@ -106,7 +127,11 @@ pub(crate) fn build(
 /// Validates neighbourhood input lengths and radii.
 ///
 /// Runtime is `O(R)` and requires no allocation.
-fn validate_input(positions: &[[f32; 3]], radii: &[f32], probe: f32) -> Result<(), SasaError> {
+pub(crate) fn validate_input(
+    positions: &[[f32; 3]],
+    radii: &[f32],
+    probe: f32,
+) -> Result<(), SasaError> {
     if positions.len() != radii.len() {
         return Err(SasaError::LengthMismatch {
             positions: positions.len(),
@@ -114,6 +139,10 @@ fn validate_input(positions: &[[f32; 3]], radii: &[f32], probe: f32) -> Result<(
         });
     }
 
+    validate_radii(radii, probe)
+}
+
+pub(crate) fn validate_radii(radii: &[f32], probe: f32) -> Result<(), SasaError> {
     if !probe.is_finite() || probe < 0.0 {
         return Err(SasaError::InvalidProbe);
     }
@@ -152,17 +181,12 @@ fn expand_radii(radii: &[f32], probe: f32) -> Result<(Vec<f64>, f64), SasaError>
 /// Promotes atom centres to double precision once for all surface algorithms.
 ///
 /// Runtime and output space are `O(A)`.
-fn promote_centres(positions: &[[f32; 3]]) -> Vec<[f64; 3]> {
-    positions
-        .iter()
-        .map(|position| {
-            [
-                f64::from(position[0]),
-                f64::from(position[1]),
-                f64::from(position[2]),
-            ]
-        })
-        .collect()
+fn promote(position: [f32; 3]) -> [f64; 3] {
+    [
+        f64::from(position[0]),
+        f64::from(position[1]),
+        f64::from(position[2]),
+    ]
 }
 
 /// Builds, for each atom, the atoms whose grown spheres can reach it.
@@ -172,40 +196,48 @@ fn promote_centres(positions: &[[f32; 3]]) -> Vec<[f64; 3]> {
 /// entering the adjacency, reducing all downstream local-density work.
 fn neighbours(
     positions: &[[f32; 3]],
-    centres: &[[f64; 3]],
     expanded: &[f64],
     widest: f64,
-) -> Result<Vec<Vec<u32>>, SpatialError> {
-    let mut adjacency = vec![Vec::new(); positions.len()];
-
+    context: &ExecutionContext,
+) -> Result<Csr<u32>, SpatialError> {
     if widest <= 0.0 {
-        return Ok(adjacency);
+        return Ok(CsrBuilder::with_degrees(&vec![0usize; positions.len()]).finish());
     }
 
     let all = AtomSelection::All(usize_to_u32(positions.len()));
     let cutoff = conservative_f32(2.0 * widest);
 
-    let pairs = pairs_within(positions, &all, &all, cutoff, SpatialBackend::Auto, None)?;
+    // The pairs are scattered into per-atom adjacency and each list is sorted
+    // afterwards, so the global pair order is never consumed: skip the sort.
+    let pairs = pairs_within_unsorted_with_options(
+        positions,
+        &all,
+        &all,
+        cutoff,
+        SpatialSearchOptions::with_backend(SpatialBackend::Auto),
+        None,
+        context,
+    )?;
 
-    let degrees = overlap_degrees(&pairs, centres, expanded);
+    // The counting pass sizes every row exactly, so the scatter below performs
+    // no allocation at all: one flat buffer replaces a Vec header and a heap
+    // allocation per atom.
+    let degrees = overlap_degrees(&pairs, positions, expanded);
+    let mut builder = CsrBuilder::with_degrees(&degrees);
 
-    adjacency = degrees.into_iter().map(Vec::with_capacity).collect();
+    fill_adjacency(&mut builder, pairs, positions, expanded);
 
-    fill_adjacency(&mut adjacency, pairs, centres, expanded);
-
-    canonicalise_adjacency(&mut adjacency);
-
-    Ok(adjacency)
+    Ok(builder.finish_canonical())
 }
 
 /// Counts exact sphere-overlap degrees to reserve adjacency capacity.
 ///
 /// Runtime is `O(P)` for spatial candidate pairs and output space is `O(A)`.
-fn overlap_degrees(pairs: &[NeighborPair], centres: &[[f64; 3]], expanded: &[f64]) -> Vec<usize> {
-    let mut degrees = vec![0usize; centres.len()];
+fn overlap_degrees(pairs: &[NeighborPair], positions: &[[f32; 3]], expanded: &[f64]) -> Vec<usize> {
+    let mut degrees = vec![0usize; positions.len()];
 
     for pair in pairs {
-        if !pair_overlaps(pair, centres, expanded) {
+        if !pair_overlaps(pair, positions, expanded) {
             continue;
         }
 
@@ -224,40 +256,20 @@ fn overlap_degrees(pairs: &[NeighborPair], centres: &[[f64; 3]], expanded: &[f64
 /// Populates exact overlap adjacency from spatial candidate pairs.
 ///
 /// Runtime is `O(P)` and no allocation occurs beyond the previously reserved
-/// adjacency capacities.
+/// row capacities.
 fn fill_adjacency(
-    adjacency: &mut [Vec<u32>],
+    adjacency: &mut CsrBuilder<u32>,
     pairs: Vec<NeighborPair>,
-    centres: &[[f64; 3]],
+    positions: &[[f32; 3]],
     expanded: &[f64],
 ) {
     for pair in pairs {
-        if !pair_overlaps(&pair, centres, expanded) {
+        if !pair_overlaps(&pair, positions, expanded) {
             continue;
         }
 
-        if let Some(list) = adjacency.get_mut(pair.first as usize) {
-            list.push(pair.second);
-        }
-
-        if let Some(list) = adjacency.get_mut(pair.second as usize) {
-            list.push(pair.first);
-        }
-    }
-}
-
-/// Sorts and deduplicates every per-atom neighbour list.
-///
-/// This defensively removes repeated pair orientations without changing
-/// accessibility semantics.
-fn canonicalise_adjacency(adjacency: &mut [Vec<u32>]) {
-    for neighbours in adjacency {
-        if neighbours.len() < 2 {
-            continue;
-        }
-
-        neighbours.sort_unstable();
-        neighbours.dedup();
+        adjacency.push(pair.first as usize, pair.second);
+        adjacency.push(pair.second as usize, pair.first);
     }
 }
 
@@ -265,13 +277,13 @@ fn canonicalise_adjacency(adjacency: &mut [Vec<u32>]) {
 ///
 /// The exact test is performed in double precision. Tangential spheres need not
 /// enter the adjacency because they occlude no finite surface patch.
-fn pair_overlaps(pair: &NeighborPair, centres: &[[f64; 3]], expanded: &[f64]) -> bool {
+fn pair_overlaps(pair: &NeighborPair, positions: &[[f32; 3]], expanded: &[f64]) -> bool {
     let first = pair.first as usize;
     let second = pair.second as usize;
 
-    let (Some(&first_centre), Some(&second_centre), Some(&first_radius), Some(&second_radius)) = (
-        centres.get(first),
-        centres.get(second),
+    let (Some(&first_point), Some(&second_point), Some(&first_radius), Some(&second_radius)) = (
+        positions.get(first),
+        positions.get(second),
         expanded.get(first),
         expanded.get(second),
     ) else {
@@ -280,14 +292,14 @@ fn pair_overlaps(pair: &NeighborPair, centres: &[[f64; 3]], expanded: &[f64]) ->
 
     let reach = first_radius + second_radius;
 
-    squared_distance(first_centre, second_centre) < reach * reach
+    squared_distance(promote(first_point), promote(second_point)) < reach * reach
 }
 
 /// Tests whether `point` lies strictly inside a sphere.
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn point_inside_sphere(point: [f64; 3], centre: [f64; 3], radius_squared: f64) -> bool {
+pub(crate) fn point_inside_sphere(point: [f64; 3], centre: [f64; 3], radius_squared: f64) -> bool {
     squared_distance(point, centre) < radius_squared
 }
 
@@ -295,7 +307,7 @@ fn point_inside_sphere(point: [f64; 3], centre: [f64; 3], radius_squared: f64) -
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn squared_distance(left: [f64; 3], right: [f64; 3]) -> f64 {
+pub(crate) fn squared_distance(left: [f64; 3], right: [f64; 3]) -> f64 {
     let dx = left[0] - right[0];
     let dy = left[1] - right[1];
     let dz = left[2] - right[2];
@@ -307,7 +319,7 @@ fn squared_distance(left: [f64; 3], right: [f64; 3]) -> f64 {
 ///
 /// If normal rounding moves downward, the next representable positive `f32` is
 /// selected so the broad-phase neighbour search cannot lose a boundary pair.
-fn conservative_f32(value: f64) -> f32 {
+pub(crate) fn conservative_f32(value: f64) -> f32 {
     let rounded = f64_to_f32(value);
 
     if !rounded.is_finite() || f64::from(rounded) >= value || rounded <= 0.0 {

@@ -1,6 +1,7 @@
 use super::lee_richards;
 use crate::accessible_area::shrake_rupley;
 use core::f64::consts::PI;
+use pdbiox_core::ExecutionContext;
 
 fn expanded(radius: f32, probe: f32) -> f64 {
     f64::from(radius) + f64::from(probe)
@@ -8,7 +9,13 @@ fn expanded(radius: f32, probe: f32) -> f64 {
 
 #[test]
 fn a_lone_atom_recovers_its_sphere_area_exactly() {
-    let Ok(areas) = lee_richards(&[[0.0, 0.0, 0.0]], &[1.5], 1.4, 300) else {
+    let Ok(areas) = lee_richards(
+        &[[0.0, 0.0, 0.0]],
+        &[1.5],
+        1.4,
+        300,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     let radius = expanded(1.5, 1.4);
@@ -22,7 +29,13 @@ fn a_lone_atom_recovers_its_sphere_area_exactly() {
 #[test]
 fn far_apart_atoms_are_each_fully_exposed() {
     let positions = [[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]];
-    let Ok(areas) = lee_richards(&positions, &[1.5, 1.5], 1.4, 300) else {
+    let Ok(areas) = lee_richards(
+        &positions,
+        &[1.5, 1.5],
+        1.4,
+        300,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     let full = 4.0 * PI * expanded(1.5, 1.4).powi(2);
@@ -34,7 +47,13 @@ fn far_apart_atoms_are_each_fully_exposed() {
 fn a_buried_atom_has_almost_no_accessible_area() {
     // A small atom concentric within a much larger one is essentially buried.
     let positions = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
-    let Ok(areas) = lee_richards(&positions, &[1.0, 3.0], 0.0, 400) else {
+    let Ok(areas) = lee_richards(
+        &positions,
+        &[1.0, 3.0],
+        0.0,
+        400,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     let small_full = 4.0 * PI;
@@ -48,10 +67,22 @@ fn a_buried_atom_has_almost_no_accessible_area() {
 #[test]
 fn it_agrees_with_shrake_rupley_on_a_touching_pair() {
     let positions = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]];
-    let Ok(lr) = lee_richards(&positions, &[1.5, 1.5], 1.4, 400) else {
+    let Ok(lr) = lee_richards(
+        &positions,
+        &[1.5, 1.5],
+        1.4,
+        400,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
-    let Ok(sr) = shrake_rupley(&positions, &[1.5, 1.5], 1.4, 4000) else {
+    let Ok(sr) = shrake_rupley(
+        &positions,
+        &[1.5, 1.5],
+        1.4,
+        4000,
+        &ExecutionContext::default(),
+    ) else {
         panic!("valid");
     };
     let lr_total: f64 = lr.iter().sum();
@@ -64,5 +95,14 @@ fn it_agrees_with_shrake_rupley_on_a_touching_pair() {
 
 #[test]
 fn zero_slices_is_rejected() {
-    assert!(lee_richards(&[[0.0, 0.0, 0.0]], &[1.5], 1.4, 0).is_err());
+    assert!(
+        lee_richards(
+            &[[0.0, 0.0, 0.0]],
+            &[1.5],
+            1.4,
+            0,
+            &ExecutionContext::default(),
+        )
+        .is_err()
+    );
 }

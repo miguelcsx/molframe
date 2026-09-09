@@ -4,6 +4,7 @@ use super::{SasaError, point_on_sphere, samples_for_density, validate_density};
 use crate::neighbourhood::{self, Neighbourhood};
 use crate::numeric::f64_to_f32;
 use crate::sampling::fibonacci_sphere;
+use pdbiox_core::ExecutionContext;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// A surface point exposed when one candidate neighbour is omitted.
@@ -40,9 +41,10 @@ pub fn atom_contact_areas(
     radii: &[f32],
     probe: f32,
     density: f32,
+    context: &ExecutionContext,
 ) -> Result<Vec<AtomContactArea>, SasaError> {
     validate_density(density)?;
-    let Some(hood) = neighbourhood::build(positions, radii, probe)? else {
+    let Some(hood) = neighbourhood::build(positions, radii, probe, context)? else {
         return Ok(Vec::new());
     };
     let mut directions = BTreeMap::new();
@@ -100,9 +102,10 @@ pub fn surface_points_excluding_pairs(
     probe: f32,
     density: f32,
     pairs: &[(usize, usize)],
+    context: &ExecutionContext,
 ) -> Result<Vec<ExcludedSurfacePoint>, SasaError> {
     validate_density(density)?;
-    let Some(hood) = neighbourhood::build(positions, radii, probe)? else {
+    let Some(hood) = neighbourhood::build(positions, radii, probe, context)? else {
         return Ok(Vec::new());
     };
     let mut directions = BTreeMap::new();
@@ -128,7 +131,7 @@ fn sample_excluding(
     if radius <= 0.0 {
         return Ok(());
     }
-    let centre = hood.centres[atom];
+    let centre = hood.centre(atom);
     let samples = samples_for_density(radius, density)?;
     let area = 4.0 * core::f64::consts::PI * radius * radius / f64::from(samples);
     let directions = directions
@@ -138,7 +141,7 @@ fn sample_excluding(
         let point = point_on_sphere(centre, radius, direction);
         if point_inside(
             point,
-            hood.centres[excluded],
+            hood.centre(excluded),
             hood.expanded_squared[excluded],
         ) && hood.point_is_clear_except(point, atom, Some(excluded))
         {

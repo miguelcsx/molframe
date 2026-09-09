@@ -13,6 +13,7 @@ mod accessible_area;
 mod burial;
 pub mod cavity;
 mod cavity_geometry;
+mod collect;
 mod components;
 pub mod depth;
 pub mod geodesic;
@@ -25,11 +26,14 @@ mod neighbourhood;
 mod numeric;
 #[path = "sphere.rs"]
 mod sampling;
+mod sampling_plan;
 pub mod ses;
+mod stream;
 #[path = "mesh.rs"]
 mod triangulation;
 #[path = "governed.rs"]
 mod workflow_policy;
+mod workspace;
 
 pub use accessible_area::{
     AtomContactArea, ExcludedSurfacePoint, SasaError, SurfacePoint, atom_contact_areas,
@@ -40,6 +44,7 @@ pub use burial::{
     buried_solvent_excluded_surface_with_options, buried_surface,
 };
 pub use cavity::{Cavity, cavities, cavities_with_options};
+pub use collect::collect_shrake_rupley;
 pub use components::{
     SurfaceComponent, SurfaceComponentError, SurfaceComponentFilter, filter_surface_components,
     surface_components,
@@ -53,10 +58,12 @@ pub use io::write_obj;
 pub use lee_richards::lee_richards;
 pub use local_shape::{CurvatureQuality, SurfaceCurvature, surface_curvatures};
 pub use sampling::fibonacci_sphere;
+pub use sampling_plan::SasaSampler;
 pub use ses::{
     SolventExcludedSurface, SurfaceTriangle, solvent_excluded_surface,
     solvent_excluded_surface_with_options,
 };
+pub use stream::visit_shrake_rupley;
 pub use triangulation::{IndexedSurfaceMesh, MeshReport, SurfaceFace};
 pub use workflow_policy::{
     SurfaceWorkflowError, SurfaceWorkflowOptions, SurfaceWorkflowResult, governed_surface_geometry,

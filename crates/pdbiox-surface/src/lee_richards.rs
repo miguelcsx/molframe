@@ -15,6 +15,7 @@ use core::f64::consts::PI;
 
 use crate::accessible_area::SasaError;
 use crate::neighbourhood::{self, Neighbourhood};
+use pdbiox_core::ExecutionContext;
 
 /// A full turn, the span of a slice circle.
 const TWO_PI: f64 = 2.0 * PI;
@@ -53,10 +54,13 @@ struct SliceNeighbour {
 /// # Examples
 ///
 /// ```
+/// use pdbiox_core::ExecutionContext;
 /// use pdbiox_surface::lee_richards;
 /// use core::f64::consts::PI;
 ///
-/// let areas = lee_richards(&[[0.0, 0.0, 0.0]], &[2.0], 1.0, 200)?;
+/// let areas = lee_richards(
+///     &[[0.0, 0.0, 0.0]], &[2.0], 1.0, 200, &ExecutionContext::default()
+/// )?;
 /// let expanded = 2.0 + 1.0;
 /// assert!((areas[0] - 4.0 * PI * expanded * expanded).abs() < 1e-6);
 /// # Ok::<(), pdbiox_surface::SasaError>(())
@@ -66,12 +70,13 @@ pub fn lee_richards(
     radii: &[f32],
     probe: f32,
     slices: u16,
+    context: &ExecutionContext,
 ) -> Result<Vec<f64>, SasaError> {
     if slices == 0 {
         return Err(SasaError::NoPoints);
     }
 
-    let Some(hood) = neighbourhood::build(positions, radii, probe)? else {
+    let Some(hood) = neighbourhood::build(positions, radii, probe, context)? else {
         return Ok(Vec::new());
     };
 
@@ -95,17 +100,19 @@ fn atom_area(atom: usize, hood: &Neighbourhood, slices: u16) -> f64 {
         return 0.0;
     }
 
-    if hood.adjacency[atom].is_empty() {
+    if hood.adjacency.row(atom).is_empty() {
         return sphere_area(radius);
     }
 
-    let centre = hood.centres[atom];
+    let centre = hood.centre(atom);
     let thickness = 2.0 * radius / f64::from(slices);
 
     // Archimedes: the sphere's lateral area over a slice of this thickness is the
     // same at every height, so the exposed fraction is all that varies.
     let ring_area = TWO_PI * radius * thickness;
-    let neighbours: Vec<SliceNeighbour> = hood.adjacency[atom]
+    let neighbours: Vec<SliceNeighbour> = hood
+        .adjacency
+        .row(atom)
         .iter()
         .map(|&neighbour| slice_neighbour(hood, neighbour as usize, centre))
         .collect();
@@ -222,7 +229,7 @@ fn add_neighbour_coverage(
 }
 
 fn slice_neighbour(hood: &Neighbourhood, neighbour: usize, centre: [f64; 3]) -> SliceNeighbour {
-    let neighbour_centre = hood.centres[neighbour];
+    let neighbour_centre = hood.centre(neighbour);
     let dx = neighbour_centre[0] - centre[0];
     let dy = neighbour_centre[1] - centre[1];
     let separation_squared = dx * dx + dy * dy;

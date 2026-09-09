@@ -17,14 +17,6 @@ pub(crate) fn i64_to_f64(value: i64) -> f64 {
     }
 }
 
-pub(crate) fn isize_to_f64(value: isize) -> f64 {
-    match value.to_f64() {
-        Some(converted) => converted,
-        None if value.is_negative() => f64::NEG_INFINITY,
-        None => f64::INFINITY,
-    }
-}
-
 pub(crate) fn f64_to_f32(value: f64) -> f32 {
     match value.to_f32() {
         Some(converted) => converted,
