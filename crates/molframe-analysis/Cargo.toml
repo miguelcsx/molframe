@@ -1,0 +1,32 @@
+[package]
+name = "molframe-analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Contacts, interactions and secondary structure for molframe"
+
+[dependencies]
+num-traits.workspace = true
+faer.workspace = true
+molframe-core.workspace = true
+molframe-cif.workspace = true
+molframe-chem.workspace = true
+molframe-geom.workspace = true
+molframe-spatial.workspace = true
+molframe-surface.workspace = true
+molframe-traj.workspace = true
+nalgebra.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+molframe-bench.workspace = true
+
+[[bench]]
+name = "analysis"
+harness = false
+
+[lints]
+workspace = true
