@@ -1,9 +1,9 @@
 #[cfg(feature = "compare")]
 use super::{ComparisonMetric, ComparisonRequest};
 use super::{
-    ContactsRequest, CoordinateInput, ExecutionPlanError, FrameInput, GeometryRequest, Plan,
-    PlanOperation, PlanValue, RmsdRequest, ScalarInput, SelectionRequest, SpatialRequest,
-    StructureRequest, StructureValue,
+    ContactsRequest, CoordinateInput, CoordinateSlot, ExecutionPlanError, FrameInput,
+    GeometryRequest, Plan, PlanOperation, PlanValue, RmsdRequest, ScalarInput, SelectionRequest,
+    SpatialRequest, StructureRequest, StructureValue,
 };
 
 mod physical_tests;
@@ -66,7 +66,10 @@ fn operation_requests_validate_before_plan_execution() {
     let mut plan = Plan::new();
     plan.add("contacts", PlanOperation::Contacts(Box::new(request)))
         .expect("first operation");
-    let duplicate = plan.add_rmsd("contacts", RmsdRequest::new(0, 1));
+    let duplicate = plan.add(
+        "contacts",
+        RmsdRequest::new(CoordinateSlot::new(0), CoordinateSlot::new(1)),
+    );
     assert!(matches!(duplicate, Err(ExecutionPlanError::DuplicateId(_))));
 }
 
@@ -81,10 +84,16 @@ fn array_operations_execute_in_native_sorted_order() {
         },
     ];
     let mut plan = Plan::new();
-    plan.add_rmsd("zeta", RmsdRequest::new(0, 1))
-        .expect("first RMSD");
-    plan.add_rmsd("alpha", RmsdRequest::new(0, 1))
-        .expect("second RMSD");
+    plan.add(
+        "zeta",
+        RmsdRequest::new(CoordinateSlot::new(0), CoordinateSlot::new(1)),
+    )
+    .expect("first RMSD");
+    plan.add(
+        "alpha",
+        RmsdRequest::new(CoordinateSlot::new(0), CoordinateSlot::new(1)),
+    )
+    .expect("second RMSD");
 
     let result = plan
         .execute(
@@ -219,8 +228,7 @@ fn selection_operations_match_the_facade_query_kernel() {
     )
     .expect("direct query selection");
     let mut plan = Plan::new();
-    plan.add_selection("selected", request)
-        .expect("selection operation");
+    plan.add("selected", request).expect("selection operation");
     let result = plan
         .execute(
             super::PlanInput {
@@ -371,7 +379,7 @@ fn chemistry_operations_use_the_same_native_kernel_as_direct_calls() {
     )
     .expect("direct inference");
     let mut plan = Plan::new();
-    plan.add_bond_inference("bonds", options)
+    plan.add("bonds", options)
         .expect("bond inference operation");
     let result = plan
         .execute(
@@ -453,23 +461,31 @@ fn comparison_operations_share_borrowed_coordinate_inputs() {
     let mut plan = Plan::new();
     plan.add(
         "lddt",
-        PlanOperation::Comparison(ComparisonRequest::new(
-            0,
-            1,
+        ComparisonRequest::new(
+            CoordinateSlot::new(0),
+            CoordinateSlot::new(1),
             ComparisonMetric::Lddt {
                 inclusion_radius: 15.0,
             },
-        )),
+        ),
     )
     .expect("lDDT operation");
     plan.add(
         "tm",
-        PlanOperation::Comparison(ComparisonRequest::new(0, 1, ComparisonMetric::TmScore)),
+        ComparisonRequest::new(
+            CoordinateSlot::new(0),
+            CoordinateSlot::new(1),
+            ComparisonMetric::TmScore,
+        ),
     )
     .expect("TM-score operation");
     plan.add(
         "gdt",
-        PlanOperation::Comparison(ComparisonRequest::new(0, 1, ComparisonMetric::GdtTs)),
+        ComparisonRequest::new(
+            CoordinateSlot::new(0),
+            CoordinateSlot::new(1),
+            ComparisonMetric::GdtTs,
+        ),
     )
     .expect("GDT operation");
 

@@ -26,7 +26,7 @@ fn trajectory_plan_rmsd_and_displacement_match_borrowed_kernels() {
         crate::traj::analyse_mean_squared_displacement_view(view, &[], 2, &policy)
             .expect("direct MSD");
     let mut plan = Plan::new();
-    plan.add_trajectory(
+    plan.add(
         "rmsd",
         TrajectoryRequest::RmsdToReference {
             frames,
@@ -60,7 +60,7 @@ fn trajectory_plan_pairwise_and_mean_match_borrowed_kernels() {
         crate::traj::analyse_generalized_procrustes_mean_view(view, 1.0e-6, 20, &policy)
             .expect("direct Procrustes mean");
     let mut plan = Plan::new();
-    plan.add_trajectory(
+    plan.add(
         "pairwise",
         TrajectoryRequest::PairwiseFittedRmsd {
             frames,
@@ -69,7 +69,7 @@ fn trajectory_plan_pairwise_and_mean_match_borrowed_kernels() {
         },
     )
     .expect("pairwise operation");
-    plan.add_trajectory(
+    plan.add(
         "mean",
         TrajectoryRequest::GeneralizedProcrustesMean {
             frames,

@@ -67,7 +67,7 @@
 //!     let (structure, _) = read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;
 //!
 //!     let mut plan = Plan::new();
-//!     plan.add_selection(
+//!     plan.add(
 //!         "alpha_carbons",
 //!         SelectionRequest::new("name CA", AnalysisPolicy::default())?,
 //!     )?;
@@ -325,10 +325,10 @@ pub use operations::FloatInput;
 pub use operations::{ComparisonMetric, ComparisonRequest, ComparisonResult};
 #[cfg(all(feature = "analysis", feature = "geom"))]
 pub use operations::{
-    ContactsRequest, CoordinateInput, ExecutionPlanError, FrameInput, GeometryRequest,
-    GeometryValue, IndexInput, PhysicalRequest, PhysicalValue, Plan, PlanInput, PlanOperation,
-    PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput, SelectionRequest,
-    SpatialRequest, SpatialValue, StructureRequest, StructureValue,
+    ContactsRequest, CoordinateInput, CoordinateSlot, ExecutionPlanError, FrameInput,
+    GeometryRequest, GeometryValue, IndexInput, PhysicalRequest, PhysicalValue, Plan, PlanInput,
+    PlanOperation, PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput,
+    SelectionRequest, SpatialRequest, SpatialValue, StructureRequest, StructureValue,
 };
 #[cfg(all(feature = "analysis", feature = "geom", feature = "surface"))]
 pub use operations::{MaskInput, SurfaceRequest, SurfaceValue};

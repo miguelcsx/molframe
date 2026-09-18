@@ -110,30 +110,55 @@ impl ContactsRequest {
     }
 }
 
+/// One coordinate-array slot in a plan's input, typed so a request cannot
+/// silently confuse a slot number with an atom or model index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CoordinateSlot(usize);
+
+impl CoordinateSlot {
+    /// Creates a slot handle for the caller's plan input.
+    #[must_use]
+    pub const fn new(slot: usize) -> Self {
+        Self(slot)
+    }
+
+    /// The slot number in the plan input's array list.
+    #[must_use]
+    pub const fn slot(self) -> usize {
+        self.0
+    }
+}
+
 /// A typed request for a coordinate-array RMSD calculation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RmsdRequest {
-    mobile: usize,
-    reference: usize,
+    mobile: CoordinateSlot,
+    reference: CoordinateSlot,
 }
 
 impl RmsdRequest {
-    /// Creates an array-slot request.
+    /// Creates a request over two coordinate-array slots.
     #[must_use]
-    pub const fn new(mobile: usize, reference: usize) -> Self {
+    pub const fn new(mobile: CoordinateSlot, reference: CoordinateSlot) -> Self {
         Self { mobile, reference }
     }
 
-    /// Mobile array slot.
+    /// Mobile coordinate-array slot.
     #[must_use]
-    pub const fn mobile(&self) -> usize {
+    pub const fn mobile(&self) -> CoordinateSlot {
         self.mobile
     }
 
-    /// Reference array slot.
+    /// Reference coordinate-array slot.
     #[must_use]
-    pub const fn reference(&self) -> usize {
+    pub const fn reference(&self) -> CoordinateSlot {
         self.reference
+    }
+}
+
+impl From<RmsdRequest> for super::plan::value::PlanOperation {
+    fn from(value: RmsdRequest) -> Self {
+        Self::Rmsd(value)
     }
 }
 
@@ -176,5 +201,17 @@ impl SelectionRequest {
     #[must_use]
     pub fn policy(&self) -> &AnalysisPolicy {
         &self.policy
+    }
+}
+
+impl From<SelectionRequest> for super::plan::value::PlanOperation {
+    fn from(value: SelectionRequest) -> Self {
+        Self::Selection(value)
+    }
+}
+
+impl From<ContactsRequest> for super::plan::value::PlanOperation {
+    fn from(value: ContactsRequest) -> Self {
+        Self::Contacts(Box::new(value))
     }
 }

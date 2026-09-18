@@ -1,6 +1,7 @@
 //! Typed coordinate comparison requests used by the facade plan.
 
 use super::plan::value::PlanOperation;
+use super::requests::CoordinateSlot;
 
 /// A comparison kernel that consumes two coordinate arrays.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -21,8 +22,8 @@ pub enum ComparisonMetric {
 /// A validated coordinate comparison request.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ComparisonRequest {
-    mobile: usize,
-    reference: usize,
+    mobile: CoordinateSlot,
+    reference: CoordinateSlot,
     metric: ComparisonMetric,
 }
 
@@ -35,7 +36,11 @@ impl ComparisonRequest {
     /// owned by the caller's plan input. lDDT's radius is validated before
     /// execution and reports a native comparison error.
     #[must_use]
-    pub const fn new(mobile: usize, reference: usize, metric: ComparisonMetric) -> Self {
+    pub const fn new(
+        mobile: CoordinateSlot,
+        reference: CoordinateSlot,
+        metric: ComparisonMetric,
+    ) -> Self {
         Self {
             mobile,
             reference,
@@ -45,13 +50,13 @@ impl ComparisonRequest {
 
     /// Mobile coordinate-array slot.
     #[must_use]
-    pub const fn mobile(&self) -> usize {
+    pub const fn mobile(&self) -> CoordinateSlot {
         self.mobile
     }
 
     /// Reference coordinate-array slot.
     #[must_use]
-    pub const fn reference(&self) -> usize {
+    pub const fn reference(&self) -> CoordinateSlot {
         self.reference
     }
 

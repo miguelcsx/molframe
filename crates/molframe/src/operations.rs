@@ -29,7 +29,7 @@ pub use plan::inputs::FloatInput;
 pub use plan::inputs::MaskInput;
 pub use plan::inputs::{CoordinateInput, FrameInput, IndexInput, PlanInput, ScalarInput};
 pub use plan::value::{ExecutionPlanError, PlanOperation, PlanResult, PlanResultEntry, PlanValue};
-pub use requests::{ContactsRequest, RmsdRequest, SelectionRequest};
+pub use requests::{ContactsRequest, CoordinateSlot, RmsdRequest, SelectionRequest};
 pub use spatial::{SpatialRequest, SpatialValue};
 pub use structure::{StructureRequest, StructureValue};
 #[cfg(feature = "surface")]

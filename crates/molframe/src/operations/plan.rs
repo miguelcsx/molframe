@@ -7,14 +7,14 @@ pub(super) mod value;
 use super::comparison;
 use super::geometry;
 use super::physical;
-use super::requests::{ContactsRequest, RmsdRequest, SelectionRequest};
+use super::requests::ContactsRequest;
 use super::spatial;
 use super::spatial_cache::SpatialContext;
 use super::structure;
 #[cfg(feature = "surface")]
 use super::surface;
 #[cfg(feature = "traj")]
-use super::{TrajectoryRequest, trajectory};
+use super::trajectory;
 use crate::QueryStructure;
 use inputs::{CoordinateInput, FrameInput, IndexInput, PlanInput};
 use molframe_analysis::Contact;
@@ -44,91 +44,24 @@ impl Plan {
 
     /// Adds one typed operation.
     ///
+    /// Every family's request converts into a [`PlanOperation`], so a plan is
+    /// written in one voice regardless of family:
+    /// `plan.add("contacts", ContactsRequest::new(..)?)`.
+    ///
     /// # Errors
     ///
     /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is already used.
     pub fn add(
         &mut self,
         id: impl Into<Box<str>>,
-        operation: PlanOperation,
+        operation: impl Into<PlanOperation>,
     ) -> Result<(), ExecutionPlanError> {
         let id = id.into();
         if self.operations.contains_key(&id) {
             return Err(ExecutionPlanError::DuplicateId(id));
         }
-        self.operations.insert(id, operation);
+        self.operations.insert(id, operation.into());
         Ok(())
-    }
-
-    /// Adds a contacts operation after native validation.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
-    /// already used.
-    pub fn add_contacts(
-        &mut self,
-        id: impl Into<Box<str>>,
-        request: ContactsRequest,
-    ) -> Result<(), ExecutionPlanError> {
-        self.add(id, PlanOperation::Contacts(Box::new(request)))
-    }
-
-    /// Adds an RMSD operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
-    /// already used.
-    pub fn add_rmsd(
-        &mut self,
-        id: impl Into<Box<str>>,
-        request: RmsdRequest,
-    ) -> Result<(), ExecutionPlanError> {
-        self.add(id, PlanOperation::Rmsd(request))
-    }
-
-    /// Adds a compiled selection operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
-    /// already used.
-    pub fn add_selection(
-        &mut self,
-        id: impl Into<Box<str>>,
-        request: SelectionRequest,
-    ) -> Result<(), ExecutionPlanError> {
-        self.add(id, PlanOperation::Selection(request))
-    }
-
-    /// Adds an explicit distance-based bond-inference operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
-    /// already used.
-    pub fn add_bond_inference(
-        &mut self,
-        id: impl Into<Box<str>>,
-        options: crate::BondInference,
-    ) -> Result<(), ExecutionPlanError> {
-        self.add(id, PlanOperation::BondInference(options))
-    }
-
-    /// Adds one typed trajectory analysis over a borrowed frame-array slot.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ExecutionPlanError::DuplicateId`] when the stable id is
-    /// already used.
-    #[cfg(feature = "traj")]
-    pub fn add_trajectory(
-        &mut self,
-        id: impl Into<Box<str>>,
-        request: TrajectoryRequest,
-    ) -> Result<(), ExecutionPlanError> {
-        self.add(id, request.into())
     }
 
     /// Number of operation nodes.
@@ -231,8 +164,8 @@ impl Plan {
                 )?)))
             }
             PlanOperation::Rmsd(request) => {
-                let mobile = array_slot(id, input.arrays, request.mobile())?;
-                let reference = array_slot(id, input.arrays, request.reference())?;
+                let mobile = array_slot(id, input.arrays, request.mobile().slot())?;
+                let reference = array_slot(id, input.arrays, request.reference().slot())?;
                 Ok(PlanValue::Rmsd(
                     molframe_geom::rmsd(mobile.positions, reference.positions)
                         .map_err(ExecutionPlanError::Rmsd)?,
@@ -274,8 +207,8 @@ impl Plan {
             }
             #[cfg(feature = "compare")]
             PlanOperation::Comparison(request) => {
-                let mobile = array_slot(id, input.arrays, request.mobile())?;
-                let reference = array_slot(id, input.arrays, request.reference())?;
+                let mobile = array_slot(id, input.arrays, request.mobile().slot())?;
+                let reference = array_slot(id, input.arrays, request.reference().slot())?;
                 Ok(PlanValue::Comparison(comparison::execute(
                     request,
                     mobile.positions,

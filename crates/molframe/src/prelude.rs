@@ -59,10 +59,10 @@ pub use crate::{Groups, Query, QueryStructure};
 // The typed operation vocabulary.
 #[cfg(all(feature = "analysis", feature = "geom"))]
 pub use crate::{
-    ContactsRequest, CoordinateInput, ExecutionPlanError, FloatInput, FrameInput, GeometryRequest,
-    GeometryValue, IndexInput, PhysicalRequest, PhysicalValue, Plan, PlanInput, PlanOperation,
-    PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput, SelectionRequest,
-    SpatialRequest, SpatialValue, StructureRequest, StructureValue,
+    ContactsRequest, CoordinateInput, CoordinateSlot, ExecutionPlanError, FloatInput, FrameInput,
+    GeometryRequest, GeometryValue, IndexInput, PhysicalRequest, PhysicalValue, Plan, PlanInput,
+    PlanOperation, PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput,
+    SelectionRequest, SpatialRequest, SpatialValue, StructureRequest, StructureValue,
 };
 
 #[cfg(all(feature = "analysis", feature = "geom", feature = "surface"))]

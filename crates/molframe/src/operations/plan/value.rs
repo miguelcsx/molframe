@@ -45,6 +45,45 @@ pub enum PlanOperation {
     Trajectory(Box<super::super::trajectory::TrajectoryRequest>),
 }
 
+// Every family's request converts into an operation, so a plan is written in
+// one voice: `plan.add(id, request)`.
+impl From<super::super::StructureRequest> for PlanOperation {
+    fn from(value: super::super::StructureRequest) -> Self {
+        Self::Structure(Box::new(value))
+    }
+}
+
+impl From<super::super::PhysicalRequest> for PlanOperation {
+    fn from(value: super::super::PhysicalRequest) -> Self {
+        Self::Physical(Box::new(value))
+    }
+}
+
+impl From<super::super::geometry::GeometryRequest> for PlanOperation {
+    fn from(value: super::super::geometry::GeometryRequest) -> Self {
+        Self::Geometry(Box::new(value))
+    }
+}
+
+impl From<super::super::spatial::SpatialRequest> for PlanOperation {
+    fn from(value: super::super::spatial::SpatialRequest) -> Self {
+        Self::Spatial(Box::new(value))
+    }
+}
+
+#[cfg(feature = "surface")]
+impl From<super::super::surface::SurfaceRequest> for PlanOperation {
+    fn from(value: super::super::surface::SurfaceRequest) -> Self {
+        Self::Surface(Box::new(value))
+    }
+}
+
+impl From<crate::BondInference> for PlanOperation {
+    fn from(value: crate::BondInference) -> Self {
+        Self::BondInference(value)
+    }
+}
+
 /// A typed result value produced by one plan node.
 #[derive(Clone, Debug)]
 pub enum PlanValue {

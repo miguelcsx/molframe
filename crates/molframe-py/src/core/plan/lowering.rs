@@ -34,10 +34,10 @@ pub(super) fn lower_operation<'py>(
         Operation::BasePairs(operation) => lower_structure(native, name, &operation.request)?,
         Operation::Structure(operation) => lower_structure(native, name, operation)?,
         Operation::Selection(operation) => native
-            .add_selection(name.to_owned(), operation.request.clone())
+            .add(name.to_owned(), operation.request.clone())
             .map_err(plan_error)?,
         Operation::BondInference(operation) => native
-            .add_bond_inference(name.to_owned(), operation.options.0)
+            .add(name.to_owned(), operation.options.0)
             .map_err(plan_error)?,
         Operation::Geometry(operation) => lower_geometry(
             native,
@@ -102,9 +102,7 @@ fn lower_contacts(
         operation.policy.inner.clone(),
     )
     .map_err(plan_error)?;
-    native
-        .add_contacts(name.to_owned(), request)
-        .map_err(plan_error)
+    native.add(name.to_owned(), request).map_err(plan_error)
 }
 
 fn lower_rmsd<'py>(
@@ -123,9 +121,12 @@ fn lower_rmsd<'py>(
         &operation.reference,
     )?;
     native
-        .add_rmsd(
+        .add(
             name.to_owned(),
-            molframe::RmsdRequest::new(mobile, reference),
+            molframe::RmsdRequest::new(
+                molframe::CoordinateSlot::new(mobile),
+                molframe::CoordinateSlot::new(reference),
+            ),
         )
         .map_err(plan_error)
 }
@@ -148,11 +149,11 @@ fn lower_comparison<'py>(
     native
         .add(
             name.to_owned(),
-            molframe::PlanOperation::Comparison(molframe::ComparisonRequest::new(
-                mobile,
-                reference,
+            molframe::ComparisonRequest::new(
+                molframe::CoordinateSlot::new(mobile),
+                molframe::CoordinateSlot::new(reference),
                 operation.metric.native(),
-            )),
+            ),
         )
         .map_err(plan_error)
 }
@@ -272,9 +273,7 @@ fn lower_trajectory<'py>(
         frame_slots,
         index_slots,
     )?;
-    native
-        .add_trajectory(name.to_owned(), request)
-        .map_err(plan_error)
+    native.add(name.to_owned(), request).map_err(plan_error)
 }
 
 fn lower_spatial<'py>(
