@@ -17,7 +17,7 @@ impl PyAtoms {
     ) -> PyResult<Bound<'py, PyCapsule>> {
         capsule(
             py,
-            molframe::AtomArrowTable::new(self.structure()).arrow_stream(),
+            molframe::AtomTable::new(self.structure()).arrow_stream(),
         )
     }
 }
@@ -37,7 +37,7 @@ impl PyResidues {
         }
         capsule(
             py,
-            molframe::ResidueArrowTable::new(self.structure()).arrow_stream(),
+            molframe::ResidueTable::new(self.structure()).arrow_stream(),
         )
     }
 }
@@ -57,7 +57,7 @@ impl PyChains {
         }
         capsule(
             py,
-            molframe::ChainArrowTable::new(self.structure()).arrow_stream(),
+            molframe::ChainTable::new(self.structure()).arrow_stream(),
         )
     }
 }
@@ -72,7 +72,7 @@ impl PyBonds {
     ) -> PyResult<Bound<'py, PyCapsule>> {
         capsule(
             py,
-            molframe::BondArrowTable::new(self.structure()).arrow_stream(),
+            molframe::ml::BondTable::new(self.structure()).arrow_stream(),
         )
     }
 }

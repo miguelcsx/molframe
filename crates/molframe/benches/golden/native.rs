@@ -297,7 +297,7 @@ fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_033(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = structure(Sample::Tiny);
-    let table = molframe::AtomArrowTable::new(&structure);
+    let table = molframe::AtomTable::new(&structure);
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-033/arrow_stream", |b| {
         b.iter(|| black_box(table.arrow_stream()));

@@ -184,7 +184,7 @@ fn ccd_rows(
 }
 
 fn core_rows(structure: &molframe::Structure, context: Context, input: &Path) -> Vec<Row> {
-    let findings = molframe::validate(structure.data());
+    let findings = molframe::core::structure::validate(structure.data());
     context.findings(&findings, &input.display().to_string());
     findings
         .iter()

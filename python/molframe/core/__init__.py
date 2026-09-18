@@ -4,11 +4,6 @@ from .contract import Analysis, Assumption, AssumptionSource, Coverage, Diagnost
 from ..chem import Element
 from .metadata import EntityKind, EntryMetadata, PolymerKind, ReferenceAlignment, ReferenceSequence, SequenceMapping, SequenceReferences
 from ..query import AnalysisPolicy
-from . import (
-    annotation, bond, chunk, column, contract, coords, diagnostic, element,
-    execution, index, io, limits, optional, parallel, provider, selection, span, structure, symbol, topology,
-)
-
 from .._native import (
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION,
     COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION, HBOND_ACCEPTOR_ANNOTATION,
@@ -39,6 +34,11 @@ from .._native import (
     StructureBatch, StructureBatchReader, collect_structure, open_structure_batches,
     Class, Code, ContextItem, Diagnostics, Kind, Rendered, Severity, Strictness,
     bit_width, pack, unpack_one, write_output,
+)
+
+from . import (
+    annotation, bond, chunk, column, contract, coords, diagnostic, element,
+    execution, index, io, limits, optional, parallel, provider, selection, span, structure, symbol, topology,
 )
 
 # The public surface is what this module binds, so it is read off the module

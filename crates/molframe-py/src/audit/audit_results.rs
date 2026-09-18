@@ -219,7 +219,7 @@ pub(crate) fn audit_batch(
         .collect::<PyResult<Vec<_>>>()?;
     let analyse = analyse.clone().unbind();
     let items = items.clone().unbind();
-    let report = molframe::audit::audit_batch(
+    let report = molframe::audit_batch(
         &plan.0,
         &subjects,
         |subject, policy| {

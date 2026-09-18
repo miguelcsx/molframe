@@ -8,7 +8,7 @@ const LARGE_ARROW_RESIDUE_ATOMS: u32 = 16;
 
 pub(super) fn run_arrow_stream_large() -> Result<ResourceRecord, String> {
     let structure = large_arrow_structure()?;
-    let table = molframe::AtomArrowTable::new(&structure);
+    let table = molframe::AtomTable::new(&structure);
     measure_case("arrow_stream_large", || {
         let stream = table
             .arrow_stream()
@@ -24,7 +24,7 @@ pub(super) fn run_arrow_stream_large() -> Result<ResourceRecord, String> {
 
 pub(super) fn run_arrow_batches_large() -> Result<ResourceRecord, String> {
     let structure = large_arrow_structure()?;
-    let table = molframe::AtomArrowTable::new(&structure);
+    let table = molframe::AtomTable::new(&structure);
     measure_case("arrow_batches_large", || {
         let batches = table
             .record_batches()

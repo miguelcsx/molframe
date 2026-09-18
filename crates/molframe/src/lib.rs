@@ -140,7 +140,7 @@ pub use molframe_core::structure::{
     ReferenceAlignment, ReferenceSequence, ResidueRef, SEQUENCE_REFERENCES_EXTENSION,
     SequenceMapping, SequenceReferences, Structure, StructureData, StructureDifference,
     StructureDifferenceOptions, StructureEditor, StructureView, UnitCell, ValueDifference,
-    structure_difference, validate,
+    structure_difference,
 };
 pub use molframe_core::symbol::{AltId, Interner, SymbolId};
 pub use molframe_core::topology::{EntityKind, PolymerKind, Topology};
@@ -154,7 +154,7 @@ pub use molframe_adapters as adapters;
 #[cfg(feature = "audit")]
 pub use molframe_audit::{
     AuditPlan, AuditReport, AuditRun, DimensionSensitivity, PlanError, PolicyDimension,
-    PolicySpace, PolicyValue, SensitiveItem, audit,
+    PolicySpace, PolicyValue, SensitiveItem, audit, audit_batch,
 };
 
 #[cfg(feature = "fx")]
@@ -164,15 +164,17 @@ pub use molframe_fx as fx;
 pub use molframe_ml as ml;
 #[cfg(feature = "ml")]
 pub use molframe_ml::{
-    ArrowStream, AtomTable as AtomArrowTable, BondTable as BondArrowTable,
-    ChainTable as ChainArrowTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset,
+    ArrowStream, AtomTable, ChainTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset,
     DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, DlpackError, DlpackTensor,
     EdgeDirection, EdgeFeature, EdgeKind, ExportCost, Graph, GraphError, GraphOptions, LoadError,
-    ManifestEntry, MissingFeaturePolicy, MolframeExtension, NodeFeature, NodeLevel,
-    ResidueTable as ResidueArrowTable, SplitOptions, SplitRatios, SplitStrategy, TableFileError,
-    extension_name, graph, write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet,
+    ManifestEntry, MissingFeaturePolicy, MolframeExtension, NodeFeature, NodeLevel, ResidueTable,
+    SplitOptions, SplitRatios, SplitStrategy, TableFileError, extension_name, graph,
+    write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet,
     write_atom_parquet_with_metadata,
 };
+// `molframe_ml::BondTable` stays module-only: the root's `BondTable` is the
+// structure's bond table, and two tables of the same name on one root would
+// resurrect the ambiguity the aliases above used to hide.
 
 #[cfg(feature = "chem")]
 pub use molframe_chem as chem;
@@ -257,7 +259,7 @@ pub use molframe_spatial::{
 #[cfg(feature = "query")]
 pub use molframe_query as query;
 #[cfg(feature = "query")]
-pub use molframe_query::{Builder as QueryBuilder, Evaluation, Groups, Query, col};
+pub use molframe_query::{Builder, Evaluation, Groups, Query, col};
 
 #[cfg(feature = "xtal")]
 pub use molframe_xtal as xtal;

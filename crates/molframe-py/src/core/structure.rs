@@ -167,7 +167,7 @@ impl PyStructure {
     }
 
     fn validate(&self) -> Vec<PyDiagnostic> {
-        molframe::validate(self.inner.data())
+        molframe::core::structure::validate(self.inner.data())
             .into_iter()
             .map(Into::into)
             .collect()
