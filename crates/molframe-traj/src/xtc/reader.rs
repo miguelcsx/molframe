@@ -149,11 +149,6 @@ impl XtcReader {
             || !precision.is_finite()
             || precision <= 0.0
             || self.source_frame.positions.len() != self.atom_count.saturating_mul(3)
-            || self
-                .source_frame
-                .positions
-                .iter()
-                .any(|value| !value.is_finite() || !(*value * NM_TO_ANGSTROM).is_finite())
         {
             return Err(XtcError::InvalidFrame);
         }
@@ -162,15 +157,23 @@ impl XtcReader {
             .previous_time
             .map(|previous| time - previous)
             .filter(|value| value.is_finite());
-        timestep.positions.clear();
+        // One conversion pass whose finiteness test subsumes the raw one: a
+        // scaled component is finite exactly when the coordinate is finite and
+        // the scaling does not overflow. On failure the scratch frame holds a
+        // partial frame that callers discard with the error.
         let (sources, _) = self.source_frame.positions.as_chunks::<3>();
-        timestep.positions.extend(sources.iter().map(|value| {
-            [
+        timestep.positions.clear();
+        for value in sources {
+            let scaled = [
                 value[0] * NM_TO_ANGSTROM,
                 value[1] * NM_TO_ANGSTROM,
                 value[2] * NM_TO_ANGSTROM,
-            ]
-        }));
+            ];
+            if !scaled.iter().all(|component| component.is_finite()) {
+                return Err(XtcError::InvalidFrame);
+            }
+            timestep.positions.push(scaled);
+        }
         timestep.frame = self.next_frame;
         timestep.time = Some(time);
         timestep.dt = dt;
