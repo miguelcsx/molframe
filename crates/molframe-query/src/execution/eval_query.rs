@@ -4,10 +4,10 @@ use super::{Evaluation, Groups, Query};
 use crate::builder::Builder;
 use crate::plan::{LogicalPlan, PhysicalQuery};
 use crate::spatial::SpatialResolver;
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::diagnostic::Diagnostic;
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::Structure;
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::diagnostic::Diagnostic;
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::Structure;
 
 impl Query {
     /// Compiles textual selection syntax into a reusable typed plan.

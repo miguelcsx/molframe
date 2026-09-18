@@ -16,10 +16,10 @@ use crate::predicate_pattern::{
 use helpers::{
     compare, is_residue_id_column, require_namespace, require_numeric, same_by_key, symbol_value,
 };
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::diagnostic::Diagnostic;
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::diagnostic::Diagnostic;
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
 use scan::{SelectionCursor, selection_from_sorted, visit};
 use std::collections::{BTreeSet, HashMap, hash_map::Entry};
 use values::{numeric, text_resolved};
@@ -182,17 +182,17 @@ pub(crate) fn membership_symbols(
     structure: &Structure,
     universe: &AtomSelection,
     column: Column,
-    symbols: &BTreeSet<pdbiox_core::symbol::SymbolId>,
+    symbols: &BTreeSet<molframe_core::symbol::SymbolId>,
 ) -> Result<AtomSelection, Diagnostic> {
     crate::annotation::require_available(structure, column)?;
     if symbols.is_empty() || universe.is_empty() {
         return Ok(AtomSelection::Empty);
     }
     let elements = if column == Column::Element {
-        let resolved: Vec<pdbiox_core::Element> = symbols
+        let resolved: Vec<molframe_core::Element> = symbols
             .iter()
             .filter_map(|symbol| structure.resolve(*symbol))
-            .filter_map(pdbiox_core::Element::from_symbol)
+            .filter_map(molframe_core::Element::from_symbol)
             .collect();
         if resolved.is_empty() {
             return Ok(AtomSelection::Empty);
@@ -224,7 +224,7 @@ pub(crate) fn membership_symbols(
             continue;
         }
         while let Some(position) = universe.next_before(atoms.end) {
-            let Some(atom) = structure.atom(pdbiox_core::AtomIndex::new(position)) else {
+            let Some(atom) = structure.atom(molframe_core::AtomIndex::new(position)) else {
                 continue;
             };
             let Some(residue) = atom.residue() else {

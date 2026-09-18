@@ -3,7 +3,7 @@
 use super::Parser;
 use crate::ast::Operator;
 use crate::lexer::{Token, TokenKind};
-use pdbiox_core::diagnostic::{Code, Diagnostic};
+use molframe_core::diagnostic::{Code, Diagnostic};
 
 impl Parser {
     pub(super) fn operator(&mut self) -> Result<Operator, Diagnostic> {

@@ -2,8 +2,8 @@
 
 use super::AtomContext;
 use crate::ast::Column;
-use pdbiox_core::contract::{AnalysisPolicy, Namespace};
-use pdbiox_core::structure::Structure;
+use molframe_core::contract::{AnalysisPolicy, Namespace};
+use molframe_core::structure::Structure;
 
 pub(super) fn numeric(
     structure: &Structure,
@@ -27,11 +27,11 @@ pub(super) fn numeric(
             None => crate::annotation::number(
                 structure,
                 context.atom.index().get(),
-                pdbiox_core::FORMAL_CHARGE_ANNOTATION,
+                molframe_core::FORMAL_CHARGE_ANNOTATION,
             )?,
         },
-        Column::Mass => pdbiox_chem::element_properties(context.atom.element()?)?.atomic_weight,
-        Column::Radius => f64::from(pdbiox_chem::vdw_radius(
+        Column::Mass => molframe_chem::element_properties(context.atom.element()?)?.atomic_weight,
+        Column::Radius => f64::from(molframe_chem::vdw_radius(
             context.atom.element()?,
             radius_set(policy.vdw_radii)?,
         )?),
@@ -47,12 +47,12 @@ pub(super) fn numeric(
     Some(value)
 }
 
-fn radius_set(set: pdbiox_core::contract::RadiiSet) -> Option<pdbiox_chem::RadiusSet> {
+fn radius_set(set: molframe_core::contract::RadiiSet) -> Option<molframe_chem::RadiusSet> {
     Some(match set {
-        pdbiox_core::contract::RadiiSet::Bondi => pdbiox_chem::RadiusSet::Bondi,
-        pdbiox_core::contract::RadiiSet::AmberUnited => pdbiox_chem::RadiusSet::AmberUnited,
-        pdbiox_core::contract::RadiiSet::Charmm => pdbiox_chem::RadiusSet::Charmm,
-        pdbiox_core::contract::RadiiSet::Alvarez => pdbiox_chem::RadiusSet::Alvarez,
+        molframe_core::contract::RadiiSet::Bondi => molframe_chem::RadiusSet::Bondi,
+        molframe_core::contract::RadiiSet::AmberUnited => molframe_chem::RadiusSet::AmberUnited,
+        molframe_core::contract::RadiiSet::Charmm => molframe_chem::RadiusSet::Charmm,
+        molframe_core::contract::RadiiSet::Alvarez => molframe_chem::RadiusSet::Alvarez,
         _ => return None,
     })
 }
@@ -72,7 +72,7 @@ pub(super) fn text_resolved<'a>(
         Column::AlternateLocation => context
             .atom
             .alt_id()
-            .and_then(pdbiox_core::symbol::AltId::symbol)
+            .and_then(molframe_core::symbol::AltId::symbol)
             .and_then(|symbol| structure.resolve(symbol))
             .or(Some("")),
         Column::Entity => context
@@ -84,7 +84,7 @@ pub(super) fn text_resolved<'a>(
         Column::Element => context
             .atom
             .element()
-            .map(pdbiox_core::element::Element::symbol),
+            .map(molframe_core::element::Element::symbol),
         Column::InsertionCode => context.residue.ins_code().or(Some("")),
         Column::RecordType => Some(if context.residue.is_het() {
             "HETATM"
@@ -94,7 +94,7 @@ pub(super) fn text_resolved<'a>(
         Column::SegmentId => crate::annotation::symbol(
             structure,
             context.atom.index().get(),
-            pdbiox_core::SEGMENT_ID_ANNOTATION,
+            molframe_core::SEGMENT_ID_ANNOTATION,
         )
         .and_then(|symbol| structure.resolve(symbol)),
         _ => None,

@@ -1,16 +1,16 @@
 //! Access to conventional typed custom atom annotations.
 
 use crate::ast::Column;
-use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::structure::Structure;
-use pdbiox_core::{AtomAnnotation, Presence, SymbolId};
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::structure::Structure;
+use molframe_core::{AtomAnnotation, Presence, SymbolId};
 
 pub(crate) fn name(column: Column) -> Option<&'static str> {
     match column {
-        Column::SegmentId => Some(pdbiox_core::SEGMENT_ID_ANNOTATION),
-        Column::Charge => Some(pdbiox_core::PARTIAL_CHARGE_ANNOTATION),
-        Column::Plddt => Some(pdbiox_core::PLDDT_ANNOTATION),
-        Column::Pae => Some(pdbiox_core::PAE_ANNOTATION),
+        Column::SegmentId => Some(molframe_core::SEGMENT_ID_ANNOTATION),
+        Column::Charge => Some(molframe_core::PARTIAL_CHARGE_ANNOTATION),
+        Column::Plddt => Some(molframe_core::PLDDT_ANNOTATION),
+        Column::Pae => Some(molframe_core::PAE_ANNOTATION),
         _ => None,
     }
 }
@@ -92,33 +92,33 @@ pub(crate) fn boolean(structure: &Structure, atom: u32, name: &str) -> Option<bo
 pub(crate) fn component_kind(
     structure: &Structure,
     atom: u32,
-) -> Option<pdbiox_chem::ComponentKind> {
+) -> Option<molframe_chem::ComponentKind> {
     let AtomAnnotation::Integer(column) = structure
         .annotations()
-        .get(pdbiox_core::COMPONENT_KIND_ANNOTATION)?
+        .get(molframe_core::COMPONENT_KIND_ANNOTATION)?
     else {
         return None;
     };
     column
         .get(atom)
         .filter(|(_, presence)| *presence == Presence::Present)
-        .and_then(|(code, _)| pdbiox_chem::ComponentKind::from_code(code))
+        .and_then(|(code, _)| molframe_chem::ComponentKind::from_code(code))
 }
 
 pub(crate) fn polymer_atom_role(
     structure: &Structure,
     atom: u32,
-) -> Option<pdbiox_chem::PolymerAtomRole> {
+) -> Option<molframe_chem::PolymerAtomRole> {
     let AtomAnnotation::Integer(column) = structure
         .annotations()
-        .get(pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION)?
+        .get(molframe_core::POLYMER_ATOM_ROLE_ANNOTATION)?
     else {
         return None;
     };
     column
         .get(atom)
         .filter(|(_, presence)| *presence == Presence::Present)
-        .and_then(|(code, _)| pdbiox_chem::PolymerAtomRole::from_code(code))
+        .and_then(|(code, _)| molframe_chem::PolymerAtomRole::from_code(code))
 }
 
 #[cfg(test)]

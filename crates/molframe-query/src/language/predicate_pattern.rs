@@ -1,9 +1,9 @@
 //! Numeric and residue-range pattern parsing for column predicates.
 
 use crate::ast::Column;
-use pdbiox_core::contract::{AnalysisPolicy, Namespace};
-use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::structure::ResidueRef;
+use molframe_core::contract::{AnalysisPolicy, Namespace};
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::structure::ResidueRef;
 use std::cmp::Ordering;
 
 #[derive(Clone, Copy)]

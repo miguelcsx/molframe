@@ -4,10 +4,10 @@
 //! once for a component expansion, while bounded bonded expansion stops after
 //! the requested breadth-first depth.
 
-use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::index::AtomIndex;
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::Structure;
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::index::AtomIndex;
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::Structure;
 
 /// Number of bits stored in one visited-set machine word.
 const WORD_BITS: usize = usize::BITS as usize;

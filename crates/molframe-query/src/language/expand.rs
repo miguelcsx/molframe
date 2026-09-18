@@ -1,8 +1,8 @@
 //! Hierarchy expansion for `byres` and `same`.
 
-use pdbiox_core::index::{AtomIndex, ChainIndex, EntityIndex, ResidueIndex};
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::{ResidueRef, Structure};
+use molframe_core::index::{AtomIndex, ChainIndex, EntityIndex, ResidueIndex};
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::{ResidueRef, Structure};
 use std::collections::HashSet;
 
 /// Expands `selected` to complete residues inside `universe`.
@@ -84,7 +84,7 @@ fn selected_residues(structure: &Structure, selected: &AtomSelection) -> HashSet
     for atom in selected {
         let Some(residue) = structure
             .atom(AtomIndex::new(atom))
-            .and_then(pdbiox_core::structure::AtomRef::residue)
+            .and_then(molframe_core::structure::AtomRef::residue)
         else {
             continue;
         };
@@ -105,7 +105,7 @@ fn selected_chains(structure: &Structure, selected: &AtomSelection) -> HashSet<C
     for atom in selected {
         let Some(residue) = structure
             .atom(AtomIndex::new(atom))
-            .and_then(pdbiox_core::structure::AtomRef::residue)
+            .and_then(molframe_core::structure::AtomRef::residue)
         else {
             continue;
         };
@@ -135,7 +135,7 @@ fn selected_entities(structure: &Structure, selected: &AtomSelection) -> HashSet
     for atom in selected {
         let Some(residue) = structure
             .atom(AtomIndex::new(atom))
-            .and_then(pdbiox_core::structure::AtomRef::residue)
+            .and_then(molframe_core::structure::AtomRef::residue)
         else {
             continue;
         };
@@ -256,8 +256,8 @@ fn append_residue_atoms(
     positions.extend(
         residue
             .atoms()
-            .map(pdbiox_core::structure::AtomRef::index)
-            .map(pdbiox_core::index::AtomIndex::get)
+            .map(molframe_core::structure::AtomRef::index)
+            .map(molframe_core::index::AtomIndex::get)
             .filter(|atom| universe.contains(*atom)),
     );
 }

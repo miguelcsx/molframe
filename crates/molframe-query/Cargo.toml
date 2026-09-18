@@ -1,21 +1,21 @@
 [package]
-name = "pdbiox-query"
+name = "molframe-query"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Typed and textual structural selection plans for pdbiox"
+description = "Typed and textual structural selection plans for molframe"
 
 [dependencies]
-pdbiox-chem.workspace = true
-pdbiox-core.workspace = true
+molframe-chem.workspace = true
+molframe-core.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
-pdbiox-cif.workspace = true
-pdbiox-spatial.workspace = true
+molframe-bench.workspace = true
+molframe-cif.workspace = true
+molframe-spatial.workspace = true
 
 [[bench]]
 name = "query"

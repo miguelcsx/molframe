@@ -1,8 +1,8 @@
 //! Ordered selection traversal shared by column predicates.
 
 use super::AtomContext;
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::Structure;
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::Structure;
 
 pub(super) struct SelectionCursor<I> {
     iter: I,

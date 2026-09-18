@@ -2,10 +2,10 @@
 
 use crate::ast::{Column, Expr};
 use crate::glob::Glob;
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::structure::Structure;
-use pdbiox_core::symbol::SymbolId;
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::structure::Structure;
+use molframe_core::symbol::SymbolId;
 use std::collections::BTreeSet;
 
 /// An immutable storage-independent selection plan.
@@ -144,7 +144,7 @@ fn cost(expr: &PhysicalExpr) -> u8 {
 ///
 /// Explicit identifier-policy restrictions are preserved.
 fn symbol_column(column: Column, policy: &AnalysisPolicy) -> bool {
-    if policy.identifiers == pdbiox_core::contract::Namespace::Explicit
+    if policy.identifiers == molframe_core::contract::Namespace::Explicit
         && matches!(
             column,
             Column::Chain | Column::ResidueName | Column::AtomName

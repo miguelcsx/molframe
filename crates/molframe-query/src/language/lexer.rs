@@ -1,6 +1,6 @@
 //! Bounded tokenisation for the selection language.
 
-use pdbiox_core::diagnostic::{Code, Diagnostic};
+use molframe_core::diagnostic::{Code, Diagnostic};
 
 /// A lexical token and its byte offset.
 #[derive(Clone, PartialEq, Eq, Debug)]

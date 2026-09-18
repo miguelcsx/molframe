@@ -1,11 +1,11 @@
 //! Criterion coverage for reusable typed and textual selections.
 
 use criterion::{Criterion, black_box};
-use pdbiox_bench::{Sample, structure};
-use pdbiox_core::ExecutionContext;
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_query::{Groups, Query, col};
-use pdbiox_spatial::{SpatialBackend, StructureSpatial};
+use molframe_bench::{Sample, structure};
+use molframe_core::ExecutionContext;
+use molframe_core::contract::AnalysisPolicy;
+use molframe_query::{Groups, Query, col};
+use molframe_spatial::{SpatialBackend, StructureSpatial};
 
 fn bench_queries(c: &mut Criterion) {
     let context = ExecutionContext::default();

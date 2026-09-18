@@ -1,8 +1,8 @@
 use super::*;
 use crate::{Groups, Query};
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
-use pdbiox_core::structure::Structure;
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::structure::Structure;
 
 const SOURCE: &str = "data_plan\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -15,7 +15,7 @@ ATOM 2 O O  GLY A 1 1 0 0\n";
 fn binding_resolves_globs_to_symbols_and_matches_direct_evaluation() {
     let structure = structure();
     let policy =
-        AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label);
+        AnalysisPolicy::default().with_identifiers(molframe_core::contract::Namespace::Label);
     let query = match Query::compile("name C*") {
         Ok(query) => query,
         Err(findings) => panic!("compile failed: {findings:?}"),
@@ -45,7 +45,7 @@ fn constant_branches_are_folded_before_execution() {
 
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match pdbiox_cif::read(&input, &ReadOptions::new()) {
+    match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     }

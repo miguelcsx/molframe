@@ -1,5 +1,5 @@
 use super::*;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
+use molframe_core::io::{InputBuffer, ReadOptions};
 
 const SOURCE: &str = "data_q\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -13,7 +13,7 @@ HETATM 3 O O HOH W 2 3 0 0 1.0 20 7 Z\n";
 
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match pdbiox_cif::read(&input, &ReadOptions::new()) {
+    match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     }
@@ -23,23 +23,23 @@ fn macro_structure() -> Structure {
     let structure = structure();
     let mut data = structure.data().clone();
     data.annotations.insert(
-        pdbiox_core::COMPONENT_KIND_ANNOTATION,
-        pdbiox_core::AtomAnnotation::Integer(
-            pdbiox_core::AnnotationColumn::from_values(vec![
-                pdbiox_chem::ComponentKind::AminoAcid.code(),
-                pdbiox_chem::ComponentKind::AminoAcid.code(),
-                pdbiox_chem::ComponentKind::Solvent.code(),
+        molframe_core::COMPONENT_KIND_ANNOTATION,
+        molframe_core::AtomAnnotation::Integer(
+            molframe_core::AnnotationColumn::from_values(vec![
+                molframe_chem::ComponentKind::AminoAcid.code(),
+                molframe_chem::ComponentKind::AminoAcid.code(),
+                molframe_chem::ComponentKind::Solvent.code(),
             ])
             .expect("small annotation column"),
         ),
     );
     data.annotations.insert(
-        pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION,
-        pdbiox_core::AtomAnnotation::Integer(
-            pdbiox_core::AnnotationColumn::from_values(vec![
-                pdbiox_chem::PolymerAtomRole::PROTEIN_NITROGEN.code(),
-                pdbiox_chem::PolymerAtomRole::PROTEIN_ALPHA_CARBON.code(),
-                pdbiox_chem::PolymerAtomRole::UNKNOWN.code(),
+        molframe_core::POLYMER_ATOM_ROLE_ANNOTATION,
+        molframe_core::AtomAnnotation::Integer(
+            molframe_core::AnnotationColumn::from_values(vec![
+                molframe_chem::PolymerAtomRole::PROTEIN_NITROGEN.code(),
+                molframe_chem::PolymerAtomRole::PROTEIN_ALPHA_CARBON.code(),
+                molframe_chem::PolymerAtomRole::UNKNOWN.code(),
             ])
             .expect("small annotation column"),
         ),
@@ -54,7 +54,7 @@ fn evaluate(source: &str) -> Evaluation {
     };
     match query.evaluate(
         &macro_structure(),
-        &AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label),
+        &AnalysisPolicy::default().with_identifiers(molframe_core::contract::Namespace::Label),
         &Groups::new(),
         None,
     ) {
@@ -148,12 +148,12 @@ fn chemistry_numeric_columns_and_aromatic_edges_use_shared_rust_data() {
     );
 
     let mut data = structure().data().clone();
-    let mut bonds = pdbiox_core::BondTableBuilder::new();
-    bonds.push(pdbiox_core::BondRecord {
-        atom_a: pdbiox_core::AtomIndex::new(0),
-        atom_b: pdbiox_core::AtomIndex::new(1),
-        order: pdbiox_core::BondOrder::Aromatic,
-        provenance: pdbiox_core::BondProvenance::ChemicalComponentDictionary,
+    let mut bonds = molframe_core::BondTableBuilder::new();
+    bonds.push(molframe_core::BondRecord {
+        atom_a: molframe_core::AtomIndex::new(0),
+        atom_b: molframe_core::AtomIndex::new(1),
+        order: molframe_core::BondOrder::Aromatic,
+        provenance: molframe_core::BondProvenance::ChemicalComponentDictionary,
     });
     data.bonds = bonds.finish();
     let structure = Structure::new(data);
@@ -188,10 +188,10 @@ fn chemistry_macros_aromatic_charge_and_chirality_use_ccd_annotations() {
 }
 
 fn chemistry_structure() -> Structure {
-    use pdbiox_chem::{
+    use molframe_chem::{
         Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider, StereoConfiguration,
     };
-    use pdbiox_core::{BondOrder, Element};
+    use molframe_core::{BondOrder, Element};
 
     let source = "data_chem\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -250,19 +250,19 @@ HETATM 4 S C LIG A 1 0 0 -1\n";
         model_coordinates: None,
     };
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = match pdbiox_cif::read(&input, &ReadOptions::new()) {
+    let (structure, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok(result) => result,
         Err(findings) => panic!("chemistry fixture failed: {findings:?}"),
     };
     let provider = MemoryProvider::new(
-        pdbiox_core::contract::DictionaryVersion::new("query-test"),
+        molframe_core::contract::DictionaryVersion::new("query-test"),
         [component],
     )
     .expect("component fixture is unique");
-    match pdbiox_chem::apply_component_chemistry(
+    match molframe_chem::apply_component_chemistry(
         &structure,
         &provider,
-        pdbiox_chem::PolymerLinkPolicy::Disabled,
+        molframe_chem::PolymerLinkPolicy::Disabled,
     ) {
         Ok(report) => report.structure,
         Err(finding) => panic!("chemistry annotation failed: {finding}"),
@@ -309,7 +309,7 @@ fn explicit_namespace_policy_rejects_unqualified_identity_selectors() {
         Err(findings) => panic!("compile failed: {findings:?}"),
     };
     let policy =
-        AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Explicit);
+        AnalysisPolicy::default().with_identifiers(molframe_core::contract::Namespace::Explicit);
     let result = query.evaluate(&structure(), &policy, &Groups::new(), None);
     assert_eq!(
         result
@@ -354,16 +354,16 @@ fn segment_atom_and_predicted_annotations_execute_from_core_columns() {
         Err(error) => panic!("dictionary failed: {error}"),
     };
     let _ = data.annotations.insert(
-        pdbiox_core::SEGMENT_ID_ANNOTATION,
-        pdbiox_core::AtomAnnotation::Symbol(
-            pdbiox_core::AnnotationColumn::from_values(vec![system, system, solvent])
+        molframe_core::SEGMENT_ID_ANNOTATION,
+        molframe_core::AtomAnnotation::Symbol(
+            molframe_core::AnnotationColumn::from_values(vec![system, system, solvent])
                 .expect("small annotation column"),
         ),
     );
     let _ = data.annotations.insert(
-        pdbiox_core::PLDDT_ANNOTATION,
-        pdbiox_core::AtomAnnotation::Real(
-            pdbiox_core::AnnotationColumn::from_values(vec![90.0, 40.0, 80.0])
+        molframe_core::PLDDT_ANNOTATION,
+        molframe_core::AtomAnnotation::Real(
+            molframe_core::AnnotationColumn::from_values(vec![90.0, 40.0, 80.0])
                 .expect("small annotation column"),
         ),
     );
@@ -379,7 +379,7 @@ fn segment_atom_and_predicted_annotations_execute_from_core_columns() {
             Err(findings) => panic!("compile failed: {findings:?}"),
         };
         let policy =
-            AnalysisPolicy::default().with_identifiers(pdbiox_core::contract::Namespace::Label);
+            AnalysisPolicy::default().with_identifiers(molframe_core::contract::Namespace::Label);
         let result = query.evaluate(&structure, &policy, &Groups::new(), None);
         let result = match result {
             Ok(result) => result,

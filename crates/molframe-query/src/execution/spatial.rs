@@ -1,7 +1,7 @@
 //! Boundary between query planning and spatial execution.
 
-use pdbiox_core::diagnostic::Diagnostic;
-use pdbiox_core::selection::AtomSelection;
+use molframe_core::diagnostic::Diagnostic;
+use molframe_core::selection::AtomSelection;
 
 /// A fully planned geometric predicate.
 #[derive(Clone, Copy, Debug)]

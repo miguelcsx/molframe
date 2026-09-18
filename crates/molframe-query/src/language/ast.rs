@@ -1,6 +1,6 @@
 //! Typed selection intermediate representation.
 
-use pdbiox_chem::SmartsPattern;
+use molframe_chem::SmartsPattern;
 
 /// A selectable structure column.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

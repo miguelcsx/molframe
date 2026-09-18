@@ -1,6 +1,6 @@
 use super::*;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
-use pdbiox_core::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
+use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 
 const SOURCE: &str = "data_bonds\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -12,7 +12,7 @@ ATOM 5 C E GLY A 1 4 0 0\n";
 
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new()).expect("fixture parses");
+    let (structure, _) = molframe_cif::read(&input, &ReadOptions::new()).expect("fixture parses");
     let mut bonds = BondTableBuilder::new();
     for (a, b) in [(0, 1), (1, 2), (3, 4)] {
         bonds.push(BondRecord {

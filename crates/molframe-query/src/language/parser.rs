@@ -2,8 +2,8 @@
 
 use crate::ast::{Column, Expr, GeometricExpr, Macro, Operator, SameKey};
 use crate::lexer::{Token, TokenKind, lex};
-use pdbiox_chem::SmartsPattern;
-use pdbiox_core::diagnostic::{Code, Diagnostic};
+use molframe_chem::SmartsPattern;
+use molframe_core::diagnostic::{Code, Diagnostic};
 
 #[path = "parser_helpers.rs"]
 mod helpers;

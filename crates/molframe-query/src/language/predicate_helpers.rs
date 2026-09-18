@@ -3,11 +3,11 @@
 use super::{AtomContext, resolved_column, scan, visit};
 use crate::ast::{Column, Operator};
 use crate::predicate_pattern::{residue_insertion, residue_number};
-use pdbiox_core::contract::{AnalysisPolicy, Namespace};
-use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::{ChainRef, Structure};
-use pdbiox_core::topology::EntityKind;
+use molframe_core::contract::{AnalysisPolicy, Namespace};
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::{ChainRef, Structure};
+use molframe_core::topology::EntityKind;
 use std::collections::HashSet;
 use std::hash::Hash;
 
@@ -115,7 +115,7 @@ pub(crate) fn atom_selector(
         let segment_matches = crate::annotation::symbol(
             structure,
             context.atom.index().get(),
-            pdbiox_core::SEGMENT_ID_ANNOTATION,
+            molframe_core::SEGMENT_ID_ANNOTATION,
         ) == Some(segment_symbol);
         let residue_matches = residue_number(context.residue, Column::ResidueId, policy)
             .is_some_and(|number| {
@@ -131,7 +131,7 @@ pub(super) fn symbol_value(
     structure: &Structure,
     context: AtomContext<'_>,
     column: Column,
-) -> Option<pdbiox_core::symbol::SymbolId> {
+) -> Option<molframe_core::symbol::SymbolId> {
     match column {
         Column::LabelChain => context.chain.label_asym_id(),
         Column::AuthChain => context.chain.auth_asym_id(),
@@ -156,7 +156,7 @@ pub(super) fn symbol_value(
         Column::SegmentId => crate::annotation::symbol(
             structure,
             context.atom.index().get(),
-            pdbiox_core::SEGMENT_ID_ANNOTATION,
+            molframe_core::SEGMENT_ID_ANNOTATION,
         ),
         _ => None,
     }

@@ -3,11 +3,11 @@
 use crate::ast::{Expr, GeometricExpr, SameKey};
 use crate::plan::{PhysicalExpr, PhysicalQuery};
 use crate::spatial::{GeometricRequest, SpatialResolver};
-use pdbiox_chem::SmartsDataError;
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::diagnostic::{Code, Diagnostic};
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::Structure;
+use molframe_chem::SmartsDataError;
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::Structure;
 use std::collections::BTreeMap;
 
 #[path = "eval_query.rs"]
@@ -470,7 +470,7 @@ fn missing_smarts_data(error: SmartsDataError) -> Diagnostic {
 }
 
 fn smarts_selection(
-    pattern: &pdbiox_chem::SmartsPattern,
+    pattern: &molframe_chem::SmartsPattern,
     structure: &Structure,
     universe: &AtomSelection,
 ) -> Result<AtomSelection, Diagnostic> {

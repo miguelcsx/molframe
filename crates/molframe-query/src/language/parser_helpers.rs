@@ -2,7 +2,7 @@
 
 use super::GeometricKeyword;
 use crate::lexer::{Token, TokenKind};
-use pdbiox_core::diagnostic::{Code, Diagnostic};
+use molframe_core::diagnostic::{Code, Diagnostic};
 use std::borrow::Cow;
 
 pub(super) fn geometric_keyword(value: &str) -> Option<GeometricKeyword> {
