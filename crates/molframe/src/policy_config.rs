@@ -1,6 +1,6 @@
 //! Strict JSON and TOML loading for complete analysis policies.
 
-use pdbiox_core::contract::{
+use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,
     EquivalencePolicy, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace, PeriodicPolicy,
     Precision, RadiiSet, SymmetryPolicy,

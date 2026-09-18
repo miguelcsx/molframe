@@ -1,4 +1,4 @@
-use pdbiox::{AnalysisPolicy, AtomSelection, SpatialBackend};
+use molframe::{AnalysisPolicy, AtomSelection, SpatialBackend};
 
 #[test]
 fn gw_024_reuses_a_neighbour_list_across_trajectory_frames() {
@@ -7,27 +7,27 @@ fn gw_024_reuses_a_neighbour_list_across_trajectory_frames() {
         [[0.1, 0.0, 0.0], [1.1, 0.0, 0.0]],
     ];
     let selection = AtomSelection::All(2);
-    let options = pdbiox::analysis::RadialDistributionOptions {
+    let options = molframe::analysis::RadialDistributionOptions {
         minimum_distance: 0.0,
         maximum_distance: 2.0,
         bins: 4,
         volume: 100.0,
         backend: SpatialBackend::BruteForce,
     };
-    let mut neighbours = pdbiox::traj::FrameNeighborList::new([0_u32, 1], [0_u32, 1], 2.0, 0.5);
+    let mut neighbours = molframe::traj::FrameNeighborList::new([0_u32, 1], [0_u32, 1], 2.0, 0.5);
     let mut radial_counts = Vec::new();
     for frame in positions {
         let _ = neighbours
             .pairs_positions(&frame, None)
             .unwrap_or_else(|error| panic!("neighbour-list query failed: {error}"));
         radial_counts.push(
-            pdbiox::analysis::radial_distribution(
+            molframe::analysis::radial_distribution(
                 &frame,
                 &selection,
                 &selection,
                 options,
                 None,
-                &pdbiox::ExecutionContext::default(),
+                &molframe::ExecutionContext::default(),
             )
             .unwrap_or_else(|error| panic!("RDF failed: {error}"))
             .iter()
@@ -55,14 +55,14 @@ frame-2
 C 2 0 0
 N 3 0 0
 ";
-    let frames = pdbiox::traj::parse_xyz(source).unwrap_or_else(|| panic!("XYZ parse failed"));
+    let frames = molframe::traj::parse_xyz(source).unwrap_or_else(|| panic!("XYZ parse failed"));
     let selected: Vec<_> = [0_usize, 2]
         .iter()
         .map(|index| frames[*index].clone())
         .collect();
-    let rendered = pdbiox::traj::write_xyz(&selected);
+    let rendered = molframe::traj::write_xyz(&selected);
     let round_trip =
-        pdbiox::traj::parse_xyz(&rendered).unwrap_or_else(|| panic!("selected XYZ parse failed"));
+        molframe::traj::parse_xyz(&rendered).unwrap_or_else(|| panic!("selected XYZ parse failed"));
     assert_eq!(round_trip, selected);
     assert_eq!(round_trip.len(), 2);
     assert_eq!(round_trip[1].comment, "frame-2");
@@ -70,10 +70,10 @@ N 3 0 0
 
 #[test]
 fn gw_026_parallel_trajectory_analysis_is_byte_identical() {
-    let structure = pdbiox_bench::structure(pdbiox_bench::Sample::Tiny);
-    let trajectory = pdbiox::traj::Trajectory::from_frames(
+    let structure = molframe_bench::structure(molframe_bench::Sample::Tiny);
+    let trajectory = molframe::traj::Trajectory::from_frames(
         (0_u16..1_025)
-            .map(|frame| pdbiox::traj::Frame {
+            .map(|frame| molframe::traj::Frame {
                 positions: structure
                     .positions()
                     .iter()
@@ -84,16 +84,16 @@ fn gw_026_parallel_trajectory_analysis_is_byte_identical() {
     )
     .unwrap_or_else(|error| panic!("trajectory construction failed: {error}"));
     let policy = AnalysisPolicy::default();
-    let kernel = pdbiox::analysis::contacts_kernel(3.0, SpatialBackend::Auto);
+    let kernel = molframe::analysis::contacts_kernel(3.0, SpatialBackend::Auto);
     let available = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
     let results: Vec<_> = [1_usize, 2, 4, 8, available]
         .into_iter()
         .map(|workers| {
-            let context = pdbiox::ExecutionContext::builder()
+            let context = molframe::ExecutionContext::builder()
                 .worker_budget(workers)
                 .build()
                 .unwrap_or_else(|error| panic!("execution context failed: {error}"));
-            pdbiox::analysis::analyse_trajectory(
+            molframe::analysis::analyse_trajectory(
                 &structure,
                 &trajectory,
                 &policy,

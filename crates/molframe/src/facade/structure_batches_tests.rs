@@ -1,5 +1,5 @@
 use super::*;
-use pdbiox_core::{ScratchPolicy, TempStoragePolicy, collect_structure};
+use molframe_core::{ScratchPolicy, TempStoragePolicy, collect_structure};
 use std::io::Write;
 
 const PDB: &str = concat!(
@@ -38,12 +38,12 @@ fn dispatch_and_collector_never_reserve_from_the_input_length() {
 #[test]
 #[cfg(all(feature = "bcif", feature = "pdb"))]
 fn binary_cif_dispatch_uses_the_bounded_reader() {
-    let input = pdbiox_core::InputBuffer::from_bytes(PDB.as_bytes().to_vec());
+    let input = molframe_core::InputBuffer::from_bytes(PDB.as_bytes().to_vec());
     let (structure, diagnostics) =
-        pdbiox_pdb::read(&input, &ReadOptions::new()).expect("PDB structure fixture");
+        molframe_pdb::read(&input, &ReadOptions::new()).expect("PDB structure fixture");
     assert!(diagnostics.is_empty());
-    let write_options = pdbiox_cif::CifWriteOptions::new().with_block_id("batch");
-    let bytes = pdbiox_bcif::write_structure_with_options(&structure, &write_options)
+    let write_options = molframe_cif::CifWriteOptions::new().with_block_id("batch");
+    let bytes = molframe_bcif::write_structure_with_options(&structure, &write_options)
         .expect("BinaryCIF fixture");
     let mut file = tempfile::Builder::new()
         .suffix(".bcif")

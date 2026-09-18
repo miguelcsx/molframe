@@ -1,8 +1,8 @@
 //! Criterion coverage for the all-features facade read/write path.
 
 use criterion::{Criterion, Throughput, black_box};
-use pdbiox::{ReadOptions, read_bytes, write_mmcif};
-use pdbiox_bench::{Sample, input};
+use molframe::{ReadOptions, read_bytes, write_mmcif};
+use molframe_bench::{Sample, input};
 
 fn bench_facade(c: &mut Criterion) {
     let bytes = match Sample::Medium.cif() {
@@ -11,7 +11,7 @@ fn bench_facade(c: &mut Criterion) {
     };
     let options = ReadOptions::new();
     let input = input(&bytes);
-    let (structure, _) = match pdbiox_cif::read(&input, &options) {
+    let (structure, _) = match molframe_cif::read(&input, &options) {
         Ok(result) => result,
         Err(findings) => panic!("facade fixture failed: {findings:?}"),
     };

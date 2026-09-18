@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pdbiox::{Component, ComponentKind, DictionaryVersion, Element, ReadOptions};
+use molframe::{Component, ComponentKind, DictionaryVersion, Element, ReadOptions};
 
 #[test]
 fn gw_027_maps_homomeric_chains_and_reports_alternatives() {
@@ -41,12 +41,12 @@ _atom_site.Cartn_z
 ",
     );
     let provider = provider();
-    let assignment = pdbiox::compare::assign_chains(
+    let assignment = molframe::compare::assign_chains(
         &reference,
         &target,
         &provider,
-        pdbiox::Namespace::Label,
-        pdbiox::seq::Scoring::simple(),
+        molframe::Namespace::Label,
+        molframe::seq::Scoring::simple(),
         1.0,
     )
     .unwrap_or_else(|finding| panic!("chain mapping failed: {finding}"));
@@ -69,7 +69,7 @@ _atom_site.Cartn_z
 #[test]
 fn gw_029_uses_chemical_symmetry_for_ligand_pose_comparison() {
     let component = symmetric_component();
-    let result = pdbiox::compare::ligand_symmetry_rmsd(
+    let result = molframe::compare::ligand_symmetry_rmsd(
         &[[0.0, 0.0, 0.0], [-1.2, 0.0, 0.0], [1.2, 0.0, 0.0]],
         &[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0], [-1.2, 0.0, 0.0]],
         &component,
@@ -99,7 +99,7 @@ ATOM 1 C CA ALA A 1 1 2 3
 ATOM 2 N N ALA A 1 4 5 6
 ",
     );
-    let tensor = pdbiox::DlpackTensor::coordinates(&structure)
+    let tensor = molframe::DlpackTensor::coordinates(&structure)
         .unwrap_or_else(|error| panic!("DLPack export failed: {error}"));
     let (data, shape, dtype_bits) = {
         let managed = tensor
@@ -114,7 +114,7 @@ ATOM 2 N N ALA A 1 4 5 6
     };
     assert_eq!(shape, [2, 3]);
     assert_eq!(dtype_bits, 32);
-    assert_eq!(tensor.cost(), pdbiox::ExportCost::Copy);
+    assert_eq!(tensor.cost(), molframe::ExportCost::Copy);
     assert_ne!(data.cast_const(), structure.positions().as_ptr().cast());
     unsafe { data.write(9.0) };
     assert_eq!(structure.positions()[0][0].to_bits(), 1.0_f32.to_bits());
@@ -122,18 +122,18 @@ ATOM 2 N N ALA A 1 4 5 6
 
 #[test]
 fn gw_036_splits_a_manifest_by_sequence_identity_without_loading_coordinates() {
-    let dataset = pdbiox::Dataset::new(vec![
+    let dataset = molframe::Dataset::new(vec![
         entry("a", "AAAA", "2020-01-01"),
         entry("b", "AAAA", "2020-01-02"),
         entry("c", "GGGG", "2021-01-01"),
         entry("d", "GGGG", "2021-01-02"),
     ])
     .unwrap_or_else(|error| panic!("dataset fixture failed: {error}"));
-    let ratios = pdbiox::SplitRatios::new(0.5, 0.25, 0.25)
+    let ratios = molframe::SplitRatios::new(0.5, 0.25, 0.25)
         .unwrap_or_else(|error| panic!("split ratios failed: {error}"));
     let split = dataset
-        .split(&pdbiox::SplitOptions {
-            strategy: pdbiox::SplitStrategy::SequenceIdentity { threshold: 1.0 },
+        .split(&molframe::SplitOptions {
+            strategy: molframe::SplitStrategy::SequenceIdentity { threshold: 1.0 },
             ratios,
         })
         .unwrap_or_else(|error| panic!("sequence split failed: {error}"));
@@ -159,14 +159,14 @@ fn gw_036_splits_a_manifest_by_sequence_identity_without_loading_coordinates() {
 #[test]
 fn gw_041_reexecutes_only_with_matching_provenance() {
     let input = b"golden-provenance-input";
-    let policy = pdbiox::AnalysisPolicy::default();
-    let provenance = pdbiox::Provenance::new(&policy)
-        .with_source(pdbiox::SourceRef::Memory)
-        .with_input_fingerprint(pdbiox::core::contract::Fingerprint::of(input));
-    let replay = pdbiox::core::contract::reexecute_from_provenance(
+    let policy = molframe::AnalysisPolicy::default();
+    let provenance = molframe::Provenance::new(&policy)
+        .with_source(molframe::SourceRef::Memory)
+        .with_input_fingerprint(molframe::core::contract::Fingerprint::of(input));
+    let replay = molframe::core::contract::reexecute_from_provenance(
         &provenance,
         input,
-        pdbiox::core::contract::ReexecutionEnvironment::current(),
+        molframe::core::contract::ReexecutionEnvironment::current(),
         |bytes, replay_policy| (bytes.len(), replay_policy.fingerprint()),
     )
     .unwrap_or_else(|error| panic!("provenance replay failed: {error}"));
@@ -174,18 +174,18 @@ fn gw_041_reexecutes_only_with_matching_provenance() {
     assert_eq!(replay.value.1, policy.fingerprint());
     assert_eq!(replay.provenance.fingerprint(), provenance.fingerprint());
     assert!(
-        pdbiox::core::contract::reexecute_from_provenance(
+        molframe::core::contract::reexecute_from_provenance(
             &provenance,
             b"different-input",
-            pdbiox::core::contract::ReexecutionEnvironment::current(),
+            molframe::core::contract::ReexecutionEnvironment::current(),
             |_, _| (),
         )
         .is_err()
     );
 }
 
-fn read(source: &str) -> pdbiox::Structure {
-    match pdbiox::read_bytes(
+fn read(source: &str) -> molframe::Structure {
+    match molframe::read_bytes(
         source.as_bytes().to_vec(),
         Some("golden.cif"),
         &ReadOptions::new(),
@@ -195,8 +195,8 @@ fn read(source: &str) -> pdbiox::Structure {
     }
 }
 
-fn provider() -> pdbiox::MemoryProvider {
-    pdbiox::MemoryProvider::new(
+fn provider() -> molframe::MemoryProvider {
+    molframe::MemoryProvider::new(
         DictionaryVersion::new("golden-ccd"),
         [component("GLY", b'G'), component("ALA", b'A')],
     )
@@ -232,17 +232,17 @@ fn symmetric_component() -> Component {
             atom("O2", Element::OXYGEN),
         ]),
         bonds: Arc::from([
-            pdbiox::ComponentBond {
+            molframe::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O1".into(),
-                order: pdbiox::BondOrder::Double,
+                order: molframe::BondOrder::Double,
                 aromatic: false,
                 stereo: None,
             },
-            pdbiox::ComponentBond {
+            molframe::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O2".into(),
-                order: pdbiox::BondOrder::Double,
+                order: molframe::BondOrder::Double,
                 aromatic: false,
                 stereo: None,
             },
@@ -252,8 +252,8 @@ fn symmetric_component() -> Component {
     }
 }
 
-fn atom(name: &str, element: Element) -> pdbiox::ComponentAtom {
-    pdbiox::ComponentAtom {
+fn atom(name: &str, element: Element) -> molframe::ComponentAtom {
+    molframe::ComponentAtom {
         name: name.into(),
         alternate_name: None,
         element,
@@ -264,8 +264,8 @@ fn atom(name: &str, element: Element) -> pdbiox::ComponentAtom {
     }
 }
 
-fn entry(id: &str, sequence: &str, date: &str) -> pdbiox::ManifestEntry {
-    pdbiox::ManifestEntry {
+fn entry(id: &str, sequence: &str, date: &str) -> molframe::ManifestEntry {
+    molframe::ManifestEntry {
         id: id.into(),
         path: id.into(),
         atom_count: 100,

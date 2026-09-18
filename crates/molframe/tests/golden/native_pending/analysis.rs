@@ -1,4 +1,4 @@
-use pdbiox::{
+use molframe::{
     AnnotationColumn, AtomAnnotation, AtomIndex, BondOrder, BondProvenance, BondRecord,
     BondTableBuilder, Presence, ReadOptions, Structure,
 };
@@ -45,15 +45,15 @@ ATOM 8 O O GLY A 2 4 3 0
 #[test]
 fn gw_015_detects_oriented_hydrogen_bonds_from_explicit_chemistry() {
     let structure = annotated_hbond_structure();
-    let bonds = pdbiox::analysis::hydrogen_bonds(
+    let bonds = molframe::analysis::hydrogen_bonds(
         &structure,
-        pdbiox::analysis::HydrogenBondOptions {
+        molframe::analysis::HydrogenBondOptions {
             maximum_donor_acceptor_distance: 3.5,
             minimum_angle_degrees: 150.0,
-            backend: pdbiox::SpatialBackend::BruteForce,
+            backend: molframe::SpatialBackend::BruteForce,
             periodic: false,
         },
-        &pdbiox::ExecutionContext::default(),
+        &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("hydrogen-bond workflow failed: {error}"));
     assert_eq!(bonds.len(), 1);
@@ -72,9 +72,9 @@ fn gw_015_detects_oriented_hydrogen_bonds_from_explicit_chemistry() {
 fn gw_016_assigns_one_secondary_structure_record_per_backbone_residue() {
     let source = read(DSSP_CIF);
     let structure = with_polymer_roles(&source);
-    let records = pdbiox::analysis::secondary_structure(
+    let records = molframe::analysis::secondary_structure(
         &structure,
-        &pdbiox::analysis::DsspOptions {
+        &molframe::analysis::DsspOptions {
             electrostatic_prefactor: 332.0 * 0.42 * 0.20,
             hydrogen_bond_energy: -0.5,
             amide_hydrogen_distance: 1.0,
@@ -88,7 +88,7 @@ fn gw_016_assigns_one_secondary_structure_record_per_backbone_residue() {
     assert!(
         records
             .iter()
-            .all(|record| record.kind == pdbiox::analysis::SseKind::Coil)
+            .all(|record| record.kind == molframe::analysis::SseKind::Coil)
     );
 }
 
@@ -112,42 +112,42 @@ ATOM 2 C CA ALA B 1 2.5 0 0
 ",
     );
     let policies = [
-        pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
-        pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
-        pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
-        pdbiox::core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
-        pdbiox::core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
+        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
+        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
+        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
+        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
+        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
     ];
     let mut fingerprints = Vec::new();
     let mut counts = Vec::new();
     for contact_def in policies {
-        let policy = pdbiox::AnalysisPolicy {
+        let policy = molframe::AnalysisPolicy {
             contact_def,
-            ..pdbiox::AnalysisPolicy::default()
+            ..molframe::AnalysisPolicy::default()
         };
         let count = match contact_def {
-            pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance } => {
-                pdbiox::analysis::atom_contacts(
+            molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance } => {
+                molframe::analysis::atom_contacts(
                     &structure,
                     2.5 + tolerance,
-                    pdbiox::SpatialBackend::BruteForce,
-                    &pdbiox::ExecutionContext::default(),
+                    molframe::SpatialBackend::BruteForce,
+                    &molframe::ExecutionContext::default(),
                 )
                 .unwrap_or_else(|error| panic!("distance contact workflow failed: {error}"))
                 .len()
             }
-            pdbiox::core::contract::ContactDefinition::SurfaceBased { probe } => {
-                pdbiox::analysis::surface_contacts(
+            molframe::core::contract::ContactDefinition::SurfaceBased { probe } => {
+                molframe::analysis::surface_contacts(
                     &structure,
                     &[1.7, 1.7],
-                    pdbiox::analysis::SurfaceContactOptions {
+                    molframe::analysis::SurfaceContactOptions {
                         tolerance: 0.5,
                         probe,
                         surface_density: 2.0,
                         minimum_area: 0.1,
-                        backend: pdbiox::SpatialBackend::BruteForce,
+                        backend: molframe::SpatialBackend::BruteForce,
                     },
-                    &pdbiox::ExecutionContext::default(),
+                    &molframe::ExecutionContext::default(),
                 )
                 .unwrap_or_else(|error| panic!("surface contact workflow failed: {error}"))
                 .len()
@@ -176,11 +176,11 @@ fn annotated_hbond_structure() -> Structure {
         .unwrap_or_else(|error| panic!("annotation fixture failed: {error}"))
     };
     data.annotations.insert(
-        pdbiox::HBOND_DONOR_ANNOTATION,
+        molframe::HBOND_DONOR_ANNOTATION,
         AtomAnnotation::Boolean(roles(0)),
     );
     data.annotations.insert(
-        pdbiox::HBOND_ACCEPTOR_ANNOTATION,
+        molframe::HBOND_ACCEPTOR_ANNOTATION,
         AtomAnnotation::Boolean(roles(2)),
     );
     let mut bonds = BondTableBuilder::new();
@@ -200,18 +200,18 @@ fn with_polymer_roles(structure: &Structure) -> Structure {
         .atoms()
         .map(|atom| {
             let role = match atom.name() {
-                Some("N") => pdbiox::PolymerAtomRole::PROTEIN_NITROGEN,
-                Some("CA") => pdbiox::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
-                Some("C") => pdbiox::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
-                Some("O") => pdbiox::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
-                _ => pdbiox::PolymerAtomRole::UNKNOWN,
+                Some("N") => molframe::PolymerAtomRole::PROTEIN_NITROGEN,
+                Some("CA") => molframe::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+                Some("C") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+                Some("O") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
+                _ => molframe::PolymerAtomRole::UNKNOWN,
             };
             (role.code(), Presence::Present)
         })
         .collect();
     let mut data = structure.data().clone();
     data.annotations.insert(
-        pdbiox::POLYMER_ATOM_ROLE_ANNOTATION,
+        molframe::POLYMER_ATOM_ROLE_ANNOTATION,
         AtomAnnotation::Integer(
             AnnotationColumn::from_entries(values)
                 .unwrap_or_else(|error| panic!("role fixture failed: {error}")),
@@ -221,7 +221,7 @@ fn with_polymer_roles(structure: &Structure) -> Structure {
 }
 
 fn read(source: &str) -> Structure {
-    match pdbiox::read_bytes(
+    match molframe::read_bytes(
         source.as_bytes().to_vec(),
         Some("golden.cif"),
         &ReadOptions::new(),

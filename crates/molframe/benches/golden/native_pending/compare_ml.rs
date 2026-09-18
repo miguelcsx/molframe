@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use pdbiox::{Component, ComponentKind, DictionaryVersion, Element, ReadOptions};
+use molframe::{Component, ComponentKind, DictionaryVersion, Element, ReadOptions};
 
 trait BenchRequired<T> {
     fn required(self, context: &str) -> T;
@@ -75,12 +75,12 @@ _atom_site.Cartn_z
     group.throughput(Throughput::Elements(4));
     group.bench_function("GW-027", |b| {
         b.iter(|| {
-            let assignment = pdbiox::compare::assign_chains(
+            let assignment = molframe::compare::assign_chains(
                 &reference,
                 &target,
                 &provider,
-                pdbiox::Namespace::Label,
-                pdbiox::seq::Scoring::simple(),
+                molframe::Namespace::Label,
+                molframe::seq::Scoring::simple(),
                 1.0,
             )
             .required("GW-027 failed");
@@ -94,7 +94,7 @@ fn bench_gw_029(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(3));
     group.bench_function("GW-029", |b| {
         b.iter(|| {
-            let result = pdbiox::compare::ligand_symmetry_rmsd(
+            let result = molframe::compare::ligand_symmetry_rmsd(
                 &[[0.0, 0.0, 0.0], [-1.2, 0.0, 0.0], [1.2, 0.0, 0.0]],
                 &[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0], [-1.2, 0.0, 0.0]],
                 &component,
@@ -127,27 +127,27 @@ ATOM 2 N N ALA A 1 4 5 6
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-034", |b| {
         b.iter(|| {
-            let tensor = pdbiox::DlpackTensor::coordinates(&structure).required("GW-034 failed");
+            let tensor = molframe::DlpackTensor::coordinates(&structure).required("GW-034 failed");
             black_box((tensor.cost(), tensor.as_managed().is_some()));
         });
     });
 }
 
 fn bench_gw_036(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let dataset = pdbiox::Dataset::new(vec![
+    let dataset = molframe::Dataset::new(vec![
         entry("a", "AAAA", "2020-01-01"),
         entry("b", "AAAA", "2020-01-02"),
         entry("c", "GGGG", "2021-01-01"),
         entry("d", "GGGG", "2021-01-02"),
     ])
     .required("GW-036 fixture failed");
-    let ratios = pdbiox::SplitRatios::new(0.5, 0.25, 0.25).required("GW-036 ratios failed");
+    let ratios = molframe::SplitRatios::new(0.5, 0.25, 0.25).required("GW-036 ratios failed");
     group.throughput(Throughput::Elements(4));
     group.bench_function("GW-036", |b| {
         b.iter(|| {
             let split = dataset
-                .split(&pdbiox::SplitOptions {
-                    strategy: pdbiox::SplitStrategy::SequenceIdentity { threshold: 1.0 },
+                .split(&molframe::SplitOptions {
+                    strategy: molframe::SplitStrategy::SequenceIdentity { threshold: 1.0 },
                     ratios,
                 })
                 .required("GW-036 failed");
@@ -158,17 +158,17 @@ fn bench_gw_036(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_041(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let input = b"golden-provenance-input";
-    let policy = pdbiox::AnalysisPolicy::default();
-    let provenance = pdbiox::Provenance::new(&policy)
-        .with_source(pdbiox::SourceRef::Memory)
-        .with_input_fingerprint(pdbiox::core::contract::Fingerprint::of(input));
+    let policy = molframe::AnalysisPolicy::default();
+    let provenance = molframe::Provenance::new(&policy)
+        .with_source(molframe::SourceRef::Memory)
+        .with_input_fingerprint(molframe::core::contract::Fingerprint::of(input));
     group.throughput(Throughput::Bytes(input.len() as u64));
     group.bench_function("GW-041", |b| {
         b.iter(|| {
-            let replay = pdbiox::core::contract::reexecute_from_provenance(
+            let replay = molframe::core::contract::reexecute_from_provenance(
                 &provenance,
                 input,
-                pdbiox::core::contract::ReexecutionEnvironment::current(),
+                molframe::core::contract::ReexecutionEnvironment::current(),
                 |bytes, replay_policy| (bytes.len(), replay_policy.fingerprint()),
             )
             .required("GW-041 failed");
@@ -177,8 +177,8 @@ fn bench_gw_041(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     });
 }
 
-fn read(source: &str) -> pdbiox::Structure {
-    pdbiox::read_bytes(
+fn read(source: &str) -> molframe::Structure {
+    molframe::read_bytes(
         source.as_bytes().to_vec(),
         Some("golden.cif"),
         &ReadOptions::new(),
@@ -187,8 +187,8 @@ fn read(source: &str) -> pdbiox::Structure {
     .0
 }
 
-fn provider() -> pdbiox::MemoryProvider {
-    pdbiox::MemoryProvider::new(
+fn provider() -> molframe::MemoryProvider {
+    molframe::MemoryProvider::new(
         DictionaryVersion::new("golden-ccd"),
         [component("GLY", b'G'), component("ALA", b'A')],
     )
@@ -224,17 +224,17 @@ fn symmetric_component() -> Component {
             atom("O2", Element::OXYGEN),
         ]),
         bonds: Arc::from([
-            pdbiox::ComponentBond {
+            molframe::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O1".into(),
-                order: pdbiox::BondOrder::Double,
+                order: molframe::BondOrder::Double,
                 aromatic: false,
                 stereo: None,
             },
-            pdbiox::ComponentBond {
+            molframe::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O2".into(),
-                order: pdbiox::BondOrder::Double,
+                order: molframe::BondOrder::Double,
                 aromatic: false,
                 stereo: None,
             },
@@ -244,8 +244,8 @@ fn symmetric_component() -> Component {
     }
 }
 
-fn atom(name: &str, element: Element) -> pdbiox::ComponentAtom {
-    pdbiox::ComponentAtom {
+fn atom(name: &str, element: Element) -> molframe::ComponentAtom {
+    molframe::ComponentAtom {
         name: name.into(),
         alternate_name: None,
         element,
@@ -256,8 +256,8 @@ fn atom(name: &str, element: Element) -> pdbiox::ComponentAtom {
     }
 }
 
-fn entry(id: &str, sequence: &str, date: &str) -> pdbiox::ManifestEntry {
-    pdbiox::ManifestEntry {
+fn entry(id: &str, sequence: &str, date: &str) -> molframe::ManifestEntry {
+    molframe::ManifestEntry {
         id: id.into(),
         path: id.into(),
         atom_count: 100,

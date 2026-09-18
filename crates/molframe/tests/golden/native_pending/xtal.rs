@@ -1,4 +1,4 @@
-use pdbiox::{
+use molframe::{
     AssemblyExt, InputBuffer, ModelIndex, ReadOptions, SpatialBackend, Structure, SymmetryExt,
 };
 
@@ -100,11 +100,11 @@ fn gw_018_materialises_a_biological_assembly_and_finds_its_interface() {
     let materialized = view
         .materialize()
         .unwrap_or_else(|findings| panic!("assembly materialisation failed: {findings:?}"));
-    let contacts = pdbiox::analysis::atom_contacts(
+    let contacts = molframe::analysis::atom_contacts(
         &materialized,
         3.0,
         SpatialBackend::BruteForce,
-        &pdbiox::ExecutionContext::default(),
+        &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("assembly interface failed: {error}"));
     assert_eq!(materialized.chain_count(), 2);
@@ -122,17 +122,17 @@ fn gw_019_lazy_and_materialised_assembly_interface_queries_agree() {
             ModelIndex::new(0),
             3.0,
             SpatialBackend::BruteForce,
-            &pdbiox::ExecutionContext::default(),
+            &molframe::ExecutionContext::default(),
         )
         .unwrap_or_else(|finding| panic!("lazy assembly query failed: {finding}"));
     let materialized = view
         .materialize()
         .unwrap_or_else(|findings| panic!("assembly materialisation failed: {findings:?}"));
-    let eager = pdbiox::analysis::atom_contacts(
+    let eager = molframe::analysis::atom_contacts(
         &materialized,
         3.0,
         SpatialBackend::BruteForce,
-        &pdbiox::ExecutionContext::default(),
+        &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("eager assembly query failed: {error}"));
     assert_eq!(lazy.len(), eager.len());
@@ -145,7 +145,7 @@ fn gw_019_lazy_and_materialised_assembly_interface_queries_agree() {
 fn gw_020_finds_crystal_contacts_across_symmetry_images() {
     let structure = crystal_structure();
     let neighbors = structure
-        .collect_crystal_neighbors(10.1, &pdbiox::ExecutionContext::default())
+        .collect_crystal_neighbors(10.1, &molframe::ExecutionContext::default())
         .unwrap_or_else(|finding| panic!("crystal neighbour search failed: {finding}"));
     assert_eq!(neighbors.len(), 1);
     assert_eq!(neighbors[0].lattice, [-1, 0, 0]);
@@ -175,34 +175,34 @@ fn gw_021_keeps_asymmetric_unit_and_biological_assembly_conclusions_distinct() {
 
 fn assembly_structure() -> Structure {
     let input = InputBuffer::from_bytes(ASSEMBLY_CIF.as_bytes().to_vec());
-    let document = pdbiox::cif::parse(&input)
+    let document = molframe::cif::parse(&input)
         .unwrap_or_else(|findings| panic!("assembly document parse failed: {findings:?}"))
         .0;
-    let assemblies = pdbiox::lower_assemblies(&document)
+    let assemblies = molframe::lower_assemblies(&document)
         .unwrap_or_else(|findings| panic!("assembly lowering failed: {findings:?}"));
-    let structure = pdbiox::read_bytes(
+    let structure = molframe::read_bytes(
         ASSEMBLY_CIF.as_bytes().to_vec(),
         Some("assembly.cif"),
         &ReadOptions::new(),
     )
     .unwrap_or_else(|findings| panic!("assembly structure read failed: {findings:?}"))
     .0;
-    structure.with_extension(pdbiox::ASSEMBLIES_EXTENSION, assemblies)
+    structure.with_extension(molframe::ASSEMBLIES_EXTENSION, assemblies)
 }
 
 fn crystal_structure() -> Structure {
     let input = InputBuffer::from_bytes(CRYSTAL_CIF.as_bytes().to_vec());
-    let document = pdbiox::cif::parse(&input)
+    let document = molframe::cif::parse(&input)
         .unwrap_or_else(|findings| panic!("crystal document parse failed: {findings:?}"))
         .0;
-    let symmetry = pdbiox::lower_symmetry(&document)
+    let symmetry = molframe::lower_symmetry(&document)
         .unwrap_or_else(|findings| panic!("symmetry lowering failed: {findings:?}"));
-    let structure = pdbiox::read_bytes(
+    let structure = molframe::read_bytes(
         CRYSTAL_CIF.as_bytes().to_vec(),
         Some("crystal.cif"),
         &ReadOptions::new(),
     )
     .unwrap_or_else(|findings| panic!("crystal structure read failed: {findings:?}"))
     .0;
-    structure.with_extension(pdbiox::SYMMETRY_EXTENSION, symmetry)
+    structure.with_extension(molframe::SYMMETRY_EXTENSION, symmetry)
 }

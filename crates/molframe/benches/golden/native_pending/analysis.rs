@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use pdbiox::{
+use molframe::{
     AnnotationColumn, AtomAnnotation, AtomIndex, BondOrder, BondProvenance, BondRecord,
     BondTableBuilder, Presence, ReadOptions, Structure,
 };
@@ -99,26 +99,26 @@ pub(super) fn register(group: &mut BenchmarkGroup<'_, criterion::measurement::Wa
 
 fn bench_gw_010(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = rama_structure();
-    let grid = pdbiox::validate::ReferenceDistribution::grid(
+    let grid = molframe::validate::ReferenceDistribution::grid(
         "general",
         vec![-180.0, 0.0, 180.0],
         vec![-180.0, 0.0, 180.0],
         vec![1.0, 1.0, 1.0, 1.0],
     )
     .required("GW-010 grid failed");
-    let library = pdbiox::validate::ReferenceLibrary::new("rama", "golden-1", [grid])
+    let library = molframe::validate::ReferenceLibrary::new("rama", "golden-1", [grid])
         .required("GW-010 library failed");
-    let basin = pdbiox::validate::RamachandranBasin::new(
-        pdbiox::validate::RamachandranRegion::AlphaHelixRight,
+    let basin = molframe::validate::RamachandranBasin::new(
+        molframe::validate::RamachandranRegion::AlphaHelixRight,
         "general",
     )
     .required("GW-010 basin failed");
-    let options = pdbiox::validate::RamachandranOptions::new(&library, [basin], 0.0)
+    let options = molframe::validate::RamachandranOptions::new(&library, [basin], 0.0)
         .required("GW-010 options failed");
     group.throughput(Throughput::Elements(structure.residue_count() as u64));
     group.bench_function("GW-010", |b| {
         b.iter(|| {
-            let records = pdbiox::validate::ramachandran(&structure, &options)
+            let records = molframe::validate::ramachandran(&structure, &options)
                 .required("GW-010 classification failed");
             black_box(records.len());
         });
@@ -130,15 +130,15 @@ fn bench_gw_015(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-015", |b| {
         b.iter(|| {
-            let bonds = pdbiox::analysis::hydrogen_bonds(
+            let bonds = molframe::analysis::hydrogen_bonds(
                 &structure,
-                pdbiox::analysis::HydrogenBondOptions {
+                molframe::analysis::HydrogenBondOptions {
                     maximum_donor_acceptor_distance: 3.5,
                     minimum_angle_degrees: 150.0,
-                    backend: pdbiox::SpatialBackend::BruteForce,
+                    backend: molframe::SpatialBackend::BruteForce,
                     periodic: false,
                 },
-                &pdbiox::ExecutionContext::default(),
+                &molframe::ExecutionContext::default(),
             )
             .required("GW-015 failed");
             black_box(bonds.len());
@@ -152,9 +152,9 @@ fn bench_gw_016(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(structure.residue_count() as u64));
     group.bench_function("GW-016", |b| {
         b.iter(|| {
-            let records = pdbiox::analysis::secondary_structure(
+            let records = molframe::analysis::secondary_structure(
                 &structure,
-                &pdbiox::analysis::DsspOptions {
+                &molframe::analysis::DsspOptions {
                     electrostatic_prefactor: 332.0 * 0.42 * 0.20,
                     hydrogen_bond_energy: -0.5,
                     amide_hydrogen_distance: 1.0,
@@ -188,11 +188,11 @@ ATOM 2 C CA ALA B 1 2.5 0 0
 ",
     );
     let policies = [
-        pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
-        pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
-        pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
-        pdbiox::core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
-        pdbiox::core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
+        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
+        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
+        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
+        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
+        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
     ];
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-038", |b| {
@@ -200,33 +200,33 @@ ATOM 2 C CA ALA B 1 2.5 0 0
             let fingerprints: Vec<_> = policies
                 .into_iter()
                 .map(|contact_def| {
-                    let policy = pdbiox::AnalysisPolicy {
+                    let policy = molframe::AnalysisPolicy {
                         contact_def,
-                        ..pdbiox::AnalysisPolicy::default()
+                        ..molframe::AnalysisPolicy::default()
                     };
                     let count = match contact_def {
-                        pdbiox::core::contract::ContactDefinition::DistanceCutoff { tolerance } => {
-                            pdbiox::analysis::atom_contacts(
-                                &structure,
-                                2.5 + tolerance,
-                                pdbiox::SpatialBackend::BruteForce,
-                                &pdbiox::ExecutionContext::default(),
-                            )
-                            .required("GW-038 distance failed")
-                            .len()
-                        }
-                        pdbiox::core::contract::ContactDefinition::SurfaceBased { probe } => {
-                            pdbiox::analysis::surface_contacts(
+                        molframe::core::contract::ContactDefinition::DistanceCutoff {
+                            tolerance,
+                        } => molframe::analysis::atom_contacts(
+                            &structure,
+                            2.5 + tolerance,
+                            molframe::SpatialBackend::BruteForce,
+                            &molframe::ExecutionContext::default(),
+                        )
+                        .required("GW-038 distance failed")
+                        .len(),
+                        molframe::core::contract::ContactDefinition::SurfaceBased { probe } => {
+                            molframe::analysis::surface_contacts(
                                 &structure,
                                 &[1.7, 1.7],
-                                pdbiox::analysis::SurfaceContactOptions {
+                                molframe::analysis::SurfaceContactOptions {
                                     tolerance: 0.5,
                                     probe,
                                     surface_density: 2.0,
                                     minimum_area: 0.1,
-                                    backend: pdbiox::SpatialBackend::BruteForce,
+                                    backend: molframe::SpatialBackend::BruteForce,
                                 },
-                                &pdbiox::ExecutionContext::default(),
+                                &molframe::ExecutionContext::default(),
                             )
                             .required("GW-038 surface failed")
                             .len()
@@ -255,11 +255,11 @@ fn annotated_hbond_structure() -> Structure {
         .required("GW-015 annotation failed")
     };
     data.annotations.insert(
-        pdbiox::HBOND_DONOR_ANNOTATION,
+        molframe::HBOND_DONOR_ANNOTATION,
         AtomAnnotation::Boolean(roles(0)),
     );
     data.annotations.insert(
-        pdbiox::HBOND_ACCEPTOR_ANNOTATION,
+        molframe::HBOND_ACCEPTOR_ANNOTATION,
         AtomAnnotation::Boolean(roles(2)),
     );
     let mut bonds = BondTableBuilder::new();
@@ -279,18 +279,18 @@ fn with_polymer_roles(structure: &Structure) -> Structure {
         .atoms()
         .map(|atom| {
             let role = match atom.name() {
-                Some("N") => pdbiox::PolymerAtomRole::PROTEIN_NITROGEN,
-                Some("CA") => pdbiox::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
-                Some("C") => pdbiox::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
-                Some("O") => pdbiox::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
-                _ => pdbiox::PolymerAtomRole::UNKNOWN,
+                Some("N") => molframe::PolymerAtomRole::PROTEIN_NITROGEN,
+                Some("CA") => molframe::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+                Some("C") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+                Some("O") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
+                _ => molframe::PolymerAtomRole::UNKNOWN,
             };
             (role.code(), Presence::Present)
         })
         .collect();
     let mut data = structure.data().clone();
     data.annotations.insert(
-        pdbiox::POLYMER_ATOM_ROLE_ANNOTATION,
+        molframe::POLYMER_ATOM_ROLE_ANNOTATION,
         AtomAnnotation::Integer(
             AnnotationColumn::from_entries(values).required("GW-016 role annotation failed"),
         ),
@@ -302,16 +302,16 @@ fn rama_structure() -> Structure {
     let source = read(RAMA_CIF);
     let mut data = source.data().clone();
     let roles = [
-        pdbiox::PolymerAtomRole::PROTEIN_NITROGEN,
-        pdbiox::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
-        pdbiox::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+        molframe::PolymerAtomRole::PROTEIN_NITROGEN,
+        molframe::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+        molframe::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
     ];
     let values = AnnotationColumn::from_entries(
         (0..9).map(|index| (roles[index % roles.len()].code(), Presence::Present)),
     )
     .required("GW-010 role annotation failed");
     data.annotations.insert(
-        pdbiox::POLYMER_ATOM_ROLE_ANNOTATION,
+        molframe::POLYMER_ATOM_ROLE_ANNOTATION,
         AtomAnnotation::Integer(values),
     );
     let mut bonds = BondTableBuilder::new();
@@ -328,7 +328,7 @@ fn rama_structure() -> Structure {
 }
 
 fn read(source: &str) -> Structure {
-    pdbiox::read_bytes(
+    molframe::read_bytes(
         source.as_bytes().to_vec(),
         Some("golden.cif"),
         &ReadOptions::new(),

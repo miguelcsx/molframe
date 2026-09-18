@@ -3,11 +3,11 @@
 use std::collections::BTreeMap;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use pdbiox::{
+use molframe::{
     AltlocPolicy, AnalysisPolicy, AtomSelection, InputBuffer, ModelChoice, ModelCifExt,
     ReadOptions, Rigid,
 };
-use pdbiox_bench::{Sample, coordinates, structure};
+use molframe_bench::{Sample, coordinates, structure};
 
 const UNKNOWN_CATEGORY_CIF: &str = "data_unknown\n\
 _custom.note 'keep this category'\n\
@@ -62,7 +62,7 @@ pub(super) fn register(group: &mut BenchmarkGroup<'_, criterion::measurement::Wa
 fn bench_gw_004(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let input = InputBuffer::from_bytes(UNKNOWN_CATEGORY_CIF.as_bytes().to_vec());
     let (document, structure, findings) =
-        match pdbiox::cif::read_with_document(&input, &ReadOptions::new()) {
+        match molframe::cif::read_with_document(&input, &ReadOptions::new()) {
             Ok(result) => result,
             Err(findings) => panic!("GW-004 setup failed: {findings:?}"),
         };
@@ -74,8 +74,8 @@ fn bench_gw_004(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-004", |b| {
         b.iter(|| {
-            let preserved = pdbiox::write_preserving(&document);
-            let moved = match pdbiox::transform(
+            let preserved = molframe::write_preserving(&document);
+            let moved = match molframe::transform(
                 &structure,
                 &selection,
                 &Rigid::translation([2.0, 0.0, 0.0]),
@@ -105,7 +105,7 @@ fn bench_gw_006(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 }
 
 fn bench_gw_008(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    use pdbiox::QueryStructure as _;
+    use molframe::QueryStructure as _;
 
     let structure = structure(Sample::Tiny);
     group.throughput(Throughput::Elements(structure.atom_count().into()));
@@ -116,7 +116,7 @@ fn bench_gw_008(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                     .select_text(
                         "within 4 of element C",
                         &AnalysisPolicy::default(),
-                        &pdbiox::ExecutionContext::default(),
+                        &molframe::ExecutionContext::default(),
                     )
                     .is_ok(),
             );
@@ -129,22 +129,22 @@ fn bench_gw_012(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(structure.residue_count() as u64));
     group.bench_function("GW-012", |b| {
         b.iter(|| {
-            let narrow = match pdbiox::analysis::residue_contact_map(
+            let narrow = match molframe::analysis::residue_contact_map(
                 &structure,
                 4.0,
                 1,
-                pdbiox::SpatialBackend::Auto,
-                &pdbiox::ExecutionContext::default(),
+                molframe::SpatialBackend::Auto,
+                &molframe::ExecutionContext::default(),
             ) {
                 Ok(map) => map,
                 Err(error) => panic!("GW-012 narrow map failed: {error}"),
             };
-            let broad = match pdbiox::analysis::residue_contact_map(
+            let broad = match molframe::analysis::residue_contact_map(
                 &structure,
                 8.0,
                 1,
-                pdbiox::SpatialBackend::Auto,
-                &pdbiox::ExecutionContext::default(),
+                molframe::SpatialBackend::Auto,
+                &molframe::ExecutionContext::default(),
             ) {
                 Ok(map) => map,
                 Err(error) => panic!("GW-012 broad map failed: {error}"),
@@ -162,12 +162,12 @@ fn bench_gw_013(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.bench_function("GW-013", |b| {
         b.iter(|| {
             black_box(
-                pdbiox::surface::shrake_rupley(
+                molframe::surface::shrake_rupley(
                     &positions,
                     &radii,
                     1.4,
                     96,
-                    &pdbiox::ExecutionContext::default(),
+                    &molframe::ExecutionContext::default(),
                 )
                 .is_ok(),
             );
@@ -181,44 +181,44 @@ fn bench_gw_014(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(positions.len() as u64));
     group.bench_function("GW-014", |b| {
         b.iter(|| {
-            let buried = pdbiox::surface::buried_surface(
+            let buried = molframe::surface::buried_surface(
                 &positions,
                 &radii,
                 1.4,
                 96,
                 &[true, false],
-                &pdbiox::ExecutionContext::default(),
+                &molframe::ExecutionContext::default(),
             );
-            let ses = pdbiox::surface::solvent_excluded_surface(&positions, &radii, 1.4, 1.0);
+            let ses = molframe::surface::solvent_excluded_surface(&positions, &radii, 1.4, 1.0);
             black_box((buried.is_ok(), ses.is_ok()));
         });
     });
 }
 
 fn bench_gw_022(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let Some(frames) = pdbiox::traj::parse_xyz(XYZ) else {
+    let Some(frames) = molframe::traj::parse_xyz(XYZ) else {
         panic!("GW-022 setup XYZ is invalid");
     };
     group.throughput(Throughput::Bytes(XYZ.len() as u64));
     group.bench_function("GW-022", |b| {
         b.iter(|| {
-            let written = pdbiox::traj::write_xyz(&frames);
-            let Some(round_trip) = pdbiox::traj::parse_xyz(&written) else {
+            let written = molframe::traj::write_xyz(&frames);
+            let Some(round_trip) = molframe::traj::parse_xyz(&written) else {
                 panic!("GW-022 XYZ round trip failed");
             };
             let timesteps: Vec<_> = round_trip
                 .iter()
                 .enumerate()
-                .map(|(frame, value)| pdbiox::traj::Timestep {
+                .map(|(frame, value)| molframe::traj::Timestep {
                     frame,
                     positions: value.atoms.iter().map(|atom| atom.position).collect(),
                     ..Default::default()
                 })
                 .collect();
-            let rmsd = match pdbiox::traj::rmsd_to_reference(
+            let rmsd = match molframe::traj::rmsd_to_reference(
                 &timesteps,
                 0,
-                pdbiox::traj::FrameAlignment::None,
+                molframe::traj::FrameAlignment::None,
             ) {
                 Ok(rmsd) => rmsd,
                 Err(error) => panic!("GW-022 RMSD failed: {error}"),
@@ -238,10 +238,10 @@ fn bench_gw_023(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(frames.len() as u64));
     group.bench_function("GW-023", |b| {
         b.iter(|| {
-            let fluctuation = pdbiox::geom::rmsf(&views);
-            let pca = pdbiox::traj::cartesian_pca(
+            let fluctuation = molframe::geom::rmsf(&views);
+            let pca = molframe::traj::cartesian_pca(
                 &frames,
-                pdbiox::traj::CartesianFit::None,
+                molframe::traj::CartesianFit::None,
                 2,
                 1024 * 1024,
             );
@@ -256,15 +256,15 @@ fn bench_gw_028(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(coordinates.len() as u64));
     group.bench_function("GW-028", |b| {
         b.iter(|| {
-            let lddt = pdbiox::compare::lddt(
+            let lddt = molframe::compare::lddt(
                 &coordinates,
                 &coordinates,
                 15.0,
-                &pdbiox::core::ExecutionContext::default(),
+                &molframe::core::ExecutionContext::default(),
             );
-            let tm = pdbiox::compare::tm_score(&coordinates, &coordinates);
-            let ts = pdbiox::compare::gdt_ts(&coordinates, &coordinates);
-            let ha = pdbiox::compare::gdt_ha(&coordinates, &coordinates);
+            let tm = molframe::compare::tm_score(&coordinates, &coordinates);
+            let ts = molframe::compare::gdt_ts(&coordinates, &coordinates);
+            let ha = molframe::compare::gdt_ha(&coordinates, &coordinates);
             black_box((lddt.is_ok(), tm.is_ok(), ts.is_ok(), ha.is_ok()));
         });
     });
@@ -275,15 +275,15 @@ fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-030", |b| {
         b.iter(|| {
-            let first_flags = pdbiox::validate::quality_flags(&structure);
-            let second_flags = pdbiox::validate::quality_flags(&structure);
-            let complete = pdbiox::validate::completeness(&structure, pdbiox::Namespace::Label);
-            let clashes = pdbiox::validate::clashes(
+            let first_flags = molframe::validate::quality_flags(&structure);
+            let second_flags = molframe::validate::quality_flags(&structure);
+            let complete = molframe::validate::completeness(&structure, molframe::Namespace::Label);
+            let clashes = molframe::validate::clashes(
                 &structure,
                 0.4,
-                pdbiox::RadiusSet::Bondi,
-                pdbiox::SpatialBackend::Auto,
-                &pdbiox::ExecutionContext::default(),
+                molframe::RadiusSet::Bondi,
+                molframe::SpatialBackend::Auto,
+                &molframe::ExecutionContext::default(),
             );
             black_box((
                 first_flags.len(),
@@ -297,7 +297,7 @@ fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_033(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = structure(Sample::Tiny);
-    let table = pdbiox::AtomArrowTable::new(&structure);
+    let table = molframe::AtomArrowTable::new(&structure);
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-033/arrow_stream", |b| {
         b.iter(|| black_box(table.arrow_stream()));
@@ -306,39 +306,39 @@ fn bench_gw_033(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_035(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = structure(Sample::Tiny);
-    let options = pdbiox::GraphOptions {
-        nodes: pdbiox::NodeLevel::Atoms,
-        edges: pdbiox::EdgeKind::Radius { cutoff: 3.0 },
-        direction: pdbiox::EdgeDirection::Symmetric,
+    let options = molframe::GraphOptions {
+        nodes: molframe::NodeLevel::Atoms,
+        edges: molframe::EdgeKind::Radius { cutoff: 3.0 },
+        direction: molframe::EdgeDirection::Symmetric,
         node_features: vec![
-            pdbiox::NodeFeature::PositionX,
-            pdbiox::NodeFeature::PositionY,
-            pdbiox::NodeFeature::PositionZ,
+            molframe::NodeFeature::PositionX,
+            molframe::NodeFeature::PositionY,
+            molframe::NodeFeature::PositionZ,
         ],
-        edge_features: vec![pdbiox::EdgeFeature::Distance],
-        missing: pdbiox::MissingFeaturePolicy::Error,
-        backend: pdbiox::SpatialBackend::Auto,
+        edge_features: vec![molframe::EdgeFeature::Distance],
+        missing: molframe::MissingFeaturePolicy::Error,
+        backend: molframe::SpatialBackend::Auto,
         periodic: false,
     };
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-035", |b| {
         b.iter(|| {
-            black_box(pdbiox::graph(
+            black_box(molframe::graph(
                 &structure,
                 &options,
-                &pdbiox::ExecutionContext::default(),
+                &molframe::ExecutionContext::default(),
             ))
         });
     });
 }
 
 fn bench_gw_039(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let space = pdbiox::PolicySpace::new(AnalysisPolicy::default())
-        .vary(pdbiox::PolicyDimension::altloc([
+    let space = molframe::PolicySpace::new(AnalysisPolicy::default())
+        .vary(molframe::PolicyDimension::altloc([
             AltlocPolicy::KeepAll,
             AltlocPolicy::First,
         ]))
-        .vary(pdbiox::PolicyDimension::model([
+        .vary(molframe::PolicyDimension::model([
             ModelChoice::First,
             ModelChoice::All,
         ]));
@@ -348,7 +348,7 @@ fn bench_gw_039(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 }
 
 fn bench_gw_040(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let profile = pdbiox::fx::motifbench_1_0();
+    let profile = molframe::fx::motifbench_1_0();
     let metrics = BTreeMap::from([("rmsd".into(), 1.0), ("motif_rmsd".into(), 0.5)]);
     group.bench_function("GW-040", |b| {
         b.iter(|| black_box(profile.decide_candidate(&metrics)));

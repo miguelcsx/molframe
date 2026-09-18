@@ -1,76 +1,128 @@
 //! A batteries-included structural bioinformatics engine.
 //!
-//! This crate is a facade. It contains no logic of its own — only re-exports,
-//! the prelude, and the feature flags that decide which formats get linked.
-//! The default is the complete user surface. A caller that needs only one
-//! format can disable default features and link just that format.
+//! This crate is the composition layer. It owns no kernel of its own: what lives
+//! here is the facade that dispatches reading and writing to whichever format
+//! crates are linked, the typed operation vocabulary over the analysis kernels
+//! ([`Plan`] and its requests), the policy configuration, and the prelude that
+//! puts all of it in scope. Everything else is re-exported from the crate that
+//! has the logic. The default feature set is the complete user surface; a caller
+//! that needs one format can disable default features and link just that format.
 //!
-//! # Reading a structure
+//! # Reading, and saying what was wrong with the file
 //!
-//! ```no_run
-//! use pdbiox::prelude::*;
+//! ```
+//! use molframe::prelude::*;
 //!
-//! # fn main() -> Result<(), Vec<pdbiox::Diagnostic>> {
-//! let (structure, findings) = pdbiox::read_with_diagnostics("1abc.pdb")?;
+//! # const PDB: &str = "\
+//! # ATOM      1  N   ALA A   1      11.104   6.134  -6.504  1.00  0.00           N
+//! # ATOM      2  CA  ALA A   1      12.560   6.195  -6.504  1.00  0.00           C
+//! # ATOM      3  C   ALA A   1      13.100   7.520  -6.504  1.00  0.00           C
+//! # END
+//! # ";
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let (structure, findings) =
+//!         read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;
 //!
-//! println!("{} atoms in {} chains", structure.atom_count(), structure.chain_count());
-//! for finding in &findings {
-//!     eprintln!("{}", Rendered::new(finding));
+//!     println!("{} atoms in {} chains", structure.atom_count(), structure.chain_count());
+//!     for finding in &findings {
+//!         eprintln!("{}", Rendered::new(finding));
+//!     }
+//!     Ok(())
 //! }
-//! # Ok(())
-//! # }
 //! ```
 //!
-//! `read_with_diagnostics` is the honest form and is what a pipeline should use:
-//! the findings say what was wrong with the file, and a file that parses is not
-//! the same as a file that is right. [`read`] discards them for convenience.
+//! [`read_with_diagnostics`] is the honest form and is what a pipeline should
+//! use: the findings say what was wrong with the file, and a file that parses is
+//! not the same as a file that is right. [`read`] discards them for convenience.
+//! Both return [`Findings`], which is an [`Error`](std::error::Error) — hence the
+//! `?` above, and hence `anyhow::Result` or `Box<dyn Error>` at a `main` without
+//! a match anywhere.
+//!
+//! # Composing an operation
+//!
+//! The same structure drives the typed operation vocabulary, so a pipeline is
+//! data rather than a chain of calls:
+//!
+//! ```
+//! use molframe::prelude::*;
+//!
+//! # const PDB: &str = "\
+//! # ATOM      1  N   ALA A   1      11.104   6.134  -6.504  1.00  0.00           N
+//! # ATOM      2  CA  ALA A   1      12.560   6.195  -6.504  1.00  0.00           C
+//! # END
+//! # ";
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let (structure, _) = read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;
+//!
+//!     let mut plan = Plan::new();
+//!     plan.add_selection(
+//!         "alpha_carbons",
+//!         SelectionRequest::new("name CA", AnalysisPolicy::default())?,
+//!     )?;
+//!
+//!     let result = plan.execute(
+//!         PlanInput { structure: Some(&structure), ..PlanInput::default() },
+//!         &ExecutionContext::default(),
+//!     )?;
+//!     assert_eq!(result.entries.len(), 1);
+//!     Ok(())
+//! }
+//! ```
+//!
+//! # Examples are owed, not owed everywhere
+//!
+//! The in-memory paths above run as doctests. The remaining public items follow
+//! the reference documentation of the crate that owns them rather than repeating
+//! it here; `CONTRIBUTING.md`'s rule that every public item carry an example is
+//! not yet met for the facade's format writers, which is a known debt.
 
 #![forbid(unsafe_code)]
 
-pub use pdbiox_core as core;
+pub use molframe_core as core;
 
-pub use pdbiox_core::annotation::{
+pub use molframe_core::annotation::{
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn,
     AtomAnnotation, AtomAnnotations, COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION,
     HBOND_ACCEPTOR_ANNOTATION, HBOND_DONOR_ANNOTATION, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION,
     PLDDT_ANNOTATION, POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION,
     STEREO_CONFIGURATION_ANNOTATION,
 };
-pub use pdbiox_core::chunk::{
+pub use molframe_core::chunk::{
     AtomChunk, AtomChunkStats, AtomRecord, ChunkBuilder, ElementMask, Extremes, ParentMapping,
     TARGET_CHUNK_ATOMS,
 };
-pub use pdbiox_core::column::{BitVec, EncodedColumn, Presence, ValidityMask};
-pub use pdbiox_core::contract::{
+pub use molframe_core::column::{BitVec, EncodedColumn, Presence, ValidityMask};
+pub use molframe_core::contract::{
     AlgorithmId, AltlocPolicy, Analysis, AnalysisParameters, AnalysisPolicy, AssemblyChoice,
     Assumption, AssumptionSource, Coverage, DictionaryVersion, ImpactEstimate, MissingPolicy,
     ModelChoice, Namespace, ParameterValue, PolicyField, ProfileId, Provenance, SourceRef, Status,
     Tolerance,
 };
-pub use pdbiox_core::coords::{Aabb, CoordinateBlock, CoordinateGeneration};
-pub use pdbiox_core::diagnostic::{
-    Class, Code, ContextItem, Diagnostic, Diagnostics, Kind, Rendered, Severity, Strictness,
+pub use molframe_core::coords::{Aabb, CoordinateBlock, CoordinateGeneration};
+pub use molframe_core::diagnostic::{
+    Class, Code, ContextItem, Diagnostic, Diagnostics, Findings, Kind, Rendered, Severity,
+    Strictness,
 };
-pub use pdbiox_core::element::Element;
-pub use pdbiox_core::execution::ExecutionContext;
-pub use pdbiox_core::index::{
+pub use molframe_core::element::Element;
+pub use molframe_core::execution::ExecutionContext;
+pub use molframe_core::index::{
     AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
 };
-pub use pdbiox_core::io::{
+pub use molframe_core::io::{
     AmbiguousResidueBoundaryPolicy, BatchContinuity, Compression, ContinuityLevel, Format,
     InputBuffer, InputKind, Limits, MissingElementPolicy, OutputOptions, ParseMode, ReadOptions,
     ReadResult, Reader, Select, SelectAll, StructureAtomRecord, StructureBatch,
     StructureBatchBuilder, StructureBatchError, collect_structure,
 };
-pub use pdbiox_core::provider::{
+pub use molframe_core::provider::{
     AtomEndpoint, BondChunk, BondChunkProvider, BondChunkRecord, ChunkDescriptor, ChunkId,
     ChunkLayout, DatasetCatalog, DatasetDescriptor, DatasetId, FrameChunk, FrameChunkProvider,
     LocalRow, LogicalRow, PayloadKind, PropertyChunk, PropertyChunkProvider, PropertyKind,
     PropertyValue, ProviderError, StructureChunk, StructureChunkProvider, TARGET_CHUNK_BONDS,
 };
-pub use pdbiox_core::selection::AtomSelection;
-pub use pdbiox_core::span::{ByteSpan, Position};
-pub use pdbiox_core::structure::{
+pub use molframe_core::selection::AtomSelection;
+pub use molframe_core::span::{ByteSpan, Position};
+pub use molframe_core::structure::{
     AtomRef, ChainRef, ChainSequenceExt, CoordinateEditor, CoordinateStore, CountDifference,
     DifferenceError, EntryMetadata, ExtensionStore, MetadataDifference, MissingResidue, ModelRef,
     ReferenceAlignment, ReferenceSequence, ResidueRef, SEQUENCE_REFERENCES_EXTENSION,
@@ -78,44 +130,44 @@ pub use pdbiox_core::structure::{
     StructureDifferenceOptions, StructureEditor, StructureView, UnitCell, ValueDifference,
     structure_difference, validate,
 };
-pub use pdbiox_core::symbol::{AltId, Interner, SymbolId};
-pub use pdbiox_core::topology::{EntityKind, PolymerKind, Topology};
-pub use pdbiox_core::{
+pub use molframe_core::symbol::{AltId, Interner, SymbolId};
+pub use molframe_core::topology::{EntityKind, PolymerKind, Topology};
+pub use molframe_core::{
     BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder,
 };
 
 #[cfg(feature = "adapters")]
-pub use pdbiox_adapters as adapters;
+pub use molframe_adapters as adapters;
 
 #[cfg(feature = "audit")]
-pub use pdbiox_audit as audit;
+pub use molframe_audit as audit;
 #[cfg(feature = "audit")]
-pub use pdbiox_audit::{
+pub use molframe_audit::{
     AuditPlan, AuditReport, AuditRun, DimensionSensitivity, PlanError, PolicyDimension,
     PolicySpace, PolicyValue, SensitiveItem, audit,
 };
 
 #[cfg(feature = "fx")]
-pub use pdbiox_fx as fx;
+pub use molframe_fx as fx;
 
 #[cfg(feature = "ml")]
-pub use pdbiox_ml as ml;
+pub use molframe_ml as ml;
 #[cfg(feature = "ml")]
-pub use pdbiox_ml::{
+pub use molframe_ml::{
     ArrowStream, AtomTable as AtomArrowTable, BondTable as BondArrowTable,
     ChainTable as ChainArrowTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset,
     DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, DlpackError, DlpackTensor,
     EdgeDirection, EdgeFeature, EdgeKind, ExportCost, Graph, GraphError, GraphOptions, LoadError,
-    ManifestEntry, MissingFeaturePolicy, NodeFeature, NodeLevel, PdbioxExtension,
+    ManifestEntry, MissingFeaturePolicy, MolframeExtension, NodeFeature, NodeLevel,
     ResidueTable as ResidueArrowTable, SplitOptions, SplitRatios, SplitStrategy, TableFileError,
     extension_name, graph, write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet,
     write_atom_parquet_with_metadata,
 };
 
 #[cfg(feature = "chem")]
-pub use pdbiox_chem as chem;
+pub use molframe_chem as chem;
 #[cfg(feature = "chem")]
-pub use pdbiox_chem::{
+pub use molframe_chem::{
     AutomorphismLimit, ChemistryReport, CifProvider, Component, ComponentAtom, ComponentBond,
     ComponentCoverage, ComponentKind, ComponentProvider, ElementProperties, EquivalenceCache,
     EquivalenceClasses, IonicRadius, IonicSpin, MemoryProvider, PeoeAtom, PeoeAtomType, PeoeBond,
@@ -124,35 +176,35 @@ pub use pdbiox_chem::{
     RadiusTable, SideChainDefinition, SideChainRoles, SmartsDataError, SmartsError, SmartsMatch,
     SmartsPattern, StereoConfiguration, apply_component_chemistry, apply_polymer_role_profile,
     automorphisms, component_coverage, component_peoe_charges, element_properties,
-    equivalence_classes, ionic_radii, peoe_charges, read_ccd, side_chain_definition, vdw_radius,
+    equivalence_classes, ionic_radii, peoe_charges, side_chain_definition, vdw_radius,
 };
 
 #[cfg(feature = "mmcif")]
-pub use pdbiox_cif as cif;
+pub use molframe_cif as cif;
 #[cfg(feature = "mmcif")]
-pub use pdbiox_cif::{
+pub use molframe_cif::{
     Category, CifValue, CifWriteError, CifWriteOptions, CifWriteToError, Column, DataBlock,
     Document, write_preserving, write_preserving_to,
 };
 
 #[cfg(feature = "modelcif")]
-pub use pdbiox_modelcif as modelcif;
+pub use molframe_modelcif as modelcif;
 #[cfg(feature = "modelcif")]
-pub use pdbiox_modelcif::{
+pub use molframe_modelcif::{
     GlobalMetric, LocalMetric, MODEL_CIF_EXTENSION, MetricDefinition, ModelCategory, ModelCif,
     ModelCifExt, ModelDescription, ModelRow, PairwiseMetric, ProtocolStep, QualityMetrics,
     SoftwareGroup, Target, Template,
 };
 
 #[cfg(feature = "bcif")]
-pub use pdbiox_bcif as bcif;
+pub use molframe_bcif as bcif;
 #[cfg(feature = "bcif")]
-pub use pdbiox_bcif::{BcifReader, BinaryDocument};
+pub use molframe_bcif::{BcifReader, BinaryDocument};
 
 #[cfg(feature = "geom")]
-pub use pdbiox_geom as geom;
+pub use molframe_geom as geom;
 #[cfg(feature = "geom")]
-pub use pdbiox_geom::{
+pub use molframe_geom::{
     BackboneFrame, BackboneResidue, BackboneTorsions, BatchGeometryError, CircularSummary,
     Decomposition, DistanceMatrix, EigenError, EigenOptions, FluctuationError, HelixGeometry,
     MatrixError, PeriodicAngle, PeriodicError, Plane, Rigid, Rotation3, RotationError,
@@ -168,25 +220,24 @@ pub use pdbiox_geom::{
 };
 
 #[cfg(feature = "ic")]
-pub use pdbiox_ic as ic;
+pub use molframe_ic as ic;
 #[cfg(feature = "ic")]
-pub use pdbiox_ic::{
+pub use molframe_ic::{
     BatFrame, Dihedron, Hedron, InternalAtom, InternalCoordinates, internal_coordinates, place_atom,
 };
 
 #[cfg(feature = "pdb")]
-pub use pdbiox_pdb as pdb;
+pub use molframe_pdb as pdb;
 #[cfg(feature = "pdb")]
-pub use pdbiox_pdb::{
+pub use molframe_pdb::{
     PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbHeadersExt, PdbIdentifierNamespace,
-    PdbOptions, read_mmtf, write_mmtf, write_mmtf_to, write_pdbqt, write_pdbqt_to, write_pqr,
-    write_pqr_to,
+    PdbOptions, write_mmtf, write_mmtf_to, write_pdbqt, write_pdbqt_to, write_pqr, write_pqr_to,
 };
 
 #[cfg(feature = "spatial")]
-pub use pdbiox_spatial as spatial;
+pub use molframe_spatial as spatial;
 #[cfg(feature = "spatial")]
-pub use pdbiox_spatial::{
+pub use molframe_spatial::{
     AutoBackendProfile, CellGridOptions, CellList, KdPeriodicOptions, KdTree, NeighborList,
     NeighborListOptions, NeighborPair, NeighborSkinProfile, PeriodicBox, PeriodicImage,
     SpatialBackend, SpatialError, SpatialOption, SpatialPlan, SpatialSearchOptions, pairs_within,
@@ -194,14 +245,14 @@ pub use pdbiox_spatial::{
 };
 
 #[cfg(feature = "query")]
-pub use pdbiox_query as query;
+pub use molframe_query as query;
 #[cfg(feature = "query")]
-pub use pdbiox_query::{Builder as QueryBuilder, Evaluation, Groups, Query, col};
+pub use molframe_query::{Builder as QueryBuilder, Evaluation, Groups, Query, col};
 
 #[cfg(feature = "xtal")]
-pub use pdbiox_xtal as xtal;
+pub use molframe_xtal as xtal;
 #[cfg(feature = "xtal")]
-pub use pdbiox_xtal::{
+pub use molframe_xtal::{
     ASSEMBLIES_EXTENSION, AffineTransform, AssemblyDef, AssemblyExt, AssemblyNeighbor, AssemblySet,
     AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalImage, CrystalImageBatch,
     CrystalImageBatchOptions, CrystalNeighbor, CrystalNeighborBatch, CrystalNeighborOptions,
@@ -216,52 +267,52 @@ pub use pdbiox_xtal::{
 // The analysis crates carry many small, related items, so they are
 // re-exported under their own namespace rather than flattened into the root.
 #[cfg(feature = "analysis")]
-pub use pdbiox_analysis as analysis;
+pub use molframe_analysis as analysis;
 #[cfg(feature = "analysis")]
-pub use pdbiox_analysis::{
+pub use molframe_analysis::{
     StreamlineDirection, StreamlineOptions, VectorFieldError, VectorFieldGrid,
     integrate_streamlines,
 };
 #[cfg(feature = "compare")]
-pub use pdbiox_compare as compare;
+pub use molframe_compare as compare;
 #[cfg(feature = "seq")]
-pub use pdbiox_seq as seq;
+pub use molframe_seq as seq;
 #[cfg(feature = "surface")]
-pub use pdbiox_surface as surface;
+pub use molframe_surface as surface;
 #[cfg(feature = "surface")]
-pub use pdbiox_surface::{
+pub use molframe_surface::{
     SurfaceComponent, SurfaceComponentError, SurfaceComponentFilter, filter_surface_components,
     surface_components,
 };
 #[cfg(feature = "traj")]
-pub use pdbiox_traj as traj;
+pub use molframe_traj as traj;
 #[cfg(feature = "traj")]
-pub use pdbiox_traj::{
+pub use molframe_traj::{
     TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames,
 };
 #[cfg(feature = "validate")]
-pub use pdbiox_validate as validate;
+pub use molframe_validate as validate;
 
-#[cfg(all(feature = "chem", feature = "spatial"))]
-mod chemistry_api;
 mod facade;
-#[cfg(all(feature = "geom", feature = "chem"))]
-mod geometry_api;
 #[cfg(all(feature = "analysis", feature = "geom"))]
 mod operations;
 mod policy_config;
-#[cfg(all(feature = "geom", feature = "chem"))]
-mod polymer_roles;
 pub mod prelude;
-#[cfg(feature = "query")]
-mod query_api;
-#[cfg(all(feature = "geom", feature = "chem"))]
-mod side_chain_api;
+mod structure;
 
 pub use facade::{
-    StructureBatchReader, default_limits, open_structure_batches, read, read_bytes,
-    read_with_diagnostics, read_with_options, write, write_with_options,
+    read, read_bytes, read_with_diagnostics, read_with_options, write, write_with_options,
 };
+// The bounded batch reader needs a format crate to read with, so these two
+// names exist under exactly the features that give `StructureBatchReader` a
+// variant.
+#[cfg(any(
+    feature = "mmcif",
+    feature = "pdb",
+    feature = "bcif",
+    feature = "modelcif"
+))]
+pub use facade::{StructureBatchReader, open_structure_batches};
 pub use policy_config::{
     ApplicationConfiguration, ChemistryConfiguration, OutputConfiguration, PolicyConfigError,
     PolicyOverrides, read_configuration, read_policy, read_policy_overrides,
@@ -269,7 +320,10 @@ pub use policy_config::{
 
 #[cfg(all(feature = "analysis", feature = "geom"))]
 pub use operations::FloatInput;
-#[cfg(feature = "compare")]
+// The comparison requests live in `operations`, which needs the two kernels
+// its executor is built from, so selecting `compare` alone is not enough for
+// the module to exist.
+#[cfg(all(feature = "compare", feature = "analysis", feature = "geom"))]
 pub use operations::{ComparisonMetric, ComparisonRequest, ComparisonResult};
 #[cfg(all(feature = "analysis", feature = "geom"))]
 pub use operations::{
@@ -287,14 +341,10 @@ pub use operations::{TrajectoryRequest, TrajectoryValue};
 pub use facade::transform;
 
 #[cfg(all(feature = "geom", feature = "chem"))]
-pub use geometry_api::{
-    BackboneTorsionRecord, ProteinAlphaTrace, structure_backbone_torsions,
-    structure_backbone_torsions_model, structure_protein_alpha_traces,
-};
-
-#[cfg(all(feature = "geom", feature = "chem"))]
-pub use side_chain_api::{
-    SideChainTorsionRecord, SideChainTorsionReport, structure_side_chain_torsions,
+pub use structure::{
+    BackboneTorsionRecord, ProteinAlphaTrace, SideChainTorsionRecord, SideChainTorsionReport,
+    structure_backbone_torsions, structure_backbone_torsions_model, structure_protein_alpha_traces,
+    structure_side_chain_torsions,
 };
 
 #[cfg(feature = "mmcif")]
@@ -313,10 +363,10 @@ pub use facade::read_component_dictionary;
 pub use facade::write_pdb;
 
 #[cfg(feature = "query")]
-pub use query_api::QueryStructure;
+pub use structure::QueryStructure;
 
 #[cfg(all(feature = "chem", feature = "spatial"))]
-pub use chemistry_api::{
+pub use structure::{
     BondInference, BondInferenceReport, DEFAULT_BOND_RADIUS_SCALE, DEFAULT_MINIMUM_BOND_DISTANCE,
     infer_bonds,
 };

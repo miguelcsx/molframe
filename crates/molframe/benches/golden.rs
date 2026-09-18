@@ -1,11 +1,11 @@
 //! Criterion measurements for the executable golden workflows.
 
 use criterion::{Criterion, Throughput, black_box};
-use pdbiox::{
+use molframe::{
     AltlocPolicy, AnalysisPolicy, AtomSelection, CifWriteOptions, Code, PdbOptions, ReadOptions,
     Rigid, read_bytes, superpose, transform, write_bcif, write_mmcif_with_options, write_pdb,
 };
-use pdbiox_bench::{Sample, structure_from_cif};
+use molframe_bench::{Sample, structure_from_cif};
 
 #[path = "golden/native.rs"]
 mod native;
@@ -56,14 +56,14 @@ ATOM 2 C CA A GLY LONG 1 1 1 0 0 0.4 11 42 GLY A CA 1
 ATOM 3 C CA B GLY LONG 1 1 2 0 0 0.6 12 42 GLY A CA 1
 ";
 
-fn fixture(text: &str, name: &str) -> pdbiox::Structure {
+fn fixture(text: &str, name: &str) -> molframe::Structure {
     match read_bytes(text.as_bytes().to_vec(), Some(name), &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("golden benchmark fixture failed: {findings:?}"),
     }
 }
 
-fn medium_cif() -> (&'static [u8], pdbiox::Structure) {
+fn medium_cif() -> (&'static [u8], molframe::Structure) {
     let Some(bytes) = Sample::Medium.cif() else {
         panic!("medium CIF fixture is required")
     };
@@ -152,7 +152,7 @@ fn bench_gw_005(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
     assert_eq!(
         result
             .err()
-            .and_then(|findings| findings.first().map(pdbiox::Diagnostic::code)),
+            .and_then(|findings| findings.first().map(molframe::Diagnostic::code)),
         Some(Code::E4102)
     );
     group.throughput(Throughput::Bytes(source.len() as u64));
@@ -195,10 +195,10 @@ fn bench_gw_009(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-009", |b| {
         b.iter(|| {
-            let chain = structure.chain(pdbiox::ChainIndex::new(0));
+            let chain = structure.chain(molframe::ChainIndex::new(0));
             black_box((
-                chain.and_then(pdbiox::ChainRef::label),
-                chain.and_then(pdbiox::ChainRef::auth_label),
+                chain.and_then(molframe::ChainRef::label),
+                chain.and_then(molframe::ChainRef::auth_label),
             ));
         });
     });

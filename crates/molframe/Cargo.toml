@@ -1,0 +1,88 @@
+[package]
+name = "molframe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A batteries-included structural bioinformatics engine"
+
+[dependencies]
+molframe-core.workspace = true
+molframe-adapters = { workspace = true, optional = true }
+molframe-audit = { workspace = true, optional = true }
+molframe-bcif = { workspace = true, optional = true }
+molframe-cif = { workspace = true, optional = true }
+molframe-chem = { workspace = true, optional = true }
+molframe-geom = { workspace = true, optional = true }
+molframe-fx = { workspace = true, optional = true }
+molframe-ic = { workspace = true, optional = true }
+molframe-ml = { workspace = true, optional = true }
+molframe-modelcif = { workspace = true, optional = true }
+molframe-pdb = { workspace = true, optional = true }
+molframe-query = { workspace = true, optional = true }
+molframe-spatial = { workspace = true, optional = true }
+molframe-xtal = { workspace = true, optional = true }
+molframe-surface = { workspace = true, optional = true }
+molframe-analysis = { workspace = true, optional = true }
+molframe-validate = { workspace = true, optional = true }
+molframe-seq = { workspace = true, optional = true }
+molframe-compare = { workspace = true, optional = true }
+molframe-traj = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+flate2.workspace = true
+molframe-bench.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "facade"
+harness = false
+
+[[bench]]
+name = "golden"
+harness = false
+
+[features]
+default = ["full"]
+
+# One format per feature, so a caller that reads one does not link the others.
+mmcif = ["dep:molframe-cif"]
+bcif = ["mmcif", "dep:molframe-bcif"]
+modelcif = ["mmcif", "dep:molframe-modelcif"]
+pdb = ["dep:molframe-pdb"]
+
+# Geometric kernels.
+geom = ["dep:molframe-geom"]
+ic = ["geom", "dep:molframe-ic"]
+query = ["dep:molframe-query"]
+spatial = ["query", "dep:molframe-spatial"]
+chem = ["dep:molframe-chem"]
+ml = ["dep:molframe-ml"]
+adapters = ["dep:molframe-adapters"]
+xtal = ["dep:molframe-xtal", "spatial"]
+
+# Analysis domains over the kernels above.
+surface = ["spatial", "dep:molframe-surface"]
+analysis = ["spatial", "geom", "chem", "dep:molframe-analysis"]
+validate = ["spatial", "geom", "chem", "dep:molframe-validate"]
+seq = ["dep:molframe-seq"]
+compare = ["geom", "chem", "seq", "dep:molframe-compare"]
+traj = ["dep:molframe-traj"]
+audit = ["analysis", "dep:molframe-audit"]
+fx = ["geom", "chem", "dep:molframe-fx"]
+
+# Ways of getting bytes in.
+gzip = ["molframe-core/gzip"]
+zstd = ["molframe-core/zstd"]
+mmap = ["molframe-core/mmap"]
+
+full = ["mmcif", "bcif", "modelcif", "pdb", "geom", "ic", "query", "spatial", "chem", "xtal", "surface", "analysis", "validate", "seq", "compare", "traj", "audit", "fx", "adapters", "ml", "gzip", "zstd", "mmap"]
+
+[lints]
+workspace = true

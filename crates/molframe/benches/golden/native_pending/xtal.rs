@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use pdbiox::{
+use molframe::{
     AssemblyExt, InputBuffer, ModelIndex, ReadOptions, SpatialBackend, Structure, SymmetryExt,
 };
 
@@ -123,11 +123,11 @@ fn bench_gw_018(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
         b.iter(|| {
             let view = structure.assembly("1").required("GW-018 view failed");
             let materialized = view.materialize().required("GW-018 materialisation failed");
-            let contacts = pdbiox::analysis::atom_contacts(
+            let contacts = molframe::analysis::atom_contacts(
                 &materialized,
                 3.0,
                 SpatialBackend::BruteForce,
-                &pdbiox::ExecutionContext::default(),
+                &molframe::ExecutionContext::default(),
             )
             .required("GW-018 contacts failed");
             black_box((materialized.chain_count(), contacts.len()));
@@ -145,15 +145,15 @@ fn bench_gw_019(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                     ModelIndex::new(0),
                     3.0,
                     SpatialBackend::BruteForce,
-                    &pdbiox::ExecutionContext::default(),
+                    &molframe::ExecutionContext::default(),
                 )
                 .required("GW-019 lazy query failed");
             let materialized = view.materialize().required("GW-019 materialisation failed");
-            let eager = pdbiox::analysis::atom_contacts(
+            let eager = molframe::analysis::atom_contacts(
                 &materialized,
                 3.0,
                 SpatialBackend::BruteForce,
-                &pdbiox::ExecutionContext::default(),
+                &molframe::ExecutionContext::default(),
             )
             .required("GW-019 eager query failed");
             black_box((lazy.len(), eager.len()));
@@ -167,7 +167,7 @@ fn bench_gw_020(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.bench_function("GW-020", |b| {
         b.iter(|| {
             let neighbors = structure
-                .collect_crystal_neighbors(10.1, &pdbiox::ExecutionContext::default())
+                .collect_crystal_neighbors(10.1, &molframe::ExecutionContext::default())
                 .required("GW-020 failed");
             black_box(neighbors.len());
         });
@@ -187,32 +187,32 @@ fn bench_gw_021(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn assembly_structure() -> Structure {
     let input = InputBuffer::from_bytes(ASSEMBLY_CIF.as_bytes().to_vec());
-    let document = pdbiox::cif::parse(&input)
+    let document = molframe::cif::parse(&input)
         .required("assembly document parse failed")
         .0;
-    let assemblies = pdbiox::lower_assemblies(&document).required("assembly lowering failed");
-    let structure = pdbiox::read_bytes(
+    let assemblies = molframe::lower_assemblies(&document).required("assembly lowering failed");
+    let structure = molframe::read_bytes(
         ASSEMBLY_CIF.as_bytes().to_vec(),
         Some("assembly.cif"),
         &ReadOptions::new(),
     )
     .required("assembly structure read failed")
     .0;
-    structure.with_extension(pdbiox::ASSEMBLIES_EXTENSION, assemblies)
+    structure.with_extension(molframe::ASSEMBLIES_EXTENSION, assemblies)
 }
 
 fn crystal_structure() -> Structure {
     let input = InputBuffer::from_bytes(CRYSTAL_CIF.as_bytes().to_vec());
-    let document = pdbiox::cif::parse(&input)
+    let document = molframe::cif::parse(&input)
         .required("crystal document parse failed")
         .0;
-    let symmetry = pdbiox::lower_symmetry(&document).required("symmetry lowering failed");
-    let structure = pdbiox::read_bytes(
+    let symmetry = molframe::lower_symmetry(&document).required("symmetry lowering failed");
+    let structure = molframe::read_bytes(
         CRYSTAL_CIF.as_bytes().to_vec(),
         Some("crystal.cif"),
         &ReadOptions::new(),
     )
     .required("crystal structure read failed")
     .0;
-    structure.with_extension(pdbiox::SYMMETRY_EXTENSION, symmetry)
+    structure.with_extension(molframe::SYMMETRY_EXTENSION, symmetry)
 }

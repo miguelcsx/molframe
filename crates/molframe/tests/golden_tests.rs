@@ -1,6 +1,6 @@
 //! Executable end-to-end correctness fixtures for shipped workflows.
 
-use pdbiox::{
+use molframe::{
     AltlocPolicy, AnalysisPolicy, AtomSelection, CifWriteOptions, Code, PdbOptions, ReadOptions,
     Rigid, read_bytes, superpose, transform, write_bcif, write_mmcif_with_options, write_pdb,
 };
@@ -49,7 +49,7 @@ ATOM 2 C CA A GLY LONG 1 1 1 0 0 0.4 11 42 GLY A CA 1
 ATOM 3 C CA B GLY LONG 1 1 2 0 0 0.6 12 42 GLY A CA 1
 ";
 
-fn read_fixture(text: &str, name: &str) -> pdbiox::Structure {
+fn read_fixture(text: &str, name: &str) -> molframe::Structure {
     match read_bytes(text.as_bytes().to_vec(), Some(name), &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("golden read failed: {findings:?}"),
@@ -99,13 +99,13 @@ fn gw_003_converts_insertion_codes_and_deposited_models_to_mmcif() {
     let model_numbers: Vec<i32> = round_tripped
         .data()
         .models()
-        .filter_map(pdbiox::ModelRef::number)
+        .filter_map(molframe::ModelRef::number)
         .collect();
     let insertion = round_tripped
         .data()
         .residues()
         .next()
-        .and_then(pdbiox::ResidueRef::ins_code);
+        .and_then(molframe::ResidueRef::ins_code);
 
     assert_eq!(model_numbers, vec![7, 11]);
     assert_eq!(insertion, Some("A"));
@@ -120,7 +120,7 @@ fn gw_003_converts_insertion_codes_and_deposited_models_to_mmcif() {
         let Ok(model_index) = u32::try_from(model) else {
             panic!("test model index does not fit in u32");
         };
-        let Some(actual) = round_tripped.model_positions(pdbiox::ModelIndex::new(model_index))
+        let Some(actual) = round_tripped.model_positions(molframe::ModelIndex::new(model_index))
         else {
             panic!("round-tripped model missing")
         };
@@ -142,7 +142,7 @@ fn gw_005_refuses_a_lossy_legacy_chain_and_names_the_capacity() {
     assert_eq!(
         result
             .err()
-            .and_then(|findings| findings.first().map(pdbiox::Diagnostic::code)),
+            .and_then(|findings| findings.first().map(molframe::Diagnostic::code)),
         Some(Code::E4102)
     );
 }
@@ -171,9 +171,9 @@ fn gw_007_altloc_policies_produce_recorded_atom_counts() {
 #[test]
 fn gw_009_keeps_both_chain_namespaces_addressable() {
     let structure = read_fixture(NAMESPACED_CIF, "golden.cif");
-    let label = structure.chain(pdbiox::ChainIndex::new(0));
-    assert_eq!(label.and_then(pdbiox::ChainRef::label), Some("LONG"));
-    assert_eq!(label.and_then(pdbiox::ChainRef::auth_label), Some("A"));
+    let label = structure.chain(molframe::ChainIndex::new(0));
+    assert_eq!(label.and_then(molframe::ChainRef::label), Some("LONG"));
+    assert_eq!(label.and_then(molframe::ChainRef::auth_label), Some("A"));
     assert!(
         structure
             .data()
