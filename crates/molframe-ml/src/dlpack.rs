@@ -1,7 +1,7 @@
 //! CPU `DLPack` tensors with mutable-safe, independently owned storage.
 
 use crate::ExportCost;
-use pdbiox_core::Structure;
+use molframe_core::Structure;
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
@@ -140,7 +140,7 @@ impl DlpackTensor {
     /// Cost classification for coordinate tensor export.
     ///
     /// This is [`ExportCost::Copy`] because `DLPack` cannot express read-only
-    /// backing storage and pdbiox snapshots must remain immutable.
+    /// backing storage and molframe snapshots must remain immutable.
     #[must_use]
     pub const fn cost(&self) -> ExportCost {
         ExportCost::Copy

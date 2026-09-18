@@ -1,6 +1,6 @@
 //! Public graph schema and explicit construction policies.
 
-use pdbiox_spatial::{SpatialBackend, SpatialError};
+use molframe_spatial::{SpatialBackend, SpatialError};
 
 /// Rows represented as graph nodes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

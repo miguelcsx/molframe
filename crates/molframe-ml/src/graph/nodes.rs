@@ -1,8 +1,8 @@
 //! One-pass projection from structure rows to graph nodes.
 
 use super::{GraphError, NodeLevel};
-use pdbiox_core::structure::AtomRef;
-use pdbiox_core::{AtomIndex, ResidueIndex, Structure};
+use molframe_core::structure::AtomRef;
+use molframe_core::{AtomIndex, ResidueIndex, Structure};
 use std::ops::Range;
 
 use crate::numeric::f64_to_f32;

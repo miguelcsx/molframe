@@ -1,8 +1,8 @@
-//! Arrow and `DLPack` interoperability for pdbiox structure tables.
+//! Arrow and `DLPack` interoperability for molframe structure tables.
 //!
 //! Raw pointers are confined to audited ABI adapters that retain immutable
 //! `Structure` snapshots for the full foreign-buffer lifetime. This boundary
-//! is independent from the operating-system mapping boundary in `pdbiox-mmap`.
+//! is independent from the operating-system mapping boundary in `molframe-mmap`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -23,7 +23,7 @@ pub use dataset::{
     SplitOptions, SplitRatios, SplitStrategy,
 };
 pub use dlpack::{DLDataType, DLDevice, DLManagedTensor, DLTensor, DlpackError, DlpackTensor};
-pub use extension::{ExportCost, PdbioxExtension, extension_name};
+pub use extension::{ExportCost, MolframeExtension, extension_name};
 pub use files::{
     TableFileError, write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet,
     write_atom_parquet_with_metadata,

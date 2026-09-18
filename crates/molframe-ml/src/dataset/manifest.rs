@@ -203,7 +203,7 @@ pub enum LoadError<E> {
 pub enum DatasetError {
     /// Exact sequence alignment exceeded its supported numeric domain.
     #[error(transparent)]
-    Alignment(#[from] pdbiox_seq::AlignError),
+    Alignment(#[from] molframe_seq::AlignError),
     /// Manifest filesystem failure.
     #[error("dataset manifest I/O failed: {0}")]
     Io(#[from] std::io::Error),

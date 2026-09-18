@@ -3,8 +3,8 @@
 use super::edges::Edge;
 use super::nodes::Nodes;
 use super::{EdgeFeature, FeatureMatrix, GraphError, MissingFeaturePolicy, NodeFeature, NodeLevel};
-use pdbiox_core::structure::AtomRef;
-use pdbiox_core::{
+use molframe_core::structure::AtomRef;
+use molframe_core::{
     AtomAnnotation, BondOrder, FORMAL_CHARGE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION, Structure,
 };
 use std::ops::Range;
@@ -90,7 +90,7 @@ fn node_value(
     match (level, feature) {
         (NodeLevel::Atoms, NodeFeature::Element) => Ok(structure
             .data()
-            .atom(pdbiox_core::AtomIndex::new(atoms.start))
+            .atom(molframe_core::AtomIndex::new(atoms.start))
             .and_then(AtomRef::element)
             .map(|element| f32::from(element.atomic_number()))),
         (NodeLevel::Atoms, NodeFeature::AtomCount)
@@ -170,7 +170,7 @@ fn atom_mean(
     let mut sum = 0.0f64;
     let mut count = 0u32;
     for atom in atoms {
-        let Some(atom) = structure.data().atom(pdbiox_core::AtomIndex::new(atom)) else {
+        let Some(atom) = structure.data().atom(molframe_core::AtomIndex::new(atom)) else {
             return Err(GraphError::IndexOverflow);
         };
         let value = match scalar {

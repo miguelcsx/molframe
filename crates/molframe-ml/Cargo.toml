@@ -1,27 +1,27 @@
 [package]
-name = "pdbiox-ml"
+name = "molframe-ml"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Arrow and machine-learning interoperability for pdbiox"
+description = "Arrow and machine-learning interoperability for molframe"
 
 [dependencies]
 arrow.workspace = true
 num-traits.workspace = true
 parquet.workspace = true
-pdbiox-core.workspace = true
-pdbiox-seq.workspace = true
+molframe-core.workspace = true
+molframe-seq.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-pdbiox-spatial.workspace = true
+molframe-spatial.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
-pdbiox-cif.workspace = true
+molframe-bench.workspace = true
+molframe-cif.workspace = true
 tempfile.workspace = true
 
 [[bench]]

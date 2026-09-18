@@ -1,4 +1,4 @@
-//! Arrow atom-table batches aligned to pdbiox chunk boundaries.
+//! Arrow atom-table batches aligned to molframe chunk boundaries.
 
 use crate::extension::{ExportCost, field};
 use crate::owner::{SnapshotOwner, f32_buffer, symbol_buffer};
@@ -11,8 +11,8 @@ use arrow::buffer::NullBuffer;
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
-use pdbiox_core::topology::ResidueTable;
-use pdbiox_core::{AtomChunk, ResidueIndex, Structure};
+use molframe_core::topology::ResidueTable;
+use molframe_core::{AtomChunk, ResidueIndex, Structure};
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -35,7 +35,7 @@ impl AtomTable {
         }
     }
 
-    /// Arrow schema with pdbiox extension and copy-cost metadata.
+    /// Arrow schema with molframe extension and copy-cost metadata.
     #[must_use]
     pub fn schema(&self) -> SchemaRef {
         self.schema.clone()
@@ -84,17 +84,17 @@ impl AtomTable {
         let element = UInt8Array::from_iter_values((0..chunk.len()).filter_map(|local| {
             chunk
                 .element(local)
-                .map(pdbiox_core::Element::atomic_number)
+                .map(molframe_core::Element::atomic_number)
         }));
         let coordinates = coordinates_array(positions, chunk, &self.owner)?;
         let names: ArrayRef = match chunk.atom_names_plain() {
             Some(names) => Arc::new(UInt32Array::new(symbol_buffer(names, &self.owner)?, None)),
             None => Arc::new(UInt32Array::from_iter_values((0..chunk.len()).filter_map(
-                |local| chunk.atom_name(local).map(pdbiox_core::SymbolId::get),
+                |local| chunk.atom_name(local).map(molframe_core::SymbolId::get),
             ))),
         };
         let altloc = UInt32Array::from_iter_values(
-            (0..chunk.len()).filter_map(|local| chunk.alt_id(local).map(pdbiox_core::AltId::get)),
+            (0..chunk.len()).filter_map(|local| chunk.alt_id(local).map(molframe_core::AltId::get)),
         );
         let (occupancy_validity, occupancy_unknown) =
             presence_arrays(chunk.len(), |local| chunk.occupancy(local));
@@ -204,14 +204,14 @@ fn coordinates_array(
         validity(chunk.len(), |local| {
             chunk
                 .has_position(local)
-                .then_some(((), pdbiox_core::Presence::Present))
+                .then_some(((), molframe_core::Presence::Present))
         }),
     )
 }
 
 fn validity<T>(
     len: u32,
-    mut value: impl FnMut(u32) -> Option<(T, pdbiox_core::Presence)>,
+    mut value: impl FnMut(u32) -> Option<(T, molframe_core::Presence)>,
 ) -> Option<NullBuffer> {
     let mut validity = NullBufferBuilder::new(len as usize);
     for position in 0..len {
@@ -223,15 +223,15 @@ fn validity<T>(
 
 fn presence_arrays<T>(
     len: u32,
-    mut value: impl FnMut(u32) -> Option<(T, pdbiox_core::Presence)>,
+    mut value: impl FnMut(u32) -> Option<(T, molframe_core::Presence)>,
 ) -> (Option<NullBuffer>, BooleanArray) {
     let mut validity = NullBufferBuilder::new(len as usize);
     let mut unknown = BooleanBuilder::with_capacity(len as usize);
     for position in 0..len {
         let state = value(position).map(|(_, state)| state);
-        let present = state.is_some_and(pdbiox_core::Presence::is_present);
+        let present = state.is_some_and(molframe_core::Presence::is_present);
         validity.append(present);
-        unknown.append_value(state == Some(pdbiox_core::Presence::Unknown));
+        unknown.append_value(state == Some(molframe_core::Presence::Unknown));
     }
     (validity.finish(), unknown.finish())
 }
@@ -244,42 +244,42 @@ fn atom_schema() -> Schema {
             "atom_index",
             DataType::UInt32,
             false,
-            Some("pdbiox.atom_index"),
+            Some("molframe.atom_index"),
             ExportCost::Decode,
         ),
         field(
             "residue_index",
             DataType::UInt32,
             false,
-            Some("pdbiox.residue_index"),
+            Some("molframe.residue_index"),
             ExportCost::Decode,
         ),
         field(
             "coordinates",
             coordinates,
             true,
-            Some("pdbiox.coordinates3f"),
+            Some("molframe.coordinates3f"),
             ExportCost::ZeroCopy,
         ),
         field(
             "element",
             DataType::UInt8,
             false,
-            Some("pdbiox.element"),
+            Some("molframe.element"),
             ExportCost::Decode,
         ),
         field(
             "atom_name",
             DataType::UInt32,
             false,
-            Some("pdbiox.symbol_id"),
+            Some("molframe.symbol_id"),
             ExportCost::Decode,
         ),
         field(
             "altloc",
             DataType::UInt32,
             false,
-            Some("pdbiox.altloc"),
+            Some("molframe.altloc"),
             ExportCost::Decode,
         ),
         field(
@@ -293,7 +293,7 @@ fn atom_schema() -> Schema {
             "occupancy_unknown",
             DataType::Boolean,
             false,
-            Some("pdbiox.validity"),
+            Some("molframe.validity"),
             ExportCost::Decode,
         ),
         field(
@@ -307,7 +307,7 @@ fn atom_schema() -> Schema {
             "b_factor_unknown",
             DataType::Boolean,
             false,
-            Some("pdbiox.validity"),
+            Some("molframe.validity"),
             ExportCost::Decode,
         ),
     ])

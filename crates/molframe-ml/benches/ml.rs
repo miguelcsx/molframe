@@ -2,13 +2,13 @@
 
 use arrow::ffi_stream::ArrowArrayStreamReader;
 use criterion::{Criterion, black_box};
-use pdbiox_bench::{Sample, structure};
-use pdbiox_core::execution::ExecutionContext;
-use pdbiox_ml::{
+use molframe_bench::{Sample, structure};
+use molframe_core::execution::ExecutionContext;
+use molframe_ml::{
     AtomTable, EdgeDirection, EdgeFeature, EdgeKind, GraphOptions, MissingFeaturePolicy,
     NodeFeature, NodeLevel, graph,
 };
-use pdbiox_spatial::SpatialBackend;
+use molframe_spatial::SpatialBackend;
 
 fn bench_arrow(c: &mut Criterion) {
     let structure = structure(Sample::Medium);

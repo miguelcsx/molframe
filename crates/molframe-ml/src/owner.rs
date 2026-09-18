@@ -3,7 +3,7 @@
 use arrow::buffer::{Buffer, ScalarBuffer};
 use arrow::datatypes::ArrowNativeType;
 use arrow::error::{ArrowError, Result};
-use pdbiox_core::{Structure, SymbolId};
+use molframe_core::{Structure, SymbolId};
 use std::ptr::NonNull;
 use std::sync::Arc;
 
@@ -58,7 +58,7 @@ fn typed_buffer<T: ArrowNativeType>(
 
 fn custom_buffer(pointer: *const u8, bytes: usize, owner: &SnapshotOwner) -> Result<Buffer> {
     let pointer = NonNull::new(pointer.cast_mut())
-        .ok_or_else(|| ArrowError::MemoryError("null pdbiox buffer".to_owned()))?;
+        .ok_or_else(|| ArrowError::MemoryError("null molframe buffer".to_owned()))?;
     let owner = owner.allocation();
     // SAFETY: the pointer and byte length come from a live immutable slice.
     // The shared snapshot owner retains the Structure allocation until Arrow

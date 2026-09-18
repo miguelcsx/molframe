@@ -2,8 +2,8 @@
 
 use super::nodes::Nodes;
 use super::{EdgeDirection, EdgeKind, GraphError, GraphOptions, NodeLevel};
-use pdbiox_core::{AtomSelection, BondOrder, ExecutionContext, Structure};
-use pdbiox_spatial::{KdTree, NeighborPair, PeriodicBox, SpatialBackend, pairs_within};
+use molframe_core::{AtomSelection, BondOrder, ExecutionContext, Structure};
+use molframe_spatial::{KdTree, NeighborPair, PeriodicBox, SpatialBackend, pairs_within};
 use std::collections::{BTreeMap, BTreeSet};
 
 const BONDS_FEATURE: &str = "bonds";

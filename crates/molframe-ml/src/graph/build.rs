@@ -3,7 +3,7 @@
 use super::features;
 use super::nodes;
 use super::{EdgeFeature, EdgeKind, Graph, GraphError, GraphOptions, NodeFeature, NodeLevel};
-use pdbiox_core::{ExecutionContext, Structure};
+use molframe_core::{ExecutionContext, Structure};
 use std::collections::BTreeSet;
 
 /// Materialises graph indices and selected feature matrices.

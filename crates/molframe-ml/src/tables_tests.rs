@@ -1,11 +1,11 @@
 use super::*;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
+use molframe_core::io::{InputBuffer, ReadOptions};
 
 const SOURCE: &str = "data_t\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\nATOM 1 C CA ALA A 1 1 2 3\nATOM 2 N N ALA A 1 4 5 6\n";
 
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match pdbiox_cif::read(&input, &ReadOptions::new()) {
+    match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     }
@@ -27,15 +27,15 @@ fn every_normalised_table_exports_a_c_stream() {
 
 #[test]
 fn topology_exports_are_split_into_bounded_batches() {
-    let mut data = pdbiox_core::StructureData::empty();
-    let mut bonds = pdbiox_core::BondTableBuilder::new();
+    let mut data = molframe_core::StructureData::empty();
+    let mut bonds = molframe_core::BondTableBuilder::new();
     let batch_rows = u32::try_from(TABLE_BATCH_ROWS).expect("batch rows fit u32");
     for atom in 0..=batch_rows {
-        bonds.push(pdbiox_core::BondRecord {
-            atom_a: pdbiox_core::AtomIndex::new(atom),
-            atom_b: pdbiox_core::AtomIndex::new(atom + 1),
-            order: pdbiox_core::BondOrder::Single,
-            provenance: pdbiox_core::BondProvenance::User,
+        bonds.push(molframe_core::BondRecord {
+            atom_a: molframe_core::AtomIndex::new(atom),
+            atom_b: molframe_core::AtomIndex::new(atom + 1),
+            order: molframe_core::BondOrder::Single,
+            provenance: molframe_core::BondProvenance::User,
         });
     }
     data.bonds = bonds.finish();

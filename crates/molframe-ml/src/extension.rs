@@ -5,12 +5,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 const EXTENSION_NAME_KEY: &str = "ARROW:extension:name";
-const EXPORT_COST_KEY: &str = "pdbiox:export_cost";
+const EXPORT_COST_KEY: &str = "molframe:export_cost";
 
 /// Whether an exported Arrow column aliases storage or materialises it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExportCost {
-    /// Arrow sees the immutable pdbiox allocation directly.
+    /// Arrow sees the immutable molframe allocation directly.
     ZeroCopy,
     /// An encoded or derived column was decoded in one pass.
     Decode,
@@ -20,7 +20,7 @@ pub enum ExportCost {
 
 /// Domain extension types published by the Arrow adapter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PdbioxExtension {
+pub enum MolframeExtension {
     /// Index into the atom table.
     AtomIndex,
     /// Index into the residue table.
@@ -43,21 +43,21 @@ pub enum PdbioxExtension {
     Validity,
 }
 
-impl PdbioxExtension {
+impl MolframeExtension {
     /// Stable extension name stored in Arrow field metadata.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Self::AtomIndex => "pdbiox.atom_index",
-            Self::ResidueIndex => "pdbiox.residue_index",
-            Self::ChainIndex => "pdbiox.chain_index",
-            Self::EntityIndex => "pdbiox.entity_index",
-            Self::Coordinates3f => "pdbiox.coordinates3f",
-            Self::Element => "pdbiox.element",
-            Self::SymbolId => "pdbiox.symbol_id",
-            Self::Altloc => "pdbiox.altloc",
-            Self::Selection => "pdbiox.selection",
-            Self::Validity => "pdbiox.validity",
+            Self::AtomIndex => "molframe.atom_index",
+            Self::ResidueIndex => "molframe.residue_index",
+            Self::ChainIndex => "molframe.chain_index",
+            Self::EntityIndex => "molframe.entity_index",
+            Self::Coordinates3f => "molframe.coordinates3f",
+            Self::Element => "molframe.element",
+            Self::SymbolId => "molframe.symbol_id",
+            Self::Altloc => "molframe.altloc",
+            Self::Selection => "molframe.selection",
+            Self::Validity => "molframe.validity",
         }
     }
 
@@ -105,7 +105,7 @@ pub(crate) fn field(
     Field::new(name, data_type, nullable).with_metadata(metadata)
 }
 
-/// Returns the pdbiox extension name carried by a field.
+/// Returns the molframe extension name carried by a field.
 #[must_use]
 pub fn extension_name(field: &Field) -> Option<&str> {
     field.metadata().get(EXTENSION_NAME_KEY).map(String::as_str)

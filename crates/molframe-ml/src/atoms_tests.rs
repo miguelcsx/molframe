@@ -2,18 +2,18 @@ use super::*;
 use crate::extension_name;
 use arrow::array::Array;
 use arrow::ffi_stream::ArrowArrayStreamReader;
-use pdbiox_core::chunk::{AtomRecord, ChunkBuilder};
-use pdbiox_core::io::{InputBuffer, ReadOptions};
-use pdbiox_core::optional::{OptionalI32, OptionalSymbol};
-use pdbiox_core::structure::{CoordinateStore, StructureData};
-use pdbiox_core::topology::ResidueRecord;
-use pdbiox_core::{AltId, Element, Presence};
+use molframe_core::chunk::{AtomRecord, ChunkBuilder};
+use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::optional::{OptionalI32, OptionalSymbol};
+use molframe_core::structure::{CoordinateStore, StructureData};
+use molframe_core::topology::ResidueRecord;
+use molframe_core::{AltId, Element, Presence};
 
 const SOURCE: &str = "data_a\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\nATOM 1 C CA ALA A 1 1 2 3\nATOM 2 N N ALA A 1 4 5 6\n";
 
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match pdbiox_cif::read(&input, &ReadOptions::new()) {
+    match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     }
@@ -54,11 +54,11 @@ fn schema_carries_domain_extensions_and_copy_costs() {
     let Some(field) = schema.field_with_name("coordinates").ok() else {
         panic!("coordinate field absent")
     };
-    assert_eq!(extension_name(field), Some("pdbiox.coordinates3f"));
+    assert_eq!(extension_name(field), Some("molframe.coordinates3f"));
     assert_eq!(
         field
             .metadata()
-            .get("pdbiox:export_cost")
+            .get("molframe:export_cost")
             .map(String::as_str),
         Some("zero-copy")
     );
