@@ -1,5 +1,6 @@
 from typing import final
 from os import PathLike
+from ..core.contract import Diagnostic
 from . import BondInference, BondInferenceReport, Structure
 
 DEFAULT_BOND_RADIUS_SCALE: float
@@ -98,7 +99,7 @@ class Component:
 @final
 class ComponentCoverage:
     coverage: object
-    findings: list[str]
+    findings: list[Diagnostic]
     dictionary_version: str
 
 @final
@@ -118,7 +119,7 @@ class EquivalenceCache:
 @final
 class ChemistryReport:
     structure: object
-    findings: list[str]
+    findings: list[Diagnostic]
     dictionary_version: str
     polymer_link_policy: PolymerLinkPolicy
 
@@ -294,7 +295,7 @@ class PeoeBond:
 
 def peoe_charges(atoms: list[PeoeAtom], bonds: list[PeoeBond], options: PeoeOptions) -> list[float]: ...
 
-def read_ccd(path: str | PathLike[str], version: str) -> tuple[ComponentDictionary, list[str]]: ...
+def read_ccd(path: str | PathLike[str], version: str) -> tuple[ComponentDictionary, list[Diagnostic]]: ...
 def element_properties(element: Element) -> ElementProperties | None: ...
 def vdw_radius(element: Element, set: RadiusSet) -> float | None: ...
 def ionic_radii(element: Element) -> list[IonicRadius]: ...

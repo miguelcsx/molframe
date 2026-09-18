@@ -2,7 +2,7 @@
 
 use super::{PyComponentDictionary, PyElement, PyPeoeOptions};
 use crate::bonds::PyBondOrder;
-use crate::contract::PyCoverage;
+use crate::contract::{PyCoverage, PyDiagnostic};
 use crate::query::PyAnalysisPolicy;
 use crate::structure::PyStructure;
 use pyo3::exceptions::{PyKeyError, PyRuntimeError, PyValueError};
@@ -66,7 +66,7 @@ pub(crate) struct PyComponentBond {
 
 #[pyclass(name = "Component", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyComponent(pub(crate) Arc<pdbiox::Component>);
+pub(crate) struct PyComponent(pub(crate) Arc<molframe::Component>);
 
 #[pymethods]
 impl PyComponent {
@@ -130,14 +130,14 @@ pub(crate) struct PyComponentCoverage {
     #[pyo3(get)]
     coverage: PyCoverage,
     #[pyo3(get)]
-    findings: Vec<String>,
+    findings: Vec<PyDiagnostic>,
     #[pyo3(get)]
     dictionary_version: String,
 }
 
 #[pyclass(name = "EquivalenceClasses", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyEquivalenceClasses(pub(crate) pdbiox::EquivalenceClasses);
+pub(crate) struct PyEquivalenceClasses(pub(crate) molframe::EquivalenceClasses);
 
 #[pymethods]
 impl PyEquivalenceClasses {
@@ -162,7 +162,7 @@ impl PyEquivalenceClasses {
 #[pyclass(name = "EquivalenceCache", skip_from_py_object)]
 #[derive(Debug)]
 pub(crate) struct PyEquivalenceCache {
-    inner: RwLock<pdbiox::EquivalenceCache>,
+    inner: RwLock<molframe::EquivalenceCache>,
 }
 
 #[pymethods]
@@ -170,8 +170,8 @@ impl PyEquivalenceCache {
     #[new]
     fn new(version: &str) -> Self {
         Self {
-            inner: RwLock::new(pdbiox::EquivalenceCache::new(
-                pdbiox::DictionaryVersion::new(version),
+            inner: RwLock::new(molframe::EquivalenceCache::new(
+                molframe::DictionaryVersion::new(version),
             )),
         }
     }
@@ -213,13 +213,13 @@ impl PyEquivalenceCache {
 
 #[pyclass(name = "PolymerAtomRole", frozen, from_py_object)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct PyPolymerAtomRole(pub(crate) pdbiox::PolymerAtomRole);
+pub(crate) struct PyPolymerAtomRole(pub(crate) molframe::PolymerAtomRole);
 
 #[pymethods]
 impl PyPolymerAtomRole {
     #[staticmethod]
     fn from_code(code: i64) -> Option<Self> {
-        pdbiox::PolymerAtomRole::from_code(code).map(Self)
+        molframe::PolymerAtomRole::from_code(code).map(Self)
     }
     #[getter]
     fn code(&self) -> i64 {
@@ -233,22 +233,22 @@ impl PyPolymerAtomRole {
     }
     #[classattr]
     fn unknown() -> Self {
-        Self(pdbiox::PolymerAtomRole::UNKNOWN)
+        Self(molframe::PolymerAtomRole::UNKNOWN)
     }
     #[classattr]
     fn protein_backbone() -> Self {
-        Self(pdbiox::PolymerAtomRole::PROTEIN_BACKBONE)
+        Self(molframe::PolymerAtomRole::PROTEIN_BACKBONE)
     }
     #[classattr]
     fn nucleic_backbone() -> Self {
-        Self(pdbiox::PolymerAtomRole::NUCLEIC_BACKBONE)
+        Self(molframe::PolymerAtomRole::NUCLEIC_BACKBONE)
     }
 }
 
 #[pymethods]
 impl PyComponentDictionary {
     fn get(&self, component_id: &str) -> PyResult<Option<PyComponent>> {
-        pdbiox::ComponentProvider::get(self.0.as_ref(), component_id)
+        molframe::ComponentProvider::get(self.0.as_ref(), component_id)
             .map(|component| component.map(PyComponent))
             .map_err(value_error)
     }
@@ -256,7 +256,7 @@ impl PyComponentDictionary {
     fn equivalence_classes(&self, component_id: &str) -> PyResult<Option<PyEquivalenceClasses>> {
         let component = self.get(component_id)?;
         Ok(component
-            .map(|component| PyEquivalenceClasses(pdbiox::equivalence_classes(&component.0))))
+            .map(|component| PyEquivalenceClasses(molframe::equivalence_classes(&component.0))))
     }
 
     pub(crate) fn coverage(
@@ -264,7 +264,7 @@ impl PyComponentDictionary {
         structure: &PyStructure,
         policy: &PyAnalysisPolicy,
     ) -> PyResult<PyComponentCoverage> {
-        pdbiox::component_coverage(structure.structure(), self.0.as_ref(), &policy.inner)
+        molframe::component_coverage(structure.structure(), self.0.as_ref(), &policy.inner)
             .map(Into::into)
             .map_err(value_error)
     }
@@ -284,12 +284,12 @@ impl PyComponentDictionary {
             .iter()
             .map(String::as_str)
             .collect::<Vec<_>>();
-        let roles = pdbiox::SideChainRoles {
+        let roles = molframe::SideChainRoles {
             nitrogen,
             alpha_carbon,
             side_chain_atoms: &atom_names,
         };
-        Ok(pdbiox::side_chain_definition(&component.0, &roles)
+        Ok(molframe::side_chain_definition(&component.0, &roles)
             .map(|definition| definition.atoms.iter().map(ToString::to_string).collect()))
     }
 
@@ -302,27 +302,27 @@ impl PyComponentDictionary {
         let component = self
             .get(component_id)?
             .ok_or_else(|| PyKeyError::new_err(component_id.to_owned()))?;
-        py.detach(move || pdbiox::component_peoe_charges(&component.0, options.0))
+        py.detach(move || molframe::component_peoe_charges(&component.0, options.0))
             .map_err(value_error)
     }
 }
 
-impl From<pdbiox::ComponentKind> for PyComponentKind {
-    fn from(value: pdbiox::ComponentKind) -> Self {
+impl From<molframe::ComponentKind> for PyComponentKind {
+    fn from(value: molframe::ComponentKind) -> Self {
         match value {
-            pdbiox::ComponentKind::AminoAcid => Self::AminoAcid,
-            pdbiox::ComponentKind::Nucleotide => Self::Nucleotide,
-            pdbiox::ComponentKind::Saccharide => Self::Saccharide,
-            pdbiox::ComponentKind::Lipid => Self::Lipid,
-            pdbiox::ComponentKind::NonPolymer => Self::NonPolymer,
-            pdbiox::ComponentKind::Solvent => Self::Solvent,
-            pdbiox::ComponentKind::Ion => Self::Ion,
-            pdbiox::ComponentKind::Unknown => Self::Unknown,
+            molframe::ComponentKind::AminoAcid => Self::AminoAcid,
+            molframe::ComponentKind::Nucleotide => Self::Nucleotide,
+            molframe::ComponentKind::Saccharide => Self::Saccharide,
+            molframe::ComponentKind::Lipid => Self::Lipid,
+            molframe::ComponentKind::NonPolymer => Self::NonPolymer,
+            molframe::ComponentKind::Solvent => Self::Solvent,
+            molframe::ComponentKind::Ion => Self::Ion,
+            molframe::ComponentKind::Unknown => Self::Unknown,
         }
     }
 }
 
-impl From<PyComponentKind> for pdbiox::ComponentKind {
+impl From<PyComponentKind> for molframe::ComponentKind {
     fn from(value: PyComponentKind) -> Self {
         match value {
             PyComponentKind::AminoAcid => Self::AminoAcid,
@@ -337,18 +337,18 @@ impl From<PyComponentKind> for pdbiox::ComponentKind {
     }
 }
 
-impl From<pdbiox::StereoConfiguration> for PyStereoConfiguration {
-    fn from(value: pdbiox::StereoConfiguration) -> Self {
+impl From<molframe::StereoConfiguration> for PyStereoConfiguration {
+    fn from(value: molframe::StereoConfiguration) -> Self {
         match value {
-            pdbiox::StereoConfiguration::R => Self::R,
-            pdbiox::StereoConfiguration::S => Self::S,
-            pdbiox::StereoConfiguration::Mixed => Self::Mixed,
+            molframe::StereoConfiguration::R => Self::R,
+            molframe::StereoConfiguration::S => Self::S,
+            molframe::StereoConfiguration::Mixed => Self::Mixed,
         }
     }
 }
 
-impl From<pdbiox::ComponentAtom> for PyComponentAtom {
-    fn from(value: pdbiox::ComponentAtom) -> Self {
+impl From<molframe::ComponentAtom> for PyComponentAtom {
+    fn from(value: molframe::ComponentAtom) -> Self {
         Self {
             name: value.name.to_string(),
             alternate_name: value.alternate_name.map(|name| name.to_string()),
@@ -361,8 +361,8 @@ impl From<pdbiox::ComponentAtom> for PyComponentAtom {
     }
 }
 
-impl From<pdbiox::ComponentBond> for PyComponentBond {
-    fn from(value: pdbiox::ComponentBond) -> Self {
+impl From<molframe::ComponentBond> for PyComponentBond {
+    fn from(value: molframe::ComponentBond) -> Self {
         Self {
             atom_a: value.atom_a.to_string(),
             atom_b: value.atom_b.to_string(),
@@ -373,15 +373,11 @@ impl From<pdbiox::ComponentBond> for PyComponentBond {
     }
 }
 
-impl From<pdbiox::ComponentCoverage> for PyComponentCoverage {
-    fn from(value: pdbiox::ComponentCoverage) -> Self {
+impl From<molframe::ComponentCoverage> for PyComponentCoverage {
+    fn from(value: molframe::ComponentCoverage) -> Self {
         Self {
             coverage: value.coverage.into(),
-            findings: value
-                .findings
-                .into_iter()
-                .map(|finding| finding.to_string())
-                .collect(),
+            findings: value.findings.into_iter().map(Into::into).collect(),
             dictionary_version: value.dictionary_version.as_str().to_owned(),
         }
     }

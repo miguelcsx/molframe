@@ -2,7 +2,8 @@
 
 use super::components::PyComponent;
 use super::{PyComponentDictionary, PyElement, PyElementProperties, PyIonicRadius, PyRadiusSet};
-use ::pdbiox;
+use crate::contract::PyDiagnostic;
+use ::molframe;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 use std::path::PathBuf;
@@ -10,7 +11,7 @@ use std::sync::Arc;
 
 #[pyclass(name = "MemoryProvider", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyMemoryProvider(pub(crate) Arc<pdbiox::MemoryProvider>);
+pub(crate) struct PyMemoryProvider(pub(crate) Arc<molframe::MemoryProvider>);
 
 /// A cheap owned provider handle used by free facade operations.
 ///
@@ -18,22 +19,22 @@ pub(crate) struct PyMemoryProvider(pub(crate) Arc<pdbiox::MemoryProvider>);
 /// still receives the native `ComponentProvider` trait object and runs in Rust.
 #[derive(Clone)]
 pub(crate) enum PyComponentProvider {
-    Cif(Arc<pdbiox::CifProvider>),
-    Memory(Arc<pdbiox::MemoryProvider>),
+    Cif(Arc<molframe::CifProvider>),
+    Memory(Arc<molframe::MemoryProvider>),
 }
 
-impl pdbiox::ComponentProvider for PyComponentProvider {
+impl molframe::ComponentProvider for PyComponentProvider {
     fn get(
         &self,
         component_id: &str,
-    ) -> Result<Option<Arc<pdbiox::Component>>, pdbiox::Diagnostic> {
+    ) -> Result<Option<Arc<molframe::Component>>, molframe::Diagnostic> {
         match self {
             Self::Cif(provider) => provider.get(component_id),
             Self::Memory(provider) => provider.get(component_id),
         }
     }
 
-    fn version(&self) -> &pdbiox::DictionaryVersion {
+    fn version(&self) -> &molframe::DictionaryVersion {
         match self {
             Self::Cif(provider) => provider.version(),
             Self::Memory(provider) => provider.version(),
@@ -66,18 +67,18 @@ impl PyMemoryProvider {
                     .map(|component| (*component.0).clone())
             })
             .collect::<PyResult<Vec<_>>>()?;
-        pdbiox::MemoryProvider::new(pdbiox::DictionaryVersion::new(version), components)
+        molframe::MemoryProvider::new(molframe::DictionaryVersion::new(version), components)
             .map(|provider| Self(Arc::new(provider)))
             .map_err(value_error)
     }
 
     #[getter]
     fn version(&self) -> &str {
-        pdbiox::ComponentProvider::version(self.0.as_ref()).as_str()
+        molframe::ComponentProvider::version(self.0.as_ref()).as_str()
     }
 
     fn get(&self, component_id: &str) -> PyResult<Option<PyComponent>> {
-        pdbiox::ComponentProvider::get(self.0.as_ref(), component_id)
+        molframe::ComponentProvider::get(self.0.as_ref(), component_id)
             .map(|component| component.map(PyComponent))
             .map_err(value_error)
     }
@@ -88,25 +89,16 @@ pub(crate) fn read_ccd(
     py: Python<'_>,
     path: PathBuf,
     version: &str,
-) -> PyResult<(PyComponentDictionary, Vec<String>)> {
-    let bytes = std::fs::read(&path).map_err(|error| {
-        pyo3::exceptions::PyOSError::new_err(format!("cannot read CCD {}: {error}", path.display()))
-    })?;
-    let version = pdbiox::DictionaryVersion::new(version);
-    py.detach(move || {
-        let input = pdbiox::InputBuffer::from_bytes(bytes);
-        pdbiox::read_ccd(&input, version)
-    })
-    .map(|(provider, findings)| {
-        (
-            PyComponentDictionary(Arc::new(provider)),
-            findings
-                .into_iter()
-                .map(|finding| finding.to_string())
-                .collect(),
-        )
-    })
-    .map_err(|findings| crate::errors::read_error(py, &findings))
+) -> PyResult<(PyComponentDictionary, Vec<PyDiagnostic>)> {
+    let version = molframe::DictionaryVersion::new(version);
+    py.detach(move || molframe::read_component_dictionary(&path, version))
+        .map(|(provider, findings)| {
+            (
+                PyComponentDictionary(Arc::new(provider)),
+                findings.into_iter().map(Into::into).collect(),
+            )
+        })
+        .map_err(|findings| crate::errors::read_error(py, &findings))
 }
 
 #[pyfunction]
@@ -115,19 +107,19 @@ pub(crate) fn element_properties(
     element: &PyElement,
 ) -> Option<PyElementProperties> {
     py.detach(move || -> Option<PyElementProperties> {
-        pdbiox::element_properties(element.0).map(PyElementProperties::from)
+        molframe::element_properties(element.0).map(PyElementProperties::from)
     })
 }
 
 #[pyfunction]
 pub(crate) fn vdw_radius(py: Python<'_>, element: &PyElement, set: PyRadiusSet) -> Option<f32> {
-    py.detach(move || -> Option<f32> { pdbiox::vdw_radius(element.0, set.into()) })
+    py.detach(move || -> Option<f32> { molframe::vdw_radius(element.0, set.into()) })
 }
 
 #[pyfunction]
 pub(crate) fn ionic_radii(py: Python<'_>, element: &PyElement) -> PyResult<Vec<PyIonicRadius>> {
     py.detach(move || -> PyResult<Vec<PyIonicRadius>> {
-        pdbiox::ionic_radii(element.0)
+        molframe::ionic_radii(element.0)
             .map(|values| values.iter().cloned().map(PyIonicRadius::from).collect())
             .map_err(value_error)
     })

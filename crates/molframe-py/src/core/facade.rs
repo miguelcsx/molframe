@@ -1,6 +1,7 @@
 //! Direct bindings for public facade projections that are not structure methods.
 
 use crate::chemistry::PyComponentDictionary;
+use crate::contract::PyDiagnostic;
 use crate::geometry::PyBackboneTorsions;
 use crate::graph::PySpatialBackend;
 use crate::io::PyLimits;
@@ -10,7 +11,7 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "BondInference", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyBondInference(pub(crate) pdbiox::BondInference);
+pub(crate) struct PyBondInference(pub(crate) molframe::BondInference);
 
 #[pymethods]
 impl PyBondInference {
@@ -23,7 +24,7 @@ impl PyBondInference {
         respect_existing: bool,
         backend: PySpatialBackend,
     ) -> Self {
-        Self(pdbiox::BondInference {
+        Self(molframe::BondInference {
             scale,
             lower_bound,
             exclude_across_chains,
@@ -34,7 +35,7 @@ impl PyBondInference {
 
     #[staticmethod]
     fn standard() -> Self {
-        Self(pdbiox::BondInference::default())
+        Self(molframe::BondInference::default())
     }
 
     #[getter]
@@ -72,13 +73,13 @@ pub(crate) struct PyBondInferenceReport {
 }
 
 impl PyBondInferenceReport {
-    pub(crate) fn from_native(report: pdbiox::BondInferenceReport) -> Self {
+    pub(crate) fn from_native(report: molframe::BondInferenceReport) -> Self {
         Self {
             structure: PyStructure::new(report.structure),
             skipped_atoms: report
                 .skipped_atoms
                 .into_iter()
-                .map(pdbiox::AtomIndex::get)
+                .map(molframe::AtomIndex::get)
                 .collect(),
         }
     }
@@ -127,14 +128,14 @@ pub(crate) struct PySideChainTorsionReport {
     #[pyo3(get)]
     records: Vec<PySideChainTorsionRecord>,
     #[pyo3(get)]
-    findings: Vec<String>,
+    findings: Vec<PyDiagnostic>,
     #[pyo3(get)]
     dictionary_version: String,
 }
 
 #[pyfunction]
 pub(crate) fn default_limits(py: Python<'_>) -> PyLimits {
-    py.detach(move || -> PyLimits { PyLimits::from_inner(pdbiox::default_limits()) })
+    py.detach(move || -> PyLimits { PyLimits::from_inner(molframe::Limits::default()) })
 }
 
 #[pyfunction]
@@ -146,14 +147,14 @@ pub(crate) fn infer_bonds(
     let structure = structure.structure().clone();
     let options = options.0;
     py.detach(move || {
-        pdbiox::infer_bonds(
+        molframe::infer_bonds(
             &structure,
             options,
             &crate::core::execution::default_context(),
         )
     })
     .map(PyBondInferenceReport::from_native)
-    .map_err(|finding| crate::errors::read_error(py, std::slice::from_ref(&finding)))
+    .map_err(|findings| crate::errors::read_error(py, &findings))
 }
 
 #[pyfunction]
@@ -162,7 +163,7 @@ pub(crate) fn structure_protein_alpha_traces(
     structure: &PyStructure,
 ) -> PyResult<Vec<PyProteinAlphaTrace>> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::structure_protein_alpha_traces(&structure))
+    py.detach(move || molframe::structure_protein_alpha_traces(&structure))
         .map(|traces| {
             traces
                 .into_iter()
@@ -172,7 +173,7 @@ pub(crate) fn structure_protein_alpha_traces(
                 })
                 .collect()
         })
-        .map_err(|finding| crate::errors::read_error(py, std::slice::from_ref(&finding)))
+        .map_err(|findings| crate::errors::read_error(py, &findings))
 }
 
 #[pyfunction]
@@ -181,14 +182,14 @@ pub(crate) fn structure_backbone_torsions(
     structure: &PyStructure,
 ) -> PyResult<Vec<PyBackboneTorsionRecord>> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::structure_backbone_torsions(&structure))
+    py.detach(move || molframe::structure_backbone_torsions(&structure))
         .map(|records| {
             records
                 .into_iter()
                 .map(PyBackboneTorsionRecord::from)
                 .collect()
         })
-        .map_err(|finding| crate::errors::read_error(py, std::slice::from_ref(&finding)))
+        .map_err(|findings| crate::errors::read_error(py, &findings))
 }
 
 #[pyfunction]
@@ -199,7 +200,7 @@ pub(crate) fn structure_backbone_torsions_model(
 ) -> PyResult<Vec<PyBackboneTorsionRecord>> {
     let structure = structure.structure().clone();
     py.detach(move || {
-        pdbiox::structure_backbone_torsions_model(&structure, pdbiox::ModelIndex::new(model))
+        molframe::structure_backbone_torsions_model(&structure, molframe::ModelIndex::new(model))
     })
     .map(|records| {
         records
@@ -207,7 +208,7 @@ pub(crate) fn structure_backbone_torsions_model(
             .map(PyBackboneTorsionRecord::from)
             .collect()
     })
-    .map_err(|finding| crate::errors::read_error(py, std::slice::from_ref(&finding)))
+    .map_err(|findings| crate::errors::read_error(py, &findings))
 }
 
 #[pyfunction]
@@ -221,7 +222,7 @@ pub(crate) fn structure_side_chain_torsions(
     let dictionary = dictionary.0.clone();
     let policy = policy.inner.clone();
     py.detach(move || {
-        pdbiox::structure_side_chain_torsions(&structure, dictionary.as_ref(), &policy)
+        molframe::structure_side_chain_torsions(&structure, dictionary.as_ref(), &policy)
     })
     .map(|report| PySideChainTorsionReport {
         records: report
@@ -233,18 +234,14 @@ pub(crate) fn structure_side_chain_torsions(
                 torsions: record.torsions.into_vec(),
             })
             .collect(),
-        findings: report
-            .findings
-            .into_iter()
-            .map(|finding| finding.to_string())
-            .collect(),
+        findings: report.findings.into_iter().map(Into::into).collect(),
         dictionary_version: report.dictionary_version.as_str().to_owned(),
     })
-    .map_err(|finding| crate::errors::read_error(py, std::slice::from_ref(&finding)))
+    .map_err(|findings| crate::errors::read_error(py, &findings))
 }
 
-impl From<pdbiox::BackboneTorsionRecord> for PyBackboneTorsionRecord {
-    fn from(value: pdbiox::BackboneTorsionRecord) -> Self {
+impl From<molframe::BackboneTorsionRecord> for PyBackboneTorsionRecord {
+    fn from(value: molframe::BackboneTorsionRecord) -> Self {
         Self {
             residue: value.residue.get(),
             torsions: value.torsions.into(),

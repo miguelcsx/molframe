@@ -8,26 +8,41 @@ from .chem import Element
 from .core.metadata import EntityKind, PolymerKind
 from .query import AnalysisPolicy, Selection
 
-from ._native import (
+from ._core_topology import (
+    AltId, AtomChunk, AtomRecord, BitVec, ChainRecord, ChainTable, ChunkBuilder,
+    CoordinateBlock, CoordinateEditor, CoordinateStore, DictionaryFull, EntityTable,
+    ExtensionStore, Interner, ModelTable, OptionalI32, OptionalSymbol, ParentMapping,
+    Presence, ResidueRecord, ResidueTable, StructureData, StructureEditor,
+    StructureView, Topology, ValidityMask, bit_width, pack, unpack_one, write_output,
+)
+
+from ._facade_models import (
+    BondOrder, BondProvenance, BondRecord, CountDifference, Limits, MetadataDifference,
+    ReadOptions, ReadScope, StructureDifference, structure_difference,
+)
+
+from ._facade_structure_io import (
+    Structure,
+)
+
+from ._io_types import (
+    AmbiguousResidueBoundaryPolicy, Format, MissingElementPolicy, ParseMode,
+)
+
+from ._provider import (
+    ChunkId,
+)
+
+from .core.annotation import (
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION,
     COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION, HBOND_ACCEPTOR_ANNOTATION,
-    HBOND_DONOR_ANNOTATION, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION, PLDDT_ANNOTATION,
-    POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION, STEREO_CONFIGURATION_ANNOTATION,
-    Aabb, AltId, AmbiguousResidueBoundaryPolicy, AnnotationColumn, AtomAnnotation, AtomAnnotations, AtomChunk, AtomChunkStats,
-    ChunkId, CountDifference, MetadataDifference, StructureDifference, structure_difference,
-    AtomIndex, AtomRecord, BitVec, ChainRecord, ChainTable, ChunkBuilder, ColumnKind, CoordinateStore,
-    ElementMask, EncodedColumn, EntityTable, ExtensionStore, Extremes,
-    BondAdjacency, BondIndex, BondOrder, BondProvenance,
-    BondRecord, BondTable, BondTableBuilder, ByteSpan, ChainIndex, Compression, CoordinateBlock,
-    Format, InputBuffer, InputKind, Limits, MissingElementPolicy, ParseMode, ReadOptions, ReadReport,
-    ReadResult, ReadScope, Reader, Select, SelectAll,
-    CoordinateGeneration, DictionaryFull, EntityIndex, InstanceId, Interner, ModelIndex, ModelTable,
-    OptionalI32, OptionalSymbol, ParentMapping, Position, Presence, ResidueIndex, ResidueRecord,
-    ResidueTable, Structure, StructureData, StructureView, StructureEditor, CoordinateEditor,
-    Class, Code, ContextItem, Diagnostics, Kind, Rendered, Severity, Strictness,
-    SymbolId, TARGET_CHUNK_ATOMS, Topology, ValidityMask,
-    bit_width, pack, write_output,
-    unpack_one,
+    HBOND_DONOR_ANNOTATION, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION,
+    PLDDT_ANNOTATION, POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION,
+    STEREO_CONFIGURATION_ANNOTATION,
+)
+
+from .core.chunk import (
+    TARGET_CHUNK_ATOMS,
 )
 
 class Kind:
@@ -226,7 +241,7 @@ class ValueDifference:
 
 class ReadReport:
     structure: Structure
-    findings: list[str]
+    findings: list[Diagnostic]
 
 ReadResult = ReadReport
 

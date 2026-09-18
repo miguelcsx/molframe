@@ -1,6 +1,7 @@
 //! Native CIF parser and reader entry points.
 
 use crate::cif_document::PyCifDocument;
+use crate::contract::PyDiagnostic;
 use crate::errors::read_error;
 use crate::io::{PyReadOptions, PyReadReport};
 use pyo3::prelude::*;
@@ -17,7 +18,7 @@ impl PyCifReader {
     }
 
     #[staticmethod]
-    fn parse(py: Python<'_>, data: Vec<u8>) -> PyResult<(PyCifDocument, Vec<String>)> {
+    fn parse(py: Python<'_>, data: Vec<u8>) -> PyResult<(PyCifDocument, Vec<PyDiagnostic>)> {
         parse_native(py, data)
     }
 
@@ -43,7 +44,10 @@ impl PyCifReader {
 }
 
 #[pyfunction(name = "parse")]
-pub(crate) fn parse_cif(py: Python<'_>, data: Vec<u8>) -> PyResult<(PyCifDocument, Vec<String>)> {
+pub(crate) fn parse_cif(
+    py: Python<'_>,
+    data: Vec<u8>,
+) -> PyResult<(PyCifDocument, Vec<PyDiagnostic>)> {
     parse_native(py, data)
 }
 
@@ -69,18 +73,15 @@ pub(crate) fn read_cif_with_document(
 
 #[pyfunction]
 pub(crate) fn split_tag(tag: &str) -> (&str, &str) {
-    pdbiox::cif::split_tag(tag)
+    molframe::cif::split_tag(tag)
 }
 
-fn parse_native(py: Python<'_>, data: Vec<u8>) -> PyResult<(PyCifDocument, Vec<String>)> {
-    py.detach(move || pdbiox::cif::parse(&pdbiox::InputBuffer::from_bytes(data)))
+fn parse_native(py: Python<'_>, data: Vec<u8>) -> PyResult<(PyCifDocument, Vec<PyDiagnostic>)> {
+    py.detach(move || molframe::cif::parse(&molframe::InputBuffer::from_bytes(data)))
         .map(|(document, findings)| {
             (
                 PyCifDocument::from(document),
-                findings
-                    .into_iter()
-                    .map(|finding| finding.to_string())
-                    .collect(),
+                findings.into_iter().map(Into::into).collect(),
             )
         })
         .map_err(|findings| read_error(py, &findings))
@@ -91,14 +92,11 @@ fn read_native(
     data: Vec<u8>,
     options: Option<&PyReadOptions>,
 ) -> PyResult<PyReadReport> {
-    let options = options.map_or_else(pdbiox::ReadOptions::new, |value| value.0.clone());
-    py.detach(move || pdbiox::cif::read(&pdbiox::InputBuffer::from_bytes(data), &options))
+    let options = options.map_or_else(molframe::ReadOptions::new, |value| value.0.clone());
+    py.detach(move || molframe::cif::read(&molframe::InputBuffer::from_bytes(data), &options))
         .map(|(structure, findings)| PyReadReport {
             structure: crate::structure::PyStructure::new(structure),
-            findings: findings
-                .into_iter()
-                .map(|finding| finding.to_string())
-                .collect(),
+            findings: findings.into_iter().map(Into::into).collect(),
         })
         .map_err(|findings| read_error(py, &findings))
 }
@@ -108,19 +106,16 @@ fn read_with_document_native(
     data: Vec<u8>,
     options: Option<&PyReadOptions>,
 ) -> PyResult<(PyCifDocument, PyReadReport)> {
-    let options = options.map_or_else(pdbiox::ReadOptions::new, |value| value.0.clone());
+    let options = options.map_or_else(molframe::ReadOptions::new, |value| value.0.clone());
     py.detach(move || {
-        pdbiox::cif::read_with_document(&pdbiox::InputBuffer::from_bytes(data), &options)
+        molframe::cif::read_with_document(&molframe::InputBuffer::from_bytes(data), &options)
     })
     .map(|(document, structure, findings)| {
         (
             PyCifDocument::from(document),
             PyReadReport {
                 structure: crate::structure::PyStructure::new(structure),
-                findings: findings
-                    .into_iter()
-                    .map(|finding| finding.to_string())
-                    .collect(),
+                findings: findings.into_iter().map(Into::into).collect(),
             },
         )
     })

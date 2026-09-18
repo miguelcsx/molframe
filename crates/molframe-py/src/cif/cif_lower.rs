@@ -13,14 +13,11 @@ pub(crate) fn lower(
     options: Option<&PyReadOptions>,
 ) -> PyResult<PyReadReport> {
     let document = document.inner.clone();
-    let options = options.map_or_else(pdbiox::ReadOptions::new, |value| value.0.clone());
-    py.detach(move || pdbiox::cif::lower(&document, &options))
+    let options = options.map_or_else(molframe::ReadOptions::new, |value| value.0.clone());
+    py.detach(move || molframe::cif::lower(&document, &options))
         .map(|(structure, findings)| PyReadReport {
             structure: crate::structure::PyStructure::new(structure),
-            findings: findings
-                .into_iter()
-                .map(|finding| finding.to_string())
-                .collect(),
+            findings: findings.into_iter().map(Into::into).collect(),
         })
         .map_err(|findings| read_error(py, &findings))
 }

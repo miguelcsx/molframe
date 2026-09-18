@@ -3,6 +3,7 @@
 use crate::analysis::PyReferenceLibrary;
 use crate::chemistry::PyComponentDictionary;
 use crate::chemistry::components::PyStereoConfiguration;
+use crate::contract::PyDiagnostic;
 use crate::query::PyAnalysisPolicy;
 use crate::structure::PyStructure;
 use pyo3::exceptions::PyValueError;
@@ -17,13 +18,13 @@ pub(crate) enum PyChiralityIssue {
 
 #[pyclass(name = "ChiralityOptions", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyChiralityOptions(pub(crate) pdbiox::validate::ChiralityOptions);
+pub(crate) struct PyChiralityOptions(pub(crate) molframe::validate::ChiralityOptions);
 
 #[pymethods]
 impl PyChiralityOptions {
     #[new]
     fn new(minimum_abs_volume: f64) -> Self {
-        Self(pdbiox::validate::ChiralityOptions { minimum_abs_volume })
+        Self(molframe::validate::ChiralityOptions { minimum_abs_volume })
     }
 }
 
@@ -50,20 +51,20 @@ pub(crate) struct PyChiralityReport {
     #[pyo3(get)]
     flags: Vec<PyChiralityFlag>,
     #[pyo3(get)]
-    findings: Vec<String>,
+    findings: Vec<PyDiagnostic>,
     #[pyo3(get)]
     dictionary_version: String,
 }
 
 #[pyclass(name = "RotamerDefinition", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyRotamerDefinition(pdbiox::validate::RotamerDefinition);
+pub(crate) struct PyRotamerDefinition(molframe::validate::RotamerDefinition);
 
 #[pymethods]
 impl PyRotamerDefinition {
     #[new]
     fn new(component: &str, chi_index: u8, atoms: [String; 4], distribution: &str) -> Self {
-        Self(pdbiox::validate::RotamerDefinition {
+        Self(molframe::validate::RotamerDefinition {
             component_id: component.into(),
             chi_index,
             atoms: atoms.map(Into::into),
@@ -74,13 +75,13 @@ impl PyRotamerDefinition {
 
 #[pyclass(name = "RotamerProfile", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyRotamerProfile(pub(super) pdbiox::validate::RotamerProfile);
+pub(crate) struct PyRotamerProfile(pub(super) molframe::validate::RotamerProfile);
 
 #[pymethods]
 impl PyRotamerProfile {
     #[new]
     fn new(id: &str, version: &str, definitions: Vec<PyRotamerDefinition>) -> PyResult<Self> {
-        pdbiox::validate::RotamerProfile::new(
+        molframe::validate::RotamerProfile::new(
             id,
             version,
             definitions.into_iter().map(|value| value.0),
@@ -101,13 +102,13 @@ impl PyRotamerProfile {
 
 #[pyclass(name = "RotamerOptions", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyRotamerOptions(pub(crate) pdbiox::validate::RotamerOptions);
+pub(crate) struct PyRotamerOptions(pub(crate) molframe::validate::RotamerOptions);
 
 #[pymethods]
 impl PyRotamerOptions {
     #[new]
     fn new(minimum_probability: f64) -> Self {
-        Self(pdbiox::validate::RotamerOptions {
+        Self(molframe::validate::RotamerOptions {
             minimum_probability,
         })
     }
@@ -134,7 +135,7 @@ pub(crate) struct PyRotamerReport {
     #[pyo3(get)]
     flags: Vec<PyRotamerFlag>,
     #[pyo3(get)]
-    findings: Vec<String>,
+    findings: Vec<PyDiagnostic>,
     #[pyo3(get)]
     dictionary_version: String,
     #[pyo3(get)]
@@ -160,10 +161,16 @@ impl PyStructure {
         let structure = self.structure().clone();
         let dictionary = dictionary.0.clone();
         let options = options.0;
-        let policy =
-            policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+        let policy = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+            value.inner.clone()
+        });
         py.detach(move || {
-            pdbiox::validate::chirality_outliers(&structure, dictionary.as_ref(), &policy, options)
+            molframe::validate::chirality_outliers(
+                &structure,
+                dictionary.as_ref(),
+                &policy,
+                options,
+            )
         })
         .map(PyChiralityReport::from)
         .map_err(value_error)
@@ -184,10 +191,11 @@ impl PyStructure {
         let references = references.0.clone();
         let profile = profile.0.clone();
         let options = options.0;
-        let policy =
-            policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+        let policy = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+            value.inner.clone()
+        });
         py.detach(move || {
-            pdbiox::validate::rotamer_outliers(
+            molframe::validate::rotamer_outliers(
                 &structure,
                 dictionary.as_ref(),
                 &policy,
@@ -201,22 +209,18 @@ impl PyStructure {
     }
 }
 
-impl From<pdbiox::validate::ChiralityReport> for PyChiralityReport {
-    fn from(value: pdbiox::validate::ChiralityReport) -> Self {
+impl From<molframe::validate::ChiralityReport> for PyChiralityReport {
+    fn from(value: molframe::validate::ChiralityReport) -> Self {
         Self {
             flags: value.flags.into_iter().map(PyChiralityFlag::from).collect(),
-            findings: value
-                .findings
-                .into_iter()
-                .map(|finding| finding.to_string())
-                .collect(),
+            findings: value.findings.into_iter().map(Into::into).collect(),
             dictionary_version: value.dictionary_version.as_str().to_owned(),
         }
     }
 }
 
-impl From<pdbiox::validate::ChiralityFlag> for PyChiralityFlag {
-    fn from(value: pdbiox::validate::ChiralityFlag) -> Self {
+impl From<molframe::validate::ChiralityFlag> for PyChiralityFlag {
+    fn from(value: molframe::validate::ChiralityFlag) -> Self {
         Self {
             residue: value.residue.get(),
             centre: value.centre.get(),
@@ -228,24 +232,20 @@ impl From<pdbiox::validate::ChiralityFlag> for PyChiralityFlag {
     }
 }
 
-impl From<pdbiox::validate::ChiralityIssue> for PyChiralityIssue {
-    fn from(value: pdbiox::validate::ChiralityIssue) -> Self {
+impl From<molframe::validate::ChiralityIssue> for PyChiralityIssue {
+    fn from(value: molframe::validate::ChiralityIssue) -> Self {
         match value {
-            pdbiox::validate::ChiralityIssue::Inverted => Self::Inverted,
-            pdbiox::validate::ChiralityIssue::Degenerate => Self::Degenerate,
+            molframe::validate::ChiralityIssue::Inverted => Self::Inverted,
+            molframe::validate::ChiralityIssue::Degenerate => Self::Degenerate,
         }
     }
 }
 
-impl From<pdbiox::validate::RotamerReport> for PyRotamerReport {
-    fn from(value: pdbiox::validate::RotamerReport) -> Self {
+impl From<molframe::validate::RotamerReport> for PyRotamerReport {
+    fn from(value: molframe::validate::RotamerReport) -> Self {
         Self {
             flags: value.flags.into_iter().map(PyRotamerFlag::from).collect(),
-            findings: value
-                .findings
-                .into_iter()
-                .map(|finding| finding.to_string())
-                .collect(),
+            findings: value.findings.into_iter().map(Into::into).collect(),
             dictionary_version: value.dictionary_version.as_str().to_owned(),
             profile_id: value.profile_id.into(),
             profile_version: value.profile_version.into(),
@@ -255,8 +255,8 @@ impl From<pdbiox::validate::RotamerReport> for PyRotamerReport {
     }
 }
 
-impl From<pdbiox::validate::RotamerFlag> for PyRotamerFlag {
-    fn from(value: pdbiox::validate::RotamerFlag) -> Self {
+impl From<molframe::validate::RotamerFlag> for PyRotamerFlag {
+    fn from(value: molframe::validate::RotamerFlag) -> Self {
         Self {
             residue: value.residue.get(),
             chi_index: value.chi_index,

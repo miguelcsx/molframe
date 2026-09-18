@@ -2,6 +2,7 @@
 
 use super::PyComponentDictionary;
 use super::components::{PyComponentKind, PyPolymerAtomRole};
+use crate::contract::PyDiagnostic;
 use crate::query::PyAnalysisPolicy;
 use crate::structure::PyStructure;
 use pyo3::prelude::*;
@@ -39,24 +40,24 @@ impl PyPolymerLinkRule {
 
 #[pyclass(name = "PolymerLinkPolicy", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyPolymerLinkPolicy(pub(crate) pdbiox::PolymerLinkPolicy);
+pub(crate) struct PyPolymerLinkPolicy(pub(crate) molframe::PolymerLinkPolicy);
 
 #[pymethods]
 impl PyPolymerLinkPolicy {
     #[staticmethod]
     fn disabled() -> Self {
-        Self(pdbiox::PolymerLinkPolicy::Disabled)
+        Self(molframe::PolymerLinkPolicy::Disabled)
     }
 
     #[staticmethod]
     fn explicit(angstrom: f32, rules: Vec<PyPolymerLinkRule>) -> Self {
         let rules = rules.into_iter().map(Into::into).collect::<Vec<_>>();
-        Self(pdbiox::PolymerLinkPolicy::explicit(angstrom, rules))
+        Self(molframe::PolymerLinkPolicy::explicit(angstrom, rules))
     }
 
     #[getter]
     fn is_disabled(&self) -> bool {
-        matches!(self.0, pdbiox::PolymerLinkPolicy::Disabled)
+        matches!(self.0, molframe::PolymerLinkPolicy::Disabled)
     }
 }
 
@@ -66,7 +67,7 @@ pub(crate) struct PyChemistryReport {
     #[pyo3(get)]
     structure: PyStructure,
     #[pyo3(get)]
-    findings: Vec<String>,
+    findings: Vec<PyDiagnostic>,
     #[pyo3(get)]
     dictionary_version: String,
     #[pyo3(get)]
@@ -106,13 +107,13 @@ impl PyPolymerRoleRule {
 
 #[pyclass(name = "PolymerRoleProfile", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyPolymerRoleProfile(pub(crate) pdbiox::PolymerRoleProfile);
+pub(crate) struct PyPolymerRoleProfile(pub(crate) molframe::PolymerRoleProfile);
 
 #[pymethods]
 impl PyPolymerRoleProfile {
     #[new]
     fn new(id: String, rules: Vec<PyPolymerRoleRule>) -> Self {
-        Self(pdbiox::PolymerRoleProfile {
+        Self(molframe::PolymerRoleProfile {
             id: id.into(),
             rules: rules.into_iter().map(Into::into).collect::<Vec<_>>().into(),
         })
@@ -150,10 +151,10 @@ impl PyComponentDictionary {
         structure: &PyStructure,
         policy: Option<PyPolymerLinkPolicy>,
     ) -> PyResult<PyChemistryReport> {
-        pdbiox::apply_component_chemistry(
+        molframe::apply_component_chemistry(
             structure.structure(),
             self.0.as_ref(),
-            policy.map_or(pdbiox::PolymerLinkPolicy::Disabled, |value| value.0),
+            policy.map_or(molframe::PolymerLinkPolicy::Disabled, |value| value.0),
         )
         .map(Into::into)
         .map_err(value_error)
@@ -164,7 +165,7 @@ impl PyComponentDictionary {
         structure: &PyStructure,
         profile: &PyPolymerRoleProfile,
     ) -> PyResult<PyPolymerRoleReport> {
-        pdbiox::apply_polymer_role_profile(structure.structure(), self.0.as_ref(), &profile.0)
+        molframe::apply_polymer_role_profile(structure.structure(), self.0.as_ref(), &profile.0)
             .map(Into::into)
             .map_err(value_error)
     }
@@ -178,7 +179,7 @@ impl PyComponentDictionary {
     }
 }
 
-impl From<PyPolymerLinkRule> for pdbiox::PolymerLinkRule {
+impl From<PyPolymerLinkRule> for molframe::PolymerLinkRule {
     fn from(value: PyPolymerLinkRule) -> Self {
         Self::new(
             value.left_kind.into(),
@@ -189,7 +190,7 @@ impl From<PyPolymerLinkRule> for pdbiox::PolymerLinkRule {
     }
 }
 
-impl From<PyPolymerRoleRule> for pdbiox::PolymerRoleRule {
+impl From<PyPolymerRoleRule> for molframe::PolymerRoleRule {
     fn from(value: PyPolymerRoleRule) -> Self {
         Self {
             component_id: value.component_id.map(Into::into),
@@ -200,29 +201,25 @@ impl From<PyPolymerRoleRule> for pdbiox::PolymerRoleRule {
     }
 }
 
-impl From<pdbiox::PolymerLinkPolicy> for PyPolymerLinkPolicy {
-    fn from(value: pdbiox::PolymerLinkPolicy) -> Self {
+impl From<molframe::PolymerLinkPolicy> for PyPolymerLinkPolicy {
+    fn from(value: molframe::PolymerLinkPolicy) -> Self {
         Self(value)
     }
 }
 
-impl From<pdbiox::ChemistryReport> for PyChemistryReport {
-    fn from(value: pdbiox::ChemistryReport) -> Self {
+impl From<molframe::ChemistryReport> for PyChemistryReport {
+    fn from(value: molframe::ChemistryReport) -> Self {
         Self {
             structure: PyStructure::new(value.structure),
-            findings: value
-                .findings
-                .into_iter()
-                .map(|finding| finding.to_string())
-                .collect(),
+            findings: value.findings.into_iter().map(Into::into).collect(),
             dictionary_version: value.dictionary_version.as_str().to_owned(),
             polymer_link_policy: value.polymer_link_policy.into(),
         }
     }
 }
 
-impl From<pdbiox::PolymerRoleRule> for PyPolymerRoleRule {
-    fn from(value: pdbiox::PolymerRoleRule) -> Self {
+impl From<molframe::PolymerRoleRule> for PyPolymerRoleRule {
+    fn from(value: molframe::PolymerRoleRule) -> Self {
         Self {
             component_id: value.component_id.map(|value| value.to_string()),
             component_kind: value.component_kind.map(Into::into),
@@ -232,8 +229,8 @@ impl From<pdbiox::PolymerRoleRule> for PyPolymerRoleRule {
     }
 }
 
-impl From<pdbiox::PolymerRoleReport> for PyPolymerRoleReport {
-    fn from(value: pdbiox::PolymerRoleReport) -> Self {
+impl From<molframe::PolymerRoleReport> for PyPolymerRoleReport {
+    fn from(value: molframe::PolymerRoleReport) -> Self {
         Self {
             structure: PyStructure::new(value.structure),
             unresolved_components: value

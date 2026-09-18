@@ -11,7 +11,7 @@ from ._thermal_motion import (
 from ..chem import ComponentDictionary, PolymerRoleProfile, RadiusSet, StereoConfiguration
 from ..core import MissingResidue, Structure
 from ..spatial import SpatialBackend
-from ..core.contract import Analysis
+from ..core.contract import Analysis, Diagnostic
 from ..geom import EigenOptions
 from ..query import AnalysisPolicy, Namespace, Selection
 from ..xtal.density import DensityMap, MapBoundary
@@ -149,7 +149,7 @@ class ChiralityFlag:
 @final
 class ChiralityReport:
     flags: list[ChiralityFlag]
-    findings: list[str]
+    findings: list[Diagnostic]
     dictionary_version: str
 
 @final
@@ -177,7 +177,7 @@ class RotamerFlag:
 @final
 class RotamerReport:
     flags: list[RotamerFlag]
-    findings: list[str]
+    findings: list[Diagnostic]
     dictionary_version: str
     profile_id: str
     profile_version: str
@@ -360,7 +360,7 @@ class ReferenceAngleFlag:
 class ReferenceGeometryReport:
     bonds: list[ReferenceBondFlag]
     angles: list[ReferenceAngleFlag]
-    findings: list[str]
+    findings: list[Diagnostic]
     intended: int
     assessed: int
     options: ReferenceGeometryOptions
@@ -398,6 +398,9 @@ def chirality_outliers(structure: Structure, dictionary: ComponentDictionary, op
 def cis_peptides(structure: Structure, threshold_degrees: float) -> list[CisPeptide]: ...
 def clashes(structure: Structure, tolerance: float, radius_set: RadiusSet, *, backend: object = ..., context: object | None = None) -> list[Clash]: ...
 def classify(phi: float, psi: float, options: RamachandranOptions) -> tuple[RamachandranRegion, ReferenceAssessment]: ...
+# The facade's name for ``classify``; the extension binds the alias once the
+# function exists, so the two are the same object under two names.
+classify_ramachandran = classify
 def completeness(structure: Structure, namespace: Namespace) -> list[ChainCompleteness]: ...
 def governed_masked_real_space_correlation(observed: DensityMap, calculated: DensityMap, mask: NDArray[bool_], policy: AnalysisPolicy) -> Analysis[RealSpaceCorrelation]: ...
 def governed_real_space_map_correlation(observed: DensityMap, calculated: DensityMap, policy: AnalysisPolicy) -> Analysis[RealSpaceCorrelation]: ...

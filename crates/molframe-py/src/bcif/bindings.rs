@@ -8,14 +8,14 @@ use pyo3::types::PyBytes;
 
 #[pyclass(name = "BinaryDocument", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyBinaryDocument(pub(crate) pdbiox::BinaryDocument);
+pub(crate) struct PyBinaryDocument(pub(crate) molframe::BinaryDocument);
 
 #[pymethods]
 impl PyBinaryDocument {
     #[new]
     fn new(py: Python<'_>, data: &Bound<'_, PyBytes>, limits: &PyLimits) -> PyResult<Self> {
-        let input = pdbiox::InputBuffer::from_bytes(data.as_bytes().to_vec());
-        pdbiox::bcif::read_document(&input, limits.0)
+        let input = molframe::InputBuffer::from_bytes(data.as_bytes().to_vec());
+        molframe::bcif::read_document(&input, limits.0)
             .map(Self)
             .map_err(|finding| read_error(py, &[finding]))
     }
@@ -76,14 +76,11 @@ impl PyBcifReader {
         data: &Bound<'_, PyBytes>,
         options: &PyReadOptions,
     ) -> PyResult<PyReadReport> {
-        let input = pdbiox::InputBuffer::from_bytes(data.as_bytes().to_vec());
-        pdbiox::bcif::read(&input, &options.0)
+        let input = molframe::InputBuffer::from_bytes(data.as_bytes().to_vec());
+        molframe::bcif::read(&input, &options.0)
             .map(|(structure, findings)| PyReadReport {
                 structure: crate::structure::PyStructure::new(structure),
-                findings: findings
-                    .into_iter()
-                    .map(|value| value.to_string())
-                    .collect(),
+                findings: findings.into_iter().map(Into::into).collect(),
             })
             .map_err(|findings| read_error(py, &findings))
     }
@@ -113,18 +110,15 @@ pub(crate) fn read_bcif_with_document(
     data: &Bound<'_, PyBytes>,
     options: &PyReadOptions,
 ) -> PyResult<(PyCifDocument, PyReadReport)> {
-    let input = pdbiox::InputBuffer::from_bytes(data.as_bytes().to_vec());
+    let input = molframe::InputBuffer::from_bytes(data.as_bytes().to_vec());
     let options = options.0.clone();
-    py.detach(move || pdbiox::bcif::read_with_document(&input, &options))
+    py.detach(move || molframe::bcif::read_with_document(&input, &options))
         .map(|(document, structure, findings)| {
             (
                 PyCifDocument { inner: document },
                 PyReadReport {
                     structure: crate::structure::PyStructure::new(structure),
-                    findings: findings
-                        .into_iter()
-                        .map(|value| value.to_string())
-                        .collect(),
+                    findings: findings.into_iter().map(Into::into).collect(),
                 },
             )
         })
@@ -137,7 +131,7 @@ pub(crate) fn write_bcif_document<'py>(
     document: &PyCifDocument,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let document = document.inner.clone();
-    py.detach(move || pdbiox::bcif::write_document(&document))
+    py.detach(move || molframe::bcif::write_document(&document))
         .map(|data| PyBytes::new(py, &data))
         .map_err(|finding| read_error(py, &[finding]))
 }

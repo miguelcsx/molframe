@@ -26,7 +26,7 @@ from .core import (
     CoordinateGeneration, DictionaryFull, DictionaryVersion, DifferenceError, EntityIndex, Fingerprint, InstanceId, Interner, ModelIndex,
     MissingResidue, ModelTable, OptionalI32, OptionalSymbol, ParameterValue, ParentMapping, Position, Presence, ProfileId, ResidueIndex, SourceRef,
     ResidueRecord, ResidueTable, Structure, StructureData, StructureView, StructureEditor,
-    CoordinateEditor, CoordinateStore, StructureDifferenceOptions, SymbolId, TARGET_CHUNK_ATOMS, Topology, ValidityMask, ValueDifference,
+    CoordinateEditor, CoordinateStore, ReadReport, StructureDifferenceOptions, SymbolId, TARGET_CHUNK_ATOMS, Topology, ValidityMask, ValueDifference,
     AtomSelection, Class, Code, ContextItem, Diagnostics, Kind, Rendered, Severity, Strictness,
     bit_width, pack, unpack_one, write_output,
 )
@@ -68,7 +68,7 @@ from .xtal import DEFAULT_CRYSTAL_IMAGE_LIMIT, DEFAULT_INSTANCE_LIMIT, SpaceGrou
 from .xtal import ASSEMBLIES_EXTENSION, AffineTransform, AssemblyDef, AssemblyNeighbor, AssemblySet, AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalNeighbor, Generator, INSTANCE_ID_ANNOTATION, NCS_EXTENSION, NcsCode, NcsOperator, NcsSet, NcsView, OperExpression, Operator, Rational, SpaceGroupSetting, SymmetrySet, SYMMETRY_EXTENSION, collect_crystal_neighbors, lower_assemblies, lower_ncs, lower_symmetry
 from .ml.graph import EdgeDirection, EdgeFeature, EdgeKind, Graph, GraphOptions, MissingFeaturePolicy, NodeFeature, NodeLevel, SpatialBackend
 from .geom import Axes, BackboneCoordinates, BackboneFrame, BackboneResidue, BackboneTorsions, CircularSummary, Decomposition, DistanceMatrix, EigenError, EigenOptions, FluctuationError, HelixGeometry, MatrixError, PeriodicError, Plane, Rigid, RotationError, RotationMeanOptions, RotationOptions, Superposition, SuperposeError, SuperposeOptions, TorusMetric, angle, asphericity, asphericity_with_options, backbone_frames, backbone_torsions, best_fit_plane, best_fit_plane_with_options, centre_of_mass, centroid, circular_summary, cross, degrees, dihedral, displacement, distance, distance_matrix, distance_matrix_between, distance_squared, dot, gyration_axes, gyration_axes_with_options, helix_geometry, helix_geometry_with_options, inertia_tensor, norm, normalise, path_torsions, plane_deviation, plane_deviation_with_options, principal_axes, principal_axes_with_options, radius_of_gyration, rmsd, rmsd_flat, rmsf, rotation_mean, rotation_mean_with_options, superpose, superpose_with_options, symmetric, symmetric_with_options, torus_summary
-from .ml import ArrowStream, AtomArrowTable, AtomTable, BondArrowTable, BondTable, ChainArrowTable, ChainTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset, DatasetEntry, DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, DlpackError, DlpackTensor, ExportCost, GraphError, LoadError, ManifestEntry, PdbioxExtension, ResidueArrowTable, ResidueTable, SplitOptions, SplitRatios, SplitStrategy, TableFileError, extension_name, graph, write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet, write_atom_parquet_with_metadata
+from .ml import ArrowStream, AtomArrowTable, AtomTable, BondArrowTable, BondTable, ChainArrowTable, ChainTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset, DatasetEntry, DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, DlpackError, DlpackTensor, ExportCost, GraphError, LoadError, ManifestEntry, MolframeExtension, ResidueArrowTable, ResidueTable, SplitOptions, SplitRatios, SplitStrategy, TableFileError, extension_name, graph, write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet, write_atom_parquet_with_metadata
 from .query import AltlocPolicy, AnalysisPolicy, AssemblyChoice, Evaluation, LogicalPlan, MissingPolicy, ModelChoice, Namespace, PhysicalQuery, Query, QueryBuilder, Selection, col
 from .seq import *
 from .compare import *
@@ -165,10 +165,6 @@ class ApplicationConfiguration:
     output: OutputConfiguration
     chem: ChemistryConfiguration
 @final
-class ReadReport:
-    structure: Structure
-    findings: list[str]
-@final
 class CountDifference:
     left: int
     right: int
@@ -255,7 +251,7 @@ class SideChainTorsionRecord:
 @final
 class SideChainTorsionReport:
     records: list[SideChainTorsionRecord]
-    findings: list[str]
+    findings: list[Diagnostic]
     dictionary_version: str
 @final
 class Hedron:

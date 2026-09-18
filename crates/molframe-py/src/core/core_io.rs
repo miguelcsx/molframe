@@ -24,7 +24,7 @@ pub(crate) enum PyInputKind {
 
 #[pyclass(name = "InputBuffer", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyInputBuffer(pub(crate) pdbiox::InputBuffer);
+pub(crate) struct PyInputBuffer(pub(crate) molframe::InputBuffer);
 
 #[pyclass(name = "Select", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -35,23 +35,23 @@ pub(crate) struct PyReader;
 
 #[pyclass(name = "OutputOptions", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyOutputOptions(pub(crate) pdbiox::OutputOptions);
+pub(crate) struct PyOutputOptions(pub(crate) molframe::OutputOptions);
 
-impl From<pdbiox::Compression> for PyCompression {
-    fn from(value: pdbiox::Compression) -> Self {
+impl From<molframe::Compression> for PyCompression {
+    fn from(value: molframe::Compression) -> Self {
         match value {
-            pdbiox::Compression::Gzip => Self::Gzip,
-            pdbiox::Compression::Zstd => Self::Zstd,
+            molframe::Compression::Gzip => Self::Gzip,
+            molframe::Compression::Zstd => Self::Zstd,
             _ => Self::NoCompression,
         }
     }
 }
 
-impl From<pdbiox::InputKind> for PyInputKind {
-    fn from(value: pdbiox::InputKind) -> Self {
+impl From<molframe::InputKind> for PyInputKind {
+    fn from(value: molframe::InputKind) -> Self {
         match value {
-            pdbiox::InputKind::Owned => Self::Owned,
-            pdbiox::InputKind::Mapped => Self::Mapped,
+            molframe::InputKind::Owned => Self::Owned,
+            molframe::InputKind::Mapped => Self::Mapped,
         }
     }
 }
@@ -60,7 +60,7 @@ impl From<pdbiox::InputKind> for PyInputKind {
 impl PyCompression {
     #[staticmethod]
     fn sniff(data: &Bound<'_, PyBytes>) -> Self {
-        pdbiox::Compression::sniff(data.as_bytes()).into()
+        molframe::Compression::sniff(data.as_bytes()).into()
     }
 }
 
@@ -68,14 +68,14 @@ impl PyCompression {
 impl PyInputBuffer {
     #[staticmethod]
     fn from_bytes(data: &Bound<'_, PyBytes>) -> Self {
-        Self(pdbiox::InputBuffer::from_bytes(data.as_bytes().to_vec()))
+        Self(molframe::InputBuffer::from_bytes(data.as_bytes().to_vec()))
     }
 
     #[staticmethod]
     #[pyo3(signature = (path, limits=None))]
     fn open(py: Python<'_>, path: PathBuf, limits: Option<&PyLimits>) -> PyResult<Self> {
-        let limits = limits.map_or_else(pdbiox::Limits::default, |value| value.0);
-        py.detach(move || pdbiox::InputBuffer::open(path, limits))
+        let limits = limits.map_or_else(molframe::Limits::default, |value| value.0);
+        py.detach(move || molframe::InputBuffer::open(path, limits))
             .map(Self)
             .map_err(|finding| read_error(py, &[finding]))
     }
@@ -83,8 +83,8 @@ impl PyInputBuffer {
     #[staticmethod]
     #[pyo3(signature = (data, limits=None))]
     fn from_reader(data: &Bound<'_, PyBytes>, limits: Option<&PyLimits>) -> PyResult<Self> {
-        let limits = limits.map_or_else(pdbiox::Limits::default, |value| value.0);
-        pdbiox::InputBuffer::from_reader(Cursor::new(data.as_bytes()), limits)
+        let limits = limits.map_or_else(molframe::Limits::default, |value| value.0);
+        molframe::InputBuffer::from_reader(Cursor::new(data.as_bytes()), limits)
             .map(Self)
             .map_err(|finding| read_error(data.py(), &[finding]))
     }
@@ -156,13 +156,10 @@ impl PyReader {
     ) -> PyResult<PyReadReport> {
         let data = input.0.as_bytes().to_vec();
         let options = options.0.clone();
-        py.detach(move || pdbiox::read_bytes(data, None, &options))
+        py.detach(move || molframe::read_bytes(data, None, &options))
             .map(|(structure, findings)| PyReadReport {
                 structure: crate::structure::PyStructure::new(structure),
-                findings: findings
-                    .into_iter()
-                    .map(|value| value.to_string())
-                    .collect(),
+                findings: findings.into_iter().map(Into::into).collect(),
             })
             .map_err(|findings| read_error(py, &findings))
     }
@@ -171,7 +168,7 @@ impl PyReader {
 #[pymethods]
 impl PyOutputOptions {
     #[new]
-    #[pyo3(signature = (*, memory_limit_bytes=pdbiox::core::io::DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES))]
+    #[pyo3(signature = (*, memory_limit_bytes=molframe::core::io::DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES))]
     fn new(memory_limit_bytes: usize) -> PyResult<Self> {
         if memory_limit_bytes == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -179,7 +176,7 @@ impl PyOutputOptions {
             ));
         }
         Ok(Self(
-            pdbiox::OutputOptions::default().with_memory_limit(memory_limit_bytes),
+            molframe::OutputOptions::default().with_memory_limit(memory_limit_bytes),
         ))
     }
 
@@ -198,14 +195,14 @@ pub(crate) fn write_with_options(
 ) -> PyResult<()> {
     let structure = structure.structure().clone();
     let options = options.0;
-    py.detach(move || pdbiox::write_with_options(path, &structure, options))
+    py.detach(move || molframe::write_with_options(path, &structure, options))
         .map_err(|findings| read_error(py, &findings))
 }
 
 #[pyfunction]
 fn write_output(py: Python<'_>, path: PathBuf, data: &Bound<'_, PyBytes>) -> PyResult<()> {
     let bytes = data.as_bytes().to_vec();
-    py.detach(move || pdbiox::core::write_output(path, &bytes))
+    py.detach(move || molframe::core::write_output(path, &bytes))
         .map_err(|finding| read_error(py, std::slice::from_ref(&finding)))
 }
 
@@ -222,7 +219,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyOutputOptions>()?;
     module.add(
         "DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES",
-        pdbiox::core::io::DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES,
+        molframe::core::io::DEFAULT_OUTPUT_MEMORY_LIMIT_BYTES,
     )?;
     module.add_function(wrap_pyfunction!(write_output, module)?)?;
     module.add("SelectAll", module.getattr("Select")?)?;

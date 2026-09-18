@@ -1,6 +1,7 @@
 //! Python projections for monomer restraint libraries and structure-factor CIF.
 
 use crate::cif_document::PyCifDocument;
+use crate::contract::PyDiagnostic;
 use crate::xtal::PyReflectionTable;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -102,7 +103,7 @@ pub(crate) struct PyMonomerRestraints {
 
 #[pyclass(name = "MonomerLibrary", frozen, skip_from_py_object)]
 #[derive(Clone, Debug, Default)]
-pub(crate) struct PyMonomerLibrary(pub(crate) pdbiox::xtal::MonomerLibrary);
+pub(crate) struct PyMonomerLibrary(pub(crate) molframe::xtal::MonomerLibrary);
 
 #[pymethods]
 impl PyMonomerLibrary {
@@ -138,7 +139,7 @@ pub(crate) fn lower_monomer_library(
     document: &PyCifDocument,
 ) -> PyResult<PyMonomerLibrary> {
     py.detach(move || -> PyResult<PyMonomerLibrary> {
-        pdbiox::xtal::lower_monomer_library(&document.inner)
+        molframe::xtal::lower_monomer_library(&document.inner)
             .map(PyMonomerLibrary)
             .map_err(value_error)
     })
@@ -148,16 +149,13 @@ pub(crate) fn lower_monomer_library(
 pub(crate) fn read_monomer_library(
     py: Python<'_>,
     data: &[u8],
-) -> PyResult<(PyMonomerLibrary, Vec<String>)> {
-    let input = pdbiox::InputBuffer::from_bytes(data.to_vec());
-    py.detach(move || pdbiox::xtal::read_monomer_library(&input))
+) -> PyResult<(PyMonomerLibrary, Vec<PyDiagnostic>)> {
+    let input = molframe::InputBuffer::from_bytes(data.to_vec());
+    py.detach(move || molframe::xtal::read_monomer_library(&input))
         .map(|(library, findings)| {
             (
                 PyMonomerLibrary(library),
-                findings
-                    .into_iter()
-                    .map(|finding| finding.to_string())
-                    .collect(),
+                findings.into_iter().map(Into::into).collect(),
             )
         })
         .map_err(value_error)
@@ -169,7 +167,7 @@ pub(crate) fn lower_structure_factor_cif(
     document: &PyCifDocument,
 ) -> PyResult<PyReflectionTable> {
     py.detach(|| {
-        pdbiox::xtal::lower_structure_factor_cif(&document.inner)
+        molframe::xtal::lower_structure_factor_cif(&document.inner)
             .map(PyReflectionTable)
             .map_err(value_error)
     })
@@ -180,11 +178,11 @@ pub(crate) fn write_structure_factor_cif(
     py: Python<'_>,
     table: &PyReflectionTable,
 ) -> PyResult<String> {
-    py.detach(|| pdbiox::xtal::write_structure_factor_cif(&table.0).map_err(value_error))
+    py.detach(|| molframe::xtal::write_structure_factor_cif(&table.0).map_err(value_error))
 }
 
-impl From<&pdbiox::xtal::MonomerRestraints> for PyMonomerRestraints {
-    fn from(value: &pdbiox::xtal::MonomerRestraints) -> Self {
+impl From<&molframe::xtal::MonomerRestraints> for PyMonomerRestraints {
+    fn from(value: &molframe::xtal::MonomerRestraints) -> Self {
         Self {
             id: value.id.to_string(),
             atoms: value.atoms.iter().map(ToString::to_string).collect(),
@@ -197,8 +195,8 @@ impl From<&pdbiox::xtal::MonomerRestraints> for PyMonomerRestraints {
     }
 }
 
-impl From<&pdbiox::xtal::BondRestraint> for PyBondRestraint {
-    fn from(value: &pdbiox::xtal::BondRestraint) -> Self {
+impl From<&molframe::xtal::BondRestraint> for PyBondRestraint {
+    fn from(value: &molframe::xtal::BondRestraint) -> Self {
         Self {
             atoms: value.atoms.clone().map(|atom| atom.to_string()),
             target: value.target,
@@ -208,8 +206,8 @@ impl From<&pdbiox::xtal::BondRestraint> for PyBondRestraint {
     }
 }
 
-impl From<&pdbiox::xtal::AngleRestraint> for PyAngleRestraint {
-    fn from(value: &pdbiox::xtal::AngleRestraint) -> Self {
+impl From<&molframe::xtal::AngleRestraint> for PyAngleRestraint {
+    fn from(value: &molframe::xtal::AngleRestraint) -> Self {
         Self {
             atoms: value.atoms.clone().map(|atom| atom.to_string()),
             target: value.target,
@@ -218,8 +216,8 @@ impl From<&pdbiox::xtal::AngleRestraint> for PyAngleRestraint {
     }
 }
 
-impl From<&pdbiox::xtal::TorsionRestraint> for PyTorsionRestraint {
-    fn from(value: &pdbiox::xtal::TorsionRestraint) -> Self {
+impl From<&molframe::xtal::TorsionRestraint> for PyTorsionRestraint {
+    fn from(value: &molframe::xtal::TorsionRestraint) -> Self {
         Self {
             id: value.id.as_deref().map(str::to_owned),
             atoms: value.atoms.clone().map(|atom| atom.to_string()),
@@ -230,8 +228,8 @@ impl From<&pdbiox::xtal::TorsionRestraint> for PyTorsionRestraint {
     }
 }
 
-impl From<&pdbiox::xtal::PlaneAtomRestraint> for PyPlaneAtomRestraint {
-    fn from(value: &pdbiox::xtal::PlaneAtomRestraint) -> Self {
+impl From<&molframe::xtal::PlaneAtomRestraint> for PyPlaneAtomRestraint {
+    fn from(value: &molframe::xtal::PlaneAtomRestraint) -> Self {
         Self {
             atom: value.atom.to_string(),
             sigma: value.sigma,
@@ -239,8 +237,8 @@ impl From<&pdbiox::xtal::PlaneAtomRestraint> for PyPlaneAtomRestraint {
     }
 }
 
-impl From<&pdbiox::xtal::PlaneRestraint> for PyPlaneRestraint {
-    fn from(value: &pdbiox::xtal::PlaneRestraint) -> Self {
+impl From<&molframe::xtal::PlaneRestraint> for PyPlaneRestraint {
+    fn from(value: &molframe::xtal::PlaneRestraint) -> Self {
         Self {
             id: value.id.to_string(),
             atoms: value.atoms.iter().map(Into::into).collect(),
@@ -248,18 +246,18 @@ impl From<&pdbiox::xtal::PlaneRestraint> for PyPlaneRestraint {
     }
 }
 
-impl From<pdbiox::xtal::ChiralVolumeSign> for PyChiralVolumeSign {
-    fn from(value: pdbiox::xtal::ChiralVolumeSign) -> Self {
+impl From<molframe::xtal::ChiralVolumeSign> for PyChiralVolumeSign {
+    fn from(value: molframe::xtal::ChiralVolumeSign) -> Self {
         match value {
-            pdbiox::xtal::ChiralVolumeSign::Positive => Self::Positive,
-            pdbiox::xtal::ChiralVolumeSign::Negative => Self::Negative,
-            pdbiox::xtal::ChiralVolumeSign::Both => Self::Both,
+            molframe::xtal::ChiralVolumeSign::Positive => Self::Positive,
+            molframe::xtal::ChiralVolumeSign::Negative => Self::Negative,
+            molframe::xtal::ChiralVolumeSign::Both => Self::Both,
         }
     }
 }
 
-impl From<&pdbiox::xtal::ChiralRestraint> for PyChiralRestraint {
-    fn from(value: &pdbiox::xtal::ChiralRestraint) -> Self {
+impl From<&molframe::xtal::ChiralRestraint> for PyChiralRestraint {
+    fn from(value: &molframe::xtal::ChiralRestraint) -> Self {
         Self {
             id: value.id.as_deref().map(str::to_owned),
             atoms: value.atoms.clone().map(|atom| atom.to_string()),

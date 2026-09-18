@@ -2,7 +2,7 @@
 
 use super::super::core_diagnostic::{PyCode, PyContextItem, PyRendered, PySeverity, PyStrictness};
 use crate::core_values::PyByteSpan;
-use pdbiox::{Diagnostic, ParameterValue, Provenance};
+use molframe::{Diagnostic, ParameterValue, Provenance};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -20,12 +20,11 @@ pub(crate) struct PyDiagnostic {
     span: Option<(u64, u64, u64, u64)>,
 }
 
-impl From<Diagnostic> for PyDiagnostic {
-    fn from(value: Diagnostic) -> Self {
-        let code = value.code();
+impl From<&Diagnostic> for PyDiagnostic {
+    fn from(value: &Diagnostic) -> Self {
         Self {
             inner: value.clone(),
-            code: code.to_string(),
+            code: value.code().to_string(),
             message: value.message().to_owned(),
             remedy: value.remedy().to_owned(),
             span: value.span().map(|span| {
@@ -40,11 +39,17 @@ impl From<Diagnostic> for PyDiagnostic {
     }
 }
 
+impl From<Diagnostic> for PyDiagnostic {
+    fn from(value: Diagnostic) -> Self {
+        Self::from(&value)
+    }
+}
+
 #[pymethods]
 impl PyDiagnostic {
     #[new]
     fn new(code: &PyCode) -> Self {
-        pdbiox::Diagnostic::new(code.0).into()
+        molframe::Diagnostic::new(code.0).into()
     }
 
     fn with_message(&self, message: &str) -> Self {
@@ -137,19 +142,8 @@ impl PyDiagnostic {
 }
 
 impl PyDiagnostic {
-    fn refresh(mut self) -> Self {
-        self.code = self.inner.code().to_string();
-        self.message = self.inner.message().to_owned();
-        self.remedy = self.inner.remedy().to_owned();
-        self.span = self.inner.span().map(|span| {
-            (
-                span.start.byte_offset,
-                span.end,
-                span.start.line,
-                span.start.column,
-            )
-        });
-        self
+    fn refresh(self) -> Self {
+        Self::from(&self.inner)
     }
 }
 
@@ -177,7 +171,7 @@ impl From<ParameterValue> for PyParameter {
 pub(crate) struct PyProvenance {
     pub(crate) inner: Provenance,
     #[pyo3(get)]
-    pdbiox_version: String,
+    molframe_version: String,
     #[pyo3(get)]
     input_source: String,
     #[pyo3(get)]
@@ -230,7 +224,7 @@ impl From<Provenance> for PyProvenance {
             });
         Self {
             inner: value.clone(),
-            pdbiox_version: value.pdbiox_version.to_owned(),
+            molframe_version: value.molframe_version.to_owned(),
             input_source: value.input_source.to_string(),
             input_fingerprint: value.input_fingerprint.map(|item| item.to_string()),
             policy_fingerprint: value.policy_fingerprint.to_string(),

@@ -7,7 +7,7 @@ from ..geom import EigenOptions
 from .. import Structure
 from ..chem import ComponentDictionary, StereoConfiguration
 from ..core import MissingResidue
-from ..core.contract import Analysis
+from ..core.contract import Analysis, Diagnostic
 from .._io_types import (BasePairError, CationPiError, DensityError, DsspBinaryError, DsspError,
     DynamicsError, EnsembleGeometryError, EnsembleSimilarityError,
     EnsembleStatisticsError, FragmentMappingError, GnmError, GovernedAnalysisError,
@@ -374,7 +374,7 @@ class ChiralityFlag:
 @final
 class ChiralityReport:
     flags: list[ChiralityFlag]
-    findings: list[str]
+    findings: list[Diagnostic]
     dictionary_version: str
 
 @final
@@ -402,7 +402,7 @@ class RotamerFlag:
 @final
 class RotamerReport:
     flags: list[RotamerFlag]
-    findings: list[str]
+    findings: list[Diagnostic]
     dictionary_version: str
     profile_id: str
     profile_version: str

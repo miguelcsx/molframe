@@ -1,5 +1,6 @@
 //! Explicit native read policy and successful diagnostic preservation.
 
+use crate::contract::PyDiagnostic;
 use crate::errors::read_error;
 use crate::structure::PyStructure;
 use pyo3::prelude::*;
@@ -50,10 +51,10 @@ pub(crate) enum PyAmbiguousResidueBoundaryPolicy {
 
 #[pyclass(name = "Limits", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyLimits(pub(crate) pdbiox::Limits);
+pub(crate) struct PyLimits(pub(crate) molframe::Limits);
 
 impl PyLimits {
-    pub(crate) const fn from_inner(value: pdbiox::Limits) -> Self {
+    pub(crate) const fn from_inner(value: molframe::Limits) -> Self {
         Self(value)
     }
 }
@@ -93,7 +94,7 @@ impl PyLimits {
         nesting_depth: u32,
         dictionary_entries: u32,
     ) -> Self {
-        Self(pdbiox::Limits {
+        Self(molframe::Limits {
             decompressed_bytes,
             compression_ratio,
             rows_per_category,
@@ -104,13 +105,13 @@ impl PyLimits {
 
     #[staticmethod]
     fn standard() -> Self {
-        Self(pdbiox::Limits::default())
+        Self(molframe::Limits::default())
     }
 }
 
 #[pyclass(name = "ReadOptions", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyReadOptions(pub(crate) pdbiox::ReadOptions);
+pub(crate) struct PyReadOptions(pub(crate) molframe::ReadOptions);
 
 #[pymethods]
 impl PyReadOptions {
@@ -124,7 +125,7 @@ impl PyReadOptions {
         limits: PyLimits,
     ) -> Self {
         Self(
-            pdbiox::ReadOptions::new()
+            molframe::ReadOptions::new()
                 .format(format.into())
                 .mode(mode.into())
                 .only_first_model(scope.only_first_model)
@@ -138,7 +139,7 @@ impl PyReadOptions {
 
     #[staticmethod]
     fn standard() -> Self {
-        Self(pdbiox::ReadOptions::new())
+        Self(molframe::ReadOptions::new())
     }
 }
 
@@ -146,12 +147,12 @@ impl PyReadOptions {
 pub(crate) struct PyReadReport {
     pub(crate) structure: PyStructure,
     #[pyo3(get)]
-    pub(crate) findings: Vec<String>,
+    pub(crate) findings: Vec<PyDiagnostic>,
 }
 
 #[pyclass(name = "PdbWriteOptions", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyPdbWriteOptions(pub(crate) pdbiox::PdbOptions);
+pub(crate) struct PyPdbWriteOptions(pub(crate) molframe::PdbOptions);
 
 /// Identifier namespace projected into fixed-width PDB fields.
 #[pyclass(name = "PdbIdentifierNamespace", frozen, eq, eq_int, from_py_object)]
@@ -162,7 +163,7 @@ pub(crate) enum PyPdbIdentifierNamespace {
     Auth,
 }
 
-impl From<PyPdbIdentifierNamespace> for pdbiox::PdbIdentifierNamespace {
+impl From<PyPdbIdentifierNamespace> for molframe::PdbIdentifierNamespace {
     fn from(value: PyPdbIdentifierNamespace) -> Self {
         match value {
             PyPdbIdentifierNamespace::Label => Self::Label,
@@ -180,7 +181,7 @@ impl PyPdbWriteOptions {
         hybrid36: bool,
         namespace: PyPdbIdentifierNamespace,
     ) -> Self {
-        let mut options = pdbiox::PdbOptions::new()
+        let mut options = molframe::PdbOptions::new()
             .hybrid36(hybrid36)
             .namespace(namespace.into());
         for (source, target) in chain_map.into_iter().flatten() {
@@ -205,26 +206,20 @@ pub(crate) fn read_with_options(
     options: &PyReadOptions,
 ) -> PyResult<PyReadReport> {
     let options = options.0.clone();
-    py.detach(move || pdbiox::read_with_options(path, &options))
+    py.detach(move || molframe::read_with_options(path, &options))
         .map(|(structure, findings)| PyReadReport {
             structure: PyStructure::new(structure),
-            findings: findings
-                .into_iter()
-                .map(|value| value.to_string())
-                .collect(),
+            findings: findings.into_iter().map(Into::into).collect(),
         })
         .map_err(|findings| read_error(py, &findings))
 }
 
 #[pyfunction]
 pub(crate) fn read_with_diagnostics(py: Python<'_>, path: PathBuf) -> PyResult<PyReadReport> {
-    py.detach(move || pdbiox::read_with_diagnostics(path))
+    py.detach(move || molframe::read_with_diagnostics(path))
         .map(|(structure, findings)| PyReadReport {
             structure: PyStructure::new(structure),
-            findings: findings
-                .into_iter()
-                .map(|value| value.to_string())
-                .collect(),
+            findings: findings.into_iter().map(Into::into).collect(),
         })
         .map_err(|findings| read_error(py, &findings))
 }
@@ -239,13 +234,10 @@ pub(crate) fn read_bytes(
 ) -> PyResult<PyReadReport> {
     let data = data.as_bytes().to_vec();
     let options = options.0.clone();
-    py.detach(move || pdbiox::read_bytes(data, name.as_deref(), &options))
+    py.detach(move || molframe::read_bytes(data, name.as_deref(), &options))
         .map(|(structure, findings)| PyReadReport {
             structure: PyStructure::new(structure),
-            findings: findings
-                .into_iter()
-                .map(|value| value.to_string())
-                .collect(),
+            findings: findings.into_iter().map(Into::into).collect(),
         })
         .map_err(|findings| read_error(py, &findings))
 }
@@ -265,7 +257,7 @@ pub(crate) fn write_mmcif(
     connection_type: Option<String>,
 ) -> PyResult<String> {
     let structure = structure.structure().clone();
-    let mut options = pdbiox::CifWriteOptions::new();
+    let mut options = molframe::CifWriteOptions::new();
     if let Some(block_id) = block_id {
         options = options.with_block_id(block_id);
     }
@@ -275,7 +267,7 @@ pub(crate) fn write_mmcif(
     if let Some(connection_type) = connection_type {
         options = options.with_connection_type_id(connection_type);
     }
-    py.detach(move || pdbiox::write_mmcif_with_options(&structure, &options))
+    py.detach(move || molframe::write_mmcif_with_options(&structure, &options))
         .map_err(|error| crate::errors::cif_write_error(&error))
 }
 
@@ -285,7 +277,7 @@ pub(crate) fn write_bcif<'py>(
     structure: &PyStructure,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::write_bcif(&structure))
+    py.detach(move || molframe::write_bcif(&structure))
         .map(|bytes| PyBytes::new(py, &bytes))
         .map_err(|findings| read_error(py, &findings))
 }
@@ -305,7 +297,7 @@ pub(crate) fn write_bcif_with_options<'py>(
     connection_type: Option<String>,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let structure = structure.structure().clone();
-    let mut options = pdbiox::CifWriteOptions::new();
+    let mut options = molframe::CifWriteOptions::new();
     if let Some(block_id) = block_id {
         options = options.with_block_id(block_id);
     }
@@ -315,7 +307,7 @@ pub(crate) fn write_bcif_with_options<'py>(
     if let Some(connection_type) = connection_type {
         options = options.with_connection_type_id(connection_type);
     }
-    py.detach(move || pdbiox::write_bcif_with_options(&structure, &options))
+    py.detach(move || molframe::write_bcif_with_options(&structure, &options))
         .map(|bytes| PyBytes::new(py, &bytes))
         .map_err(|findings| read_error(py, &findings))
 }
@@ -328,14 +320,14 @@ pub(crate) fn write_pdb(
 ) -> PyResult<String> {
     let structure = structure.structure().clone();
     let options = options.0.clone();
-    py.detach(move || pdbiox::write_pdb(&structure, &options))
+    py.detach(move || molframe::write_pdb(&structure, &options))
         .map_err(|findings| read_error(py, &findings))
 }
 
 #[pyfunction]
 pub(crate) fn write(py: Python<'_>, path: PathBuf, structure: &PyStructure) -> PyResult<()> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::write(path, &structure))
+    py.detach(move || molframe::write(path, &structure))
         .map_err(|findings| read_error(py, &findings))
 }
 
@@ -346,7 +338,7 @@ pub(crate) fn read_mmtf(
     data: &Bound<'_, PyBytes>,
     options: Option<&PyReadOptions>,
 ) -> PyResult<PyReadReport> {
-    read_variant(py, data, options, pdbiox::read_mmtf)
+    read_variant(py, data, options, molframe::pdb::read_mmtf)
 }
 
 #[pyfunction]
@@ -360,17 +352,14 @@ pub(crate) fn read_pdb(
         Ok(bytes) => bytes.as_bytes().to_vec(),
         Err(_) => data.extract::<String>()?.into_bytes(),
     };
-    let options = options.map_or_else(pdbiox::ReadOptions::new, |value| value.0.clone());
+    let options = options.map_or_else(molframe::ReadOptions::new, |value| value.0.clone());
     py.detach(move || {
-        let input = pdbiox::InputBuffer::from_bytes(data);
-        pdbiox::pdb::read(&input, &options)
+        let input = molframe::InputBuffer::from_bytes(data);
+        molframe::pdb::read(&input, &options)
     })
     .map(|(structure, findings)| PyReadReport {
         structure: PyStructure::new(structure),
-        findings: findings
-            .into_iter()
-            .map(|value| value.to_string())
-            .collect(),
+        findings: findings.into_iter().map(Into::into).collect(),
     })
     .map_err(|findings| read_error(py, &findings))
 }
@@ -382,7 +371,7 @@ pub(crate) fn read_pqr(
     data: &Bound<'_, PyBytes>,
     options: Option<&PyReadOptions>,
 ) -> PyResult<PyReadReport> {
-    read_variant(py, data, options, pdbiox::pdb::read_pqr)
+    read_variant(py, data, options, molframe::pdb::read_pqr)
 }
 
 #[pyfunction]
@@ -392,27 +381,24 @@ pub(crate) fn read_pdbqt(
     data: &Bound<'_, PyBytes>,
     options: Option<&PyReadOptions>,
 ) -> PyResult<PyReadReport> {
-    read_variant(py, data, options, pdbiox::pdb::read_pdbqt)
+    read_variant(py, data, options, molframe::pdb::read_pdbqt)
 }
 
 fn read_variant(
     py: Python<'_>,
     data: &Bound<'_, PyBytes>,
     options: Option<&PyReadOptions>,
-    reader: fn(&pdbiox::InputBuffer, &pdbiox::ReadOptions) -> pdbiox::ReadResult,
+    reader: fn(&molframe::InputBuffer, &molframe::ReadOptions) -> molframe::ReadResult,
 ) -> PyResult<PyReadReport> {
     let data = data.as_bytes().to_vec();
-    let options = options.map_or_else(pdbiox::ReadOptions::new, |value| value.0.clone());
+    let options = options.map_or_else(molframe::ReadOptions::new, |value| value.0.clone());
     py.detach(move || {
-        let input = pdbiox::InputBuffer::from_bytes(data);
+        let input = molframe::InputBuffer::from_bytes(data);
         reader(&input, &options)
     })
     .map(|(structure, findings)| PyReadReport {
         structure: PyStructure::new(structure),
-        findings: findings
-            .into_iter()
-            .map(|value| value.to_string())
-            .collect(),
+        findings: findings.into_iter().map(Into::into).collect(),
     })
     .map_err(|findings| read_error(py, &findings))
 }
@@ -423,7 +409,7 @@ pub(crate) fn write_mmtf<'py>(
     structure: &PyStructure,
 ) -> PyResult<Bound<'py, PyBytes>> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::write_mmtf(&structure))
+    py.detach(move || molframe::write_mmtf(&structure))
         .map(|bytes| PyBytes::new(py, &bytes))
         .map_err(|findings| read_error(py, &findings))
 }
@@ -436,7 +422,7 @@ pub(crate) fn write_pqr(
 ) -> PyResult<String> {
     let structure = structure.structure().clone();
     let options = options.0.clone();
-    py.detach(move || pdbiox::write_pqr(&structure, &options))
+    py.detach(move || molframe::write_pqr(&structure, &options))
         .map_err(|findings| read_error(py, &findings))
 }
 
@@ -448,11 +434,11 @@ pub(crate) fn write_pdbqt(
 ) -> PyResult<String> {
     let structure = structure.structure().clone();
     let options = options.0.clone();
-    py.detach(move || pdbiox::write_pdbqt(&structure, &options))
+    py.detach(move || molframe::write_pdbqt(&structure, &options))
         .map_err(|findings| read_error(py, &findings))
 }
 
-impl From<PyFormat> for pdbiox::Format {
+impl From<PyFormat> for molframe::Format {
     fn from(value: PyFormat) -> Self {
         match value {
             PyFormat::Auto => Self::Auto,
@@ -467,7 +453,7 @@ impl From<PyFormat> for pdbiox::Format {
     }
 }
 
-impl From<PyParseMode> for pdbiox::ParseMode {
+impl From<PyParseMode> for molframe::ParseMode {
     fn from(value: PyParseMode) -> Self {
         match value {
             PyParseMode::Strict => Self::Strict,
@@ -477,7 +463,7 @@ impl From<PyParseMode> for pdbiox::ParseMode {
     }
 }
 
-impl From<PyMissingElementPolicy> for pdbiox::MissingElementPolicy {
+impl From<PyMissingElementPolicy> for molframe::MissingElementPolicy {
     fn from(value: PyMissingElementPolicy) -> Self {
         match value {
             PyMissingElementPolicy::PreserveUnknown => Self::PreserveUnknown,
@@ -486,7 +472,7 @@ impl From<PyMissingElementPolicy> for pdbiox::MissingElementPolicy {
     }
 }
 
-impl From<PyAmbiguousResidueBoundaryPolicy> for pdbiox::AmbiguousResidueBoundaryPolicy {
+impl From<PyAmbiguousResidueBoundaryPolicy> for molframe::AmbiguousResidueBoundaryPolicy {
     fn from(value: PyAmbiguousResidueBoundaryPolicy) -> Self {
         match value {
             PyAmbiguousResidueBoundaryPolicy::Reject => Self::Reject,

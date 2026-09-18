@@ -13,7 +13,7 @@ create_exception!(_native, PdbmlReadError, PyValueError);
 #[pyfunction]
 pub(crate) fn parse_pdbml_document(py: Python<'_>, bytes: Vec<u8>) -> PyResult<PyCifDocument> {
     py.detach(move || -> PyResult<PyCifDocument> {
-        pdbiox::cif::parse_pdbml_document(&bytes)
+        molframe::cif::parse_pdbml_document(&bytes)
             .map(Into::into)
             .map_err(|error| PdbmlError::new_err(error.to_string()))
     })
@@ -26,23 +26,22 @@ pub(crate) fn read_pdbml(
     bytes: Vec<u8>,
     options: Option<&PyReadOptions>,
 ) -> PyResult<(PyCifDocument, PyReadReport)> {
-    let options = options.map_or_else(pdbiox::ReadOptions::new, |value| value.0.clone());
-    py.detach(move || pdbiox::cif::read_pdbml(&bytes, &options))
+    let options = options.map_or_else(molframe::ReadOptions::new, |value| value.0.clone());
+    py.detach(move || molframe::cif::read_pdbml(&bytes, &options))
         .map(|(document, structure, findings)| {
             (
                 PyCifDocument::from(document),
                 PyReadReport {
                     structure: crate::structure::PyStructure::new(structure),
-                    findings: findings
-                        .into_iter()
-                        .map(|finding| finding.to_string())
-                        .collect(),
+                    findings: findings.into_iter().map(Into::into).collect(),
                 },
             )
         })
         .map_err(|error| match error {
-            pdbiox::cif::PdbmlReadError::Findings(findings) => read_error(py, &findings),
-            pdbiox::cif::PdbmlReadError::Pdbml(error) => PdbmlReadError::new_err(error.to_string()),
+            molframe::cif::PdbmlReadError::Findings(findings) => read_error(py, &findings),
+            molframe::cif::PdbmlReadError::Pdbml(error) => {
+                PdbmlReadError::new_err(error.to_string())
+            }
             _ => PdbmlReadError::new_err("unknown PDBML read failure"),
         })
 }
@@ -50,7 +49,7 @@ pub(crate) fn read_pdbml(
 #[pyfunction]
 pub(crate) fn write_pdbml(py: Python<'_>, document: &PyCifDocument) -> PyResult<String> {
     py.detach(move || -> PyResult<String> {
-        pdbiox::cif::write_pdbml(&document.inner)
+        molframe::cif::write_pdbml(&document.inner)
             .map_err(|error| PdbmlError::new_err(error.to_string()))
     })
 }

@@ -1,6 +1,7 @@
 //! Lossless projections for validation reports that are not structure methods.
 
 use super::{PyBondDeviation, PyNucleicTorsions, PyPucker};
+use crate::contract::PyDiagnostic;
 use crate::geometry::PyEigenOptions;
 use pyo3::prelude::*;
 
@@ -30,13 +31,15 @@ pub(crate) struct PyRealSpaceCorrelation {
 
 #[pyclass(name = "ReferenceGeometryOptions", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyReferenceGeometryOptions(pub(crate) pdbiox::validate::ReferenceGeometryOptions);
+pub(crate) struct PyReferenceGeometryOptions(
+    pub(crate) molframe::validate::ReferenceGeometryOptions,
+);
 
 #[pymethods]
 impl PyReferenceGeometryOptions {
     #[new]
     fn new(maximum_bond_deviation: f64, maximum_angle_deviation_degrees: f64) -> Self {
-        Self(pdbiox::validate::ReferenceGeometryOptions {
+        Self(molframe::validate::ReferenceGeometryOptions {
             maximum_bond_deviation,
             maximum_angle_deviation_degrees,
         })
@@ -97,7 +100,7 @@ pub(crate) struct PyReferenceGeometryReport {
     #[pyo3(get)]
     pub(crate) angles: Vec<PyReferenceAngleFlag>,
     #[pyo3(get)]
-    pub(crate) findings: Vec<String>,
+    pub(crate) findings: Vec<PyDiagnostic>,
     #[pyo3(get)]
     pub(crate) intended: usize,
     #[pyo3(get)]
@@ -108,7 +111,7 @@ pub(crate) struct PyReferenceGeometryReport {
 
 #[pyclass(name = "NucleicGeometryPolicy", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyNucleicGeometryPolicy(pub(crate) pdbiox::validate::NucleicGeometryPolicy);
+pub(crate) struct PyNucleicGeometryPolicy(pub(crate) molframe::validate::NucleicGeometryPolicy);
 
 #[pymethods]
 impl PyNucleicGeometryPolicy {
@@ -119,7 +122,7 @@ impl PyNucleicGeometryPolicy {
         phosphodiester_bond_range: [f64; 2],
         plane_fit: &PyEigenOptions,
     ) -> Self {
-        Self(pdbiox::validate::NucleicGeometryPolicy {
+        Self(molframe::validate::NucleicGeometryPolicy {
             maximum_base_plane_deviation,
             glycosidic_bond_range,
             phosphodiester_bond_range,
@@ -184,8 +187,8 @@ pub(crate) struct PyNucleicGeometryRecord {
     pub(crate) issues: Vec<PyNucleicGeometryIssue>,
 }
 
-impl From<pdbiox::validate::LigandGeometryReport> for PyLigandGeometryReport {
-    fn from(value: pdbiox::validate::LigandGeometryReport) -> Self {
+impl From<molframe::validate::LigandGeometryReport> for PyLigandGeometryReport {
+    fn from(value: molframe::validate::LigandGeometryReport) -> Self {
         Self {
             outliers: value.outliers.into_iter().map(Into::into).collect(),
             intended: value.intended,
@@ -194,8 +197,8 @@ impl From<pdbiox::validate::LigandGeometryReport> for PyLigandGeometryReport {
     }
 }
 
-impl From<pdbiox::validate::RealSpaceCorrelation> for PyRealSpaceCorrelation {
-    fn from(value: pdbiox::validate::RealSpaceCorrelation) -> Self {
+impl From<molframe::validate::RealSpaceCorrelation> for PyRealSpaceCorrelation {
+    fn from(value: molframe::validate::RealSpaceCorrelation) -> Self {
         Self {
             coefficient: value.coefficient,
             sample_count: value.sample_count,
@@ -205,8 +208,8 @@ impl From<pdbiox::validate::RealSpaceCorrelation> for PyRealSpaceCorrelation {
     }
 }
 
-impl From<pdbiox::validate::ReferenceBondFlag> for PyReferenceBondFlag {
-    fn from(value: pdbiox::validate::ReferenceBondFlag) -> Self {
+impl From<molframe::validate::ReferenceBondFlag> for PyReferenceBondFlag {
+    fn from(value: molframe::validate::ReferenceBondFlag) -> Self {
         Self {
             residue: value.residue.get(),
             first: value.first.get(),
@@ -218,8 +221,8 @@ impl From<pdbiox::validate::ReferenceBondFlag> for PyReferenceBondFlag {
     }
 }
 
-impl From<pdbiox::validate::ReferenceAngleFlag> for PyReferenceAngleFlag {
-    fn from(value: pdbiox::validate::ReferenceAngleFlag) -> Self {
+impl From<molframe::validate::ReferenceAngleFlag> for PyReferenceAngleFlag {
+    fn from(value: molframe::validate::ReferenceAngleFlag) -> Self {
         Self {
             residue: value.residue.get(),
             first: value.first.get(),
@@ -232,16 +235,12 @@ impl From<pdbiox::validate::ReferenceAngleFlag> for PyReferenceAngleFlag {
     }
 }
 
-impl From<pdbiox::validate::ReferenceGeometryReport> for PyReferenceGeometryReport {
-    fn from(value: pdbiox::validate::ReferenceGeometryReport) -> Self {
+impl From<molframe::validate::ReferenceGeometryReport> for PyReferenceGeometryReport {
+    fn from(value: molframe::validate::ReferenceGeometryReport) -> Self {
         Self {
             bonds: value.bonds.into_iter().map(Into::into).collect(),
             angles: value.angles.into_iter().map(Into::into).collect(),
-            findings: value
-                .findings
-                .into_iter()
-                .map(|item| item.to_string())
-                .collect(),
+            findings: value.findings.into_iter().map(Into::into).collect(),
             intended: value.intended,
             assessed: value.assessed,
             options: PyReferenceGeometryOptions(value.options),
@@ -249,10 +248,10 @@ impl From<pdbiox::validate::ReferenceGeometryReport> for PyReferenceGeometryRepo
     }
 }
 
-impl From<pdbiox::validate::NucleicGeometryIssue> for PyNucleicGeometryIssue {
-    fn from(value: pdbiox::validate::NucleicGeometryIssue) -> Self {
+impl From<molframe::validate::NucleicGeometryIssue> for PyNucleicGeometryIssue {
+    fn from(value: molframe::validate::NucleicGeometryIssue) -> Self {
         match value {
-            pdbiox::validate::NucleicGeometryIssue::MissingBaseAtoms {
+            molframe::validate::NucleicGeometryIssue::MissingBaseAtoms {
                 available,
                 expected,
             } => Self {
@@ -262,40 +261,42 @@ impl From<pdbiox::validate::NucleicGeometryIssue> for PyNucleicGeometryIssue {
                 deviation: None,
                 distance: None,
             },
-            pdbiox::validate::NucleicGeometryIssue::MissingSugarAtoms { available } => Self {
+            molframe::validate::NucleicGeometryIssue::MissingSugarAtoms { available } => Self {
                 kind: "missing_sugar_atoms".to_owned(),
                 available: Some(available),
                 expected: None,
                 deviation: None,
                 distance: None,
             },
-            pdbiox::validate::NucleicGeometryIssue::NonPlanarBase { deviation } => Self {
+            molframe::validate::NucleicGeometryIssue::NonPlanarBase { deviation } => Self {
                 kind: "non_planar_base".to_owned(),
                 available: None,
                 expected: None,
                 deviation: Some(deviation),
                 distance: None,
             },
-            pdbiox::validate::NucleicGeometryIssue::GlycosidicBondLength { distance } => Self {
+            molframe::validate::NucleicGeometryIssue::GlycosidicBondLength { distance } => Self {
                 kind: "glycosidic_bond_length".to_owned(),
                 available: None,
                 expected: None,
                 deviation: None,
                 distance: Some(distance),
             },
-            pdbiox::validate::NucleicGeometryIssue::PhosphodiesterBondLength { distance } => Self {
-                kind: "phosphodiester_bond_length".to_owned(),
-                available: None,
-                expected: None,
-                deviation: None,
-                distance: Some(distance),
-            },
+            molframe::validate::NucleicGeometryIssue::PhosphodiesterBondLength { distance } => {
+                Self {
+                    kind: "phosphodiester_bond_length".to_owned(),
+                    available: None,
+                    expected: None,
+                    deviation: None,
+                    distance: Some(distance),
+                }
+            }
         }
     }
 }
 
-impl From<pdbiox::validate::NucleicGeometryRecord> for PyNucleicGeometryRecord {
-    fn from(value: pdbiox::validate::NucleicGeometryRecord) -> Self {
+impl From<molframe::validate::NucleicGeometryRecord> for PyNucleicGeometryRecord {
+    fn from(value: molframe::validate::NucleicGeometryRecord) -> Self {
         Self {
             residue: value.residue.get(),
             torsions: value.torsions.into(),

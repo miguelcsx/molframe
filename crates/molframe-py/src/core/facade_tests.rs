@@ -3,7 +3,7 @@ use super::{PyBondInference, PyProteinAlphaTrace, PySideChainTorsionReport};
 #[test]
 fn facade_defaults_are_exposed_without_reinterpreting_native_values() {
     let options = PyBondInference::standard();
-    let native = pdbiox::BondInference::default();
+    let native = molframe::BondInference::default();
     assert!((options.scale() - native.scale).abs() < f32::EPSILON);
     assert!((options.lower_bound() - native.lower_bound).abs() < f32::EPSILON);
     assert_eq!(
@@ -24,9 +24,14 @@ fn projection_types_keep_their_python_owned_shapes() {
 
     let report = PySideChainTorsionReport {
         records: Vec::new(),
-        findings: vec!["finding".to_owned()],
+        findings: vec![
+            molframe::Diagnostic::new(molframe::Code::W2001)
+                .at_row(7)
+                .into(),
+        ],
         dictionary_version: "ccd".to_owned(),
     };
-    assert_eq!(report.findings, ["finding"]);
+    // The row is a structured detail the text form used to flatten away.
+    assert_eq!(report.findings[0].inner.row(), Some(7));
     assert_eq!(report.dictionary_version, "ccd");
 }
