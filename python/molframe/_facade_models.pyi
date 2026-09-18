@@ -78,7 +78,7 @@ from .analysis import analyse_chain_interface, analyse_contacts, analyse_half_sp
 from .surface import SurfaceWorkflowOptions, SurfaceWorkflowResult, analyse_surface_geometry
 from .traj import CartesianFit, analyse_diffusion, analyse_pca, analyse_torsion_pca
 from .validate import validate_bond_lengths, validate_cis_peptides, validate_clashes, validate_completeness, validate_planarity, validate_quality, validate_valence
-from ._trajectory import DiffusionMap, DmsBond, DmsCell, DmsFrame, DmsParticle, DmsSystem, DmsTopology, DmsVersion, PcaResult, PeriodicAngle, Rotation3, SurfaceMesh, Trajectory, TrajectoryFormat, TrajectoryUnits, TrajectoryWriteOptions, read_dms, write_dms
+from ._trajectory import DiffusionMap, DmsBond, DmsCell, DmsFrame, DmsParticle, DmsSystem, DmsTopology, DmsVersion, PcaResult, PeriodicAngle, Rotation3, SurfaceMesh, Trajectory, TrajectoryFormat, TrajectoryUnits, TrajectoryWriteOptions, write_dms
 from .modelcif import GlobalMetric, LocalMetric, MetricDefinition, ModelCategory, ModelCif, ModelDescription, ModelRow, PairwiseMetric, ProtocolStep, QualityMetrics, SoftwareGroup, Target, Template, lower_model_cif
 from .pdb import MMTF_METADATA_EXTENSION, MmtfEntityMetadata, MmtfGroupMetadata, MmtfMetadata, MmtfOptionalField, PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbIdentifierNamespace, PdbOptions, PdbWriteOptions, mmtf_metadata, with_mmtf_metadata, write_mmtf_with_metadata
 
