@@ -182,10 +182,79 @@ fn sparse_paired_positions(pair_count: u16) -> (Vec<[f32; 3]>, AtomSelection, At
     )
 }
 
+/// Uniform points filling `lengths`, drawn from the shared `Seed` sequence so
+/// every run sees the same fixture.
+fn periodic_positions(lengths: [f64; 3], atom_count: u32) -> Vec<[f32; 3]> {
+    use num_traits::ToPrimitive;
+
+    fn f32_lossless(value: f64) -> f32 {
+        match value.to_f32() {
+            Some(converted) => converted,
+            None => f32::INFINITY,
+        }
+    }
+
+    let mut seed = molframe_bench::Seed::new(0x5EED);
+    (0..atom_count)
+        .map(|_| {
+            [
+                f32_lossless(seed.next_unit() * lengths[0]),
+                f32_lossless(seed.next_unit() * lengths[1]),
+                f32_lossless(seed.next_unit() * lengths[2]),
+            ]
+        })
+        .collect()
+}
+
+fn periodic_box(angles: [f64; 3], lengths: [f64; 3]) -> PeriodicBox {
+    match PeriodicBox::from_cell(UnitCell { lengths, angles }) {
+        Ok(box_) => box_,
+        Err(error) => panic!("periodic benchmark cell failed: {error}"),
+    }
+}
+
+/// Periodic `pairs_within` at the 19-performance budget scale (100k atoms,
+/// 5 Å): today the planner pins this to scalar brute force, so the per-backend
+/// rows are the before/after evidence for the cost-model fix.
+fn bench_periodic_search(c: &mut Criterion) {
+    let context = ExecutionContext::default();
+    let orthorhombic = periodic_box([90.0; 3], [120.0; 3]);
+    let triclinic = periodic_box([72.0, 81.0, 76.0], [120.0; 3]);
+    let mut group = c.benchmark_group("spatial_pairs_within_periodic");
+    for (atom_count, label) in [(10_000_u32, "10k"), (100_000, "100k")] {
+        let positions = periodic_positions([120.0; 3], atom_count);
+        let selection = AtomSelection::All(atom_count);
+        group.throughput(Throughput::Elements(u64::from(atom_count)));
+        for (cell_name, cell) in [("orthorhombic", &orthorhombic), ("triclinic", &triclinic)] {
+            for backend in [
+                SpatialBackend::BruteForce,
+                SpatialBackend::CellList,
+                SpatialBackend::KdTree,
+            ] {
+                group.bench_function(format!("{label}/{cell_name}/{backend:?}"), |b| {
+                    b.iter(|| {
+                        black_box(pairs_within(
+                            &positions,
+                            &selection,
+                            &selection,
+                            5.0,
+                            backend,
+                            Some(cell),
+                            &context,
+                        ))
+                    });
+                });
+            }
+        }
+    }
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_backends(&mut criterion);
     bench_periodic_geometry(&mut criterion);
+    bench_periodic_search(&mut criterion);
     bench_large_scaling(&mut criterion);
     bench_streaming_reduction(&mut criterion);
     criterion.final_summary();
