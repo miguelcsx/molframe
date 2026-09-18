@@ -1,0 +1,28 @@
+[package]
+name = "molframe-spatial"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deterministic spatial indices and neighbour search for molframe"
+
+[dependencies]
+molframe-core.workspace = true
+molframe-query.workspace = true
+num-traits.workspace = true
+thiserror.workspace = true
+wide.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+molframe-bench.workspace = true
+proptest.workspace = true
+molframe-cif.workspace = true
+
+[[bench]]
+name = "spatial"
+harness = false
+
+[lints]
+workspace = true
