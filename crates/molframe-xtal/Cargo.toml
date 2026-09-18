@@ -1,0 +1,27 @@
+[package]
+name = "molframe-xtal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Assemblies, symmetry and crystallographic transforms for molframe"
+
+[dependencies]
+num-traits.workspace = true
+molframe-core.workspace = true
+molframe-cif.workspace = true
+molframe-geom.workspace = true
+molframe-spatial.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+molframe-bench.workspace = true
+
+[[bench]]
+name = "xtal"
+harness = false
+
+[lints]
+workspace = true
