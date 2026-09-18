@@ -81,9 +81,19 @@ pub fn lee_richards(
     };
 
     let mut areas = Vec::with_capacity(positions.len());
+    // One pair of scratch buffers circulates across every atom; per-atom
+    // allocation would otherwise dominate the surface kernel at scale.
+    let mut neighbours: Vec<SliceNeighbour> = Vec::new();
+    let mut segments: Vec<(f64, f64)> = Vec::new();
 
     for atom in 0..positions.len() {
-        areas.push(atom_area(atom, &hood, slices));
+        areas.push(atom_area(
+            atom,
+            &hood,
+            slices,
+            &mut neighbours,
+            &mut segments,
+        ));
     }
 
     Ok(areas)
@@ -91,9 +101,15 @@ pub fn lee_richards(
 
 /// The accessible area of one atom, integrated over its slices.
 ///
-/// One angular-segment buffer is reused for every slice, avoiding a second
-/// temporary vector in coverage merging.
-fn atom_area(atom: usize, hood: &Neighbourhood, slices: u16) -> f64 {
+/// The neighbour list and angular-segment buffer arrive reused from the caller
+/// and are cleared here, so repeated calls retain one allocation each.
+fn atom_area(
+    atom: usize,
+    hood: &Neighbourhood,
+    slices: u16,
+    neighbours: &mut Vec<SliceNeighbour>,
+    segments: &mut Vec<(f64, f64)>,
+) -> f64 {
     let radius = hood.expanded[atom];
 
     if radius <= 0.0 {
@@ -110,15 +126,16 @@ fn atom_area(atom: usize, hood: &Neighbourhood, slices: u16) -> f64 {
     // Archimedes: the sphere's lateral area over a slice of this thickness is the
     // same at every height, so the exposed fraction is all that varies.
     let ring_area = TWO_PI * radius * thickness;
-    let neighbours: Vec<SliceNeighbour> = hood
-        .adjacency
-        .row(atom)
-        .iter()
-        .map(|&neighbour| slice_neighbour(hood, neighbour as usize, centre))
-        .collect();
+    neighbours.clear();
+    neighbours.extend(
+        hood.adjacency
+            .row(atom)
+            .iter()
+            .map(|&neighbour| slice_neighbour(hood, neighbour as usize, centre)),
+    );
 
     let mut area = 0.0;
-    let mut segments = Vec::with_capacity(neighbours.len() * 2);
+    segments.clear();
 
     for slice in 0..slices {
         let Some(circle) = slice_circle(centre[2], radius, thickness, slice) else {
@@ -127,11 +144,11 @@ fn atom_area(atom: usize, hood: &Neighbourhood, slices: u16) -> f64 {
 
         segments.clear();
 
-        if slice_fully_covered(&neighbours, circle, &mut segments) {
+        if slice_fully_covered(neighbours, circle, segments) {
             continue;
         }
 
-        let exposed = (1.0 - covered_fraction(&mut segments)).max(0.0);
+        let exposed = (1.0 - covered_fraction(segments)).max(0.0);
 
         area += exposed * ring_area;
     }
