@@ -22,7 +22,7 @@ mod namespace_sequence;
 #[path = "trajectory_exports.rs"]
 mod trajectory_exports;
 
-use namespace_catalog::NAMESPACES;
+pub(crate) use namespace_catalog::NAMESPACES;
 use namespace_compare::WORKFLOW as COMPARE_WORKFLOW;
 use namespace_compare::{REGION as COMPARE_REGION, SUPERPOSED as COMPARE_SUPERPOSED};
 use namespace_platform::ML_ALIASES;
@@ -154,3 +154,11 @@ fn set_public_exports(
     let names = PyTuple::new(namespace.py(), names)?;
     namespace.setattr("__all__", names)
 }
+
+#[cfg(test)]
+#[path = "namespaces_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "native_import_tests.rs"]
+mod native_imports;

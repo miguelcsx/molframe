@@ -83,7 +83,7 @@ pub(super) const VALIDATE: &[&str] = &[
     "validate_bond_lengths",
 ];
 
-pub(super) const NAMESPACES: &[(&str, &[&str])] = &[
+pub(crate) const NAMESPACES: &[(&str, &[&str])] = &[
     ("core", CORE),
     ("geom", GEOM),
     ("analysis", ANALYSIS),
