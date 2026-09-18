@@ -1,5 +1,5 @@
 [package]
-name = "pdbiox-adapters"
+name = "molframe-adapters"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,16 +8,16 @@ repository.workspace = true
 description = "Neutral topology transfer and verified byte acquisition"
 
 [dependencies]
-pdbiox-chem.workspace = true
-pdbiox-core.workspace = true
+molframe-chem.workspace = true
+molframe-core.workspace = true
 reqwest.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
-pdbiox-pdb.workspace = true
+molframe-bench.workspace = true
+molframe-pdb.workspace = true
 
 [[bench]]
 name = "adapters"

@@ -1,11 +1,11 @@
 //! Validated native construction from a columnar topology batch.
 
 use crate::{MISSING_STRING, TopologyBatch};
-use pdbiox_core::chunk::{AtomRecord, ChunkBuilder};
-use pdbiox_core::column::Presence;
-use pdbiox_core::structure::{CoordinateStore, Structure, StructureData};
-use pdbiox_core::topology::{ChainRecord, EntityKind, PolymerKind, ResidueRecord};
-use pdbiox_core::{
+use molframe_core::chunk::{AtomRecord, ChunkBuilder};
+use molframe_core::column::Presence;
+use molframe_core::structure::{CoordinateStore, Structure, StructureData};
+use molframe_core::topology::{ChainRecord, EntityKind, PolymerKind, ResidueRecord};
+use molframe_core::{
     AltId, AtomIndex, BondProvenance, BondRecord, BondTableBuilder, CapacityError, DictionaryFull,
     Element, OptionalI32, OptionalSymbol, ResidueIndex, TableError,
 };
@@ -427,7 +427,7 @@ fn optional_string(batch: &TopologyBatch, id: u32) -> Result<Option<&str>, Topol
 }
 
 fn optional_symbol(
-    dictionary: &mut pdbiox_core::Interner,
+    dictionary: &mut molframe_core::Interner,
     value: Option<&str>,
 ) -> Result<OptionalSymbol, DictionaryFull> {
     match value {
@@ -438,7 +438,7 @@ fn optional_symbol(
 
 fn valid_value<T: Copy>(
     values: &[T],
-    validity: &pdbiox_core::column::ValidityMask,
+    validity: &molframe_core::column::ValidityMask,
     position: u32,
 ) -> Option<T> {
     if validity.get(position).is_present() {
@@ -450,7 +450,7 @@ fn valid_value<T: Copy>(
 
 fn present_value<T: Copy + Default>(
     values: &[T],
-    validity: &pdbiox_core::column::ValidityMask,
+    validity: &molframe_core::column::ValidityMask,
     position: u32,
 ) -> (T, Presence) {
     let value = match values.get(position as usize).copied() {

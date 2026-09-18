@@ -1,10 +1,10 @@
 //! Compact columnar topology projection for neutral interoperability.
 
-use pdbiox_chem::element_properties;
-use pdbiox_core::column::{BitVec, Presence, ValidityMask};
-use pdbiox_core::contract::Namespace;
-use pdbiox_core::structure::{AtomRef, ChainRef, ResidueRef};
-use pdbiox_core::{BondOrder, ModelIndex, Structure};
+use molframe_chem::element_properties;
+use molframe_core::column::{BitVec, Presence, ValidityMask};
+use molframe_core::contract::Namespace;
+use molframe_core::structure::{AtomRef, ChainRef, ResidueRef};
+use molframe_core::{BondOrder, ModelIndex, Structure};
 use std::collections::HashMap;
 use thiserror::Error;
 

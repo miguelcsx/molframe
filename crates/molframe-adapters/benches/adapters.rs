@@ -1,10 +1,10 @@
 //! Criterion coverage for deterministic adapter projections.
 
 use criterion::{Criterion, black_box};
-use pdbiox_adapters::TopologyBatch;
-use pdbiox_bench::{Sample, structure};
-use pdbiox_core::contract::Namespace;
-use pdbiox_core::index::ModelIndex;
+use molframe_adapters::TopologyBatch;
+use molframe_bench::{Sample, structure};
+use molframe_core::contract::Namespace;
+use molframe_core::index::ModelIndex;
 
 fn bench_topology_projection(c: &mut Criterion) {
     let structure = structure(Sample::Medium);

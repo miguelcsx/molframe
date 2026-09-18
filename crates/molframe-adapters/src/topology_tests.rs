@@ -1,5 +1,5 @@
 use super::*;
-use pdbiox_core::{BondOrder, InputBuffer, ReadOptions};
+use molframe_core::{BondOrder, InputBuffer, ReadOptions};
 
 const TWO_RESIDUES: &str = concat!(
     "ATOM      1  N   GLY A   1      11.000  12.000  13.000  1.00 20.00           N  \n",
@@ -16,7 +16,7 @@ fn projection_is_columnar_and_preserves_hierarchy() {
     let batch = TopologyBatch::from_model(
         &structure,
         ModelIndex::new(0),
-        pdbiox_core::contract::Namespace::Label,
+        molframe_core::contract::Namespace::Label,
     );
     let batch = match batch {
         Ok(batch) => batch,
@@ -40,7 +40,7 @@ fn unavailable_model_is_explicit() {
         TopologyBatch::from_model(
             &structure(),
             ModelIndex::new(1),
-            pdbiox_core::contract::Namespace::Label,
+            molframe_core::contract::Namespace::Label,
         ),
         Err(TopologyBatchError::ModelUnavailable { model: 1 })
     );
@@ -52,7 +52,7 @@ fn columnar_projection_round_trips() {
     let batch = match TopologyBatch::from_model(
         &source,
         ModelIndex::new(0),
-        pdbiox_core::contract::Namespace::Auth,
+        molframe_core::contract::Namespace::Auth,
     ) {
         Ok(batch) => batch,
         Err(error) => panic!("projection failed: {error}"),
@@ -75,7 +75,7 @@ fn import_rejects_a_misaligned_column() {
     let mut batch = match TopologyBatch::from_model(
         &structure(),
         ModelIndex::new(0),
-        pdbiox_core::contract::Namespace::Label,
+        molframe_core::contract::Namespace::Label,
     ) {
         Ok(batch) => batch,
         Err(error) => panic!("projection failed: {error}"),
@@ -92,7 +92,7 @@ fn import_rejects_a_misaligned_column() {
 
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(TWO_RESIDUES.as_bytes().to_vec());
-    match pdbiox_pdb::read(&input, &ReadOptions::default()) {
+    match molframe_pdb::read(&input, &ReadOptions::default()) {
         Ok((structure, _diagnostics)) => structure,
         Err(diagnostics) => panic!("reader failed: {diagnostics:?}"),
     }
