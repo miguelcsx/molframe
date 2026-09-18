@@ -273,18 +273,24 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
                 let (ox, oy, oz) = (f32::from(x) * 2.8, f32::from(y) * 2.8, f32::from(z) * 2.8);
                 let residue = serial / 2 + 1;
                 serial += 1;
-                writeln!(
+                if writeln!(
                     source,
                     "ATOM {serial} O O HOH A {residue} {ox:.3} {oy:.3} {oz:.3}"
                 )
-                .expect("fixture row");
+                .is_err()
+                {
+                    panic!("hbond fixture row failed");
+                }
                 serial += 1;
-                writeln!(
+                if writeln!(
                     source,
                     "ATOM {serial} H H1 HOH A {residue} {:.3} {oy:.3} {oz:.3}",
                     ox + 0.96
                 )
-                .expect("fixture row");
+                .is_err()
+                {
+                    panic!("hbond fixture row failed");
+                }
             }
         }
     }
