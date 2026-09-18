@@ -1,20 +1,20 @@
 //! Criterion coverage for trajectory parsing and ensemble operations.
 
-use criterion::{BatchSize, Criterion, black_box};
+use criterion::{BatchSize, Criterion, Throughput, black_box};
 use molframe_bench::{Sample, coordinates, perturbed, structure};
 use molframe_traj::{
     CartesianFit, DcdReader, DcdWriteOptions, DielectricOptions, EnsembleDistanceMatrix,
     FrameAlignment, H5mdOptions, HarmonicSimilarityOptions, KMeansOptions, Linkage, NamdEndian,
-    PathFrameMetric, RemainderPolicy, SurvivalMode, Timestep, TrrWriteOptions, XtcWriteOptions,
-    agglomerative_clustering, block_convergence, cartesian_pca, cluster_population_similarity,
-    dbscan_clustering, dielectric_from_dipoles, diffusion_map, generalized_procrustes_mean,
-    group_coordinate_variance, harmonic_ensemble_similarity, kmeans, mean_squared_displacement,
-    medoid, pairwise_fitted_rmsd, parse_aims_geometry, parse_charmm_record, parse_dcd,
-    parse_gro_records, parse_gromacs_itp, parse_h5md, parse_hoomd_xml, parse_lammps_data,
-    parse_lammps_dump, parse_namd_binary, parse_psf, parse_trr, parse_txyz_records, parse_xtc,
-    parse_xyz, path_similarity, rmsd_to_reference, water_dynamics, write_aims_geometry,
-    write_charmm_card, write_dcd, write_gro, write_h5md, write_namd_binary, write_psf, write_trr,
-    write_txyz, write_xtc, write_xyz,
+    PathFrameMetric, RemainderPolicy, SurvivalMode, Timestep, TngWriteOptions, TrrWriteOptions,
+    XtcWriteOptions, agglomerative_clustering, block_convergence, cartesian_pca,
+    cluster_population_similarity, dbscan_clustering, dielectric_from_dipoles, diffusion_map,
+    generalized_procrustes_mean, group_coordinate_variance, harmonic_ensemble_similarity, kmeans,
+    mean_squared_displacement, medoid, pairwise_fitted_rmsd, parse_aims_geometry,
+    parse_charmm_record, parse_dcd, parse_gro_records, parse_gromacs_itp, parse_h5md,
+    parse_hoomd_xml, parse_lammps_data, parse_lammps_dump, parse_namd_binary, parse_psf, parse_tng,
+    parse_trr, parse_txyz_records, parse_xtc, parse_xyz, path_similarity, rmsd_to_reference,
+    water_dynamics, write_aims_geometry, write_charmm_card, write_dcd, write_gro, write_h5md,
+    write_namd_binary, write_psf, write_tng, write_trr, write_txyz, write_xtc, write_xyz,
 };
 
 use std::{fmt::Debug, mem::size_of};
@@ -463,5 +463,65 @@ fn main() {
     bench_extended_ensemble(&mut criterion);
     bench_extended_formats(&mut criterion);
     bench_dcd_streaming(&mut criterion);
+    bench_decode_throughput(&mut criterion);
     criterion.final_summary();
+}
+
+/// Decode throughput at a scale the 4x4 rows cannot show: 128 frames of the
+/// Small fixture. The `Throughput::Bytes` rows report megabytes per second,
+/// and the XTC and TNG rows are the evidence base for the buffer-reuse fixes
+/// in those readers.
+fn bench_decode_throughput(c: &mut Criterion) {
+    let sample = structure(Sample::Small);
+    let frames: Vec<_> = synthetic_frames(&coordinates(&sample), 128)
+        .into_iter()
+        .enumerate()
+        .map(|(frame, positions)| Timestep {
+            frame,
+            time: Some(f64::from(usize_to_u32(frame))),
+            positions,
+            ..Timestep::default()
+        })
+        .collect();
+
+    let xtc = write_xtc(&frames, XtcWriteOptions::default()).required("XTC fixture failed");
+    let trr = write_trr(&frames, TrrWriteOptions::default()).required("TRR fixture failed");
+    let dcd = write_dcd(&frames, &DcdWriteOptions::default()).required("DCD fixture failed");
+    let tng_file = tempfile::NamedTempFile::new().required("TNG temporary file failed");
+    write_tng(tng_file.path(), &frames, TngWriteOptions::default()).required("TNG fixture failed");
+    let tng_path = tng_file.path().to_path_buf();
+
+    let mut group = c.benchmark_group("traj_decode");
+    for (label, bytes) in [("xtc", &xtc), ("trr", &trr), ("dcd", &dcd)] {
+        group.throughput(Throughput::Bytes(bytes.len() as u64));
+        group.bench_function(format!("parse/{label}/128x{}", sample.atom_count()), |b| {
+            b.iter(|| {
+                let frame_count = match label {
+                    "xtc" => parse_xtc(&xtc)
+                        .map(|value| value.frames.len())
+                        .map_err(|error| error.to_string()),
+                    "trr" => parse_trr(&trr)
+                        .map(|value| value.frames.len())
+                        .map_err(|error| error.to_string()),
+                    _ => parse_dcd(&dcd)
+                        .map(|value| value.frames.len())
+                        .map_err(|error| error.to_string()),
+                };
+                let count = match frame_count {
+                    Ok(count) => count,
+                    Err(error) => panic!("decode benchmark failed: {error}"),
+                };
+                black_box(count);
+            });
+        });
+    }
+    let tng_bytes = std::fs::read(&tng_path).required("TNG benchmark read failed");
+    group.throughput(Throughput::Bytes(tng_bytes.len() as u64));
+    group.bench_function(format!("parse/tng/128x{}", sample.atom_count()), |b| {
+        b.iter(|| {
+            let parsed = parse_tng(&tng_path).required("TNG decode benchmark failed");
+            black_box(parsed.frames.len());
+        });
+    });
+    group.finish();
 }
