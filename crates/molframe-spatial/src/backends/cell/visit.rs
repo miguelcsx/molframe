@@ -2,7 +2,7 @@
 
 use super::{Grid, NEIGHBOUR_OFFSETS, cell_of, members_of_cell, neighbour_cell};
 use crate::SpatialError;
-use crate::brute::{distance_squared, finite};
+use crate::brute::finite;
 
 /// Evaluates a cell-grid query and emits matches as they are found.
 ///
@@ -49,40 +49,14 @@ fn append_grid_pairs<const UPPER: bool>(
         };
 
         let members = members_of_cell(grid, cell).ok_or(SpatialError::NumericRangeExceeded)?;
-        append_cell_pairs::<UPPER>(positions, atom, position, members, cutoff_squared, emit)?;
-    }
-    Ok(())
-}
-
-/// Compares one query atom against all members of one cell.
-///
-/// Grid members are finite by construction, so only defensive bounds checks
-/// remain in the hot loop.
-fn append_cell_pairs<const UPPER: bool>(
-    positions: &[[f32; 3]],
-    atom: u32,
-    position: [f32; 3],
-    targets: &[u32],
-    cutoff_squared: f32,
-    emit: &mut impl FnMut(u32, u32, f32),
-) -> Result<(), SpatialError> {
-    for &target in targets {
-        if atom == target || (UPPER && atom > target) {
-            continue;
-        }
-
-        let Ok(index) = usize::try_from(target) else {
-            return Err(SpatialError::NumericRangeExceeded);
-        };
-        let Some(target_position) = positions.get(index).copied() else {
-            continue;
-        };
-
-        let squared = distance_squared(position, target_position, None);
-
-        if squared <= cutoff_squared {
-            emit(atom, target, squared);
-        }
+        super::super::brute_simd::append_pairs::<UPPER>(
+            positions,
+            atom,
+            position,
+            members,
+            cutoff_squared,
+            emit,
+        );
     }
     Ok(())
 }
