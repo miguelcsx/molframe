@@ -1,0 +1,40 @@
+[package]
+name = "molframe-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core types, storage and analysis contracts for molframe"
+
+# 02-architecture.md §3 layer 0: `molframe-core` keeps its dependency surface
+# narrow. Rayon lives here because the process-wide executor is itself a core
+# execution contract; mapping and decompression remain feature-gated.
+[dependencies]
+bytemuck.workspace = true
+hashbrown.workspace = true
+num-traits.workspace = true
+rayon.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+flate2 = { workspace = true, optional = true }
+molframe-mmap = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
+[features]
+default = []
+mmap = ["dep:molframe-mmap"]
+gzip = ["dep:flate2"]
+zstd = ["dep:zstd"]
+
+[[bench]]
+name = "core"
+harness = false
+
+[dev-dependencies]
+criterion.workspace = true
+molframe-bench.workspace = true
+
+[lints]
+workspace = true
