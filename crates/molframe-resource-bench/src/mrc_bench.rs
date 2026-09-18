@@ -21,7 +21,7 @@ pub(super) fn run_mrc_block_1g() -> Result<ResourceRecord, String> {
 pub(super) fn read_file(name: &'static str, path: &Path) -> Result<ResourceRecord, String> {
     measure_case(name, || {
         let mut reader =
-            pdbiox::xtal::MrcBlockReader::open(path, pdbiox::xtal::MrcBlockOptions::default())
+            molframe::xtal::MrcBlockReader::open(path, molframe::xtal::MrcBlockOptions::default())
                 .map_err(|error| format!("MRC block reader open failed: {error}"))?;
         let mut values = Vec::new();
         reader
@@ -49,7 +49,7 @@ impl SparseMrc {
             .map_err(|error| format!("system clock cannot name MRC fixture: {error}"))?
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "pdbiox-mrc-resource-{}-{nonce}.mrc",
+            "molframe-mrc-resource-{}-{nonce}.mrc",
             std::process::id(),
         ));
         let mut file = OpenOptions::new()

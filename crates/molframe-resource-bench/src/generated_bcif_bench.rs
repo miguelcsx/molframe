@@ -2,9 +2,11 @@
 
 use super::generated_structure_bench::drain;
 use super::{ResourceRecord, measure_case};
-use pdbiox::ReadOptions;
-use pdbiox::bcif::{DataType, EncodedData, Encoding};
-use pdbiox::core::{ChunkId, DatasetId, ExecutionContext, InputBuffer, LogicalRow, ScratchPolicy};
+use molframe::ReadOptions;
+use molframe::bcif::{DataType, EncodedData, Encoding};
+use molframe::core::{
+    ChunkId, DatasetId, ExecutionContext, InputBuffer, LogicalRow, ScratchPolicy,
+};
 use serde::Serialize;
 
 const LOGICAL_ROW_BYTES: u64 = 49;
@@ -20,7 +22,7 @@ pub(super) fn run(minimum_logical_bytes: u64) -> Result<ResourceRecord, String> 
             .scratch_policy(ScratchPolicy::new(0))
             .build()
             .map_err(|error| format!("generated_bcif_batches: context failed: {error}"))?;
-        let source = pdbiox::bcif::BcifBatchSource::new(
+        let source = molframe::bcif::BcifBatchSource::new(
             InputBuffer::from_bytes(bytes),
             ReadOptions::new(),
             DatasetId::new(0),
@@ -74,7 +76,7 @@ fn encoded_file(rows: u64) -> Result<Vec<u8>, String> {
     ];
     let file = File {
         version: "0.3.0",
-        encoder: "pdbiox-tera-gate",
+        encoder: "molframe-tera-gate",
         data_blocks: vec![Block {
             header: "tera",
             categories: vec![Category {

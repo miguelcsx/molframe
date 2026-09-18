@@ -2,7 +2,7 @@
 //!
 //! These cases exist to answer one question: does peak memory follow the input
 //! size, or the caller's budget? The answer today is the input size, which is
-//! what bounds pdbiox to files that fit in memory. The measurement is recorded
+//! what bounds molframe to files that fit in memory. The measurement is recorded
 //! at several sizes so the shape of the curve is visible — a flat line across
 //! two decimal orders is the claim, and a straight line at slope one is the
 //! defect.
@@ -12,12 +12,12 @@
 //! fixture generation and optional full-structure collection.
 
 use super::{ResourceRecord, measure_case, measure_retained_case};
-use pdbiox::core::{
+use molframe::core::{
     Backpressure, BatchDemand, BatchSource, ExecutionContext, MemoryBudget, ScratchPolicy,
     SourceBytes, WindowedFile,
 };
-use pdbiox::{InputBuffer, Limits, ReadOptions};
-use pdbiox_bench::{Sample, Seed, SyntheticCifSource, Tile, structure};
+use molframe::{InputBuffer, Limits, ReadOptions};
+use molframe_bench::{Sample, Seed, SyntheticCifSource, Tile, structure};
 use std::hint::black_box;
 use std::io::Write;
 use std::path::Path;
@@ -79,7 +79,7 @@ fn drain_structure_batches_with_context(
     path: &Path,
     context: &ExecutionContext,
 ) -> Result<BatchStats, String> {
-    let mut source = pdbiox::open_structure_batches(path, &ReadOptions::new(), context)
+    let mut source = molframe::open_structure_batches(path, &ReadOptions::new(), context)
         .map_err(|error| format!("{name}: bounded open failed: {error}"))?;
     let mut rows = 0_u64;
     let mut models = 0_u64;
@@ -124,7 +124,7 @@ pub(super) fn run_structure_batch_file(
             .map_err(|error| format!("compressed spill directory failed: {error}"))?;
         let context = ExecutionContext::builder()
             .scratch_policy(ScratchPolicy::new(0))
-            .temp_storage_policy(pdbiox::core::TempStoragePolicy::directory(
+            .temp_storage_policy(molframe::core::TempStoragePolicy::directory(
                 directory.path(),
                 maximum_spill_bytes,
             ))
@@ -175,7 +175,7 @@ pub(super) fn run_file_copied_1g() -> Result<ResourceRecord, String> {
     measure_case("file_copied_1g", || {
         let buffer = InputBuffer::open(&path, unbounded())
             .map_err(|finding| format!("open failed: {finding:?}"))?;
-        let (structure, _findings) = pdbiox::cif::read(&buffer, &ReadOptions::new())
+        let (structure, _findings) = molframe::cif::read(&buffer, &ReadOptions::new())
             .map_err(|findings| format!("read failed: {findings:?}"))?;
         Ok(black_box(u64::from(structure.atom_count())))
     })
@@ -193,10 +193,10 @@ pub(super) fn run_file_mapped_1g() -> Result<ResourceRecord, String> {
         // SAFETY: the file was written by this process into a temporary
         // directory it owns, is not open for writing anywhere, and is removed
         // only after the mapping is dropped.
-        let mapped = unsafe { pdbiox_mmap::MappedFile::map_file_unchecked(&file) }
+        let mapped = unsafe { molframe_mmap::MappedFile::map_file_unchecked(&file) }
             .map_err(|error| format!("map failed: {error}"))?;
         let buffer = InputBuffer::from_mapped(mapped);
-        let (structure, _findings) = pdbiox::cif::read(&buffer, &ReadOptions::new())
+        let (structure, _findings) = molframe::cif::read(&buffer, &ReadOptions::new())
             .map_err(|findings| format!("read failed: {findings:?}"))?;
         Ok(black_box(u64::from(structure.atom_count())))
     })
@@ -256,7 +256,7 @@ struct CountingSink {
     cells: u64,
 }
 
-impl pdbiox::cif::CifEventSink for CountingSink {
+impl molframe::cif::CifEventSink for CountingSink {
     type Output = u64;
 
     fn block(&mut self, _name: &str) {}
@@ -265,8 +265,8 @@ impl pdbiox::cif::CifEventSink for CountingSink {
         &mut self,
         _category: &str,
         _item: &str,
-        _value: pdbiox::cif::CifScalar<'_>,
-        _span: pdbiox::ByteSpan,
+        _value: molframe::cif::CifScalar<'_>,
+        _span: molframe::ByteSpan,
     ) {
         self.cells = self.cells.saturating_add(1);
     }
@@ -293,7 +293,7 @@ fn lex_stream(name: &'static str, bytes: u64) -> Result<ResourceRecord, String> 
         let source = SyntheticCifSource::new(tile, copies);
         let buffer = InputBuffer::from_reader(source, unbounded())
             .map_err(|finding| format!("{name}: input was refused: {finding:?}"))?;
-        let mut lexer = pdbiox::cif::lexer::Lexer::new(buffer.as_bytes())
+        let mut lexer = molframe::cif::lexer::Lexer::new(buffer.as_bytes())
             .map_err(|error| format!("{name}: lexer refused the input: {error:?}"))?;
         let mut tokens = 0_u64;
         loop {
@@ -324,7 +324,7 @@ fn scan_stream(name: &'static str, bytes: u64) -> Result<ResourceRecord, String>
         let source = SyntheticCifSource::new(tile, copies);
         let buffer = InputBuffer::from_reader(source, unbounded())
             .map_err(|finding| format!("{name}: input was refused: {finding:?}"))?;
-        let (cells, _findings) = pdbiox::cif::parse_events(&buffer, CountingSink { cells: 0 })
+        let (cells, _findings) = molframe::cif::parse_events(&buffer, CountingSink { cells: 0 })
             .map_err(|findings| format!("{name}: parse failed: {findings:?}"))?;
         Ok(black_box(cells))
     })

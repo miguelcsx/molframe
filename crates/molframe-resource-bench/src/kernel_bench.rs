@@ -4,10 +4,10 @@ use super::{ResourceRecord, measure_case};
 use std::hint::black_box;
 
 pub(super) fn run_trajectory_contacts() -> Result<ResourceRecord, String> {
-    let structure = pdbiox_bench::structure(pdbiox_bench::Sample::Tiny);
-    let trajectory = pdbiox::traj::Trajectory::from_frames(
+    let structure = molframe_bench::structure(molframe_bench::Sample::Tiny);
+    let trajectory = molframe::traj::Trajectory::from_frames(
         (0_u16..64)
-            .map(|frame| pdbiox::traj::Frame {
+            .map(|frame| molframe::traj::Frame {
                 positions: structure
                     .positions()
                     .iter()
@@ -17,15 +17,15 @@ pub(super) fn run_trajectory_contacts() -> Result<ResourceRecord, String> {
             .collect(),
     )
     .map_err(|error| format!("trajectory construction failed: {error}"))?;
-    let policy = pdbiox::AnalysisPolicy::default();
-    let kernel = pdbiox::analysis::contacts_kernel(3.0, pdbiox::SpatialBackend::Auto);
+    let policy = molframe::AnalysisPolicy::default();
+    let kernel = molframe::analysis::contacts_kernel(3.0, molframe::SpatialBackend::Auto);
     measure_case("trajectory_contacts", || {
-        let analysis = pdbiox::analysis::analyse_trajectory(
+        let analysis = molframe::analysis::analyse_trajectory(
             &structure,
             &trajectory,
             &policy,
             &kernel,
-            &pdbiox::ExecutionContext::builder()
+            &molframe::ExecutionContext::builder()
                 .worker_budget(4)
                 .build()
                 .map_err(|error| format!("execution context failed: {error}"))?,
@@ -47,7 +47,7 @@ pub(super) fn run_pore_profile_100000() -> Result<ResourceRecord, String> {
         }
     }
     let radii = vec![1.7; positions.len()];
-    let options = pdbiox::analysis::PoreProfileOptions::new(
+    let options = molframe::analysis::PoreProfileOptions::new(
         ([0.0; 3], [0.0, 0.0, 1.0]),
         -10.0,
         10.0,
@@ -57,7 +57,7 @@ pub(super) fn run_pore_profile_100000() -> Result<ResourceRecord, String> {
         1.4,
     );
     measure_case("pore_profile_100000", || {
-        let profile = pdbiox::analysis::pore_profile(&positions, &radii, options)
+        let profile = molframe::analysis::pore_profile(&positions, &radii, options)
             .map_err(|error| format!("pore profile failed: {error}"))?;
         Ok(profile.iter().fold(0_u64, |digest, sample| {
             digest.wrapping_add(u64::from(sample.radius.to_bits()))
@@ -83,9 +83,9 @@ pub(super) fn run_msa_eight_512() -> Result<ResourceRecord, String> {
     });
     let views = sequences.each_ref().map(Vec::as_slice);
     measure_case("msa_eight_512", || {
-        let alignment = pdbiox::seq::progressive_msa(
+        let alignment = molframe::seq::progressive_msa(
             &views,
-            pdbiox::seq::MsaOptions::progressive(pdbiox::seq::Scoring::simple()),
+            molframe::seq::MsaOptions::progressive(molframe::seq::Scoring::simple()),
         )
         .map_err(|error| format!("MSA failed: {error}"))?;
         alignment_digest(&alignment)
@@ -111,9 +111,9 @@ pub(super) fn run_msa_sixty_four_128() -> Result<ResourceRecord, String> {
         .collect::<Vec<_>>();
     let views = sequences.iter().map(Vec::as_slice).collect::<Vec<_>>();
     measure_case("msa_sixty_four_128", || {
-        let alignment = pdbiox::seq::progressive_msa(
+        let alignment = molframe::seq::progressive_msa(
             &views,
-            pdbiox::seq::MsaOptions::progressive(pdbiox::seq::Scoring::simple()),
+            molframe::seq::MsaOptions::progressive(molframe::seq::Scoring::simple()),
         )
         .map_err(|error| format!("MSA failed: {error}"))?;
         alignment_digest(&alignment)

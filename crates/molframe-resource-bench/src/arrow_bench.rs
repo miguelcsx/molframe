@@ -8,7 +8,7 @@ const LARGE_ARROW_RESIDUE_ATOMS: u32 = 16;
 
 pub(super) fn run_arrow_stream_large() -> Result<ResourceRecord, String> {
     let structure = large_arrow_structure()?;
-    let table = pdbiox::AtomArrowTable::new(&structure);
+    let table = molframe::AtomArrowTable::new(&structure);
     measure_case("arrow_stream_large", || {
         let stream = table
             .arrow_stream()
@@ -24,7 +24,7 @@ pub(super) fn run_arrow_stream_large() -> Result<ResourceRecord, String> {
 
 pub(super) fn run_arrow_batches_large() -> Result<ResourceRecord, String> {
     let structure = large_arrow_structure()?;
-    let table = pdbiox::AtomArrowTable::new(&structure);
+    let table = molframe::AtomArrowTable::new(&structure);
     measure_case("arrow_batches_large", || {
         let batches = table
             .record_batches()
@@ -42,11 +42,11 @@ fn add_rows(rows: u64, batch_rows: usize) -> Result<u64, String> {
         .ok_or_else(|| "Arrow row count exceeds u64".to_owned())
 }
 
-fn large_arrow_structure() -> Result<pdbiox::Structure, String> {
-    use pdbiox::core::optional::{OptionalI32, OptionalSymbol};
-    use pdbiox::core::topology::ResidueRecord;
+fn large_arrow_structure() -> Result<molframe::Structure, String> {
+    use molframe::core::optional::{OptionalI32, OptionalSymbol};
+    use molframe::core::topology::ResidueRecord;
 
-    let mut data = pdbiox::StructureData::empty();
+    let mut data = molframe::StructureData::empty();
     let atom_name = data
         .dictionary
         .intern("CA")
@@ -55,7 +55,7 @@ fn large_arrow_structure() -> Result<pdbiox::Structure, String> {
         .dictionary
         .intern("ALA")
         .map_err(|error| format!("component interning failed: {error}"))?;
-    let mut chunks = pdbiox::ChunkBuilder::new();
+    let mut chunks = molframe::ChunkBuilder::new();
     let atom_capacity = usize::try_from(LARGE_ARROW_ATOMS)
         .map_err(|_| "Arrow stress atom count exceeds usize".to_owned())?;
     chunks.reserve(atom_capacity);
@@ -84,17 +84,17 @@ fn large_arrow_structure() -> Result<pdbiox::Structure, String> {
             )
             .map_err(|error| format!("Arrow stress residue failed: {error}"))?;
         for atom in first..end {
-            chunks.push(pdbiox::AtomRecord {
+            chunks.push(molframe::AtomRecord {
                 position: Some([0.0, 0.0, 0.0]),
-                element: pdbiox::Element::CARBON,
+                element: molframe::Element::CARBON,
                 atom_name,
                 auth_atom_name: OptionalSymbol::NONE,
                 alternate_component_id: OptionalSymbol::NONE,
-                alt_id: pdbiox::AltId::BLANK,
+                alt_id: molframe::AltId::BLANK,
                 residue,
-                occupancy: (1.0, pdbiox::Presence::Present),
-                b_factor: (10.0, pdbiox::Presence::Present),
-                formal_charge: (0, pdbiox::Presence::Inapplicable),
+                occupancy: (1.0, molframe::Presence::Present),
+                b_factor: (10.0, molframe::Presence::Present),
+                formal_charge: (0, molframe::Presence::Inapplicable),
                 atom_site_id: atom + 1,
             });
         }
@@ -102,6 +102,6 @@ fn large_arrow_structure() -> Result<pdbiox::Structure, String> {
     }
     let (atom_chunks, coordinates) = chunks.finish();
     data.chunks = atom_chunks.into();
-    data.coords = pdbiox::CoordinateStore::Single(coordinates);
-    Ok(pdbiox::Structure::new(data))
+    data.coords = molframe::CoordinateStore::Single(coordinates);
+    Ok(molframe::Structure::new(data))
 }
