@@ -1,0 +1,29 @@
+[package]
+name = "molframe-cif"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "PDBx/mmCIF reading and writing for molframe"
+
+[dependencies]
+molframe-core.workspace = true
+indexmap.workspace = true
+memchr.workspace = true
+num-traits.workspace = true
+quick-xml.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+criterion.workspace = true
+molframe-bench.workspace = true
+molframe-core.workspace = true
+
+[[bench]]
+name = "cif"
+harness = false
+
+[lints]
+workspace = true
