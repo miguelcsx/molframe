@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 const LARGE_BYTES: usize = 8 * 1024 * 1024;
 
 fn temporary_file(name: &str) -> std::path::PathBuf {
-    std::env::temp_dir().join(format!("pdbiox-map-{name}-{}", std::process::id()))
+    std::env::temp_dir().join(format!("molframe-map-{name}-{}", std::process::id()))
 }
 
 #[test]

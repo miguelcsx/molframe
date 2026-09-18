@@ -1,11 +1,11 @@
 [package]
-name = "pdbiox-mmap"
+name = "molframe-mmap"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Audited read-only memory mapping boundary for pdbiox"
+description = "Audited read-only memory mapping boundary for molframe"
 
 [dependencies]
 memmap2.workspace = true

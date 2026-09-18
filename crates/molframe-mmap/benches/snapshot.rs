@@ -1,14 +1,14 @@
 //! Criterion coverage for safe snapshots and unchecked file-backed mappings.
 
 use criterion::{Criterion, black_box};
-use pdbiox_mmap::MappedFile;
+use molframe_mmap::MappedFile;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 
 const SNAPSHOT_BYTES: usize = 8 * 1024 * 1024;
 
 fn bench_snapshot(c: &mut Criterion) -> io::Result<()> {
-    let path = std::env::temp_dir().join(format!("pdbiox-mmap-criterion-{}", std::process::id()));
+    let path = std::env::temp_dir().join(format!("molframe-mmap-criterion-{}", std::process::id()));
     let mut output = OpenOptions::new()
         .read(true)
         .write(true)
