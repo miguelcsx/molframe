@@ -12,7 +12,7 @@ use std::sync::Arc;
 /// A compiled query that reuses topology planning across frame evaluations.
 #[pyclass(name = "UpdatingSelection", frozen, skip_from_py_object)]
 pub(crate) struct PyUpdatingSelection {
-    inner: Arc<pdbiox::traj::UpdatingSelection>,
+    inner: Arc<molframe::traj::UpdatingSelection>,
 }
 
 #[pymethods]
@@ -26,10 +26,11 @@ impl PyUpdatingSelection {
         groups: Option<BTreeMap<String, PySelection>>,
         backend: PySpatialBackend,
     ) -> Self {
-        let policy =
-            policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+        let policy = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+            value.inner.clone()
+        });
         let groups = groups_from_python(groups);
-        let inner = pdbiox::traj::UpdatingSelection::new(
+        let inner = molframe::traj::UpdatingSelection::new(
             topology.structure().clone(),
             &query.inner,
             policy,
@@ -57,7 +58,7 @@ impl PyUpdatingSelection {
         py.detach(move || selection.evaluate(&frame, &context))
             .map(PyEvaluation::from)
             .map_err(|error| match error {
-                pdbiox::traj::UpdatingSelectionError::Memory(_) => {
+                molframe::traj::UpdatingSelectionError::Memory(_) => {
                     PyMemoryError::new_err(error.to_string())
                 }
                 _ => crate::errors::UpdatingSelectionError::new_err(error.to_string()),

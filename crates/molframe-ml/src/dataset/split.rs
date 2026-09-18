@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::numeric::{f64_to_usize, u64_to_usize, usize_to_f64, usize_to_u64};
 
-use pdbiox_seq::{Scoring, global};
+use molframe_seq::{Scoring, global};
 
 use super::{Dataset, DatasetError};
 
@@ -283,14 +283,16 @@ fn assign_groups(mut groups: Vec<Vec<usize>>, ratios: SplitRatios) -> [Vec<usize
     let total = usize_to_f64(groups.iter().map(Vec::len).sum());
     let mut output: [Vec<usize>; 3] = std::array::from_fn(|_| Vec::new());
     for group in groups {
-        let partition = (0..3)
+        let partition = match (0..3)
             .filter(|index| targets[*index] > 0.0)
             .min_by(|left, right| {
                 let left_fill = usize_to_f64(output[*left].len()) / (total * targets[*left]);
                 let right_fill = usize_to_f64(output[*right].len()) / (total * targets[*right]);
                 left_fill.total_cmp(&right_fill).then(left.cmp(right))
-            })
-            .map_or(0, |index| index);
+            }) {
+            Some(index) => index,
+            None => 0,
+        };
         output[partition].extend(group);
     }
     for partition in &mut output {

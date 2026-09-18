@@ -1,7 +1,7 @@
 //! Reusable payload windows and primitive `BinaryCIF` word decoding.
 
 use crate::{DataType, Encoding};
-use pdbiox_core::{Code, Diagnostic, SourceBytes};
+use molframe_core::{Code, Diagnostic, SourceBytes};
 use std::ops::Range;
 
 pub(super) const PAYLOAD_BUFFER_BYTES: usize = 16 * 1024;
@@ -46,8 +46,11 @@ impl PayloadInput {
 
     pub(super) fn checkpoint(&self) -> u64 {
         let unread = self.buffer.len().saturating_sub(self.position);
-        self.next
-            .saturating_sub(u64::try_from(unread).map_or(u64::MAX, |value| value))
+        let unread = match u64::try_from(unread) {
+            Ok(unread) => unread,
+            Err(_) => u64::MAX,
+        };
+        self.next.saturating_sub(unread)
     }
 
     pub(super) fn restore(&mut self, checkpoint: u64) {
@@ -67,7 +70,10 @@ impl PayloadInput {
             self.position = 0;
             return Ok(());
         }
-        let remaining = usize::try_from(self.end - self.next).map_or(usize::MAX, |value| value);
+        let remaining = match usize::try_from(self.end - self.next) {
+            Ok(length) => length,
+            Err(_) => usize::MAX,
+        };
         let demand = PAYLOAD_BUFFER_BYTES
             .saturating_sub(carry_len)
             .min(remaining);
@@ -95,7 +101,10 @@ pub(super) fn read_encoding<S: SourceBytes>(
     let mut bytes = Vec::with_capacity(length);
     let mut offset = range.start;
     while offset < range.end {
-        let remaining = usize::try_from(range.end - offset).map_or(usize::MAX, |value| value);
+        let remaining = match usize::try_from(range.end - offset) {
+            Ok(length) => length,
+            Err(_) => usize::MAX,
+        };
         let window = source.window(offset, remaining.min(window_bytes))?;
         if window.bytes().is_empty() {
             return Err(error("truncated BinaryCIF encoding metadata"));

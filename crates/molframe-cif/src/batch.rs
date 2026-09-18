@@ -4,13 +4,13 @@ mod budget;
 mod token;
 
 use budget::{identity_overflow, reserve_bytes, row_capacity};
-use num_traits::ToPrimitive;
-use pdbiox_core::{
+use molframe_core::{
     Backpressure, Batch, BatchContinuity, BatchDemand, BatchLease, BatchSource, ChunkId,
     ContinuityLevel, DatasetId, Element, ExecutionContext, LogicalRow, Presence, ReadOptions,
     SourceBytes, StructureAtomRecord, StructureBatch, StructureBatchBuffer, StructureBatchBuilder,
     StructureBatchError, StructureBatchPool,
 };
+use num_traits::ToPrimitive;
 use token::TokenCursor;
 
 /// Incremental mmCIF coordinate rows.
@@ -71,7 +71,7 @@ impl<S: SourceBytes> BatchSource for MmcifBatchSource<S> {
         }
         let capacity = row_capacity(demand)?;
         let reserve = reserve_bytes(capacity, demand);
-        let descriptor = pdbiox_core::ChunkDescriptor::new(
+        let descriptor = molframe_core::ChunkDescriptor::new(
             self.dataset,
             self.chunk,
             self.logical_row,
@@ -449,7 +449,10 @@ fn integer_u32(values: &[i64; 4], present: u32, index: usize) -> u32 {
     if present & (1 << (7 + index)) == 0 {
         return 0;
     }
-    u32::try_from(values[index]).map_or(0, |value| value)
+    match u32::try_from(values[index]) {
+        Ok(value) => value,
+        Err(_) => 0,
+    }
 }
 
 fn integer_presence(values: &[i64; 4], present: u32, index: usize) -> (i8, Presence) {

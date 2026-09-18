@@ -11,12 +11,12 @@ use super::index::BcifOffsetIndex;
 use append::append_rows;
 use budget::{address_overflow, range_bytes, reserve_bytes};
 use decoded::{ColumnChunk, DecodedChunk};
-use num_traits::ToPrimitive;
-use pdbiox_core::{
+use molframe_core::{
     Backpressure, BatchDemand, BatchLease, BatchSource, ChunkId, Code, ContinuityLevel, DatasetId,
     Diagnostic, Element, ExecutionContext, LogicalRow, MemoryReservation, Presence, ReadOptions,
     SourceBytes, StructureAtomRecord, StructureBatch, StructureBatchError, StructureBatchPool,
 };
+use num_traits::ToPrimitive;
 use stream::{ColumnCheckpoints, ColumnStream, PAYLOAD_BUFFER_BYTES};
 
 const RETAINED_BYTES_PER_ROW: usize = 128;
@@ -290,10 +290,13 @@ impl RowView<'_> {
             occupancy: self.real_presence(Field::Occupancy, 1.0),
             b_factor: self.real_presence(Field::BFactor, 0.0),
             formal_charge: self.integer_presence(Field::Charge),
-            atom_site_id: self
+            atom_site_id: match self
                 .integer(Field::Id)
                 .and_then(|value| u32::try_from(value).ok())
-                .map_or(0, |value| value),
+            {
+                Some(value) => value,
+                None => 0,
+            },
             heterogen: self.text(Field::Group).eq_ignore_ascii_case("HETATM"),
         }
     }
@@ -338,9 +341,13 @@ impl RowView<'_> {
     }
 
     fn integer_i32(&self, field: Field, absent: i32) -> i32 {
-        self.integer(field)
+        match self
+            .integer(field)
             .and_then(|value| i32::try_from(value).ok())
-            .map_or(absent, |value| value)
+        {
+            Some(value) => value,
+            None => absent,
+        }
     }
 
     fn real_presence(&self, field: Field, absent: f32) -> (f32, Presence) {
@@ -348,10 +355,10 @@ impl RowView<'_> {
             return (absent, Presence::Unknown);
         };
         let validity = presence(chunk, self.row);
-        let value = self
-            .real(field)
-            .and_then(|value| value.to_f32())
-            .map_or(absent, |value| value);
+        let value = match self.real(field).and_then(|value| value.to_f32()) {
+            Some(value) => value,
+            None => absent,
+        };
         (value, validity)
     }
 
@@ -360,10 +367,13 @@ impl RowView<'_> {
             return (0, Presence::Unknown);
         };
         let validity = presence(chunk, self.row);
-        let value = self
+        let value = match self
             .integer(field)
             .and_then(|value| i8::try_from(value).ok())
-            .map_or(0, |value| value);
+        {
+            Some(value) => value,
+            None => 0,
+        };
         (value, validity)
     }
 
@@ -426,13 +436,15 @@ fn field_index(name: &str) -> Option<usize> {
 }
 
 fn row_capacity(demand: BatchDemand) -> Result<u32, StructureBatchError> {
-    let rows = demand
+    let retained = match demand
         .max_bytes
         .saturating_sub(DICTIONARY_HEADROOM)
         .checked_div(RETAINED_BYTES_PER_ROW)
-        .map_or(0, |value| value)
-        .min(demand.max_rows)
-        .min(u32::MAX as usize);
+    {
+        Some(rows) => rows,
+        None => 0,
+    };
+    let rows = retained.min(demand.max_rows).min(u32::MAX as usize);
     if rows == 0 {
         return Err(StructureBatchError::DemandTooSmall {
             required: DICTIONARY_HEADROOM + RETAINED_BYTES_PER_ROW,

@@ -160,10 +160,10 @@ fn cube_values(grid: &Grid, distance: &[f32], x: usize, y: usize, z: usize) -> [
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
 fn distance_at(distance: &[f32], index: usize) -> f32 {
-    distance
-        .get(index)
-        .copied()
-        .map_or(f32::INFINITY, |value| value)
+    match distance.get(index).copied() {
+        Some(value) => value,
+        None => f32::INFINITY,
+    }
 }
 
 /// Polygonises one tetrahedron without temporary heap vectors.

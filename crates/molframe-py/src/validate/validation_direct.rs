@@ -27,7 +27,7 @@ pub(crate) fn bond_length_deviations(
     tolerance: f32,
 ) -> Vec<PyBondDeviation> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::validate::bond_length_deviations(&structure, tolerance))
+    py.detach(move || molframe::validate::bond_length_deviations(&structure, tolerance))
         .into_iter()
         .map(Into::into)
         .collect()
@@ -41,7 +41,7 @@ pub(crate) fn ligand_geometry_outliers(
     tolerance: f32,
 ) -> Vec<PyBondDeviation> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::validate::ligand_geometry_outliers(&structure, tolerance))
+    py.detach(move || molframe::validate::ligand_geometry_outliers(&structure, tolerance))
         .into_iter()
         .map(Into::into)
         .collect()
@@ -55,7 +55,7 @@ pub(crate) fn ligand_geometry(
     tolerance: f32,
 ) -> super::PyLigandGeometryReport {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::validate::ligand_geometry(&structure, tolerance))
+    py.detach(move || molframe::validate::ligand_geometry(&structure, tolerance))
         .into()
 }
 
@@ -82,7 +82,7 @@ pub(crate) fn clashes(
         crate::core::execution::PyExecutionContext::native,
     );
     py.detach(move || {
-        pdbiox::validate::clashes(
+        molframe::validate::clashes(
             &structure,
             tolerance,
             radius_set.into(),
@@ -102,7 +102,7 @@ pub(crate) fn completeness(
 ) -> PyResult<Vec<PyChainCompleteness>> {
     let structure = structure.structure().clone();
     let retained = structure.clone();
-    py.detach(move || pdbiox::validate::completeness(&structure, namespace.into()))
+    py.detach(move || molframe::validate::completeness(&structure, namespace.into()))
         .map_err(value_error)?
         .into_iter()
         .map(|value| project_completeness(&retained, value).map_err(value_error))
@@ -116,7 +116,7 @@ pub(crate) fn cis_peptides(
     threshold_degrees: f64,
 ) -> PyResult<Vec<PyCisPeptide>> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::validate::cis_peptides(&structure, threshold_degrees))
+    py.detach(move || molframe::validate::cis_peptides(&structure, threshold_degrees))
         .map(|values| values.into_iter().map(Into::into).collect())
         .map_err(value_error)
 }
@@ -128,7 +128,7 @@ pub(crate) fn nonplanar_aromatic_rings(
     options: PyPlanarityOptions,
 ) -> PyResult<Vec<PyPlanarityFlag>> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::validate::nonplanar_aromatic_rings(&structure, options.0))
+    py.detach(move || molframe::validate::nonplanar_aromatic_rings(&structure, options.0))
         .map(|values| values.into_iter().map(Into::into).collect())
         .map_err(value_error)
 }
@@ -136,7 +136,7 @@ pub(crate) fn nonplanar_aromatic_rings(
 #[pyfunction]
 pub(crate) fn overvalent_atoms(py: Python<'_>, structure: &PyStructure) -> Vec<PyValenceError> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::validate::overvalent_atoms(&structure))
+    py.detach(move || molframe::validate::overvalent_atoms(&structure))
         .into_iter()
         .map(Into::into)
         .collect()
@@ -145,7 +145,7 @@ pub(crate) fn overvalent_atoms(py: Python<'_>, structure: &PyStructure) -> Vec<P
 #[pyfunction]
 pub(crate) fn quality_flags(py: Python<'_>, structure: &PyStructure) -> Vec<PyQualityFlag> {
     let structure = structure.structure().clone();
-    py.detach(move || pdbiox::validate::quality_flags(&structure))
+    py.detach(move || molframe::validate::quality_flags(&structure))
         .into_iter()
         .map(Into::into)
         .collect()
@@ -183,12 +183,12 @@ fn project_ramachandran(
     let minimum_probability = options.minimum_probability;
     py.detach(move || {
         let options =
-            pdbiox::validate::RamachandranOptions::new(&references, basins, minimum_probability)
+            molframe::validate::RamachandranOptions::new(&references, basins, minimum_probability)
                 .map_err(|error| error.to_string())?;
         if outliers_only {
-            pdbiox::validate::ramachandran_outliers(&structure, &options)
+            molframe::validate::ramachandran_outliers(&structure, &options)
         } else {
-            pdbiox::validate::ramachandran(&structure, &options)
+            molframe::validate::ramachandran(&structure, &options)
         }
         .map_err(|error| error.to_string())
     })
@@ -205,7 +205,7 @@ pub(crate) fn altloc_occupancy_sums(
 ) -> PyResult<super::PyAltlocOccupancyReport> {
     let structure = structure.structure().clone();
     py.detach(move || {
-        pdbiox::validate::altloc_occupancy_sums(&structure, namespace.into(), options.0)
+        molframe::validate::altloc_occupancy_sums(&structure, namespace.into(), options.0)
     })
     .map(Into::into)
     .map_err(value_error)
@@ -221,9 +221,11 @@ pub(crate) fn ccd_missing_atoms(
     let structure = structure.structure().clone();
     let dictionary = dictionary.0.clone();
     let policy = policy.inner.clone();
-    py.detach(move || pdbiox::validate::ccd_missing_atoms(&structure, dictionary.as_ref(), &policy))
-        .map(Into::into)
-        .map_err(value_error)
+    py.detach(move || {
+        molframe::validate::ccd_missing_atoms(&structure, dictionary.as_ref(), &policy)
+    })
+    .map(Into::into)
+    .map_err(value_error)
 }
 
 #[pyfunction]
@@ -236,13 +238,13 @@ pub(crate) fn plane_restraint_outliers(
     let structure = structure.structure().clone();
     let restraints = restraints
         .into_iter()
-        .map(|value| pdbiox::validate::PlaneRestraint {
+        .map(|value| molframe::validate::PlaneRestraint {
             id: value.id,
             atoms: value.atoms.inner,
         })
         .collect::<Vec<_>>();
     py.detach(move || {
-        pdbiox::validate::plane_restraint_outliers(&structure, &restraints, options.0)
+        molframe::validate::plane_restraint_outliers(&structure, &restraints, options.0)
     })
     .map(Into::into)
     .map_err(value_error)
@@ -260,9 +262,11 @@ pub(crate) fn chirality_outliers(
     let structure = structure.structure().clone();
     let dictionary = dictionary.0.clone();
     let options = options.0;
-    let policy = policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+    let policy = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+        value.inner.clone()
+    });
     py.detach(move || {
-        pdbiox::validate::chirality_outliers(&structure, dictionary.as_ref(), &policy, options)
+        molframe::validate::chirality_outliers(&structure, dictionary.as_ref(), &policy, options)
     })
     .map(Into::into)
     .map_err(value_error)
@@ -284,9 +288,11 @@ pub(crate) fn rotamer_outliers(
     let references = references.0.clone();
     let profile = profile.0.clone();
     let options = options.0;
-    let policy = policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+    let policy = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+        value.inner.clone()
+    });
     py.detach(move || {
-        pdbiox::validate::rotamer_outliers(
+        molframe::validate::rotamer_outliers(
             &structure,
             dictionary.as_ref(),
             &policy,
@@ -311,8 +317,8 @@ pub(crate) fn classify(
     let minimum_probability = options.minimum_probability;
     py.detach(move || {
         let options =
-            pdbiox::validate::RamachandranOptions::new(&references, basins, minimum_probability)?;
-        pdbiox::validate::classify(phi, psi, &options)
+            molframe::validate::RamachandranOptions::new(&references, basins, minimum_probability)?;
+        molframe::validate::classify(phi, psi, &options)
     })
     .map(|(region, assessment)| (region.into(), assessment.into()))
     .map_err(value_error)
@@ -329,7 +335,7 @@ pub(crate) fn reference_geometry(
     let structure = structure.structure().clone();
     let provider = provider.0.clone();
     py.detach(move || {
-        pdbiox::validate::reference_geometry(
+        molframe::validate::reference_geometry(
             &structure,
             provider.as_ref(),
             namespace.into(),
@@ -352,7 +358,7 @@ pub(crate) fn nucleic_acid_geometry(
     let provider = provider.0.clone();
     let roles = roles.0.clone();
     py.detach(move || {
-        pdbiox::validate::nucleic_acid_geometry(&structure, provider.as_ref(), &roles, policy.0)
+        molframe::validate::nucleic_acid_geometry(&structure, provider.as_ref(), &roles, policy.0)
     })
     .map(|values| values.into_iter().map(Into::into).collect())
     .map_err(value_error)

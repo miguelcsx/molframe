@@ -12,7 +12,7 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "FxEvaluation", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyEvaluation(pub(crate) pdbiox::fx::Evaluation);
+pub(crate) struct PyEvaluation(pub(crate) molframe::fx::Evaluation);
 
 #[pymethods]
 impl PyEvaluation {
@@ -39,7 +39,7 @@ impl PyEvaluation {
 
 #[pyclass(name = "EvaluationReport", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyEvaluationReport(pub(crate) pdbiox::fx::EvaluationReport);
+pub(crate) struct PyEvaluationReport(pub(crate) molframe::fx::EvaluationReport);
 
 #[pymethods]
 impl PyEvaluationReport {
@@ -76,12 +76,14 @@ pub(crate) fn evaluate_motif(
     let profile = profile.0.clone();
     let measurement = measurement.0;
     let dictionary = dictionary.map(|value| value.0.clone());
-    let policy = policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+    let policy = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+        value.inner.clone()
+    });
     py.detach(move || {
         let provider = dictionary
             .as_ref()
-            .map(|value| value.as_ref() as &dyn pdbiox::ComponentProvider);
-        pdbiox::fx::evaluate_motif(
+            .map(|value| value.as_ref() as &dyn molframe::ComponentProvider);
+        molframe::fx::evaluate_motif(
             &structure,
             &motif,
             provider,

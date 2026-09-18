@@ -50,7 +50,7 @@ struct SurfaceGrid {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_surface::{AtomDepthOptions, atom_depths};
+/// use molframe_surface::{AtomDepthOptions, atom_depths};
 ///
 /// let depths = atom_depths(
 ///     &[[0.0, 0.0, 0.0]],
@@ -58,7 +58,7 @@ struct SurfaceGrid {
 ///     AtomDepthOptions { cell_size: 3.0 },
 /// )?;
 /// assert!((depths[0] - 5.0).abs() < 1e-4);
-/// # Ok::<(), pdbiox_surface::AtomDepthError>(())
+/// # Ok::<(), molframe_surface::AtomDepthError>(())
 /// ```
 ///
 /// # Errors
@@ -288,7 +288,7 @@ fn offset_cell(centre: CellIndex, delta: CellIndex) -> Option<CellIndex> {
 /// queried atom and therefore remains correct even when the atom lies far
 /// outside the surface-point coordinate extent.
 fn furthest_required_ring(centre: CellIndex, bounds: CellBounds) -> i64 {
-    [
+    match [
         cell_distance(centre.0, bounds.min.0),
         cell_distance(centre.0, bounds.max.0),
         cell_distance(centre.1, bounds.min.1),
@@ -298,7 +298,10 @@ fn furthest_required_ring(centre: CellIndex, bounds: CellBounds) -> i64 {
     ]
     .into_iter()
     .max()
-    .map_or(0, |distance| distance)
+    {
+        Some(distance) => distance,
+        None => 0,
+    }
 }
 
 /// Computes the saturated absolute difference between two cell coordinates.

@@ -230,10 +230,8 @@ fn build_node(
 
     let middle = atoms.len() / 2;
     atoms.select_nth_unstable_by(middle, |left, right| {
-        let left_index = usize::try_from(*left).map_or(usize::MAX, |value| value);
-        let right_index = usize::try_from(*right).map_or(usize::MAX, |value| value);
-        positions[left_index][axis]
-            .total_cmp(&positions[right_index][axis])
+        positions[*left as usize][axis]
+            .total_cmp(&positions[*right as usize][axis])
             .then_with(|| left.cmp(right))
     });
     let (left_atoms, right_atoms) = atoms.split_at_mut(middle);

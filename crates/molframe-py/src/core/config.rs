@@ -117,7 +117,9 @@ impl PyPolicyOverrides {
     #[pyo3(signature = (policy=None))]
     fn apply_to(&self, policy: Option<&PyAnalysisPolicy>) -> PyResult<PyAnalysisPolicy> {
         let overrides = self.clone().into_inner();
-        let base = policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+        let base = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+            value.inner.clone()
+        });
         overrides
             .apply_to(base)
             .map(|inner| PyAnalysisPolicy { inner })
@@ -151,28 +153,28 @@ pub(crate) fn read_configuration(
     py: Python<'_>,
     path: PathBuf,
 ) -> PyResult<PyApplicationConfiguration> {
-    py.detach(move || pdbiox::read_configuration(path))
+    py.detach(move || molframe::read_configuration(path))
         .map(Into::into)
         .map_err(|error| crate::errors::PolicyConfigError::new_err(error.to_string()))
 }
 
 #[pyfunction]
 pub(crate) fn read_policy_overrides(py: Python<'_>, path: PathBuf) -> PyResult<PyPolicyOverrides> {
-    py.detach(move || pdbiox::read_policy_overrides(path))
+    py.detach(move || molframe::read_policy_overrides(path))
         .map(Into::into)
         .map_err(|error| crate::errors::PolicyConfigError::new_err(error.to_string()))
 }
 
 #[pyfunction]
 pub(crate) fn read_policy(py: Python<'_>, path: PathBuf) -> PyResult<PyAnalysisPolicy> {
-    py.detach(move || pdbiox::read_policy(path))
+    py.detach(move || molframe::read_policy(path))
         .map(|inner| PyAnalysisPolicy { inner })
         .map_err(|error| crate::errors::PolicyConfigError::new_err(error.to_string()))
 }
 
 impl PyPolicyOverrides {
-    fn into_inner(self) -> pdbiox::PolicyOverrides {
-        pdbiox::PolicyOverrides {
+    fn into_inner(self) -> molframe::PolicyOverrides {
+        molframe::PolicyOverrides {
             assembly: self.assembly,
             model: self.model,
             altloc: self.altloc,
@@ -192,8 +194,8 @@ impl PyPolicyOverrides {
     }
 }
 
-impl From<pdbiox::PolicyOverrides> for PyPolicyOverrides {
-    fn from(value: pdbiox::PolicyOverrides) -> Self {
+impl From<molframe::PolicyOverrides> for PyPolicyOverrides {
+    fn from(value: molframe::PolicyOverrides) -> Self {
         Self {
             assembly: value.assembly,
             model: value.model,
@@ -214,8 +216,8 @@ impl From<pdbiox::PolicyOverrides> for PyPolicyOverrides {
     }
 }
 
-impl From<pdbiox::ApplicationConfiguration> for PyApplicationConfiguration {
-    fn from(value: pdbiox::ApplicationConfiguration) -> Self {
+impl From<molframe::ApplicationConfiguration> for PyApplicationConfiguration {
+    fn from(value: molframe::ApplicationConfiguration) -> Self {
         Self {
             policy: value.policy.into(),
             output: value.output.into(),
@@ -224,16 +226,16 @@ impl From<pdbiox::ApplicationConfiguration> for PyApplicationConfiguration {
     }
 }
 
-impl From<pdbiox::OutputConfiguration> for PyOutputConfiguration {
-    fn from(value: pdbiox::OutputConfiguration) -> Self {
+impl From<molframe::OutputConfiguration> for PyOutputConfiguration {
+    fn from(value: molframe::OutputConfiguration) -> Self {
         Self {
             format: value.format,
         }
     }
 }
 
-impl From<pdbiox::ChemistryConfiguration> for PyChemistryConfiguration {
-    fn from(value: pdbiox::ChemistryConfiguration) -> Self {
+impl From<molframe::ChemistryConfiguration> for PyChemistryConfiguration {
+    fn from(value: molframe::ChemistryConfiguration) -> Self {
         Self {
             ccd_cache: value.ccd_cache,
             ccd_version: value.ccd_version,

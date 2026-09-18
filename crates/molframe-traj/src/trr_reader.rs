@@ -181,10 +181,13 @@ impl TrajectoryReader for TrrReader {
         self.pending = None;
         if self.next == 0 {
             self.pending = next_header(&mut self.input)?;
-            frame.dt = self
-                .pending
-                .as_ref()
-                .map(|next| next.time - frame.time.map_or(next.time, |time| time));
+            frame.dt = self.pending.as_ref().map(|next| {
+                let time = match frame.time {
+                    Some(time) => time,
+                    None => next.time,
+                };
+                next.time - time
+            });
         }
         self.next += 1;
         Ok(true)

@@ -5,15 +5,17 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "PolicySpace", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyPolicySpace(pub(crate) pdbiox::PolicySpace);
+pub(crate) struct PyPolicySpace(pub(crate) molframe::PolicySpace);
 
 #[pymethods]
 impl PyPolicySpace {
     #[new]
     #[pyo3(signature = (policy=None))]
     pub(crate) fn new(policy: Option<&PyAnalysisPolicy>) -> Self {
-        Self(pdbiox::PolicySpace::new(
-            policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone()),
+        Self(molframe::PolicySpace::new(
+            policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+                value.inner.clone()
+            }),
         ))
     }
     pub(crate) fn vary(&self, dimension: &PyPolicyDimension) -> Self {
@@ -38,7 +40,7 @@ impl PyPolicySpace {
 
 #[pyclass(name = "AuditPlan", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyAuditPlan(pub(crate) pdbiox::AuditPlan);
+pub(crate) struct PyAuditPlan(pub(crate) molframe::AuditPlan);
 
 #[pymethods]
 impl PyAuditPlan {

@@ -113,7 +113,10 @@ impl SourceBytes for SpillWindowedFile {
         if start >= self.length || len == 0 {
             return Ok(ByteWindow::new(start, &[]));
         }
-        let remaining = usize::try_from(self.length - start).map_or(usize::MAX, |value| value);
+        let remaining = match usize::try_from(self.length - start) {
+            Ok(length) => length,
+            Err(_) => usize::MAX,
+        };
         let target = len.min(remaining);
         self.output.clear();
         let record_bytes = u64::try_from(self.record_bytes)

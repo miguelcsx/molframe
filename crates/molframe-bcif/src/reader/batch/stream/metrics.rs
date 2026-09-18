@@ -13,11 +13,15 @@ impl ColumnStream {
 
 impl TextStream {
     fn max_width(&self) -> usize {
-        self.offsets
+        match self
+            .offsets
             .windows(2)
             .filter_map(|pair| pair[1].checked_sub(pair[0]))
             .filter_map(|width| usize::try_from(width).ok())
             .max()
-            .map_or(0, |width| width)
+        {
+            Some(width) => width,
+            None => 0,
+        }
     }
 }

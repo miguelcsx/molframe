@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 #[pyclass(name = "MappedMotif", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyMappedMotif(pub(crate) pdbiox::fx::MappedMotif);
+pub(crate) struct PyMappedMotif(pub(crate) molframe::fx::MappedMotif);
 
 #[pymethods]
 impl PyMappedMotif {
@@ -18,18 +18,18 @@ impl PyMappedMotif {
     fn new(components: BTreeMap<String, u32>, atoms: Vec<(PyAtomSite, Vec<u32>)>) -> Self {
         let components = components
             .into_iter()
-            .map(|(name, residue)| (name.into_boxed_str(), pdbiox::ResidueIndex::new(residue)))
+            .map(|(name, residue)| (name.into_boxed_str(), molframe::ResidueIndex::new(residue)))
             .collect();
         let atoms = atoms
             .into_iter()
             .map(|(site, values)| {
                 (
                     site.0,
-                    values.into_iter().map(pdbiox::AtomIndex::new).collect(),
+                    values.into_iter().map(molframe::AtomIndex::new).collect(),
                 )
             })
             .collect();
-        Self(pdbiox::fx::MappedMotif { components, atoms })
+        Self(molframe::fx::MappedMotif { components, atoms })
     }
 
     #[getter]
@@ -65,13 +65,13 @@ impl PyMappedMotif {
 
 #[pyclass(name = "MappingSet", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyMappingSet(pub(crate) pdbiox::fx::MappingSet);
+pub(crate) struct PyMappingSet(pub(crate) molframe::fx::MappingSet);
 
 #[pymethods]
 impl PyMappingSet {
     #[new]
     fn new(mappings: Vec<PyMappedMotif>, ambiguous: bool) -> Self {
-        Self(pdbiox::fx::MappingSet {
+        Self(molframe::fx::MappingSet {
             mappings: mappings.into_iter().map(|mapping| mapping.0).collect(),
             ambiguous,
         })
@@ -101,12 +101,14 @@ pub(crate) fn map_motif(
     let structure = structure.structure().clone();
     let motif = motif.0.clone();
     let dictionary = dictionary.map(|value| value.0.clone());
-    let policy = policy.map_or_else(pdbiox::AnalysisPolicy::default, |value| value.inner.clone());
+    let policy = policy.map_or_else(molframe::AnalysisPolicy::default, |value| {
+        value.inner.clone()
+    });
     py.detach(move || {
         let provider = dictionary
             .as_ref()
-            .map(|value| value.as_ref() as &dyn pdbiox::ComponentProvider);
-        pdbiox::fx::map_motif(&structure, &motif, provider, &policy, limit)
+            .map(|value| value.as_ref() as &dyn molframe::ComponentProvider);
+        molframe::fx::map_motif(&structure, &motif, provider, &policy, limit)
             .map(PyMappingSet)
             .map_err(mapping_error)
     })

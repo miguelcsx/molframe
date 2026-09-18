@@ -1,8 +1,8 @@
 //! Virtual tera-scale structural inputs consumed by the real batch readers.
 
 use super::{ResourceRecord, measure_case};
-use pdbiox::ReadOptions;
-use pdbiox::core::{
+use molframe::ReadOptions;
+use molframe::core::{
     Backpressure, BatchDemand, BatchSource, ByteWindow, ChunkId, DatasetId, ExecutionContext,
     LogicalRow, MemoryReservation, ScratchPolicy, SourceBytes, StructureBatch, StructureBatchError,
 };
@@ -79,7 +79,7 @@ pub(super) fn run(format: GeneratedFormat, minimum_bytes: u64) -> Result<Resourc
         let logical_row = LogicalRow::new(0);
         let rows = match format {
             GeneratedFormat::Mmcif => drain(
-                pdbiox::cif::MmcifBatchSource::new(
+                molframe::cif::MmcifBatchSource::new(
                     source,
                     options,
                     dataset,
@@ -93,7 +93,7 @@ pub(super) fn run(format: GeneratedFormat, minimum_bytes: u64) -> Result<Resourc
                 name,
             )?,
             GeneratedFormat::ModelCif => drain(
-                pdbiox::modelcif::ModelCifBatchSource::new(
+                molframe::modelcif::ModelCifBatchSource::new(
                     source,
                     options,
                     dataset,
@@ -107,7 +107,7 @@ pub(super) fn run(format: GeneratedFormat, minimum_bytes: u64) -> Result<Resourc
                 name,
             )?,
             GeneratedFormat::Pdb => drain(
-                pdbiox::pdb::PdbBatchSource::new(
+                molframe::pdb::PdbBatchSource::new(
                     source,
                     options,
                     dataset,
@@ -221,19 +221,22 @@ impl RepeatedSource {
 }
 
 impl SourceBytes for RepeatedSource {
-    fn window(&mut self, start: u64, len: usize) -> Result<ByteWindow<'_>, pdbiox::Diagnostic> {
+    fn window(&mut self, start: u64, len: usize) -> Result<ByteWindow<'_>, molframe::Diagnostic> {
         if start >= self.length || len == 0 {
             return Ok(ByteWindow::new(start, &[]));
         }
         if len > self.buffer.capacity() {
-            return Err(pdbiox::Diagnostic::new(pdbiox::Code::E1902)
+            return Err(molframe::Diagnostic::new(molframe::Code::E1902)
                 .with_context("requested bytes", len.to_string()));
         }
-        let remaining = usize::try_from(self.length - start).map_or(usize::MAX, |value| value);
+        let remaining = match usize::try_from(self.length - start) {
+            Ok(length) => length,
+            Err(_) => usize::MAX,
+        };
         let target = len.min(remaining);
         self.buffer.clear();
         self.append_at(start, target).map_err(|error| {
-            pdbiox::Diagnostic::new(pdbiox::Code::E1903).with_context("reason", error)
+            molframe::Diagnostic::new(molframe::Code::E1903).with_context("reason", error)
         })?;
         Ok(ByteWindow::new(start, &self.buffer))
     }
