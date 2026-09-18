@@ -8,6 +8,18 @@
 //! has the logic. The default feature set is the complete user surface; a caller
 //! that needs one format can disable default features and link just that format.
 //!
+//! # What the root carries
+//!
+//! The root namespace is curated, not a mirror of the workspace. It holds the
+//! core data model, the reading and writing verbs, the typed operation
+//! vocabulary, and — as flat names — the crates whose surface is small enough
+//! to read flat: `chem`, `geom`, `ic`, `ml`, `query`, `spatial`, `xtal` and
+//! `audit`. Every one of those is also reachable as a module
+//! (`molframe::geom`, …), so a caller can always qualify. The large domain
+//! crates — `analysis`, `compare`, `seq`, `surface`, `traj`, `validate`, `fx` —
+//! are module-only: `molframe::analysis::hydrogen_bonds`, never a flat
+//! `molframe::hydrogen_bonds`, so the root stays a page a reader can hold.
+//!
 //! # Reading, and saying what was wrong with the file
 //!
 //! ```
@@ -140,8 +152,6 @@ pub use molframe_core::{
 pub use molframe_adapters as adapters;
 
 #[cfg(feature = "audit")]
-pub use molframe_audit as audit;
-#[cfg(feature = "audit")]
 pub use molframe_audit::{
     AuditPlan, AuditReport, AuditRun, DimensionSensitivity, PlanError, PolicyDimension,
     PolicySpace, PolicyValue, SensitiveItem, audit,
@@ -268,28 +278,14 @@ pub use molframe_xtal::{
 // re-exported under their own namespace rather than flattened into the root.
 #[cfg(feature = "analysis")]
 pub use molframe_analysis as analysis;
-#[cfg(feature = "analysis")]
-pub use molframe_analysis::{
-    StreamlineDirection, StreamlineOptions, VectorFieldError, VectorFieldGrid,
-    integrate_streamlines,
-};
 #[cfg(feature = "compare")]
 pub use molframe_compare as compare;
 #[cfg(feature = "seq")]
 pub use molframe_seq as seq;
 #[cfg(feature = "surface")]
 pub use molframe_surface as surface;
-#[cfg(feature = "surface")]
-pub use molframe_surface::{
-    SurfaceComponent, SurfaceComponentError, SurfaceComponentFilter, filter_surface_components,
-    surface_components,
-};
 #[cfg(feature = "traj")]
 pub use molframe_traj as traj;
-#[cfg(feature = "traj")]
-pub use molframe_traj::{
-    TrajectoryInterpolation, TrajectoryInterpolationError, interpolate_trajectory_frames,
-};
 #[cfg(feature = "validate")]
 pub use molframe_validate as validate;
 
