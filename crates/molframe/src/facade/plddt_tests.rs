@@ -3,7 +3,7 @@ use super::*;
 #[cfg(feature = "modelcif")]
 #[test]
 fn modelcif_plddt_becomes_a_shared_atom_property_without_changing_b_factors() {
-    let source = include_str!("../../pdbiox-modelcif/tests/fixtures/modelcif_plddt.cif");
+    let source = include_str!("../../../molframe-modelcif/tests/fixtures/modelcif_plddt.cif");
     let (structure, findings) = read_bytes(
         source.as_bytes().to_vec(),
         Some("modelcif_plddt.cif"),

@@ -42,48 +42,48 @@ fn structure() -> crate::Structure {
 }
 
 struct DirectPhysicalAnalyses {
-    radial: crate::Analysis<Vec<pdbiox_analysis::RadialBin>>,
+    radial: crate::Analysis<Vec<molframe_analysis::RadialBin>>,
     coordination: crate::Analysis<Vec<u32>>,
-    leaflets: crate::Analysis<Vec<pdbiox_analysis::Leaflet>>,
-    linear: crate::Analysis<Vec<pdbiox_analysis::LinearDensityBin>>,
-    density: crate::Analysis<pdbiox_analysis::DensityGrid>,
-    pore: crate::Analysis<Vec<pdbiox_analysis::PoreSample>>,
-    surface_contacts: crate::Analysis<Vec<pdbiox_analysis::Contact>>,
+    leaflets: crate::Analysis<Vec<molframe_analysis::Leaflet>>,
+    linear: crate::Analysis<Vec<molframe_analysis::LinearDensityBin>>,
+    density: crate::Analysis<molframe_analysis::DensityGrid>,
+    pore: crate::Analysis<Vec<molframe_analysis::PoreSample>>,
+    surface_contacts: crate::Analysis<Vec<molframe_analysis::Contact>>,
 }
 
 struct PhysicalOptions {
-    radial: pdbiox_analysis::RadialDistributionOptions,
-    leaflets: pdbiox_analysis::LeafletOptions,
-    linear: pdbiox_analysis::LinearDensityOptions,
-    grid: pdbiox_analysis::DensityGridSpec,
-    pore: pdbiox_analysis::PoreProfileOptions,
+    radial: molframe_analysis::RadialDistributionOptions,
+    leaflets: molframe_analysis::LeafletOptions,
+    linear: molframe_analysis::LinearDensityOptions,
+    grid: molframe_analysis::DensityGridSpec,
+    pore: molframe_analysis::PoreProfileOptions,
 }
 
 fn options() -> PhysicalOptions {
     PhysicalOptions {
-        radial: pdbiox_analysis::RadialDistributionOptions {
+        radial: molframe_analysis::RadialDistributionOptions {
             minimum_distance: 0.0,
             maximum_distance: 3.5,
             bins: 7,
             volume: 1_000.0,
             backend: SpatialBackend::BruteForce,
         },
-        leaflets: pdbiox_analysis::LeafletOptions {
+        leaflets: molframe_analysis::LeafletOptions {
             connection_distance: 1.5,
             backend: SpatialBackend::BruteForce,
         },
-        linear: pdbiox_analysis::LinearDensityOptions {
-            axis: pdbiox_analysis::CartesianAxis::X,
+        linear: molframe_analysis::LinearDensityOptions {
+            axis: molframe_analysis::CartesianAxis::X,
             minimum: -1.0,
             maximum: 22.0,
             bins: 5,
         },
-        grid: pdbiox_analysis::DensityGridSpec {
+        grid: molframe_analysis::DensityGridSpec {
             origin: [-1.0, -1.0, -1.0],
             spacing: [5.0, 5.0, 5.0],
             shape: [5, 2, 2],
         },
-        pore: pdbiox_analysis::PoreProfileOptions {
+        pore: molframe_analysis::PoreProfileOptions {
             axis_origin: [0.0, 0.0, 0.0],
             axis_direction: [1.0, 0.0, 0.0],
             start: 0.0,
@@ -105,21 +105,21 @@ fn direct_analyses(
     options: &PhysicalOptions,
     policy: &AnalysisPolicy,
 ) -> DirectPhysicalAnalyses {
-    let radial_kernel = pdbiox_analysis::radial_distribution_kernel(left, left, options.radial);
-    let coordination_kernel = pdbiox_analysis::coordination_numbers_kernel(
+    let radial_kernel = molframe_analysis::radial_distribution_kernel(left, left, options.radial);
+    let coordination_kernel = molframe_analysis::coordination_numbers_kernel(
         left,
         left,
         0.0,
         2.1,
         SpatialBackend::BruteForce,
     );
-    let leaflets_kernel = pdbiox_analysis::leaflets_kernel(left, options.leaflets);
-    let linear_kernel = pdbiox_analysis::linear_density_kernel(weights, options.linear);
-    let density_kernel = pdbiox_analysis::density_map_kernel(weights, options.grid);
-    let pore_kernel = pdbiox_analysis::pore_profile_kernel(radii, options.pore);
-    let contacts_kernel = pdbiox_analysis::surface_contacts_kernel(
+    let leaflets_kernel = molframe_analysis::leaflets_kernel(left, options.leaflets);
+    let linear_kernel = molframe_analysis::linear_density_kernel(weights, options.linear);
+    let density_kernel = molframe_analysis::density_map_kernel(weights, options.grid);
+    let pore_kernel = molframe_analysis::pore_profile_kernel(radii, options.pore);
+    let contacts_kernel = molframe_analysis::surface_contacts_kernel(
         radii,
-        pdbiox_analysis::SurfaceContactOptions {
+        molframe_analysis::SurfaceContactOptions {
             tolerance: 0.5,
             probe: 1.0,
             surface_density: 32.0,
@@ -128,53 +128,53 @@ fn direct_analyses(
         },
     );
     DirectPhysicalAnalyses {
-        radial: pdbiox_analysis::analyse_structure(
+        radial: molframe_analysis::analyse_structure(
             structure,
             policy,
             &radial_kernel,
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("direct radial analysis"),
-        coordination: pdbiox_analysis::analyse_structure(
+        coordination: molframe_analysis::analyse_structure(
             structure,
             policy,
             &coordination_kernel,
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("direct coordination analysis"),
-        leaflets: pdbiox_analysis::analyse_structure(
+        leaflets: molframe_analysis::analyse_structure(
             structure,
             policy,
             &leaflets_kernel,
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("direct leaflet analysis"),
-        linear: pdbiox_analysis::analyse_structure(
+        linear: molframe_analysis::analyse_structure(
             structure,
             policy,
             &linear_kernel,
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("direct linear density analysis"),
-        density: pdbiox_analysis::analyse_structure(
+        density: molframe_analysis::analyse_structure(
             structure,
             policy,
             &density_kernel,
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("direct density analysis"),
-        pore: pdbiox_analysis::analyse_structure(
+        pore: molframe_analysis::analyse_structure(
             structure,
             policy,
             &pore_kernel,
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("direct pore analysis"),
-        surface_contacts: pdbiox_analysis::analyse_structure(
+        surface_contacts: molframe_analysis::analyse_structure(
             structure,
             policy,
             &contacts_kernel,
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("direct surface contacts analysis"),
     }
@@ -280,7 +280,7 @@ fn plan_values(
             floats: &floats,
             ..Default::default()
         },
-        &pdbiox_core::ExecutionContext::default(),
+        &molframe_core::ExecutionContext::default(),
     )
     .expect("physical plan")
     .entries

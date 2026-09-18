@@ -15,21 +15,21 @@ fn surface_operations_match_the_facade_surface_kernels() {
     let masks = [MaskInput { values: &first }];
     let probe = 1.4_f32;
     let sample_points = 400_u16;
-    let direct_sasa = pdbiox_surface::shrake_rupley(
+    let direct_sasa = molframe_surface::shrake_rupley(
         &positions,
         &radii,
         probe,
         sample_points,
-        &pdbiox_core::ExecutionContext::default(),
+        &molframe_core::ExecutionContext::default(),
     )
     .expect("direct SASA");
-    let direct_buried = pdbiox_surface::buried_surface(
+    let direct_buried = molframe_surface::buried_surface(
         &positions,
         &radii,
         probe,
         sample_points,
         &first,
-        &pdbiox_core::ExecutionContext::default(),
+        &molframe_core::ExecutionContext::default(),
     )
     .expect("direct buried surface");
 
@@ -63,7 +63,7 @@ fn surface_operations_match_the_facade_surface_kernels() {
                 masks: &masks,
                 ..Default::default()
             },
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("native surface plan");
     let values = result

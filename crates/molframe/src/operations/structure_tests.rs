@@ -40,20 +40,20 @@ fn gaussian_network_plan_matches_direct_kernel() {
     )
     .expect("GNM fixture");
     let sites = crate::AtomSelection::from_sorted(vec![0, 1, 2]);
-    let options = pdbiox_analysis::GnmOptions {
+    let options = molframe_analysis::GnmOptions {
         contact_distance: 1.1,
         mode_count: 2,
         zero_mode_tolerance: 1e-10,
         memory_limit_bytes: 1_024,
         backend: crate::SpatialBackend::BruteForce,
-        reduction: pdbiox_core::parallel::ReductionPolicy::Deterministic,
+        reduction: molframe_core::parallel::ReductionPolicy::Deterministic,
     };
-    let direct = pdbiox_analysis::gaussian_network_model(
+    let direct = molframe_analysis::gaussian_network_model(
         structure.positions(),
         &sites,
         options,
         None,
-        &pdbiox_core::ExecutionContext::default(),
+        &molframe_core::ExecutionContext::default(),
     )
     .expect("direct GNM");
     let mut plan = Plan::new();
@@ -73,7 +73,7 @@ fn gaussian_network_plan_matches_direct_kernel() {
                 structure: Some(&structure),
                 ..Default::default()
             },
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("GNM plan");
     let Some(PlanValue::Structure(value)) = result.entries.first().map(|entry| &entry.value) else {
@@ -134,7 +134,7 @@ fn base_pair_plan_matches_direct_kernel_with_an_explicit_ccd_provider() {
         &structure,
         provider.as_ref(),
         options,
-        &pdbiox_core::ExecutionContext::default(),
+        &molframe_core::ExecutionContext::default(),
     )
     .expect("direct base-pair kernel");
     let mut plan = Plan::new();
@@ -153,7 +153,7 @@ fn base_pair_plan_matches_direct_kernel_with_an_explicit_ccd_provider() {
                 structure: Some(&structure),
                 ..Default::default()
             },
-            &pdbiox_core::ExecutionContext::default(),
+            &molframe_core::ExecutionContext::default(),
         )
         .expect("base-pair plan");
     let Some(PlanValue::Structure(value)) = result.entries.first().map(|entry| &entry.value) else {
