@@ -49,8 +49,8 @@ single responsibility too. The cap forces the split at the point where the seam
 is still obvious.
 
 **In practice.** `foo.rs` becomes `foo/` with `mod.rs` plus one file per
-responsibility. See `crates/pdbiox-core/src/topology/` and
-`crates/pdbiox-cif/src/lower/` for the shape.
+responsibility. See `crates/molframe-core/src/topology/` and
+`crates/molframe-cif/src/lower/` for the shape.
 
 ---
 
@@ -87,6 +87,11 @@ manual_unwrap_or         = "allow"
 
 **Do not "fix" those allows.** They exist because of this rule.
 
+`map_or(value, |found| found)` is not a way around this rule either — it is the
+`unwrap_or` this rule forbids, spelled so the check below cannot see it. An
+explicit `match` says the same thing and keeps the fallback a decision made at
+the call site.
+
 Tests are exempt: a test that cannot unwrap is a test whose failure message got
 worse. Prefer `let ... else { panic!("...") }` there anyway, so the failure says
 what was expected.
@@ -107,7 +112,7 @@ correct the result is.
 - Interned identifiers, not strings, in anything a kernel touches.
 - One arena for many small strings, not one allocation each.
 - A reserved sentinel instead of `Option` where the column is per-atom or
-  per-residue — see `crates/pdbiox-core/src/optional.rs`.
+  per-residue — see `crates/molframe-core/src/optional.rs`.
 - Compare squared distances against a squared cutoff; take the square root only
   when a caller wants a length.
 - Read the data-design reasoning in the specification before inventing a new
@@ -181,9 +186,29 @@ are half-written.
 
 **DRY.** One implementation per idea. If two places need the same thing, extract
 it — but extract the *idea*, not a superficial similarity. The symmetric
-eigensolver in `pdbiox-geom` serves both the inertia tensor and the superposition
+eigensolver in `molframe-geom` serves both the inertia tensor and the superposition
 matrix because they genuinely want the same computation; two format writers that
 happen to both emit text do not.
+
+---
+
+## 9. The facade's vocabulary is closed
+
+**No `#[non_exhaustive]` on the facade's own enums.** A variant added to
+`PlanOperation`, `StructureRequest` or any other request enum is an API change,
+and the compiler says where: the match sites that must grow a conversion arm. An
+`_ =>` in one of them would turn that compile error into a silent misdispatch, so
+the exhaustive match is the guard. `Format` is the exception — it comes from core
+and crosses a version boundary between crates, which is what `#[non_exhaustive]`
+is for.
+
+**A feature gate mirrors the item it guards.** An `any`/`all` gate on a module,
+a re-export or a variant lists exactly the features that make the item exist —
+not the shortest expression the feature graph currently allows. `bcif` implying
+`mmcif` today does not let a gate say `mmcif` when the enum holds a `bcif`
+variant: the short form goes on compiling after the implication is dropped, while
+the reader silently disappears. The feature loop under **Checking** is the guard
+that catches it.
 
 ---
 
@@ -192,11 +217,48 @@ happen to both emit text do not.
 Everything above is checked by:
 
 ```bash
-cargo clippy --workspace --all-targets    # must be zero warnings
 cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings     # must be zero warnings
+# Also carries the two checks that keep the Python surface honest, one per
+# direction the drift can run: every name the extension registers must be named by
+# the module that carries it, in the `.py` and the `.pyi` both, and every name a
+# namespace advertises must be registered by something — which the module build
+# enforces, because `add_exports` resolves each name with `getattr` and propagates
+# the miss (`crates/molframe-py/src/core/registration`, `module_tests.rs`).
 cargo test --workspace
-./scripts/check-docs.sh
+cargo test -p molframe --doc
+```
 
-grep -rn "unwrap" crates/ | grep -v "_tests.rs"          # must be empty
-find crates -name "*.rs" | xargs wc -l | awk '$1>500'    # must be empty
+The facade must also compile with **every single feature and with none**, which
+is what keeps §9's gates honest:
+
+```bash
+for f in "" pdb mmcif bcif modelcif geom ic query spatial chem ml xtal \
+         surface analysis validate seq compare traj audit fx adapters \
+         gzip zstd mmap; do
+  cargo check -p molframe --no-default-features ${f:+--features "$f"} || exit 1
+done
+```
+
+Every single feature is listed, not a sample. The three pass-through ones at the
+end gate nothing in `molframe` itself, but they change how `molframe-core` is
+built — `mmap` is what turns on its audited `unsafe` boundary — and no other entry
+reaches that configuration. The two aggregates are the only ones absent: `full` is
+what `cargo test --workspace` already builds, and `default` is `full`.
+
+(With a shell that does not split `${f:+…}`, spell the branch out with an `if`.)
+
+plus these greps, each of which must come back empty:
+
+```bash
+# No unwrap, expect, or any unwrap_*/expect_* variant outside test files.
+# Tests are exempt: a test that cannot unwrap is a test whose failure message
+# got worse. Both exclusions matter — unit tests are `*_tests.rs`, integration
+# and golden tests live under `tests/`. `Arc::try_unwrap` and friends are not
+# matches: the pattern anchors on the method call's leading dot.
+grep -rnE '\.(unwrap|expect)(_[A-Za-z0-9_]+)?\(' crates/ --include="*.rs" \
+  | grep -v '_tests.rs' | grep -v '/tests/'
+
+# The file cap, .rs only. Nothing else in the tree is source.
+find crates -name "*.rs" -print0 | xargs -0 wc -l | awk '$1>500 && $2 != "total" {print}'
 ```
