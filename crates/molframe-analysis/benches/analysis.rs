@@ -14,7 +14,7 @@ use molframe_spatial::SpatialBackend;
 
 #[path = "analysis/extended.rs"]
 mod extended;
-use extended::bench_extended_kernels;
+use extended::{bench_extended_kernels, bench_hydrogen_bonds};
 
 #[path = "analysis/gnm.rs"]
 mod gnm;
@@ -302,5 +302,6 @@ fn main() {
     bench_large_physical_scaling(&mut criterion);
     bench_model_kernels(&mut criterion);
     bench_extended_kernels(&mut criterion);
+    bench_hydrogen_bonds(&mut criterion);
     criterion.final_summary();
 }

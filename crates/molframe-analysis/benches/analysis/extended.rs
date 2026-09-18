@@ -1,12 +1,12 @@
 //! Extended analysis benchmark families.
 
 use criterion::measurement::WallTime;
-use criterion::{BenchmarkGroup, Criterion, black_box};
+use criterion::{BenchmarkGroup, Criterion, Throughput, black_box};
 use molframe_analysis::{
-    BaseFrame, CentreGroup, FragmentReference, HelicalOptions, LeafletOptions,
+    BaseFrame, CentreGroup, FragmentReference, HelicalOptions, HydrogenBondOptions, LeafletOptions,
     RadialDistributionOptions, atom_contacts_between, atom_contacts_between_with_spatial,
-    centre_of_mass_radial_distribution, helical_parameters, helical_steps, identify_leaflets,
-    map_fragments, sugar_pucker, surface_contacts,
+    centre_of_mass_radial_distribution, helical_parameters, helical_steps, hydrogen_bonds,
+    identify_leaflets, map_fragments, sugar_pucker, surface_contacts,
 };
 use molframe_bench::{Sample, structure};
 use molframe_core::selection::AtomSelection;
@@ -247,4 +247,128 @@ fn bench_extended_reference_kernels(
     group.bench_function("sugar_pucker", |b| {
         b.iter(|| black_box(sugar_pucker([12.0, -8.0, 5.0, 16.0, -4.0])));
     });
+}
+
+/// A water lattice of `side^3` O–H pairs: every oxygen both donor and
+/// acceptor, spacing 2.8 ångström. The same shape the hbond property tests
+/// use, scaled to the kernel's block boundaries. Even indices are oxygens.
+fn hydrogen_bond_lattice(side: i16) -> Structure {
+    use molframe_core::io::{InputBuffer, ReadOptions};
+    use molframe_core::{
+        AnnotationColumn, AtomAnnotation, BondOrder, BondProvenance, BondRecord, BondTableBuilder,
+        Presence,
+    };
+    use std::fmt::Write;
+
+    let mut source = String::from(
+        "data_s\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n",
+    );
+    let mut serial = 0_u32;
+    for x in 0..side {
+        for y in 0..side {
+            for z in 0..side {
+                let (ox, oy, oz) = (f32::from(x) * 2.8, f32::from(y) * 2.8, f32::from(z) * 2.8);
+                let residue = serial / 2 + 1;
+                serial += 1;
+                writeln!(
+                    source,
+                    "ATOM {serial} O O HOH A {residue} {ox:.3} {oy:.3} {oz:.3}"
+                )
+                .expect("fixture row");
+                serial += 1;
+                writeln!(
+                    source,
+                    "ATOM {serial} H H1 HOH A {residue} {:.3} {oy:.3} {oz:.3}",
+                    ox + 0.96
+                )
+                .expect("fixture row");
+            }
+        }
+    }
+
+    let input = InputBuffer::from_bytes(source.into_bytes());
+    let (structure, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
+        Ok(parsed) => parsed,
+        Err(findings) => panic!("hbond fixture failed: {findings:?}"),
+    };
+    let count = structure.atom_count();
+    let mut data = structure.data().clone();
+    let oxygens = |atoms: u32| match AnnotationColumn::from_entries((0..atoms).map(|atom| {
+        if atom % 2 == 0 {
+            (true, Presence::Present)
+        } else {
+            (false, Presence::Inapplicable)
+        }
+    })) {
+        Ok(column) => column,
+        Err(error) => panic!("hbond fixture annotation failed: {error:?}"),
+    };
+    data.annotations.insert(
+        molframe_core::HBOND_DONOR_ANNOTATION,
+        AtomAnnotation::Boolean(oxygens(count)),
+    );
+    data.annotations.insert(
+        molframe_core::HBOND_ACCEPTOR_ANNOTATION,
+        AtomAnnotation::Boolean(oxygens(count)),
+    );
+    let mut bonds = BondTableBuilder::new();
+    for oxygen in (0..count).step_by(2) {
+        bonds.push(BondRecord {
+            atom_a: molframe_core::AtomIndex::new(oxygen),
+            atom_b: molframe_core::AtomIndex::new(oxygen + 1),
+            order: BondOrder::Single,
+            provenance: BondProvenance::ChemicalComponentDictionary,
+        });
+    }
+    data.bonds = bonds.finish();
+    Structure::new(data)
+}
+
+/// Hydrogen-bond detection on a 20³ water lattice (40k atoms). The periodic
+/// brute-force row is the evidence base for routing periodic search through
+/// the cost model.
+pub(super) fn bench_hydrogen_bonds(c: &mut Criterion) {
+    let structure = hydrogen_bond_lattice(20);
+    let cell = molframe_core::structure::UnitCell {
+        lengths: [56.0, 56.0, 56.0],
+        angles: [90.0; 3],
+    };
+    let mut data = structure.data().clone();
+    data.cell = Some(cell);
+    let periodic = Structure::new(data);
+    let mut group = c.benchmark_group("analysis_hbond");
+    group.throughput(Throughput::Elements(u64::from(structure.atom_count())));
+    for (label, structure, periodic) in [
+        ("cell_list", &structure, false),
+        ("cell_list/periodic", &periodic, true),
+        ("brute_force/periodic", &periodic, true),
+    ] {
+        let backend = if label.starts_with("brute_force") {
+            SpatialBackend::BruteForce
+        } else {
+            SpatialBackend::CellList
+        };
+        group.bench_function(label, |b| {
+            b.iter(|| {
+                let bonds = match hydrogen_bonds(
+                    structure,
+                    HydrogenBondOptions {
+                        maximum_donor_acceptor_distance: 3.5,
+                        minimum_angle_degrees: 150.0,
+                        backend,
+                        periodic,
+                    },
+                    &context(),
+                ) {
+                    Ok(bonds) => bonds,
+                    Err(error) => panic!("hbond benchmark failed: {error:?}"),
+                };
+                black_box(bonds.len());
+            });
+        });
+    }
+    group.finish();
 }
