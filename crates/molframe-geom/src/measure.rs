@@ -50,7 +50,7 @@ pub fn distance_squared(a: [f32; 3], b: [f32; 3]) -> f64 {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_geom::distance;
+/// use molframe_geom::distance;
 ///
 /// let separation = distance([0.0, 0.0, 0.0], [3.0, 4.0, 0.0]);
 /// assert!((separation - 5.0).abs() < 1e-12);
@@ -125,7 +125,7 @@ pub fn normalise(vector: [f64; 3]) -> Option<[f64; 3]> {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_geom::angle;
+/// use molframe_geom::angle;
 ///
 /// let right = angle([1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
 /// assert!(right.is_some_and(|value| (value - std::f64::consts::FRAC_PI_2).abs() < 1e-12));
@@ -162,7 +162,7 @@ pub fn angle(a: [f32; 3], vertex: [f32; 3], c: [f32; 3]) -> Option<f64> {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_geom::dihedral;
+/// use molframe_geom::dihedral;
 ///
 /// let planar = dihedral(
 ///     [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0],

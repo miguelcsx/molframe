@@ -43,7 +43,7 @@ pub enum FluctuationError {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_geom::rmsf;
+/// use molframe_geom::rmsf;
 ///
 /// // One atom that sits at the origin in one frame and two units along x in
 /// // the next: it strays one unit either side of its mean.
@@ -51,7 +51,7 @@ pub enum FluctuationError {
 /// let b = [[2.0, 0.0, 0.0]];
 /// let values = rmsf(&[&a, &b])?;
 /// assert!((values[0] - 1.0).abs() < 1e-9);
-/// # Ok::<(), pdbiox_geom::FluctuationError>(())
+/// # Ok::<(), molframe_geom::FluctuationError>(())
 /// ```
 pub fn rmsf(frames: &[&[[f32; 3]]]) -> Result<Vec<f64>, FluctuationError> {
     let Some((first, rest)) = frames.split_first() else {

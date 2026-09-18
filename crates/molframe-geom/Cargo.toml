@@ -1,11 +1,11 @@
 [package]
-name = "pdbiox-geom"
+name = "molframe-geom"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Geometric kernels for pdbiox"
+description = "Geometric kernels for molframe"
 
 [dependencies]
 num-traits.workspace = true
@@ -13,7 +13,7 @@ wide.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
+molframe-bench.workspace = true
 
 [[bench]]
 name = "geom"

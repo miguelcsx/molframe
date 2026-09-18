@@ -12,7 +12,7 @@ use num_traits::AsPrimitive;
 /// # Examples
 ///
 /// ```
-/// use pdbiox_geom::Rigid;
+/// use molframe_geom::Rigid;
 ///
 /// let shift = Rigid::translation([1.0, 2.0, 3.0]);
 /// assert_eq!(shift.apply([0.0, 0.0, 0.0]), [1.0, 2.0, 3.0]);

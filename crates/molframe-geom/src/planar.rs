@@ -32,12 +32,12 @@ pub struct Plane {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_geom::plane_deviation;
+/// use molframe_geom::plane_deviation;
 ///
 /// let flat = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]];
 /// let Some(deviation) = plane_deviation(&flat)? else { panic!("plane absent") };
 /// assert!(deviation < 1e-6);
-/// # Ok::<(), pdbiox_geom::EigenError>(())
+/// # Ok::<(), molframe_geom::EigenError>(())
 /// ```
 ///
 /// # Errors
