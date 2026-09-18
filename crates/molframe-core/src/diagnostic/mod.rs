@@ -12,9 +12,11 @@
 
 mod code;
 mod finding;
+mod findings;
 mod registry;
 mod render;
 
 pub use code::{Class, Code, Kind, Severity, Strictness};
 pub use finding::{ContextItem, Diagnostic, Diagnostics};
+pub use findings::Findings;
 pub use render::Rendered;

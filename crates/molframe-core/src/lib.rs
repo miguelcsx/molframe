@@ -1,6 +1,6 @@
-//! Core types, storage and analysis contracts for pdbiox.
+//! Core types, storage and analysis contracts for molframe.
 //!
-//! This crate holds the vocabulary every other pdbiox crate speaks: the typed
+//! This crate holds the vocabulary every other molframe crate speaks: the typed
 //! positions into a structure's tables, the interned identifiers, the chunked
 //! columnar store the coordinates and annotations live in, the immutable
 //! [`Structure`](structure::Structure) built over it, and the contract types
@@ -58,7 +58,8 @@ pub use column::{BitVec, EncodedColumn, Presence, ValidityMask};
 pub use contract::{Analysis, AnalysisPolicy, Coverage, Provenance, Status};
 pub use coords::{Aabb, CoordinateBlock, CoordinateGeneration};
 pub use diagnostic::{
-    Class, Code, ContextItem, Diagnostic, Diagnostics, Kind, Rendered, Severity, Strictness,
+    Class, Code, ContextItem, Diagnostic, Diagnostics, Findings, Kind, Rendered, Severity,
+    Strictness,
 };
 pub use element::Element;
 pub use execution::{

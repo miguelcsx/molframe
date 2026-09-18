@@ -3,11 +3,11 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json};
-use pdbiox::surface::{edge_geodesic_distances, surface_curvatures, surface_patch};
-use pdbiox::traj::{
+use molframe::surface::{edge_geodesic_distances, surface_curvatures, surface_patch};
+use molframe::traj::{
     CartesianFit, cartesian_pca, diffusion_map, dihedral_pca, pairwise_fitted_rmsd,
 };
-use pdbiox::{AtomIndex, ModelIndex, PeriodicAngle, RadiusSet, Structure, vdw_radius};
+use molframe::{AtomIndex, ModelIndex, PeriodicAngle, RadiusSet, Structure, vdw_radius};
 use std::fmt::Write as _;
 use std::path::Path;
 
@@ -20,10 +20,10 @@ pub(super) fn torsions(path: &Path, ccd: &Path, ccd_version: &str, context: Cont
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let values = match pdbiox::structure_backbone_torsions(&structure) {
+    let values = match molframe::structure_backbone_torsions(&structure) {
         Ok(values) => values,
-        Err(finding) => {
-            context.findings(&[finding], &path.display().to_string());
+        Err(findings) => {
+            context.findings(&findings, &path.display().to_string());
             return Exit::Consistency;
         }
     };
@@ -51,7 +51,7 @@ pub(super) fn helix(
     path: &Path,
     ccd: &Path,
     ccd_version: &str,
-    eigen: pdbiox::EigenOptions,
+    eigen: molframe::EigenOptions,
     context: Context,
 ) -> Exit {
     let structure = match open(path, context) {
@@ -66,21 +66,21 @@ pub(super) fn helix(
     let mut frame_count = 0usize;
     let mut helix_count = 0usize;
     let mut chain_count = 0usize;
-    let traces = match pdbiox::structure_protein_alpha_traces(&structure) {
+    let traces = match molframe::structure_protein_alpha_traces(&structure) {
         Ok(traces) => traces,
-        Err(finding) => {
-            context.findings(&[finding], &path.display().to_string());
+        Err(findings) => {
+            context.findings(&findings, &path.display().to_string());
             return Exit::Consistency;
         }
     };
     for trace in traces {
         let chain_positions = trace.positions;
         alpha_count += chain_positions.iter().flatten().count();
-        frame_count += pdbiox::backbone_frames(&chain_positions)
+        frame_count += molframe::backbone_frames(&chain_positions)
             .iter()
             .flatten()
             .count();
-        match pdbiox::helix_geometry_with_options(&chain_positions, eigen) {
+        match molframe::helix_geometry_with_options(&chain_positions, eigen) {
             Ok(Some(_)) => helix_count += 1,
             Ok(None) => {}
             Err(error) => {
@@ -142,14 +142,14 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
         positions.push(position);
         radii.push(radius);
     }
-    let Ok(surface) = pdbiox::surface::solvent_excluded_surface_with_options(
+    let Ok(surface) = molframe::surface::solvent_excluded_surface_with_options(
         &positions,
         &radii,
         options.probe,
-        pdbiox::surface::SurfaceGridOptions {
+        molframe::surface::SurfaceGridOptions {
             resolution: options.resolution,
             max_cells: options.max_cells,
-            max_workspace_bytes: pdbiox::surface::SurfaceGridOptions::STANDARD_WORKSPACE_BYTES,
+            max_workspace_bytes: molframe::surface::SurfaceGridOptions::STANDARD_WORKSPACE_BYTES,
         },
     ) else {
         eprintln!("surface construction failed for the supplied probe or resolution");
@@ -165,7 +165,7 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
             eprintln!("surface output currently requires an .obj destination");
             return Exit::Usage;
         }
-        if let Err(error) = pdbiox::surface::write_obj(output, &mesh) {
+        if let Err(error) = molframe::surface::write_obj(output, &mesh) {
             eprintln!("surface output failed: {error}");
             return Exit::Failure;
         }
@@ -279,10 +279,10 @@ pub(super) fn torsion_pca(
         };
         let mut row = Vec::new();
         let records =
-            match pdbiox::structure_backbone_torsions_model(&structure, ModelIndex::new(model)) {
+            match molframe::structure_backbone_torsions_model(&structure, ModelIndex::new(model)) {
                 Ok(records) => records,
-                Err(finding) => {
-                    context.findings(&[finding], &path.display().to_string());
+                Err(findings) => {
+                    context.findings(&findings, &path.display().to_string());
                     return Exit::Consistency;
                 }
             };
