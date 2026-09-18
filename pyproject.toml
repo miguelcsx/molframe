@@ -8,6 +8,9 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = ["numpy>=2"]
 
+[dependency-groups]
+dev = ["pytest>=8"]
+
 [tool.maturin]
 manifest-path = "crates/molframe-py/Cargo.toml"
 python-source = "python"
