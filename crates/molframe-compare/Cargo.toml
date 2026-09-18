@@ -1,0 +1,30 @@
+[package]
+name = "molframe-compare"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Structure comparison scores for molframe"
+
+[dependencies]
+num-traits.workspace = true
+molframe-core.workspace = true
+molframe-chem.workspace = true
+molframe-geom.workspace = true
+molframe-seq.workspace = true
+molframe-spatial.workspace = true
+molframe-surface.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+molframe-bench.workspace = true
+molframe-cif.workspace = true
+
+[[bench]]
+name = "compare"
+harness = false
+
+[lints]
+workspace = true
