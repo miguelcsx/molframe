@@ -79,6 +79,26 @@ pub(crate) struct PyQuery {
     pub(crate) inner: Query,
 }
 
+/// The query argument of [`PyStructure::select`]: a compiled [`PyQuery`] or
+/// selection-syntax text parsed here, inside Rust (ADR-0013 keeps parsing out
+/// of the Python layer).
+#[derive(Debug, FromPyObject)]
+pub(crate) enum PyQueryArg {
+    Compiled(PyQuery),
+    Text(String),
+}
+
+impl PyQueryArg {
+    fn compile(self, py: Python<'_>) -> PyResult<Query> {
+        match self {
+            Self::Compiled(query) => Ok(query.inner),
+            Self::Text(source) => {
+                Query::compile(&source).map_err(|findings| read_error(py, &findings))
+            }
+        }
+    }
+}
+
 #[pyclass(name = "LogicalPlan", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyLogicalPlan {
@@ -164,12 +184,12 @@ impl PyStructure {
     fn select(
         &self,
         py: Python<'_>,
-        query: &PyQuery,
+        query: PyQueryArg,
         policy: Option<&PyAnalysisPolicy>,
         groups: Option<BTreeMap<String, PySelection>>,
     ) -> PyResult<PySelection> {
+        let query = query.compile(py)?;
         let structure = self.structure().clone();
-        let query = query.inner.clone();
         let policy = policy.map_or_else(AnalysisPolicy::default, |value| value.inner.clone());
         let groups = groups_from_python(groups);
         py.detach(move || {
