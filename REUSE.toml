@@ -16,25 +16,25 @@ SPDX-FileCopyrightText = "2026 Miguel Cárdenas"
 SPDX-License-Identifier = "MIT OR Apache-2.0"
 
 [[annotations]]
-path = "crates/pdbiox-chem/data/LICENSE.mendeleev"
+path = "crates/molframe-chem/data/LICENSE.mendeleev"
 precedence = "override"
 SPDX-FileCopyrightText = "2015 Lukasz Mentel"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
-path = "crates/pdbiox-chem/data/ionic-radii.bin"
+path = "crates/molframe-chem/data/ionic-radii.bin"
 precedence = "override"
 SPDX-FileCopyrightText = "2015 Lukasz Mentel"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
-path = "crates/pdbiox-xtal/data/LICENSE.spglib"
+path = "crates/molframe-xtal/data/LICENSE.spglib"
 precedence = "override"
 SPDX-FileCopyrightText = "2024 Spglib team"
 SPDX-License-Identifier = "BSD-3-Clause"
 
 [[annotations]]
-path = "crates/pdbiox-xtal/data/space-groups.bin"
+path = "crates/molframe-xtal/data/space-groups.bin"
 precedence = "override"
 SPDX-FileCopyrightText = "2024 Spglib team"
 SPDX-License-Identifier = "BSD-3-Clause"

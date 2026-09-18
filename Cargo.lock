@@ -2038,6 +2038,408 @@ dependencies = [
 ]
 
 [[package]]
+name = "molframe"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "flate2",
+ "molframe-adapters",
+ "molframe-analysis",
+ "molframe-audit",
+ "molframe-bcif",
+ "molframe-bench",
+ "molframe-chem",
+ "molframe-cif",
+ "molframe-compare",
+ "molframe-core",
+ "molframe-fx",
+ "molframe-geom",
+ "molframe-ic",
+ "molframe-ml",
+ "molframe-modelcif",
+ "molframe-pdb",
+ "molframe-query",
+ "molframe-seq",
+ "molframe-spatial",
+ "molframe-surface",
+ "molframe-traj",
+ "molframe-validate",
+ "molframe-xtal",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "toml",
+]
+
+[[package]]
+name = "molframe-adapters"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-chem",
+ "molframe-core",
+ "molframe-pdb",
+ "reqwest",
+ "sha2",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "molframe-analysis"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "faer",
+ "molframe-bench",
+ "molframe-chem",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-geom",
+ "molframe-spatial",
+ "molframe-surface",
+ "molframe-traj",
+ "nalgebra",
+ "num-traits",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "molframe-audit"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-core",
+ "num-traits",
+]
+
+[[package]]
+name = "molframe-bcif"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "indexmap 2.14.0",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "num-traits",
+ "proptest",
+ "rmp-serde",
+ "serde",
+ "serde_bytes",
+ "serde_repr",
+ "wide",
+]
+
+[[package]]
+name = "molframe-bench"
+version = "0.1.0"
+dependencies = [
+ "molframe-bcif",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-pdb",
+ "num-traits",
+]
+
+[[package]]
+name = "molframe-chem"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "num-traits",
+]
+
+[[package]]
+name = "molframe-cif"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "indexmap 2.14.0",
+ "memchr",
+ "molframe-bench",
+ "molframe-core",
+ "num-traits",
+ "proptest",
+ "quick-xml",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "molframe-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "clap_complete",
+ "clap_mangen",
+ "glob",
+ "molframe",
+ "molframe-adapters",
+ "tempfile",
+]
+
+[[package]]
+name = "molframe-compare"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-chem",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-geom",
+ "molframe-seq",
+ "molframe-spatial",
+ "molframe-surface",
+ "num-traits",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "molframe-core"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "criterion",
+ "flate2",
+ "hashbrown 0.16.1",
+ "molframe-bench",
+ "molframe-mmap",
+ "num-traits",
+ "rayon",
+ "smallvec",
+ "thiserror 2.0.20",
+ "zstd",
+]
+
+[[package]]
+name = "molframe-fx"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-chem",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-geom",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "toml",
+]
+
+[[package]]
+name = "molframe-geom"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "num-traits",
+ "wide",
+]
+
+[[package]]
+name = "molframe-ic"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-geom",
+ "num-traits",
+]
+
+[[package]]
+name = "molframe-ml"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "criterion",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-seq",
+ "molframe-spatial",
+ "num-traits",
+ "parquet 59.2.0",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "molframe-mmap"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "memmap2",
+ "tempfile",
+]
+
+[[package]]
+name = "molframe-modelcif"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "num-traits",
+]
+
+[[package]]
+name = "molframe-pdb"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "num-traits",
+ "proptest",
+ "rmp-serde",
+ "serde",
+ "serde_bytes",
+]
+
+[[package]]
+name = "molframe-py"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "molframe",
+ "numpy",
+ "pyo3",
+]
+
+[[package]]
+name = "molframe-query"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-chem",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-spatial",
+]
+
+[[package]]
+name = "molframe-resource-bench"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "molframe",
+ "molframe-bench",
+ "molframe-mmap",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "molframe-seq"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+]
+
+[[package]]
+name = "molframe-spatial"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-query",
+ "num-traits",
+ "proptest",
+ "thiserror 2.0.20",
+ "wide",
+]
+
+[[package]]
+name = "molframe-surface"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-core",
+ "molframe-spatial",
+ "num-traits",
+ "tempfile",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "molframe-traj"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "hdf5-reader",
+ "hdf5-writer",
+ "hoomd-gsd",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-geom",
+ "molframe-query",
+ "molframe-spatial",
+ "molly",
+ "nalgebra",
+ "netcdf-reader",
+ "netcdf-writer",
+ "num-traits",
+ "quick-xml",
+ "rusqlite",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tng-rs",
+]
+
+[[package]]
+name = "molframe-validate"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-analysis",
+ "molframe-bench",
+ "molframe-chem",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-geom",
+ "molframe-spatial",
+ "molframe-xtal",
+ "num-traits",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "molframe-xtal"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "molframe-bench",
+ "molframe-cif",
+ "molframe-core",
+ "molframe-geom",
+ "molframe-spatial",
+ "num-traits",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "molly"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2392,408 +2794,6 @@ name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
-
-[[package]]
-name = "pdbiox"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "flate2",
- "pdbiox-adapters",
- "pdbiox-analysis",
- "pdbiox-audit",
- "pdbiox-bcif",
- "pdbiox-bench",
- "pdbiox-chem",
- "pdbiox-cif",
- "pdbiox-compare",
- "pdbiox-core",
- "pdbiox-fx",
- "pdbiox-geom",
- "pdbiox-ic",
- "pdbiox-ml",
- "pdbiox-modelcif",
- "pdbiox-pdb",
- "pdbiox-query",
- "pdbiox-seq",
- "pdbiox-spatial",
- "pdbiox-surface",
- "pdbiox-traj",
- "pdbiox-validate",
- "pdbiox-xtal",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "toml",
-]
-
-[[package]]
-name = "pdbiox-adapters"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "pdbiox-bench",
- "pdbiox-chem",
- "pdbiox-core",
- "pdbiox-pdb",
- "reqwest",
- "sha2",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "pdbiox-analysis"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "faer",
- "nalgebra",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-chem",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-geom",
- "pdbiox-spatial",
- "pdbiox-surface",
- "pdbiox-traj",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "pdbiox-audit"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-core",
-]
-
-[[package]]
-name = "pdbiox-bcif"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "indexmap 2.14.0",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
- "proptest",
- "rmp-serde",
- "serde",
- "serde_bytes",
- "serde_repr",
- "wide",
-]
-
-[[package]]
-name = "pdbiox-bench"
-version = "0.1.0"
-dependencies = [
- "num-traits",
- "pdbiox-bcif",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-pdb",
-]
-
-[[package]]
-name = "pdbiox-chem"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
-]
-
-[[package]]
-name = "pdbiox-cif"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "indexmap 2.14.0",
- "memchr",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-core",
- "proptest",
- "quick-xml",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "pdbiox-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "clap_complete",
- "clap_mangen",
- "glob",
- "pdbiox",
- "pdbiox-adapters",
- "tempfile",
-]
-
-[[package]]
-name = "pdbiox-compare"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-chem",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-geom",
- "pdbiox-seq",
- "pdbiox-spatial",
- "pdbiox-surface",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "pdbiox-core"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "criterion",
- "flate2",
- "hashbrown 0.16.1",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-mmap",
- "rayon",
- "smallvec",
- "thiserror 2.0.20",
- "zstd",
-]
-
-[[package]]
-name = "pdbiox-fx"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-chem",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-geom",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "toml",
-]
-
-[[package]]
-name = "pdbiox-geom"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "wide",
-]
-
-[[package]]
-name = "pdbiox-ic"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-geom",
-]
-
-[[package]]
-name = "pdbiox-ml"
-version = "0.1.0"
-dependencies = [
- "arrow",
- "criterion",
- "num-traits",
- "parquet 59.2.0",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-seq",
- "pdbiox-spatial",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "pdbiox-mmap"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "memmap2",
- "tempfile",
-]
-
-[[package]]
-name = "pdbiox-modelcif"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
-]
-
-[[package]]
-name = "pdbiox-pdb"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
- "proptest",
- "rmp-serde",
- "serde",
- "serde_bytes",
-]
-
-[[package]]
-name = "pdbiox-py"
-version = "0.1.0"
-dependencies = [
- "arrow",
- "numpy",
- "pdbiox",
- "pyo3",
-]
-
-[[package]]
-name = "pdbiox-query"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "pdbiox-bench",
- "pdbiox-chem",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-spatial",
-]
-
-[[package]]
-name = "pdbiox-resource-bench"
-version = "0.1.0"
-dependencies = [
- "arrow",
- "pdbiox",
- "pdbiox-bench",
- "pdbiox-mmap",
- "rmp-serde",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "pdbiox-seq"
-version = "0.1.0"
-dependencies = [
- "criterion",
-]
-
-[[package]]
-name = "pdbiox-spatial"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-query",
- "proptest",
- "thiserror 2.0.20",
- "wide",
-]
-
-[[package]]
-name = "pdbiox-surface"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-core",
- "pdbiox-spatial",
- "tempfile",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "pdbiox-traj"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "hdf5-reader",
- "hdf5-writer",
- "hoomd-gsd",
- "molly",
- "nalgebra",
- "netcdf-reader",
- "netcdf-writer",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-geom",
- "pdbiox-query",
- "pdbiox-spatial",
- "quick-xml",
- "rusqlite",
- "tempfile",
- "thiserror 2.0.20",
- "tng-rs",
-]
-
-[[package]]
-name = "pdbiox-validate"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-analysis",
- "pdbiox-bench",
- "pdbiox-chem",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-geom",
- "pdbiox-spatial",
- "pdbiox-xtal",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "pdbiox-xtal"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "num-traits",
- "pdbiox-bench",
- "pdbiox-cif",
- "pdbiox-core",
- "pdbiox-geom",
- "pdbiox-spatial",
- "thiserror 2.0.20",
-]
 
 [[package]]
 name = "percent-encoding"
