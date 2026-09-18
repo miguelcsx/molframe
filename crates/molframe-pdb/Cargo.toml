@@ -1,0 +1,28 @@
+[package]
+name = "molframe-pdb"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Legacy PDB reading and writing for molframe"
+
+[dependencies]
+num-traits.workspace = true
+molframe-core.workspace = true
+rmp-serde.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true
+
+[dev-dependencies]
+molframe-cif.workspace = true
+proptest.workspace = true
+criterion.workspace = true
+molframe-bench.workspace = true
+
+[[bench]]
+name = "pdb"
+harness = false
+
+[lints]
+workspace = true
