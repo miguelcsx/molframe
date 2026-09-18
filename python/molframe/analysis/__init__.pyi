@@ -312,8 +312,8 @@ from os import PathLike
 from numpy import float32
 from numpy.typing import NDArray
 from ..core.execution import ExecutionContext
-from .._io_types import PdbioxError
+from .._io_types import MolframeError
 
-class SasaStreamError(PdbioxError): ...
+class SasaStreamError(MolframeError): ...
 
 def sasa_stream(path: str | PathLike[str], radii: NDArray[float32], probe: float, samples: int, emit: Callable[[int, float | None, float], None], context: ExecutionContext, *, frame_workspace_bytes: int = 8_000_000) -> int: ...

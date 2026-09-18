@@ -66,7 +66,7 @@ class Diagnostic:
 
 @final
 class Provenance:
-    pdbiox_version: str
+    molframe_version: str
     input_source: str
     input_fingerprint: str | None
     policy_fingerprint: str
@@ -81,10 +81,10 @@ class Provenance:
 
 @final
 class ReexecutionEnvironment:
-    def __init__(self, *, pdbiox_version: str | None = ..., schema_version: str | None = ..., component_version: str | None = ...) -> None: ...
+    def __init__(self, *, molframe_version: str | None = ..., schema_version: str | None = ..., component_version: str | None = ...) -> None: ...
     @staticmethod
     def current() -> ReexecutionEnvironment: ...
-    pdbiox_version: str
+    molframe_version: str
     schema_version: str | None
     component_version: str | None
 

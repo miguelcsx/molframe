@@ -8,7 +8,7 @@ from .._native import (
     DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset, DatasetEntry,
     DatasetError, DatasetFilter,
     DatasetSplit, DatasetWarning, DlpackError, DlpackTensor, ExportCost, GraphError,
-    LoadError, ManifestEntry, PdbioxExtension, SplitOptions, SplitRatios,
+    LoadError, ManifestEntry, MolframeExtension, SplitOptions, SplitRatios,
     SplitStrategy, TableFileError, extension_name, graph as build_graph, write_atom_ipc,
     write_atom_ipc_with_metadata, write_atom_parquet, write_atom_parquet_with_metadata,
 )
@@ -22,7 +22,7 @@ __all__ = [
     "ArrowStream", "AtomTable", "AtomArrowTable", "BondTable", "BondArrowTable", "ChainTable", "ChainArrowTable", "ResidueTable", "ResidueArrowTable", "DLDataType", "DLDevice",
     "DLManagedTensor", "DLTensor", "Dataset", "DatasetEntry", "DatasetError",
     "DatasetFilter", "DatasetSplit", "DatasetWarning", "DlpackError", "DlpackTensor",
-    "ExportCost", "GraphError", "LoadError", "ManifestEntry", "PdbioxExtension",
+    "ExportCost", "GraphError", "LoadError", "ManifestEntry", "MolframeExtension",
     "EdgeDirection", "EdgeFeature", "EdgeKind", "Graph", "GraphOptions",
     "MissingFeaturePolicy", "NodeFeature", "NodeLevel", "SpatialBackend",
     "SplitOptions", "SplitRatios", "SplitStrategy", "TableFileError",

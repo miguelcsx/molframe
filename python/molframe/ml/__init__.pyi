@@ -95,17 +95,17 @@ class ExportCost:
     label: str
 
 @final
-class PdbioxExtension:
-    AtomIndex: PdbioxExtension
-    ResidueIndex: PdbioxExtension
-    ChainIndex: PdbioxExtension
-    EntityIndex: PdbioxExtension
-    Coordinates3f: PdbioxExtension
-    Element: PdbioxExtension
-    SymbolId: PdbioxExtension
-    Altloc: PdbioxExtension
-    Selection: PdbioxExtension
-    Validity: PdbioxExtension
+class MolframeExtension:
+    AtomIndex: MolframeExtension
+    ResidueIndex: MolframeExtension
+    ChainIndex: MolframeExtension
+    EntityIndex: MolframeExtension
+    Coordinates3f: MolframeExtension
+    Element: MolframeExtension
+    SymbolId: MolframeExtension
+    Altloc: MolframeExtension
+    Selection: MolframeExtension
+    Validity: MolframeExtension
     name: str
     storage_type: str
 

@@ -1,4 +1,4 @@
-"""Common pdbiox facade types for concise interactive imports."""
+"""Common molframe facade types for concise interactive imports."""
 
 from .. import Atom, Chain, Model, Residue
 from ..core import (
