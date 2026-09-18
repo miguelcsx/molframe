@@ -1,5 +1,5 @@
 from typing import final
-from . import Format, ReadOptions, ReadReport, Structure, read_mmtf, read_pdbqt, read_pqr, write_mmtf, write_pdbqt, write_pqr
+from . import Format, ReadOptions, ReadReport, Structure, read_mmtf, read_pdb, read_pdbqt, read_pqr, write_mmtf, write_pdb, write_pdbqt, write_pqr
 from . import fixed, hybrid36
 
 @final

@@ -7,8 +7,8 @@ from numpy.typing import NDArray
 from numpy.ma import MaskedArray
 from .surface import SurfaceGridOptions
 from .core.execution import ExecutionContext
-from ._native import CartesianFit
-from ._native import UnitCell
+from ._trajectory import CartesianFit
+from .xtal._crystal import UnitCell
 from ._trajectory_dispatch import AmberAsciiReadOptions, TrajectoryReadOptions, read_trajectory_materialized, write_trajectory
 DEFAULT_PAIRWISE_MEMORY_LIMIT: int
 

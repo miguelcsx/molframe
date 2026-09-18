@@ -1,4 +1,4 @@
-from ._native import UnitCell
+from .xtal._crystal import UnitCell
 from os import PathLike
 from ._trajectory import Trajectory, TrajectoryFormat, TrajectoryUnits, TrajectoryWriteOptions, AmberRestartLayout
 from ._trajectory_format_models import Timestep

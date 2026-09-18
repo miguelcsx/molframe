@@ -3,7 +3,7 @@ from numpy import float32
 from numpy.typing import NDArray
 from ..xtal import UnitCell
 from .._io_types import MapStatisticsError, MrcError
-from .._native import MrcBrickError
+from .._io_types import MrcBrickError
 from .._provider import ChunkId, DatasetId
 
 @final

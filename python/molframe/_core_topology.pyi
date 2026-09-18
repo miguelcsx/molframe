@@ -8,26 +8,42 @@ from .chem import Element
 from .core.metadata import EntityKind, PolymerKind
 from .query import AnalysisPolicy, Selection
 
-from ._native import (
+from ._core_primitives import (
+    Aabb, AnnotationColumn, AtomAnnotation, AtomAnnotations, AtomChunkStats, AtomIndex,
+    BondAdjacency, BondIndex, BondTable, BondTableBuilder, ByteSpan, ChainIndex, Class,
+    Code, ColumnKind, Compression, ContextItem, CoordinateGeneration, Diagnostics,
+    ElementMask, EncodedColumn, EntityIndex, Extremes, InputBuffer, InputKind,
+    InstanceId, Kind, ModelIndex, Position, ReadReport, ReadResult, Reader, Rendered,
+    ResidueIndex, Select, SelectAll, Severity, Strictness,
+)
+
+from ._facade_models import (
+    BondOrder, BondProvenance, BondRecord, CountDifference, Limits, MetadataDifference,
+    ReadOptions, ReadScope, StructureDifference, structure_difference,
+)
+
+from ._facade_structure_io import (
+    Structure,
+)
+
+from ._io_types import (
+    AmbiguousResidueBoundaryPolicy, Format, MissingElementPolicy, ParseMode,
+)
+
+from ._provider import (
+    ChunkId,
+)
+
+from .core.annotation import (
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION,
     COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION, HBOND_ACCEPTOR_ANNOTATION,
-    HBOND_DONOR_ANNOTATION, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION, PLDDT_ANNOTATION,
-    POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION, STEREO_CONFIGURATION_ANNOTATION,
-    Aabb, AltId, AmbiguousResidueBoundaryPolicy, AnnotationColumn, AtomAnnotation, AtomAnnotations, AtomChunk, AtomChunkStats,
-    ChunkId, CountDifference, MetadataDifference, StructureDifference, structure_difference,
-    AtomIndex, AtomRecord, BitVec, ChainRecord, ChainTable, ChunkBuilder, ColumnKind, CoordinateStore,
-    ElementMask, EncodedColumn, EntityTable, ExtensionStore, Extremes,
-    BondAdjacency, BondIndex, BondOrder, BondProvenance,
-    BondRecord, BondTable, BondTableBuilder, ByteSpan, ChainIndex, Compression, CoordinateBlock,
-    Format, InputBuffer, InputKind, Limits, MissingElementPolicy, ParseMode, ReadOptions, ReadReport,
-    ReadResult, ReadScope, Reader, Select, SelectAll,
-    CoordinateGeneration, DictionaryFull, EntityIndex, InstanceId, Interner, ModelIndex, ModelTable,
-    OptionalI32, OptionalSymbol, ParentMapping, Position, Presence, ResidueIndex, ResidueRecord,
-    ResidueTable, Structure, StructureData, StructureView, StructureEditor, CoordinateEditor,
-    Class, Code, ContextItem, Diagnostics, Kind, Rendered, Severity, Strictness,
-    SymbolId, TARGET_CHUNK_ATOMS, Topology, ValidityMask,
-    bit_width, pack, write_output,
-    unpack_one,
+    HBOND_DONOR_ANNOTATION, PAE_ANNOTATION, PARTIAL_CHARGE_ANNOTATION,
+    PLDDT_ANNOTATION, POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION,
+    STEREO_CONFIGURATION_ANNOTATION,
+)
+
+from .core.chunk import (
+    TARGET_CHUNK_ATOMS,
 )
 
 class AtomRecord:
@@ -141,6 +157,10 @@ class ResidueTable:
     def ins_code(self, residue: ResidueIndex) -> SymbolId | None: ...
     def is_het(self, residue: ResidueIndex) -> bool: ...
 
+class MissingResidue:
+    canonical_position: int
+    component: str
+
 class EntityTable:
     def __init__(self) -> None: ...
     def __len__(self) -> int: ...
@@ -192,6 +212,13 @@ class StructureEditor:
     def transform(self, selection: object, transform: object) -> None: ...
     def delete_atoms(self, selection: object) -> None: ...
     def commit(self) -> Structure: ...
+
+# The facade's name for the scoped coordinate-mutation context the extension
+# registers as ``CoordinateEdit``; the alias is bound after the class exists, so
+# it is declared here rather than pulled from the compiled module.
+class CoordinateEditor:
+    def __enter__(self) -> Any: ...
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> bool: ...
 
 class CoordinateStore:
     @staticmethod
@@ -305,6 +332,8 @@ class Interner:
     def arena_len(self) -> int: ...
     def retained_bytes(self) -> int: ...
     def iter(self) -> list[tuple[SymbolId, str]]: ...
+
+class DictionaryFull(ValueError): ...
 
 class CoordinateBlock:
     def __init__(self) -> None: ...

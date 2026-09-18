@@ -2,7 +2,10 @@ from os import PathLike
 from typing import Mapping, Sequence
 from numpy.typing import NDArray
 from numpy import float32
-from .._native import AnalysisPolicy, ComponentDictionary, EigenOptions, Rigid, Structure
+from ..chem import ComponentDictionary
+from ..geom import EigenOptions, Rigid
+from ..query import AnalysisPolicy
+from .. import Structure
 
 class MotifError(ValueError): ...
 class MappingError(ValueError): ...
@@ -181,6 +184,10 @@ class Evaluation:
     alignment: AlignmentKind
     measurements: MeasurementSet
     verdict: Verdict
+
+# The name the extension registers this class under; the ``fx`` namespace binds
+# ``Evaluation`` to it, so the two are the same object under two names.
+FxEvaluation = Evaluation
 
 class EvaluationReport:
     mapping_ambiguous: bool
