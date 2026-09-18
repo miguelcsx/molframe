@@ -107,16 +107,9 @@ pub struct PolicyOverrides {
 ///
 /// Returns [`PolicyConfigError`] for I/O, syntax, schema or value errors.
 pub fn read_policy(path: impl AsRef<Path>) -> Result<AnalysisPolicy, PolicyConfigError> {
-    read_policy_overrides(path)?.apply_to(AnalysisPolicy::default())
-}
-
-/// Loads a partial policy document without applying a baseline.
-///
-/// # Errors
-///
-/// Returns [`PolicyConfigError`] for I/O, syntax or schema errors.
-pub fn read_policy_overrides(path: impl AsRef<Path>) -> Result<PolicyOverrides, PolicyConfigError> {
-    Ok(read_configuration(path)?.policy)
+    read_configuration(path)?
+        .policy
+        .apply_to(AnalysisPolicy::default())
 }
 
 /// Loads a strict application configuration without accessing referenced resources.

@@ -231,7 +231,6 @@ from ._native import (
     read_bytes,
     read_document,
     read_policy,
-    read_policy_overrides,
     lower_model_cif,
     collect_crystal_neighbors,
     lower_assemblies,

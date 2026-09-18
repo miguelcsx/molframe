@@ -159,13 +159,6 @@ pub(crate) fn read_configuration(
 }
 
 #[pyfunction]
-pub(crate) fn read_policy_overrides(py: Python<'_>, path: PathBuf) -> PyResult<PyPolicyOverrides> {
-    py.detach(move || molframe::read_policy_overrides(path))
-        .map(Into::into)
-        .map_err(|error| crate::errors::PolicyConfigError::new_err(error.to_string()))
-}
-
-#[pyfunction]
 pub(crate) fn read_policy(py: Python<'_>, path: PathBuf) -> PyResult<PyAnalysisPolicy> {
     py.detach(move || molframe::read_policy(path))
         .map(|inner| PyAnalysisPolicy { inner })

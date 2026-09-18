@@ -6,7 +6,7 @@ use crate::cif_document::{
 };
 use crate::config::{
     PyApplicationConfiguration, PyChemistryConfiguration, PyOutputConfiguration, PyPolicyOverrides,
-    read_configuration, read_policy, read_policy_overrides,
+    read_configuration, read_policy,
 };
 use crate::facade::{
     PyBackboneTorsionRecord, PyBondInference, PyBondInferenceReport, PyProteinAlphaTrace,
@@ -53,6 +53,5 @@ pub(super) fn register_facade(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_preserving, module)?)?;
     module.add_function(wrap_pyfunction!(read_configuration, module)?)?;
     module.add_function(wrap_pyfunction!(read_policy, module)?)?;
-    module.add_function(wrap_pyfunction!(read_policy_overrides, module)?)?;
     Ok(())
 }

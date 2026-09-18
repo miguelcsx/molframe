@@ -314,7 +314,7 @@ pub use facade::{
 pub use facade::{StructureBatchReader, open_structure_batches};
 pub use policy_config::{
     ApplicationConfiguration, ChemistryConfiguration, OutputConfiguration, PolicyConfigError,
-    PolicyOverrides, read_configuration, read_policy, read_policy_overrides,
+    PolicyOverrides, read_configuration, read_policy,
 };
 
 #[cfg(all(feature = "analysis", feature = "geom"))]
