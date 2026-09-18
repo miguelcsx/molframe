@@ -117,14 +117,15 @@ pub fn read_bytes(
 /// structure cannot be represented, compression is unavailable, or the
 /// destination cannot be written.
 pub fn write(path: impl AsRef<Path>, structure: &Structure) -> Result<(), Findings> {
-    write_with_options(path, structure, OutputOptions::default())
+    write_with_options(path, structure, &WriteOptions::canonical())
 }
 
-/// Streams a structure under an explicit output-memory policy.
+/// Streams a structure under explicit projection and memory decisions.
 ///
-/// The default policy is 100 MB and no policy above 500 MB is accepted. The
-/// file sink itself retains at most 64 KiB; format writers receive rows or
-/// columns incrementally and never construct a complete file buffer.
+/// The output policy defaults to 100 MB and no policy above 500 MB is
+/// accepted. The file sink itself retains at most 64 KiB; format writers
+/// receive rows or columns incrementally and never construct a complete file
+/// buffer.
 ///
 /// # Errors
 ///
@@ -133,7 +134,7 @@ pub fn write(path: impl AsRef<Path>, structure: &Structure) -> Result<(), Findin
 pub fn write_with_options(
     path: impl AsRef<Path>,
     structure: &Structure,
-    options: OutputOptions,
+    options: &WriteOptions,
 ) -> Result<(), Findings> {
     let path = path.as_ref();
     let name = path.file_name().and_then(|name| name.to_str());
@@ -142,49 +143,116 @@ pub fn write_with_options(
             Diagnostic::new(Code::E1001).with_context("name", path.display().to_string()),
         ));
     };
-    let mut output = OutputSink::create(path, options).map_err(Findings::from)?;
-    write_stream(&mut output, structure, format, options.memory_limit_bytes)?;
+    let mut output = OutputSink::create(path, options.output).map_err(Findings::from)?;
+    write_stream(&mut output, structure, format, options)?;
     output.finish().map_err(Findings::from)
+}
+
+/// The decisions a write makes: which identifiers the projection invents, per
+/// format family, plus the output working-memory policy.
+///
+/// [`WriteOptions::canonical`] is the default projection; the `with_*`
+/// builders hand the per-family decision types to callers that need explicit
+/// identifiers.
+#[derive(Clone, Debug)]
+pub struct WriteOptions {
+    output: OutputOptions,
+    #[cfg(feature = "mmcif")]
+    cif: molframe_cif::CifWriteOptions,
+    #[cfg(feature = "pdb")]
+    pdb: molframe_pdb::PdbOptions,
+}
+
+impl WriteOptions {
+    /// Canonical projection with the default 100 MB output-workspace ceiling.
+    #[must_use]
+    pub fn canonical() -> Self {
+        Self {
+            output: OutputOptions::default(),
+            #[cfg(feature = "mmcif")]
+            cif: molframe_cif::CifWriteOptions::new(),
+            #[cfg(feature = "pdb")]
+            pdb: molframe_pdb::PdbOptions::new(),
+        }
+    }
+
+    /// Replaces the output working-memory policy.
+    #[must_use]
+    pub fn with_output(mut self, output: OutputOptions) -> Self {
+        self.output = output;
+        self
+    }
+
+    /// Replaces the CIF-family projection decisions.
+    #[cfg(feature = "mmcif")]
+    #[must_use]
+    pub fn with_cif(mut self, cif: molframe_cif::CifWriteOptions) -> Self {
+        self.cif = cif;
+        self
+    }
+
+    /// Replaces the PDB-family projection decisions.
+    #[cfg(feature = "pdb")]
+    #[must_use]
+    pub fn with_pdb(mut self, pdb: molframe_pdb::PdbOptions) -> Self {
+        self.pdb = pdb;
+        self
+    }
+
+    /// The output working-memory policy.
+    #[must_use]
+    pub const fn output(&self) -> &OutputOptions {
+        &self.output
+    }
+
+    /// The CIF-family projection decisions.
+    #[cfg(feature = "mmcif")]
+    #[must_use]
+    pub const fn cif(&self) -> &molframe_cif::CifWriteOptions {
+        &self.cif
+    }
+
+    /// The PDB-family projection decisions.
+    #[cfg(feature = "pdb")]
+    #[must_use]
+    pub const fn pdb(&self) -> &molframe_pdb::PdbOptions {
+        &self.pdb
+    }
 }
 
 fn write_stream<W: Write>(
     output: &mut W,
     structure: &Structure,
     format: Format,
-    memory_limit_bytes: usize,
+    options: &WriteOptions,
 ) -> Result<(), Findings> {
-    #[cfg(not(feature = "bcif"))]
-    let _ = memory_limit_bytes;
     #[cfg(not(any(feature = "mmcif", feature = "bcif", feature = "pdb")))]
-    let _ = (output, structure);
+    let _ = (output, structure, options);
     match format {
         #[cfg(feature = "mmcif")]
-        Format::Mmcif => {
-            write_mmcif_to_with_options(structure, &molframe_cif::CifWriteOptions::new(), output)
-                .map_err(|error| cif_write_findings(&error))
-        }
+        Format::Mmcif => write_mmcif_to_with_options(structure, options.cif(), output)
+            .map_err(|error| cif_write_findings(&error)),
         #[cfg(feature = "bcif")]
         Format::BinaryCif => molframe_bcif::write_structure_to_with_memory_limit(
             structure,
-            &molframe_cif::CifWriteOptions::new(),
-            memory_limit_bytes,
+            options.cif(),
+            options.output().memory_limit_bytes,
             output,
         )
         .map_err(Findings::from),
         #[cfg(feature = "pdb")]
-        Format::Pdb => molframe_pdb::write_to(structure, &molframe_pdb::PdbOptions::new(), output)
-            .map_err(Findings::from),
+        Format::Pdb => {
+            molframe_pdb::write_to(structure, options.pdb(), output).map_err(Findings::from)
+        }
         #[cfg(feature = "pdb")]
         Format::Mmtf => molframe_pdb::write_mmtf_to(structure, output).map_err(Findings::from),
         #[cfg(feature = "pdb")]
         Format::Pqr => {
-            molframe_pdb::write_pqr_to(structure, &molframe_pdb::PdbOptions::new(), output)
-                .map_err(Findings::from)
+            molframe_pdb::write_pqr_to(structure, options.pdb(), output).map_err(Findings::from)
         }
         #[cfg(feature = "pdb")]
         Format::Pdbqt => {
-            molframe_pdb::write_pdbqt_to(structure, &molframe_pdb::PdbOptions::new(), output)
-                .map_err(Findings::from)
+            molframe_pdb::write_pdbqt_to(structure, options.pdb(), output).map_err(Findings::from)
         }
         other => Err(unsupported_writer(other).into()),
     }
@@ -326,9 +394,9 @@ pub fn read_component_dictionary(
 ///
 /// # Errors
 ///
-/// Returns the canonical preflight or in-memory destination error.
+/// Returns the same diagnostics the file verbs return.
 #[cfg(feature = "mmcif")]
-pub fn write_mmcif(structure: &Structure) -> Result<String, molframe_cif::CifWriteToError> {
+pub fn write_mmcif(structure: &Structure) -> Result<String, Findings> {
     write_mmcif_with_options(structure, &molframe_cif::CifWriteOptions::new())
 }
 
@@ -336,39 +404,34 @@ pub fn write_mmcif(structure: &Structure) -> Result<String, molframe_cif::CifWri
 ///
 /// # Errors
 ///
-/// Returns the canonical preflight or in-memory destination error.
+/// Returns the same diagnostics the file verbs return.
 #[cfg(feature = "mmcif")]
 pub fn write_mmcif_with_options(
     structure: &Structure,
     options: &molframe_cif::CifWriteOptions,
-) -> Result<String, molframe_cif::CifWriteToError> {
+) -> Result<String, Findings> {
     let mut output = Vec::with_capacity(structure.atom_count() as usize * 100);
-    write_mmcif_to_with_options(structure, options, &mut output)?;
+    write_mmcif_to_with_options(structure, options, &mut output)
+        .map_err(|error| cif_write_findings(&error))?;
     String::from_utf8(output).map_err(|error| {
-        molframe_cif::CifWriteToError::Output(io::Error::new(io::ErrorKind::InvalidData, error))
+        cif_write_findings(&molframe_cif::CifWriteToError::Output(io::Error::new(
+            io::ErrorKind::InvalidData,
+            error,
+        )))
     })
-}
-
-/// Streams canonical mmCIF to a byte destination.
-///
-/// # Errors
-///
-/// Returns canonical projection or destination errors.
-#[cfg(feature = "mmcif")]
-pub fn write_mmcif_to<W: Write>(
-    structure: &Structure,
-    output: &mut W,
-) -> Result<(), molframe_cif::CifWriteToError> {
-    write_mmcif_to_with_options(structure, &molframe_cif::CifWriteOptions::new(), output)
 }
 
 /// Streams canonical mmCIF with explicit identifier decisions.
 ///
+/// The in-memory writers above are the public ladder; this streaming form
+/// serves the file verbs and stays private so the facade exposes one write
+/// convention per family.
+///
 /// # Errors
 ///
 /// Returns canonical projection or destination errors.
 #[cfg(feature = "mmcif")]
-pub fn write_mmcif_to_with_options<W: Write>(
+fn write_mmcif_to_with_options<W: Write>(
     structure: &Structure,
     options: &molframe_cif::CifWriteOptions,
     output: &mut W,

@@ -316,7 +316,7 @@ fn mmtf_is_dispatched_by_content_and_suffix() {
         &mut output,
         &structure,
         Format::Mmtf,
-        OutputOptions::default().memory_limit_bytes,
+        &WriteOptions::canonical(),
     );
     assert!(rendered.is_err());
 }
@@ -347,7 +347,7 @@ fn pdbml_input_remains_supported_without_an_eager_generic_writer() {
             &mut output,
             &structure,
             Format::Pdbml,
-            OutputOptions::default().memory_limit_bytes,
+            &WriteOptions::canonical(),
         )
         .is_err()
     );
@@ -443,10 +443,9 @@ loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.l
             .map(|confidence| confidence.plddt().count()),
         Some(1)
     );
-    let mut rendered = Vec::new();
-    write_mmcif_to(&structure, &mut rendered)
-        .unwrap_or_else(|error| panic!("write failed: {error}"));
-    assert!(String::from_utf8_lossy(&rendered).contains("_ma_qa_metric_local.metric_value"));
+    let rendered =
+        write_mmcif(&structure).unwrap_or_else(|findings| panic!("write failed: {findings:?}"));
+    assert!(rendered.contains("_ma_qa_metric_local.metric_value"));
 
     #[cfg(feature = "bcif")]
     {

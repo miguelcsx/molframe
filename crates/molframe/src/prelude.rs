@@ -25,10 +25,7 @@ pub use crate::{
 };
 
 #[cfg(feature = "mmcif")]
-pub use crate::{
-    read_document, write_mmcif, write_mmcif_to, write_mmcif_to_with_options,
-    write_mmcif_with_options,
-};
+pub use crate::{WriteOptions, read_document, write_mmcif, write_mmcif_with_options};
 
 #[cfg(feature = "bcif")]
 pub use crate::{write_bcif, write_bcif_with_options};

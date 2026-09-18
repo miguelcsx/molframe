@@ -194,9 +194,15 @@ pub(crate) fn write_with_options(
     options: &PyOutputOptions,
 ) -> PyResult<()> {
     let structure = structure.structure().clone();
-    let options = options.0;
-    py.detach(move || molframe::write_with_options(path, &structure, options))
-        .map_err(|findings| read_error(py, &findings))
+    let output = options.0;
+    py.detach(move || {
+        molframe::write_with_options(
+            path,
+            &structure,
+            &molframe::WriteOptions::canonical().with_output(output),
+        )
+    })
+    .map_err(|findings| read_error(py, &findings))
 }
 
 #[pyfunction]

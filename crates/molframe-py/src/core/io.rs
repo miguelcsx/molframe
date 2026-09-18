@@ -268,7 +268,7 @@ pub(crate) fn write_mmcif(
         options = options.with_connection_type_id(connection_type);
     }
     py.detach(move || molframe::write_mmcif_with_options(&structure, &options))
-        .map_err(|error| crate::errors::cif_write_error(&error))
+        .map_err(|findings| read_error(py, &findings))
 }
 
 #[pyfunction]

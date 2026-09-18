@@ -334,10 +334,6 @@ pub(crate) fn read_error(py: Python<'_>, findings: &[Diagnostic]) -> PyErr {
     attach_diagnostic(py, error, findings)
 }
 
-pub(crate) fn cif_write_error(error: &molframe::CifWriteToError) -> PyErr {
-    ConversionError::new_err(error.to_string())
-}
-
 /// Attaches the finding set to a raised error.
 ///
 /// The scalar attributes describe the *head* of the list, which is the worst

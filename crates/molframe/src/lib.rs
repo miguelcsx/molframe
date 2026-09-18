@@ -299,7 +299,8 @@ pub mod prelude;
 mod structure;
 
 pub use facade::{
-    read, read_bytes, read_with_diagnostics, read_with_options, write, write_with_options,
+    WriteOptions, read, read_bytes, read_with_diagnostics, read_with_options, write,
+    write_with_options,
 };
 // The bounded batch reader needs a format crate to read with, so these two
 // names exist under exactly the features that give `StructureBatchReader` a
@@ -346,10 +347,7 @@ pub use structure::{
 };
 
 #[cfg(feature = "mmcif")]
-pub use facade::{
-    read_document, write_mmcif, write_mmcif_to, write_mmcif_to_with_options,
-    write_mmcif_with_options,
-};
+pub use facade::{read_document, write_mmcif, write_mmcif_with_options};
 
 #[cfg(feature = "bcif")]
 pub use facade::{write_bcif, write_bcif_with_options};
