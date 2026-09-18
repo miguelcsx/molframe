@@ -7,10 +7,27 @@
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table, json_array};
 use molframe::{
-    ChainRef, Format, Namespace, PdbIdentifierNamespace, PdbOptions, ReadOptions, Structure,
+    ChainRef, Evaluation, Findings, Format, Groups, Namespace, PdbIdentifierNamespace, PdbOptions,
+    Query, ReadOptions, Structure,
 };
 use std::fmt::Write as _;
 use std::path::Path;
+
+/// Compiles textual syntax and evaluates it under the CLI's execution context.
+///
+/// The CLI governs resources explicitly (memory, workers, cancellation), so
+/// selection goes through the full-control verb rather than the defaulting
+/// `QueryStructure::select_text`.
+pub(super) fn select_text(
+    structure: &Structure,
+    source: &str,
+    policy: &molframe::AnalysisPolicy,
+    execution: &molframe::core::ExecutionContext,
+) -> Result<Evaluation, Findings> {
+    use molframe::QueryStructure as _;
+    let query = Query::compile(source).map_err(Findings::from)?;
+    structure.select_with_options(&query, policy, &Groups::new(), execution)
+}
 
 /// Reads a file, printing whatever was wrong with it.
 pub(super) fn open(path: &Path, context: Context) -> Result<Structure, Exit> {
@@ -245,13 +262,11 @@ pub fn convert(
     ) {
         return Exit::Usage;
     }
-    let written = molframe::write_with_options(
-        output,
-        &structure,
-        &molframe::WriteOptions::canonical()
-            .with_cif(cif_options.clone())
-            .with_pdb(pdb_options.clone().unwrap_or_else(PdbOptions::new)),
-    );
+    let mut options = molframe::WriteOptions::canonical().with_cif(cif_options.clone());
+    if let Some(pdb) = pdb_options.clone() {
+        options = options.with_pdb(pdb);
+    }
+    let written = molframe::write_with_options(output, &structure, &options);
     match written {
         Ok(()) => Exit::Success,
         Err(findings) => {

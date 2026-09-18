@@ -140,17 +140,20 @@ impl Plan {
             PlanOperation::Selection(request) => {
                 let structure = required_structure(id, input.structure)?;
                 let groups = Groups::new();
-                let evaluation = if request.policy() == &AnalysisPolicy::default() {
-                    if let Some(spatial) = spatial {
-                        request
-                            .query()
-                            .evaluate(structure, request.policy(), &groups, Some(spatial))
-                            .map_err(Findings::from)
-                    } else {
-                        structure.select(request.query(), request.policy(), &groups, context)
-                    }
+                let evaluation = if request.policy() == &AnalysisPolicy::default()
+                    && let Some(spatial) = spatial
+                {
+                    request
+                        .query()
+                        .evaluate(structure, request.policy(), &groups, Some(spatial))
+                        .map_err(Findings::from)
                 } else {
-                    structure.select(request.query(), request.policy(), &groups, context)
+                    structure.select_with_options(
+                        request.query(),
+                        request.policy(),
+                        &groups,
+                        context,
+                    )
                 };
                 evaluation
                     .map(|value| PlanValue::Selection(Box::new(value)))
@@ -375,10 +378,10 @@ fn execute_contacts(
         (left, right, contacts)
     } else {
         let left = structure
-            .select(request.left_query(), request.policy(), &groups, context)
+            .select_with_options(request.left_query(), request.policy(), &groups, context)
             .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
         let right = structure
-            .select(request.right_query(), request.policy(), &groups, context)
+            .select_with_options(request.right_query(), request.policy(), &groups, context)
             .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
         let contacts = molframe_analysis::atom_contacts_between(
             structure,

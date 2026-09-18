@@ -237,7 +237,6 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
                     .select_text(
                         "within 5 of element H",
                         &molframe::AnalysisPolicy::default(),
-                        &molframe::ExecutionContext::default(),
                     )
                     .map_err(|findings| format!("selection failed: {findings:?}"))?;
                 Ok(black_box(evaluation.selection.len() as u64))

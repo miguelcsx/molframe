@@ -3,7 +3,7 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json, OutputKind, Table};
-use molframe::{AtomIndex, ChainIndex, QueryStructure as _};
+use molframe::{AtomIndex, ChainIndex};
 use std::path::Path;
 
 pub(crate) fn select(
@@ -17,13 +17,14 @@ pub(crate) fn select(
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let evaluation = match structure.select_text(query, context.policy, context.execution) {
-        Ok(evaluation) => evaluation,
-        Err(findings) => {
-            context.findings(&findings, &input.display().to_string());
-            return Exit::of(&findings);
-        }
-    };
+    let evaluation =
+        match crate::commands::select_text(&structure, query, context.policy, context.execution) {
+            Ok(evaluation) => evaluation,
+            Err(findings) => {
+                context.findings(&findings, &input.display().to_string());
+                return Exit::of(&findings);
+            }
+        };
     context.findings(&evaluation.warnings, &input.display().to_string());
     if count_only {
         emit_count(evaluation.selection.len(), context);

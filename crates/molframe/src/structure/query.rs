@@ -8,19 +8,19 @@ use molframe_query::{Evaluation, Groups, Query};
 
 /// Selection methods implemented by immutable structure snapshots.
 pub trait QueryStructure {
-    /// Evaluates a precompiled query with optional named groups.
+    /// Evaluates a precompiled query under the default execution context.
+    ///
+    /// Named groups are empty here; [`QueryStructure::select_with_options`]
+    /// carries them, together with an explicit execution context, for callers
+    /// that govern resources themselves.
     ///
     /// # Errors
     ///
     /// Returns diagnostics when required data is unavailable or a geometric
     /// parameter is invalid.
-    fn select(
-        &self,
-        query: &Query,
-        policy: &AnalysisPolicy,
-        groups: &Groups,
-        context: &ExecutionContext,
-    ) -> Result<Evaluation, Findings>;
+    fn select(&self, query: &Query, policy: &AnalysisPolicy) -> Result<Evaluation, Findings> {
+        self.select_with_options(query, policy, &Groups::new(), &ExecutionContext::default())
+    }
 
     /// Compiles and evaluates textual syntax in one call.
     ///
@@ -29,16 +29,28 @@ pub trait QueryStructure {
     /// # Errors
     ///
     /// Returns syntax, semantic or evaluation diagnostics.
-    fn select_text(
+    fn select_text(&self, source: &str, policy: &AnalysisPolicy) -> Result<Evaluation, Findings> {
+        let query = Query::compile(source)?;
+        self.select(&query, policy)
+    }
+
+    /// Evaluates a precompiled query with explicit named groups and
+    /// execution context.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same diagnostics as [`QueryStructure::select`].
+    fn select_with_options(
         &self,
-        source: &str,
+        query: &Query,
         policy: &AnalysisPolicy,
+        groups: &Groups,
         context: &ExecutionContext,
     ) -> Result<Evaluation, Findings>;
 }
 
 impl QueryStructure for Structure {
-    fn select(
+    fn select_with_options(
         &self,
         query: &Query,
         policy: &AnalysisPolicy,
@@ -64,16 +76,6 @@ impl QueryStructure for Structure {
                 .evaluate(self, policy, groups, None)
                 .map_err(Findings::from)
         }
-    }
-
-    fn select_text(
-        &self,
-        source: &str,
-        policy: &AnalysisPolicy,
-        context: &ExecutionContext,
-    ) -> Result<Evaluation, Findings> {
-        let query = Query::compile(source)?;
-        self.select(&query, policy, &Groups::new(), context)
     }
 }
 

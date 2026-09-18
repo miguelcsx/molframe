@@ -4,7 +4,6 @@ use crate::AuditArguments;
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table};
-use molframe::QueryStructure as _;
 use std::collections::BTreeSet;
 
 pub(crate) fn audit_selection(args: &AuditArguments, context: Context) -> Exit {
@@ -47,8 +46,7 @@ pub(crate) fn audit_selection(args: &AuditArguments, context: Context) -> Exit {
     let result = molframe::audit(
         &plan,
         |policy| {
-            structure
-                .select_text(&args.query, policy, context.execution)
+            crate::commands::select_text(&structure, &args.query, policy, context.execution)
                 .map(|evaluation| evaluation.selection)
         },
         |selection| selection.iter().collect::<BTreeSet<_>>(),

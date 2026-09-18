@@ -3,7 +3,6 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, RowWriter};
-use molframe::QueryStructure as _;
 use molframe::{AtomIndex, RadiusSet, SpatialBackend};
 use std::path::Path;
 
@@ -76,14 +75,12 @@ fn contact_filters(
         eprintln!("--between requires exactly two selections");
         return Err(Exit::Usage);
     };
-    let first = structure
-        .select_text(first, context.policy, context.execution)
+    let first = crate::commands::select_text(structure, first, context.policy, context.execution)
         .map_err(|findings| {
-            context.findings(&findings, &input.display().to_string());
-            Exit::of(&findings)
-        })?;
-    let second = structure
-        .select_text(second, context.policy, context.execution)
+        context.findings(&findings, &input.display().to_string());
+        Exit::of(&findings)
+    })?;
+    let second = crate::commands::select_text(structure, second, context.policy, context.execution)
         .map_err(|findings| {
             context.findings(&findings, &input.display().to_string());
             Exit::of(&findings)
@@ -94,18 +91,18 @@ fn contact_filters(
 }
 
 pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context) -> Exit {
-    use molframe::QueryStructure as _;
     let structure = match open(input, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let evaluation = match structure.select_text(query, context.policy, context.execution) {
-        Ok(evaluation) => evaluation,
-        Err(findings) => {
-            context.findings(&findings, &input.display().to_string());
-            return Exit::of(&findings);
-        }
-    };
+    let evaluation =
+        match crate::commands::select_text(&structure, query, context.policy, context.execution) {
+            Ok(evaluation) => evaluation,
+            Err(findings) => {
+                context.findings(&findings, &input.display().to_string());
+                return Exit::of(&findings);
+            }
+        };
     context.findings(&evaluation.warnings, &input.display().to_string());
     let all = molframe::AtomSelection::All(structure.atom_count());
     let mut output = match RowWriter::new(context, &["atom_a", "atom_b", "distance_angstrom"]) {

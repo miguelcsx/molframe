@@ -220,13 +220,9 @@ fn selection_operations_match_the_facade_query_kernel() {
     .expect("structure fixture");
     let request = SelectionRequest::new("name CA", AnalysisPolicy::default())
         .expect("compiled selection request");
-    let direct = crate::QueryStructure::select_text(
-        &structure,
-        "name CA",
-        &AnalysisPolicy::default(),
-        &molframe_core::ExecutionContext::default(),
-    )
-    .expect("direct query selection");
+    let direct =
+        crate::QueryStructure::select_text(&structure, "name CA", &AnalysisPolicy::default())
+            .expect("direct query selection");
     let mut plan = Plan::new();
     plan.add("selected", request).expect("selection operation");
     let result = plan

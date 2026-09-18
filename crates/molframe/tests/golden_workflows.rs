@@ -108,11 +108,7 @@ fn gw_008_evaluates_a_spatial_binding_pocket_selection() {
 
     let structure = structure(Sample::Tiny);
     let evaluation = structure
-        .select_text(
-            "within 4 of element C",
-            &AnalysisPolicy::default(),
-            &molframe::ExecutionContext::default(),
-        )
+        .select_text("within 4 of element C", &AnalysisPolicy::default())
         .unwrap_or_else(|findings| panic!("selection failed: {findings:?}"));
     let selected = evaluation.selection.iter().count();
     assert!(selected > 0);

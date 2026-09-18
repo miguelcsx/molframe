@@ -113,11 +113,7 @@ fn bench_gw_008(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
         b.iter(|| {
             black_box(
                 structure
-                    .select_text(
-                        "within 4 of element C",
-                        &AnalysisPolicy::default(),
-                        &molframe::ExecutionContext::default(),
-                    )
+                    .select_text("within 4 of element C", &AnalysisPolicy::default())
                     .is_ok(),
             );
         });

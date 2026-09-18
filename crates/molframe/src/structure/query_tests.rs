@@ -24,11 +24,7 @@ fn structure_text_selection_connects_query_and_spatial_execution() {
         identifiers: Namespace::Label,
         ..AnalysisPolicy::default()
     };
-    let selected = structure().select_text(
-        "within 1.1 of name C1",
-        &policy,
-        &ExecutionContext::default(),
-    );
+    let selected = structure().select_text("within 1.1 of name C1", &policy);
     let selected = match selected {
         Ok(selected) => selected,
         Err(findings) => panic!("select failed: {findings:?}"),

@@ -4,7 +4,6 @@ use crate::MetricChoice;
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table};
-use molframe::QueryStructure as _;
 use molframe::seq::Scoring;
 use std::path::Path;
 
@@ -16,7 +15,6 @@ pub(crate) fn superpose(
     options: molframe::SuperposeOptions,
     context: Context,
 ) -> Exit {
-    use molframe::QueryStructure as _;
     let mobile_structure = match open(mobile, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,
@@ -25,22 +23,30 @@ pub(crate) fn superpose(
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let mobile_selection =
-        match mobile_structure.select_text(query, context.policy, context.execution) {
-            Ok(evaluation) => evaluation,
-            Err(findings) => {
-                context.findings(&findings, &mobile.display().to_string());
-                return Exit::of(&findings);
-            }
-        };
-    let reference_selection =
-        match reference_structure.select_text(query, context.policy, context.execution) {
-            Ok(evaluation) => evaluation,
-            Err(findings) => {
-                context.findings(&findings, &reference.display().to_string());
-                return Exit::of(&findings);
-            }
-        };
+    let mobile_selection = match crate::commands::select_text(
+        &mobile_structure,
+        query,
+        context.policy,
+        context.execution,
+    ) {
+        Ok(evaluation) => evaluation,
+        Err(findings) => {
+            context.findings(&findings, &mobile.display().to_string());
+            return Exit::of(&findings);
+        }
+    };
+    let reference_selection = match crate::commands::select_text(
+        &reference_structure,
+        query,
+        context.policy,
+        context.execution,
+    ) {
+        Ok(evaluation) => evaluation,
+        Err(findings) => {
+            context.findings(&findings, &reference.display().to_string());
+            return Exit::of(&findings);
+        }
+    };
     context.findings(&mobile_selection.warnings, &mobile.display().to_string());
     context.findings(
         &reference_selection.warnings,
@@ -167,18 +173,16 @@ fn comparison_points(
     let Some(query) = query else {
         return Ok((mobile.positions().to_vec(), reference.positions().to_vec()));
     };
-    let moving = mobile
-        .select_text(query, context.policy, context.execution)
+    let moving = crate::commands::select_text(mobile, query, context.policy, context.execution)
         .map_err(|findings| {
             context.findings(&findings, &mobile_path.display().to_string());
             Exit::of(&findings)
         })?;
-    let fixed = reference
-        .select_text(query, context.policy, context.execution)
+    let fixed = crate::commands::select_text(reference, query, context.policy, context.execution)
         .map_err(|findings| {
-            context.findings(&findings, &reference_path.display().to_string());
-            Exit::of(&findings)
-        })?;
+        context.findings(&findings, &reference_path.display().to_string());
+        Exit::of(&findings)
+    })?;
     context.findings(&moving.warnings, &mobile_path.display().to_string());
     context.findings(&fixed.warnings, &reference_path.display().to_string());
     Ok((

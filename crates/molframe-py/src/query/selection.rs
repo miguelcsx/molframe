@@ -173,7 +173,7 @@ impl PyStructure {
         let policy = policy.map_or_else(AnalysisPolicy::default, |value| value.inner.clone());
         let groups = groups_from_python(groups);
         py.detach(move || {
-            structure.select(
+            structure.select_with_options(
                 &query,
                 &policy,
                 &groups,
