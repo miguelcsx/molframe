@@ -1,11 +1,11 @@
 [package]
-name = "pdbiox-py"
+name = "molframe-py"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Mechanical Python bindings for pdbiox"
+description = "Mechanical Python bindings for molframe"
 publish = false
 
 [lib]
@@ -15,7 +15,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 arrow.workspace = true
 numpy.workspace = true
-pdbiox = { path = "../pdbiox", version = "0.1.0", default-features = false, features = ["full"] }
+molframe = { path = "../molframe", version = "0.1.0", features = ["full"] }
+# 91 types carry more than one `#[pymethods]` block, and for some of them the
+# blocks are in different modules: `PyAtoms` is declared in `core/atom.rs` and
+# given its Arrow methods in `ml/arrow.rs`.  The feature is what lets one Rust
+# type stay one Python type instead of being split at the file boundary.
 pyo3 = { workspace = true, features = ["multiple-pymethods"] }
 
 [lints.rust]

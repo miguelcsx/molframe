@@ -2,7 +2,7 @@
 //!
 //! Audited pointer use is confined to NumPy/Arrow/DLPack lifetime adapters;
 //! computational kernels remain in Rust. This ABI boundary is separate from the
-//! operating-system mapping boundary in `pdbiox-mmap`.
+//! operating-system mapping boundary in `molframe-mmap`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 

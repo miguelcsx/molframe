@@ -127,7 +127,7 @@ pub(super) const ML: &[&str] = &[
     "DLTensor",
     "DlpackTensor",
     "ExportCost",
-    "PdbioxExtension",
+    "MolframeExtension",
     "DatasetError",
     "Dataset",
     "DatasetEntry",

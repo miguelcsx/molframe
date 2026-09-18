@@ -103,8 +103,29 @@ use io_registration::register_io_functions;
 use modelcif_registration::register_modelcif;
 use query_registration::register_query;
 use read_registration::read;
+// No `gil_used = false` here, and the reason is a measurement rather than an
+// omission.  The claim is about a free-threaded interpreter, and this repo has
+// no way to produce one: the wheel is `abi3-py313`, and in the pinned pyo3
+// 0.29.2 the free-threaded stable ABI starts at `abi3t-py315` — free-threaded
+// CPython before 3.15 gets a version-specific build instead, so there is no
+// `abi3t-py313` to ask for.  The audit the claim would rest on is done, and
+// clean: nothing in the crate is `unsendable`, nothing holds a `GILProtected`,
+// the two lazily created exception types are `PyOnceLock` (pyo3's
+// free-threading-safe lazy global) and the single shared instance, `Columns`,
+// is a frozen unit struct.  Checking with `--features pyo3/abi3t-py315` sets
+// `Py_GIL_DISABLED` and compiles, but an exit-0 compile is a necessary condition
+// and not a test — pyo3 does not use that cfg to bound `#[pyclass]` payloads, so
+// it says nothing about the 794 hand-written kernels at runtime.  Declare it
+// with a free-threaded interpreter to run against.
+//
+// The Rust name is `native`, not `_native`: the leading underscore belongs to the
+// Python module, and putting it on the item as well would make every in-process
+// caller of it trip `clippy::used_underscore_items`.  `name` keeps the exported
+// module — and the `PyInit__native` symbol, and the module every `create_exception!`
+// in this crate attaches to — exactly as it was.
 #[pymodule]
-fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "_native")]
+fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     register(module)?;
     crate::adapters::register(module)?;
     register_facade(module)?;
@@ -456,3 +477,7 @@ fn register_geometry_functions(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(superpose_with_options, module)?)?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "module_tests.rs"]
+mod tests;

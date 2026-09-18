@@ -15,8 +15,8 @@ pub(crate) fn read(
 ) -> PyResult<PyStructure> {
     let options = options.map(|value| value.0.clone());
     py.detach(move || match options {
-        Some(options) => pdbiox::read_with_options(path, &options).map(|value| value.0),
-        None => pdbiox::read(path),
+        Some(options) => molframe::read_with_options(path, &options).map(|value| value.0),
+        None => molframe::read(path),
     })
     .map(PyStructure::new)
     .map_err(|findings| read_error(py, &findings))

@@ -122,7 +122,7 @@ pub(super) const ANALYSIS: &[&str] = &[
     "helical_parameters",
     "helical_steps",
     "water_dynamics",
-    // `pdbiox-analysis` intentionally re-exports these trajectory kernels.
+    // `molframe-analysis` intentionally re-exports these trajectory kernels.
     "agglomerative_clustering",
     "block_convergence",
     "cluster_population_similarity",
