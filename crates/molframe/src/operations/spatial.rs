@@ -1,9 +1,10 @@
 //! Typed spatial-search requests for the native facade plan.
 
-use super::requests::{CoordinateInput, ExecutionPlanError, PlanInput};
+use super::plan::inputs::{CoordinateInput, PlanInput};
+use super::plan::value::ExecutionPlanError;
 use super::spatial_cache::SpatialContext;
-use pdbiox_core::ExecutionContext;
-use pdbiox_core::selection::AtomSelection;
+use molframe_core::ExecutionContext;
+use molframe_core::selection::AtomSelection;
 
 /// A reusable fixed-radius spatial request over one borrowed coordinate array.
 #[derive(Clone, Debug)]
@@ -19,9 +20,9 @@ pub enum SpatialRequest {
         /// Distance cutoff in ångström.
         cutoff: f32,
         /// Complete backend planning profile.
-        options: pdbiox_spatial::SpatialSearchOptions,
+        options: molframe_spatial::SpatialSearchOptions,
         /// Optional periodic unit-cell geometry.
-        periodic: Option<pdbiox_spatial::PeriodicBox>,
+        periodic: Option<molframe_spatial::PeriodicBox>,
     },
     /// Selects query atoms within the cutoff of a target selection.
     AtomsWithin {
@@ -34,9 +35,9 @@ pub enum SpatialRequest {
         /// Distance cutoff in ångström.
         cutoff: f32,
         /// Complete backend planning profile.
-        options: pdbiox_spatial::SpatialSearchOptions,
+        options: molframe_spatial::SpatialSearchOptions,
         /// Optional periodic unit-cell geometry.
-        periodic: Option<pdbiox_spatial::PeriodicBox>,
+        periodic: Option<molframe_spatial::PeriodicBox>,
     },
 }
 
@@ -44,7 +45,7 @@ pub enum SpatialRequest {
 #[derive(Clone, Debug)]
 pub enum SpatialValue {
     /// Sorted fixed-radius pairs.
-    NeighborPairs(Vec<pdbiox_spatial::NeighborPair>),
+    NeighborPairs(Vec<molframe_spatial::NeighborPair>),
     /// Sorted atom indices selected by a within query.
     AtomsWithin(AtomSelection),
 }
@@ -67,7 +68,7 @@ pub(super) fn execute(
         } => {
             let result = match context {
                 Some(context) => context.pairs(left, right, *cutoff, execution),
-                None => pdbiox_spatial::pairs_within_with_options(
+                None => molframe_spatial::pairs_within_with_options(
                     coordinates(operation, input.arrays, *positions)?,
                     left,
                     right,
@@ -91,7 +92,7 @@ pub(super) fn execute(
         } => {
             let result = match context {
                 Some(context) => context.within(query, target, *cutoff, execution),
-                None => pdbiox_spatial::within_with_options(
+                None => molframe_spatial::within_with_options(
                     coordinates(operation, input.arrays, *positions)?,
                     query,
                     target,

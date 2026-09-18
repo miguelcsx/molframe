@@ -1,13 +1,13 @@
 //! Deterministic native plan execution.
 
+pub(super) mod inputs;
+pub(super) mod value;
+
 #[cfg(feature = "compare")]
 use super::comparison;
 use super::geometry;
 use super::physical;
-use super::requests::{
-    ContactsRequest, CoordinateInput, ExecutionPlanError, PlanInput, PlanOperation, PlanResult,
-    PlanResultEntry, PlanValue, RmsdRequest, SelectionRequest,
-};
+use super::requests::{ContactsRequest, RmsdRequest, SelectionRequest};
 use super::spatial;
 use super::spatial_cache::SpatialContext;
 use super::structure;
@@ -16,13 +16,16 @@ use super::surface;
 #[cfg(feature = "traj")]
 use super::{TrajectoryRequest, trajectory};
 use crate::QueryStructure;
-use pdbiox_analysis::Contact;
-use pdbiox_core::contract::{Analysis, AnalysisPolicy, Coverage, Status};
-use pdbiox_core::structure::Structure;
-use pdbiox_query::Groups;
-use pdbiox_spatial::{PeriodicBox, SpatialBackend, SpatialSearchOptions, StructureSpatial};
+use inputs::{CoordinateInput, FrameInput, IndexInput, PlanInput};
+use molframe_analysis::Contact;
+use molframe_core::contract::{Analysis, AnalysisPolicy, Coverage, Status};
+use molframe_core::diagnostic::Findings;
+use molframe_core::structure::Structure;
+use molframe_query::Groups;
+use molframe_spatial::{PeriodicBox, SpatialBackend, SpatialSearchOptions, StructureSpatial};
 use std::collections::BTreeMap;
 use std::fmt;
+use value::{ExecutionPlanError, PlanOperation, PlanResult, PlanResultEntry, PlanValue};
 
 /// A deterministic native operation plan.
 #[derive(Clone, Debug, Default)]
@@ -152,7 +155,7 @@ impl Plan {
     pub fn execute(
         &self,
         input: PlanInput<'_>,
-        context: &pdbiox_core::ExecutionContext,
+        context: &molframe_core::ExecutionContext,
     ) -> Result<PlanResult, ExecutionPlanError> {
         let has_contacts = self.operations.values().any(|operation| {
             matches!(
@@ -198,7 +201,7 @@ impl Plan {
         input: PlanInput<'_>,
         spatial: Option<&StructureSpatial<'_>>,
         coordinate_contexts: &mut [SpatialContext<'_>],
-        context: &pdbiox_core::ExecutionContext,
+        context: &molframe_core::ExecutionContext,
     ) -> Result<PlanValue, ExecutionPlanError> {
         match operation {
             PlanOperation::Selection(request) => {
@@ -206,12 +209,10 @@ impl Plan {
                 let groups = Groups::new();
                 let evaluation = if request.policy() == &AnalysisPolicy::default() {
                     if let Some(spatial) = spatial {
-                        request.query().evaluate(
-                            structure,
-                            request.policy(),
-                            &groups,
-                            Some(spatial),
-                        )
+                        request
+                            .query()
+                            .evaluate(structure, request.policy(), &groups, Some(spatial))
+                            .map_err(Findings::from)
                     } else {
                         structure.select(request.query(), request.policy(), &groups, context)
                     }
@@ -233,7 +234,7 @@ impl Plan {
                 let mobile = array_slot(id, input.arrays, request.mobile())?;
                 let reference = array_slot(id, input.arrays, request.reference())?;
                 Ok(PlanValue::Rmsd(
-                    pdbiox_geom::rmsd(mobile.positions, reference.positions)
+                    molframe_geom::rmsd(mobile.positions, reference.positions)
                         .map_err(ExecutionPlanError::Rmsd)?,
                 ))
             }
@@ -344,7 +345,7 @@ fn reusable_spatial<'a>(
     structure: Option<&'a Structure>,
     needed: bool,
     policy: &AnalysisPolicy,
-    context: &'a pdbiox_core::ExecutionContext,
+    context: &'a molframe_core::ExecutionContext,
 ) -> Result<Option<StructureSpatial<'a>>, ExecutionPlanError> {
     let Some(structure) = structure.filter(|_| needed) else {
         return Ok(None);
@@ -388,9 +389,9 @@ fn array_slot<'a>(
 
 fn frame_slot<'a>(
     operation: &str,
-    frames: &'a [super::requests::FrameInput<'a>],
+    frames: &'a [FrameInput<'a>],
     slot: usize,
-) -> Result<&'a super::requests::FrameInput<'a>, ExecutionPlanError> {
+) -> Result<&'a FrameInput<'a>, ExecutionPlanError> {
     frames
         .get(slot)
         .ok_or_else(|| ExecutionPlanError::FrameSlot {
@@ -401,7 +402,7 @@ fn frame_slot<'a>(
 
 fn index_slot<'a>(
     operation: &str,
-    indices: &'a [super::requests::IndexInput<'a>],
+    indices: &'a [IndexInput<'a>],
     slot: usize,
 ) -> Result<&'a [usize], ExecutionPlanError> {
     indices
@@ -417,7 +418,7 @@ fn execute_contacts(
     request: &ContactsRequest,
     structure: &Structure,
     spatial: Option<&StructureSpatial<'_>>,
-    context: &pdbiox_core::ExecutionContext,
+    context: &molframe_core::ExecutionContext,
 ) -> Result<Analysis<Vec<Contact>>, ExecutionPlanError> {
     let groups = Groups::new();
     let (left, right, contacts) = if let Some(spatial) = spatial {
@@ -429,7 +430,7 @@ fn execute_contacts(
             .right_query()
             .evaluate(structure, request.policy(), &groups, Some(spatial))
             .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
-        let contacts = pdbiox_analysis::atom_contacts_between_with_spatial(
+        let contacts = molframe_analysis::atom_contacts_between_with_spatial(
             structure,
             &left.selection,
             &right.selection,
@@ -446,7 +447,7 @@ fn execute_contacts(
         let right = structure
             .select(request.right_query(), request.policy(), &groups, context)
             .map_err(|findings| ExecutionPlanError::Governed(format!("{findings:?}").into()))?;
-        let contacts = pdbiox_analysis::atom_contacts_between(
+        let contacts = molframe_analysis::atom_contacts_between(
             structure,
             &left.selection,
             &right.selection,

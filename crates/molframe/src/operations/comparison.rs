@@ -1,6 +1,6 @@
 //! Typed coordinate comparison requests used by the facade plan.
 
-use super::PlanOperation;
+use super::plan::value::PlanOperation;
 
 /// A comparison kernel that consumes two coordinate arrays.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -76,18 +76,18 @@ pub(crate) fn execute(
     request: &ComparisonRequest,
     mobile: &[[f32; 3]],
     reference: &[[f32; 3]],
-    context: &pdbiox_core::ExecutionContext,
-) -> Result<ComparisonResult, pdbiox_compare::CompareError> {
+    context: &molframe_core::ExecutionContext,
+) -> Result<ComparisonResult, molframe_compare::CompareError> {
     let value = match request.metric {
-        ComparisonMetric::Lddt { inclusion_radius } => pdbiox_compare::lddt_with_options(
+        ComparisonMetric::Lddt { inclusion_radius } => molframe_compare::lddt_with_options(
             mobile,
             reference,
-            &pdbiox_compare::LddtOptions::standard(inclusion_radius),
+            &molframe_compare::LddtOptions::standard(inclusion_radius),
             context,
         )?,
-        ComparisonMetric::TmScore => pdbiox_compare::tm_score(mobile, reference)?,
-        ComparisonMetric::GdtTs => pdbiox_compare::gdt_ts(mobile, reference)?,
-        ComparisonMetric::GdtHa => pdbiox_compare::gdt_ha(mobile, reference)?,
+        ComparisonMetric::TmScore => molframe_compare::tm_score(mobile, reference)?,
+        ComparisonMetric::GdtTs => molframe_compare::gdt_ts(mobile, reference)?,
+        ComparisonMetric::GdtHa => molframe_compare::gdt_ha(mobile, reference)?,
     };
     Ok(ComparisonResult {
         metric: request.metric,

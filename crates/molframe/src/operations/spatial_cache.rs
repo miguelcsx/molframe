@@ -13,11 +13,11 @@
 //! is handed `&[u32]`, and it cannot store a selection more compactly than the
 //! caller materialised it.
 
-use super::requests::ExecutionPlanError;
+use super::plan::value::ExecutionPlanError;
 use super::spatial::SpatialRequest;
-use pdbiox_core::ExecutionContext;
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_spatial::{
+use molframe_core::ExecutionContext;
+use molframe_core::selection::AtomSelection;
+use molframe_spatial::{
     CellList, KdTree, NeighborPair, PeriodicBox, SpatialBackend, SpatialSearchOptions,
 };
 
@@ -122,7 +122,7 @@ impl<'a> SpatialContext<'a> {
         right: &AtomSelection,
         cutoff: f32,
         context: &ExecutionContext,
-    ) -> Result<Vec<NeighborPair>, pdbiox_spatial::SpatialError> {
+    ) -> Result<Vec<NeighborPair>, molframe_spatial::SpatialError> {
         let plan = self.options.plan(
             left_count(left)?,
             left_count(right)?,
@@ -130,7 +130,7 @@ impl<'a> SpatialContext<'a> {
             cutoff,
         )?;
         if self.periodic.is_some() {
-            return pdbiox_spatial::pairs_within_with_options(
+            return molframe_spatial::pairs_within_with_options(
                 self.positions,
                 left,
                 right,
@@ -152,7 +152,7 @@ impl<'a> SpatialContext<'a> {
                 let right_indices = indices(right);
                 self.kd_pairs(&left_indices, &right_indices, cutoff)
             }
-            backend => pdbiox_spatial::pairs_within_with_options(
+            backend => molframe_spatial::pairs_within_with_options(
                 self.positions,
                 left,
                 right,
@@ -173,7 +173,7 @@ impl<'a> SpatialContext<'a> {
         target: &AtomSelection,
         cutoff: f32,
         context: &ExecutionContext,
-    ) -> Result<AtomSelection, pdbiox_spatial::SpatialError> {
+    ) -> Result<AtomSelection, molframe_spatial::SpatialError> {
         let pairs = self.pairs(query, target, cutoff, context)?;
         let mut matched = vec![false; self.positions.len()];
         for pair in pairs {
@@ -183,11 +183,11 @@ impl<'a> SpatialContext<'a> {
         let mut selected = Vec::new();
         for atom in query {
             let index = usize::try_from(atom)
-                .map_err(|_| pdbiox_spatial::SpatialError::NumericRangeExceeded)?;
+                .map_err(|_| molframe_spatial::SpatialError::NumericRangeExceeded)?;
             if matched
                 .get(index)
                 .copied()
-                .ok_or(pdbiox_spatial::SpatialError::AtomOutOfBounds(atom))?
+                .ok_or(molframe_spatial::SpatialError::AtomOutOfBounds(atom))?
                 || target.contains(atom)
             {
                 selected.push(atom);
@@ -201,7 +201,7 @@ impl<'a> SpatialContext<'a> {
         left: &[u32],
         right: &[u32],
         cutoff: f32,
-    ) -> Result<Vec<NeighborPair>, pdbiox_spatial::SpatialError> {
+    ) -> Result<Vec<NeighborPair>, molframe_spatial::SpatialError> {
         let key = TargetKey::of(right);
         if let Some(index) = self.cache.iter().find_map(|entry| match entry {
             CachedIndex::Cell {
@@ -238,7 +238,7 @@ impl<'a> SpatialContext<'a> {
         left: &[u32],
         right: &[u32],
         cutoff: f32,
-    ) -> Result<Vec<NeighborPair>, pdbiox_spatial::SpatialError> {
+    ) -> Result<Vec<NeighborPair>, molframe_spatial::SpatialError> {
         let key = TargetKey::of(right);
         if let Some(index) = self.cache.iter().find_map(|entry| match entry {
             CachedIndex::Kd {
@@ -268,8 +268,9 @@ impl<'a> SpatialContext<'a> {
     }
 }
 
-fn left_count(selection: &AtomSelection) -> Result<usize, pdbiox_spatial::SpatialError> {
-    usize::try_from(selection.len()).map_err(|_| pdbiox_spatial::SpatialError::NumericRangeExceeded)
+fn left_count(selection: &AtomSelection) -> Result<usize, molframe_spatial::SpatialError> {
+    usize::try_from(selection.len())
+        .map_err(|_| molframe_spatial::SpatialError::NumericRangeExceeded)
 }
 
 fn indices(selection: &AtomSelection) -> Vec<u32> {
@@ -281,7 +282,7 @@ fn mark_pair(
     query: &AtomSelection,
     target: &AtomSelection,
     pair: NeighborPair,
-) -> Result<(), pdbiox_spatial::SpatialError> {
+) -> Result<(), molframe_spatial::SpatialError> {
     if query.contains(pair.first) && target.contains(pair.second) {
         mark(matched, pair.first)?;
     }
@@ -291,12 +292,12 @@ fn mark_pair(
     Ok(())
 }
 
-fn mark(matched: &mut [bool], atom: u32) -> Result<(), pdbiox_spatial::SpatialError> {
+fn mark(matched: &mut [bool], atom: u32) -> Result<(), molframe_spatial::SpatialError> {
     let index =
-        usize::try_from(atom).map_err(|_| pdbiox_spatial::SpatialError::NumericRangeExceeded)?;
+        usize::try_from(atom).map_err(|_| molframe_spatial::SpatialError::NumericRangeExceeded)?;
     let slot = matched
         .get_mut(index)
-        .ok_or(pdbiox_spatial::SpatialError::AtomOutOfBounds(atom))?;
+        .ok_or(molframe_spatial::SpatialError::AtomOutOfBounds(atom))?;
     *slot = true;
     Ok(())
 }

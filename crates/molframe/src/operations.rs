@@ -24,14 +24,12 @@ pub use comparison::{ComparisonMetric, ComparisonRequest, ComparisonResult};
 pub use geometry::{GeometryRequest, GeometryValue};
 pub use physical::{PhysicalRequest, PhysicalValue};
 pub use plan::Plan;
-pub use requests::FloatInput;
+pub use plan::inputs::FloatInput;
 #[cfg(feature = "surface")]
-pub use requests::MaskInput;
-pub use requests::{
-    ContactsRequest, CoordinateInput, ExecutionPlanError, FrameInput, IndexInput, PlanInput,
-    PlanOperation, PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput,
-    SelectionRequest,
-};
+pub use plan::inputs::MaskInput;
+pub use plan::inputs::{CoordinateInput, FrameInput, IndexInput, PlanInput, ScalarInput};
+pub use plan::value::{ExecutionPlanError, PlanOperation, PlanResult, PlanResultEntry, PlanValue};
+pub use requests::{ContactsRequest, RmsdRequest, SelectionRequest};
 pub use spatial::{SpatialRequest, SpatialValue};
 pub use structure::{StructureRequest, StructureValue};
 #[cfg(feature = "surface")]
@@ -40,5 +38,5 @@ pub use surface::{SurfaceRequest, SurfaceValue};
 pub use trajectory::{TrajectoryRequest, TrajectoryValue};
 
 #[cfg(test)]
-#[path = "operations_tests.rs"]
+#[path = "operations/operations_tests.rs"]
 mod tests;

@@ -1,8 +1,8 @@
 //! Shared support for structure operation execution.
 
-use super::requests::ExecutionPlanError;
-use pdbiox_core::structure::Structure;
-use pdbiox_spatial::PeriodicBox;
+use super::plan::value::ExecutionPlanError;
+use molframe_core::structure::Structure;
+use molframe_spatial::PeriodicBox;
 
 pub(super) fn periodic_box(
     structure: &Structure,

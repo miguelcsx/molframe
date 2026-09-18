@@ -1,9 +1,9 @@
 //! Typed trajectory requests executed over borrowed contiguous frame buffers.
 
-use super::PlanOperation;
-use super::requests::{ExecutionPlanError, FrameInput};
-use pdbiox_core::contract::{Analysis, AnalysisPolicy};
-use pdbiox_traj::{
+use super::plan::inputs::FrameInput;
+use super::plan::value::{ExecutionPlanError, PlanOperation};
+use molframe_core::contract::{Analysis, AnalysisPolicy};
+use molframe_traj::{
     EnsembleDistanceMatrix, FrameAlignment, FrameView, MeanSquaredDisplacement,
     analyse_generalized_procrustes_mean_view, analyse_mean_squared_displacement_view,
     analyse_pairwise_fitted_rmsd_view, analyse_rmsd_to_reference_view,

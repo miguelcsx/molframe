@@ -1,6 +1,7 @@
 //! Typed coordinate and ensemble geometry requests for the facade plan.
 
-use super::requests::{CoordinateInput, ExecutionPlanError, PlanInput, ScalarInput};
+use super::plan::inputs::{CoordinateInput, PlanInput, ScalarInput};
+use super::plan::value::ExecutionPlanError;
 
 /// A reusable geometry request over borrowed plan inputs.
 #[derive(Clone, Debug)]
@@ -38,21 +39,21 @@ pub enum GeometryRequest {
         /// Optional scalar-array slot.
         masses: Option<usize>,
         /// Bounded eigensolver controls.
-        options: pdbiox_geom::EigenOptions,
+        options: molframe_geom::EigenOptions,
     },
     /// Shape asphericity from the gyration tensor.
     Asphericity {
         /// Coordinate-array slot.
         positions: usize,
         /// Bounded eigensolver controls.
-        options: pdbiox_geom::EigenOptions,
+        options: molframe_geom::EigenOptions,
     },
     /// Eigenvectors and eigenvalues of the gyration tensor.
     GyrationAxes {
         /// Coordinate-array slot.
         positions: usize,
         /// Bounded eigensolver controls.
-        options: pdbiox_geom::EigenOptions,
+        options: molframe_geom::EigenOptions,
     },
     /// Dense pairwise distances within one coordinate set.
     DistanceMatrix {
@@ -85,13 +86,13 @@ pub enum GeometryValue {
     /// Inertia tensor.
     InertiaTensor(Option<[[f64; 3]; 3]>),
     /// Principal axes.
-    PrincipalAxes(Option<pdbiox_geom::Decomposition<3>>),
+    PrincipalAxes(Option<molframe_geom::Decomposition<3>>),
     /// Asphericity.
     Asphericity(Option<f64>),
     /// Gyration axes.
-    GyrationAxes(Option<pdbiox_geom::Decomposition<3>>),
+    GyrationAxes(Option<molframe_geom::Decomposition<3>>),
     /// Dense distance matrix.
-    DistanceMatrix(pdbiox_geom::DistanceMatrix),
+    DistanceMatrix(molframe_geom::DistanceMatrix),
     /// Per-atom RMS fluctuation.
     Rmsf(Vec<f64>),
 }
@@ -103,12 +104,12 @@ pub(super) fn execute(
 ) -> Result<GeometryValue, ExecutionPlanError> {
     match request {
         GeometryRequest::Centroid { positions } => Ok(GeometryValue::Centroid(
-            pdbiox_geom::centroid(coordinates(operation, input.arrays, *positions)?),
+            molframe_geom::centroid(coordinates(operation, input.arrays, *positions)?),
         )),
         GeometryRequest::CentreOfMass { positions, masses } => {
             let positions = coordinates(operation, input.arrays, *positions)?;
             let masses = scalar_values(operation, input.scalars, *masses, positions.len())?;
-            Ok(GeometryValue::CentreOfMass(pdbiox_geom::centre_of_mass(
+            Ok(GeometryValue::CentreOfMass(molframe_geom::centre_of_mass(
                 positions, masses,
             )))
         }
@@ -116,13 +117,13 @@ pub(super) fn execute(
             let positions = coordinates(operation, input.arrays, *positions)?;
             let masses = scalar_values(operation, input.scalars, *masses, positions.len())?;
             Ok(GeometryValue::RadiusOfGyration(
-                pdbiox_geom::radius_of_gyration(positions, masses),
+                molframe_geom::radius_of_gyration(positions, masses),
             ))
         }
         GeometryRequest::InertiaTensor { positions, masses } => {
             let positions = coordinates(operation, input.arrays, *positions)?;
             let masses = scalar_values(operation, input.scalars, *masses, positions.len())?;
-            Ok(GeometryValue::InertiaTensor(pdbiox_geom::inertia_tensor(
+            Ok(GeometryValue::InertiaTensor(molframe_geom::inertia_tensor(
                 positions, masses,
             )))
         }
@@ -133,31 +134,31 @@ pub(super) fn execute(
         } => {
             let positions = coordinates(operation, input.arrays, *positions)?;
             let masses = scalar_values(operation, input.scalars, *masses, positions.len())?;
-            pdbiox_geom::principal_axes_with_options(positions, masses, *options)
+            molframe_geom::principal_axes_with_options(positions, masses, *options)
                 .map(GeometryValue::PrincipalAxes)
                 .map_err(ExecutionPlanError::Eigen)
         }
         GeometryRequest::Asphericity { positions, options } => {
             let positions = coordinates(operation, input.arrays, *positions)?;
-            pdbiox_geom::asphericity_with_options(positions, *options)
+            molframe_geom::asphericity_with_options(positions, *options)
                 .map(GeometryValue::Asphericity)
                 .map_err(ExecutionPlanError::Eigen)
         }
         GeometryRequest::GyrationAxes { positions, options } => {
             let positions = coordinates(operation, input.arrays, *positions)?;
-            pdbiox_geom::gyration_axes_with_options(positions, *options)
+            molframe_geom::gyration_axes_with_options(positions, *options)
                 .map(GeometryValue::GyrationAxes)
                 .map_err(ExecutionPlanError::Eigen)
         }
         GeometryRequest::DistanceMatrix { positions } => {
-            pdbiox_geom::distance_matrix(coordinates(operation, input.arrays, *positions)?)
+            molframe_geom::distance_matrix(coordinates(operation, input.arrays, *positions)?)
                 .map(GeometryValue::DistanceMatrix)
                 .map_err(ExecutionPlanError::Matrix)
         }
         GeometryRequest::DistanceMatrixBetween { left, right } => {
             let left = coordinates(operation, input.arrays, *left)?;
             let right = coordinates(operation, input.arrays, *right)?;
-            pdbiox_geom::distance_matrix_between(left, right)
+            molframe_geom::distance_matrix_between(left, right)
                 .map(GeometryValue::DistanceMatrix)
                 .map_err(ExecutionPlanError::Matrix)
         }
@@ -192,7 +193,7 @@ pub(super) fn execute(
                     .chunks_exact(frame_input.atom_count)
                     .collect::<Vec<_>>()
             };
-            pdbiox_geom::rmsf(&frame_views)
+            molframe_geom::rmsf(&frame_views)
                 .map(GeometryValue::Rmsf)
                 .map_err(ExecutionPlanError::Fluctuation)
         }

@@ -1,7 +1,8 @@
 //! Typed surface requests executed by the native facade plan.
 
-use super::requests::{ExecutionPlanError, PlanInput};
-use pdbiox_core::ExecutionContext;
+use super::plan::inputs::PlanInput;
+use super::plan::value::ExecutionPlanError;
+use molframe_core::ExecutionContext;
 
 /// A reusable surface calculation over borrowed plan inputs.
 #[derive(Clone, Debug)]
@@ -38,7 +39,7 @@ pub enum SurfaceValue {
     /// One accessible area per input atom.
     SolventAccessibleSurface(Vec<f64>),
     /// Accessible areas and the total buried area.
-    BuriedSurface(pdbiox_surface::BuriedSurface),
+    BuriedSurface(molframe_surface::BuriedSurface),
 }
 
 pub(super) fn execute(
@@ -53,7 +54,7 @@ pub(super) fn execute(
             radii,
             probe,
             sample_points,
-        } => pdbiox_surface::shrake_rupley(
+        } => molframe_surface::shrake_rupley(
             coordinates(operation, input.arrays, *positions)?,
             floats(operation, input.floats, *radii)?,
             *probe,
@@ -68,7 +69,7 @@ pub(super) fn execute(
             first,
             probe,
             sample_points,
-        } => pdbiox_surface::buried_surface(
+        } => molframe_surface::buried_surface(
             coordinates(operation, input.arrays, *positions)?,
             floats(operation, input.floats, *radii)?,
             *probe,
@@ -83,7 +84,7 @@ pub(super) fn execute(
 
 fn coordinates<'a>(
     operation: &str,
-    arrays: &'a [super::requests::CoordinateInput<'a>],
+    arrays: &'a [super::plan::inputs::CoordinateInput<'a>],
     slot: usize,
 ) -> Result<&'a [[f32; 3]], ExecutionPlanError> {
     arrays
@@ -97,7 +98,7 @@ fn coordinates<'a>(
 
 fn floats<'a>(
     operation: &str,
-    values: &'a [super::requests::FloatInput<'a>],
+    values: &'a [super::plan::inputs::FloatInput<'a>],
     slot: usize,
 ) -> Result<&'a [f32], ExecutionPlanError> {
     values
@@ -111,7 +112,7 @@ fn floats<'a>(
 
 fn masks<'a>(
     operation: &str,
-    values: &'a [super::requests::MaskInput<'a>],
+    values: &'a [super::plan::inputs::MaskInput<'a>],
     slot: usize,
 ) -> Result<&'a [bool], ExecutionPlanError> {
     values

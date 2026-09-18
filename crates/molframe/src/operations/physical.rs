@@ -1,10 +1,11 @@
 //! Policy-bound physical analysis operations.
 
-use super::requests::{ExecutionPlanError, PlanInput};
-use pdbiox_core::contract::{Analysis, AnalysisPolicy, PeriodicPolicy};
-use pdbiox_core::selection::AtomSelection;
-use pdbiox_core::structure::Structure;
-use pdbiox_spatial::SpatialBackend;
+use super::plan::inputs::PlanInput;
+use super::plan::value::ExecutionPlanError;
+use molframe_core::contract::{Analysis, AnalysisPolicy, PeriodicPolicy};
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::Structure;
+use molframe_spatial::SpatialBackend;
 
 /// A reusable structure-bound physical analysis request.
 #[derive(Clone, Debug)]
@@ -16,7 +17,7 @@ pub enum PhysicalRequest {
         /// Sites contributing the second side of the distribution.
         right: AtomSelection,
         /// Shell and normalization controls.
-        options: pdbiox_analysis::RadialDistributionOptions,
+        options: molframe_analysis::RadialDistributionOptions,
         /// Compatibility switch for minimum-image periodicity.
         periodic: bool,
         /// Data and model policy.
@@ -44,7 +45,7 @@ pub enum PhysicalRequest {
         /// Representative sites supplied by the caller.
         sites: AtomSelection,
         /// Component construction controls.
-        options: pdbiox_analysis::LeafletOptions,
+        options: molframe_analysis::LeafletOptions,
         /// Compatibility switch for minimum-image periodicity.
         periodic: bool,
         /// Data and model policy.
@@ -55,7 +56,7 @@ pub enum PhysicalRequest {
         /// Slot containing atom-aligned weights.
         weights: usize,
         /// Axis, bounds and binning controls.
-        options: pdbiox_analysis::LinearDensityOptions,
+        options: molframe_analysis::LinearDensityOptions,
         /// Data and model policy.
         policy: AnalysisPolicy,
     },
@@ -64,7 +65,7 @@ pub enum PhysicalRequest {
         /// Slot containing atom-aligned weights.
         weights: usize,
         /// Grid origin, spacing and shape.
-        spec: pdbiox_analysis::DensityGridSpec,
+        spec: molframe_analysis::DensityGridSpec,
         /// Data and model policy.
         policy: AnalysisPolicy,
     },
@@ -73,7 +74,7 @@ pub enum PhysicalRequest {
         /// Slot containing atom-aligned radii.
         radii: usize,
         /// Axis and sampling controls.
-        options: pdbiox_analysis::PoreProfileOptions,
+        options: molframe_analysis::PoreProfileOptions,
         /// Data and model policy.
         policy: AnalysisPolicy,
     },
@@ -100,19 +101,19 @@ pub enum PhysicalRequest {
 #[derive(Clone, Debug)]
 pub enum PhysicalValue {
     /// Radial bins and their analysis contract.
-    RadialDistribution(Analysis<Vec<pdbiox_analysis::RadialBin>>),
+    RadialDistribution(Analysis<Vec<molframe_analysis::RadialBin>>),
     /// Per-left-site coordination counts and their analysis contract.
     CoordinationNumbers(Analysis<Vec<u32>>),
     /// Deterministic connected components and their analysis contract.
-    Leaflets(Analysis<Vec<pdbiox_analysis::Leaflet>>),
+    Leaflets(Analysis<Vec<molframe_analysis::Leaflet>>),
     /// Linear density bins and their analysis contract.
-    LinearDensity(Analysis<Vec<pdbiox_analysis::LinearDensityBin>>),
+    LinearDensity(Analysis<Vec<molframe_analysis::LinearDensityBin>>),
     /// Density grid and its analysis contract.
-    DensityMap(Analysis<pdbiox_analysis::DensityGrid>),
+    DensityMap(Analysis<molframe_analysis::DensityGrid>),
     /// Pore samples and their analysis contract.
-    PoreProfile(Analysis<Vec<pdbiox_analysis::PoreSample>>),
+    PoreProfile(Analysis<Vec<molframe_analysis::PoreSample>>),
     /// Exposed-surface contacts and their analysis contract.
-    SurfaceContacts(Analysis<Vec<pdbiox_analysis::Contact>>),
+    SurfaceContacts(Analysis<Vec<molframe_analysis::Contact>>),
 }
 
 /// Execute one physical request through the governed analysis layer.
@@ -121,7 +122,7 @@ pub fn execute(
     request: &PhysicalRequest,
     structure: &Structure,
     input: PlanInput<'_>,
-    context: &pdbiox_core::ExecutionContext,
+    context: &molframe_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     match request {
         PhysicalRequest::RadialDistribution {
@@ -132,8 +133,8 @@ pub fn execute(
             policy,
         } => {
             let policy = effective_policy(policy, *periodic);
-            let kernel = pdbiox_analysis::radial_distribution_kernel(left, right, *options);
-            pdbiox_analysis::analyse_structure(structure, &policy, &kernel, context)
+            let kernel = molframe_analysis::radial_distribution_kernel(left, right, *options);
+            molframe_analysis::analyse_structure(structure, &policy, &kernel, context)
                 .map(PhysicalValue::RadialDistribution)
                 .map_err(governed_error)
         }
@@ -147,14 +148,14 @@ pub fn execute(
             policy,
         } => {
             let policy = effective_policy(policy, *periodic);
-            let kernel = pdbiox_analysis::coordination_numbers_kernel(
+            let kernel = molframe_analysis::coordination_numbers_kernel(
                 left,
                 right,
                 *minimum_distance,
                 *maximum_distance,
                 *backend,
             );
-            pdbiox_analysis::analyse_structure(structure, &policy, &kernel, context)
+            molframe_analysis::analyse_structure(structure, &policy, &kernel, context)
                 .map(PhysicalValue::CoordinationNumbers)
                 .map_err(governed_error)
         }
@@ -165,8 +166,8 @@ pub fn execute(
             policy,
         } => {
             let policy = effective_policy(policy, *periodic);
-            let kernel = pdbiox_analysis::leaflets_kernel(sites, *options);
-            pdbiox_analysis::analyse_structure(structure, &policy, &kernel, context)
+            let kernel = molframe_analysis::leaflets_kernel(sites, *options);
+            molframe_analysis::analyse_structure(structure, &policy, &kernel, context)
                 .map(PhysicalValue::Leaflets)
                 .map_err(governed_error)
         }
@@ -222,13 +223,13 @@ fn execute_linear_density(
     structure: &Structure,
     input: PlanInput<'_>,
     slot: usize,
-    options: pdbiox_analysis::LinearDensityOptions,
+    options: molframe_analysis::LinearDensityOptions,
     policy: &AnalysisPolicy,
-    context: &pdbiox_core::ExecutionContext,
+    context: &molframe_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let weights = scalar_slot(operation, input, slot)?;
-    let kernel = pdbiox_analysis::linear_density_kernel(weights.values, options);
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
+    let kernel = molframe_analysis::linear_density_kernel(weights.values, options);
+    molframe_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::LinearDensity)
         .map_err(governed_error)
 }
@@ -238,13 +239,13 @@ fn execute_density_map(
     structure: &Structure,
     input: PlanInput<'_>,
     slot: usize,
-    spec: pdbiox_analysis::DensityGridSpec,
+    spec: molframe_analysis::DensityGridSpec,
     policy: &AnalysisPolicy,
-    context: &pdbiox_core::ExecutionContext,
+    context: &molframe_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let weights = scalar_slot(operation, input, slot)?;
-    let kernel = pdbiox_analysis::density_map_kernel(weights.values, spec);
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
+    let kernel = molframe_analysis::density_map_kernel(weights.values, spec);
+    molframe_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::DensityMap)
         .map_err(governed_error)
 }
@@ -254,13 +255,13 @@ fn execute_pore_profile(
     structure: &Structure,
     input: PlanInput<'_>,
     slot: usize,
-    options: pdbiox_analysis::PoreProfileOptions,
+    options: molframe_analysis::PoreProfileOptions,
     policy: &AnalysisPolicy,
-    context: &pdbiox_core::ExecutionContext,
+    context: &molframe_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let radii = float_slot(operation, input, slot)?;
-    let kernel = pdbiox_analysis::pore_profile_kernel(radii.values, options);
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
+    let kernel = molframe_analysis::pore_profile_kernel(radii.values, options);
+    molframe_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::PoreProfile)
         .map_err(governed_error)
 }
@@ -281,12 +282,12 @@ fn execute_surface_contacts(
     slot: usize,
     parameters: SurfaceContactParameters,
     policy: &AnalysisPolicy,
-    context: &pdbiox_core::ExecutionContext,
+    context: &molframe_core::ExecutionContext,
 ) -> Result<PhysicalValue, ExecutionPlanError> {
     let radii = float_slot(operation, input, slot)?;
-    let kernel = pdbiox_analysis::surface_contacts_kernel(
+    let kernel = molframe_analysis::surface_contacts_kernel(
         radii.values,
-        pdbiox_analysis::SurfaceContactOptions {
+        molframe_analysis::SurfaceContactOptions {
             tolerance: parameters.tolerance,
             probe: parameters.probe,
             surface_density: parameters.density,
@@ -294,7 +295,7 @@ fn execute_surface_contacts(
             backend: parameters.backend,
         },
     );
-    pdbiox_analysis::analyse_structure(structure, policy, &kernel, context)
+    molframe_analysis::analyse_structure(structure, policy, &kernel, context)
         .map(PhysicalValue::SurfaceContacts)
         .map_err(governed_error)
 }
@@ -315,7 +316,7 @@ fn scalar_slot<'a>(
     operation: &str,
     input: PlanInput<'a>,
     slot: usize,
-) -> Result<super::requests::ScalarInput<'a>, ExecutionPlanError> {
+) -> Result<super::plan::inputs::ScalarInput<'a>, ExecutionPlanError> {
     input
         .scalars
         .get(slot)
@@ -330,7 +331,7 @@ fn float_slot<'a>(
     operation: &str,
     input: PlanInput<'a>,
     slot: usize,
-) -> Result<super::requests::FloatInput<'a>, ExecutionPlanError> {
+) -> Result<super::plan::inputs::FloatInput<'a>, ExecutionPlanError> {
     input
         .floats
         .get(slot)
