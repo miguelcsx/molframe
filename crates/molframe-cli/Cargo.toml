@@ -1,0 +1,24 @@
+[package]
+name = "molframe-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line interface for molframe"
+
+[[bin]]
+name = "molframe"
+path = "src/main.rs"
+
+[dependencies]
+molframe = { workspace = true, features = ["ml"] }
+molframe-adapters.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+clap_mangen.workspace = true
+glob.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
