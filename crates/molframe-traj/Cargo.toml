@@ -1,0 +1,39 @@
+[package]
+name = "molframe-traj"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Trajectory frames and formats for molframe"
+
+[dependencies]
+hoomd-gsd.workspace = true
+hdf5-reader.workspace = true
+hdf5-writer.workspace = true
+molly.workspace = true
+nalgebra.workspace = true
+netcdf-reader.workspace = true
+netcdf-writer.workspace = true
+num-traits.workspace = true
+molframe-core.workspace = true
+molframe-geom.workspace = true
+molframe-query.workspace = true
+molframe-spatial.workspace = true
+quick-xml.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+tng-rs.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+molframe-bench.workspace = true
+molframe-cif.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "traj"
+harness = false
+
+[lints]
+workspace = true
