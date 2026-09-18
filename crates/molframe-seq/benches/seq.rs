@@ -1,7 +1,7 @@
 //! Criterion coverage for sequence alignment and sequence formats.
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box};
-use pdbiox_seq::{
+use molframe_seq::{
     MsaOptions, Scoring, global, global_banded, kmer_counts, local, minimizers, parse_fasta,
     parse_fastq, progressive_msa, semi_global, write_fasta,
 };

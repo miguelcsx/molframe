@@ -43,7 +43,7 @@ pub fn parse_clustal(text: &str) -> Vec<FastaRecord> {
 /// Writes alignment records as a single-block Clustal file.
 #[must_use]
 pub fn write_clustal(records: &[FastaRecord]) -> String {
-    let mut out = String::from("CLUSTAL W (pdbiox) multiple sequence alignment\n\n");
+    let mut out = String::from("CLUSTAL W (molframe) multiple sequence alignment\n\n");
     for record in records {
         out.push_str(&record.id);
         out.push(' ');

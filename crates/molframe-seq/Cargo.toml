@@ -1,11 +1,11 @@
 [package]
-name = "pdbiox-seq"
+name = "molframe-seq"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Sequence alignment and comparison for pdbiox"
+description = "Sequence alignment and comparison for molframe"
 
 [dependencies]
 

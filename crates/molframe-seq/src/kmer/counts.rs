@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 /// # Examples
 ///
 /// ```
-/// use pdbiox_seq::kmer_counts;
+/// use molframe_seq::kmer_counts;
 ///
 /// let counts = kmer_counts(b"AAAA", 2);
 /// assert_eq!(counts, vec![(b"AA".to_vec(), 3)]);

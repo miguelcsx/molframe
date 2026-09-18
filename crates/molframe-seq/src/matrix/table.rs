@@ -42,7 +42,7 @@ impl SubstitutionMatrix {
     /// # Examples
     ///
     /// ```
-    /// use pdbiox_seq::matrix::blosum62;
+    /// use molframe_seq::matrix::blosum62;
     /// // The distributed matrices are built through this constructor.
     /// let m = blosum62();
     /// assert_eq!(m.get(b'C', b'C'), 9);
@@ -73,7 +73,7 @@ impl SubstitutionMatrix {
     /// # Examples
     ///
     /// ```
-    /// use pdbiox_seq::matrix::blosum62;
+    /// use molframe_seq::matrix::blosum62;
     /// let m = blosum62();
     /// assert_eq!(m.get(b'W', b'W'), 11);
     /// assert_eq!(m.get(b'w', b'W'), 11);
@@ -138,7 +138,7 @@ impl Score for SubstitutionMatrix {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_seq::matrix::blosum62;
+/// use molframe_seq::matrix::blosum62;
 /// let m = blosum62();
 /// assert_eq!(m.get(b'A', b'A'), 4);
 /// assert_eq!(m.get(b'W', b'W'), 11);

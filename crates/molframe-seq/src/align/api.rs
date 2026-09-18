@@ -150,13 +150,13 @@ fn region<'a>(
 /// # Examples
 ///
 /// ```
-/// use pdbiox_seq::align::global_matrix;
-/// use pdbiox_seq::matrix::blosum62;
+/// use molframe_seq::align::global_matrix;
+/// use molframe_seq::matrix::blosum62;
 /// let alignment = global_matrix(b"WKFL", b"WKFL", &blosum62(), -11, -1)?;
 /// // Two identical proteins align with no gaps and a positive score.
 /// assert_eq!(alignment.columns.len(), 4);
 /// assert!(alignment.score > 0);
-/// # Ok::<(), pdbiox_seq::AlignError>(())
+/// # Ok::<(), molframe_seq::AlignError>(())
 /// ```
 ///
 /// # Errors
@@ -181,11 +181,11 @@ pub fn global_matrix(
 /// # Examples
 ///
 /// ```
-/// use pdbiox_seq::align::local_matrix;
-/// use pdbiox_seq::matrix::blosum62;
+/// use molframe_seq::align::local_matrix;
+/// use molframe_seq::matrix::blosum62;
 /// let alignment = local_matrix(b"AAWKFAA", b"WKF", &blosum62(), -11, -1)?;
 /// assert!(alignment.score > 0);
-/// # Ok::<(), pdbiox_seq::AlignError>(())
+/// # Ok::<(), molframe_seq::AlignError>(())
 /// ```
 ///
 /// # Errors
@@ -210,11 +210,11 @@ pub fn local_matrix(
 /// # Examples
 ///
 /// ```
-/// use pdbiox_seq::align::semi_global_matrix;
-/// use pdbiox_seq::matrix::blosum62;
+/// use molframe_seq::align::semi_global_matrix;
+/// use molframe_seq::matrix::blosum62;
 /// let alignment = semi_global_matrix(b"GGWKFGG", b"WKF", &blosum62(), -11, -1)?;
 /// assert!(alignment.score > 0);
-/// # Ok::<(), pdbiox_seq::AlignError>(())
+/// # Ok::<(), molframe_seq::AlignError>(())
 /// ```
 ///
 /// # Errors
