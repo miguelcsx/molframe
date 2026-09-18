@@ -1,7 +1,7 @@
 //! Deterministic coordinate and radius fixture transformations.
 
-use pdbiox_core::index::ModelIndex;
-use pdbiox_core::structure::Structure;
+use molframe_core::index::ModelIndex;
+use molframe_core::structure::Structure;
 
 /// The first model's atom positions as an owned slice.
 #[must_use]

@@ -51,7 +51,7 @@ _atom_site.pdbx_PDB_model_num\n";
 /// # Examples
 ///
 /// ```
-/// use pdbiox_bench::{Sample, Seed, SyntheticCifSource, Tile, structure};
+/// use molframe_bench::{Sample, Seed, SyntheticCifSource, Tile, structure};
 /// use std::io::Read;
 ///
 /// let tile = Tile::from_structure(&structure(Sample::Tiny), Seed::new(1));

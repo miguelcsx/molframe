@@ -1,4 +1,4 @@
-//! Shared real-structure fixtures for the pdbiox benchmark suite.
+//! Shared real-structure fixtures for the molframe benchmark suite.
 
 mod coordinates;
 mod fixtures;

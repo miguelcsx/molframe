@@ -21,8 +21,8 @@
 
 use super::seed::Seed;
 use crate::numeric::{f64_to_f32, usize_to_f64};
-use pdbiox_core::element::Element;
-use pdbiox_core::structure::Structure;
+use molframe_core::element::Element;
+use molframe_core::structure::Structure;
 
 /// Gap between adjacent lattice cells, as a fraction of the tile extent.
 ///

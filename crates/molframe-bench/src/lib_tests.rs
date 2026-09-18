@@ -44,7 +44,7 @@ fn the_ensemble_has_several_models() {
 #[test]
 fn the_large_sample_decompresses_from_gzip() {
     let buffer = input_gzip(large_cif_gz());
-    let parsed = pdbiox_cif::read(&buffer, &pdbiox_core::io::ReadOptions::new());
+    let parsed = molframe_cif::read(&buffer, &molframe_core::io::ReadOptions::new());
     match parsed {
         Ok((structure, _)) => assert!(structure.atom_count() > 10_000),
         Err(findings) => panic!("gzip mmCIF failed: {findings:?}"),

@@ -28,7 +28,7 @@ const SECOND_MULTIPLIER: u64 = 0x94d0_49bb_1331_11eb;
 /// # Examples
 ///
 /// ```
-/// use pdbiox_bench::Seed;
+/// use molframe_bench::Seed;
 ///
 /// let mut left = Seed::new(7);
 /// let mut right = Seed::new(7);

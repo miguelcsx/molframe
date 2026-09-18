@@ -1,0 +1,19 @@
+[package]
+name = "molframe-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared real-structure fixtures for molframe benchmarks (not published)"
+publish = false
+
+[dependencies]
+molframe-core = { workspace = true, features = ["gzip"] }
+molframe-cif.workspace = true
+molframe-pdb.workspace = true
+molframe-bcif.workspace = true
+num-traits.workspace = true
+
+[lints]
+workspace = true

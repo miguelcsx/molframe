@@ -3,8 +3,8 @@
 use std::io::Cursor;
 use std::sync::OnceLock;
 
-use pdbiox_core::io::{InputBuffer, Limits, ReadOptions};
-use pdbiox_core::structure::Structure;
+use molframe_core::io::{InputBuffer, Limits, ReadOptions};
+use molframe_core::structure::Structure;
 
 use crate::samples::Sample;
 
@@ -73,7 +73,7 @@ fn cached_bcif(cache: &OnceLock<Structure>, sample: Sample) -> Structure {
 
 fn parse_bcif(sample: Sample) -> Structure {
     let buffer = input(sample.bcif());
-    match pdbiox_bcif::read(&buffer, &ReadOptions::new()) {
+    match molframe_bcif::read(&buffer, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!(
             "bench fixture {} (bcif) failed: {findings:?}",
@@ -87,7 +87,7 @@ fn parse_pdb(sample: Sample) -> Structure {
         panic!("sample {} has no PDB fixture", sample.label())
     };
     let buffer = input(bytes);
-    match pdbiox_pdb::read(&buffer, &ReadOptions::new()) {
+    match molframe_pdb::read(&buffer, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!(
             "bench fixture {} (pdb) failed: {findings:?}",
@@ -114,7 +114,7 @@ static ENSEMBLE_PDB: OnceLock<Structure> = OnceLock::new();
 pub fn structure_from_cif(sample: Sample) -> Option<Structure> {
     let bytes = sample.cif()?;
     let buffer = input(bytes);
-    match pdbiox_cif::read(&buffer, &ReadOptions::new()) {
+    match molframe_cif::read(&buffer, &ReadOptions::new()) {
         Ok((structure, _)) => Some(structure),
         Err(findings) => panic!(
             "bench fixture {} (cif) failed: {findings:?}",
