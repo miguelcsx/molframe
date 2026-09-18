@@ -11,8 +11,6 @@ pub struct AutoBackendProfile {
     pub kd_target_minimum: usize,
     /// Required target-to-query size ratio for selecting a k-d tree.
     pub kd_query_ratio: usize,
-    /// Backend selected for periodic searches.
-    pub periodic_backend: SpatialBackend,
 }
 
 impl AutoBackendProfile {
@@ -21,7 +19,6 @@ impl AutoBackendProfile {
         brute_force_pair_limit: 250_000,
         kd_target_minimum: 20_000,
         kd_query_ratio: 8,
-        periodic_backend: SpatialBackend::BruteForce,
     };
 
     /// Validates that every threshold defines an unambiguous plan.
@@ -41,13 +38,15 @@ impl AutoBackendProfile {
         if self.kd_query_ratio == 0 {
             return Err(SpatialError::InvalidOption(SpatialOption::KdQueryRatio));
         }
-        if self.periodic_backend == SpatialBackend::Auto {
-            return Err(SpatialError::InvalidOption(SpatialOption::PeriodicBackend));
-        }
         Ok(())
     }
 
     /// Resolves one workload after validating the profile.
+    ///
+    /// The same cost ladder holds for periodic workloads: a k-d tree keeps
+    /// wrapped targets and queries lattice images, a cell list builds the
+    /// fractional-coordinate grid, and brute force stays the small-workload
+    /// choice. Selection is never pinned by periodicity alone.
     ///
     /// # Errors
     ///
@@ -56,12 +55,8 @@ impl AutoBackendProfile {
         self,
         left_count: usize,
         right_count: usize,
-        periodic: bool,
     ) -> Result<SpatialBackend, SpatialError> {
         self.validate()?;
-        if periodic {
-            return Ok(self.periodic_backend);
-        }
         let pair_count = left_count
             .checked_mul(right_count)
             .ok_or(SpatialError::NumericRangeExceeded)?;
@@ -302,7 +297,6 @@ impl SpatialSearchOptions {
         self,
         left_count: usize,
         right_count: usize,
-        periodic: bool,
         cutoff: f32,
     ) -> Result<SpatialPlan, SpatialError> {
         if !cutoff.is_finite() || cutoff < 0.0 {
@@ -310,7 +304,7 @@ impl SpatialSearchOptions {
         }
         self.validate()?;
         let backend = match self.backend {
-            SpatialBackend::Auto => self.automatic.resolve(left_count, right_count, periodic)?,
+            SpatialBackend::Auto => self.automatic.resolve(left_count, right_count)?,
             backend => backend,
         };
         let neighbor_skin = if backend == SpatialBackend::NeighborList {

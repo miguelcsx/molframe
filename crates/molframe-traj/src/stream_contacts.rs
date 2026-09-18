@@ -25,7 +25,7 @@ pub fn contact_counts_stream<R: TrajectoryReader + ?Sized>(
     if !cutoff.is_finite() || cutoff < 0.0 {
         return Err(molframe_spatial::SpatialError::InvalidCutoff.into());
     }
-    options.plan(atoms as usize, atoms as usize, false, cutoff)?;
+    options.plan(atoms as usize, atoms as usize, cutoff)?;
     let all = AtomSelection::All(atoms);
     run_analysis_stream(reader, context, frame_workspace_bytes, |frame, context| {
         let periodic = frame.cell.map(PeriodicBox::from_cell).transpose()?;

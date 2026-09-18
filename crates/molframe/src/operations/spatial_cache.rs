@@ -123,23 +123,9 @@ impl<'a> SpatialContext<'a> {
         cutoff: f32,
         context: &ExecutionContext,
     ) -> Result<Vec<NeighborPair>, molframe_spatial::SpatialError> {
-        let plan = self.options.plan(
-            left_count(left)?,
-            left_count(right)?,
-            self.periodic.is_some(),
-            cutoff,
-        )?;
-        if self.periodic.is_some() {
-            return molframe_spatial::pairs_within_with_options(
-                self.positions,
-                left,
-                right,
-                cutoff,
-                self.options,
-                self.periodic.as_ref(),
-                context,
-            );
-        }
+        let plan = self
+            .options
+            .plan(left_count(left)?, left_count(right)?, cutoff)?;
 
         match plan.backend {
             SpatialBackend::CellList => {
@@ -161,7 +147,7 @@ impl<'a> SpatialContext<'a> {
                     backend,
                     ..self.options
                 },
-                None,
+                self.periodic.as_ref(),
                 context,
             ),
         }
@@ -220,7 +206,7 @@ impl<'a> SpatialContext<'a> {
             self.positions,
             right,
             cutoff,
-            None,
+            self.periodic,
             self.options.cell_grid,
         )?;
         let pairs = index.pairs(left, cutoff)?;
@@ -250,8 +236,12 @@ impl<'a> SpatialContext<'a> {
         }) {
             return index.pairs(left, cutoff);
         }
-        let index =
-            KdTree::build_with_options(self.positions, right, None, self.options.kd_periodic)?;
+        let index = KdTree::build_with_options(
+            self.positions,
+            right,
+            self.periodic,
+            self.options.kd_periodic,
+        )?;
         let pairs = index.pairs(left, cutoff)?;
         self.retain(CachedIndex::Kd {
             key,

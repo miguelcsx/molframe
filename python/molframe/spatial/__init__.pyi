@@ -44,13 +44,12 @@ class AtomsWithin:
 
 @final
 class AutoBackendProfile:
-    def __init__(self, brute_force_pair_limit: int, kd_target_minimum: int, kd_query_ratio: int, periodic_backend: SpatialBackend) -> None: ...
+    def __init__(self, brute_force_pair_limit: int, kd_target_minimum: int, kd_query_ratio: int) -> None: ...
     @staticmethod
     def balanced() -> AutoBackendProfile: ...
     brute_force_pair_limit: int
     kd_target_minimum: int
     kd_query_ratio: int
-    periodic_backend: SpatialBackend
 
 @final
 class NeighborSkinProfile:
@@ -97,7 +96,7 @@ class SpatialOption:
     BruteForcePairLimit: SpatialOption
     KdTargetMinimum: SpatialOption
     KdQueryRatio: SpatialOption
-    PeriodicBackend: SpatialOption
+    UnresolvedBackend: SpatialOption
     NeighborSkinRatio: SpatialOption
     NeighborSkinMinimum: SpatialOption
     MaximumCellCount: SpatialOption
@@ -127,7 +126,7 @@ class SpatialSearchOptions:
     def __init__(self, backend: SpatialBackend = SpatialBackend.Auto, *, automatic: AutoBackendProfile | None = None, neighbor_skin: NeighborSkinProfile | None = None, cell_grid: CellGridOptions | None = None, kd_periodic: KdPeriodicOptions | None = None) -> None: ...
     @staticmethod
     def balanced() -> SpatialSearchOptions: ...
-    def plan(self, left_count: int, right_count: int, periodic: bool, cutoff: float) -> SpatialPlan: ...
+    def plan(self, left_count: int, right_count: int, cutoff: float) -> SpatialPlan: ...
 
 @final
 class SpatialPlan:

@@ -73,12 +73,7 @@ where
     let indices = super::indices::IndexWorkspace::new(left, right, positions.len(), context)?;
     let left_indices = indices.left();
     let right_indices = indices.right();
-    let plan = options.plan(
-        left_indices.len(),
-        right_indices.len(),
-        periodic.is_some(),
-        cutoff,
-    )?;
+    let plan = options.plan(left_indices.len(), right_indices.len(), cutoff)?;
 
     // A cell list over a non-periodic workload is the only shape with a block
     // decomposition: cells own disjoint same-selection pairs, and each query
@@ -92,7 +87,7 @@ where
             positions,
             right_indices,
             cutoff,
-            periodic,
+            periodic.copied(),
             options.cell_grid,
             context,
         )?;

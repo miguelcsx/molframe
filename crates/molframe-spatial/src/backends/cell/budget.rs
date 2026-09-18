@@ -16,7 +16,7 @@ impl<'a> CellList<'a> {
         positions: &'a [[f32; 3]],
         targets: &[u32],
         cutoff: f32,
-        periodic: Option<&'a PeriodicBox>,
+        periodic: Option<PeriodicBox>,
         options: CellGridOptions,
         context: &ExecutionContext,
     ) -> Result<Self, SpatialError> {
@@ -26,7 +26,7 @@ impl<'a> CellList<'a> {
         super::validate_cutoff(cutoff)?;
         super::validate_indices(targets, positions.len())?;
         options.validate()?;
-        let bytes = workspace_bytes(positions, targets, cutoff, periodic, options)?;
+        let bytes = workspace_bytes(positions, targets, cutoff, periodic.as_ref(), options)?;
         let mut reservation = context.try_reserve(bytes)?;
         let mut index = Self::build_with_options(positions, targets, cutoff, periodic, options)?;
         let retained = match &index.grid {

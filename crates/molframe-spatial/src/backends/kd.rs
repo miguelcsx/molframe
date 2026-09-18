@@ -29,7 +29,7 @@ pub struct KdTree<'a> {
     positions: &'a [[f32; 3]],
     nodes: Vec<Node>,
     root: Option<usize>,
-    periodic: Option<&'a PeriodicBox>,
+    periodic: Option<PeriodicBox>,
     periodic_options: KdPeriodicOptions,
     reservation: Option<molframe_core::MemoryReservation>,
 }
@@ -43,7 +43,7 @@ impl<'a> KdTree<'a> {
     pub fn build(
         positions: &'a [[f32; 3]],
         targets: &[u32],
-        periodic: Option<&'a PeriodicBox>,
+        periodic: Option<PeriodicBox>,
     ) -> Result<Self, SpatialError> {
         Self::build_with_options(positions, targets, periodic, KdPeriodicOptions::default())
     }
@@ -56,13 +56,13 @@ impl<'a> KdTree<'a> {
     pub fn build_with_options(
         positions: &'a [[f32; 3]],
         targets: &[u32],
-        periodic: Option<&'a PeriodicBox>,
+        periodic: Option<PeriodicBox>,
         periodic_options: KdPeriodicOptions,
     ) -> Result<Self, SpatialError> {
         validate_indices(targets, positions.len())?;
         periodic_options.validate()?;
 
-        let mut entries = finite_entries(positions, targets, periodic);
+        let mut entries = finite_entries(positions, targets, periodic.as_ref());
         let mut nodes = Vec::with_capacity(entries.len());
         let root = build_nodes(&mut entries, 0, &mut nodes);
 
@@ -125,7 +125,7 @@ impl<'a> KdTree<'a> {
         };
 
         if let Some(periodic) = self.periodic {
-            return self.periodic_nearest(root, query, point, count, periodic);
+            return self.periodic_nearest(root, query, point, count, &periodic);
         }
 
         let capacity = count
@@ -158,7 +158,7 @@ impl<'a> KdTree<'a> {
             return Ok(());
         };
 
-        let limits = periodic_image_limits(periodic, cutoff)?;
+        let limits = periodic_image_limits(&periodic, cutoff)?;
         validate_image_budget(limits, self.periodic_options)?;
         let wrapped = periodic.wrap(position);
         for_each_shift(limits, |shift| {

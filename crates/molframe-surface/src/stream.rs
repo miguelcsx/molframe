@@ -72,7 +72,7 @@ impl SasaSampler<'_> {
             positions,
             &self.targets,
             cutoff,
-            periodic,
+            periodic.copied(),
             CellGridOptions::default(),
             context,
         )?;

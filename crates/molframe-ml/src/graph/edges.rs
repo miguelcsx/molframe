@@ -132,7 +132,7 @@ fn nearest(
     let targets: Vec<_> = (0..nodes.positions.len())
         .map(|node| u32::try_from(node).map_err(|_| GraphError::IndexOverflow))
         .collect::<Result<_, _>>()?;
-    let tree = KdTree::build(&nodes.positions, &targets, periodic)?;
+    let tree = KdTree::build(&nodes.positions, &targets, periodic.copied())?;
     let capacity = nodes
         .positions
         .len()

@@ -48,12 +48,7 @@ pub(super) fn visit_indices(
         context,
         ..
     } = query;
-    let plan = options.plan(
-        left_indices.len(),
-        right_indices.len(),
-        periodic.is_some(),
-        cutoff,
-    )?;
+    let plan = options.plan(left_indices.len(), right_indices.len(), cutoff)?;
 
     let same_selection = left_indices == right_indices;
     if matches!(
@@ -64,7 +59,7 @@ pub(super) fn visit_indices(
             positions,
             right_indices,
             cutoff,
-            periodic,
+            periodic.copied(),
             options.cell_grid,
             context,
         )?;
@@ -123,7 +118,7 @@ pub(super) fn visit_indices(
     let index = KdTree::build_in(
         positions,
         right_indices,
-        periodic,
+        periodic.copied(),
         options.kd_periodic,
         context,
     )?;

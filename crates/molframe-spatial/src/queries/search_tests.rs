@@ -75,6 +75,44 @@ fn every_backend_agrees_under_triclinic_periodicity() {
 }
 
 #[test]
+fn automatic_planning_agrees_with_brute_force_under_periodicity() {
+    let positions = [[0.1, 0.2, 0.3], [7.9, 0.2, 0.3], [4.0, 4.0, 4.0]];
+    let periodic = match PeriodicBox::from_cell(molframe_core::structure::UnitCell {
+        lengths: [8.0, 9.0, 10.0],
+        angles: [70.0, 80.0, 65.0],
+    }) {
+        Ok(periodic) => periodic,
+        Err(error) => panic!("cell failed: {error}"),
+    };
+    let all = AtomSelection::All(3);
+    let expected = match pairs_within_with_options(
+        &positions,
+        &all,
+        &all,
+        1.0,
+        SpatialSearchOptions::with_backend(SpatialBackend::BruteForce),
+        Some(&periodic),
+        &context(),
+    ) {
+        Ok(pairs) => pair_indices(&pairs),
+        Err(error) => panic!("query failed: {error}"),
+    };
+    let actual = match pairs_within_with_options(
+        &positions,
+        &all,
+        &all,
+        1.0,
+        SpatialSearchOptions::BALANCED,
+        Some(&periodic),
+        &context(),
+    ) {
+        Ok(pairs) => pair_indices(&pairs),
+        Err(error) => panic!("query failed: {error}"),
+    };
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn identical_selections_keep_sorted_unique_pair_contract() {
     let positions = [
         [0.0, 0.0, 0.0],

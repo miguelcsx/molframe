@@ -81,8 +81,8 @@ pub enum SpatialOption {
     KdTargetMinimum,
     /// Target-to-query ratio for a k-d tree.
     KdQueryRatio,
-    /// Concrete periodic backend used by automatic planning.
-    PeriodicBackend,
+    /// Automatic planning did not resolve to a concrete backend.
+    UnresolvedBackend,
     /// Cutoff fraction used to derive a neighbour skin.
     NeighborSkinRatio,
     /// Minimum or absolute neighbour skin.
@@ -160,7 +160,7 @@ impl fmt::Display for SpatialOption {
             Self::BruteForcePairLimit => "brute_force_pair_limit",
             Self::KdTargetMinimum => "kd_target_minimum",
             Self::KdQueryRatio => "kd_query_ratio",
-            Self::PeriodicBackend => "periodic_backend",
+            Self::UnresolvedBackend => "unresolved_backend",
             Self::NeighborSkinRatio => "neighbor_skin.cutoff_ratio",
             Self::NeighborSkinMinimum => "neighbor_skin.minimum",
             Self::MaximumCellCount => "cell_grid.maximum_cell_count",

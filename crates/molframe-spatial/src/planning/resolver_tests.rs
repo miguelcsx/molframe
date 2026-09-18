@@ -124,6 +124,51 @@ fn repeated_structure_queries_reuse_the_same_generation_bound_index() {
 }
 
 #[test]
+fn periodic_resolvers_cache_indices_that_match_brute_force() {
+    let context = molframe_core::ExecutionContext::default();
+    let mut builder = ChunkBuilder::new();
+    builder.reserve(2);
+    builder.start_model(0);
+    builder.push(test_atom([0.1, 0.2, 0.3], 0));
+    builder.push(test_atom([7.9, 0.2, 0.3], 1));
+    let (chunks, coords) = builder.finish();
+    let mut data = StructureData::empty();
+    data.chunks = chunks.into();
+    data.coords = CoordinateStore::Single(coords);
+    data.cell = Some(molframe_core::structure::UnitCell {
+        lengths: [8.0, 9.0, 10.0],
+        angles: [70.0, 80.0, 65.0],
+    });
+    let structure = Structure::new(data);
+    let mut policy =
+        AnalysisPolicy::default().with_identifiers(molframe_core::contract::Namespace::Label);
+    policy.periodic = molframe_core::contract::PeriodicPolicy::MinimumImage;
+    let all = AtomSelection::All(2);
+    let reference =
+        match StructureSpatial::new(&structure, &policy, SpatialBackend::BruteForce, &context) {
+            Ok(resolver) => resolver,
+            Err(finding) => panic!("resolver failed: {finding}"),
+        };
+    let expected = match reference.pairs_with_backend(&all, &all, 1.0, SpatialBackend::BruteForce) {
+        Ok(pairs) => pairs,
+        Err(finding) => panic!("brute force reference failed: {finding}"),
+    };
+
+    for backend in [SpatialBackend::CellList, SpatialBackend::KdTree] {
+        let resolver = match StructureSpatial::new(&structure, &policy, backend, &context) {
+            Ok(resolver) => resolver,
+            Err(finding) => panic!("resolver failed for {backend:?}: {finding}"),
+        };
+        let actual = match resolver.pairs_with_backend(&all, &all, 1.0, backend) {
+            Ok(pairs) => pairs,
+            Err(finding) => panic!("query failed for {backend:?}: {finding}"),
+        };
+        assert_eq!(actual, expected, "cached periodic index for {backend:?}");
+        assert_eq!(resolver.cached_index_count(), 1, "cache for {backend:?}");
+    }
+}
+
+#[test]
 fn streamed_within_and_iso_match_the_materialized_pair_reference() {
     let context = molframe_core::ExecutionContext::default();
     let structure = structure();

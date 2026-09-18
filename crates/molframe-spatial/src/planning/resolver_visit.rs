@@ -23,22 +23,6 @@ impl StructureSpatial<'_> {
         cutoff: f32,
         mut emit: impl FnMut(NeighborPair),
     ) -> Result<(), Diagnostic> {
-        if self.periodic.is_some() {
-            return for_each_pairs_within_unsorted(
-                &PairQuery {
-                    positions: self.positions(),
-                    left: query,
-                    right: target,
-                    cutoff,
-                    options: self.options,
-                    periodic: self.periodic.as_ref(),
-                    context: self.context,
-                },
-                emit,
-            )
-            .map_err(spatial_diagnostic);
-        }
-
         let backend = cacheable_backend(self.options, query.len(), target.len())
             .map_err(spatial_diagnostic)?;
         match backend {
@@ -55,7 +39,7 @@ impl StructureSpatial<'_> {
                         backend,
                         ..self.options
                     },
-                    periodic: None,
+                    periodic: self.periodic.as_ref(),
                     context: self.context,
                 },
                 emit,

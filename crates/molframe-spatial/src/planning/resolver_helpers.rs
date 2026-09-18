@@ -72,7 +72,7 @@ pub(super) fn select_iso_layer(
     inner_squared: f32,
     outer_squared: f32,
 ) -> Result<AtomSelection, Diagnostic> {
-    let mut selected = Vec::new();
+    let mut selected = Vec::with_capacity(selection_capacity(universe));
     for atom in universe {
         let index = usize::try_from(atom).map_err(|_| atom_out_of_bounds(atom))?;
         let squared = if target.contains(atom) {
@@ -110,7 +110,7 @@ pub(super) fn collect_within(
     target: &AtomSelection,
     matched: &[bool],
 ) -> Result<AtomSelection, Diagnostic> {
-    let mut selected = Vec::new();
+    let mut selected = Vec::with_capacity(selection_capacity(query));
     for atom in query {
         let index = usize::try_from(atom).map_err(|_| atom_out_of_bounds(atom))?;
         let spatial_match = matched
@@ -122,6 +122,14 @@ pub(super) fn collect_within(
         }
     }
     Ok(AtomSelection::from_sorted(selected))
+}
+
+/// The selection length as an addressable capacity, or zero when it cannot fit.
+pub(super) fn selection_capacity(selection: &AtomSelection) -> usize {
+    let Ok(capacity) = usize::try_from(selection.len()) else {
+        return 0;
+    };
+    capacity
 }
 
 pub(super) fn collect_selection_indices(selection: &AtomSelection) -> Vec<u32> {
@@ -176,9 +184,7 @@ pub(super) fn cacheable_backend(
 ) -> Result<SpatialBackend, SpatialError> {
     let left = usize::try_from(left).map_err(|_| SpatialError::NumericRangeExceeded)?;
     let right = usize::try_from(right).map_err(|_| SpatialError::NumericRangeExceeded)?;
-    options
-        .plan(left, right, false, 0.0)
-        .map(|plan| plan.backend)
+    options.plan(left, right, 0.0).map(|plan| plan.backend)
 }
 
 #[inline]

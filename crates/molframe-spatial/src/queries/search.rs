@@ -166,12 +166,9 @@ fn pairs_with_order(
     let indices = super::indices::IndexWorkspace::new(left, right, positions.len(), context)?;
     let left_indices = indices.left();
     let right_indices = indices.right();
-    let plan = request.options.plan(
-        left_indices.len(),
-        right_indices.len(),
-        periodic.is_some(),
-        cutoff,
-    )?;
+    let plan = request
+        .options
+        .plan(left_indices.len(), right_indices.len(), cutoff)?;
 
     dispatch_pairs(
         positions,
@@ -208,7 +205,7 @@ fn dispatch_pairs(
                 positions,
                 right,
                 cutoff,
-                periodic,
+                periodic.copied(),
                 dispatch.options.cell_grid,
                 context,
             )?;
@@ -230,7 +227,7 @@ fn dispatch_pairs(
         SpatialBackend::KdTree => KdTree::build_in(
             positions,
             right,
-            periodic,
+            periodic.copied(),
             dispatch.options.kd_periodic,
             context,
         )?
@@ -273,7 +270,7 @@ fn dispatch_pairs(
             }
         }
         SpatialBackend::Auto => Err(SpatialError::InvalidOption(
-            crate::SpatialOption::PeriodicBackend,
+            crate::SpatialOption::UnresolvedBackend,
         )),
     }
 }

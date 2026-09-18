@@ -48,7 +48,7 @@ fn periodic_nearest_search_uses_tree_images_across_a_triclinic_boundary() {
         Ok(periodic) => periodic,
         Err(error) => panic!("cell failed: {error}"),
     };
-    let tree = match KdTree::build(&positions, &[0, 1, 2], Some(&periodic)) {
+    let tree = match KdTree::build(&positions, &[0, 1, 2], Some(periodic)) {
         Ok(tree) => tree,
         Err(error) => panic!("build failed: {error}"),
     };
@@ -76,7 +76,7 @@ fn periodic_image_budget_is_enforced_instead_of_falling_back() {
     let tree = KdTree::build_with_options(
         &positions,
         &[0, 1],
-        Some(&periodic),
+        Some(periodic),
         KdPeriodicOptions {
             maximum_image_count: 1,
         },

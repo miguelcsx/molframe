@@ -55,17 +55,11 @@ pub(crate) struct PyAutoBackendProfile(molframe::AutoBackendProfile);
 #[pymethods]
 impl PyAutoBackendProfile {
     #[new]
-    fn new(
-        brute_force_pair_limit: usize,
-        kd_target_minimum: usize,
-        kd_query_ratio: usize,
-        periodic_backend: PySpatialBackend,
-    ) -> Self {
+    fn new(brute_force_pair_limit: usize, kd_target_minimum: usize, kd_query_ratio: usize) -> Self {
         Self(molframe::AutoBackendProfile {
             brute_force_pair_limit,
             kd_target_minimum,
             kd_query_ratio,
-            periodic_backend: periodic_backend.into(),
         })
     }
 
@@ -85,10 +79,6 @@ impl PyAutoBackendProfile {
     #[getter]
     fn kd_query_ratio(&self) -> usize {
         self.0.kd_query_ratio
-    }
-    #[getter]
-    fn periodic_backend(&self) -> PySpatialBackend {
-        self.0.periodic_backend.into()
     }
 }
 
@@ -277,15 +267,9 @@ impl PySpatialSearchOptions {
         Self(molframe::SpatialSearchOptions::BALANCED)
     }
 
-    fn plan(
-        &self,
-        left_count: usize,
-        right_count: usize,
-        periodic: bool,
-        cutoff: f32,
-    ) -> PyResult<PySpatialPlan> {
+    fn plan(&self, left_count: usize, right_count: usize, cutoff: f32) -> PyResult<PySpatialPlan> {
         self.0
-            .plan(left_count, right_count, periodic, cutoff)
+            .plan(left_count, right_count, cutoff)
             .map(PySpatialPlan)
             .map_err(value_error)
     }

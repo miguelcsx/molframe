@@ -54,7 +54,7 @@ where
                 list.positions,
                 query,
                 cutoff * cutoff,
-                periodic,
+                &periodic,
                 &mut emit,
             )
         }
@@ -90,7 +90,7 @@ fn pairs_same_selection_with_order(
                 list.positions,
                 query,
                 cutoff * cutoff,
-                periodic,
+                &periodic,
                 sort_result,
             )
         }

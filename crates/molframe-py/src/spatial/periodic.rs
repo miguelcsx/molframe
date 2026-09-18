@@ -74,7 +74,7 @@ pub(crate) enum PySpatialOption {
     BruteForcePairLimit,
     KdTargetMinimum,
     KdQueryRatio,
-    PeriodicBackend,
+    UnresolvedBackend,
     NeighborSkinRatio,
     NeighborSkinMinimum,
     MaximumCellCount,

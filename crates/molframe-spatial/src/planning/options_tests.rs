@@ -6,16 +6,11 @@ fn automatic_decisions_are_reproducible_from_the_public_profile() {
         brute_force_pair_limit: 100,
         kd_target_minimum: 20,
         kd_query_ratio: 4,
-        periodic_backend: SpatialBackend::CellList,
     };
 
-    assert_eq!(
-        profile.resolve(10, 10, false),
-        Ok(SpatialBackend::BruteForce)
-    );
-    assert_eq!(profile.resolve(4, 40, false), Ok(SpatialBackend::KdTree));
-    assert_eq!(profile.resolve(20, 20, false), Ok(SpatialBackend::CellList));
-    assert_eq!(profile.resolve(1, 1, true), Ok(SpatialBackend::CellList));
+    assert_eq!(profile.resolve(10, 10), Ok(SpatialBackend::BruteForce));
+    assert_eq!(profile.resolve(4, 40), Ok(SpatialBackend::KdTree));
+    assert_eq!(profile.resolve(20, 20), Ok(SpatialBackend::CellList));
 }
 
 #[test]
@@ -29,7 +24,7 @@ fn invalid_profiles_name_the_field_that_prevents_a_plan() {
     };
 
     assert_eq!(
-        options.plan(1, 1, false, 1.0),
+        options.plan(1, 1, 1.0),
         Err(SpatialError::InvalidOption(SpatialOption::KdQueryRatio))
     );
 }
@@ -45,7 +40,7 @@ fn a_neighbor_plan_exposes_its_derived_skin() {
         ..SpatialSearchOptions::BALANCED
     };
 
-    let plan = match options.plan(100, 100, false, 4.0) {
+    let plan = match options.plan(100, 100, 4.0) {
         Ok(plan) => plan,
         Err(error) => panic!("plan failed: {error}"),
     };

@@ -24,12 +24,7 @@ pub fn count_pairs_within(query: &PairQuery<'_>) -> Result<u64, SpatialError> {
     )?;
     let left = indices.left();
     let right = indices.right();
-    let plan = query.options.plan(
-        left.len(),
-        right.len(),
-        query.periodic.is_some(),
-        query.cutoff,
-    )?;
+    let plan = query.options.plan(left.len(), right.len(), query.cutoff)?;
     let mut total = 0_u64;
     if !matches!(
         plan.backend,
@@ -42,7 +37,7 @@ pub fn count_pairs_within(query: &PairQuery<'_>) -> Result<u64, SpatialError> {
         query.positions,
         right,
         query.cutoff,
-        query.periodic,
+        query.periodic.copied(),
         query.options.cell_grid,
         query.context,
     )?;

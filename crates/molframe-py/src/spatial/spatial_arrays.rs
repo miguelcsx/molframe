@@ -268,14 +268,10 @@ fn nearest_neighbors(
     };
     py.detach(move || {
         validate_sorted_indices(targets, positions.len()).map_err(SpatialBindingError::Input)?;
-        let neighbors = molframe::KdTree::build_with_options(
-            positions,
-            targets,
-            periodic.as_ref(),
-            periodic_options,
-        )
-        .and_then(|tree| tree.k_nearest(query, count))
-        .map_err(SpatialBindingError::Spatial)?;
+        let neighbors =
+            molframe::KdTree::build_with_options(positions, targets, periodic, periodic_options)
+                .and_then(|tree| tree.k_nearest(query, count))
+                .map_err(SpatialBindingError::Spatial)?;
         PyNeighborTable::from_nearest(query, neighbors).map_err(SpatialBindingError::Allocation)
     })
     .map_err(SpatialBindingError::into_pyerr)

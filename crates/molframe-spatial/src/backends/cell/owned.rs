@@ -38,7 +38,7 @@ impl CellList<'_> {
                     self.positions,
                     query,
                     cutoff * cutoff,
-                    periodic,
+                    &periodic,
                     &mut emit,
                 )
             }

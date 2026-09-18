@@ -34,7 +34,7 @@ fn periodic_streaming_emits_a_target_once_even_when_many_images_match() {
     let tree = KdTree::build_in(
         &positions,
         &[0, 1, 2],
-        Some(&periodic),
+        Some(periodic),
         KdPeriodicOptions::default(),
         &context,
     )

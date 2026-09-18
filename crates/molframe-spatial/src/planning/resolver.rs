@@ -143,7 +143,7 @@ impl<'a> StructureSpatial<'a> {
         let inner_squared = inner * inner;
         let outer_squared = outer * outer;
         let cylindrical = z.is_some();
-        let mut selected = Vec::new();
+        let mut selected = Vec::with_capacity(helpers::selection_capacity(universe));
 
         for atom in universe {
             let position = self.position(atom)?;
@@ -308,22 +308,6 @@ impl<'a> StructureSpatial<'a> {
         cutoff: f32,
         requested_backend: SpatialBackend,
     ) -> Result<Vec<NeighborPair>, Diagnostic> {
-        if self.periodic.is_some() {
-            return pairs_within_with_options(
-                self.positions(),
-                query,
-                target,
-                cutoff,
-                SpatialSearchOptions {
-                    backend: requested_backend,
-                    ..self.options
-                },
-                self.periodic.as_ref(),
-                self.context,
-            )
-            .map_err(spatial_diagnostic);
-        }
-
         let requested = SpatialSearchOptions {
             backend: requested_backend,
             ..self.options
@@ -347,7 +331,7 @@ impl<'a> StructureSpatial<'a> {
                     target,
                     cutoff,
                     options,
-                    None,
+                    self.periodic.as_ref(),
                     self.context,
                 )
                 .map_err(spatial_diagnostic)
@@ -438,16 +422,19 @@ impl<'a> StructureSpatial<'a> {
                 positions,
                 targets,
                 cutoff,
-                None,
+                self.periodic,
                 self.options.cell_grid,
             )
             .map(CachedIndex::Cell)
             .map_err(spatial_diagnostic),
-            SpatialBackend::KdTree => {
-                KdTree::build_with_options(positions, targets, None, self.options.kd_periodic)
-                    .map(CachedIndex::Kd)
-                    .map_err(spatial_diagnostic)
-            }
+            SpatialBackend::KdTree => KdTree::build_with_options(
+                positions,
+                targets,
+                self.periodic,
+                self.options.kd_periodic,
+            )
+            .map(CachedIndex::Kd)
+            .map_err(spatial_diagnostic),
             _ => Err(Diagnostic::new(Code::E9001)),
         }
     }

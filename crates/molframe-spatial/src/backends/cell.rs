@@ -75,7 +75,7 @@ enum CellGrid {
 pub struct CellList<'a> {
     positions: &'a [[f32; 3]],
     cutoff: f32,
-    periodic: Option<&'a PeriodicBox>,
+    periodic: Option<PeriodicBox>,
     grid: Option<CellGrid>,
     reservation: Option<molframe_core::MemoryReservation>,
 }
@@ -90,7 +90,7 @@ impl<'a> CellList<'a> {
         positions: &'a [[f32; 3]],
         targets: &[u32],
         cutoff: f32,
-        periodic: Option<&'a PeriodicBox>,
+        periodic: Option<PeriodicBox>,
     ) -> Result<Self, SpatialError> {
         Self::build_with_options(
             positions,
@@ -110,14 +110,14 @@ impl<'a> CellList<'a> {
         positions: &'a [[f32; 3]],
         targets: &[u32],
         cutoff: f32,
-        periodic: Option<&'a PeriodicBox>,
+        periodic: Option<PeriodicBox>,
         options: CellGridOptions,
     ) -> Result<Self, SpatialError> {
         validate_cutoff(cutoff)?;
         validate_indices(targets, positions.len())?;
         options.validate()?;
 
-        let grid = match periodic {
+        let grid = match periodic.as_ref() {
             Some(periodic) => Some(CellGrid::Periodic(PeriodicGrid::build(
                 positions, targets, cutoff, periodic, options,
             )?)),
@@ -180,7 +180,7 @@ impl<'a> CellList<'a> {
                 grid_for_each_pair::<false>(self.positions, grid, query, cutoff * cutoff, &mut emit)
             }
             Some(CellGrid::Periodic(grid)) => {
-                let Some(periodic) = self.periodic else {
+                let Some(periodic) = &self.periodic else {
                     return Err(SpatialError::InvalidCell);
                 };
                 grid.for_each_pair(self.positions, query, cutoff * cutoff, periodic, &mut emit)

@@ -10,7 +10,7 @@ impl<'a> KdTree<'a> {
     pub(crate) fn build_in(
         positions: &'a [[f32; 3]],
         targets: &[u32],
-        periodic: Option<&'a PeriodicBox>,
+        periodic: Option<PeriodicBox>,
         options: KdPeriodicOptions,
         context: &ExecutionContext,
     ) -> Result<Self, SpatialError> {
@@ -57,7 +57,7 @@ impl<'a> KdTree<'a> {
         let squared_cutoff = cutoff * cutoff;
         let limits = self
             .periodic
-            .map(|periodic| periodic_image_limits(periodic, cutoff))
+            .map(|periodic| periodic_image_limits(&periodic, cutoff))
             .transpose()?;
         if let Some(limits) = limits {
             validate_image_budget(limits, self.periodic_options)?;
