@@ -1,8 +1,8 @@
 //! Internal-coordinate value types and rebuilding.
 
 use crate::place_atom;
-use pdbiox_core::{AtomIndex, Code, Diagnostic};
-use pdbiox_geom::{angle, dihedral, distance};
+use molframe_core::{AtomIndex, Code, Diagnostic};
+use molframe_geom::{angle, dihedral, distance};
 
 /// Two bond lengths and their included angle.
 #[derive(Clone, Copy, Debug, PartialEq)]

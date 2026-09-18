@@ -1,7 +1,7 @@
 //! Conversion of a structure model into an internal-coordinate forest.
 
 use crate::{Dihedron, InternalAtom, InternalCoordinates};
-use pdbiox_core::{AtomIndex, Code, Diagnostic, ModelIndex, Structure};
+use molframe_core::{AtomIndex, Code, Diagnostic, ModelIndex, Structure};
 use std::collections::VecDeque;
 
 /// Converts one coordinate model using a deterministic bond-graph forest.
@@ -57,7 +57,7 @@ pub fn internal_coordinates(
 
 fn spanning_forest(
     atom_count: usize,
-    adjacency: &pdbiox_core::BondAdjacency,
+    adjacency: &molframe_core::BondAdjacency,
 ) -> Result<(Vec<Option<AtomIndex>>, Vec<usize>), Diagnostic> {
     let mut parents = vec![None; atom_count];
     let mut visited = vec![false; atom_count];

@@ -1,5 +1,5 @@
 use super::internal_coordinates;
-use pdbiox_core::{InputBuffer, ModelIndex, ReadOptions};
+use molframe_core::{InputBuffer, ModelIndex, ReadOptions};
 
 const SOURCE: &str = "data_ic\n\
 loop_\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n\
@@ -21,7 +21,7 @@ _struct_conn.pdbx_value_order\n\
 #[test]
 fn a_bonded_model_round_trips_through_internal_coordinates() {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    let structure = match pdbiox_cif::read(&input, &ReadOptions::new()) {
+    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     };
@@ -51,7 +51,7 @@ fn a_bonded_model_round_trips_through_internal_coordinates() {
 #[test]
 fn bat_topology_measures_multiple_frames_and_rebuilds_them() {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    let structure = match pdbiox_cif::read(&input, &ReadOptions::new()) {
+    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     };

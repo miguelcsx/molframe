@@ -1,9 +1,9 @@
 //! Criterion coverage for internal-coordinate extraction and placement.
 
 use criterion::{Criterion, black_box};
-use pdbiox_bench::{Sample, coordinates, structure};
-use pdbiox_core::index::ModelIndex;
-use pdbiox_ic::{internal_coordinates, place_atom};
+use molframe_bench::{Sample, coordinates, structure};
+use molframe_core::index::ModelIndex;
+use molframe_ic::{internal_coordinates, place_atom};
 
 fn bench_internal_coordinates(c: &mut Criterion) {
     let structure = structure(Sample::Medium);

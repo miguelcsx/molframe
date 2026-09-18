@@ -1,7 +1,7 @@
 //! CHARMM CARTCV-style placement from three reference atoms.
 
+use molframe_geom::{cross, normalise};
 use num_traits::ToPrimitive;
-use pdbiox_geom::{cross, normalise};
 
 /// Places `L` from references `I`, `J`, `K` and `K–L` geometry.
 ///

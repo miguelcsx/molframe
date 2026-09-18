@@ -1,21 +1,21 @@
 [package]
-name = "pdbiox-ic"
+name = "molframe-ic"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Internal-coordinate conversion and rebuilding for pdbiox"
+description = "Internal-coordinate conversion and rebuilding for molframe"
 
 [dependencies]
-pdbiox-core.workspace = true
-pdbiox-geom.workspace = true
+molframe-core.workspace = true
+molframe-geom.workspace = true
 num-traits.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
-pdbiox-cif.workspace = true
+molframe-bench.workspace = true
+molframe-cif.workspace = true
 
 [[bench]]
 name = "ic"
