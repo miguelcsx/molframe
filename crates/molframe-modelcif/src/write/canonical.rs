@@ -1,9 +1,9 @@
 //! Canonical `ModelCIF` projection over the shared streaming mmCIF renderer.
 
 use crate::{ModelCategory, ModelCif, ValueRef};
-use pdbiox_cif::{CifWriteOptions, CifWriteToError, write_quoted};
-use pdbiox_core::Structure;
-use pdbiox_core::io::TextOutput;
+use molframe_cif::{CifWriteOptions, CifWriteToError, write_quoted};
+use molframe_core::Structure;
+use molframe_core::io::TextOutput;
 use std::fmt;
 use std::io::{self, Write as IoWrite};
 
@@ -50,7 +50,7 @@ pub fn write_canonical_to<W: IoWrite>(
     options: &CifWriteOptions,
     output: &mut W,
 ) -> Result<(), CifWriteToError> {
-    pdbiox_cif::write_canonical_to(structure, options, output)?;
+    molframe_cif::write_canonical_to(structure, options, output)?;
     let mut output = TextOutput::new(output);
     for category in &model_cif.categories {
         write_category(&mut output, category);

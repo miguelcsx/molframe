@@ -2,10 +2,10 @@ use crate::model::metadata;
 use crate::{
     ModelCategory, ModelDescription, ProtocolStep, QualityMetrics, SoftwareGroup, Target, Template,
 };
-use pdbiox_core::Structure;
+use molframe_core::Structure;
 
 /// Stable key for typed `ModelCIF` metadata on a structure.
-pub const MODEL_CIF_EXTENSION: &str = "pdbiox.modelcif.v1";
+pub const MODEL_CIF_EXTENSION: &str = "molframe.modelcif.v1";
 
 /// Typed and forward-compatible `ModelCIF` contents.
 ///

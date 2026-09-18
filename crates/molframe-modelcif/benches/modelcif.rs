@@ -1,10 +1,10 @@
 //! Criterion coverage for real `ModelCIF` lowering and canonical writing.
 
 use criterion::{Criterion, black_box};
-use pdbiox_bench::{Sample, structure};
-use pdbiox_cif::{lexer::Lexer, parse};
-use pdbiox_core::io::InputBuffer;
-use pdbiox_modelcif::{lower, read_compact, write_canonical};
+use molframe_bench::{Sample, structure};
+use molframe_cif::{lexer::Lexer, parse};
+use molframe_core::io::InputBuffer;
+use molframe_modelcif::{lower, read_compact, write_canonical};
 use std::path::{Path, PathBuf};
 
 const SMALL_MODEL_CIF: &str = "data_model\n\
@@ -23,7 +23,7 @@ _ma_qa_metric_local_pairwise.label_seq_id_2\n\
 _ma_qa_metric_local_pairwise.metric_id\n\
 _ma_qa_metric_local_pairwise.metric_value\n1 A 1 A 2 2 3.2\n";
 
-fn parsed(bytes: Vec<u8>) -> pdbiox_cif::Document {
+fn parsed(bytes: Vec<u8>) -> molframe_cif::Document {
     let buffer = InputBuffer::from_bytes(bytes);
     match parse(&buffer) {
         Ok((document, _)) => document,
@@ -66,7 +66,7 @@ fn bench_lower(c: &mut Criterion) {
     }
 }
 
-fn lex_all(input: &InputBuffer) -> Result<usize, pdbiox_cif::lexer::LexError> {
+fn lex_all(input: &InputBuffer) -> Result<usize, molframe_cif::lexer::LexError> {
     let mut lexer = Lexer::new(input.as_bytes())?;
     let mut count = 0usize;
     while lexer.next_token()?.is_some() {

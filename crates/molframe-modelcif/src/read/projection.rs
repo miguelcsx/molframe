@@ -2,8 +2,8 @@
 
 use super::category::ModelBuilder;
 use crate::{ModelCif, ModelCifError, ModelCifOptions};
-use pdbiox_cif::{CifEventSink, CifScalar};
-use pdbiox_core::{Diagnostic, span::ByteSpan};
+use molframe_cif::{CifEventSink, CifScalar};
+use molframe_core::{Diagnostic, span::ByteSpan};
 
 /// Event projection used to combine structure and `ModelCIF` reading in one lex.
 #[doc(hidden)]

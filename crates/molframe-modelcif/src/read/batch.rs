@@ -1,7 +1,7 @@
 //! `ModelCIF` structure batches over the shared incremental CIF tokenizer.
 
-use pdbiox_cif::MmcifBatchSource;
-use pdbiox_core::{
+use molframe_cif::MmcifBatchSource;
+use molframe_core::{
     Backpressure, BatchDemand, BatchLease, BatchSource, ChunkId, DatasetId, ExecutionContext,
     LogicalRow, ReadOptions, SourceBytes, StructureBatch, StructureBatchError,
 };

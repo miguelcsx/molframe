@@ -1,14 +1,14 @@
 use crate::lower;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
+use molframe_core::io::{InputBuffer, ReadOptions};
 
 #[test]
 fn canonical_write_keeps_modelcif_categories_and_metrics() {
     let document = crate::lower::tests::document();
-    let (structure, _) = pdbiox_cif::lower(&document, &ReadOptions::new())
+    let (structure, _) = molframe_cif::lower(&document, &ReadOptions::new())
         .unwrap_or_else(|findings| panic!("lower failed: {findings:?}"));
     let (model, findings) = lower(&document).expect("compact lowering succeeds");
     assert!(findings.is_empty());
-    let options = pdbiox_cif::CifWriteOptions::new()
+    let options = molframe_cif::CifWriteOptions::new()
         .with_block_id("model")
         .with_generated_connection_ids()
         .with_connection_type_id("covale");
@@ -19,7 +19,7 @@ fn canonical_write_keeps_modelcif_categories_and_metrics() {
         .unwrap_or_else(|error| panic!("streaming write failed: {error}"));
     assert_eq!(streamed, text.as_bytes());
     let input = InputBuffer::from_bytes(text.into_bytes());
-    let (round_trip, _) = pdbiox_cif::parse(&input)
+    let (round_trip, _) = molframe_cif::parse(&input)
         .unwrap_or_else(|findings| panic!("written `ModelCIF` failed: {findings:?}"));
     let (round_trip_model, findings) = lower(&round_trip).expect("round-trip lowering succeeds");
     assert!(findings.is_empty());

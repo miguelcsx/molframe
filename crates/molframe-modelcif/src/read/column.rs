@@ -2,7 +2,7 @@ use super::packed::{GrowingIndices, GrowingIntegers, push, reserved};
 use crate::{
     CompactColumn, DictionaryColumn, DictionaryEntry, IntegerColumn, ModelCifError, NumberColumn,
 };
-use pdbiox_cif::{CifScalar, CifValue};
+use molframe_cif::{CifScalar, CifValue};
 use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;

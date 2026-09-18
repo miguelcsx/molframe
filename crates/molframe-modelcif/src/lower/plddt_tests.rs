@@ -1,15 +1,15 @@
 use super::lower_plddt_annotation;
 use crate::{ModelCifError, lower};
-use pdbiox_core::annotation::PLDDT_ANNOTATION;
-use pdbiox_core::column::Presence;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
+use molframe_core::annotation::PLDDT_ANNOTATION;
+use molframe_core::column::Presence;
+use molframe_core::io::{InputBuffer, ReadOptions};
 
 const FIXTURE: &str = include_str!("../../tests/fixtures/modelcif_plddt.cif");
 
-fn fixture() -> (pdbiox_core::Structure, crate::ModelCif) {
+fn fixture() -> (molframe_core::Structure, crate::ModelCif) {
     let input = InputBuffer::from_bytes(FIXTURE.as_bytes().to_vec());
     let (document, structure, findings) =
-        pdbiox_cif::read_with_document(&input, &ReadOptions::new())
+        molframe_cif::read_with_document(&input, &ReadOptions::new())
             .expect("fixture structure lowers");
     assert!(findings.is_empty());
     let (model, findings) = lower(&document).expect("fixture ModelCIF lowers");
@@ -39,7 +39,7 @@ fn duplicate_residue_confidence_is_rejected() {
     let duplicate = FIXTURE.replace("1 A 3 SER 1 55.0", "1 A 1 ALA 1 80.0\n1 A 3 SER 1 55.0");
     let input = InputBuffer::from_bytes(duplicate.into_bytes());
     let (document, structure, _) =
-        pdbiox_cif::read_with_document(&input, &ReadOptions::new()).expect("fixture lowers");
+        molframe_cif::read_with_document(&input, &ReadOptions::new()).expect("fixture lowers");
     let (model, _) = lower(&document).expect("ModelCIF lowers");
     assert!(matches!(
         lower_plddt_annotation(&structure, &model),

@@ -2,14 +2,14 @@ use super::category::ModelBuilder;
 use super::{read_compact, read_compact_with_options};
 use crate::lower::tests::MODEL_CIF;
 use crate::{ModelCif, ModelCifError, ModelCifOptions, ModelCifReadError, lower};
-use pdbiox_cif::CifScalar;
-use pdbiox_core::io::InputBuffer;
+use molframe_cif::CifScalar;
+use molframe_core::io::InputBuffer;
 
 #[test]
 fn direct_projection_is_cell_exact_with_document_lowering() {
     let input = InputBuffer::from_bytes(MODEL_CIF.as_bytes().to_vec());
     let (direct, direct_findings) = read_compact(&input).expect("direct projection succeeds");
-    let (document, parse_findings) = pdbiox_cif::parse(&input).expect("document parse succeeds");
+    let (document, parse_findings) = molframe_cif::parse(&input).expect("document parse succeeds");
     let (reference, reference_findings) = lower(&document).expect("document lowering succeeds");
     assert_eq!(direct_findings, parse_findings);
     assert_eq!(direct_findings, reference_findings);
@@ -30,7 +30,7 @@ _ma_future.id\n_ma_future.integer\n_ma_future.numeric\n_ma_future.mixed\n\
 8 8 ? ?\n";
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
     let (direct, direct_findings) = read_compact(&input).expect("direct projection succeeds");
-    let (document, parse_findings) = pdbiox_cif::parse(&input).expect("document parse succeeds");
+    let (document, parse_findings) = molframe_cif::parse(&input).expect("document parse succeeds");
     let (reference, reference_findings) = lower(&document).expect("document lowering succeeds");
     assert_eq!(direct_findings, parse_findings);
     assert_eq!(direct_findings, reference_findings);
@@ -45,7 +45,7 @@ _ma_qa_metric_local.label_seq_id\n_ma_qa_metric_local.metric_id\n\
 _ma_qa_metric_local.metric_value\n1 A nope 2 infinite\n";
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
     let (direct, direct_findings) = read_compact(&input).expect("direct projection succeeds");
-    let (document, parse_findings) = pdbiox_cif::parse(&input).expect("document parse succeeds");
+    let (document, parse_findings) = molframe_cif::parse(&input).expect("document parse succeeds");
     let (reference, reference_findings) = lower(&document).expect("document lowering succeeds");
     assert_cells_equal(&direct, &reference);
     assert_eq!(parse_findings.len(), 0);
@@ -91,7 +91,7 @@ fn syntax_failure_is_not_relabelled_as_a_projection_failure() {
         panic!("expected syntax findings");
     };
     assert_eq!(findings.len(), 1);
-    assert_eq!(findings[0].code(), pdbiox_core::Code::E1106);
+    assert_eq!(findings[0].code(), molframe_core::Code::E1106);
 }
 
 fn assert_cells_equal(actual: &ModelCif, expected: &ModelCif) {

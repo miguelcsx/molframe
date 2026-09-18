@@ -1,4 +1,4 @@
-use pdbiox_core::Diagnostic;
+use molframe_core::Diagnostic;
 use std::fmt;
 
 /// Configuration or storage failure while projecting `ModelCIF` metadata.

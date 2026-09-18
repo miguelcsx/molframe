@@ -8,7 +8,7 @@
 use super::packed::{PackedIndices, PackedIntegers, reserved};
 use super::schema::identifier_item;
 use crate::{MemoryBudget, ModelCifError};
-use pdbiox_cif::{Category, CifValue};
+use molframe_cif::{Category, CifValue};
 use std::collections::HashMap;
 use std::mem::size_of;
 use std::sync::Arc;

@@ -1,9 +1,9 @@
 //! Typed projection of residue confidence onto existing atom rows.
 
 use crate::{LocalMetric, ModelCif, ModelCifError};
-use pdbiox_core::annotation::AnnotationColumn;
-use pdbiox_core::column::Presence;
-use pdbiox_core::{ModelIndex, Structure};
+use molframe_core::annotation::AnnotationColumn;
+use molframe_core::column::Presence;
+use molframe_core::{ModelIndex, Structure};
 use std::collections::BTreeMap;
 
 /// Projects residue-scoped pLDDT to one atom-aligned confidence column.

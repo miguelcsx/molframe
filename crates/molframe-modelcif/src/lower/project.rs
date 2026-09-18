@@ -1,6 +1,6 @@
 use crate::{CompactColumn, MemoryBudget, ModelCategory, ModelCif, ModelCifError, ModelCifOptions};
-use pdbiox_cif::Document;
-use pdbiox_core::{Code, Diagnostic};
+use molframe_cif::Document;
+use molframe_core::{Code, Diagnostic};
 
 /// Explicitly materialises a CIF document's `ModelCIF` categories into one compact store.
 ///

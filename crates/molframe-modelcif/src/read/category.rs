@@ -1,6 +1,6 @@
 use super::column::{ColumnBuilder, PushMemory};
 use crate::{CompactColumn, ModelCategory, ModelCif, ModelCifError, identifier_item};
-use pdbiox_cif::CifScalar;
+use molframe_cif::CifScalar;
 use std::collections::HashMap;
 use std::mem::size_of;
 

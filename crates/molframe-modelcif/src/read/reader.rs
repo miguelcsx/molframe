@@ -2,8 +2,8 @@
 
 use super::ModelCifProjection;
 use crate::{ModelCif, ModelCifOptions, ModelCifReadError};
-use pdbiox_cif::parse_events;
-use pdbiox_core::{Diagnostic, io::InputBuffer};
+use molframe_cif::parse_events;
+use molframe_core::{Diagnostic, io::InputBuffer};
 
 /// Reads compact `ModelCIF` categories without constructing a CIF document.
 ///

@@ -1,21 +1,21 @@
 [package]
-name = "pdbiox-modelcif"
+name = "molframe-modelcif"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "ModelCIF metadata and confidence metrics for pdbiox"
+description = "ModelCIF metadata and confidence metrics for molframe"
 
 [dependencies]
 num-traits.workspace = true
-pdbiox-core.workspace = true
-pdbiox-cif.workspace = true
+molframe-core.workspace = true
+molframe-cif.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
-pdbiox-core.workspace = true
+molframe-bench.workspace = true
+molframe-core.workspace = true
 
 [[bench]]
 name = "modelcif"
