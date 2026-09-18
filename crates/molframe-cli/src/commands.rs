@@ -245,53 +245,20 @@ pub fn convert(
     ) {
         return Exit::Usage;
     }
-    let output_options = molframe::OutputOptions::default();
-    let mut sink = match molframe::core::io::OutputSink::create(output, output_options) {
-        Ok(sink) => sink,
-        Err(finding) => {
-            context.findings(&[finding], &output.display().to_string());
-            return Exit::Failure;
-        }
-    };
-    let written = match target {
-        Format::Mmcif => molframe::write_mmcif_to_with_options(&structure, cif_options, &mut sink)
-            .map_err(|error| vec![write_finding(error)]),
-        Format::BinaryCif => molframe::bcif::write_structure_to_with_memory_limit(
-            &structure,
-            cif_options,
-            output_options.memory_limit_bytes,
-            &mut sink,
-        ),
-        Format::Mmtf => molframe::write_mmtf_to(&structure, &mut sink),
-        Format::Pdb => match &pdb_options {
-            Some(options) => molframe::pdb::write_to(&structure, options, &mut sink),
-            None => return Exit::Usage,
-        },
-        Format::Pqr => match &pdb_options {
-            Some(options) => molframe::write_pqr_to(&structure, options, &mut sink),
-            None => return Exit::Usage,
-        },
-        Format::Pdbqt => match &pdb_options {
-            Some(options) => molframe::write_pdbqt_to(&structure, options, &mut sink),
-            None => return Exit::Usage,
-        },
-        _ => return Exit::Usage,
-    };
-    if let Err(refusals) = written {
-        context.findings(&refusals, &input.display().to_string());
-        return Exit::of(&refusals);
-    }
-    match sink.finish() {
+    let written = molframe::write_with_options(
+        output,
+        &structure,
+        &molframe::WriteOptions::canonical()
+            .with_cif(cif_options.clone())
+            .with_pdb(pdb_options.clone().unwrap_or_else(PdbOptions::new)),
+    );
+    match written {
         Ok(()) => Exit::Success,
-        Err(finding) => {
-            context.findings(&[finding], &output.display().to_string());
-            Exit::Failure
+        Err(findings) => {
+            context.findings(&findings, &input.display().to_string());
+            Exit::of(&findings)
         }
     }
-}
-
-fn write_finding(error: impl std::fmt::Display) -> molframe::Diagnostic {
-    molframe::Diagnostic::new(molframe::Code::E4105).with_context("reason", error.to_string())
 }
 
 fn pdb_options(
