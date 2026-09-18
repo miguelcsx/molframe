@@ -2,7 +2,7 @@
 
 use crate::exit::Exit;
 use crate::report::{Context, Json};
-use pdbiox_adapters::VerifiedDownload;
+use molframe_adapters::VerifiedDownload;
 use std::io::Write as _;
 use std::path::Path;
 
@@ -36,11 +36,11 @@ pub(crate) fn fetch(
         }
     };
     let name = output.file_name().and_then(std::ffi::OsStr::to_str);
-    let options = pdbiox::ReadOptions::new()
+    let options = molframe::ReadOptions::new()
         .mode(context.mode)
         .missing_element_policy(context.missing_element_policy)
         .ambiguous_residue_boundary_policy(context.residue_boundary_policy);
-    match pdbiox::read_bytes(download.bytes.clone(), name, &options) {
+    match molframe::read_bytes(download.bytes.clone(), name, &options) {
         Ok((_, findings)) => context.findings(&findings, &url),
         Err(findings) => {
             context.findings(&findings, &url);
@@ -70,8 +70,10 @@ pub(crate) fn update_ccd(
             return Exit::Input;
         }
     };
-    let input = pdbiox::InputBuffer::from_bytes(download.bytes.clone());
-    match pdbiox::read_ccd(&input, pdbiox::DictionaryVersion::new(version)) {
+    // The downloaded bytes are validated before they are written, so this reads
+    // from the buffer rather than from a path the facade could open.
+    let input = molframe::InputBuffer::from_bytes(download.bytes.clone());
+    match molframe::chem::read_ccd(&input, molframe::DictionaryVersion::new(version)) {
         Ok((_, findings)) => context.findings(&findings, url),
         Err(findings) => {
             context.findings(&findings, url);
@@ -85,11 +87,11 @@ fn verified_download(
     url: &str,
     sha256: &str,
     options: NetworkOptions,
-) -> Result<VerifiedDownload, pdbiox_adapters::DownloadError> {
-    pdbiox_adapters::fetch_verified(
+) -> Result<VerifiedDownload, molframe_adapters::DownloadError> {
+    molframe_adapters::fetch_verified(
         url,
         sha256,
-        pdbiox_adapters::DownloadOptions {
+        molframe_adapters::DownloadOptions {
             max_bytes: options.max_bytes,
             timeout: std::time::Duration::from_secs(options.timeout_seconds),
             redirect_limit: options.redirect_limit,
