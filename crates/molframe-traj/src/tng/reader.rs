@@ -43,7 +43,6 @@ fn parse_inner(path: &Path) -> Result<TngTrajectory, TngError> {
         return Err(TngError::InvalidShape);
     }
     let steps = position_steps(&mut source, logical_frames)?;
-    let expected = steps.len();
     let exponent = source.distance_unit_exponential_get();
     let length_scale = length_to_angstrom(exponent)?;
     let precision = source.compression_precision_get();
@@ -64,35 +63,15 @@ fn parse_inner(path: &Path) -> Result<TngTrajectory, TngError> {
         _ => return Err(TngError::InvalidValue),
     };
 
-    let frame_width = atoms
-        .checked_mul(VECTOR_WIDTH)
-        .ok_or(TngError::InvalidShape)?;
-    let bulk_value_count = expected
-        .checked_mul(frame_width)
-        .ok_or(TngError::InvalidShape)?;
-    let bulk_frames = match source.util_pos_read() {
-        Ok((values, _)) if values.len() == bulk_value_count => Some(
-            values
-                .chunks_exact(frame_width)
-                .map(|frame| f32_values_to_vectors(frame, length_scale))
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-        Ok(_) => None,
-        Err(_) => {
-            source = open(path)?;
-            None
-        }
-    };
-    let mut bulk_frames = bulk_frames.map(Vec::into_iter);
     let mut frames = Vec::with_capacity(steps.len());
     for (frame, step) in steps.iter().copied().enumerate() {
         source.frame_set_of_frame_find(step)?;
-        let positions = if let Some(values) = &mut bulk_frames {
-            values.next().ok_or(TngError::InvalidShape)?
-        } else {
-            let (values, _) = source.util_pos_read_range(step, step)?;
-            required_vectors(&values, atoms, length_scale)?
-        };
+        // Every coordinate block is decoded exactly once, frame by frame, and
+        // converted straight into canonical units. The decoded positions are
+        // never retained alongside the published frames, so peak bytes track
+        // one frame of scratch over the trajectory's own storage.
+        let (values, _) = source.util_pos_read_range(step, step)?;
+        let positions = required_vectors(&values, atoms, length_scale)?;
         let velocities =
             optional_vectors(source.util_vel_read_range(step, step), atoms, length_scale)?;
         let forces = optional_vectors(
@@ -166,26 +145,6 @@ fn position_steps(source: &mut Trajectory, logical_frames: i64) -> Result<Vec<i6
         Err(TngError::InvalidShape)
     } else {
         Ok(steps)
-    }
-}
-
-fn f32_values_to_vectors(values: &[f32], scale: f64) -> Result<Vec<[f32; 3]>, TngError> {
-    let (chunks, tail) = values.as_chunks::<VECTOR_WIDTH>();
-    let vectors = chunks
-        .iter()
-        .map(|value| {
-            f32_triplet([
-                f64::from(value[0]) * scale,
-                f64::from(value[1]) * scale,
-                f64::from(value[2]) * scale,
-            ])
-            .ok_or(TngError::InvalidValue)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    if tail.is_empty() {
-        Ok(vectors)
-    } else {
-        Err(TngError::InvalidShape)
     }
 }
 
