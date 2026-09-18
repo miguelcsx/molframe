@@ -1,7 +1,7 @@
 use super::map_motif;
 use crate::{AtomSite, ComponentRole, ComponentSpec, Constraint, Motif, NamedConstraint};
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::io::{InputBuffer, ReadOptions};
 
 #[test]
 fn maps_components_and_explicitly_equivalent_atoms_without_name_guessing() {
@@ -11,7 +11,7 @@ _atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n\
 _atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 ATOM 1 O OG SER A 1 0 0 0\nATOM 2 O OD2 ASP A 2 2.8 0 0\n";
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new())
+    let (structure, _) = molframe_cif::read(&input, &ReadOptions::new())
         .unwrap_or_else(|findings| panic!("fixture failed: {findings:?}"));
     let motif = Motif::new(
         [
@@ -47,7 +47,7 @@ ATOM 1 O OG SER A 1 0 0 0\nATOM 2 O OD2 ASP A 2 2.8 0 0\n";
             .atoms
             .get(&AtomSite::new("asp", "OD1"))
             .map(Vec::as_slice),
-        Some([pdbiox_core::index::AtomIndex::new(1)].as_slice())
+        Some([molframe_core::index::AtomIndex::new(1)].as_slice())
     );
 }
 
@@ -58,7 +58,7 @@ _atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n\
 _atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n\
 _atom_site.Cartn_y\n_atom_site.Cartn_z\nATOM 1 O OG SER A 1 0 0 0\n";
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new())
+    let (structure, _) = molframe_cif::read(&input, &ReadOptions::new())
         .unwrap_or_else(|findings| panic!("fixture failed: {findings:?}"));
     let motif = Motif::new(
         [(

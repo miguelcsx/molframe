@@ -1,8 +1,8 @@
 use crate::{AtomSite, ComponentRole, ComponentSpec, Motif};
-use pdbiox_chem::{Component, ComponentKind, ComponentProvider, equivalence_classes};
-use pdbiox_core::contract::{AnalysisPolicy, EquivalencePolicy};
-use pdbiox_core::index::{AtomIndex, ResidueIndex};
-use pdbiox_core::structure::{ResidueRef, Structure};
+use molframe_chem::{Component, ComponentKind, ComponentProvider, equivalence_classes};
+use molframe_core::contract::{AnalysisPolicy, EquivalencePolicy};
+use molframe_core::index::{AtomIndex, ResidueIndex};
+use molframe_core::structure::{ResidueRef, Structure};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::numeric::usize_to_u32;
@@ -31,7 +31,7 @@ pub struct MappingSet {
 pub enum MappingError {
     /// The CCD provider failed.
     #[error("component chemistry could not be read: {0}")]
-    Chemistry(pdbiox_core::Diagnostic),
+    Chemistry(molframe_core::Diagnostic),
     /// The explicit enumeration bound was reached.
     #[error("motif mapping exceeded the limit of {limit} alternatives")]
     LimitExceeded {
@@ -186,7 +186,7 @@ fn atom_alternatives(
     residue
         .atoms()
         .filter(|atom| atom.name().is_some_and(|name| names.contains(name)))
-        .map(pdbiox_core::structure::AtomRef::index)
+        .map(molframe_core::structure::AtomRef::index)
         .collect()
 }
 

@@ -1,6 +1,6 @@
 use crate::{AlignedMotif, Constraint, Motif};
-use pdbiox_core::index::AtomIndex;
-use pdbiox_core::structure::Structure;
+use molframe_core::index::AtomIndex;
+use molframe_core::structure::Structure;
 use std::collections::BTreeMap;
 
 use crate::numeric::usize_to_f64;
@@ -68,7 +68,7 @@ pub struct MeasurementOptions {
     /// Maximum equivalent-atom combinations evaluated for one constraint.
     pub maximum_alternatives: usize,
     /// Numerical controls for plane-fitting constraints.
-    pub plane_fit: pdbiox_geom::EigenOptions,
+    pub plane_fit: molframe_geom::EigenOptions,
 }
 
 impl MeasurementSet {
@@ -98,7 +98,7 @@ pub enum MeasurementError {
     },
     /// A constraint's geometric decomposition failed.
     #[error("constraint geometry failed: {0:?}")]
-    Geometry(pdbiox_geom::EigenError),
+    Geometry(molframe_geom::EigenError),
 }
 
 /// Measures every constraint against one aligned mapping.
@@ -208,7 +208,7 @@ fn observe(
     constraint: &Constraint,
     aligned: &AlignedMotif,
     atoms: &[AtomIndex],
-    plane_fit: pdbiox_geom::EigenOptions,
+    plane_fit: molframe_geom::EigenOptions,
 ) -> Result<Observation, MeasurementError> {
     let positions: Option<Vec<_>> = atoms
         .iter()
@@ -216,7 +216,7 @@ fn observe(
             structure
                 .data()
                 .atom(atom)
-                .and_then(pdbiox_core::structure::AtomRef::position)
+                .and_then(molframe_core::structure::AtomRef::position)
                 .map(|position| aligned.transform.apply(position))
         })
         .collect();
@@ -227,28 +227,28 @@ fn observe(
         Constraint::Distance {
             target, tolerance, ..
         } => scalar(
-            pdbiox_geom::distance(points[0], points[1]),
+            molframe_geom::distance(points[0], points[1]),
             *target,
             *tolerance,
             false,
         ),
         Constraint::Angle {
             target, tolerance, ..
-        } => pdbiox_geom::angle(points[0], points[1], points[2])
-            .map(pdbiox_geom::degrees)
+        } => molframe_geom::angle(points[0], points[1], points[2])
+            .map(molframe_geom::degrees)
             .map_or_else(Observation::degenerate, |value| {
                 scalar(value, *target, *tolerance, false)
             }),
         Constraint::Dihedral {
             target, tolerance, ..
-        } => pdbiox_geom::dihedral(points[0], points[1], points[2], points[3])
-            .map(pdbiox_geom::degrees)
+        } => molframe_geom::dihedral(points[0], points[1], points[2], points[3])
+            .map(molframe_geom::degrees)
             .map_or_else(Observation::degenerate, |value| {
                 scalar(value, *target, *tolerance, true)
             }),
         Constraint::Chirality { positive, .. } => chirality(&points, *positive),
         Constraint::Planarity { tolerance, .. } => {
-            pdbiox_geom::plane_deviation_with_options(&points, plane_fit)
+            molframe_geom::plane_deviation_with_options(&points, plane_fit)
                 .map_err(MeasurementError::Geometry)?
                 .map_or_else(Observation::degenerate, |value| {
                     upper_bound(value, *tolerance)
@@ -261,7 +261,7 @@ fn observe(
         } => {
             let observed = points[1..]
                 .iter()
-                .filter(|&&partner| pdbiox_geom::distance(points[0], partner) <= *max_distance)
+                .filter(|&&partner| molframe_geom::distance(points[0], partner) <= *max_distance)
                 .count();
             let deviation = usize_to_f64(observed.abs_diff(*count));
             Observation {
@@ -272,7 +272,7 @@ fn observe(
             }
         }
         Constraint::StericExclusion { min_distance, .. } => {
-            let value = pdbiox_geom::distance(points[0], points[1]);
+            let value = molframe_geom::distance(points[0], points[1]);
             Observation {
                 value: Some(MeasurementValue::Scalar(value)),
                 deviation: (*min_distance - value).max(0.0),
@@ -328,10 +328,10 @@ fn upper_bound(value: f64, limit: f64) -> Observation {
 }
 
 fn chirality(points: &[[f32; 3]], positive: bool) -> Observation {
-    let first = pdbiox_geom::displacement(points[0], points[1]);
-    let second = pdbiox_geom::displacement(points[0], points[2]);
-    let third = pdbiox_geom::displacement(points[0], points[3]);
-    let triple = pdbiox_geom::dot(pdbiox_geom::cross(first, second), third);
+    let first = molframe_geom::displacement(points[0], points[1]);
+    let second = molframe_geom::displacement(points[0], points[2]);
+    let third = molframe_geom::displacement(points[0], points[3]);
+    let triple = molframe_geom::dot(molframe_geom::cross(first, second), third);
     if triple.abs() <= f64::EPSILON {
         return Observation::degenerate();
     }

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 fn profile(missing: MissingVerdict) -> VerdictProfile {
     VerdictProfile::new(
-        "pdbiox-fx-strict-1.0",
+        "molframe-fx-strict-1.0",
         [
             VerdictRule {
                 metric: "required_atom_rmsd".into(),
@@ -25,7 +25,7 @@ fn decisions_retain_the_exact_profile_and_each_rule() {
         (Box::<str>::from("required_atom_rmsd"), 0.8),
     ]);
     let verdict = profile(MissingVerdict::Indeterminate).decide(&metrics);
-    assert_eq!(verdict.profile.as_ref(), "pdbiox-fx-strict-1.0");
+    assert_eq!(verdict.profile.as_ref(), "molframe-fx-strict-1.0");
     assert_eq!(verdict.status, VerdictStatus::Pass);
     assert_eq!(verdict.outcomes.len(), 2);
 }

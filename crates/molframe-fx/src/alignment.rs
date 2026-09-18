@@ -1,5 +1,5 @@
 use crate::MappedMotif;
-use pdbiox_geom::Rigid;
+use molframe_geom::Rigid;
 
 /// How a mapped motif was placed before measurement.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

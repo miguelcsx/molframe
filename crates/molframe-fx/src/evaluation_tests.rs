@@ -3,8 +3,8 @@ use crate::{
     AtomSite, Comparison, ComponentRole, ComponentSpec, Constraint, MissingVerdict, Motif,
     NamedConstraint, VerdictProfile, VerdictRule, VerdictStatus,
 };
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::io::{InputBuffer, ReadOptions};
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::io::{InputBuffer, ReadOptions};
 
 #[test]
 fn orchestration_preserves_each_stage_and_rule() {
@@ -14,7 +14,7 @@ _atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n\
 _atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 ATOM 1 O OG SER A 1 0 0 0\nATOM 2 N NE2 HIS A 2 2.8 0 0\n";
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new())
+    let (structure, _) = molframe_cif::read(&input, &ReadOptions::new())
         .unwrap_or_else(|findings| panic!("fixture failed: {findings:?}"));
     let motif = Motif::new(
         [
@@ -55,7 +55,7 @@ ATOM 1 O OG SER A 1 0 0 0\nATOM 2 N NE2 HIS A 2 2.8 0 0\n";
         8,
         crate::MeasurementOptions {
             maximum_alternatives: 8,
-            plane_fit: pdbiox_geom::EigenOptions::standard(),
+            plane_fit: molframe_geom::EigenOptions::standard(),
         },
     )
     .unwrap_or_else(|error| panic!("evaluation failed: {error}"));

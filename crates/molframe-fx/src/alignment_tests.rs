@@ -1,6 +1,6 @@
 use super::{AlignmentKind, align_intrinsic, align_with_transform};
 use crate::MappedMotif;
-use pdbiox_geom::Rigid;
+use molframe_geom::Rigid;
 use std::collections::BTreeMap;
 
 #[test]

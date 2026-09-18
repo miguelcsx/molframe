@@ -2,9 +2,9 @@ use crate::{
     AlignmentKind, MappingError, MeasurementError, MeasurementOptions, MeasurementSet, Motif,
     Verdict, VerdictProfile, align_intrinsic, map_motif, measure_constraints,
 };
-use pdbiox_chem::ComponentProvider;
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::structure::Structure;
+use molframe_chem::ComponentProvider;
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::structure::Structure;
 
 /// One complete mapping → alignment → measurement → decision path.
 #[derive(Clone, Debug, PartialEq)]

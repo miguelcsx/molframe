@@ -1,8 +1,8 @@
 //! Criterion coverage for declarative functional-geometry evaluation.
 
 use criterion::{Criterion, black_box};
-use pdbiox_bench::{Sample, structure};
-use pdbiox_fx::{ame_heavy_atom_1_0, motifbench_1_0};
+use molframe_bench::{Sample, structure};
+use molframe_fx::{ame_heavy_atom_1_0, motifbench_1_0};
 use std::collections::BTreeMap;
 
 fn bench_profiles(c: &mut Criterion) {
