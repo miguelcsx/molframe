@@ -67,3 +67,22 @@ jobs:
         run: |
           find crates -name "*.rs" -print0 | xargs -0 wc -l \
             | awk '$1 > 500 && $2 != "total" { print; found = 1 } END { exit found }'
+
+  # The binding smoke suite (16 §1.1): binding correctness only. The behaviour
+  # lives in Rust and is covered by the workspace tests above.
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Interpreter and dependencies
+        run: uv python install 3.13 && uv sync --group dev --no-install-project
+
+      - name: Extension
+        run: uvx maturin develop
+
+      - name: Smoke suite
+        run: uv run --no-sync pytest python/tests -q
