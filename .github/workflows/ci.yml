@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  green:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The pinned channel in `rust-toolchain.toml` is the source of truth, and
+      # it is what brings `rustfmt` and `clippy`: this installs it and nothing else.
+      - name: Toolchain
+        run: rustup show active-toolchain
+
+      # Everything below is `AGENTS.md` §4 in order, so a red job and a red local
+      # run mean the same thing.
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # This carries the guards that keep the Python surface honest, in both
+      # directions the drift can run, plus the read reports and the errors.
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Doc tests
+        run: cargo test -p molframe --doc
+
+      # Every single feature, not a sample. The three pass-through ones at the
+      # end gate nothing in `molframe` itself, but they change how
+      # `molframe-core` is built, and nothing else here reaches that
+      # configuration.
+      - name: Facade features
+        run: |
+          set -e
+          for f in "" pdb mmcif bcif modelcif geom ic query spatial chem ml xtal \
+                   surface analysis validate seq compare traj audit fx adapters \
+                   gzip zstd mmap; do
+            cargo check -p molframe --no-default-features ${f:+--features "$f"}
+          done
+
+      # The stable ABI, which is what maturin builds by default. It costs one
+      # compilation here, and it is the only check that would notice a binding
+      # that stopped being abi3-compatible.
+      - name: Stable ABI
+        env:
+          PYO3_NO_PYTHON: "1"
+          PYO3_BUILD_EXTENSION_MODULE: "1"
+        run: cargo check -p molframe-py --features pyo3/abi3-py313
+
+      # The two greps. No `unwrap` or `expect` outside test code, and no source
+      # file over 500 lines.
+      - name: No unwrap outside tests
+        run: |
+          if grep -rnE '\.(unwrap|expect)(_[A-Za-z0-9_]+)?\(' crates/ --include="*.rs" \
+              | grep -v '_tests.rs' | grep -v '/tests/'; then
+            echo "::error::unwrap or expect outside test code"
+            exit 1
+          fi
+
+      - name: File cap
+        run: |
+          find crates -name "*.rs" -print0 | xargs -0 wc -l \
+            | awk '$1 > 500 && $2 != "total" { print; found = 1 } END { exit found }'
