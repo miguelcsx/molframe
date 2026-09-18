@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 
 cff-version: 1.2.0
-message: "If you use pdbiox in your work, please cite this software."
-title: "pdbiox"
+message: "If you use molframe in your work, please cite this software."
+title: "molframe"
 abstract: "A batteries-included structural bioinformatics engine: semantics-preserving molecular data, high-performance analysis, and reproducible scientific evaluation."
 authors:
   - family-names: "Cárdenas"
@@ -17,5 +17,5 @@ keywords:
   - "Rust"
   - "NumPy"
 license: "MIT OR Apache-2.0"
-repository-code: "https://github.com/miguelcsx/pdbiox"
+repository-code: "https://github.com/miguelcsx/molframe"
 date-released: "2026-08-06"
