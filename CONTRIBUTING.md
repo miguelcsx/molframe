@@ -1,8 +1,8 @@
-# Contributing to pdbiox
+# Contributing to molframe
 
-pdbiox is **specification-first**: the specification is written before the code, and it is normative. If you are about to write code that the specification does not describe, the specification change comes first.
+molframe is **specification-first**: the specification is written before the code, and it is normative. If you are about to write code that the specification does not describe, the specification change comes first.
 
-Before your first contribution, read the vision-and-scope (what pdbiox is and, importantly, is not), the architecture (the crate graph and the inward-dependency rule) and the requirements (the contract every change is traceable to).
+Before your first contribution, read the vision-and-scope (what molframe is and, importantly, is not), the architecture (the crate graph and the inward-dependency rule) and the requirements (the contract every change is traceable to).
 
 ---
 
@@ -30,9 +30,9 @@ New capabilities get an entry in the benchmarks catalogue — executable, measur
 
 If a reference library does this, compare against it under matched policies (testing conventions §5). Classify every divergence:
 
-- **pdbiox is wrong** — fix it, add a regression test
-- **the reference is wrong** — document it, report upstream, assert pdbiox's behaviour
-- **a legitimate policy difference** — document it, verify pdbiox reproduces the reference under the matching policy
+- **molframe is wrong** — fix it, add a regression test
+- **the reference is wrong** — document it, report upstream, assert molframe's behaviour
+- **a legitimate policy difference** — document it, verify molframe reproduces the reference under the matching policy
 - **numerical tolerance** — document the tolerance and why it is acceptable
 
 **An unexplained divergence blocks the merge.** This is the gate that turns "we're different" into either a fix or a finding.
@@ -43,7 +43,7 @@ Every public item is documented and carries an example that compiles and runs. `
 
 ### 6. No logic in the binding layer
 
-**Binding-layer rule.** `pdbiox-py` bodies are argument conversion, one call into a `pdbiox-*` crate, result conversion. Nothing else. `python/pdbiox/` contains only stubs and re-exports.
+**Binding-layer rule.** `molframe-py` bodies are argument conversion, one call into a `molframe-*` crate, result conversion. Nothing else. `python/molframe/` contains only stubs and re-exports.
 
 If a Python convenience is worth having, put it in Rust, where the CLI and Rust users get it too.
 
@@ -53,7 +53,7 @@ CI enforces this with a dependency allowlist and a Python-source check.
 
 Adapting third-party code? Name the source, its licence and the attribution in the PR.
 
-**MDAnalysis is GPL-2.0-or-later. Its code must not enter pdbiox.** Read it for design, cite it, write your own. The same applies to MDTraj (LGPL) and OpenStructure (LGPL); gemmi is MPL-2.0 and file-level copyleft, so reimplement rather than adapt.
+**MDAnalysis is GPL-2.0-or-later. Its code must not enter molframe.** Read it for design, cite it, write your own. The same applies to MDTraj (LGPL) and OpenStructure (LGPL); gemmi is MPL-2.0 and file-level copyleft, so reimplement rather than adapt.
 
 pdbtbx (MIT), Biopython and Biotite (BSD) are adaptable with attribution.
 
@@ -70,28 +70,24 @@ Records are immutable once accepted — a change of mind is a *new* record that 
 ## Development
 
 ```bash
-git clone <repo> && cd pdbiox
+git clone <repo> && cd molframe
 
 cargo build --workspace
-cargo test  --workspace
-cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 
-# Python
+# Python bindings
 maturin develop
-pytest python/tests
-mypy --strict python/
 
 # benchmarks (dedicated machine; shared runners give noise, not data)
 cargo bench
-
-# specification checks (requires the spec tree)
-./scripts/check-docs.sh
 ```
 
-## Code conventions
+That block is the whole definition of green — see `AGENTS.md` §4, which also carries the
+two greps (no `unwrap` outside tests, no file over 500 lines) that must come back empty.
 
-Taken from `bio/atpts/`, which is the house style.
+## Code conventions
 
 **Modules:** one responsibility each, with a `//!` header stating the scientific intent. Not "this module handles PDB files" — *what it computes and why*.
 
@@ -106,7 +102,7 @@ fn residue_boundaries_fall_back_to_file_order_when_label_seq_id_repeats() { ... 
 
 A test name should make a CI failure readable without opening the file.
 
-**Comments:** explain *why*, not *what*. The most valuable comments in this codebase will be the ones explaining why a reference implementation behaves the way it does, and why pdbiox agrees or diverges.
+**Comments:** explain *why*, not *what*. The most valuable comments in this codebase will be the ones explaining why a reference implementation behaves the way it does, and why molframe agrees or diverges.
 
 **Allocation:** none in hot loops. `SmallVec` for small collections. Reuse buffers across iterations.
 
@@ -118,28 +114,28 @@ Full anti-pattern list: see the performance notes before writing kernels.
 
 | Change | Crate |
 |---|---|
-| Types, storage, policy, provenance | `pdbiox-core` |
-| Selection language | `pdbiox-query` |
-| A format | `pdbiox-cif` / `-bcif` / `-pdb` / `-modelcif` / `-traj` |
-| Chemistry, CCD, bonds | `pdbiox-chem` |
-| A geometric kernel | `pdbiox-geom` |
-| Neighbour search | `pdbiox-spatial` |
-| SASA, SES, buried surface | `pdbiox-surface` |
-| An analysis | `pdbiox-analysis` |
-| A comparison metric | `pdbiox-compare` |
-| A validation check | `pdbiox-validate` |
-| Assemblies, symmetry, maps | `pdbiox-xtal` |
-| Alignment, phylogeny | `pdbiox-seq` |
-| Tensor or graph export | `pdbiox-ml` |
-| A library bridge | `pdbiox-adapters` |
+| Types, storage, policy, provenance | `molframe-core` |
+| Selection language | `molframe-query` |
+| A format | `molframe-cif` / `-bcif` / `-pdb` / `-modelcif` / `-traj` |
+| Chemistry, CCD, bonds | `molframe-chem` |
+| A geometric kernel | `molframe-geom` |
+| Neighbour search | `molframe-spatial` |
+| SASA, SES, buried surface | `molframe-surface` |
+| An analysis | `molframe-analysis` |
+| A comparison metric | `molframe-compare` |
+| A validation check | `molframe-validate` |
+| Assemblies, symmetry, maps | `molframe-xtal` |
+| Alignment, phylogeny | `molframe-seq` |
+| Tensor or graph export | `molframe-ml` |
+| A library bridge | `molframe-adapters` |
 
 Unsure? The layering rules usually answer it: put it in the lowest layer that can hold it without adding a dependency.
 
 ## Reporting bugs
 
-Include: pdbiox version, platform, a minimal input file (or its PDB ID), the exact code, what you expected, what happened, and the full diagnostic including the `PDBIOX-` code.
+Include: molframe version, platform, a minimal input file (or its PDB ID), the exact code, what you expected, what happened, and the full diagnostic including the `MOLFRAME-` code.
 
-**A wrong number is more serious than a crash.** If pdbiox produced a plausible but incorrect result, say so prominently — that is the failure mode this project exists to prevent, and it goes to the front of the queue.
+**A wrong number is more serious than a crash.** If molframe produced a plausible but incorrect result, say so prominently — that is the failure mode this project exists to prevent, and it goes to the front of the queue.
 
 ## Proposing capabilities
 
@@ -148,12 +144,12 @@ Include: pdbiox version, platform, a minimal input file (or its PDB ID), the exa
 3. Check the library/workflow boundary — a laboratory pipeline belongs downstream when public primitives already suffice.
 4. Open a discussion with: the requirement it satisfies, the crate it belongs in, the prior art, and the golden workflow that would demonstrate it.
 
-As a rule of thumb the default answer to "should pdbiox do this?" is **yes, if it is structural bioinformatics**. The scope boundary is domain, not effort.
+As a rule of thumb the default answer to "should molframe do this?" is **yes, if it is structural bioinformatics**. The scope boundary is domain, not effort.
 
 That answer applies to reusable capabilities, not named use cases. A proposal
 derived from a laboratory script must identify the smallest general operation
 that is absent from the public API. Adding the script's templates, thresholds,
-classification policy, output schema or command name to pdbiox is scope creep.
+classification policy, output schema or command name to molframe is scope creep.
 
 ## Reviewing
 
