@@ -14,7 +14,7 @@
 
 use std::collections::BTreeSet;
 
-use pdbiox_core::contract::{AnalysisPolicy, PolicyField};
+use molframe_core::contract::{AnalysisPolicy, PolicyField};
 
 use crate::AuditPlan;
 use crate::engine::audit;

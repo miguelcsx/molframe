@@ -1,19 +1,19 @@
 [package]
-name = "pdbiox-audit"
+name = "molframe-audit"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Bounded policy-sensitivity audits for pdbiox analyses"
+description = "Bounded policy-sensitivity audits for molframe analyses"
 
 [dependencies]
 num-traits.workspace = true
-pdbiox-core.workspace = true
+molframe-core.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
+molframe-bench.workspace = true
 
 [[bench]]
 name = "audit"

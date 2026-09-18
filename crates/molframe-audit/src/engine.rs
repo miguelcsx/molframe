@@ -19,7 +19,7 @@ pub fn audit<R, I, E, A, P>(
 ) -> Result<AuditReport<R, I>, E>
 where
     I: Ord + Clone,
-    A: FnMut(&pdbiox_core::contract::AnalysisPolicy) -> Result<R, E>,
+    A: FnMut(&molframe_core::contract::AnalysisPolicy) -> Result<R, E>,
     P: Fn(&R) -> BTreeSet<I>,
 {
     let mut runs = Vec::with_capacity(plan.cost());
@@ -82,7 +82,7 @@ fn frequencies<I: Ord + Clone>(sets: &[BTreeSet<I>]) -> BTreeMap<I, usize> {
 }
 
 fn dimension_report<I: Ord + Clone>(
-    field: pdbiox_core::contract::PolicyField,
+    field: molframe_core::contract::PolicyField,
     axis: usize,
     coordinates: &[Vec<usize>],
     sets: &[BTreeSet<I>],

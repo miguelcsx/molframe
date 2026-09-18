@@ -1,6 +1,6 @@
 use super::audit;
 use crate::{PolicyDimension, PolicySpace};
-use pdbiox_core::contract::{AnalysisPolicy, MissingPolicy, Namespace, PolicyField};
+use molframe_core::contract::{AnalysisPolicy, MissingPolicy, Namespace, PolicyField};
 use std::collections::BTreeSet;
 
 #[test]

@@ -1,6 +1,6 @@
 use super::audit_batch;
 use crate::{PolicyDimension, PolicySpace};
-use pdbiox_core::contract::{AnalysisPolicy, MissingPolicy, PolicyField};
+use molframe_core::contract::{AnalysisPolicy, MissingPolicy, PolicyField};
 use std::collections::BTreeSet;
 
 fn plan() -> crate::AuditPlan {

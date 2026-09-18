@@ -1,4 +1,4 @@
-use pdbiox_core::contract::{AnalysisPolicy, PolicyField};
+use molframe_core::contract::{AnalysisPolicy, PolicyField};
 
 /// One completed analysis at one policy point.
 #[derive(Clone, Debug, PartialEq)]

@@ -1,5 +1,5 @@
 use crate::PolicyValue;
-use pdbiox_core::contract::{
+use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,
     EquivalencePolicy, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace, PeriodicPolicy,
     PolicyField, Precision, RadiiSet, SymmetryPolicy, Tolerance,

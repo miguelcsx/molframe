@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use criterion::{Criterion, black_box};
-use pdbiox_audit::{PolicyDimension, PolicySpace, audit_batch};
-use pdbiox_core::contract::{AnalysisPolicy, MissingPolicy, Namespace};
+use molframe_audit::{PolicyDimension, PolicySpace, audit_batch};
+use molframe_core::contract::{AnalysisPolicy, MissingPolicy, Namespace};
 
 fn bench_policy_plan(c: &mut Criterion) {
     let space = PolicySpace::new(AnalysisPolicy::default())

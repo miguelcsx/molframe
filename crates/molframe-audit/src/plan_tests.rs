@@ -1,5 +1,5 @@
 use super::{PlanError, PolicyDimension, PolicySpace};
-use pdbiox_core::contract::{AnalysisPolicy, MissingPolicy, ModelChoice, Namespace};
+use molframe_core::contract::{AnalysisPolicy, MissingPolicy, ModelChoice, Namespace};
 
 #[test]
 fn cost_is_available_before_expansion() {
@@ -33,7 +33,7 @@ fn empty_duplicate_and_oversized_spaces_are_refused() {
     assert_eq!(
         empty,
         Err(PlanError::EmptyDimension(
-            pdbiox_core::contract::PolicyField::Model
+            molframe_core::contract::PolicyField::Model
         ))
     );
 
@@ -44,7 +44,7 @@ fn empty_duplicate_and_oversized_spaces_are_refused() {
     assert_eq!(
         duplicate,
         Err(PlanError::DuplicateDimension(
-            pdbiox_core::contract::PolicyField::Model
+            molframe_core::contract::PolicyField::Model
         ))
     );
 

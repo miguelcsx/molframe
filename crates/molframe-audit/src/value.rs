@@ -1,4 +1,4 @@
-use pdbiox_core::contract::{
+use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AssemblyChoice, ContactDefinition, EquivalencePolicy,
     HydrogenPolicy, MissingPolicy, ModelChoice, Namespace, PeriodicPolicy, Precision, RadiiSet,
     SymmetryPolicy, Tolerance,
