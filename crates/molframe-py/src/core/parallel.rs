@@ -6,14 +6,14 @@ use pyo3::types::PyModule;
 /// How work is divided, independently of how many threads will run it.
 #[pyclass(name = "BlockPlan", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyBlockPlan(pub(crate) pdbiox::core::parallel::BlockPlan);
+pub(crate) struct PyBlockPlan(pub(crate) molframe::core::parallel::BlockPlan);
 
 #[pymethods]
 impl PyBlockPlan {
     #[new]
-    #[pyo3(signature = (count, block = pdbiox::core::parallel::DEFAULT_BLOCK_ITEMS))]
+    #[pyo3(signature = (count, block = molframe::core::parallel::DEFAULT_BLOCK_ITEMS))]
     fn new(count: usize, block: usize) -> Self {
-        Self(pdbiox::core::parallel::BlockPlan::new(count, block))
+        Self(molframe::core::parallel::BlockPlan::new(count, block))
     }
 
     #[getter]
@@ -77,13 +77,13 @@ pub(crate) enum PyReductionPolicy {
 impl PyReductionPolicy {
     /// Returns true when combination order is fixed by block index.
     fn is_deterministic(&self) -> bool {
-        pdbiox::core::parallel::ReductionPolicy::from(*self).is_deterministic()
+        molframe::core::parallel::ReductionPolicy::from(*self).is_deterministic()
     }
 
     /// The name recorded in provenance.
     #[getter]
     fn name(&self) -> &'static str {
-        pdbiox::core::parallel::ReductionPolicy::from(*self).name()
+        molframe::core::parallel::ReductionPolicy::from(*self).name()
     }
 
     fn __repr__(&self) -> String {
@@ -91,7 +91,7 @@ impl PyReductionPolicy {
     }
 }
 
-impl From<PyReductionPolicy> for pdbiox::core::parallel::ReductionPolicy {
+impl From<PyReductionPolicy> for molframe::core::parallel::ReductionPolicy {
     fn from(value: PyReductionPolicy) -> Self {
         match value {
             PyReductionPolicy::Deterministic => Self::Deterministic,
@@ -100,11 +100,11 @@ impl From<PyReductionPolicy> for pdbiox::core::parallel::ReductionPolicy {
     }
 }
 
-impl From<pdbiox::core::parallel::ReductionPolicy> for PyReductionPolicy {
-    fn from(value: pdbiox::core::parallel::ReductionPolicy) -> Self {
+impl From<molframe::core::parallel::ReductionPolicy> for PyReductionPolicy {
+    fn from(value: molframe::core::parallel::ReductionPolicy) -> Self {
         match value {
-            pdbiox::core::parallel::ReductionPolicy::Deterministic => Self::Deterministic,
-            pdbiox::core::parallel::ReductionPolicy::Fast => Self::Fast,
+            molframe::core::parallel::ReductionPolicy::Deterministic => Self::Deterministic,
+            molframe::core::parallel::ReductionPolicy::Fast => Self::Fast,
         }
     }
 }
@@ -121,7 +121,7 @@ fn try_for_each_block_in(
 ) -> PyResult<()> {
     let context = context.native();
     py.detach(move || {
-        pdbiox::core::parallel::try_for_each_block_in(
+        molframe::core::parallel::try_for_each_block_in(
             plan.0,
             &context,
             bytes_per_block,
@@ -130,7 +130,7 @@ fn try_for_each_block_in(
         )
     })
     .map_err(|error| match error {
-        pdbiox::core::parallel::BlockExecutionError::Operation(error) => error,
+        molframe::core::parallel::BlockExecutionError::Operation(error) => error,
         other => pyo3::exceptions::PyRuntimeError::new_err(other.to_string()),
     })
 }
@@ -138,7 +138,7 @@ fn try_for_each_block_in(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add(
         "DEFAULT_BLOCK_ITEMS",
-        pdbiox::core::parallel::DEFAULT_BLOCK_ITEMS,
+        molframe::core::parallel::DEFAULT_BLOCK_ITEMS,
     )?;
     module.add_class::<PyBlockPlan>()?;
     module.add_function(wrap_pyfunction!(try_for_each_block_in, module)?)?;

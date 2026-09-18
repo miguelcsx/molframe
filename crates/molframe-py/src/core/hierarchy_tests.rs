@@ -2,9 +2,9 @@ use super::{PyChains, PyModels, PyResidues};
 use pyo3::Python;
 use std::path::PathBuf;
 
-fn sample() -> pdbiox::Structure {
+fn sample() -> molframe::Structure {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/basic.pdb");
-    match pdbiox::read(path) {
+    match molframe::read(path) {
         Ok(structure) => structure,
         Err(findings) => panic!("binding fixture failed to read: {findings:?}"),
     }

@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "CoordinateBlock", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyCoordinateBlock(pub(crate) pdbiox::CoordinateBlock);
+pub(crate) struct PyCoordinateBlock(pub(crate) molframe::CoordinateBlock);
 
 impl PyCoordinateBlock {
     pub(crate) fn view<'py>(
@@ -41,12 +41,12 @@ impl PyCoordinateBlock {
 impl PyCoordinateBlock {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::CoordinateBlock::new())
+        Self(molframe::CoordinateBlock::new())
     }
 
     #[staticmethod]
     fn with_capacity(positions: usize) -> Self {
-        Self(pdbiox::CoordinateBlock::with_capacity(positions))
+        Self(molframe::CoordinateBlock::with_capacity(positions))
     }
 
     #[getter]

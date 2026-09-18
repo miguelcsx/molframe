@@ -24,16 +24,16 @@ pub(crate) enum PyColumnKind {
 
 #[derive(Clone)]
 enum ColumnData {
-    U8(pdbiox::EncodedColumn<u8>),
-    U16(pdbiox::EncodedColumn<u16>),
-    U32(pdbiox::EncodedColumn<u32>),
-    U64(pdbiox::EncodedColumn<u64>),
-    I8(pdbiox::EncodedColumn<i8>),
-    I16(pdbiox::EncodedColumn<i16>),
-    I32(pdbiox::EncodedColumn<i32>),
-    I64(pdbiox::EncodedColumn<i64>),
-    F32(pdbiox::EncodedColumn<f32>),
-    SymbolId(pdbiox::EncodedColumn<pdbiox::SymbolId>),
+    U8(molframe::EncodedColumn<u8>),
+    U16(molframe::EncodedColumn<u16>),
+    U32(molframe::EncodedColumn<u32>),
+    U64(molframe::EncodedColumn<u64>),
+    I8(molframe::EncodedColumn<i8>),
+    I16(molframe::EncodedColumn<i16>),
+    I32(molframe::EncodedColumn<i32>),
+    I64(molframe::EncodedColumn<i64>),
+    F32(molframe::EncodedColumn<f32>),
+    SymbolId(molframe::EncodedColumn<molframe::SymbolId>),
 }
 
 #[pyclass(name = "EncodedColumn", from_py_object)]
@@ -217,9 +217,9 @@ impl PyEncodedColumn {
             ($type:ty, $variant:ident) => {{
                 let values = values.extract::<Vec<$type>>()?;
                 let column = if encoded {
-                    pdbiox::EncodedColumn::encode(&values)
+                    molframe::EncodedColumn::encode(&values)
                 } else {
-                    pdbiox::EncodedColumn::plain(&values)
+                    molframe::EncodedColumn::plain(&values)
                 };
                 Ok(Self {
                     kind,
@@ -242,9 +242,9 @@ impl PyEncodedColumn {
                 let values = values.extract::<Vec<PySymbolId>>()?;
                 let values = values.into_iter().map(|value| value.0).collect::<Vec<_>>();
                 let column = if encoded {
-                    pdbiox::EncodedColumn::encode(&values)
+                    molframe::EncodedColumn::encode(&values)
                 } else {
-                    pdbiox::EncodedColumn::plain(&values)
+                    molframe::EncodedColumn::plain(&values)
                 };
                 Ok(Self {
                     kind,
@@ -261,17 +261,17 @@ trait ColumnLength {
     fn is_constant(&self) -> bool;
 }
 
-impl<T: pdbiox::core::column::ColumnValue> ColumnLength for pdbiox::EncodedColumn<T> {
+impl<T: molframe::core::column::ColumnValue> ColumnLength for molframe::EncodedColumn<T> {
     fn len(&self) -> usize {
-        pdbiox::EncodedColumn::len(self)
+        molframe::EncodedColumn::len(self)
     }
 
     fn is_empty(&self) -> bool {
-        pdbiox::EncodedColumn::is_empty(self)
+        molframe::EncodedColumn::is_empty(self)
     }
 
     fn is_constant(&self) -> bool {
-        pdbiox::EncodedColumn::is_constant(self)
+        molframe::EncodedColumn::is_constant(self)
     }
 }
 

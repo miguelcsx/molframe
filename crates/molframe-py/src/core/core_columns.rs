@@ -5,28 +5,28 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "BitVec", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyBitVec(pub(crate) pdbiox::core::BitVec);
+pub(crate) struct PyBitVec(pub(crate) molframe::core::BitVec);
 
 #[pymethods]
 impl PyBitVec {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::core::BitVec::new())
+        Self(molframe::core::BitVec::new())
     }
 
     #[staticmethod]
     fn repeat(value: bool, length: u32) -> Self {
-        Self(pdbiox::core::BitVec::repeat(value, length))
+        Self(molframe::core::BitVec::repeat(value, length))
     }
 
     #[staticmethod]
     fn with_capacity(length: u32) -> Self {
-        Self(pdbiox::core::BitVec::with_capacity(length))
+        Self(molframe::core::BitVec::with_capacity(length))
     }
 
     #[staticmethod]
     fn from_values(values: Vec<bool>) -> PyResult<Self> {
-        pdbiox::core::BitVec::try_from_iter(values)
+        molframe::core::BitVec::try_from_iter(values)
             .map(Self)
             .ok_or_else(|| PyValueError::new_err("bit vector length exceeds the native limit"))
     }
@@ -100,7 +100,7 @@ pub(crate) enum PyPresence {
     Inapplicable,
 }
 
-impl From<PyPresence> for pdbiox::core::Presence {
+impl From<PyPresence> for molframe::core::Presence {
     fn from(value: PyPresence) -> Self {
         match value {
             PyPresence::Present => Self::Present,
@@ -110,12 +110,12 @@ impl From<PyPresence> for pdbiox::core::Presence {
     }
 }
 
-impl From<pdbiox::core::Presence> for PyPresence {
-    fn from(value: pdbiox::core::Presence) -> Self {
+impl From<molframe::core::Presence> for PyPresence {
+    fn from(value: molframe::core::Presence) -> Self {
         match value {
-            pdbiox::core::Presence::Present => Self::Present,
-            pdbiox::core::Presence::Unknown => Self::Unknown,
-            pdbiox::core::Presence::Inapplicable => Self::Inapplicable,
+            molframe::core::Presence::Present => Self::Present,
+            molframe::core::Presence::Unknown => Self::Unknown,
+            molframe::core::Presence::Inapplicable => Self::Inapplicable,
         }
     }
 }
@@ -129,19 +129,19 @@ impl PyPresence {
 
 #[pyclass(name = "ValidityMask", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyValidityMask(pub(crate) pdbiox::core::ValidityMask);
+pub(crate) struct PyValidityMask(pub(crate) molframe::core::ValidityMask);
 
 #[pymethods]
 impl PyValidityMask {
     #[staticmethod]
     fn all_present(length: u32) -> Self {
-        Self(pdbiox::core::ValidityMask::all_present(length))
+        Self(molframe::core::ValidityMask::all_present(length))
     }
 
     #[staticmethod]
     fn from_values(values: Vec<PyPresence>) -> PyResult<Self> {
         let values = values.into_iter().map(Into::into).collect::<Vec<_>>();
-        pdbiox::core::ValidityMask::try_from_iter(values)
+        molframe::core::ValidityMask::try_from_iter(values)
             .map(Self)
             .ok_or_else(|| PyValueError::new_err("validity mask length exceeds the native limit"))
     }
@@ -183,18 +183,18 @@ impl PyValidityMask {
 
 #[pyfunction]
 pub(crate) fn bit_width(py: Python<'_>, maximum: u64) -> u8 {
-    py.detach(move || -> u8 { pdbiox::core::column::bit_width(maximum) })
+    py.detach(move || -> u8 { molframe::core::column::bit_width(maximum) })
 }
 
 #[pyfunction(name = "pack")]
 pub(crate) fn pack_bits(values: Vec<u64>, width: u8) -> PyResult<Vec<u8>> {
-    pdbiox::core::column::pack(&values, width)
+    molframe::core::column::pack(&values, width)
         .ok_or_else(|| PyValueError::new_err("packed bit column exceeds the native limit"))
 }
 
 #[pyfunction(name = "unpack_one")]
 pub(crate) fn unpack_one_bits(data: Vec<u8>, width: u8, index: u32) -> Option<u64> {
-    pdbiox::core::column::unpack_one(&data, width, index)
+    molframe::core::column::unpack_one(&data, width, index)
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

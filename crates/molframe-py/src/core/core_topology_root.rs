@@ -11,13 +11,13 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "Topology", from_py_object)]
 #[derive(Clone, Debug, Default)]
-pub(crate) struct PyTopology(pub(crate) pdbiox::Topology);
+pub(crate) struct PyTopology(pub(crate) molframe::Topology);
 
 #[pymethods]
 impl PyTopology {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::Topology::default())
+        Self(molframe::Topology::default())
     }
 
     fn atom_count(&self) -> u32 {
@@ -63,7 +63,7 @@ impl PyTopology {
         first_residue: u32,
         end_residue: u32,
     ) -> PyResult<PyChainIndex> {
-        let native = pdbiox::core::topology::ChainRecord {
+        let native = molframe::core::topology::ChainRecord {
             label_asym_id: record.label_asym_id.0,
             auth_asym_id: record.auth_asym_id.0,
             entity: record.entity.0,
@@ -82,7 +82,7 @@ impl PyTopology {
         first_atom: u32,
         end_atom: u32,
     ) -> PyResult<PyResidueIndex> {
-        let native = pdbiox::core::topology::ResidueRecord {
+        let native = molframe::core::topology::ResidueRecord {
             label_comp_id: record.label_comp_id.0,
             auth_comp_id: record.auth_comp_id.0,
             label_seq_id: record.label_seq_id.0,

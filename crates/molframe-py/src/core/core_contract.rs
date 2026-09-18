@@ -6,17 +6,17 @@ use pyo3::types::PyDict;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-type NativeParameter = pdbiox::core::contract::ParameterValue;
+type NativeParameter = molframe::core::contract::ParameterValue;
 
 #[pyclass(name = "AlgorithmId", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyAlgorithmId(pub(crate) pdbiox::AlgorithmId);
+pub(crate) struct PyAlgorithmId(pub(crate) molframe::AlgorithmId);
 
 #[pymethods]
 impl PyAlgorithmId {
     #[new]
     fn new(name: String, version: String) -> Self {
-        Self(pdbiox::AlgorithmId::new(name, version))
+        Self(molframe::AlgorithmId::new(name, version))
     }
 
     #[getter]
@@ -36,13 +36,13 @@ impl PyAlgorithmId {
 
 #[pyclass(name = "DictionaryVersion", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyDictionaryVersion(pub(crate) pdbiox::DictionaryVersion);
+pub(crate) struct PyDictionaryVersion(pub(crate) molframe::DictionaryVersion);
 
 #[pymethods]
 impl PyDictionaryVersion {
     #[new]
     fn new(version: String) -> Self {
-        Self(pdbiox::DictionaryVersion::new(version))
+        Self(molframe::DictionaryVersion::new(version))
     }
 
     #[getter]
@@ -57,13 +57,13 @@ impl PyDictionaryVersion {
 
 #[pyclass(name = "ProfileId", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyProfileId(pub(crate) pdbiox::ProfileId);
+pub(crate) struct PyProfileId(pub(crate) molframe::ProfileId);
 
 #[pymethods]
 impl PyProfileId {
     #[staticmethod]
     fn default() -> Self {
-        Self(pdbiox::ProfileId::DEFAULT)
+        Self(molframe::ProfileId::DEFAULT)
     }
 
     #[getter]
@@ -78,18 +78,18 @@ impl PyProfileId {
 
 #[pyclass(name = "Fingerprint", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct PyFingerprint(pub(crate) pdbiox::core::contract::Fingerprint);
+pub(crate) struct PyFingerprint(pub(crate) molframe::core::contract::Fingerprint);
 
 #[pymethods]
 impl PyFingerprint {
     #[new]
     fn new(data: &[u8]) -> Self {
-        Self(pdbiox::core::contract::Fingerprint::of(data))
+        Self(molframe::core::contract::Fingerprint::of(data))
     }
 
     #[staticmethod]
     fn of(data: &[u8]) -> Self {
-        Self(pdbiox::core::contract::Fingerprint::of(data))
+        Self(molframe::core::contract::Fingerprint::of(data))
     }
 
     #[getter]
@@ -199,7 +199,7 @@ fn infallible<T>(value: Result<T, std::convert::Infallible>) -> T {
 
 #[pyclass(name = "AnalysisParameters", from_py_object)]
 #[derive(Clone, Debug, Default)]
-pub(crate) struct PyAnalysisParameters(pub(crate) pdbiox::AnalysisParameters);
+pub(crate) struct PyAnalysisParameters(pub(crate) molframe::AnalysisParameters);
 
 #[pymethods]
 impl PyAnalysisParameters {
@@ -259,37 +259,37 @@ impl PyAnalysisParameters {
 
 #[pyclass(name = "SourceRef", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PySourceRef(pub(crate) pdbiox::SourceRef);
+pub(crate) struct PySourceRef(pub(crate) molframe::SourceRef);
 
 #[pymethods]
 impl PySourceRef {
     #[staticmethod]
     fn none() -> Self {
-        Self(pdbiox::SourceRef::None)
+        Self(molframe::SourceRef::None)
     }
 
     #[staticmethod]
     fn path(path: PathBuf) -> Self {
-        Self(pdbiox::SourceRef::path(path))
+        Self(molframe::SourceRef::path(path))
     }
 
     #[staticmethod]
     fn url(url: String) -> Self {
-        Self(pdbiox::SourceRef::Url(url.into_boxed_str()))
+        Self(molframe::SourceRef::Url(url.into_boxed_str()))
     }
 
     #[staticmethod]
     fn memory() -> Self {
-        Self(pdbiox::SourceRef::Memory)
+        Self(molframe::SourceRef::Memory)
     }
 
     #[getter]
     fn kind(&self) -> &'static str {
         match self.0 {
-            pdbiox::SourceRef::None => "none",
-            pdbiox::SourceRef::Path(_) => "path",
-            pdbiox::SourceRef::Url(_) => "url",
-            pdbiox::SourceRef::Memory => "memory",
+            molframe::SourceRef::None => "none",
+            molframe::SourceRef::Path(_) => "path",
+            molframe::SourceRef::Url(_) => "url",
+            molframe::SourceRef::Memory => "memory",
             _ => "unknown",
         }
     }
@@ -308,14 +308,14 @@ impl PySourceRef {
 
 #[pyclass(name = "StructureDifferenceOptions", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyStructureDifferenceOptions(pub(crate) pdbiox::StructureDifferenceOptions);
+pub(crate) struct PyStructureDifferenceOptions(pub(crate) molframe::StructureDifferenceOptions);
 
 #[pymethods]
 impl PyStructureDifferenceOptions {
     #[new]
     #[pyo3(signature = (coordinate_tolerance=0.0))]
     fn new(coordinate_tolerance: f32) -> Self {
-        Self(pdbiox::StructureDifferenceOptions {
+        Self(molframe::StructureDifferenceOptions {
             coordinate_tolerance,
         })
     }

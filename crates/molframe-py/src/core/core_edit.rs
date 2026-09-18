@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "StructureEditor", skip_from_py_object)]
 pub(crate) struct PyStructureEditor {
-    inner: Option<pdbiox::StructureEditor>,
+    inner: Option<molframe::StructureEditor>,
 }
 
 fn missing_editor() -> PyErr {
@@ -43,7 +43,7 @@ impl PyStructureEditor {
         self.inner
             .as_mut()
             .ok_or_else(missing_editor)
-            .map(pdbiox::StructureEditor::clear_extensions)
+            .map(molframe::StructureEditor::clear_extensions)
     }
 
     fn rename_chain(

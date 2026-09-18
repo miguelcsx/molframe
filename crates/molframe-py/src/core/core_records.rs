@@ -28,8 +28,8 @@ pub(crate) struct PyAtomRecord {
 }
 
 impl PyAtomRecord {
-    fn native(&self) -> pdbiox::AtomRecord {
-        pdbiox::AtomRecord {
+    fn native(&self) -> molframe::AtomRecord {
+        molframe::AtomRecord {
             position: self.position,
             element: self.element.0,
             atom_name: self.atom_name.0,
@@ -47,10 +47,10 @@ impl PyAtomRecord {
 
 #[pyclass(name = "AtomChunk", frozen, from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyAtomChunk(pub(crate) pdbiox::AtomChunk);
+pub(crate) struct PyAtomChunk(pub(crate) molframe::AtomChunk);
 
 #[pyclass(name = "ChunkBuilder", skip_from_py_object)]
-pub(crate) struct PyChunkBuilder(pub(crate) pdbiox::ChunkBuilder);
+pub(crate) struct PyChunkBuilder(pub(crate) molframe::ChunkBuilder);
 
 fn readonly_f32<'py>(
     py: Python<'py>,
@@ -293,12 +293,12 @@ impl PyAtomChunk {
 impl PyChunkBuilder {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::ChunkBuilder::new())
+        Self(molframe::ChunkBuilder::new())
     }
 
     #[staticmethod]
     fn with_target(target: u32) -> Self {
-        Self(pdbiox::ChunkBuilder::with_target(target))
+        Self(molframe::ChunkBuilder::with_target(target))
     }
 
     fn reserve(&mut self, atoms: usize) {
@@ -323,8 +323,8 @@ impl PyChunkBuilder {
     }
 }
 
-impl From<pdbiox::AtomRecord> for PyAtomRecord {
-    fn from(value: pdbiox::AtomRecord) -> Self {
+impl From<molframe::AtomRecord> for PyAtomRecord {
+    fn from(value: molframe::AtomRecord) -> Self {
         Self {
             position: value.position,
             element: PyElement(value.element),

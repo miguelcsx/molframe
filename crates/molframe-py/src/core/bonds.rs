@@ -3,7 +3,7 @@
 use crate::errors::index_error;
 use crate::index::{PyAtomIndex, PyBondIndex, normalise_index};
 use crate::structure::PyStructure;
-use pdbiox::Structure;
+use molframe::Structure;
 use pyo3::prelude::*;
 
 #[pyclass(name = "BondOrder", frozen, eq, eq_int, from_py_object)]
@@ -41,10 +41,10 @@ pub(crate) struct PyBondRecord {
 }
 
 impl PyBondRecord {
-    fn native(self) -> pdbiox::BondRecord {
-        pdbiox::BondRecord {
-            atom_a: pdbiox::AtomIndex::new(self.atom_a),
-            atom_b: pdbiox::AtomIndex::new(self.atom_b),
+    fn native(self) -> molframe::BondRecord {
+        molframe::BondRecord {
+            atom_a: molframe::AtomIndex::new(self.atom_a),
+            atom_b: molframe::AtomIndex::new(self.atom_b),
             order: self.order.into(),
             provenance: self.provenance.into(),
         }
@@ -53,14 +53,14 @@ impl PyBondRecord {
 
 #[pyclass(name = "BondTable", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyBondTable(pub(crate) pdbiox::BondTable);
+pub(crate) struct PyBondTable(pub(crate) molframe::BondTable);
 
 #[pyclass(name = "BondTableBuilder", skip_from_py_object)]
-pub(crate) struct PyBondTableBuilder(pdbiox::BondTableBuilder);
+pub(crate) struct PyBondTableBuilder(molframe::BondTableBuilder);
 
 #[pyclass(name = "BondAdjacency", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyBondAdjacency(pub(crate) pdbiox::BondAdjacency);
+pub(crate) struct PyBondAdjacency(pub(crate) molframe::BondAdjacency);
 
 #[pyclass(name = "Bonds", frozen, skip_from_py_object)]
 pub(crate) struct PyBonds {
@@ -97,12 +97,12 @@ impl PyBondRecord {
 
     #[getter]
     fn atom_a_index(&self) -> PyAtomIndex {
-        PyAtomIndex(pdbiox::AtomIndex::new(self.atom_a))
+        PyAtomIndex(molframe::AtomIndex::new(self.atom_a))
     }
 
     #[getter]
     fn atom_b_index(&self) -> PyAtomIndex {
-        PyAtomIndex(pdbiox::AtomIndex::new(self.atom_b))
+        PyAtomIndex(molframe::AtomIndex::new(self.atom_b))
     }
 }
 
@@ -110,7 +110,7 @@ impl PyBondRecord {
 impl PyBondTable {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::BondTable::default())
+        Self(molframe::BondTable::default())
     }
 
     fn __len__(&self) -> usize {
@@ -144,7 +144,7 @@ impl PyBondTable {
         };
         let position = u32::try_from(position).map_err(|_| index_error(py, index))?;
         self.0
-            .get(pdbiox::BondIndex::new(position))
+            .get(molframe::BondIndex::new(position))
             .map(PyBondRecord::from)
             .ok_or_else(|| index_error(py, index))
     }
@@ -163,7 +163,7 @@ impl PyBondTable {
 impl PyBondTableBuilder {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::BondTableBuilder::new())
+        Self(molframe::BondTableBuilder::new())
     }
 
     fn push(&mut self, record: PyBondRecord) {
@@ -213,7 +213,7 @@ impl PyBonds {
         self.inner
             .data()
             .bonds
-            .get(pdbiox::BondIndex::new(position))
+            .get(molframe::BondIndex::new(position))
             .map(PyBondRecord::from)
             .ok_or_else(|| index_error(py, index))
     }
@@ -224,8 +224,8 @@ impl PyBonds {
     }
 }
 
-impl From<pdbiox::BondRecord> for PyBondRecord {
-    fn from(value: pdbiox::BondRecord) -> Self {
+impl From<molframe::BondRecord> for PyBondRecord {
+    fn from(value: molframe::BondRecord) -> Self {
         Self {
             atom_a: value.atom_a.get(),
             atom_b: value.atom_b.get(),
@@ -235,21 +235,21 @@ impl From<pdbiox::BondRecord> for PyBondRecord {
     }
 }
 
-impl From<pdbiox::BondOrder> for PyBondOrder {
-    fn from(value: pdbiox::BondOrder) -> Self {
+impl From<molframe::BondOrder> for PyBondOrder {
+    fn from(value: molframe::BondOrder) -> Self {
         match value {
-            pdbiox::BondOrder::Single => Self::Single,
-            pdbiox::BondOrder::Double => Self::Double,
-            pdbiox::BondOrder::Triple => Self::Triple,
-            pdbiox::BondOrder::Quadruple => Self::Quadruple,
-            pdbiox::BondOrder::Aromatic => Self::Aromatic,
-            pdbiox::BondOrder::Polymeric => Self::Polymeric,
-            pdbiox::BondOrder::Unknown => Self::Unknown,
+            molframe::BondOrder::Single => Self::Single,
+            molframe::BondOrder::Double => Self::Double,
+            molframe::BondOrder::Triple => Self::Triple,
+            molframe::BondOrder::Quadruple => Self::Quadruple,
+            molframe::BondOrder::Aromatic => Self::Aromatic,
+            molframe::BondOrder::Polymeric => Self::Polymeric,
+            molframe::BondOrder::Unknown => Self::Unknown,
         }
     }
 }
 
-impl From<PyBondOrder> for pdbiox::BondOrder {
+impl From<PyBondOrder> for molframe::BondOrder {
     fn from(value: PyBondOrder) -> Self {
         match value {
             PyBondOrder::Single => Self::Single,
@@ -263,20 +263,20 @@ impl From<PyBondOrder> for pdbiox::BondOrder {
     }
 }
 
-impl From<pdbiox::BondProvenance> for PyBondProvenance {
-    fn from(value: pdbiox::BondProvenance) -> Self {
+impl From<molframe::BondProvenance> for PyBondProvenance {
+    fn from(value: molframe::BondProvenance) -> Self {
         match value {
-            pdbiox::BondProvenance::File => Self::File,
-            pdbiox::BondProvenance::ChemicalComponentDictionary => {
+            molframe::BondProvenance::File => Self::File,
+            molframe::BondProvenance::ChemicalComponentDictionary => {
                 Self::ChemicalComponentDictionary
             }
-            pdbiox::BondProvenance::InferredDistance => Self::InferredDistance,
-            pdbiox::BondProvenance::User => Self::User,
+            molframe::BondProvenance::InferredDistance => Self::InferredDistance,
+            molframe::BondProvenance::User => Self::User,
         }
     }
 }
 
-impl From<PyBondProvenance> for pdbiox::BondProvenance {
+impl From<PyBondProvenance> for molframe::BondProvenance {
     fn from(value: PyBondProvenance) -> Self {
         match value {
             PyBondProvenance::File => Self::File,

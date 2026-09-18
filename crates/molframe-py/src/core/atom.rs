@@ -6,7 +6,7 @@ use crate::errors::index_error;
 use crate::hierarchy::PyResidue;
 use crate::index::{PyAtomIndex, normalise_index};
 use crate::structure::PyStructure;
-use pdbiox::{AtomIndex, AtomRef, Structure};
+use molframe::{AtomIndex, AtomRef, Structure};
 use pyo3::prelude::*;
 
 #[pyclass(name = "Atoms", frozen, skip_from_py_object)]
@@ -156,7 +156,7 @@ impl PyAtom {
         self.inner
             .atom(self.index)
             .and_then(AtomRef::element)
-            .map(pdbiox::Element::symbol)
+            .map(molframe::Element::symbol)
     }
 
     #[getter]

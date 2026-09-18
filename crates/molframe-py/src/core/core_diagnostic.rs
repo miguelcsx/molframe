@@ -9,16 +9,16 @@ pub(crate) enum PyKind {
     Warning,
 }
 
-impl From<pdbiox::Kind> for PyKind {
-    fn from(value: pdbiox::Kind) -> Self {
+impl From<molframe::Kind> for PyKind {
+    fn from(value: molframe::Kind) -> Self {
         match value {
-            pdbiox::Kind::Error => Self::Error,
-            pdbiox::Kind::Warning => Self::Warning,
+            molframe::Kind::Error => Self::Error,
+            molframe::Kind::Warning => Self::Warning,
         }
     }
 }
 
-impl From<PyKind> for pdbiox::Kind {
+impl From<PyKind> for molframe::Kind {
     fn from(value: PyKind) -> Self {
         match value {
             PyKind::Error => Self::Error,
@@ -37,19 +37,19 @@ pub(crate) enum PySeverity {
     Breaking,
 }
 
-impl From<pdbiox::Severity> for PySeverity {
-    fn from(value: pdbiox::Severity) -> Self {
+impl From<molframe::Severity> for PySeverity {
+    fn from(value: molframe::Severity) -> Self {
         match value {
-            pdbiox::Severity::Info => Self::Info,
-            pdbiox::Severity::Loose => Self::Loose,
-            pdbiox::Severity::Strict => Self::Strict,
-            pdbiox::Severity::Invalidating => Self::Invalidating,
-            pdbiox::Severity::Breaking => Self::Breaking,
+            molframe::Severity::Info => Self::Info,
+            molframe::Severity::Loose => Self::Loose,
+            molframe::Severity::Strict => Self::Strict,
+            molframe::Severity::Invalidating => Self::Invalidating,
+            molframe::Severity::Breaking => Self::Breaking,
         }
     }
 }
 
-impl From<PySeverity> for pdbiox::Severity {
+impl From<PySeverity> for molframe::Severity {
     fn from(value: PySeverity) -> Self {
         match value {
             PySeverity::Info => Self::Info,
@@ -64,12 +64,12 @@ impl From<PySeverity> for pdbiox::Severity {
 #[pymethods]
 impl PySeverity {
     fn is_error(&self, strictness: PyStrictness) -> bool {
-        pdbiox::Severity::from(*self).is_error(strictness.into())
+        molframe::Severity::from(*self).is_error(strictness.into())
     }
 
     #[getter]
     fn label(&self) -> &'static str {
-        pdbiox::Severity::from(*self).label()
+        molframe::Severity::from(*self).label()
     }
 }
 
@@ -81,7 +81,7 @@ pub(crate) enum PyStrictness {
     Loose,
 }
 
-impl From<PyStrictness> for pdbiox::Strictness {
+impl From<PyStrictness> for molframe::Strictness {
     fn from(value: PyStrictness) -> Self {
         match value {
             PyStrictness::Strict => Self::Strict,
@@ -104,16 +104,16 @@ pub(crate) enum PyClass {
     Internal,
 }
 
-impl From<pdbiox::Class> for PyClass {
-    fn from(value: pdbiox::Class) -> Self {
+impl From<molframe::Class> for PyClass {
+    fn from(value: molframe::Class) -> Self {
         match value {
-            pdbiox::Class::Syntax => Self::Syntax,
-            pdbiox::Class::Schema => Self::Schema,
-            pdbiox::Class::Consistency => Self::Consistency,
-            pdbiox::Class::Conversion => Self::Conversion,
-            pdbiox::Class::Geometry => Self::Geometry,
-            pdbiox::Class::Policy => Self::Policy,
-            pdbiox::Class::Resource => Self::Resource,
+            molframe::Class::Syntax => Self::Syntax,
+            molframe::Class::Schema => Self::Schema,
+            molframe::Class::Consistency => Self::Consistency,
+            molframe::Class::Conversion => Self::Conversion,
+            molframe::Class::Geometry => Self::Geometry,
+            molframe::Class::Policy => Self::Policy,
+            molframe::Class::Resource => Self::Resource,
             _ => Self::Internal,
         }
     }
@@ -121,18 +121,18 @@ impl From<pdbiox::Class> for PyClass {
 
 #[pyclass(name = "Code", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct PyCode(pub(crate) pdbiox::Code);
+pub(crate) struct PyCode(pub(crate) molframe::Code);
 
 #[pymethods]
 impl PyCode {
     #[new]
     fn new(kind: PyKind, number: u16) -> Self {
-        Self(pdbiox::Code::new(kind.into(), number))
+        Self(molframe::Code::new(kind.into(), number))
     }
 
     #[staticmethod]
     fn from_text(text: &str) -> Option<Self> {
-        let text = match text.strip_prefix("PDBIOX-") {
+        let text = match text.strip_prefix("MOLFRAME-") {
             Some(value) => value,
             None => text,
         };
@@ -148,7 +148,7 @@ impl PyCode {
 
     #[staticmethod]
     fn registered() -> Vec<Self> {
-        pdbiox::Code::registered().map(Self).collect()
+        molframe::Code::registered().map(Self).collect()
     }
 
     #[getter]
@@ -211,8 +211,8 @@ pub(crate) struct PyContextItem {
     pub(crate) value: String,
 }
 
-impl From<pdbiox::ContextItem> for PyContextItem {
-    fn from(value: pdbiox::ContextItem) -> Self {
+impl From<molframe::ContextItem> for PyContextItem {
+    fn from(value: molframe::ContextItem) -> Self {
         Self {
             label: value.label().to_owned(),
             value: value.value().to_owned(),
@@ -240,7 +240,7 @@ impl PyRendered {
 
 #[pyclass(name = "Diagnostics", from_py_object)]
 #[derive(Clone, Debug, Default)]
-pub(crate) struct PyDiagnostics(pub(crate) pdbiox::Diagnostics);
+pub(crate) struct PyDiagnostics(pub(crate) molframe::Diagnostics);
 
 #[pymethods]
 impl PyDiagnostics {
@@ -248,9 +248,9 @@ impl PyDiagnostics {
     #[pyo3(signature = (capacity=0))]
     fn new(capacity: usize) -> Self {
         if capacity == 0 {
-            Self(pdbiox::Diagnostics::new())
+            Self(molframe::Diagnostics::new())
         } else {
-            Self(pdbiox::Diagnostics::with_capacity(capacity))
+            Self(molframe::Diagnostics::with_capacity(capacity))
         }
     }
 
@@ -290,26 +290,26 @@ impl PyDiagnostics {
 
 impl PyRendered {
     pub(crate) fn from_diagnostic(
-        diagnostic: &pdbiox::Diagnostic,
+        diagnostic: &molframe::Diagnostic,
         source: Option<&[u8]>,
         origin: Option<&str>,
         color: bool,
     ) -> Self {
         let rendered = match (source, origin) {
-            (Some(source), Some(origin)) => pdbiox::Rendered::new(diagnostic)
+            (Some(source), Some(origin)) => molframe::Rendered::new(diagnostic)
                 .with_source(source)
                 .with_origin(origin)
                 .with_color(color)
                 .to_string(),
-            (Some(source), None) => pdbiox::Rendered::new(diagnostic)
+            (Some(source), None) => molframe::Rendered::new(diagnostic)
                 .with_source(source)
                 .with_color(color)
                 .to_string(),
-            (None, Some(origin)) => pdbiox::Rendered::new(diagnostic)
+            (None, Some(origin)) => molframe::Rendered::new(diagnostic)
                 .with_origin(origin)
                 .with_color(color)
                 .to_string(),
-            (None, None) => pdbiox::Rendered::new(diagnostic)
+            (None, None) => molframe::Rendered::new(diagnostic)
                 .with_color(color)
                 .to_string(),
         };

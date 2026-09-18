@@ -2,7 +2,7 @@ use super::PyResidueAtoms;
 use crate::atom::PyAtom;
 use crate::errors::{index_error, key_error};
 use crate::index::normalise_index;
-use pdbiox::AtomRef;
+use molframe::AtomRef;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 

@@ -23,7 +23,7 @@ pub(crate) fn checked_range(start: u32, end: u32) -> PyResult<Range<u32>> {
 
 #[pyclass(name = "ModelTable", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyModelTable(pub(crate) pdbiox::core::topology::ModelTable);
+pub(crate) struct PyModelTable(pub(crate) molframe::core::topology::ModelTable);
 
 #[pyclass(name = "ChainRecord", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
@@ -36,7 +36,7 @@ pub(crate) struct PyChainRecord {
 
 #[pyclass(name = "ChainTable", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyChainTable(pub(crate) pdbiox::core::topology::ChainTable);
+pub(crate) struct PyChainTable(pub(crate) molframe::core::topology::ChainTable);
 
 #[pyclass(name = "ResidueRecord", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
@@ -51,17 +51,17 @@ pub(crate) struct PyResidueRecord {
 
 #[pyclass(name = "ResidueTable", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyResidueTable(pub(crate) pdbiox::core::topology::ResidueTable);
+pub(crate) struct PyResidueTable(pub(crate) molframe::core::topology::ResidueTable);
 
 #[pyclass(name = "EntityTable", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyEntityTable(pub(crate) pdbiox::core::topology::EntityTable);
+pub(crate) struct PyEntityTable(pub(crate) molframe::core::topology::EntityTable);
 
 #[pymethods]
 impl PyModelTable {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::core::topology::ModelTable::default())
+        Self(molframe::core::topology::ModelTable::default())
     }
 
     fn __len__(&self) -> usize {
@@ -136,7 +136,7 @@ impl PyChainRecord {
 impl PyChainTable {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::core::topology::ChainTable::default())
+        Self(molframe::core::topology::ChainTable::default())
     }
 
     fn __len__(&self) -> usize {
@@ -153,7 +153,7 @@ impl PyChainTable {
         first_residue: u32,
         end_residue: u32,
     ) -> PyResult<PyChainIndex> {
-        let native = pdbiox::core::topology::ChainRecord {
+        let native = molframe::core::topology::ChainRecord {
             label_asym_id: record.label_asym_id.0,
             auth_asym_id: record.auth_asym_id.0,
             entity: record.entity.0,
@@ -266,7 +266,7 @@ impl PyResidueRecord {
 impl PyResidueTable {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::core::topology::ResidueTable::default())
+        Self(molframe::core::topology::ResidueTable::default())
     }
 
     fn __len__(&self) -> usize {
@@ -283,7 +283,7 @@ impl PyResidueTable {
         first_atom: u32,
         end_atom: u32,
     ) -> PyResult<PyResidueIndex> {
-        let native = pdbiox::core::topology::ResidueRecord {
+        let native = molframe::core::topology::ResidueRecord {
             label_comp_id: record.label_comp_id.0,
             auth_comp_id: record.auth_comp_id.0,
             label_seq_id: record.label_seq_id.0,
@@ -345,7 +345,7 @@ impl PyResidueTable {
 impl PyEntityTable {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::core::topology::EntityTable::default())
+        Self(molframe::core::topology::EntityTable::default())
     }
 
     fn __len__(&self) -> usize {

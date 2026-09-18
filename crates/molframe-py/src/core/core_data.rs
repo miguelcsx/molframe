@@ -18,33 +18,33 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "CoordinateStore", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyCoordinateStore(pub(crate) pdbiox::CoordinateStore);
+pub(crate) struct PyCoordinateStore(pub(crate) molframe::CoordinateStore);
 
 #[pyclass(name = "ExtensionStore", from_py_object)]
 #[derive(Clone, Debug, Default)]
-pub(crate) struct PyExtensionStore(pub(crate) pdbiox::ExtensionStore);
+pub(crate) struct PyExtensionStore(pub(crate) molframe::ExtensionStore);
 
 #[pyclass(name = "StructureData", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyStructureData(pub(crate) pdbiox::StructureData);
+pub(crate) struct PyStructureData(pub(crate) molframe::StructureData);
 
 #[pymethods]
 impl PyCoordinateStore {
     #[staticmethod]
     fn single(block: PyCoordinateBlock) -> Self {
-        Self(pdbiox::CoordinateStore::Single(block.0))
+        Self(molframe::CoordinateStore::Single(block.0))
     }
 
     #[staticmethod]
     fn dense(frames: Vec<PyCoordinateBlock>) -> Self {
-        Self(pdbiox::CoordinateStore::Dense {
+        Self(molframe::CoordinateStore::Dense {
             frames: frames.into_iter().map(|frame| frame.0).collect(),
         })
     }
 
     #[staticmethod]
     fn ragged(py: Python<'_>, models: Vec<Py<PyStructure>>) -> Self {
-        Self(pdbiox::CoordinateStore::Ragged {
+        Self(molframe::CoordinateStore::Ragged {
             models: models
                 .into_iter()
                 .map(|model| model.borrow(py).structure().clone())
@@ -75,7 +75,7 @@ impl PyCoordinateStore {
 impl PyExtensionStore {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::ExtensionStore::default())
+        Self(molframe::ExtensionStore::default())
     }
 
     fn clear(&mut self) {
@@ -99,7 +99,7 @@ impl PyExtensionStore {
 impl PyStructureData {
     #[staticmethod]
     fn empty() -> Self {
-        Self(pdbiox::StructureData::empty())
+        Self(molframe::StructureData::empty())
     }
 
     fn atom_count(&self) -> u32 {
@@ -161,7 +161,7 @@ impl PyStructureData {
     }
 
     fn to_structure(&self) -> PyStructure {
-        PyStructure::new(pdbiox::Structure::new(self.0.clone()))
+        PyStructure::new(molframe::Structure::new(self.0.clone()))
     }
 
     fn atom(&self, index: PyAtomIndex) -> Option<PyAtom> {
@@ -172,7 +172,7 @@ impl PyStructureData {
     fn atoms(&self) -> Vec<PyAtom> {
         let structure = self.to_structure();
         (0..structure.structure().atom_count())
-            .filter_map(|index| atom_handle(structure.structure(), pdbiox::AtomIndex::new(index)))
+            .filter_map(|index| atom_handle(structure.structure(), molframe::AtomIndex::new(index)))
             .collect()
     }
 
@@ -186,7 +186,7 @@ impl PyStructureData {
         (0..structure.structure().model_count())
             .filter_map(|index| {
                 u32::try_from(index).ok().and_then(|index| {
-                    model_handle(structure.structure(), pdbiox::ModelIndex::new(index))
+                    model_handle(structure.structure(), molframe::ModelIndex::new(index))
                 })
             })
             .collect()
@@ -202,7 +202,7 @@ impl PyStructureData {
         (0..structure.structure().chain_count())
             .filter_map(|index| {
                 u32::try_from(index).ok().and_then(|index| {
-                    chain_handle(structure.structure(), pdbiox::ChainIndex::new(index))
+                    chain_handle(structure.structure(), molframe::ChainIndex::new(index))
                 })
             })
             .collect()
@@ -227,7 +227,7 @@ impl PyStructureData {
         (0..structure.structure().residue_count())
             .filter_map(|index| {
                 u32::try_from(index).ok().and_then(|index| {
-                    residue_handle(structure.structure(), pdbiox::ResidueIndex::new(index))
+                    residue_handle(structure.structure(), molframe::ResidueIndex::new(index))
                 })
             })
             .collect()

@@ -18,7 +18,7 @@ pub(crate) enum PyMmtfOptionalField {
     EntityList,
 }
 
-impl From<PyMmtfOptionalField> for pdbiox::pdb::MmtfOptionalField {
+impl From<PyMmtfOptionalField> for molframe::pdb::MmtfOptionalField {
     fn from(value: PyMmtfOptionalField) -> Self {
         match value {
             PyMmtfOptionalField::BFactor => Self::BFactor,
@@ -33,17 +33,17 @@ impl From<PyMmtfOptionalField> for pdbiox::pdb::MmtfOptionalField {
     }
 }
 
-impl From<pdbiox::pdb::MmtfOptionalField> for PyMmtfOptionalField {
-    fn from(value: pdbiox::pdb::MmtfOptionalField) -> Self {
+impl From<molframe::pdb::MmtfOptionalField> for PyMmtfOptionalField {
+    fn from(value: molframe::pdb::MmtfOptionalField) -> Self {
         match value {
-            pdbiox::pdb::MmtfOptionalField::BFactor => Self::BFactor,
-            pdbiox::pdb::MmtfOptionalField::Occupancy => Self::Occupancy,
-            pdbiox::pdb::MmtfOptionalField::AtomId => Self::AtomId,
-            pdbiox::pdb::MmtfOptionalField::AltLoc => Self::AltLoc,
-            pdbiox::pdb::MmtfOptionalField::InsCode => Self::InsCode,
-            pdbiox::pdb::MmtfOptionalField::SequenceIndex => Self::SequenceIndex,
-            pdbiox::pdb::MmtfOptionalField::ChainName => Self::ChainName,
-            pdbiox::pdb::MmtfOptionalField::EntityList => Self::EntityList,
+            molframe::pdb::MmtfOptionalField::BFactor => Self::BFactor,
+            molframe::pdb::MmtfOptionalField::Occupancy => Self::Occupancy,
+            molframe::pdb::MmtfOptionalField::AtomId => Self::AtomId,
+            molframe::pdb::MmtfOptionalField::AltLoc => Self::AltLoc,
+            molframe::pdb::MmtfOptionalField::InsCode => Self::InsCode,
+            molframe::pdb::MmtfOptionalField::SequenceIndex => Self::SequenceIndex,
+            molframe::pdb::MmtfOptionalField::ChainName => Self::ChainName,
+            molframe::pdb::MmtfOptionalField::EntityList => Self::EntityList,
         }
     }
 }
@@ -83,8 +83,8 @@ impl PyMmtfGroupMetadata {
     }
 }
 
-impl From<pdbiox::pdb::MmtfGroupMetadata> for PyMmtfGroupMetadata {
-    fn from(value: pdbiox::pdb::MmtfGroupMetadata) -> Self {
+impl From<molframe::pdb::MmtfGroupMetadata> for PyMmtfGroupMetadata {
+    fn from(value: molframe::pdb::MmtfGroupMetadata) -> Self {
         Self {
             name: value.name.into(),
             atom_names: value.atom_names.into_iter().map(Into::into).collect(),
@@ -97,7 +97,7 @@ impl From<pdbiox::pdb::MmtfGroupMetadata> for PyMmtfGroupMetadata {
     }
 }
 
-impl From<PyMmtfGroupMetadata> for pdbiox::pdb::MmtfGroupMetadata {
+impl From<PyMmtfGroupMetadata> for molframe::pdb::MmtfGroupMetadata {
     fn from(value: PyMmtfGroupMetadata) -> Self {
         Self {
             name: value.name.into(),
@@ -134,8 +134,8 @@ impl PyMmtfEntityMetadata {
     }
 }
 
-impl From<pdbiox::pdb::MmtfEntityMetadata> for PyMmtfEntityMetadata {
-    fn from(value: pdbiox::pdb::MmtfEntityMetadata) -> Self {
+impl From<molframe::pdb::MmtfEntityMetadata> for PyMmtfEntityMetadata {
+    fn from(value: molframe::pdb::MmtfEntityMetadata) -> Self {
         Self {
             description: value.description.into(),
             kind: value.kind.into(),
@@ -144,7 +144,7 @@ impl From<pdbiox::pdb::MmtfEntityMetadata> for PyMmtfEntityMetadata {
     }
 }
 
-impl From<PyMmtfEntityMetadata> for pdbiox::pdb::MmtfEntityMetadata {
+impl From<PyMmtfEntityMetadata> for molframe::pdb::MmtfEntityMetadata {
     fn from(value: PyMmtfEntityMetadata) -> Self {
         Self {
             description: value.description.into(),
@@ -186,8 +186,8 @@ impl PyMmtfMetadata {
     }
 }
 
-impl From<pdbiox::pdb::MmtfMetadata> for PyMmtfMetadata {
-    fn from(value: pdbiox::pdb::MmtfMetadata) -> Self {
+impl From<molframe::pdb::MmtfMetadata> for PyMmtfMetadata {
+    fn from(value: molframe::pdb::MmtfMetadata) -> Self {
         Self {
             space_group: value.space_group.map(Into::into),
             groups: value.groups.into_iter().map(Into::into).collect(),
@@ -197,7 +197,7 @@ impl From<pdbiox::pdb::MmtfMetadata> for PyMmtfMetadata {
     }
 }
 
-impl From<PyMmtfMetadata> for pdbiox::pdb::MmtfMetadata {
+impl From<PyMmtfMetadata> for molframe::pdb::MmtfMetadata {
     fn from(value: PyMmtfMetadata) -> Self {
         Self {
             space_group: value.space_group.map(Into::into),
@@ -218,7 +218,7 @@ pub(crate) fn mmtf_metadata(py: Python<'_>, structure: &PyStructure) -> Option<P
         structure
             .structure()
             .extensions()
-            .get::<pdbiox::pdb::MmtfMetadata>(pdbiox::pdb::MMTF_METADATA_EXTENSION)
+            .get::<molframe::pdb::MmtfMetadata>(molframe::pdb::MMTF_METADATA_EXTENSION)
             .cloned()
             .map(Into::into)
     })
@@ -231,11 +231,11 @@ pub(crate) fn with_mmtf_metadata(
     metadata: PyMmtfMetadata,
 ) -> PyStructure {
     py.detach(move || -> PyStructure {
-        let metadata: pdbiox::pdb::MmtfMetadata = metadata.into();
+        let metadata: molframe::pdb::MmtfMetadata = metadata.into();
         PyStructure::new(
             structure
                 .structure()
-                .with_extension(pdbiox::pdb::MMTF_METADATA_EXTENSION, metadata),
+                .with_extension(molframe::pdb::MMTF_METADATA_EXTENSION, metadata),
         )
     })
 }
@@ -246,11 +246,11 @@ pub(crate) fn write_mmtf_with_metadata(
     structure: &PyStructure,
     metadata: PyMmtfMetadata,
 ) -> PyResult<Vec<u8>> {
-    let metadata: pdbiox::pdb::MmtfMetadata = metadata.into();
+    let metadata: molframe::pdb::MmtfMetadata = metadata.into();
     let structure = structure
         .structure()
-        .with_extension(pdbiox::pdb::MMTF_METADATA_EXTENSION, metadata);
-    py.detach(move || pdbiox::write_mmtf(&structure))
+        .with_extension(molframe::pdb::MMTF_METADATA_EXTENSION, metadata);
+    py.detach(move || molframe::write_mmtf(&structure))
         .map_err(|findings| read_error(py, &findings))
 }
 

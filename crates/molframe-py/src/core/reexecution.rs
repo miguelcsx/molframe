@@ -9,7 +9,7 @@ use pyo3::types::PyBytes;
 #[pyclass(name = "ReexecutionEnvironment", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyReexecutionEnvironment {
-    pdbiox: String,
+    molframe: String,
     schema: Option<String>,
     component: Option<String>,
 }
@@ -17,19 +17,19 @@ pub(crate) struct PyReexecutionEnvironment {
 #[pymethods]
 impl PyReexecutionEnvironment {
     #[new]
-    #[pyo3(signature = (*, pdbiox_version=None, schema_version=None, component_version=None))]
+    #[pyo3(signature = (*, molframe_version=None, schema_version=None, component_version=None))]
     fn new(
-        pdbiox_version: Option<String>,
+        molframe_version: Option<String>,
         schema_version: Option<String>,
         component_version: Option<String>,
     ) -> Self {
-        let current = pdbiox::core::contract::ReexecutionEnvironment::current();
-        let pdbiox_version = match pdbiox_version {
+        let current = molframe::core::contract::ReexecutionEnvironment::current();
+        let molframe_version = match molframe_version {
             Some(value) => value,
-            None => current.pdbiox_version.to_owned(),
+            None => current.molframe_version.to_owned(),
         };
         Self {
-            pdbiox: pdbiox_version,
+            molframe: molframe_version,
             schema: schema_version,
             component: component_version,
         }
@@ -41,8 +41,8 @@ impl PyReexecutionEnvironment {
     }
 
     #[getter]
-    fn pdbiox_version(&self) -> &str {
-        &self.pdbiox
+    fn molframe_version(&self) -> &str {
+        &self.molframe
     }
 
     #[getter]
@@ -57,9 +57,9 @@ impl PyReexecutionEnvironment {
 }
 
 impl PyReexecutionEnvironment {
-    fn native(&self) -> pdbiox::core::contract::ReexecutionEnvironment<'_> {
-        pdbiox::core::contract::ReexecutionEnvironment {
-            pdbiox_version: &self.pdbiox,
+    fn native(&self) -> molframe::core::contract::ReexecutionEnvironment<'_> {
+        molframe::core::contract::ReexecutionEnvironment {
+            molframe_version: &self.molframe,
             schema_version: self.schema.as_deref(),
             component_version: self.component.as_deref(),
         }
@@ -95,7 +95,7 @@ pub(crate) fn reexecute_from_provenance(
     run: Py<PyAny>,
 ) -> PyResult<PyReexecution> {
     let bytes = input.as_bytes();
-    let native = pdbiox::core::contract::reexecute_from_provenance(
+    let native = molframe::core::contract::reexecute_from_provenance(
         &provenance.inner,
         bytes,
         environment.native(),

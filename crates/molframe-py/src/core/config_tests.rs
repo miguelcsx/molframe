@@ -21,7 +21,7 @@ fn policy_overrides_round_trip_into_the_native_policy_parser() {
     };
     let policy = overrides
         .into_inner()
-        .apply_to(pdbiox::AnalysisPolicy::default())
+        .apply_to(molframe::AnalysisPolicy::default())
         .expect("known policy vocabulary");
-    assert_eq!(policy.identifiers, pdbiox::Namespace::Auth);
+    assert_eq!(policy.identifiers, molframe::Namespace::Auth);
 }

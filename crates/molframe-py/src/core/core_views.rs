@@ -11,13 +11,13 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "StructureView", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyStructureView(pub(crate) pdbiox::StructureView);
+pub(crate) struct PyStructureView(pub(crate) molframe::StructureView);
 
 #[pymethods]
 impl PyStructureView {
     #[staticmethod]
     fn new(structure: &PyStructure, selection: &PySelection) -> Self {
-        Self(pdbiox::StructureView::new(
+        Self(molframe::StructureView::new(
             structure.structure(),
             selection.inner.clone(),
         ))

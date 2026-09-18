@@ -9,19 +9,19 @@ create_exception!(_native, DictionaryFull, PyValueError);
 
 #[pyclass(name = "Position", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct PyPosition(pub(crate) pdbiox::Position);
+pub(crate) struct PyPosition(pub(crate) molframe::Position);
 
 #[pymethods]
 impl PyPosition {
     #[new]
     fn new(byte_offset: u64, line: u64, column: u64) -> Self {
-        Self(pdbiox::Position::new(byte_offset, line, column))
+        Self(molframe::Position::new(byte_offset, line, column))
     }
 
     #[classattr]
     #[pyo3(name = "START")]
     fn start() -> Self {
-        Self(pdbiox::Position::START)
+        Self(molframe::Position::START)
     }
 
     #[getter]
@@ -57,18 +57,18 @@ impl PyPosition {
 
 #[pyclass(name = "ByteSpan", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct PyByteSpan(pub(crate) pdbiox::ByteSpan);
+pub(crate) struct PyByteSpan(pub(crate) molframe::ByteSpan);
 
 #[pymethods]
 impl PyByteSpan {
     #[new]
     fn new(start: PyPosition, end: u64) -> Self {
-        Self(pdbiox::ByteSpan::new(start.0, end))
+        Self(molframe::ByteSpan::new(start.0, end))
     }
 
     #[staticmethod]
     fn empty(at: PyPosition) -> Self {
-        Self(pdbiox::ByteSpan::empty(at.0))
+        Self(molframe::ByteSpan::empty(at.0))
     }
 
     #[getter]
@@ -106,24 +106,24 @@ impl PyByteSpan {
 
 #[pyclass(name = "CoordinateGeneration", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct PyCoordinateGeneration(pub(crate) pdbiox::CoordinateGeneration);
+pub(crate) struct PyCoordinateGeneration(pub(crate) molframe::CoordinateGeneration);
 
 #[pymethods]
 impl PyCoordinateGeneration {
     #[new]
     fn new(value: u64) -> Self {
-        Self(pdbiox::CoordinateGeneration::from_raw(value))
+        Self(molframe::CoordinateGeneration::from_raw(value))
     }
 
     #[staticmethod]
     fn from_raw(value: u64) -> Self {
-        Self(pdbiox::CoordinateGeneration::from_raw(value))
+        Self(molframe::CoordinateGeneration::from_raw(value))
     }
 
     #[classattr]
     #[pyo3(name = "INITIAL")]
     fn initial() -> Self {
-        Self(pdbiox::CoordinateGeneration::INITIAL)
+        Self(molframe::CoordinateGeneration::INITIAL)
     }
 
     #[getter]
@@ -150,24 +150,24 @@ impl PyCoordinateGeneration {
 
 #[pyclass(name = "Aabb", eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct PyAabb(pub(crate) pdbiox::Aabb);
+pub(crate) struct PyAabb(pub(crate) molframe::Aabb);
 
 #[pymethods]
 impl PyAabb {
     #[new]
     fn new(min: [f32; 3], max: [f32; 3]) -> Self {
-        Self(pdbiox::Aabb { min, max })
+        Self(molframe::Aabb { min, max })
     }
 
     #[staticmethod]
     fn empty() -> Self {
-        Self(pdbiox::Aabb::EMPTY)
+        Self(molframe::Aabb::EMPTY)
     }
 
     #[classattr]
     #[pyo3(name = "EMPTY")]
     fn empty_value() -> Self {
-        Self(pdbiox::Aabb::EMPTY)
+        Self(molframe::Aabb::EMPTY)
     }
 
     #[getter]
@@ -199,18 +199,18 @@ impl PyAabb {
 
 #[pyclass(name = "SymbolId", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct PySymbolId(pub(crate) pdbiox::SymbolId);
+pub(crate) struct PySymbolId(pub(crate) molframe::SymbolId);
 
 #[pymethods]
 impl PySymbolId {
     #[new]
     fn new(value: u32) -> Self {
-        Self(pdbiox::SymbolId::from_raw(value))
+        Self(molframe::SymbolId::from_raw(value))
     }
 
     #[staticmethod]
     fn from_raw(value: u32) -> Self {
-        Self(pdbiox::SymbolId::from_raw(value))
+        Self(molframe::SymbolId::from_raw(value))
     }
 
     #[getter]
@@ -241,29 +241,29 @@ impl PySymbolId {
 
 #[pyclass(name = "AltId", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct PyAltId(pub(crate) pdbiox::AltId);
+pub(crate) struct PyAltId(pub(crate) molframe::AltId);
 
 #[pymethods]
 impl PyAltId {
     #[new]
     fn new(value: u32) -> Self {
-        Self(pdbiox::AltId::from_raw(value))
+        Self(molframe::AltId::from_raw(value))
     }
 
     #[staticmethod]
     fn from_raw(value: u32) -> Self {
-        Self(pdbiox::AltId::from_raw(value))
+        Self(molframe::AltId::from_raw(value))
     }
 
     #[classattr]
     #[pyo3(name = "BLANK")]
     fn blank() -> Self {
-        Self(pdbiox::AltId::BLANK)
+        Self(molframe::AltId::BLANK)
     }
 
     #[staticmethod]
     fn labelled(symbol: PySymbolId) -> Option<Self> {
-        pdbiox::AltId::labelled(symbol.0).map(Self)
+        molframe::AltId::labelled(symbol.0).map(Self)
     }
 
     #[getter]
@@ -290,7 +290,7 @@ impl PyAltId {
 
 #[pyclass(name = "OptionalI32", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct PyOptionalI32(pub(crate) pdbiox::core::OptionalI32);
+pub(crate) struct PyOptionalI32(pub(crate) molframe::core::OptionalI32);
 
 #[pymethods]
 impl PyOptionalI32 {
@@ -298,20 +298,20 @@ impl PyOptionalI32 {
     #[pyo3(signature = (value=None))]
     pub(crate) fn new(value: Option<i32>) -> Self {
         Self(value.map_or(
-            pdbiox::core::OptionalI32::NONE,
-            pdbiox::core::OptionalI32::some,
+            molframe::core::OptionalI32::NONE,
+            molframe::core::OptionalI32::some,
         ))
     }
 
     #[staticmethod]
     fn some(value: i32) -> Self {
-        Self(pdbiox::core::OptionalI32::some(value))
+        Self(molframe::core::OptionalI32::some(value))
     }
 
     #[classattr]
     #[pyo3(name = "NONE")]
     fn none() -> Self {
-        Self(pdbiox::core::OptionalI32::NONE)
+        Self(molframe::core::OptionalI32::NONE)
     }
 
     fn get(&self) -> Option<i32> {
@@ -329,27 +329,27 @@ impl PyOptionalI32 {
 
 #[pyclass(name = "OptionalSymbol", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct PyOptionalSymbol(pub(crate) pdbiox::core::OptionalSymbol);
+pub(crate) struct PyOptionalSymbol(pub(crate) molframe::core::OptionalSymbol);
 
 #[pymethods]
 impl PyOptionalSymbol {
     #[new]
     #[pyo3(signature = (value=None))]
     pub(crate) fn new(value: Option<PySymbolId>) -> Self {
-        Self(value.map_or(pdbiox::core::OptionalSymbol::NONE, |value| {
-            pdbiox::core::OptionalSymbol::some(value.0)
+        Self(value.map_or(molframe::core::OptionalSymbol::NONE, |value| {
+            molframe::core::OptionalSymbol::some(value.0)
         }))
     }
 
     #[staticmethod]
     fn some(value: PySymbolId) -> Self {
-        Self(pdbiox::core::OptionalSymbol::some(value.0))
+        Self(molframe::core::OptionalSymbol::some(value.0))
     }
 
     #[classattr]
     #[pyo3(name = "NONE")]
     fn none() -> Self {
-        Self(pdbiox::core::OptionalSymbol::NONE)
+        Self(molframe::core::OptionalSymbol::NONE)
     }
 
     fn get(&self) -> Option<PySymbolId> {
@@ -367,24 +367,24 @@ impl PyOptionalSymbol {
 
 #[pyclass(name = "Interner", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyInterner(pub(crate) pdbiox::core::Interner);
+pub(crate) struct PyInterner(pub(crate) molframe::core::Interner);
 
 #[pymethods]
 impl PyInterner {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::core::Interner::new())
+        Self(molframe::core::Interner::new())
     }
 
     #[classattr]
     #[pyo3(name = "DEFAULT_LIMIT")]
     fn default_limit() -> u32 {
-        pdbiox::core::Interner::DEFAULT_LIMIT
+        molframe::core::Interner::DEFAULT_LIMIT
     }
 
     #[staticmethod]
     fn with_capacity(identifiers: usize) -> Self {
-        Self(pdbiox::core::Interner::with_capacity(identifiers))
+        Self(molframe::core::Interner::with_capacity(identifiers))
     }
 
     fn with_limit(&self, limit: u32) -> Self {

@@ -3,7 +3,7 @@
 use crate::analysis::PyMissingResidue;
 use crate::hierarchy::PyChain;
 use crate::structure::PyStructure;
-use pdbiox::{ChainSequenceExt, EntityKind, PolymerKind};
+use molframe::{ChainSequenceExt, EntityKind, PolymerKind};
 use pyo3::prelude::*;
 
 #[pyclass(name = "EntityKind", frozen, eq, eq_int, from_py_object)]
@@ -196,7 +196,7 @@ impl PyStructure {
         self.structure()
             .data()
             .extensions
-            .get::<pdbiox::SequenceReferences>(pdbiox::SEQUENCE_REFERENCES_EXTENSION)
+            .get::<molframe::SequenceReferences>(molframe::SEQUENCE_REFERENCES_EXTENSION)
             .cloned()
             .map(Into::into)
     }
@@ -206,8 +206,8 @@ impl PyStructure {
 impl PyChain {
     fn entity(&self) -> Option<u32> {
         self.inner_chain()
-            .and_then(pdbiox::ChainRef::entity)
-            .map(pdbiox::EntityIndex::get)
+            .and_then(molframe::ChainRef::entity)
+            .map(molframe::EntityIndex::get)
     }
 
     fn entity_kind(&self) -> PyEntityKind {
@@ -291,13 +291,13 @@ impl PyChain {
 }
 
 impl PyChain {
-    fn inner_chain(&self) -> Option<pdbiox::ChainRef<'_>> {
+    fn inner_chain(&self) -> Option<molframe::ChainRef<'_>> {
         self.inner.chain(self.index)
     }
 }
 
-impl From<pdbiox::EntryMetadata> for PyEntryMetadata {
-    fn from(value: pdbiox::EntryMetadata) -> Self {
+impl From<molframe::EntryMetadata> for PyEntryMetadata {
+    fn from(value: molframe::EntryMetadata) -> Self {
         Self {
             id: value.id.map(str::into_string),
             title: value.title.map(str::into_string),
@@ -307,8 +307,8 @@ impl From<pdbiox::EntryMetadata> for PyEntryMetadata {
     }
 }
 
-impl From<pdbiox::ReferenceSequence> for PyReferenceSequence {
-    fn from(value: pdbiox::ReferenceSequence) -> Self {
+impl From<molframe::ReferenceSequence> for PyReferenceSequence {
+    fn from(value: molframe::ReferenceSequence) -> Self {
         Self {
             id: value.id.into_string(),
             entity_id: value.entity_id.into_string(),
@@ -320,8 +320,8 @@ impl From<pdbiox::ReferenceSequence> for PyReferenceSequence {
     }
 }
 
-impl From<pdbiox::ReferenceAlignment> for PyReferenceAlignment {
-    fn from(value: pdbiox::ReferenceAlignment) -> Self {
+impl From<molframe::ReferenceAlignment> for PyReferenceAlignment {
+    fn from(value: molframe::ReferenceAlignment) -> Self {
         Self {
             id: value.id.into_string(),
             reference_id: value.reference_id.into_string(),
@@ -336,8 +336,8 @@ impl From<pdbiox::ReferenceAlignment> for PyReferenceAlignment {
     }
 }
 
-impl From<pdbiox::SequenceReferences> for PySequenceReferences {
-    fn from(value: pdbiox::SequenceReferences) -> Self {
+impl From<molframe::SequenceReferences> for PySequenceReferences {
+    fn from(value: molframe::SequenceReferences) -> Self {
         Self {
             sequences: value.sequences.into_iter().map(Into::into).collect(),
             alignments: value.alignments.into_iter().map(Into::into).collect(),
@@ -345,8 +345,8 @@ impl From<pdbiox::SequenceReferences> for PySequenceReferences {
     }
 }
 
-impl From<pdbiox::SequenceMapping<'_>> for PySequenceMapping {
-    fn from(value: pdbiox::SequenceMapping<'_>) -> Self {
+impl From<molframe::SequenceMapping<'_>> for PySequenceMapping {
+    fn from(value: molframe::SequenceMapping<'_>) -> Self {
         Self {
             residue: value.residue.get(),
             canonical_position: value.canonical_position,
@@ -366,7 +366,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PySequenceMapping>()?;
     module.add(
         "SEQUENCE_REFERENCES_EXTENSION",
-        pdbiox::SEQUENCE_REFERENCES_EXTENSION,
+        molframe::SEQUENCE_REFERENCES_EXTENSION,
     )?;
     Ok(())
 }

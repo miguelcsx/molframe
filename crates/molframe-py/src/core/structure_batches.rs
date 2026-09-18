@@ -3,15 +3,17 @@
 use crate::core::execution::{PyBackpressure, PyBatchDemand, PyExecutionContext};
 use crate::io::PyReadOptions;
 use crate::structure::PyStructure;
+use molframe::core::{
+    Backpressure, Batch, BatchDemand, BatchLease, BatchSource, Presence, SymbolId,
+};
 use numpy::ndarray::Array2;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
-use pdbiox::core::{Backpressure, Batch, BatchDemand, BatchLease, BatchSource, Presence, SymbolId};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-type NativeLease = BatchLease<pdbiox::StructureBatch>;
+type NativeLease = BatchLease<molframe::StructureBatch>;
 
 #[pyclass(name = "StructureBatch", frozen, skip_from_py_object)]
 #[derive(Clone, Debug)]
@@ -161,7 +163,7 @@ impl PyStructureBatch {
 }
 
 impl PyStructureBatch {
-    fn batch(&self) -> &pdbiox::StructureBatch {
+    fn batch(&self) -> &molframe::StructureBatch {
         self.0.batch()
     }
 }
@@ -169,8 +171,8 @@ impl PyStructureBatch {
 #[pyclass(name = "StructureBatchReader", skip_from_py_object)]
 #[derive(Debug)]
 pub(crate) struct PyStructureBatchReader {
-    source: Mutex<pdbiox::StructureBatchReader>,
-    context: pdbiox::core::ExecutionContext,
+    source: Mutex<molframe::StructureBatchReader>,
+    context: molframe::core::ExecutionContext,
 }
 
 #[pymethods]
@@ -213,12 +215,12 @@ pub(crate) fn open_structure_batches(
     options: Option<&PyReadOptions>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyStructureBatchReader> {
-    let options = options.map_or_else(pdbiox::ReadOptions::new, |value| value.0.clone());
-    let context = context.map_or_else(pdbiox::core::ExecutionContext::default, |value| {
+    let options = options.map_or_else(molframe::ReadOptions::new, |value| value.0.clone());
+    let context = context.map_or_else(molframe::core::ExecutionContext::default, |value| {
         value.native()
     });
     let source = py
-        .detach(|| pdbiox::open_structure_batches(path, &options, &context))
+        .detach(|| molframe::open_structure_batches(path, &options, &context))
         .map_err(runtime_error)?;
     Ok(PyStructureBatchReader {
         source: Mutex::new(source),
@@ -237,7 +239,7 @@ pub(crate) fn collect_structure(
             .source
             .lock()
             .map_err(|_| PyRuntimeError::new_err("structure batch reader is poisoned"))?;
-        pdbiox::collect_structure(&mut *guard, &context).map_err(runtime_error)
+        molframe::collect_structure(&mut *guard, &context).map_err(runtime_error)
     })?;
     Ok(PyStructure::new(structure))
 }
@@ -246,12 +248,12 @@ fn default_demand() -> BatchDemand {
     BatchDemand::new(65_536, 16 * 1024 * 1024)
 }
 
-fn continuity_name(value: pdbiox::ContinuityLevel) -> &'static str {
+fn continuity_name(value: molframe::ContinuityLevel) -> &'static str {
     match value {
-        pdbiox::ContinuityLevel::None => "none",
-        pdbiox::ContinuityLevel::Model => "model",
-        pdbiox::ContinuityLevel::Chain => "chain",
-        pdbiox::ContinuityLevel::Residue => "residue",
+        molframe::ContinuityLevel::None => "none",
+        molframe::ContinuityLevel::Model => "model",
+        molframe::ContinuityLevel::Chain => "chain",
+        molframe::ContinuityLevel::Residue => "residue",
     }
 }
 

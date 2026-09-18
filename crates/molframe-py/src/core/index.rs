@@ -65,13 +65,13 @@ macro_rules! index_class {
     };
 }
 
-index_class!(PyAtomIndex, "AtomIndex", pdbiox::AtomIndex);
-index_class!(PyBondIndex, "BondIndex", pdbiox::BondIndex);
-index_class!(PyChainIndex, "ChainIndex", pdbiox::ChainIndex);
-index_class!(PyEntityIndex, "EntityIndex", pdbiox::EntityIndex);
-index_class!(PyInstanceId, "InstanceId", pdbiox::InstanceId);
-index_class!(PyModelIndex, "ModelIndex", pdbiox::ModelIndex);
-index_class!(PyResidueIndex, "ResidueIndex", pdbiox::ResidueIndex);
+index_class!(PyAtomIndex, "AtomIndex", molframe::AtomIndex);
+index_class!(PyBondIndex, "BondIndex", molframe::BondIndex);
+index_class!(PyChainIndex, "ChainIndex", molframe::ChainIndex);
+index_class!(PyEntityIndex, "EntityIndex", molframe::EntityIndex);
+index_class!(PyInstanceId, "InstanceId", molframe::InstanceId);
+index_class!(PyModelIndex, "ModelIndex", molframe::ModelIndex);
+index_class!(PyResidueIndex, "ResidueIndex", molframe::ResidueIndex);
 
 macro_rules! global_id_class {
     ($name:ident, $python:literal, $rust:path) => {
@@ -119,19 +119,19 @@ macro_rules! global_id_class {
     };
 }
 
-global_id_class!(PyDatasetId, "DatasetId", pdbiox::DatasetId);
-global_id_class!(PyChunkId, "ChunkId", pdbiox::ChunkId);
-global_id_class!(PyLogicalRow, "LogicalRow", pdbiox::LogicalRow);
+global_id_class!(PyDatasetId, "DatasetId", molframe::DatasetId);
+global_id_class!(PyChunkId, "ChunkId", molframe::ChunkId);
+global_id_class!(PyLogicalRow, "LogicalRow", molframe::LogicalRow);
 
 #[pyclass(name = "LocalRow", frozen, eq, from_py_object)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct PyLocalRow(pub(crate) pdbiox::LocalRow);
+pub(crate) struct PyLocalRow(pub(crate) molframe::LocalRow);
 
 #[pymethods]
 impl PyLocalRow {
     #[new]
     fn new(value: u32) -> Self {
-        Self(pdbiox::LocalRow::new(value))
+        Self(molframe::LocalRow::new(value))
     }
 
     #[getter]

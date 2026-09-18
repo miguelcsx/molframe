@@ -5,12 +5,12 @@ use pyo3::prelude::*;
 
 #[pyclass(frozen)]
 struct Retained64Owner {
-    values: pdbiox::core::execution::Retained<Vec<f64>>,
+    values: molframe::core::execution::Retained<Vec<f64>>,
 }
 
 pub(crate) fn retained_scalars(
     py: Python<'_>,
-    values: pdbiox::core::execution::Retained<Vec<f64>>,
+    values: molframe::core::execution::Retained<Vec<f64>>,
 ) -> PyResult<Bound<'_, PyArray1<f64>>> {
     let owner = Bound::new(py, Retained64Owner { values })?;
     let (length, pointer) = {

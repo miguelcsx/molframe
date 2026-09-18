@@ -8,26 +8,26 @@ use pyo3::prelude::*;
 
 #[pyclass(name = "ElementMask", from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyElementMask(pub(crate) pdbiox::core::ElementMask);
+pub(crate) struct PyElementMask(pub(crate) molframe::core::ElementMask);
 
 #[pyclass(name = "Extremes", from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyExtremes(pub(crate) pdbiox::core::Extremes);
+pub(crate) struct PyExtremes(pub(crate) molframe::core::Extremes);
 
 #[pyclass(name = "AtomChunkStats", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PyAtomChunkStats(pub(crate) pdbiox::core::AtomChunkStats);
+pub(crate) struct PyAtomChunkStats(pub(crate) molframe::core::AtomChunkStats);
 
 #[pyclass(name = "ParentMapping", from_py_object)]
 #[derive(Clone, Debug)]
-pub(crate) struct PyParentMapping(pub(crate) pdbiox::core::ParentMapping);
+pub(crate) struct PyParentMapping(pub(crate) molframe::core::ParentMapping);
 
 #[pymethods]
 impl PyElementMask {
     #[classattr]
     #[pyo3(name = "EMPTY")]
     fn empty() -> Self {
-        Self(pdbiox::core::ElementMask::EMPTY)
+        Self(molframe::core::ElementMask::EMPTY)
     }
 
     #[new]
@@ -64,7 +64,7 @@ impl PyElementMask {
 impl PyExtremes {
     #[new]
     fn new() -> Self {
-        Self(pdbiox::core::Extremes::default())
+        Self(molframe::core::Extremes::default())
     }
 
     fn observe(&mut self, value: f32) {
@@ -159,23 +159,23 @@ impl PyAtomChunkStats {
 impl PyParentMapping {
     #[staticmethod]
     fn offsets_only() -> Self {
-        Self(pdbiox::core::ParentMapping::OffsetsOnly)
+        Self(molframe::core::ParentMapping::OffsetsOnly)
     }
 
     #[staticmethod]
     fn explicit(parents: Vec<u32>) -> Self {
-        Self(pdbiox::core::ParentMapping::explicit(&parents))
+        Self(molframe::core::ParentMapping::explicit(&parents))
     }
 
     #[staticmethod]
     fn block_indexed(parents: Vec<u32>) -> Self {
-        Self(pdbiox::core::ParentMapping::block_indexed(&parents))
+        Self(molframe::core::ParentMapping::block_indexed(&parents))
     }
 
     #[classattr]
     #[pyo3(name = "DEFAULT_BLOCK")]
     fn default_block() -> u16 {
-        pdbiox::core::ParentMapping::DEFAULT_BLOCK
+        molframe::core::ParentMapping::DEFAULT_BLOCK
     }
 
     fn bytes(&self) -> usize {
@@ -199,6 +199,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyExtremes>()?;
     module.add_class::<PyAtomChunkStats>()?;
     module.add_class::<PyParentMapping>()?;
-    module.add("TARGET_CHUNK_ATOMS", pdbiox::core::TARGET_CHUNK_ATOMS)?;
+    module.add("TARGET_CHUNK_ATOMS", molframe::core::TARGET_CHUNK_ATOMS)?;
     Ok(())
 }
