@@ -155,7 +155,8 @@ fn rotation_vector(matrix: [[f64; 3]; 3], tolerance: f64) -> [f64; 3] {
 }
 
 fn half_turn_axis(matrix: [[f64; 3]; 3]) -> [f64; 3] {
-    let squared: [f64; 3] = std::array::from_fn(|axis| ((matrix[axis][axis] + 1.0) * 0.5).max(0.0));
+    let squared: [f64; 3] =
+        std::array::from_fn(|axis| f64::midpoint(matrix[axis][axis], 1.0).max(0.0));
     let largest = if squared[1] > squared[0] {
         usize::from(squared[2] > squared[1]) + 1
     } else if squared[2] > squared[0] {

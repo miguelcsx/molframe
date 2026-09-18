@@ -70,10 +70,7 @@ pub(super) fn difference_runs(mut left: RunCursor<'_>, mut right: RunCursor<'_>)
     let mut right_run = right.next();
     for left_run in &mut left {
         let mut cursor = left_run.start;
-        loop {
-            let Some(current) = right_run.as_ref() else {
-                break;
-            };
+        while let Some(current) = right_run.as_ref() {
             if current.end <= cursor {
                 right_run = right.next();
                 continue;

@@ -176,7 +176,7 @@ fn curvature_at(
         maximum,
         minimum,
         shape_index: 2.0 / PI * ratio.atan(),
-        curvedness: ((maximum * maximum + minimum * minimum) * 0.5).sqrt(),
+        curvedness: f64::midpoint(maximum * maximum, minimum * minimum).sqrt(),
         quality: if boundary {
             CurvatureQuality::Boundary
         } else {

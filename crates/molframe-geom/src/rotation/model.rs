@@ -353,9 +353,9 @@ fn rodrigues_series(tangent: [f64; 3]) -> [[f64; 3]; 3] {
 
 fn log_half_turn(matrix: [[f64; 3]; 3], angle: f64, small_angle_tolerance: f64) -> [f64; 3] {
     let mut axis = [
-        ((matrix[0][0] + 1.0) * 0.5).max(0.0).sqrt(),
-        ((matrix[1][1] + 1.0) * 0.5).max(0.0).sqrt(),
-        ((matrix[2][2] + 1.0) * 0.5).max(0.0).sqrt(),
+        f64::midpoint(matrix[0][0], 1.0).max(0.0).sqrt(),
+        f64::midpoint(matrix[1][1], 1.0).max(0.0).sqrt(),
+        f64::midpoint(matrix[2][2], 1.0).max(0.0).sqrt(),
     ];
     if matrix[2][1] - matrix[1][2] < 0.0 {
         axis[0] = -axis[0];

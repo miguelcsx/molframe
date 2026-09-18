@@ -102,7 +102,7 @@ fn weighted_centre_and_total(positions: &[[f32; 3]], masses: &[f64]) -> Option<(
 /// # Examples
 ///
 /// ```
-/// use pdbiox_geom::radius_of_gyration;
+/// use molframe_geom::radius_of_gyration;
 ///
 /// let pair = [[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
 /// assert!(radius_of_gyration(&pair, &[]).is_some_and(|rg| (rg - 1.0).abs() < 1e-12));
@@ -265,7 +265,7 @@ pub fn asphericity_with_options(
 
     // The standard combination: the largest eigenvalue against the mean of the
     // other two, normalised by the trace so the result is scale-free.
-    Ok(Some(((a - 0.5 * (b + c)) / trace).clamp(0.0, 1.0)))
+    Ok(Some(((a - f64::midpoint(b, c)) / trace).clamp(0.0, 1.0)))
 }
 
 /// The gyration tensor's eigen-decomposition, largest extent first.

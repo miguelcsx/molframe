@@ -154,7 +154,7 @@ fn read_bounds<'a>(
                 field: format!("box bound {axis}").into(),
             });
         }
-        for (slot, value) in row.iter_mut().zip(values.into_iter()) {
+        for (slot, value) in row.iter_mut().zip(values) {
             *slot = value.map_err(|_| LammpsError::InvalidNumber {
                 field: format!("box bound {axis}").into(),
             })?;

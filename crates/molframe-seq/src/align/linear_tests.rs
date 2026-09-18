@@ -10,7 +10,7 @@ fn linear_space_global_matches_full_affine_scores_over_generated_inputs() {
         gap_open: -3,
         gap_extend: -1,
     };
-    let alphabet = [b'A', b'B'];
+    let alphabet = *b"AB";
     for left_len in 0..=6 {
         for right_len in 0..=6 {
             for left_bits in 0..(1usize << left_len) {

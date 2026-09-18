@@ -22,9 +22,9 @@ pub(crate) fn execute(command: FxCommand, context: Context) -> Exit {
             chemistry.ccd_version.as_deref(),
             EvaluationOptions {
                 mapping_limit,
-                measurement: pdbiox::fx::MeasurementOptions {
+                measurement: molframe::fx::MeasurementOptions {
                     maximum_alternatives: measurement_limit,
-                    plane_fit: pdbiox::EigenOptions {
+                    plane_fit: molframe::EigenOptions {
                         relative_tolerance: plane_relative_tolerance,
                         maximum_sweeps: plane_maximum_sweeps,
                     },
@@ -38,7 +38,7 @@ pub(crate) fn execute(command: FxCommand, context: Context) -> Exit {
 #[derive(Clone, Copy)]
 struct EvaluationOptions {
     mapping_limit: usize,
-    measurement: pdbiox::fx::MeasurementOptions,
+    measurement: molframe::fx::MeasurementOptions,
 }
 
 fn evaluate(
@@ -66,14 +66,14 @@ fn evaluate(
         Ok(provider) => provider,
         Err(exit) => return exit,
     };
-    let specification = match pdbiox::fx::read_evaluation_specification(motif_path) {
+    let specification = match molframe::fx::read_evaluation_specification(motif_path) {
         Ok(specification) => specification,
         Err(error) => {
             eprintln!("functional specification failed: {error}");
             return Exit::Policy;
         }
     };
-    let report = match pdbiox::fx::evaluate_motif(
+    let report = match molframe::fx::evaluate_motif(
         &structure,
         &specification.motif,
         Some(&provider),
@@ -90,10 +90,9 @@ fn evaluate(
     };
     emit(&report, context);
     if report.evaluations.is_empty()
-        || report
-            .evaluations
-            .iter()
-            .any(|evaluation| evaluation.verdict.status == pdbiox::fx::VerdictStatus::Indeterminate)
+        || report.evaluations.iter().any(|evaluation| {
+            evaluation.verdict.status == molframe::fx::VerdictStatus::Indeterminate
+        })
     {
         Exit::Indeterminate
     } else {
@@ -101,7 +100,7 @@ fn evaluate(
     }
 }
 
-fn emit(report: &pdbiox::fx::EvaluationReport, context: Context) {
+fn emit(report: &molframe::fx::EvaluationReport, context: Context) {
     let rows = report
         .evaluations
         .iter()
@@ -172,10 +171,10 @@ fn emit(report: &pdbiox::fx::EvaluationReport, context: Context) {
     }
 }
 
-const fn verdict_name(status: pdbiox::fx::VerdictStatus) -> &'static str {
+const fn verdict_name(status: molframe::fx::VerdictStatus) -> &'static str {
     match status {
-        pdbiox::fx::VerdictStatus::Pass => "pass",
-        pdbiox::fx::VerdictStatus::Fail => "fail",
-        pdbiox::fx::VerdictStatus::Indeterminate => "indeterminate",
+        molframe::fx::VerdictStatus::Pass => "pass",
+        molframe::fx::VerdictStatus::Fail => "fail",
+        molframe::fx::VerdictStatus::Indeterminate => "indeterminate",
     }
 }

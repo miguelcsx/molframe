@@ -135,7 +135,7 @@ fn local_frame(
     let binormal = normalise(cross(incoming, outgoing))?;
     let normal = normalise(cross(binormal, tangent))?;
     let cosine = (dot(incoming, outgoing) / (incoming_length * outgoing_length)).clamp(-1.0, 1.0);
-    let mean_length = 0.5 * (incoming_length + outgoing_length);
+    let mean_length = f64::midpoint(incoming_length, outgoing_length);
     if mean_length <= 0.0 {
         return None;
     }

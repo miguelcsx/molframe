@@ -45,10 +45,7 @@ fn parse_ncol(arguments: &str, header: &mut Header) -> Result<(), ReflectionErro
     header.reflection_count =
         usize::try_from(values[1]).map_err(|_| ReflectionError::InvalidMtz)?;
     header.batch_count = usize::try_from(values[2]).map_err(|_| ReflectionError::InvalidMtz)?;
-    if usize::try_from(values[0])
-        .ok()
-        .is_some_and(|count| count > 200)
-    {
+    if usize::try_from(values[0]).is_ok_and(|count| count > 200) {
         return Err(ReflectionError::InvalidMtz);
     }
     Ok(())

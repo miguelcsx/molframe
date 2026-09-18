@@ -11,7 +11,7 @@
 //! was written `.` from one that was written `'.'`.
 
 use memchr::{memchr, memchr_iter, memrchr};
-use pdbiox_core::span::{ByteSpan, Position};
+use molframe_core::span::{ByteSpan, Position};
 
 /// How a value was written, which decides what it means.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -70,12 +70,12 @@ pub enum LexError {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_cif::lexer::{Lexer, Token};
+/// use molframe_cif::lexer::{Lexer, Token};
 ///
 /// let mut lexer = Lexer::new(b"data_test\n_entry.id 1ABC\n")?;
 /// let first = lexer.next_token()?;
 /// assert_eq!(first.map(|spanned| spanned.token), Some(Token::Block("test")));
-/// # Ok::<(), pdbiox_cif::lexer::LexError>(())
+/// # Ok::<(), molframe_cif::lexer::LexError>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct Lexer<'a> {
@@ -150,10 +150,8 @@ impl<'a> Lexer<'a> {
                     });
                 }
             }
-            Some(b'l' | b'L') => {
-                if word.eq_ignore_ascii_case("loop_") {
-                    return Ok(Token::Loop);
-                }
+            Some(b'l' | b'L') if word.eq_ignore_ascii_case("loop_") => {
+                return Ok(Token::Loop);
             }
             _ => {}
         }

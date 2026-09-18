@@ -258,15 +258,13 @@ impl Grid {
                 }
 
                 let mut dx = first_x;
-                let mut index = self.index(lo[0], y, z);
-                for _ in lo[0]..=hi[0] {
+                for (index, _) in (self.index(lo[0], y, z)..).zip(lo[0]..=hi[0]) {
                     if dx * dx <= remaining_xy
                         && let Some(cell) = state.get_mut(index)
                     {
                         *cell = SOLID;
                     }
                     dx += self.step;
-                    index += 1;
                 }
                 dy += self.step;
             }

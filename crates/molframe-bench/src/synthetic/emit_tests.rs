@@ -52,8 +52,7 @@ fn every_row_carries_one_field_per_declared_item() {
 #[test]
 fn serial_numbers_ascend_without_a_gap() {
     let text = drain(source(2));
-    let mut expected = 1_u64;
-    for line in text.lines().filter(|line| line.starts_with("ATOM ")) {
+    for (expected, line) in (1_u64..).zip(text.lines().filter(|line| line.starts_with("ATOM "))) {
         let Some(field) = line.split_whitespace().nth(1) else {
             panic!("row has no serial: {line}")
         };
@@ -61,7 +60,6 @@ fn serial_numbers_ascend_without_a_gap() {
             panic!("serial is not a number: {field}")
         };
         assert_eq!(serial, expected);
-        expected += 1;
     }
 }
 
@@ -146,7 +144,7 @@ fn the_stream_stays_bounded_however_long_it_runs() {
 
 #[test]
 fn the_generated_stream_parses_back_with_the_expected_atom_count() {
-    use pdbiox_core::io::{InputBuffer, Limits, ReadOptions};
+    use molframe_core::io::{InputBuffer, Limits, ReadOptions};
 
     let stream = source(3);
     let declared = stream.atom_count();
@@ -155,7 +153,7 @@ fn the_generated_stream_parses_back_with_the_expected_atom_count() {
         Ok(buffer) => buffer,
         Err(finding) => panic!("synthetic stream was refused: {finding:?}"),
     };
-    let (structure, _findings) = match pdbiox_cif::read(&buffer, &ReadOptions::default()) {
+    let (structure, _findings) = match molframe_cif::read(&buffer, &ReadOptions::default()) {
         Ok(read) => read,
         Err(findings) => panic!("synthetic mmCIF did not parse: {findings:?}"),
     };
@@ -167,7 +165,7 @@ fn the_generated_stream_parses_back_with_the_expected_atom_count() {
 
 #[test]
 fn a_tiled_structure_keeps_the_source_chain_count_per_copy() {
-    use pdbiox_core::io::{InputBuffer, Limits, ReadOptions};
+    use molframe_core::io::{InputBuffer, Limits, ReadOptions};
 
     let single = structure(Sample::Tiny);
     let tile = Tile::from_structure(&single, Seed::new(1));
@@ -178,7 +176,7 @@ fn a_tiled_structure_keeps_the_source_chain_count_per_copy() {
             Ok(buffer) => buffer,
             Err(finding) => panic!("synthetic stream was refused: {finding:?}"),
         };
-    let (tiled, _findings) = match pdbiox_cif::read(&buffer, &ReadOptions::default()) {
+    let (tiled, _findings) = match molframe_cif::read(&buffer, &ReadOptions::default()) {
         Ok(read) => read,
         Err(findings) => panic!("synthetic mmCIF did not parse: {findings:?}"),
     };
@@ -191,7 +189,7 @@ fn a_tiled_structure_keeps_the_source_chain_count_per_copy() {
 
 #[test]
 fn every_copy_becomes_its_own_chain() {
-    use pdbiox_core::io::{InputBuffer, Limits, ReadOptions};
+    use molframe_core::io::{InputBuffer, Limits, ReadOptions};
 
     let single = structure(Sample::Tiny);
     let tile = Tile::from_structure(&single, Seed::new(1));
@@ -201,7 +199,7 @@ fn every_copy_becomes_its_own_chain() {
         Ok(buffer) => buffer,
         Err(finding) => panic!("synthetic stream was refused: {finding:?}"),
     };
-    let (tiled, _findings) = match pdbiox_cif::read(&buffer, &ReadOptions::default()) {
+    let (tiled, _findings) = match molframe_cif::read(&buffer, &ReadOptions::default()) {
         Ok(read) => read,
         Err(findings) => panic!("synthetic mmCIF did not parse: {findings:?}"),
     };
@@ -211,7 +209,7 @@ fn every_copy_becomes_its_own_chain() {
 
 #[test]
 fn parsing_a_tiled_stream_raises_no_boundary_inference_warning() {
-    use pdbiox_core::io::{InputBuffer, Limits, ReadOptions};
+    use molframe_core::io::{InputBuffer, Limits, ReadOptions};
 
     let tile = Tile::from_structure(&structure(Sample::Tiny), Seed::new(1));
     let buffer = match InputBuffer::from_reader(SyntheticCifSource::new(tile, 3), Limits::default())
@@ -219,7 +217,7 @@ fn parsing_a_tiled_stream_raises_no_boundary_inference_warning() {
         Ok(buffer) => buffer,
         Err(finding) => panic!("synthetic stream was refused: {finding:?}"),
     };
-    let (_structure, findings) = match pdbiox_cif::read(&buffer, &ReadOptions::default()) {
+    let (_structure, findings) = match molframe_cif::read(&buffer, &ReadOptions::default()) {
         Ok(read) => read,
         Err(findings) => panic!("synthetic mmCIF did not parse: {findings:?}"),
     };
