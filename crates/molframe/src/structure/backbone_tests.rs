@@ -1,5 +1,5 @@
 use super::*;
-use pdbiox_core::AtomAnnotation;
+use molframe_core::AtomAnnotation;
 
 const PEPTIDE: &str = "\
 ATOM      1  N   GLY A   1       0.000   0.000   0.000  1.00 10.00           N
@@ -36,9 +36,9 @@ fn structure_torsions_follow_explicit_connectivity_and_keep_residue_indices() {
         .map(|index| roles[index % roles.len()].code())
         .collect();
     data.annotations.insert(
-        pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION,
+        molframe_core::POLYMER_ATOM_ROLE_ANNOTATION,
         AtomAnnotation::Integer(
-            pdbiox_core::AnnotationColumn::from_values(role_values).expect("small column"),
+            molframe_core::AnnotationColumn::from_values(role_values).expect("small column"),
         ),
     );
     let structure = Structure::new(data);

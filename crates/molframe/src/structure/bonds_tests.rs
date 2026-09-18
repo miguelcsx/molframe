@@ -11,11 +11,11 @@ ATOM 3 C C2 LIG A 1 5 0 0\n";
 #[test]
 fn inference_adds_only_radius_compatible_nearby_pairs_with_provenance() {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    let (structure, _) = pdbiox_cif::read(&input, &ReadOptions::new()).expect("fixture reads");
+    let (structure, _) = molframe_cif::read(&input, &ReadOptions::new()).expect("fixture reads");
     let report = infer_bonds(
         &structure,
         BondInference::default(),
-        &pdbiox_core::ExecutionContext::default(),
+        &molframe_core::ExecutionContext::default(),
     )
     .expect("inference works");
     let bonds: Vec<_> = report.structure.data().bonds.iter().collect();

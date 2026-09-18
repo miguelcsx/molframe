@@ -1,10 +1,10 @@
 //! Explicit distance-based connectivity inference.
 
 use crate::{
-    AtomIndex, AtomSelection, BondOrder, BondProvenance, BondRecord, Code, Diagnostic,
+    AtomIndex, AtomSelection, BondOrder, BondProvenance, BondRecord, Code, Diagnostic, Findings,
     SpatialBackend, Structure,
 };
-use pdbiox_core::bond::BondTableBuilder;
+use molframe_core::bond::BondTableBuilder;
 use std::collections::BTreeSet;
 
 /// Default multiplier applied to the sum of two CCD covalent radii.
@@ -63,26 +63,26 @@ pub struct BondInferenceReport {
 pub fn infer_bonds(
     structure: &Structure,
     options: BondInference,
-    context: &pdbiox_core::ExecutionContext,
-) -> Result<BondInferenceReport, Diagnostic> {
+    context: &molframe_core::ExecutionContext,
+) -> Result<BondInferenceReport, Findings> {
     if !options.scale.is_finite()
         || options.scale <= 0.0
         || !options.lower_bound.is_finite()
         || options.lower_bound < 0.0
     {
-        return Err(
-            Diagnostic::new(Code::E4002).with_context("parameter", BOND_INFERENCE_PARAMETER)
-        );
+        return Err(Diagnostic::new(Code::E4002)
+            .with_context("parameter", BOND_INFERENCE_PARAMETER)
+            .into());
     }
     if !structure.data().coords.is_dense() {
-        return Err(Diagnostic::new(Code::E6008));
+        return Err(Diagnostic::new(Code::E6008).into());
     }
     let radii: Vec<_> = structure
         .data()
         .atoms()
         .map(|atom| {
             atom.element()
-                .and_then(pdbiox_chem::element_properties)
+                .and_then(molframe_chem::element_properties)
                 .and_then(|properties| properties.covalent_radius)
         })
         .collect();
@@ -100,9 +100,9 @@ pub fn infer_bonds(
     let maximum = max_radius * 2.0 * options.scale;
     let lower_squared = options.lower_bound * options.lower_bound;
     if !maximum.is_finite() || !lower_squared.is_finite() || options.lower_bound > maximum {
-        return Err(
-            Diagnostic::new(Code::E4002).with_context("parameter", BOND_INFERENCE_PARAMETER)
-        );
+        return Err(Diagnostic::new(Code::E4002)
+            .with_context("parameter", BOND_INFERENCE_PARAMETER)
+            .into());
     }
     let chains = atom_chains(structure);
     let existing: BTreeSet<_> = structure
@@ -119,13 +119,13 @@ pub fn infer_bonds(
     // so the candidates are filtered as they are produced rather than collected
     // into a vector sized by the quadratic candidate count.
     let selection = AtomSelection::All(structure.atom_count());
-    pdbiox_spatial::for_each_pairs_within_unsorted(
-        &pdbiox_spatial::PairQuery {
+    molframe_spatial::for_each_pairs_within_unsorted(
+        &molframe_spatial::PairQuery {
             positions: structure.positions(),
             left: &selection,
             right: &selection,
             cutoff: maximum,
-            options: pdbiox_spatial::SpatialSearchOptions::with_backend(options.backend),
+            options: molframe_spatial::SpatialSearchOptions::with_backend(options.backend),
             periodic: None,
             context,
         },
@@ -152,7 +152,7 @@ pub fn infer_bonds(
 }
 
 fn reject_pair(
-    pair: &pdbiox_spatial::NeighborPair,
+    pair: &molframe_spatial::NeighborPair,
     radii: &[Option<f32>],
     chains: &[Option<u32>],
     existing: &BTreeSet<(u32, u32)>,
@@ -191,5 +191,5 @@ fn atom_chains(structure: &Structure) -> Vec<Option<u32>> {
 }
 
 #[cfg(test)]
-#[path = "chemistry_api_tests.rs"]
+#[path = "bonds_tests.rs"]
 mod tests;

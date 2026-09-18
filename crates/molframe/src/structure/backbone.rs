@@ -1,12 +1,12 @@
 //! Structure-aware projection into geometry kernels.
 
-use pdbiox_chem::PolymerAtomRole;
-use pdbiox_core::Diagnostic;
-use pdbiox_core::index::{AtomIndex, ChainIndex, ModelIndex, ResidueIndex};
-use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
-use pdbiox_geom::{BackboneResidue, BackboneTorsions};
+use molframe_chem::PolymerAtomRole;
+use molframe_core::index::{AtomIndex, ChainIndex, ModelIndex, ResidueIndex};
+use molframe_core::structure::{AtomRef, ResidueRef, Structure};
+use molframe_core::{Diagnostic, Findings};
+use molframe_geom::{BackboneResidue, BackboneTorsions};
 
-use crate::polymer_roles::{require_polymer_roles, residue_has_role, role_atom};
+use super::roles::{require_polymer_roles, residue_has_role, role_atom};
 
 /// Backbone torsions associated with their structure residue.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,7 +34,7 @@ pub struct ProteinAlphaTrace {
 /// carries more than one alpha carbon.
 pub fn structure_protein_alpha_traces(
     structure: &Structure,
-) -> Result<Vec<ProteinAlphaTrace>, Diagnostic> {
+) -> Result<Vec<ProteinAlphaTrace>, Findings> {
     require_polymer_roles(structure)?;
     let mut traces = Vec::new();
     for chain in structure.data().chains() {
@@ -69,7 +69,7 @@ pub fn structure_protein_alpha_traces(
 /// or assign the same required semantic role to multiple atoms in one residue.
 pub fn structure_backbone_torsions(
     structure: &Structure,
-) -> Result<Vec<BackboneTorsionRecord>, Diagnostic> {
+) -> Result<Vec<BackboneTorsionRecord>, Findings> {
     structure_backbone_torsions_model(structure, ModelIndex::new(0))
 }
 
@@ -82,7 +82,7 @@ pub fn structure_backbone_torsions(
 pub fn structure_backbone_torsions_model(
     structure: &Structure,
     model: ModelIndex,
-) -> Result<Vec<BackboneTorsionRecord>, Diagnostic> {
+) -> Result<Vec<BackboneTorsionRecord>, Findings> {
     require_polymer_roles(structure)?;
     let Some(positions) = structure.model_positions(model) else {
         return Ok(Vec::new());
@@ -100,7 +100,7 @@ pub fn structure_backbone_torsions_model(
             let next = residues.get(position + 1).copied();
             backbone.push(project(structure, positions, *residue, next)?);
         }
-        let torsions = pdbiox_geom::backbone_torsions(&backbone);
+        let torsions = molframe_geom::backbone_torsions(&backbone);
         output.extend(
             residues
                 .into_iter()
@@ -163,5 +163,5 @@ fn bonded(structure: &Structure, carbon: AtomIndex, nitrogen: AtomIndex) -> bool
 }
 
 #[cfg(test)]
-#[path = "geometry_api_tests.rs"]
+#[path = "backbone_tests.rs"]
 mod tests;

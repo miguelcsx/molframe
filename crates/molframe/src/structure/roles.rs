@@ -1,14 +1,14 @@
 //! Shared access to explicit polymer atom-role annotations.
 
-use pdbiox_chem::PolymerAtomRole;
-use pdbiox_core::structure::{AtomRef, ResidueRef, Structure};
-use pdbiox_core::{AtomAnnotation, Code, Diagnostic, Presence};
+use molframe_chem::PolymerAtomRole;
+use molframe_core::structure::{AtomRef, ResidueRef, Structure};
+use molframe_core::{AtomAnnotation, Code, Diagnostic, Presence};
 
 pub(crate) fn require_polymer_roles(structure: &Structure) -> Result<(), Diagnostic> {
     if matches!(
         structure
             .annotations()
-            .get(pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION),
+            .get(molframe_core::POLYMER_ATOM_ROLE_ANNOTATION),
         Some(AtomAnnotation::Integer(_))
     ) {
         Ok(())
@@ -52,7 +52,7 @@ pub(crate) fn role_atom<'a>(
 pub(crate) fn atom_role(structure: &Structure, atom: AtomRef<'_>) -> Option<PolymerAtomRole> {
     let AtomAnnotation::Integer(column) = structure
         .annotations()
-        .get(pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION)?
+        .get(molframe_core::POLYMER_ATOM_ROLE_ANNOTATION)?
     else {
         return None;
     };

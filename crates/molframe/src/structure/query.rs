@@ -1,10 +1,10 @@
 //! Structure-facing selection API over the query and spatial crates.
 
-use pdbiox_core::ExecutionContext;
-use pdbiox_core::contract::AnalysisPolicy;
-use pdbiox_core::diagnostic::Diagnostic;
-use pdbiox_core::structure::Structure;
-use pdbiox_query::{Evaluation, Groups, Query};
+use molframe_core::ExecutionContext;
+use molframe_core::contract::AnalysisPolicy;
+use molframe_core::diagnostic::Findings;
+use molframe_core::structure::Structure;
+use molframe_query::{Evaluation, Groups, Query};
 
 /// Selection methods implemented by immutable structure snapshots.
 pub trait QueryStructure {
@@ -20,7 +20,7 @@ pub trait QueryStructure {
         policy: &AnalysisPolicy,
         groups: &Groups,
         context: &ExecutionContext,
-    ) -> Result<Evaluation, Vec<Diagnostic>>;
+    ) -> Result<Evaluation, Findings>;
 
     /// Compiles and evaluates textual syntax in one call.
     ///
@@ -34,7 +34,7 @@ pub trait QueryStructure {
         source: &str,
         policy: &AnalysisPolicy,
         context: &ExecutionContext,
-    ) -> Result<Evaluation, Vec<Diagnostic>>;
+    ) -> Result<Evaluation, Findings>;
 }
 
 impl QueryStructure for Structure {
@@ -44,21 +44,25 @@ impl QueryStructure for Structure {
         policy: &AnalysisPolicy,
         groups: &Groups,
         context: &ExecutionContext,
-    ) -> Result<Evaluation, Vec<Diagnostic>> {
+    ) -> Result<Evaluation, Findings> {
         #[cfg(feature = "spatial")]
         {
-            let resolver = pdbiox_spatial::StructureSpatial::new(
+            let resolver = molframe_spatial::StructureSpatial::new(
                 self,
                 policy,
-                pdbiox_spatial::SpatialBackend::Auto,
+                molframe_spatial::SpatialBackend::Auto,
                 context,
             )
-            .map_err(|finding| vec![finding])?;
-            query.evaluate(self, policy, groups, Some(&resolver))
+            .map_err(Findings::from)?;
+            query
+                .evaluate(self, policy, groups, Some(&resolver))
+                .map_err(Findings::from)
         }
         #[cfg(not(feature = "spatial"))]
         {
-            query.evaluate(self, policy, groups, None)
+            query
+                .evaluate(self, policy, groups, None)
+                .map_err(Findings::from)
         }
     }
 
@@ -67,12 +71,12 @@ impl QueryStructure for Structure {
         source: &str,
         policy: &AnalysisPolicy,
         context: &ExecutionContext,
-    ) -> Result<Evaluation, Vec<Diagnostic>> {
+    ) -> Result<Evaluation, Findings> {
         let query = Query::compile(source)?;
         self.select(&query, policy, &Groups::new(), context)
     }
 }
 
 #[cfg(test)]
-#[path = "query_api_tests.rs"]
+#[path = "query_tests.rs"]
 mod tests;

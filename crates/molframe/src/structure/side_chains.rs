@@ -1,12 +1,12 @@
 //! Structure projection for chemistry-derived side-chain torsions.
 
-use crate::{AnalysisPolicy, Diagnostic, ResidueIndex, Structure};
-use pdbiox_chem::{ComponentProvider, PolymerAtomRole, SideChainRoles, side_chain_definition};
-use pdbiox_core::Code;
-use pdbiox_core::contract::DictionaryVersion;
-use pdbiox_core::structure::ResidueRef;
+use crate::{AnalysisPolicy, Diagnostic, Findings, ResidueIndex, Structure};
+use molframe_chem::{ComponentProvider, PolymerAtomRole, SideChainRoles, side_chain_definition};
+use molframe_core::Code;
+use molframe_core::contract::DictionaryVersion;
+use molframe_core::structure::ResidueRef;
 
-use crate::polymer_roles::{atom_role, require_polymer_roles};
+use super::roles::{atom_role, require_polymer_roles};
 
 /// χ torsions and their defining component atom path for one residue.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,7 +46,7 @@ pub fn structure_side_chain_torsions(
     structure: &Structure,
     provider: &dyn ComponentProvider,
     policy: &AnalysisPolicy,
-) -> Result<SideChainTorsionReport, Diagnostic> {
+) -> Result<SideChainTorsionReport, Findings> {
     require_polymer_roles(structure)?;
     let selected = structure.resolve_altlocs(policy);
     let mut findings = selected.warnings;
@@ -81,7 +81,7 @@ pub fn structure_side_chain_torsions(
                     .filter(|atom| atom.name() == Some(name));
                 let first = matches
                     .next()
-                    .and_then(pdbiox_core::structure::AtomRef::position);
+                    .and_then(molframe_core::structure::AtomRef::position);
                 if matches.next().is_some() {
                     None
                 } else {
@@ -92,7 +92,7 @@ pub fn structure_side_chain_torsions(
         records.push(SideChainTorsionRecord {
             residue: residue.index(),
             atoms: definition.atoms,
-            torsions: pdbiox_geom::path_torsions(&positions, 5).into_boxed_slice(),
+            torsions: molframe_geom::path_torsions(&positions, 5).into_boxed_slice(),
         });
     }
     Ok(SideChainTorsionReport {
@@ -105,7 +105,7 @@ pub fn structure_side_chain_torsions(
 fn side_chain_roles<'a>(
     structure: &'a Structure,
     residue: ResidueRef<'a>,
-    selected: &pdbiox_core::AtomSelection,
+    selected: &molframe_core::AtomSelection,
 ) -> Result<Option<ResolvedSideChainRoles<'a>>, Diagnostic> {
     let nitrogen = unique_role_name(
         structure,
@@ -126,7 +126,7 @@ fn side_chain_roles<'a>(
             atom_role(structure, *atom)
                 .is_some_and(|role| role.intersects(PolymerAtomRole::PROTEIN_SIDECHAIN))
         })
-        .filter_map(pdbiox_core::structure::AtomRef::name)
+        .filter_map(molframe_core::structure::AtomRef::name)
         .collect::<Vec<_>>();
     match (nitrogen, alpha_carbon, side_chain_atoms.is_empty()) {
         (Some(nitrogen), Some(alpha_carbon), false) => Ok(Some(ResolvedSideChainRoles {
@@ -141,7 +141,7 @@ fn side_chain_roles<'a>(
 fn unique_role_name<'a>(
     structure: &'a Structure,
     residue: ResidueRef<'a>,
-    selected: &pdbiox_core::AtomSelection,
+    selected: &molframe_core::AtomSelection,
     required: PolymerAtomRole,
 ) -> Result<Option<&'a str>, Diagnostic> {
     let mut matching = residue
@@ -150,7 +150,7 @@ fn unique_role_name<'a>(
         .filter(|atom| atom_role(structure, *atom).is_some_and(|role| role.intersects(required)));
     let first = matching
         .next()
-        .and_then(pdbiox_core::structure::AtomRef::name);
+        .and_then(molframe_core::structure::AtomRef::name);
     if matching.next().is_some() {
         Err(Diagnostic::new(Code::E4002)
             .with_context("residue", residue.index().to_string())
@@ -164,5 +164,5 @@ fn unique_role_name<'a>(
 }
 
 #[cfg(test)]
-#[path = "side_chain_api_tests.rs"]
+#[path = "side_chains_tests.rs"]
 mod tests;

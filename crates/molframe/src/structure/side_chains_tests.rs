@@ -46,7 +46,7 @@ fn structure_projection_requires_explicit_polymer_roles() {
         Err(findings) => panic!("fixture failed: {findings:?}"),
     };
     let error = structure_side_chain_torsions(&structure, &provider(), &AnalysisPolicy::default());
-    assert!(matches!(error, Err(error) if error.code() == crate::Code::E4003));
+    assert!(matches!(error, Err(error) if error.code() == Some(crate::Code::E4003)));
 }
 
 fn annotated(structure: &Structure) -> Structure {
@@ -61,7 +61,7 @@ fn annotated(structure: &Structure) -> Structure {
         PolymerAtomRole::PROTEIN_SIDECHAIN,
     ];
     let _ = data.annotations.insert(
-        pdbiox_core::POLYMER_ATOM_ROLE_ANNOTATION,
+        molframe_core::POLYMER_ATOM_ROLE_ANNOTATION,
         AtomAnnotation::Integer(
             AnnotationColumn::from_values(roles.into_iter().map(PolymerAtomRole::code).collect())
                 .expect("small annotation column"),
