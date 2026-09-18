@@ -15,7 +15,7 @@ use core::f64::consts::PI;
 
 use crate::accessible_area::SasaError;
 use crate::neighbourhood::{self, Neighbourhood};
-use pdbiox_core::ExecutionContext;
+use molframe_core::ExecutionContext;
 
 /// A full turn, the span of a slice circle.
 const TWO_PI: f64 = 2.0 * PI;
@@ -54,8 +54,8 @@ struct SliceNeighbour {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_core::ExecutionContext;
-/// use pdbiox_surface::lee_richards;
+/// use molframe_core::ExecutionContext;
+/// use molframe_surface::lee_richards;
 /// use core::f64::consts::PI;
 ///
 /// let areas = lee_richards(
@@ -63,7 +63,7 @@ struct SliceNeighbour {
 /// )?;
 /// let expanded = 2.0 + 1.0;
 /// assert!((areas[0] - 4.0 * PI * expanded * expanded).abs() < 1e-6);
-/// # Ok::<(), pdbiox_surface::SasaError>(())
+/// # Ok::<(), molframe_surface::SasaError>(())
 /// ```
 pub fn lee_richards(
     positions: &[[f32; 3]],

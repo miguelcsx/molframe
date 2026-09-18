@@ -11,9 +11,9 @@
 //! the atom count. The double-precision point tests keep the result stable
 //! regardless of the order neighbours arrive in.
 
-use pdbiox_core::ExecutionContext;
-use pdbiox_core::parallel::{BlockPlan, map_blocks_in};
-use pdbiox_spatial::SpatialError;
+use molframe_core::ExecutionContext;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use molframe_spatial::SpatialError;
 
 use crate::neighbourhood::{self, Neighbourhood};
 use crate::numeric::{f64_to_f32, f64_to_u16, f64_to_usize};
@@ -103,8 +103,8 @@ pub enum SasaError {
 /// # Examples
 ///
 /// ```
-/// use pdbiox_core::ExecutionContext;
-/// use pdbiox_surface::shrake_rupley;
+/// use molframe_core::ExecutionContext;
+/// use molframe_surface::shrake_rupley;
 /// use core::f64::consts::PI;
 ///
 /// // A lone atom is fully exposed: its area is that of the expanded sphere.
@@ -113,7 +113,7 @@ pub enum SasaError {
 /// )?;
 /// let expanded = 2.0 + 1.0;
 /// assert!((areas[0] - 4.0 * PI * expanded * expanded).abs() < 1e-6);
-/// # Ok::<(), pdbiox_surface::SasaError>(())
+/// # Ok::<(), molframe_surface::SasaError>(())
 /// ```
 pub fn shrake_rupley(
     positions: &[[f32; 3]],

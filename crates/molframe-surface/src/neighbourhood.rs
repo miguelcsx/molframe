@@ -12,9 +12,9 @@
 //! all-pairs scan, so building it costs `O(atoms · local density)` rather than
 //! quadratic in the atom count.
 
-use pdbiox_core::topology::{Csr, CsrBuilder};
-use pdbiox_core::{ExecutionContext, selection::AtomSelection};
-use pdbiox_spatial::{
+use molframe_core::topology::{Csr, CsrBuilder};
+use molframe_core::{ExecutionContext, selection::AtomSelection};
+use molframe_spatial::{
     NeighborPair, SpatialBackend, SpatialError, SpatialSearchOptions,
     pairs_within_unsorted_with_options,
 };

@@ -4,7 +4,7 @@ use super::{SasaError, point_on_sphere, samples_for_density, validate_density};
 use crate::neighbourhood::{self, Neighbourhood};
 use crate::numeric::f64_to_f32;
 use crate::sampling::fibonacci_sphere;
-use pdbiox_core::ExecutionContext;
+use molframe_core::ExecutionContext;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// A surface point exposed when one candidate neighbour is omitted.

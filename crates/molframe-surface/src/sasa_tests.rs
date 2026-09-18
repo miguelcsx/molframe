@@ -1,6 +1,6 @@
 use super::{SasaError, shrake_rupley, surface_points};
 use core::f64::consts::PI;
-use pdbiox_core::ExecutionContext;
+use molframe_core::ExecutionContext;
 
 fn context() -> ExecutionContext {
     ExecutionContext::default()

@@ -14,7 +14,7 @@
 //! `O(atoms · points · local density)` cost of the underlying construction.
 
 use crate::accessible_area::{SasaError, shrake_rupley};
-use pdbiox_core::ExecutionContext;
+use molframe_core::ExecutionContext;
 
 /// Explicit participation of an atom in a two-molecule buried-surface calculation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

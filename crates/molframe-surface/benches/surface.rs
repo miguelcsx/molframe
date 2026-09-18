@@ -1,9 +1,9 @@
 //! Criterion coverage for sampled molecular-surface kernels.
 
 use criterion::{Criterion, Throughput, black_box};
-use pdbiox_bench::{Sample, coordinates, structure};
-use pdbiox_core::ExecutionContext;
-use pdbiox_surface::{
+use molframe_bench::{Sample, coordinates, structure};
+use molframe_core::ExecutionContext;
+use molframe_surface::{
     AtomDepthOptions, SurfaceGridOptions, atom_depths, buried_surface, cavities,
     cavities_with_options, fibonacci_sphere, lee_richards, shrake_rupley, solvent_excluded_surface,
     solvent_excluded_surface_with_options, surface_points, surface_points_at_density,

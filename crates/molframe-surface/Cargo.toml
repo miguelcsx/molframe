@@ -1,21 +1,21 @@
 [package]
-name = "pdbiox-surface"
+name = "molframe-surface"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Solvent-accessible and molecular surfaces for pdbiox"
+description = "Solvent-accessible and molecular surfaces for molframe"
 
 [dependencies]
 num-traits.workspace = true
-pdbiox-core.workspace = true
-pdbiox-spatial.workspace = true
+molframe-core.workspace = true
+molframe-spatial.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-pdbiox-bench.workspace = true
+molframe-bench.workspace = true
 tempfile.workspace = true
 
 [[bench]]

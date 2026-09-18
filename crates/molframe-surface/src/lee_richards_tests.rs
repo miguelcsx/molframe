@@ -1,7 +1,7 @@
 use super::lee_richards;
 use crate::accessible_area::shrake_rupley;
 use core::f64::consts::PI;
-use pdbiox_core::ExecutionContext;
+use molframe_core::ExecutionContext;
 
 fn expanded(radius: f32, probe: f32) -> f64 {
     f64::from(radius) + f64::from(probe)

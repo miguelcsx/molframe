@@ -1,8 +1,8 @@
 //! Explicit materialization of bounded sampled atom areas.
 
 use crate::{SasaError, SasaSampler};
-use pdbiox_core::{ExecutionContext, execution::Retained};
-use pdbiox_spatial::{PeriodicBox, SpatialError};
+use molframe_core::{ExecutionContext, execution::Retained};
+use molframe_spatial::{PeriodicBox, SpatialError};
 
 /// Collects areas whose output allocation stays charged until its final owner drops.
 ///

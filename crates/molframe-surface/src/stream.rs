@@ -8,11 +8,11 @@
 use crate::accessible_area::{SasaError, point_on_sphere};
 use crate::neighbourhood::{point_inside_sphere, squared_distance};
 use crate::sampling_plan::SasaSampler;
-use pdbiox_core::{
+use molframe_core::{
     ExecutionContext,
     parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in},
 };
-use pdbiox_spatial::{CellGridOptions, CellList, PeriodicBox, SpatialError};
+use molframe_spatial::{CellGridOptions, CellList, PeriodicBox, SpatialError};
 
 const BLOCK_ATOMS: usize = 64;
 const NEIGHBOR_TILE: usize = 64;

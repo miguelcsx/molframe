@@ -5,8 +5,8 @@ use crate::{
     neighbourhood::{conservative_f32, validate_radii},
     sampling::fibonacci_sphere,
 };
-use pdbiox_core::{ExecutionContext, MemoryReservation};
-use pdbiox_spatial::SpatialError;
+use molframe_core::{ExecutionContext, MemoryReservation};
+use molframe_spatial::SpatialError;
 
 /// Validated radii, canonical atom identifiers and deterministic sample directions.
 ///

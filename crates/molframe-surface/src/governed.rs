@@ -5,7 +5,7 @@ use crate::{
     SurfaceGridOptions, edge_geodesic_distances, solvent_excluded_surface_with_options,
     surface_curvatures,
 };
-use pdbiox_core::contract::{AlgorithmId, Analysis, AnalysisPolicy, Coverage, ParameterValue};
+use molframe_core::contract::{AlgorithmId, Analysis, AnalysisPolicy, Coverage, ParameterValue};
 
 /// Indexed mesh, curvature and optional source geodesics from one workflow.
 #[derive(Clone, Debug, PartialEq)]

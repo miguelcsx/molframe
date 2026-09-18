@@ -1,6 +1,6 @@
 use super::*;
 use crate::fibonacci_sphere;
-use pdbiox_core::{MemoryBudget, ScratchPolicy};
+use molframe_core::{MemoryBudget, ScratchPolicy};
 
 #[test]
 fn streamed_areas_match_resident_bits_at_every_worker_count() {
@@ -127,7 +127,7 @@ fn tangent_zero_radius_and_nonfinite_positions_preserve_the_reference() {
 
 #[test]
 fn periodic_sampling_matches_a_direct_minimum_image_reference() {
-    use pdbiox_core::structure::UnitCell;
+    use molframe_core::structure::UnitCell;
     for angles in [[90.0; 3], [90.0, 90.0, 60.0]] {
         let periodic = PeriodicBox::from_cell(UnitCell {
             lengths: [10.0; 3],

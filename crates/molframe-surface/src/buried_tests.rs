@@ -1,5 +1,5 @@
 use super::{MoleculeRole, buried_solvent_excluded_surface, buried_surface};
-use pdbiox_core::ExecutionContext;
+use molframe_core::ExecutionContext;
 
 #[test]
 fn groups_pulled_far_apart_bury_nothing() {
