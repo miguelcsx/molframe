@@ -1,0 +1,30 @@
+[package]
+name = "molframe-validate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Geometric and completeness validation for molframe"
+
+[dependencies]
+num-traits.workspace = true
+molframe-core.workspace = true
+molframe-analysis.workspace = true
+molframe-chem.workspace = true
+molframe-geom.workspace = true
+molframe-spatial.workspace = true
+molframe-xtal.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+molframe-bench.workspace = true
+molframe-cif.workspace = true
+
+[[bench]]
+name = "validate"
+harness = false
+
+[lints]
+workspace = true
