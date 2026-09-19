@@ -7,6 +7,10 @@ name = "molframe"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = ["numpy>=2"]
+# PEP 639. maturin gained full support for the SPDX expression and
+# `license-files` in 1.9.0; the build backend below already requires 1.9.4.
+license = "MIT"
+license-files = ["LICENSE"]
 
 [dependency-groups]
 dev = ["pytest>=8"]

@@ -6,7 +6,7 @@
 
 Read, transform, analyze, and compare molecular structures through a single semantics-preserving data model.
 
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Rust](https://img.shields.io/badge/Rust-2024-orange.svg?logo=rust)](https://www.rust-lang.org/)
 [![Python](https://img.shields.io/badge/Python-native%20bindings-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 
@@ -511,9 +511,9 @@ Machine-readable citation metadata is provided in [`CITATION.cff`](CITATION.cff)
 
 ## License
 
-MolFrame is dual-licensed under either:
+MolFrame is released under the [MIT License](LICENSE).
 
-- [MIT License](LICENSES/MIT.txt), or
-- [Apache License 2.0](LICENSES/Apache-2.0.txt),
-
-at your option.
+The bundled reference data keeps the licence of its upstream source, carried
+beside the data it covers: mendeleev's MIT notice in
+`crates/molframe-chem/data/LICENSE.mendeleev`, and spglib's BSD-3-Clause notice
+in `crates/molframe-xtal/data/LICENSE.spglib`.
