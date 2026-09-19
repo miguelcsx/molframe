@@ -3,10 +3,14 @@
 use super::{ByteWindow, Compression, SourceBytes, SpillWindowedFile, WindowedFile};
 use crate::{Code, Diagnostic, ExecutionContext};
 use std::fs::File;
-use std::io::{ErrorKind, Read};
+#[cfg(any(feature = "gzip", feature = "zstd"))]
+use std::io::ErrorKind;
+use std::io::Read;
 use std::path::Path;
+#[cfg(any(feature = "gzip", feature = "zstd"))]
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[cfg(any(feature = "gzip", feature = "zstd"))]
 static SPOOL_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// A seekable bounded source, with compressed input spooled only when the
@@ -179,12 +183,14 @@ fn codec_error(reason: impl Into<Box<str>>) -> Diagnostic {
     Diagnostic::new(Code::E1401).with_message(reason)
 }
 
+#[cfg(any(feature = "gzip", feature = "zstd"))]
 fn spill_error(error: &crate::SpillError) -> Diagnostic {
     resource_error(format!(
         "compressed structure requires bounded spill: {error}"
     ))
 }
 
+#[cfg(any(feature = "gzip", feature = "zstd"))]
 fn resource_error(reason: impl Into<Box<str>>) -> Diagnostic {
     Diagnostic::new(Code::E1902).with_message(reason)
 }

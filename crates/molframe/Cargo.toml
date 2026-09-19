@@ -40,16 +40,28 @@ flate2.workspace = true
 molframe-bench.workspace = true
 tempfile.workspace = true
 
+[[test]]
+name = "golden_tests"
+required-features = ["full"]
+
+[[test]]
+name = "golden_workflows"
+required-features = ["full"]
+
 [[bench]]
 name = "facade"
 harness = false
+required-features = ["full"]
 
 [[bench]]
 name = "golden"
 harness = false
+required-features = ["full"]
 
 [features]
-default = ["full"]
+# Core + the two basic structure formats: pure-Rust, no C toolchain, no
+# numeric stack, no network. Everything else is opt-in.
+default = ["mmcif", "pdb"]
 
 # One format per feature, so a caller that reads one does not link the others.
 mmcif = ["dep:molframe-cif"]
@@ -63,12 +75,17 @@ ic = ["geom", "dep:molframe-ic"]
 query = ["dep:molframe-query"]
 spatial = ["query", "dep:molframe-spatial"]
 chem = ["dep:molframe-chem"]
+# Arrow and Parquet together — pulls in molframe-ml (not separable without
+# splitting that crate).
 ml = ["dep:molframe-ml"]
+# Neutral byte acquisition, of which network fetch is one client; this is
+# what covers reqwest/rustls.
 adapters = ["dep:molframe-adapters"]
 xtal = ["dep:molframe-xtal", "spatial"]
 
 # Analysis domains over the kernels above.
 surface = ["spatial", "dep:molframe-surface"]
+# Pulls in faer.
 analysis = ["spatial", "geom", "chem", "dep:molframe-analysis"]
 validate = ["spatial", "geom", "chem", "dep:molframe-validate"]
 seq = ["dep:molframe-seq"]

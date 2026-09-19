@@ -72,6 +72,7 @@ impl QueryStructure for Structure {
         }
         #[cfg(not(feature = "spatial"))]
         {
+            let _ = context;
             query
                 .evaluate(self, policy, groups, None)
                 .map_err(Findings::from)

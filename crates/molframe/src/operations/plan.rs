@@ -16,7 +16,9 @@ use super::surface;
 #[cfg(feature = "traj")]
 use super::trajectory;
 use crate::QueryStructure;
-use inputs::{CoordinateInput, FrameInput, IndexInput, PlanInput};
+use inputs::{CoordinateInput, PlanInput};
+#[cfg(feature = "traj")]
+use inputs::{FrameInput, IndexInput};
 use molframe_analysis::Contact;
 use molframe_core::contract::{Analysis, AnalysisPolicy, Coverage, Status};
 use molframe_core::diagnostic::Findings;
@@ -323,6 +325,7 @@ fn array_slot<'a>(
         })
 }
 
+#[cfg(feature = "traj")]
 fn frame_slot<'a>(
     operation: &str,
     frames: &'a [FrameInput<'a>],
@@ -336,6 +339,7 @@ fn frame_slot<'a>(
         })
 }
 
+#[cfg(feature = "traj")]
 fn index_slot<'a>(
     operation: &str,
     indices: &'a [IndexInput<'a>],

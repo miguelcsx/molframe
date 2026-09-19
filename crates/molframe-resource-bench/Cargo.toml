@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 arrow.workspace = true
-molframe.workspace = true
+molframe = { path = "../molframe", version = "0.1.0", default-features = false, features = ["full"] }
 molframe-bench.workspace = true
 molframe-mmap.workspace = true
 tempfile.workspace = true
