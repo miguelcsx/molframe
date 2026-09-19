@@ -54,7 +54,7 @@ use crate::io::{
     PyAmbiguousResidueBoundaryPolicy, PyFormat, PyLimits, PyMissingElementPolicy, PyParseMode,
     PyPdbIdentifierNamespace, PyPdbWriteOptions, PyReadOptions, PyReadReport, PyReadScope,
 };
-use crate::ml::{
+use crate::interop::{
     PyDataset, PyDatasetEntry, PyDatasetFilter, PyDatasetSplit, PyDatasetWarning, PySplitOptions,
     PySplitRatios, PySplitStrategy, write_atom_ipc, write_atom_ipc_with_metadata,
     write_atom_parquet, write_atom_parquet_with_metadata,
@@ -136,7 +136,7 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     fx_registration::register_fx(module)?;
     crate::metadata::register(module)?;
     crate::mmtf_metadata::register(module)?;
-    crate::ml_extensions::register(module)?;
+    crate::extensions::register(module)?;
     crate::crystallography::register(module)?;
     crate::spatial::register(module)?;
     register_ic(module)?;
@@ -232,7 +232,7 @@ fn register_classes(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PySpatialBackend>()?;
     module.add_class::<PyGraphOptions>()?;
     module.add_class::<PyGraph>()?;
-    crate::ml::register_classes(module)?;
+    crate::interop::register_classes(module)?;
     module.add_class::<PyDatasetEntry>()?;
     module.add("ManifestEntry", module.getattr("DatasetEntry")?)?;
     module.add_class::<PyDatasetFilter>()?;

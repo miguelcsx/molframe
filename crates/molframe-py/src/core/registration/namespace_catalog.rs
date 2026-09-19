@@ -4,7 +4,7 @@ use super::namespace_analysis::ANALYSIS;
 use super::namespace_compare::COMPARE;
 use super::namespace_core::CORE;
 use super::namespace_geometry::GEOM;
-use super::namespace_platform::{FX, ML, SPATIAL, XTAL};
+use super::namespace_platform::{FX, INTEROP, SPATIAL, XTAL};
 use super::namespace_sequence::SEQ;
 use super::trajectory_exports::TRAJ;
 
@@ -92,7 +92,7 @@ pub(crate) const NAMESPACES: &[(&str, &[&str])] = &[
     ("traj", TRAJ),
     ("xtal", XTAL),
     ("spatial", SPATIAL),
-    ("ml", ML),
+    ("interop", INTEROP),
     (
         "chem",
         &[

@@ -12,7 +12,7 @@ from . import (
     geom,
     fx,
     ic,
-    ml,
+    interop,
     modelcif,
     pdb,
     query,
@@ -314,7 +314,7 @@ from .xtal import (
     space_group_by_hall, space_group_by_number, space_group_by_symbol, space_group_setting,
     space_group_settings,
 )
-from .ml.graph import (
+from .interop.graph import (
     EdgeDirection, EdgeFeature, EdgeKind, Graph, GraphOptions, MissingFeaturePolicy,
     NodeFeature, NodeLevel, SpatialBackend,
 )
@@ -336,7 +336,7 @@ from .geom import (
     symmetric_with_options, torus_summary, gyration_axes_with_options,
     helix_geometry_with_options, plane_deviation_with_options,
 )
-from .ml import (
+from .interop import (
     ArrowStream, AtomArrowTable, BondArrowTable, ChainArrowTable, DLDataType, DLDevice,
     DLManagedTensor, DLTensor, Dataset, DatasetEntry, DatasetError, DatasetFilter,
     DatasetSplit, DatasetWarning, DlpackError, DlpackTensor, ExportCost, GraphError,

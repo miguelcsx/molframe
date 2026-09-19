@@ -21,7 +21,7 @@ pub(crate) struct PyGraph {
     edge_features: Py<PyArray2<f32>>,
     node_feature_schema: Vec<PyNodeFeature>,
     edge_feature_schema: Vec<PyEdgeFeature>,
-    cost: crate::ml_extensions::PyExportCost,
+    cost: crate::extensions::PyExportCost,
 }
 
 #[pymethods]
@@ -84,7 +84,7 @@ impl PyGraph {
     }
 
     #[getter]
-    fn cost(&self) -> crate::ml_extensions::PyExportCost {
+    fn cost(&self) -> crate::extensions::PyExportCost {
         self.cost
     }
 
@@ -178,7 +178,7 @@ impl PyGraph {
             edge_features,
             node_feature_schema,
             edge_feature_schema,
-            cost: crate::ml_extensions::PyExportCost::Copy,
+            cost: crate::extensions::PyExportCost::Copy,
         })
     }
 }

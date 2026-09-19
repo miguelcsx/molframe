@@ -15,11 +15,11 @@ pub(crate) mod chem;
 pub(crate) mod cif;
 pub(crate) mod compare;
 pub(crate) mod core;
+mod capsule;
 mod fx;
 pub(crate) mod geom;
 pub(crate) mod ic;
-mod interop;
-pub(crate) mod ml;
+pub(crate) mod interop;
 pub(crate) mod modelcif;
 mod module;
 pub(crate) mod pdb;
@@ -49,7 +49,7 @@ pub(crate) use core::{
 };
 pub(crate) use geom::{self as geometry, intrinsic_geometry as intrinsic};
 pub(crate) use ic::internal_coordinates;
-pub(crate) use ml::{arrow, extensions as ml_extensions, graph};
+pub(crate) use interop::{arrow, extensions, graph};
 pub(crate) use modelcif::write as modelcif_write;
 pub(crate) use pdb::{headers as pdb_headers, primitives as pdb_primitives};
 pub(crate) use spatial::{index as spatial_index, periodic as spatial_periodic};
@@ -57,4 +57,4 @@ pub(crate) use surface::{functions as surface_functions, types as surface_types}
 pub(crate) use traj::{self as trajectory, dms, dms_models};
 pub(crate) use xtal::{crystallography, maps as xtal_maps, restraints as xtal_restraints};
 
-pub use interop::structure_from_python;
+pub use capsule::structure_from_python;

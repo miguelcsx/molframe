@@ -13,7 +13,7 @@
 //! The root namespace is curated, not a mirror of the workspace. It holds the
 //! core data model, the reading and writing verbs, the typed operation
 //! vocabulary, and — as flat names — the crates whose surface is small enough
-//! to read flat: `chem`, `geom`, `ic`, `ml`, `query`, `spatial`, `xtal` and
+//! to read flat: `chem`, `geom`, `ic`, `interop`, `query`, `spatial`, `xtal` and
 //! `audit`. Every one of those is also reachable as a module
 //! (`molframe::geom`, …), so a caller can always qualify. The large domain
 //! crates — `analysis`, `compare`, `seq`, `surface`, `traj`, `validate`, `fx` —
@@ -160,10 +160,10 @@ pub use molframe_audit::{
 #[cfg(feature = "fx")]
 pub use molframe_fx as fx;
 
-#[cfg(feature = "ml")]
-pub use molframe_ml as ml;
-#[cfg(feature = "ml")]
-pub use molframe_ml::{
+#[cfg(feature = "interop")]
+pub use molframe_interop as interop;
+#[cfg(feature = "interop")]
+pub use molframe_interop::{
     ArrowStream, AtomTable, ChainTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset,
     DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, DlpackError, DlpackTensor,
     EdgeDirection, EdgeFeature, EdgeKind, ExportCost, Graph, GraphError, GraphOptions, LoadError,
@@ -172,7 +172,7 @@ pub use molframe_ml::{
     write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet,
     write_atom_parquet_with_metadata,
 };
-// `molframe_ml::BondTable` stays module-only: the root's `BondTable` is the
+// `molframe_interop::BondTable` stays module-only: the root's `BondTable` is the
 // structure's bond table, and two tables of the same name on one root would
 // resurrect the ambiguity the aliases above used to hide.
 

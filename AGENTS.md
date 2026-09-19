@@ -24,7 +24,7 @@ self-contained: it is the whole contract for this repository.
 | `molframe-validate` | Steric clashes, cis-peptide detection, occupancy/B-factor sanity checks. |
 | `molframe-compare` | Superposition-free lDDT; TM-score, GDT-TS and GDT-HA over the shared superposition. |
 | `molframe-seq` | Pairwise alignment (global, local, semi-global) with affine gap costs. |
-| `molframe-ml` | Apache Arrow interop (C-stream export, extension types). |
+| `molframe-interop` | Apache Arrow interop (C-stream export, extension types). |
 | `molframe-modelcif` | ModelCIF metadata and confidence metrics. |
 | `molframe-audit` | Bounded policy-sensitivity audits for analyses. |
 | `molframe-fx` | Declarative functional-geometry evaluation. |
@@ -42,7 +42,7 @@ editing.
 **A known, accepted upstream duplication.** `molframe-traj` depends on
 `hoomd-gsd` (from `hoomd-rs`), which pulls in `hoomd-utility`; that crate hard-pins
 `parquet = "58.0.0"` for an internal `ParquetLogger` convenience type, while our
-own `molframe-ml` wants `parquet = "59"`. These are two incompatible majors, so a
+own `molframe-interop` wants `parquet = "59"`. These are two incompatible majors, so a
 build enabling both `traj` and `ml` compiles `parquet` (and its `parquet_derive`
 proc-macro, and a duplicate `syn 2.0.119`) twice. `hoomd-utility`'s use of
 `parquet` (`RecordWriter`, `SerializedFileWriter`, `WriterProperties`) is
@@ -136,7 +136,7 @@ cargo test -p molframe --doc --features full
 # (`mmcif` + `pdb`, not equal to any single entry in the loop below), so it gets
 # its own explicit, bare check.
 cargo check -p molframe
-for f in "" pdb mmcif bcif modelcif geom ic query spatial chem ml xtal \
+for f in "" pdb mmcif bcif modelcif geom ic query spatial chem interop xtal \
          surface analysis validate seq compare traj audit fx adapters \
          gzip zstd mmap; do
   if [ -z "$f" ]; then cargo check -p molframe --no-default-features || exit 1; \

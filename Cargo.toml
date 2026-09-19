@@ -24,7 +24,7 @@ molframe-fx = { path = "crates/molframe-fx", version = "0.1.0" }
 molframe-ic = { path = "crates/molframe-ic", version = "0.1.0" }
 molframe-pdb = { path = "crates/molframe-pdb", version = "0.1.0" }
 molframe-mmap = { path = "crates/molframe-mmap", version = "0.1.0" }
-molframe-ml = { path = "crates/molframe-ml", version = "0.1.0" }
+molframe-interop = { path = "crates/molframe-interop", version = "0.1.0" }
 molframe-modelcif = { path = "crates/molframe-modelcif", version = "0.1.0" }
 molframe-query = { path = "crates/molframe-query", version = "0.1.0" }
 molframe-seq = { path = "crates/molframe-seq", version = "0.1.0" }

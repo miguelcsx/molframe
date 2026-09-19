@@ -101,7 +101,7 @@ macro_rules! table_binding {
 table_binding!(PyAtomTable, "AtomArrowTable", molframe::AtomTable);
 table_binding!(PyResidueTable, "ResidueArrowTable", molframe::ResidueTable);
 table_binding!(PyChainTable, "ChainArrowTable", molframe::ChainTable);
-table_binding!(PyBondTable, "BondArrowTable", molframe::ml::BondTable);
+table_binding!(PyBondTable, "BondArrowTable", molframe::interop::BondTable);
 
 fn import_reader(py: Python<'_>, stream: molframe::ArrowStream) -> PyResult<Bound<'_, PyAny>> {
     let capsule = capsule(py, Ok::<_, std::convert::Infallible>(stream))?;

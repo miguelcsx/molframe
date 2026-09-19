@@ -65,8 +65,8 @@ fn binary_cif_namespace_exposes_native_document() {
     let _ = std::mem::size_of::<crate::bcif::BinaryDocument>();
 }
 
-#[cfg(feature = "ml")]
+#[cfg(feature = "interop")]
 #[test]
 fn machine_learning_namespace_exposes_native_dataset() {
-    let _ = std::mem::size_of::<crate::ml::Dataset>();
+    let _ = std::mem::size_of::<crate::interop::Dataset>();
 }

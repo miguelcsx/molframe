@@ -2,7 +2,7 @@ from typing import final
 from numpy import float32, uint32
 from numpy.typing import NDArray
 from ..xtal import UnitCell
-from ..ml.graph import SpatialBackend
+from ..interop.graph import SpatialBackend
 
 class SpatialError(ValueError): ...
 

@@ -76,7 +76,7 @@ impl PyStructure {
     ///
     /// The capsule is deliberately private to the Python protocol: consumers
     /// must validate its name before reading the `repr(C)` payload.
-    fn _pdviewx_structure_capsule<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyCapsule>> {
+    fn _molgfx_structure_capsule<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyCapsule>> {
         PyCapsule::new_with_value(py, self.inner.clone(), c"molframe.Structure")
     }
 

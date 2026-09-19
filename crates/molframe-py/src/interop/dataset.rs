@@ -123,7 +123,7 @@ impl PyDatasetEntry {
 #[pyclass(name = "DatasetFilter", frozen, from_py_object)]
 #[derive(Clone, Debug)]
 pub(crate) struct PyDatasetFilter {
-    pub(super) inner: DatasetFilter,
+    pub(in crate::interop) inner: DatasetFilter,
 }
 
 #[pymethods]
@@ -177,7 +177,7 @@ impl PyDatasetFilter {
 #[pyclass(name = "SplitRatios", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PySplitRatios {
-    pub(super) inner: SplitRatios,
+    pub(in crate::interop) inner: SplitRatios,
 }
 
 #[pymethods]
@@ -215,7 +215,7 @@ impl PySplitRatios {
 #[pyclass(name = "SplitOptions", frozen, from_py_object)]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PySplitOptions {
-    pub(super) inner: SplitOptions,
+    pub(in crate::interop) inner: SplitOptions,
 }
 
 #[pymethods]

@@ -1,4 +1,4 @@
-//! Platform namespace contracts for crystallography, spatial search, ML, and FX.
+//! Platform namespace contracts for crystallography, spatial search, interop, and FX.
 
 pub(super) const XTAL: &[&str] = &[
     "AffineTransform",
@@ -115,7 +115,7 @@ pub(super) const SPATIAL: &[&str] = &[
     "nearest_neighbors",
 ];
 
-pub(super) const ML: &[&str] = &[
+pub(super) const INTEROP: &[&str] = &[
     "ArrowStream",
     "AtomArrowTable",
     "BondArrowTable",
@@ -210,7 +210,7 @@ pub(super) const FX: &[&str] = &[
     "read_evaluation_specification",
 ];
 
-pub(super) const ML_ALIASES: &[(&str, &str)] = &[
+pub(super) const INTEROP_ALIASES: &[(&str, &str)] = &[
     ("AtomTable", "AtomArrowTable"),
     ("BondTable", "BondArrowTable"),
     ("ChainTable", "ChainArrowTable"),

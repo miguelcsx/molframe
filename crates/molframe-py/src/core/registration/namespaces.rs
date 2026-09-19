@@ -25,7 +25,7 @@ mod trajectory_exports;
 pub(crate) use namespace_catalog::NAMESPACES;
 use namespace_compare::WORKFLOW as COMPARE_WORKFLOW;
 use namespace_compare::{REGION as COMPARE_REGION, SUPERPOSED as COMPARE_SUPERPOSED};
-use namespace_platform::ML_ALIASES;
+use namespace_platform::INTEROP_ALIASES;
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = module.py();
@@ -37,8 +37,8 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
         for (alias, source) in namespace_overlays::aliases(name) {
             namespace.setattr(alias, module.getattr(source)?)?;
         }
-        if *name == "ml" {
-            for (alias, source) in ML_ALIASES {
+        if *name == "interop" {
+            for (alias, source) in INTEROP_ALIASES {
                 namespace.setattr(alias, namespace.getattr(source)?)?;
             }
         }

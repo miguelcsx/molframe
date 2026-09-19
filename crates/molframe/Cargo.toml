@@ -17,7 +17,7 @@ molframe-chem = { workspace = true, optional = true }
 molframe-geom = { workspace = true, optional = true }
 molframe-fx = { workspace = true, optional = true }
 molframe-ic = { workspace = true, optional = true }
-molframe-ml = { workspace = true, optional = true }
+molframe-interop = { workspace = true, optional = true }
 molframe-modelcif = { workspace = true, optional = true }
 molframe-pdb = { workspace = true, optional = true }
 molframe-query = { workspace = true, optional = true }
@@ -75,9 +75,9 @@ ic = ["geom", "dep:molframe-ic"]
 query = ["dep:molframe-query"]
 spatial = ["query", "dep:molframe-spatial"]
 chem = ["dep:molframe-chem"]
-# Arrow and Parquet together — pulls in molframe-ml (not separable without
+# Arrow and Parquet together — pulls in molframe-interop (not separable without
 # splitting that crate).
-ml = ["dep:molframe-ml"]
+interop = ["dep:molframe-interop"]
 # Neutral byte acquisition, of which network fetch is one client; this is
 # what covers reqwest/rustls.
 adapters = ["dep:molframe-adapters"]
@@ -99,7 +99,7 @@ gzip = ["molframe-core/gzip"]
 zstd = ["molframe-core/zstd"]
 mmap = ["molframe-core/mmap"]
 
-full = ["mmcif", "bcif", "modelcif", "pdb", "geom", "ic", "query", "spatial", "chem", "xtal", "surface", "analysis", "validate", "seq", "compare", "traj", "audit", "fx", "adapters", "ml", "gzip", "zstd", "mmap"]
+full = ["mmcif", "bcif", "modelcif", "pdb", "geom", "ic", "query", "spatial", "chem", "xtal", "surface", "analysis", "validate", "seq", "compare", "traj", "audit", "fx", "adapters", "interop", "gzip", "zstd", "mmap"]
 
 [lints]
 workspace = true

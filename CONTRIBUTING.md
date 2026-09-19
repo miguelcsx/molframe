@@ -126,7 +126,7 @@ Full anti-pattern list: see the performance notes before writing kernels.
 | A validation check | `molframe-validate` |
 | Assemblies, symmetry, maps | `molframe-xtal` |
 | Alignment, phylogeny | `molframe-seq` |
-| Tensor or graph export | `molframe-ml` |
+| Tensor or graph export | `molframe-interop` |
 | A library bridge | `molframe-adapters` |
 
 Unsure? The layering rules usually answer it: put it in the lowest layer that can hold it without adding a dependency.

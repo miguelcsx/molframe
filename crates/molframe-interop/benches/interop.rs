@@ -4,7 +4,7 @@ use arrow::ffi_stream::ArrowArrayStreamReader;
 use criterion::{Criterion, black_box};
 use molframe_bench::{Sample, structure};
 use molframe_core::execution::ExecutionContext;
-use molframe_ml::{
+use molframe_interop::{
     AtomTable, EdgeDirection, EdgeFeature, EdgeKind, GraphOptions, MissingFeaturePolicy,
     NodeFeature, NodeLevel, graph,
 };

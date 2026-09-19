@@ -18,7 +18,7 @@ numpy.workspace = true
 molframe = { path = "../molframe", version = "0.1.0", default-features = false, features = ["full"] }
 # 91 types carry more than one `#[pymethods]` block, and for some of them the
 # blocks are in different modules: `PyAtoms` is declared in `core/atom.rs` and
-# given its Arrow methods in `ml/arrow.rs`.  The feature is what lets one Rust
+# given its Arrow methods in `interop/arrow.rs`.  The feature is what lets one Rust
 # type stay one Python type instead of being split at the file boundary.
 pyo3 = { workspace = true, features = ["multiple-pymethods"] }
 

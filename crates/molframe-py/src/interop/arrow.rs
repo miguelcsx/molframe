@@ -72,7 +72,7 @@ impl PyBonds {
     ) -> PyResult<Bound<'py, PyCapsule>> {
         capsule(
             py,
-            molframe::ml::BondTable::new(self.structure()).arrow_stream(),
+            molframe::interop::BondTable::new(self.structure()).arrow_stream(),
         )
     }
 }

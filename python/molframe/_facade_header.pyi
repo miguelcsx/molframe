@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 
 from numpy.ma import MaskedArray
 
-from . import adapters, analysis, audit, bcif, cif, chem, compare, core, geom, fx, ic, ml, modelcif, pdb, query, seq, spatial, surface, traj, validate, xtal
+from . import adapters, analysis, audit, bcif, cif, chem, compare, core, geom, fx, ic, interop, modelcif, pdb, query, seq, spatial, surface, traj, validate, xtal
 
 from .audit import AlignmentPolicy, AuditPlan, AuditReport, AuditRun, ContactDefinition, DimensionSensitivity, EquivalencePolicy, HydrogenPolicy, PeriodicPolicy, PlanError, PolicyDimension, PolicyField, PolicySpace, PolicyValue, Precision, SensitiveItem, SymmetryPolicy, Tolerance
 
@@ -45,7 +45,7 @@ from .xtal import DEFAULT_CRYSTAL_IMAGE_LIMIT, DEFAULT_INSTANCE_LIMIT, SpaceGrou
 
 from .xtal import ASSEMBLIES_EXTENSION, AffineTransform, AssemblyDef, AssemblyNeighbor, AssemblySet, AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalNeighbor, Generator, INSTANCE_ID_ANNOTATION, NCS_EXTENSION, NcsCode, NcsOperator, NcsSet, NcsView, OperExpression, Operator, Rational, SpaceGroupSetting, SymmetrySet, SYMMETRY_EXTENSION, collect_crystal_neighbors, lower_assemblies, lower_ncs, lower_symmetry
 
-from .ml.graph import EdgeDirection, EdgeFeature, EdgeKind, Graph, GraphOptions, MissingFeaturePolicy, NodeFeature, NodeLevel, SpatialBackend
+from .interop.graph import EdgeDirection, EdgeFeature, EdgeKind, Graph, GraphOptions, MissingFeaturePolicy, NodeFeature, NodeLevel, SpatialBackend
 
 from .seq import *
 
@@ -68,4 +68,3 @@ from ._trajectory import DiffusionMap, DmsBond, DmsCell, DmsFrame, DmsParticle, 
 from .modelcif import GlobalMetric, LocalMetric, MetricDefinition, ModelCategory, ModelCif, ModelDescription, ModelRow, PairwiseMetric, ProtocolStep, QualityMetrics, SoftwareGroup, Target, Template, lower_model_cif
 
 from .pdb import MMTF_METADATA_EXTENSION, MmtfEntityMetadata, MmtfGroupMetadata, MmtfMetadata, MmtfOptionalField, PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbIdentifierNamespace, PdbOptions, PdbWriteOptions, mmtf_metadata, with_mmtf_metadata, write_mmtf_with_metadata
-
