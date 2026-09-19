@@ -347,3 +347,7 @@ impl SplitMix64 {
         value ^ (value >> 31)
     }
 }
+
+#[cfg(test)]
+#[path = "splitting_tests.rs"]
+mod tests;

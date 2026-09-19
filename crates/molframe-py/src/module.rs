@@ -44,6 +44,11 @@ use crate::graph::{
 use crate::hierarchy::{
     PyChain, PyChains, PyModel, PyModels, PyResidue, PyResidueAtoms, PyResidues,
 };
+use crate::interop::{
+    PyDataset, PyDatasetEntry, PyDatasetFilter, PyDatasetSplit, PyDatasetWarning, PySplitOptions,
+    PySplitRatios, PySplitStrategy, write_atom_ipc, write_atom_ipc_with_metadata,
+    write_atom_parquet, write_atom_parquet_with_metadata,
+};
 use crate::intrinsic::{
     PyCartesianFit, PyDiffusionMap, PyPcaResult, PyPeriodicAngle, PyRotation3,
     PySurfaceGridOptions, PySurfaceMesh, PySurfaceWorkflowOptions, PySurfaceWorkflowResult,
@@ -53,11 +58,6 @@ use crate::intrinsic::{
 use crate::io::{
     PyAmbiguousResidueBoundaryPolicy, PyFormat, PyLimits, PyMissingElementPolicy, PyParseMode,
     PyPdbIdentifierNamespace, PyPdbWriteOptions, PyReadOptions, PyReadReport, PyReadScope,
-};
-use crate::interop::{
-    PyDataset, PyDatasetEntry, PyDatasetFilter, PyDatasetSplit, PyDatasetWarning, PySplitOptions,
-    PySplitRatios, PySplitStrategy, write_atom_ipc, write_atom_ipc_with_metadata,
-    write_atom_parquet, write_atom_parquet_with_metadata,
 };
 use crate::structure::PyStructure;
 use crate::trajectory::{

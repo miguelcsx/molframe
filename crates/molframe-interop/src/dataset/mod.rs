@@ -1,13 +1,9 @@
 //! Lazy manifest-backed structure datasets.
 
-mod filter;
+mod filtering;
 mod manifest;
-mod split;
+mod splitting;
 
-pub use filter::DatasetFilter;
+pub use filtering::DatasetFilter;
 pub use manifest::{Dataset, DatasetError, LoadError, ManifestEntry};
-pub use split::{DatasetSplit, DatasetWarning, SplitOptions, SplitRatios, SplitStrategy};
-
-#[cfg(test)]
-#[path = "dataset_tests.rs"]
-mod tests;
+pub use splitting::{DatasetSplit, DatasetWarning, SplitOptions, SplitRatios, SplitStrategy};

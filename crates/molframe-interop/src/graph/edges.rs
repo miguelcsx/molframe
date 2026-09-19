@@ -4,7 +4,6 @@ use super::nodes::Nodes;
 use super::{EdgeDirection, EdgeKind, GraphError, GraphOptions, NodeLevel};
 use molframe_core::{AtomSelection, BondOrder, ExecutionContext, Structure};
 use molframe_spatial::{KdTree, NeighborPair, PeriodicBox, SpatialBackend, pairs_within};
-use std::collections::{BTreeMap, BTreeSet};
 
 const BONDS_FEATURE: &str = "bonds";
 const DIRECTED_GEOMETRY_FEATURE: &str = "directed_non_knn_edges";
@@ -115,7 +114,7 @@ fn geometric(
         .filter(|pair| {
             excluded
                 .as_ref()
-                .is_none_or(|bonds| !bonds.contains(&(pair.first, pair.second)))
+                .is_none_or(|bonds| bonds.binary_search(&(pair.first, pair.second)).is_err())
         })
         .map(pair_edge)
         .collect())
@@ -167,28 +166,25 @@ fn orient(
             feature: DIRECTED_GEOMETRY_FEATURE,
         });
     }
-    let mut output = BTreeMap::new();
+    let mut output = Vec::new();
     for edge in edges {
-        let canonical = canonical_edge(edge);
         match direction {
-            EdgeDirection::Undirected => {
-                output.insert((canonical.source, canonical.target), canonical);
-            }
+            EdgeDirection::Undirected => output.push(canonical_edge(edge)),
             EdgeDirection::Symmetric => {
-                output.insert((canonical.source, canonical.target), canonical);
-                let reverse = Edge {
+                let canonical = canonical_edge(edge);
+                output.push(canonical);
+                output.push(Edge {
                     source: canonical.target,
                     target: canonical.source,
                     ..canonical
-                };
-                output.insert((reverse.source, reverse.target), reverse);
+                });
             }
-            EdgeDirection::Directed => {
-                output.insert((edge.source, edge.target), edge);
-            }
+            EdgeDirection::Directed => output.push(edge),
         }
     }
-    Ok(output.into_values().collect())
+    output.sort_unstable_by_key(|edge| (edge.source, edge.target));
+    output.dedup_by_key(|edge| (edge.source, edge.target));
+    Ok(output)
 }
 
 fn edge(
@@ -241,8 +237,9 @@ fn canonical_edge(edge: Edge) -> Edge {
     }
 }
 
-fn bonded_nodes(structure: &Structure, nodes: &Nodes) -> BTreeSet<(u32, u32)> {
-    structure
+/// Canonical bonded node pairs, sorted for binary-search exclusion.
+fn bonded_nodes(structure: &Structure, nodes: &Nodes) -> Vec<(u32, u32)> {
+    let mut excluded = structure
         .data()
         .bonds
         .iter()
@@ -255,7 +252,10 @@ fn bonded_nodes(structure: &Structure, nodes: &Nodes) -> BTreeSet<(u32, u32)> {
                 (right, left)
             })
         })
-        .collect()
+        .collect::<Vec<_>>();
+    excluded.sort_unstable();
+    excluded.dedup();
+    excluded
 }
 
 fn periodic_box(structure: &Structure, periodic: bool) -> Result<Option<PeriodicBox>, GraphError> {

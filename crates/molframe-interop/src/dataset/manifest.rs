@@ -151,7 +151,7 @@ impl Dataset {
     ///
     /// Rejects invalid ratios or metadata missing for the selected strategy.
     pub fn split(&self, options: &SplitOptions) -> Result<DatasetSplit, DatasetError> {
-        super::split::split(self, options)
+        super::splitting::split(self, options)
     }
 
     /// Divides selected handles into lazy batches without loading coordinates.
@@ -327,3 +327,7 @@ const fn days_in_month(year: u32, month: u8) -> u8 {
         _ => 0,
     }
 }
+
+#[cfg(test)]
+#[path = "manifest_tests.rs"]
+mod tests;

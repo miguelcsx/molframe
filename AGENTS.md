@@ -43,14 +43,14 @@ editing.
 `hoomd-gsd` (from `hoomd-rs`), which pulls in `hoomd-utility`; that crate hard-pins
 `parquet = "58.0.0"` for an internal `ParquetLogger` convenience type, while our
 own `molframe-interop` wants `parquet = "59"`. These are two incompatible majors, so a
-build enabling both `traj` and `ml` compiles `parquet` (and its `parquet_derive`
+build enabling both `traj` and `interop` compiles `parquet` (and its `parquet_derive`
 proc-macro, and a duplicate `syn 2.0.119`) twice. `hoomd-utility`'s use of
 `parquet` (`RecordWriter`, `SerializedFileWriter`, `WriterProperties`) is
 unchanged between 58.4.0 and 59.2.0, so the fix is a version-bump request filed
 upstream against `glotzerlab/hoomd-rs`, not a vendored/patched copy of
 `hoomd-utility` in this repo — this repo carries no patched third-party crates,
 full stop. In practice this only bites builds that deliberately opt into both
-`traj` and `ml`; neither is in `molframe`'s `default` feature.
+`traj` and `interop`; neither is in `molframe`'s `default` feature.
 
 ---
 
@@ -85,8 +85,8 @@ sections below. The list here is the definition: a scope in a commit subject
 that is not a crate name must appear below.
 
 ```
-core cif pdb geom cli py query spatial chem xtal surface traj compare validate
-spec repo ci
+core cif pdb geom cli py query spatial chem xtal surface interop traj compare
+validate spec repo ci
 ```
 
 - `py` — Python bindings (PyO3 + NumPy zero-copy views + `python/` stubs).

@@ -9,17 +9,21 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 struct SnapshotAllocation {
-    _structure: Structure,
+    _structure: Arc<Structure>,
 }
 
 /// Shared owner for every zero-copy buffer exported from one table snapshot.
+///
+/// Holding [`Arc`] lets a table and its zero-copy buffers share one snapshot
+/// clone, so table construction copies the structure once and `Clone` is
+/// `O(1)`.
 #[derive(Clone, Debug)]
 pub(crate) struct SnapshotOwner(Arc<SnapshotAllocation>);
 
 impl SnapshotOwner {
-    pub(crate) fn new(structure: &Structure) -> Self {
+    pub(crate) fn from_arc(structure: Arc<Structure>) -> Self {
         Self(Arc::new(SnapshotAllocation {
-            _structure: structure.clone(),
+            _structure: structure,
         }))
     }
 

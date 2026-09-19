@@ -13,13 +13,13 @@ use molframe_spatial::SpatialBackend;
 fn bench_arrow(c: &mut Criterion) {
     let structure = structure(Sample::Medium);
     let table = AtomTable::new(&structure);
-    c.bench_function("ml_atom_record_batches/4hhb", |b| {
+    c.bench_function("interop_atom_record_batches/4hhb", |b| {
         b.iter(|| black_box(table.record_batches()));
     });
-    c.bench_function("ml_atom_arrow_stream/4hhb", |b| {
+    c.bench_function("interop_atom_arrow_stream/4hhb", |b| {
         b.iter(|| black_box(table.arrow_stream()));
     });
-    c.bench_function("ml_atom_arrow_stream_consume/4hhb", |b| {
+    c.bench_function("interop_atom_arrow_stream_consume/4hhb", |b| {
         b.iter(|| {
             let stream = match table.arrow_stream() {
                 Ok(stream) => stream,
@@ -55,9 +55,9 @@ fn bench_graph(c: &mut Criterion) {
         missing: MissingFeaturePolicy::Fill(0.0),
     };
     if let Err(error) = graph(&structure, &options, &context) {
-        panic!("ML graph benchmark setup failed: {error}");
+        panic!("graph benchmark setup failed: {error}");
     }
-    c.bench_function("ml_graph/1ubq", |b| {
+    c.bench_function("interop_graph/1ubq", |b| {
         b.iter(|| black_box(graph(&structure, &options, &context)));
     });
 }

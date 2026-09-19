@@ -1,8 +1,8 @@
 //! Arrow atom-table batches aligned to molframe chunk boundaries.
 
-use crate::extension::{ExportCost, field};
-use crate::owner::{SnapshotOwner, f32_buffer, symbol_buffer};
-use crate::stream::{ArrowStream, ArrowTableExport};
+use super::extension::{ExportCost, field};
+use super::owner::{SnapshotOwner, f32_buffer, symbol_buffer};
+use super::stream::{ArrowStream, ArrowTableExport};
 use arrow::array::{
     ArrayRef, BooleanArray, BooleanBuilder, FixedSizeListArray, Float32Array, UInt8Array,
     UInt32Array, builder::NullBufferBuilder,
@@ -17,9 +17,13 @@ use std::ops::Range;
 use std::sync::Arc;
 
 /// Arrow view of a structure's atom table.
+///
+/// Cloning is `O(1)`: the immutable snapshot is shared through [`Arc`] and the
+/// zero-copy buffers alias it, so a clone bumps reference counts rather than
+/// copying coordinates.
 #[derive(Clone, Debug)]
 pub struct AtomTable {
-    structure: Structure,
+    structure: Arc<Structure>,
     schema: SchemaRef,
     owner: SnapshotOwner,
 }
@@ -28,10 +32,11 @@ impl AtomTable {
     /// Binds the immutable structure snapshot to an Arrow table.
     #[must_use]
     pub fn new(structure: &Structure) -> Self {
+        let structure = Arc::new(structure.clone());
         Self {
             structure: structure.clone(),
             schema: Arc::new(atom_schema()),
-            owner: SnapshotOwner::new(structure),
+            owner: SnapshotOwner::from_arc(structure),
         }
     }
 

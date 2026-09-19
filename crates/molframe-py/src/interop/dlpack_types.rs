@@ -1,7 +1,7 @@
 //! Safe Python descriptors for the public `DLPack` ABI types.
 
-use crate::interop::dlpack::tensor_capsule;
 use crate::extensions::PyExportCost;
+use crate::interop::dlpack::tensor_capsule;
 use crate::structure::PyStructure;
 use pyo3::exceptions::{PyBufferError, PyValueError};
 use pyo3::prelude::*;
