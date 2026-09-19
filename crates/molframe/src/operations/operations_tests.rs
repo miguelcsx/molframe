@@ -6,6 +6,7 @@ use super::{
     SpatialRequest, StructureRequest, StructureValue,
 };
 
+mod comparison_tests;
 mod physical_tests;
 mod structure_tests;
 #[cfg(feature = "surface")]
@@ -441,65 +442,4 @@ fn structure_operations_return_governed_native_analysis() {
     assert_eq!(analysis.status, Status::Complete);
     assert!(analysis.value.is_empty());
     assert_eq!(analysis.coverage.intended, structure.atom_count());
-}
-
-#[cfg(feature = "compare")]
-#[test]
-fn comparison_operations_share_borrowed_coordinate_inputs() {
-    let mobile = [[0.0_f32, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
-    let reference = mobile;
-    let arrays = [
-        super::CoordinateInput { positions: &mobile },
-        super::CoordinateInput {
-            positions: &reference,
-        },
-    ];
-    let mut plan = Plan::new();
-    plan.add(
-        "lddt",
-        ComparisonRequest::new(
-            CoordinateSlot::new(0),
-            CoordinateSlot::new(1),
-            ComparisonMetric::Lddt {
-                inclusion_radius: 15.0,
-            },
-        ),
-    )
-    .expect("lDDT operation");
-    plan.add(
-        "tm",
-        ComparisonRequest::new(
-            CoordinateSlot::new(0),
-            CoordinateSlot::new(1),
-            ComparisonMetric::TmScore,
-        ),
-    )
-    .expect("TM-score operation");
-    plan.add(
-        "gdt",
-        ComparisonRequest::new(
-            CoordinateSlot::new(0),
-            CoordinateSlot::new(1),
-            ComparisonMetric::GdtTs,
-        ),
-    )
-    .expect("GDT operation");
-
-    let result = plan
-        .execute(
-            super::PlanInput {
-                structure: None,
-                arrays: &arrays,
-                ..Default::default()
-            },
-            &molframe_core::ExecutionContext::default(),
-        )
-        .expect("native comparison plan");
-    assert_eq!(result.entries.len(), 3);
-    assert!(result.entries.iter().all(|entry| {
-        matches!(
-            entry.value,
-            super::PlanValue::Comparison(value) if (value.value - 1.0).abs() < f64::EPSILON
-        )
-    }));
 }

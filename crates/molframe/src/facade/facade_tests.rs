@@ -1,4 +1,8 @@
 use super::*;
+#[cfg(feature = "chem")]
+use molframe_core::contract::DictionaryVersion;
+#[cfg(feature = "geom")]
+use molframe_core::selection::AtomSelection;
 
 #[cfg(feature = "pdb")]
 use crate::PdbOptions;
