@@ -226,13 +226,14 @@ cargo clippy --workspace --all-targets -- -D warnings     # must be zero warning
 # enforces, because `add_exports` resolves each name with `getattr` and propagates
 # the miss (`crates/molframe-py/src/core/registration`, `module_tests.rs`).
 cargo test --workspace
-cargo test -p molframe --doc
+cargo test -p molframe --doc --features full
 ```
 
 The facade must also compile with **every single feature and with none**, which
 is what keeps §9's gates honest:
 
 ```bash
+cargo check -p molframe
 for f in "" pdb mmcif bcif modelcif geom ic query spatial chem ml xtal \
          surface analysis validate seq compare traj audit fx adapters \
          gzip zstd mmap; do
@@ -243,8 +244,12 @@ done
 Every single feature is listed, not a sample. The three pass-through ones at the
 end gate nothing in `molframe` itself, but they change how `molframe-core` is
 built — `mmap` is what turns on its audited `unsafe` boundary — and no other entry
-reaches that configuration. The two aggregates are the only ones absent: `full` is
-what `cargo test --workspace` already builds, and `default` is `full`.
+reaches that configuration. `full` is still covered the same way: `molframe-py`
+depends on it explicitly (`default-features = false`, `features = ["full"]`), so
+`cargo test --workspace` unifies the whole build back up to `full` no matter what
+`molframe`'s own default is. `default` is now its own distinct combination
+(`mmcif` + `pdb`, not equal to any single entry in the loop above), so it gets one
+more explicit, bare check ahead of the loop.
 
 (With a shell that does not split `${f:+…}`, spell the branch out with an `if`.)
 

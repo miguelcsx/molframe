@@ -39,6 +39,19 @@ self-contained: it is the whole contract for this repository.
 `RULES.md` is the binding style guide for code in these crates. Read it before
 editing.
 
+**A known, accepted upstream duplication.** `molframe-traj` depends on
+`hoomd-gsd` (from `hoomd-rs`), which pulls in `hoomd-utility`; that crate hard-pins
+`parquet = "58.0.0"` for an internal `ParquetLogger` convenience type, while our
+own `molframe-ml` wants `parquet = "59"`. These are two incompatible majors, so a
+build enabling both `traj` and `ml` compiles `parquet` (and its `parquet_derive`
+proc-macro, and a duplicate `syn 2.0.119`) twice. `hoomd-utility`'s use of
+`parquet` (`RecordWriter`, `SerializedFileWriter`, `WriterProperties`) is
+unchanged between 58.4.0 and 59.2.0, so the fix is a version-bump request filed
+upstream against `glotzerlab/hoomd-rs`, not a vendored/patched copy of
+`hoomd-utility` in this repo — this repo carries no patched third-party crates,
+full stop. In practice this only bites builds that deliberately opt into both
+`traj` and `ml`; neither is in `molframe`'s `default` feature.
+
 ---
 
 ## 2. What lives here, what does not
@@ -106,7 +119,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 # resolves each name with `getattr` and propagates the miss, so a listed name
 # nothing registers fails the build instead of `import molframe` (`module::tests`).
 cargo test --workspace
-cargo test -p molframe --doc
+cargo test -p molframe --doc --features full
 
 # The facade compiles with any single feature and with none. This is what keeps
 # a gate on a module, a re-export or an enum variant matching the features that
@@ -115,9 +128,14 @@ cargo test -p molframe --doc
 # Every single feature, not a sample: the three pass-through ones at the end
 # (`gzip`, `zstd`, `mmap`) gate nothing in `molframe` itself, but they change how
 # `molframe-core` is built — `mmap` is what turns on its audited `unsafe` boundary —
-# and nothing else in this list reaches that configuration. Only the two aggregates
-# are absent, because `full` is what `cargo test --workspace` already builds and
-# `default` is `full`.
+# and nothing else in this list reaches that configuration. `full` is still
+# covered, the same way it always was: `molframe-py` depends on it explicitly
+# (`features = ["full"]`, `default-features = false`), so `cargo test --workspace`
+# unifies the whole build back up to `full` regardless of what `molframe`'s own
+# default is. `default` is no longer `full` — it's its own distinct combination
+# (`mmcif` + `pdb`, not equal to any single entry in the loop below), so it gets
+# its own explicit, bare check.
+cargo check -p molframe
 for f in "" pdb mmcif bcif modelcif geom ic query spatial chem ml xtal \
          surface analysis validate seq compare traj audit fx adapters \
          gzip zstd mmap; do
