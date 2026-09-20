@@ -263,3 +263,15 @@ fn a_zstd_file_expands_into_private_mapped_storage() {
     assert_eq!(input.as_bytes(), b"data_test\n");
     let _removed = std::fs::remove_file(path);
 }
+#[test]
+fn owner_backed_input_adopts_stable_bytes_and_clones_only_the_handle() {
+    let owner: std::sync::Arc<[u8]> = std::sync::Arc::from(&b"data_block"[..]);
+    let pointer = owner.as_ptr();
+    let input = InputBuffer::from_owner(std::sync::Arc::clone(&owner));
+    assert_eq!(input.kind(), InputKind::OwnerBacked);
+    assert_eq!(input.as_bytes().as_ptr(), pointer);
+    let clone = input.clone();
+    drop(input);
+    assert_eq!(clone.as_bytes(), &b"data_block"[..]);
+    assert_eq!(clone.as_bytes().as_ptr(), pointer);
+}

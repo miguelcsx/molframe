@@ -14,6 +14,7 @@ use super::{Compression, Limits};
 #[cfg(not(feature = "mmap"))]
 use crate::diagnostic::Code;
 use crate::diagnostic::Diagnostic;
+use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -27,14 +28,21 @@ pub(super) const MMAP_MIN_BYTES: u64 = 1 << 20;
 pub enum InputKind {
     /// Bytes owned by the process.
     Owned,
+    /// Stable bytes retained through an external owner without copying.
+    OwnerBacked,
     /// Read-only pages mapped from a local file.
     #[cfg(feature = "mmap")]
     Mapped,
 }
 
+trait ByteOwner: AsRef<[u8]> + fmt::Debug + Send + Sync {}
+
+impl<T> ByteOwner for T where T: AsRef<[u8]> + fmt::Debug + Send + Sync {}
+
 #[derive(Clone, Debug)]
 enum InputBytes {
     Owned(Arc<Vec<u8>>),
+    OwnerBacked(Arc<dyn ByteOwner>),
     #[cfg(feature = "mmap")]
     Mapped(Arc<molframe_mmap::MappedFile>),
 }
@@ -43,6 +51,7 @@ impl InputBytes {
     fn as_slice(&self) -> &[u8] {
         match self {
             Self::Owned(bytes) => bytes.as_slice(),
+            Self::OwnerBacked(owner) => owner.as_ref().as_ref(),
             #[cfg(feature = "mmap")]
             Self::Mapped(mapped) => mapped.as_bytes(),
         }
@@ -51,6 +60,7 @@ impl InputBytes {
     const fn kind(&self) -> InputKind {
         match self {
             Self::Owned(_) => InputKind::Owned,
+            Self::OwnerBacked(_) => InputKind::OwnerBacked,
             #[cfg(feature = "mmap")]
             Self::Mapped(_) => InputKind::Mapped,
         }
@@ -70,6 +80,22 @@ impl InputBuffer {
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self {
             bytes: InputBytes::Owned(Arc::new(bytes)),
+            origin: None,
+        }
+    }
+
+    /// Retains stable externally owned bytes without copying their payload.
+    ///
+    /// The owner is held for the complete lifetime of this buffer and every
+    /// clone. This is the adoption path for language-runtime byte objects and
+    /// existing immutable buffers whose address remains stable.
+    #[must_use]
+    pub fn from_owner<T>(owner: T) -> Self
+    where
+        T: AsRef<[u8]> + fmt::Debug + Send + Sync + 'static,
+    {
+        Self {
+            bytes: InputBytes::OwnerBacked(Arc::new(owner)),
             origin: None,
         }
     }
