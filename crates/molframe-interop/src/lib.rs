@@ -13,9 +13,9 @@ mod numeric;
 mod tensor;
 
 pub use columnar::{
-    ArrowStream, AtomTable, BondTable, ChainTable, ExportCost, MolframeExtension, ResidueTable,
-    TableFileError, extension_name, write_atom_ipc, write_atom_ipc_with_metadata,
-    write_atom_parquet, write_atom_parquet_with_metadata,
+    ArrowStream, AtomTable, BondTable, ChainTable, ContactArrowTable, ExportCost,
+    MolframeExtension, ResidueTable, TableFileError, extension_name, write_atom_ipc,
+    write_atom_ipc_with_metadata, write_atom_parquet, write_atom_parquet_with_metadata,
 };
 pub use dataset::{
     Dataset, DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, LoadError, ManifestEntry,

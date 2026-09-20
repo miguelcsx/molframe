@@ -12,6 +12,7 @@ arrow.workspace = true
 num-traits.workspace = true
 parquet.workspace = true
 molframe-core.workspace = true
+molframe-analysis.workspace = true
 molframe-seq.workspace = true
 serde.workspace = true
 serde_json.workspace = true
