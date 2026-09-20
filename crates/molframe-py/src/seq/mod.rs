@@ -1,1 +1,0 @@
-//! Sequence binding sources.

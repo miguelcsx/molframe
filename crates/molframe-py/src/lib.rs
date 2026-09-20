@@ -1,60 +1,83 @@
-//! Mechanical Python bindings for the Rust facade.
+//! Curated Python bindings for the `MolFrame` facade.
 //!
-//! Audited pointer use is confined to NumPy/Arrow/DLPack lifetime adapters;
-//! computational kernels remain in Rust. This ABI boundary is separate from the
-//! operating-system mapping boundary in `molframe-mmap`.
+//! Python mirrors the stable Rust contract rather than the workspace crate
+//! graph. Native storage and kernels remain in Rust; this crate owns only
+//! lifetime-safe Python views and small conversion boundaries.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-pub(crate) mod adapters;
-mod analysis;
-pub(crate) mod api;
-pub(crate) mod audit;
-pub(crate) mod bcif;
-mod capsule;
-pub(crate) mod chem;
-pub(crate) mod cif;
-pub(crate) mod compare;
-pub(crate) mod core;
-mod fx;
-pub(crate) mod geom;
-pub(crate) mod ic;
-pub(crate) mod interop;
-pub(crate) mod modelcif;
-mod module;
-pub(crate) mod pdb;
-mod query;
-pub(crate) mod seq;
-pub(crate) mod spatial;
-pub(crate) mod surface;
-pub(crate) mod traj;
-mod validate;
-pub(crate) mod xtal;
+mod bindings;
+mod catalog;
+mod hierarchy;
+mod workflow;
 
-pub(crate) use bcif::codec as bcif_codec;
-pub(crate) use chem::bindings as chemistry;
-pub(crate) use cif::{
-    document as cif_document, lexer as cif_lexer, lower as cif_lower, parser as cif_parser,
-    pdbml as cif_pdbml, rows as cif_rows, small as cif_small, write as cif_write,
+use bindings::{
+    PyContactTable, PyQuery, PyReader, PySelection, PyStructure, PyStructureEditor, atom_contacts,
+    centroid, distance_matrix, read, rmsd,
 };
-pub(crate) use compare::difference;
-pub(crate) use core::{
-    annotations as core_annotations, atom, bonds, chunk_stats as core_chunk_stats,
-    columns as core_columns, config, contract, contract_types as core_contract, data as core_data,
-    diagnostic as core_diagnostic, edit, edit_types as core_edit, encoded as core_encoded, errors,
-    facade, hierarchy, index, io, io_types as core_io, metadata, mmtf_metadata,
-    plan::bindings as plan, records as core_records, reexecution, storage as core_storage,
-    structure, topology as core_topology, topology_root as core_topology_root,
-    values as core_values, views as core_views,
-};
-pub(crate) use geom::{self as geometry, intrinsic_geometry as intrinsic};
-pub(crate) use ic::internal_coordinates;
-pub(crate) use interop::{arrow, extensions, graph};
-pub(crate) use modelcif::write as modelcif_write;
-pub(crate) use pdb::{headers as pdb_headers, primitives as pdb_primitives};
-pub(crate) use spatial::{index as spatial_index, periodic as spatial_periodic};
-pub(crate) use surface::{functions as surface_functions, types as surface_types};
-pub(crate) use traj::{self as trajectory, dms, dms_models};
-pub(crate) use xtal::{crystallography, maps as xtal_maps, restraints as xtal_restraints};
+use hierarchy::{PyAtom, PyAtoms, PyChain, PyChains, PyModel, PyModels, PyResidue, PyResidues};
+use pyo3::prelude::*;
+use workflow::{PyCompiledWorkflow, PyWorkflow, PyWorkflowNode};
 
-pub use capsule::structure_from_python;
+#[pymodule]
+#[pyo3(name = "_native")]
+fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<PyStructure>()?;
+    module.add_class::<PyStructureEditor>()?;
+    module.add_class::<PyAtom>()?;
+    module.add_class::<PyAtoms>()?;
+    module.add_class::<PyResidue>()?;
+    module.add_class::<PyResidues>()?;
+    module.add_class::<PyChain>()?;
+    module.add_class::<PyChains>()?;
+    module.add_class::<PyModel>()?;
+    module.add_class::<PyModels>()?;
+    module.add_class::<PySelection>()?;
+    module.add_class::<PyQuery>()?;
+    module.add_class::<PyReader>()?;
+    module.add_class::<PyContactTable>()?;
+    module.add_class::<PyWorkflow>()?;
+    module.add_class::<PyWorkflowNode>()?;
+    module.add_class::<PyCompiledWorkflow>()?;
+    module.add_function(wrap_pyfunction!(read, module)?)?;
+    register_namespaces(module)?;
+    catalog::validate_registration(module)
+}
+
+fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = module.py();
+    let geometry = PyModule::new(py, "geometry")?;
+    geometry.add_function(wrap_pyfunction!(centroid, &geometry)?)?;
+    geometry.add_function(wrap_pyfunction!(distance_matrix, &geometry)?)?;
+    geometry.add_function(wrap_pyfunction!(rmsd, &geometry)?)?;
+    module.add_submodule(&geometry)?;
+
+    let analysis = PyModule::new(py, "analysis")?;
+    analysis.add_function(wrap_pyfunction!(atom_contacts, &analysis)?)?;
+    analysis.add("ContactTable", module.getattr("ContactTable")?)?;
+    module.add_submodule(&analysis)?;
+
+    for name in [
+        "trajectory",
+        "sequence",
+        "crystal",
+        "validation",
+        "motif",
+        "chemistry",
+        "compare",
+        "query",
+        "spatial",
+        "surface",
+    ] {
+        module.add_submodule(&PyModule::new(py, name)?)?;
+    }
+    let formats = PyModule::new(py, "formats")?;
+    for name in ["cif", "bcif", "pdb", "modelcif"] {
+        formats.add_submodule(&PyModule::new(py, name)?)?;
+    }
+    module.add_submodule(&formats)
+}
+
+#[cfg(test)]
+#[path = "module_tests.rs"]
+mod tests;
