@@ -76,19 +76,22 @@ structure = molframe.read("1ubq.cif")
 print(structure.atom_count)
 print(structure.chain_count)
 
-xyz = structure.xyz
-print(xyz.shape)
+coordinates = structure.coordinates
+print(coordinates.shape)
 ```
 
-`structure.xyz` exposes coordinates as an `N × 3` `float32` NumPy-compatible view without rebuilding the molecular structure in Python.
+`structure.coordinates` exposes coordinates as an `N × 3` read-only `float32`
+NumPy view without rebuilding the molecular structure in Python. A
+`Selection.to_coordinates()` call is intentionally named because a discontiguous
+selection must be materialized.
 
 The same structure can be used directly for querying and analysis:
 
 ```python
 structure = molframe.read("1ubq.cif")
 
-for chain in structure.chains:
-    print(chain.label, len(chain.residues))
+backbone = structure.select("name CA")
+print(backbone.to_coordinates().shape)
 ```
 
 ### Rust
@@ -115,6 +118,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 `read_with_diagnostics` preserves problems and ambiguities encountered while loading a structure instead of reducing parsing to a success/failure decision.
+
+## Workflow and data-movement contract
+
+`Workflow` builds an immutable typed DAG with named inputs and outputs. Compile
+once, then reuse the `CompiledWorkflow`; compilation validates types and cycles,
+removes dead and common nodes, fixes deterministic execution order, plans value
+lifetimes, and estimates peak retained memory. Kernels keep their bounded
+internal parallelism while graph nodes run in stable topological order.
+
+Logical and physical explanations label movement explicitly: `Borrow` aliases a
+live input, `Adopt` retains an owner without copying its payload, `Decode`
+converts encoded data, `Copy` duplicates native storage, and `Materialize`
+computes or gathers a new representation. Python follows the same rule:
+compatible contiguous arrays are borrowed for eager calls, non-contiguous arrays
+are rejected with an instruction to use `numpy.ascontiguousarray`, and values
+retained by a compiled workflow require the explicit `copy=True` choice.
+
+Potentially large interaction results are native structure-of-arrays tables.
+Their columns are borrowed directly in Rust, reducer blocks append column by
+column, and Python arrays retain native owners. A `Selection` is structure-bound
+and zero-copy; `Selection.to_coordinates()` is the explicit gather operation.
 
 ## One model from file to result
 
@@ -434,7 +458,9 @@ feature-gated dependencies
 
 Specific benchmark numbers belong with their dataset, hardware, software revision, and methodology rather than as context-free claims in this README.
 
-See [`benchmarks/`](benchmarks/) for benchmark sources and methodology.
+Benchmark sources live beside the subsystem they measure in each crate's
+`benches/` directory; deterministic allocation and resident-memory cases live
+in `crates/molframe-resource-bench`.
 
 ## Rust features
 
@@ -450,21 +476,25 @@ bcif
 modelcif
 pdb
 
-geom
+geometry
 query
 spatial
-chem
-xtal
+chemistry
+crystal
 
 surface
 analysis
-validate
+validation
 compare
-traj
-ml
+trajectory
+sequence
+interop
+audit
+motif
 ```
 
-The default configuration exposes the complete engine, while advanced consumers can build against a smaller dependency surface.
+The default configuration enables mmCIF and PDB only. Applications opt into
+analysis domains individually, and `full` is available for complete builds.
 
 ## Project status
 

@@ -29,7 +29,7 @@ jobs:
         run: cargo test --workspace
 
       - name: Doc tests
-        run: cargo test -p molframe --doc
+        run: cargo test -p molframe --doc --features full
 
       # Every single feature, not a sample. The three pass-through ones at the
       # end gate nothing in `molframe` itself, but they change how
@@ -38,8 +38,8 @@ jobs:
       - name: Facade features
         run: |
           set -e
-          for f in "" pdb mmcif bcif modelcif geom ic query spatial chem interop xtal \
-                   surface analysis validate seq compare traj audit fx adapters \
+          for f in "" pdb mmcif bcif modelcif geometry ic query spatial chemistry interop crystal \
+                   surface analysis validation sequence compare trajectory audit motif adapters \
                    gzip zstd mmap; do
             cargo check -p molframe --no-default-features ${f:+--features "$f"}
           done
@@ -47,6 +47,7 @@ jobs:
       # The stable ABI, which is what maturin builds by default. It costs one
       # compilation here, and it is the only check that would notice a binding
       # that stopped being abi3-compatible.
+      #
       - name: Stable ABI
         env:
           PYO3_NO_PYTHON: "1"
@@ -68,8 +69,6 @@ jobs:
           find crates -name "*.rs" -print0 | xargs -0 wc -l \
             | awk '$1 > 500 && $2 != "total" { print; found = 1 } END { exit found }'
 
-  # The binding smoke suite (16 §1.1): binding correctness only. The behaviour
-  # lives in Rust and is covered by the workspace tests above.
   python:
     runs-on: ubuntu-latest
     steps:
@@ -86,3 +85,6 @@ jobs:
 
       - name: Smoke suite
         run: uv run --no-sync pytest python/tests -q
+
+      - name: Public typing surface
+        run: uv run --no-sync pyright --verifytypes molframe

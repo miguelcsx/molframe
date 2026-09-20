@@ -111,13 +111,6 @@ Green means all of these pass:
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
-# This carries the two checks that keep the Python surface honest, one per
-# direction the drift can run. Every name the extension registers must be named
-# by the module that carries it, in the `.py` and the `.pyi` both
-# (`module::namespace_registration`). And every name a namespace advertises must
-# be registered by something, which the module build itself enforces: `add_exports`
-# resolves each name with `getattr` and propagates the miss, so a listed name
-# nothing registers fails the build instead of `import molframe` (`module::tests`).
 cargo test --workspace
 cargo test -p molframe --doc --features full
 
@@ -136,8 +129,8 @@ cargo test -p molframe --doc --features full
 # (`mmcif` + `pdb`, not equal to any single entry in the loop below), so it gets
 # its own explicit, bare check.
 cargo check -p molframe
-for f in "" pdb mmcif bcif modelcif geom ic query spatial chem interop xtal \
-         surface analysis validate seq compare traj audit fx adapters \
+for f in "" pdb mmcif bcif modelcif geometry ic query spatial chemistry interop crystal \
+         surface analysis validation sequence compare trajectory audit motif adapters \
          gzip zstd mmap; do
   if [ -z "$f" ]; then cargo check -p molframe --no-default-features || exit 1; \
   else cargo check -p molframe --no-default-features --features "$f" || exit 1; fi

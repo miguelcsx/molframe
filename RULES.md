@@ -234,8 +234,8 @@ is what keeps §9's gates honest:
 
 ```bash
 cargo check -p molframe
-for f in "" pdb mmcif bcif modelcif geom ic query spatial chem interop xtal \
-         surface analysis validate seq compare traj audit fx adapters \
+for f in "" pdb mmcif bcif modelcif geometry ic query spatial chemistry interop crystal \
+         surface analysis validation sequence compare trajectory audit motif adapters \
          gzip zstd mmap; do
   cargo check -p molframe --no-default-features ${f:+--features "$f"} || exit 1
 done
