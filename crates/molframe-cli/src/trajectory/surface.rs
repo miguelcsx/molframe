@@ -2,7 +2,7 @@
 
 use crate::exit::Exit;
 use crate::report::{Context, Json, RowWriter};
-use molframe::core::{Backpressure, BatchDemand, BatchSource, execution::Retained};
+use molframe_core::{Backpressure, BatchDemand, BatchSource, execution::Retained};
 use std::path::Path;
 
 pub(crate) fn sasa(
@@ -10,7 +10,7 @@ pub(crate) fn sasa(
     topology: &Path,
     probe: f32,
     samples: u16,
-    radius_set: molframe::RadiusSet,
+    radius_set: molframe::chemistry::RadiusSet,
     context: Context,
 ) -> Exit {
     if !super::streaming::supported(path) {
@@ -61,7 +61,7 @@ pub(crate) fn sasa(
                 sink.row(values.iter().map(String::as_str))
             };
             output.map_err(|error| {
-                molframe::traj::TrajectoryError::SourceIo {
+                molframe::trajectory::TrajectoryError::SourceIo {
                     format: "SASA output",
                     kind: error.kind(),
                 }
@@ -87,7 +87,7 @@ pub(crate) fn sasa(
 fn read_radii(
     path: &Path,
     atoms: usize,
-    set: molframe::RadiusSet,
+    set: molframe::chemistry::RadiusSet,
     context: Context,
 ) -> Result<Retained<Vec<f32>>, Exit> {
     let bytes = atoms
@@ -132,7 +132,7 @@ fn read_radii(
                         return Err(Exit::Consistency);
                     }
                     let element = molframe::Element::from_atomic_number(element);
-                    let Some(radius) = molframe::vdw_radius(element, set) else {
+                    let Some(radius) = molframe::chemistry::vdw_radius(element, set) else {
                         eprintln!("radius set has no value for topology atom {}", radii.len());
                         return Err(Exit::Indeterminate);
                     };

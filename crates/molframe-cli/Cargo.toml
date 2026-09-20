@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 molframe = { path = "../molframe", version = "0.1.0", default-features = false, features = ["full"] }
 molframe-adapters.workspace = true
+molframe-core.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 clap_mangen.workspace = true

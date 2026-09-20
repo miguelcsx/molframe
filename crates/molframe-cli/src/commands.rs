@@ -6,10 +6,9 @@
 
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table, json_array};
-use molframe::{
-    ChainRef, Evaluation, Findings, Format, Groups, Namespace, PdbIdentifierNamespace, PdbOptions,
-    Query, ReadOptions, Structure,
-};
+use molframe::formats::pdb::{PdbIdentifierNamespace, PdbOptions};
+use molframe::query::{Evaluation, Groups};
+use molframe::{ChainRef, Findings, Format, Namespace, Query, ReadOptions, Structure};
 use std::fmt::Write as _;
 use std::path::Path;
 
@@ -22,7 +21,7 @@ pub(super) fn select_text(
     structure: &Structure,
     source: &str,
     policy: &molframe::AnalysisPolicy,
-    execution: &molframe::core::ExecutionContext,
+    execution: &molframe_core::ExecutionContext,
 ) -> Result<Evaluation, Findings> {
     use molframe::QueryStructure as _;
     let query = Query::compile(source).map_err(Findings::from)?;
@@ -68,7 +67,7 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
             return Exit::Usage;
         }
     };
-    let data = structure.data();
+    let data = structure.engine().data();
 
     if context.is_json() {
         let mut object = Json::new();
@@ -78,7 +77,7 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
         object
             .number("models", structure.model_count())
             .number("chains", structure.chain_count())
-            .number("entities", structure.entity_count())
+            .number("entities", structure.engine().entity_count())
             .number("residues", structure.residue_count())
             .number("atoms", structure.atom_count());
         if detail {
@@ -101,7 +100,7 @@ pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
     }
     let _ = writeln!(text, "models    {}", structure.model_count());
     let _ = writeln!(text, "chains    {}", structure.chain_count());
-    let _ = writeln!(text, "entities  {}", structure.entity_count());
+    let _ = writeln!(text, "entities  {}", structure.engine().entity_count());
     let _ = writeln!(text, "residues  {}", structure.residue_count());
     let _ = write!(text, "atoms     {}", structure.atom_count());
     if let Some(cell) = data.cell {
@@ -140,13 +139,13 @@ fn info_table(
     delimiter: char,
     namespace: Namespace,
 ) -> String {
-    let id = match &structure.data().entry.id {
+    let id = match &structure.engine().data().entry.id {
         Some(id) => id.as_ref(),
         None => "",
     };
     if detail {
         let mut table = Table::new(delimiter, &["entry", "chain", "residues", "atoms"]);
-        for chain in structure.data().chains() {
+        for chain in structure.engine().data().chains() {
             let values = [
                 id.to_owned(),
                 label_of(structure, chain, namespace),
@@ -169,7 +168,7 @@ fn info_table(
         id.to_owned(),
         structure.model_count().to_string(),
         structure.chain_count().to_string(),
-        structure.entity_count().to_string(),
+        structure.engine().entity_count().to_string(),
         structure.residue_count().to_string(),
         structure.atom_count().to_string(),
     ];
@@ -179,6 +178,7 @@ fn info_table(
 
 fn chain_detail_json(structure: &Structure, namespace: Namespace) -> String {
     let entries: Vec<String> = structure
+        .engine()
         .data()
         .chains()
         .map(|chain| {
@@ -205,7 +205,7 @@ fn label_of(structure: &Structure, chain: ChainRef<'_>, namespace: Namespace) ->
         Namespace::Auth => chain.auth_asym_id(),
         _ => None,
     };
-    match symbol.and_then(|symbol| structure.resolve(symbol)) {
+    match symbol.and_then(|symbol| structure.engine().resolve(symbol)) {
         Some(label) => label.to_owned(),
         None => "?".to_owned(),
     }
@@ -218,7 +218,7 @@ pub fn convert(
     chain_map: &[String],
     hybrid36: bool,
     preserve: bool,
-    cif_options: &molframe::CifWriteOptions,
+    cif_options: &molframe::formats::cif::CifWriteOptions,
     context: Context,
 ) -> Exit {
     if preserve {
@@ -322,14 +322,14 @@ fn preserving_convert(input: &Path, output: &Path, context: Context) -> Exit {
         }
     };
     let mut sink =
-        match molframe::core::io::OutputSink::create(output, molframe::OutputOptions::default()) {
+        match molframe_core::io::OutputSink::create(output, molframe::OutputOptions::default()) {
             Ok(sink) => sink,
             Err(finding) => {
                 context.findings(&[finding], &output.display().to_string());
                 return Exit::Failure;
             }
         };
-    if let Err(error) = molframe::write_preserving_to(&document, &mut sink) {
+    if let Err(error) = molframe::formats::cif::write_preserving_to(&document, &mut sink) {
         eprintln!("could not write {}: {error}", output.display());
         return Exit::Failure;
     }
@@ -348,13 +348,13 @@ pub fn measure(path: &Path, context: Context) -> Exit {
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let positions = structure.positions();
+    let positions = structure.coordinates();
 
-    let Some(centre) = molframe::centroid(positions) else {
+    let Some(centre) = molframe::geometry::centroid(positions) else {
         eprintln!("the structure holds no positions to measure");
         return Exit::Consistency;
     };
-    let radius = molframe::radius_of_gyration(positions, &[]);
+    let radius = molframe::geometry::radius_of_gyration(positions, &[]);
 
     if context.is_json() {
         let mut object = Json::new();

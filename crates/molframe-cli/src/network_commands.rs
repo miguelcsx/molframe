@@ -73,7 +73,7 @@ pub(crate) fn update_ccd(
     // The downloaded bytes are validated before they are written, so this reads
     // from the buffer rather than from a path the facade could open.
     let input = molframe::InputBuffer::from_bytes(download.bytes.clone());
-    match molframe::chem::read_ccd(&input, molframe::DictionaryVersion::new(version)) {
+    match molframe::chemistry::read_ccd(&input, molframe::DictionaryVersion::new(version)) {
         Ok((_, findings)) => context.findings(&findings, url),
         Err(findings) => {
             context.findings(&findings, url);

@@ -1,10 +1,11 @@
 //! Thin rendering over native correspondence-based comparison kernels.
 
+use super::render::{emit_mappings, emit_metrics, emit_rmsd};
 use crate::MetricChoice;
 use crate::commands::open;
 use crate::exit::Exit;
-use crate::report::{Context, Json, Table};
-use molframe::seq::Scoring;
+use crate::report::{Context, Json};
+use molframe::sequence::Scoring;
 use std::path::Path;
 
 pub(crate) fn superpose(
@@ -12,7 +13,7 @@ pub(crate) fn superpose(
     reference: &Path,
     output: &Path,
     query: &str,
-    options: molframe::SuperposeOptions,
+    options: molframe::geometry::SuperposeOptions,
     context: Context,
 ) -> Exit {
     let mobile_structure = match open(mobile, context) {
@@ -54,14 +55,18 @@ pub(crate) fn superpose(
     );
     let mobile_points = selected_positions(&mobile_structure, &mobile_selection.selection);
     let reference_points = selected_positions(&reference_structure, &reference_selection.selection);
-    let fit = match molframe::superpose_with_options(&mobile_points, &reference_points, options) {
+    let fit = match molframe::geometry::superpose_with_options(
+        &mobile_points,
+        &reference_points,
+        options,
+    ) {
         Ok(fit) => fit,
         Err(error) => {
             eprintln!("superposition failed: {}", superpose_error(error));
             return Exit::Consistency;
         }
     };
-    let all = molframe::AtomSelection::All(mobile_structure.atom_count());
+    let all = molframe_core::selection::AtomSelection::All(mobile_structure.atom_count());
     let aligned = match molframe::transform(&mobile_structure, &all, &fit.transform) {
         Ok(aligned) => aligned,
         Err(findings) => {
@@ -94,24 +99,28 @@ pub(crate) fn superpose(
     }
 }
 
-const fn superpose_error(error: molframe::SuperposeError) -> &'static str {
+const fn superpose_error(error: molframe::geometry::SuperposeError) -> &'static str {
     match error {
-        molframe::SuperposeError::LengthMismatch => "selections have different atom counts",
-        molframe::SuperposeError::TooFewPoints => "selection has fewer than three atoms",
-        molframe::SuperposeError::Degenerate => "selected coordinates are collinear",
-        molframe::SuperposeError::InvalidOptions => "superposition options are invalid",
-        molframe::SuperposeError::TooManyPoints => "selection exceeds the supported atom count",
-        molframe::SuperposeError::Eigen(_) => "quaternion eigensolver failed",
+        molframe::geometry::SuperposeError::LengthMismatch => {
+            "selections have different atom counts"
+        }
+        molframe::geometry::SuperposeError::TooFewPoints => "selection has fewer than three atoms",
+        molframe::geometry::SuperposeError::Degenerate => "selected coordinates are collinear",
+        molframe::geometry::SuperposeError::InvalidOptions => "superposition options are invalid",
+        molframe::geometry::SuperposeError::TooManyPoints => {
+            "selection exceeds the supported atom count"
+        }
+        molframe::geometry::SuperposeError::Eigen(_) => "quaternion eigensolver failed",
     }
 }
 
 fn selected_positions(
     structure: &molframe::Structure,
-    selection: &molframe::AtomSelection,
+    selection: &molframe_core::selection::AtomSelection,
 ) -> Vec<[f32; 3]> {
     selection
         .iter()
-        .map(|atom| structure.positions()[atom as usize])
+        .map(|atom| structure.coordinates()[atom as usize])
         .collect()
 }
 
@@ -150,9 +159,9 @@ pub(crate) fn rmsd(
         return Exit::Consistency;
     }
     let measured = if no_fit {
-        molframe::rmsd(&moving, &fixed).map(|value| (value, false))
+        molframe::geometry::rmsd(&moving, &fixed).map(|value| (value, false))
     } else {
-        molframe::superpose(&moving, &fixed).map(|fit| (fit.rmsd, true))
+        molframe::geometry::superpose(&moving, &fixed).map(|fit| (fit.rmsd, true))
     };
     let Ok((value, fitted)) = measured else {
         eprintln!("the selected coordinates cannot be compared");
@@ -171,7 +180,10 @@ fn comparison_points(
     context: Context,
 ) -> Result<ComparisonPoints, Exit> {
     let Some(query) = query else {
-        return Ok((mobile.positions().to_vec(), reference.positions().to_vec()));
+        return Ok((
+            mobile.coordinates().to_vec(),
+            reference.coordinates().to_vec(),
+        ));
     };
     let moving = crate::commands::select_text(mobile, query, context.policy, context.execution)
         .map_err(|findings| {
@@ -189,29 +201,6 @@ fn comparison_points(
         selected_positions(mobile, &moving.selection),
         selected_positions(reference, &fixed.selection),
     ))
-}
-
-fn emit_rmsd(value: f64, atoms: usize, fitted: bool, context: Context) {
-    if context.is_json() {
-        let mut object = Json::new();
-        object
-            .number("rmsd", format!("{value:.4}"))
-            .number("atoms", atoms)
-            .raw("fitted", if fitted { "true" } else { "false" });
-        context.result(&object.finish());
-    } else if let Some(delimiter) = context.delimiter() {
-        let mut table = Table::new(delimiter, &["rmsd", "atoms", "fitted"]);
-        let values = [format!("{value:.4}"), atoms.to_string(), fitted.to_string()];
-        table.row(values.iter().map(String::as_str));
-        context.result(&table.finish());
-    } else {
-        let how = if fitted {
-            "after fitting"
-        } else {
-            "as they sit"
-        };
-        context.result(&format!("rmsd {value:.3} over {atoms} atoms, {how}"));
-    }
 }
 
 type ComparisonPoints = (Vec<[f32; 3]>, Vec<[f32; 3]>);
@@ -274,7 +263,7 @@ fn measure(
     model: &molframe::Structure,
     reference: &molframe::Structure,
     options: &ComparisonOptions<'_>,
-    execution: &molframe::core::ExecutionContext,
+    execution: &molframe_core::ExecutionContext,
 ) -> Result<Vec<(&'static str, f64)>, Exit> {
     let result = match metric {
         MetricChoice::Lddt => {
@@ -291,8 +280,8 @@ fn measure(
                 return Err(Exit::Usage);
             }
             molframe::compare::lddt_with_options(
-                model.positions(),
-                reference.positions(),
+                model.coordinates(),
+                reference.coordinates(),
                 &molframe::compare::LddtOptions {
                     inclusion_radius: f64::from(radius),
                     minimum_reference_distance: minimum,
@@ -303,10 +292,14 @@ fn measure(
             )
         }
         MetricChoice::TmScore => {
-            molframe::compare::tm_score(model.positions(), reference.positions())
+            molframe::compare::tm_score(model.coordinates(), reference.coordinates())
         }
-        MetricChoice::GdtTs => molframe::compare::gdt_ts(model.positions(), reference.positions()),
-        MetricChoice::GdtHa => molframe::compare::gdt_ha(model.positions(), reference.positions()),
+        MetricChoice::GdtTs => {
+            molframe::compare::gdt_ts(model.coordinates(), reference.coordinates())
+        }
+        MetricChoice::GdtHa => {
+            molframe::compare::gdt_ha(model.coordinates(), reference.coordinates())
+        }
         MetricChoice::DockQ => return measure_dockq(model, reference, options),
     };
     result
@@ -341,8 +334,8 @@ fn measure_dockq(
         return Err(Exit::Usage);
     };
     molframe::compare::dockq(
-        model,
-        reference,
+        model.engine(),
+        reference.engine(),
         receptor,
         ligand,
         molframe::compare::DockQOptions {
@@ -392,8 +385,8 @@ pub(crate) fn map_chains(
         Err(exit) => return exit,
     };
     let assignment = match molframe::compare::assign_chains(
-        &reference,
-        &model,
+        reference.engine(),
+        model.engine(),
         &provider,
         context.policy.identifiers,
         scoring,
@@ -427,63 +420,6 @@ pub(crate) fn map_chains(
     }));
     emit_mappings(context, &rows);
     Exit::Success
-}
-
-fn emit_metrics(context: Context, rows: &[(&str, f64)]) {
-    if context.is_json() {
-        let mut json = Json::new();
-        for (name, value) in rows {
-            json.number(name, value);
-        }
-        context.result(&json.finish());
-    } else {
-        let delimiter = match context.delimiter() {
-            Some(value) => value,
-            None => '\t',
-        };
-        let mut table = Table::new(delimiter, &["metric", "value"]);
-        for (name, value) in rows {
-            let value = value.to_string();
-            table.row([*name, &value]);
-        }
-        context.result(&table.finish());
-    }
-}
-
-fn emit_mappings(context: Context, rows: &[(&str, String, String, f64)]) {
-    if context.is_json() {
-        let objects = rows
-            .iter()
-            .map(|(assignment, reference, model, identity)| {
-                let mut json = Json::new();
-                json.text("assignment", assignment)
-                    .text("reference_chain", reference)
-                    .text("model_chain", model)
-                    .number("identity", identity);
-                json.finish()
-            })
-            .collect::<Vec<_>>();
-        context.result(&context.json_records(&objects));
-    } else {
-        let delimiter = match context.delimiter() {
-            Some(value) => value,
-            None => '\t',
-        };
-        let mut table = Table::new(
-            delimiter,
-            &["assignment", "reference_chain", "model_chain", "identity"],
-        );
-        for (assignment, reference, model, identity) in rows {
-            let identity = identity.to_string();
-            table.row([
-                *assignment,
-                reference.as_str(),
-                model.as_str(),
-                identity.as_str(),
-            ]);
-        }
-        context.result(&table.finish());
-    }
 }
 
 pub(super) const fn metric_name(metric: MetricChoice) -> &'static str {

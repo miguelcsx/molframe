@@ -3,11 +3,13 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json};
+use molframe::chemistry::{RadiusSet, vdw_radius};
+use molframe::geometry::PeriodicAngle;
 use molframe::surface::{edge_geodesic_distances, surface_curvatures, surface_patch};
-use molframe::traj::{
+use molframe::trajectory::{
     CartesianFit, cartesian_pca, diffusion_map, dihedral_pca, pairwise_fitted_rmsd,
 };
-use molframe::{AtomIndex, ModelIndex, PeriodicAngle, RadiusSet, Structure, vdw_radius};
+use molframe::{ModelIndex, Structure};
 use std::fmt::Write as _;
 use std::path::Path;
 
@@ -20,7 +22,7 @@ pub(super) fn torsions(path: &Path, ccd: &Path, ccd_version: &str, context: Cont
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let values = match molframe::structure_backbone_torsions(&structure) {
+    let values = match molframe::structure_backbone_torsions(structure.engine()) {
         Ok(values) => values,
         Err(findings) => {
             context.findings(&findings, &path.display().to_string());
@@ -51,7 +53,7 @@ pub(super) fn helix(
     path: &Path,
     ccd: &Path,
     ccd_version: &str,
-    eigen: molframe::EigenOptions,
+    eigen: molframe::geometry::EigenOptions,
     context: Context,
 ) -> Exit {
     let structure = match open(path, context) {
@@ -66,7 +68,7 @@ pub(super) fn helix(
     let mut frame_count = 0usize;
     let mut helix_count = 0usize;
     let mut chain_count = 0usize;
-    let traces = match molframe::structure_protein_alpha_traces(&structure) {
+    let traces = match molframe::structure_protein_alpha_traces(structure.engine()) {
         Ok(traces) => traces,
         Err(findings) => {
             context.findings(&findings, &path.display().to_string());
@@ -76,11 +78,11 @@ pub(super) fn helix(
     for trace in traces {
         let chain_positions = trace.positions;
         alpha_count += chain_positions.iter().flatten().count();
-        frame_count += molframe::backbone_frames(&chain_positions)
+        frame_count += molframe::geometry::backbone_frames(&chain_positions)
             .iter()
             .flatten()
             .count();
-        match molframe::helix_geometry_with_options(&chain_positions, eigen) {
+        match molframe::geometry::helix_geometry_with_options(&chain_positions, eigen) {
             Ok(Some(_)) => helix_count += 1,
             Ok(None) => {}
             Err(error) => {
@@ -129,7 +131,7 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
     let mut positions = Vec::new();
     let mut radii = Vec::new();
     for index in 0..structure.atom_count() {
-        let Some(atom) = structure.atom(AtomIndex::new(index)) else {
+        let Some(atom) = structure.atom_at(index as usize) else {
             continue;
         };
         let (Some(position), Some(element)) = (atom.position(), atom.element()) else {
@@ -278,14 +280,16 @@ pub(super) fn torsion_pca(
             return Exit::Resource;
         };
         let mut row = Vec::new();
-        let records =
-            match molframe::structure_backbone_torsions_model(&structure, ModelIndex::new(model)) {
-                Ok(records) => records,
-                Err(findings) => {
-                    context.findings(&findings, &path.display().to_string());
-                    return Exit::Consistency;
-                }
-            };
+        let records = match molframe::structure_backbone_torsions_model(
+            structure.engine(),
+            ModelIndex::new(model),
+        ) {
+            Ok(records) => records,
+            Err(findings) => {
+                context.findings(&findings, &path.display().to_string());
+                return Exit::Consistency;
+            }
+        };
         for record in records {
             for angle in [
                 record.torsions.phi,
@@ -382,7 +386,7 @@ fn dense_frames(structure: &Structure) -> Option<Vec<Vec<[f32; 3]>>> {
                 return None;
             };
             structure
-                .model_positions(ModelIndex::new(model))
+                .model_coordinates(ModelIndex::new(model))
                 .map(<[_]>::to_vec)
         })
         .collect()

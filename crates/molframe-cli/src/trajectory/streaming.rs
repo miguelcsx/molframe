@@ -2,7 +2,7 @@
 
 use crate::exit::Exit;
 use crate::report::{Context, Json, RowWriter};
-use molframe::traj::{
+use molframe::trajectory::{
     FrameAlignment, Timestep, TrajectoryFormat, TrajectoryReader, TrajectoryReaderOptions,
     read_trajectory_in, rmsd_stream, run_analysis_stream,
 };
@@ -69,7 +69,7 @@ pub(super) fn info(path: &Path, topology: Option<&Path>, context: Context) -> Ex
         summary.frames_with_cell += usize::from(frame.cell.is_some());
         summary.frames_with_velocities += usize::from(frame.velocities.is_some());
         summary.frames_with_forces += usize::from(frame.forces.is_some());
-        Ok::<(), molframe::traj::TrajectoryError>(())
+        Ok::<(), molframe::trajectory::TrajectoryError>(())
     });
     if let Err(error) = result {
         eprintln!("trajectory read failed: {error}");
@@ -145,7 +145,7 @@ pub(super) fn rmsd(path: &Path, reference_index: usize, no_fit: bool, context: C
                 ];
                 sink.row(values.iter().map(String::as_str))
             };
-            output.map_err(|error| molframe::traj::TrajectoryError::SourceIo {
+            output.map_err(|error| molframe::trajectory::TrajectoryError::SourceIo {
                 format: "result output",
                 kind: error.kind(),
             })

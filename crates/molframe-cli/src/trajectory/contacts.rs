@@ -23,10 +23,10 @@ pub(crate) fn contacts(path: &Path, cutoff: f32, context: Context) -> Exit {
             return Exit::Failure;
         }
     };
-    let result = molframe::traj::contact_counts_stream(
+    let result = molframe::trajectory::contact_counts_stream(
         &mut *reader,
         cutoff,
-        molframe::SpatialSearchOptions::default(),
+        molframe::spatial::SpatialSearchOptions::default(),
         context.execution,
         bytes,
         |frame, time, contacts| {
@@ -45,7 +45,7 @@ pub(crate) fn contacts(path: &Path, cutoff: f32, context: Context) -> Exit {
                 ];
                 sink.row(values.iter().map(String::as_str))
             };
-            output.map_err(|error| molframe::traj::TrajectoryError::SourceIo {
+            output.map_err(|error| molframe::trajectory::TrajectoryError::SourceIo {
                 format: "contact output",
                 kind: error.kind(),
             })

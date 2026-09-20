@@ -1,6 +1,7 @@
 //! Structure comparison command projections.
 
 mod command;
+mod render;
 
 pub(super) use command::{ComparisonOptions, compare, map_chains, rmsd, superpose};
 

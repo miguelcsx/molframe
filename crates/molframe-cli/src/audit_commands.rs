@@ -43,7 +43,7 @@ pub(crate) fn audit_selection(args: &AuditArguments, context: Context) -> Exit {
             return Exit::Resource;
         }
     };
-    let result = molframe::audit(
+    let result = molframe::audit::audit(
         &plan,
         |policy| {
             crate::commands::select_text(&structure, &args.query, policy, context.execution)
@@ -65,8 +65,8 @@ pub(crate) fn audit_selection(args: &AuditArguments, context: Context) -> Exit {
 fn policy_space(
     args: &AuditArguments,
     baseline: &molframe::AnalysisPolicy,
-) -> Result<molframe::PolicySpace, molframe::PolicyConfigError> {
-    let space = molframe::PolicySpace::new(baseline.clone()).with_max_runs(args.max_runs);
+) -> Result<molframe::audit::PolicySpace, molframe::PolicyConfigError> {
+    let space = molframe::audit::PolicySpace::new(baseline.clone()).with_max_runs(args.max_runs);
     let space = identity_space(args, baseline, space)?;
     let space = chemistry_space(args, baseline, space)?;
     numeric_space(args, baseline, space)
@@ -75,15 +75,15 @@ fn policy_space(
 fn identity_space(
     args: &AuditArguments,
     baseline: &molframe::AnalysisPolicy,
-    mut space: molframe::PolicySpace,
-) -> Result<molframe::PolicySpace, molframe::PolicyConfigError> {
+    mut space: molframe::audit::PolicySpace,
+) -> Result<molframe::audit::PolicySpace, molframe::PolicyConfigError> {
     if !args.assembly_values.is_empty() {
         let values = args
             .assembly_values
             .iter()
             .map(|value| parse_override("assembly", value, baseline).map(|policy| policy.assembly))
             .collect::<Result<Vec<_>, _>>()?;
-        space = space.vary(molframe::PolicyDimension::assembly(values));
+        space = space.vary(molframe::audit::PolicyDimension::assembly(values));
     }
     if !args.model_values.is_empty() {
         let values = args
@@ -91,7 +91,7 @@ fn identity_space(
             .iter()
             .map(|value| parse_override("model", value, baseline).map(|policy| policy.model))
             .collect::<Result<Vec<_>, _>>()?;
-        space = space.vary(molframe::PolicyDimension::model(values));
+        space = space.vary(molframe::audit::PolicyDimension::model(values));
     }
     if !args.altloc_values.is_empty() {
         let values = args
@@ -99,7 +99,7 @@ fn identity_space(
             .iter()
             .map(|value| parse_override("altloc", value, baseline).map(|policy| policy.altloc))
             .collect::<Result<Vec<_>, _>>()?;
-        space = space.vary(molframe::PolicyDimension::altloc(values));
+        space = space.vary(molframe::audit::PolicyDimension::altloc(values));
     }
     if !args.identifier_values.is_empty() {
         let values = args
@@ -109,7 +109,7 @@ fn identity_space(
                 parse_override("identifiers", value, baseline).map(|policy| policy.identifiers)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        space = space.vary(molframe::PolicyDimension::identifiers(values));
+        space = space.vary(molframe::audit::PolicyDimension::identifiers(values));
     }
     Ok(space)
 }
@@ -117,35 +117,35 @@ fn identity_space(
 fn chemistry_space(
     args: &AuditArguments,
     baseline: &molframe::AnalysisPolicy,
-    mut space: molframe::PolicySpace,
-) -> Result<molframe::PolicySpace, molframe::PolicyConfigError> {
+    mut space: molframe::audit::PolicySpace,
+) -> Result<molframe::audit::PolicySpace, molframe::PolicyConfigError> {
     if !args.missing_atom_values.is_empty() {
         let values = policies("missing_atoms", &args.missing_atom_values, baseline)?
             .into_iter()
             .map(|policy| policy.missing_atoms)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::missing_atoms(values));
+        space = space.vary(molframe::audit::PolicyDimension::missing_atoms(values));
     }
     if !args.hydrogen_values.is_empty() {
         let values = policies("hydrogens", &args.hydrogen_values, baseline)?
             .into_iter()
             .map(|policy| policy.hydrogens)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::hydrogens(values));
+        space = space.vary(molframe::audit::PolicyDimension::hydrogens(values));
     }
     if !args.atom_equivalence_values.is_empty() {
         let values = policies("atom_equivalence", &args.atom_equivalence_values, baseline)?
             .into_iter()
             .map(|policy| policy.atom_equivalence)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::atom_equivalence(values));
+        space = space.vary(molframe::audit::PolicyDimension::atom_equivalence(values));
     }
     if !args.symmetry_values.is_empty() {
         let values = policies("symmetry", &args.symmetry_values, baseline)?
             .into_iter()
             .map(|policy| policy.symmetry)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::symmetry(values));
+        space = space.vary(molframe::audit::PolicyDimension::symmetry(values));
     }
     Ok(space)
 }
@@ -153,42 +153,42 @@ fn chemistry_space(
 fn numeric_space(
     args: &AuditArguments,
     baseline: &molframe::AnalysisPolicy,
-    mut space: molframe::PolicySpace,
-) -> Result<molframe::PolicySpace, molframe::PolicyConfigError> {
+    mut space: molframe::audit::PolicySpace,
+) -> Result<molframe::audit::PolicySpace, molframe::PolicyConfigError> {
     if !args.alignment_values.is_empty() {
         let values = policies("alignment", &args.alignment_values, baseline)?
             .into_iter()
             .map(|policy| policy.alignment)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::alignment(values));
+        space = space.vary(molframe::audit::PolicyDimension::alignment(values));
     }
     if !args.precision_values.is_empty() {
         let values = policies("precision", &args.precision_values, baseline)?
             .into_iter()
             .map(|policy| policy.precision)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::precision(values));
+        space = space.vary(molframe::audit::PolicyDimension::precision(values));
     }
     if !args.periodic_values.is_empty() {
         let values = policies("periodic", &args.periodic_values, baseline)?
             .into_iter()
             .map(|policy| policy.periodic)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::periodic(values));
+        space = space.vary(molframe::audit::PolicyDimension::periodic(values));
     }
     if !args.vdw_radii_values.is_empty() {
         let values = policies("vdw_radii", &args.vdw_radii_values, baseline)?
             .into_iter()
             .map(|policy| policy.vdw_radii)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::vdw_radii(values));
+        space = space.vary(molframe::audit::PolicyDimension::vdw_radii(values));
     }
     if !args.contact_values.is_empty() {
         let values = policies("contact_def", &args.contact_values, baseline)?
             .into_iter()
             .map(|policy| policy.contact_def)
             .collect::<Vec<_>>();
-        space = space.vary(molframe::PolicyDimension::contact_def(values));
+        space = space.vary(molframe::audit::PolicyDimension::contact_def(values));
     }
     if !args.float_tolerance_values.is_empty() {
         let values = args
@@ -196,7 +196,7 @@ fn numeric_space(
             .iter()
             .map(|value| parse_tolerance(value, baseline))
             .collect::<Result<Vec<_>, _>>()?;
-        space = space.vary(molframe::PolicyDimension::float_tolerance(values));
+        space = space.vary(molframe::audit::PolicyDimension::float_tolerance(values));
     }
     Ok(space)
 }
@@ -313,7 +313,7 @@ fn parse_tolerance(
     Ok(policy.float_tolerance)
 }
 
-fn emit<R>(report: &molframe::AuditReport<R, u32>, context: Context) {
+fn emit<R>(report: &molframe::audit::AuditReport<R, u32>, context: Context) {
     if context.is_json() {
         let mut json = Json::new();
         let dimensions = report

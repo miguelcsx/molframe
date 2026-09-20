@@ -1,6 +1,6 @@
 //! Stable trajectory summaries shared by human and machine output.
 
-use molframe::traj::{TrajectoryData, TrajectoryFormat, Units};
+use molframe::trajectory::{TrajectoryData, TrajectoryFormat, Units};
 
 #[derive(Debug, PartialEq)]
 pub(super) struct Summary {
@@ -29,7 +29,10 @@ impl Summary {
     }
 }
 
-fn count(data: &TrajectoryData, predicate: impl Fn(&molframe::traj::Timestep) -> bool) -> usize {
+fn count(
+    data: &TrajectoryData,
+    predicate: impl Fn(&molframe::trajectory::Timestep) -> bool,
+) -> usize {
     data.frames.iter().filter(|frame| predicate(frame)).count()
 }
 

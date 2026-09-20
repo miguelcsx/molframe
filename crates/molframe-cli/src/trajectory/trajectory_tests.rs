@@ -1,6 +1,6 @@
 use super::command::apply_stride;
 use super::summary::Summary;
-use molframe::traj::{
+use molframe::trajectory::{
     FormatMetadata, Timestep, TrajectoryData, TrajectoryFormat, TrajectoryMetadata,
 };
 

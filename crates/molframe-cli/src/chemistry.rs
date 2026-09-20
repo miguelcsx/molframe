@@ -58,7 +58,7 @@ pub(crate) fn with_ccd(
 }
 
 pub(crate) fn component(path: &Path, version: &str, id: &str, context: Context) -> Exit {
-    use molframe::ComponentProvider as _;
+    use molframe::chemistry::ComponentProvider as _;
     let provider = match load_ccd(path, version, context) {
         Ok(provider) => provider,
         Err(exit) => return exit,
@@ -100,16 +100,16 @@ pub(crate) fn component(path: &Path, version: &str, id: &str, context: Context) 
     Exit::Success
 }
 
-const fn component_kind(kind: molframe::ComponentKind) -> &'static str {
+const fn component_kind(kind: molframe::chemistry::ComponentKind) -> &'static str {
     match kind {
-        molframe::ComponentKind::AminoAcid => "amino-acid",
-        molframe::ComponentKind::Nucleotide => "nucleotide",
-        molframe::ComponentKind::Saccharide => "saccharide",
-        molframe::ComponentKind::Lipid => "lipid",
-        molframe::ComponentKind::NonPolymer => "non-polymer",
-        molframe::ComponentKind::Solvent => "solvent",
-        molframe::ComponentKind::Ion => "ion",
-        molframe::ComponentKind::Unknown => "unknown",
+        molframe::chemistry::ComponentKind::AminoAcid => "amino-acid",
+        molframe::chemistry::ComponentKind::Nucleotide => "nucleotide",
+        molframe::chemistry::ComponentKind::Saccharide => "saccharide",
+        molframe::chemistry::ComponentKind::Lipid => "lipid",
+        molframe::chemistry::ComponentKind::NonPolymer => "non-polymer",
+        molframe::chemistry::ComponentKind::Solvent => "solvent",
+        molframe::chemistry::ComponentKind::Ion => "ion",
+        molframe::chemistry::ComponentKind::Unknown => "unknown",
     }
 }
 
@@ -117,7 +117,7 @@ pub(crate) fn load_ccd(
     path: &Path,
     version: &str,
     context: Context,
-) -> Result<molframe::CifProvider, Exit> {
+) -> Result<molframe::chemistry::CifProvider, Exit> {
     match molframe::read_component_dictionary(path, molframe::DictionaryVersion::new(version)) {
         Ok((provider, findings)) => {
             context.findings(&findings, &path.display().to_string());
@@ -137,14 +137,14 @@ pub(crate) fn annotate(
     context: Context,
 ) -> Result<molframe::Structure, Exit> {
     let provider = load_ccd(path, version, context)?;
-    match molframe::apply_component_chemistry(
-        structure,
+    match molframe::chemistry::apply_component_chemistry(
+        structure.engine(),
         &provider,
-        molframe::PolymerLinkPolicy::Disabled,
+        molframe::chemistry::PolymerLinkPolicy::Disabled,
     ) {
         Ok(report) => {
             context.findings(&report.findings, &path.display().to_string());
-            Ok(report.structure)
+            Ok(report.structure.into())
         }
         Err(finding) => {
             context.findings(&[finding], &path.display().to_string());

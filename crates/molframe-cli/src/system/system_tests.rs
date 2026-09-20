@@ -1,4 +1,4 @@
-use molframe::traj::DmsSystem;
+use molframe::trajectory::DmsSystem;
 
 #[test]
 fn empty_system_has_aligned_default_arrays() {

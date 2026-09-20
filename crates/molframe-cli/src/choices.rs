@@ -10,7 +10,7 @@ pub(crate) enum RadiusChoice {
     Alvarez,
 }
 
-impl From<RadiusChoice> for molframe::RadiusSet {
+impl From<RadiusChoice> for molframe::chemistry::RadiusSet {
     fn from(value: RadiusChoice) -> Self {
         match value {
             RadiusChoice::Bondi => Self::Bondi,

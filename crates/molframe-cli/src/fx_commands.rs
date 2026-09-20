@@ -22,9 +22,9 @@ pub(crate) fn execute(command: FxCommand, context: Context) -> Exit {
             chemistry.ccd_version.as_deref(),
             EvaluationOptions {
                 mapping_limit,
-                measurement: molframe::fx::MeasurementOptions {
+                measurement: molframe::motif::MeasurementOptions {
                     maximum_alternatives: measurement_limit,
-                    plane_fit: molframe::EigenOptions {
+                    plane_fit: molframe::geometry::EigenOptions {
                         relative_tolerance: plane_relative_tolerance,
                         maximum_sweeps: plane_maximum_sweeps,
                     },
@@ -38,7 +38,7 @@ pub(crate) fn execute(command: FxCommand, context: Context) -> Exit {
 #[derive(Clone, Copy)]
 struct EvaluationOptions {
     mapping_limit: usize,
-    measurement: molframe::fx::MeasurementOptions,
+    measurement: molframe::motif::MeasurementOptions,
 }
 
 fn evaluate(
@@ -66,15 +66,15 @@ fn evaluate(
         Ok(provider) => provider,
         Err(exit) => return exit,
     };
-    let specification = match molframe::fx::read_evaluation_specification(motif_path) {
+    let specification = match molframe::motif::read_evaluation_specification(motif_path) {
         Ok(specification) => specification,
         Err(error) => {
             eprintln!("functional specification failed: {error}");
             return Exit::Policy;
         }
     };
-    let report = match molframe::fx::evaluate_motif(
-        &structure,
+    let report = match molframe::motif::evaluate_motif(
+        structure.engine(),
         &specification.motif,
         Some(&provider),
         context.policy,
@@ -91,7 +91,7 @@ fn evaluate(
     emit(&report, context);
     if report.evaluations.is_empty()
         || report.evaluations.iter().any(|evaluation| {
-            evaluation.verdict.status == molframe::fx::VerdictStatus::Indeterminate
+            evaluation.verdict.status == molframe::motif::VerdictStatus::Indeterminate
         })
     {
         Exit::Indeterminate
@@ -100,7 +100,7 @@ fn evaluate(
     }
 }
 
-fn emit(report: &molframe::fx::EvaluationReport, context: Context) {
+fn emit(report: &molframe::motif::EvaluationReport, context: Context) {
     let rows = report
         .evaluations
         .iter()
@@ -171,10 +171,10 @@ fn emit(report: &molframe::fx::EvaluationReport, context: Context) {
     }
 }
 
-const fn verdict_name(status: molframe::fx::VerdictStatus) -> &'static str {
+const fn verdict_name(status: molframe::motif::VerdictStatus) -> &'static str {
     match status {
-        molframe::fx::VerdictStatus::Pass => "pass",
-        molframe::fx::VerdictStatus::Fail => "fail",
-        molframe::fx::VerdictStatus::Indeterminate => "indeterminate",
+        molframe::motif::VerdictStatus::Pass => "pass",
+        molframe::motif::VerdictStatus::Fail => "fail",
+        molframe::motif::VerdictStatus::Indeterminate => "indeterminate",
     }
 }

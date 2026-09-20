@@ -128,24 +128,25 @@ impl GlobalOptions {
                 None => default_output_format(),
             },
         };
-        let memory = molframe::core::MemoryBudget::new(self.memory_budget).map_err(|error| {
+        let memory = molframe_core::MemoryBudget::new(self.memory_budget).map_err(|error| {
             molframe::PolicyConfigError::InvalidValue {
                 field: "memory-budget",
                 value: error.to_string(),
             }
         })?;
-        let mut execution = molframe::core::ExecutionContext::builder()
+        let mut execution = molframe_core::ExecutionContext::builder()
             .memory_budget(memory)
-            .scratch_policy(molframe::core::ScratchPolicy::new(
+            .scratch_policy(molframe_core::ScratchPolicy::new(
                 self.memory_budget.min(8_000_000),
             ));
         if self.workers > 0 {
             execution = execution.worker_budget(self.workers);
         }
         if let Some(directory) = self.spill_directory {
-            execution = execution.temp_storage_policy(
-                molframe::core::TempStoragePolicy::directory(directory, self.spill_budget),
-            );
+            execution = execution.temp_storage_policy(molframe_core::TempStoragePolicy::directory(
+                directory,
+                self.spill_budget,
+            ));
         }
         let execution =
             execution

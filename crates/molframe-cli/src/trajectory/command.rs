@@ -4,7 +4,7 @@ use super::summary::{Summary, canonical_length_unit, canonical_time_unit, format
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table};
-use molframe::traj::{
+use molframe::trajectory::{
     FrameAlignment, GsdOptions, TrajectoryData, TrajectoryFormat, TrajectoryReadOptions,
     TrajectoryWriteOptions, TrzWriteOptions, read_trajectory_materialized, rmsd_to_reference,
     write_trajectory,
@@ -345,5 +345,5 @@ fn emit_conversion(context: Context, input: &Path, output: &Path, summary: &Summ
 }
 
 fn format_name_from_path(path: &Path) -> &'static str {
-    molframe::traj::TrajectoryFormat::infer(path).map_or("unknown", format_name)
+    molframe::trajectory::TrajectoryFormat::infer(path).map_or("unknown", format_name)
 }

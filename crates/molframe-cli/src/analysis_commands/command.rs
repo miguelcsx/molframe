@@ -3,7 +3,8 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, RowWriter};
-use molframe::{AtomIndex, RadiusSet, SpatialBackend};
+use molframe::chemistry::RadiusSet;
+use molframe::spatial::SpatialBackend;
 use std::path::Path;
 
 pub(crate) fn contacts(
@@ -39,7 +40,7 @@ pub(crate) fn contacts(
     };
     let searched = match filters {
         Some((left, right)) => molframe::analysis::visit_atom_contacts_between(
-            &structure,
+            structure.engine(),
             &left,
             &right,
             cutoff,
@@ -48,7 +49,7 @@ pub(crate) fn contacts(
             &mut emit,
         ),
         None => molframe::analysis::visit_atom_contacts(
-            &structure,
+            structure.engine(),
             cutoff,
             SpatialBackend::Auto,
             context.execution,
@@ -67,7 +68,13 @@ fn contact_filters(
     between: Option<&[String]>,
     input: &Path,
     context: Context,
-) -> Result<Option<(molframe::AtomSelection, molframe::AtomSelection)>, Exit> {
+) -> Result<
+    Option<(
+        molframe_core::selection::AtomSelection,
+        molframe_core::selection::AtomSelection,
+    )>,
+    Exit,
+> {
     let Some(between) = between else {
         return Ok(None);
     };
@@ -104,7 +111,7 @@ pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context
             }
         };
     context.findings(&evaluation.warnings, &input.display().to_string());
-    let all = molframe::AtomSelection::All(structure.atom_count());
+    let all = molframe_core::selection::AtomSelection::All(structure.atom_count());
     let mut output = match RowWriter::new(context, &["atom_a", "atom_b", "distance_angstrom"]) {
         Ok(output) => output,
         Err(error) => return output_error(&error),
@@ -112,11 +119,11 @@ pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context
     let mut write_error = None;
     let searched = molframe::spatial::for_each_pairs_within_unsorted(
         &molframe::spatial::PairQuery {
-            positions: structure.positions(),
+            positions: structure.coordinates(),
             left: &evaluation.selection,
             right: &all,
             cutoff,
-            options: molframe::SpatialSearchOptions::with_backend(SpatialBackend::Auto),
+            options: molframe::spatial::SpatialSearchOptions::with_backend(SpatialBackend::Auto),
             periodic: None,
             context: context.execution,
         },
@@ -173,7 +180,7 @@ pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Ex
         helix_offset: options.helix_offset,
         turn_offsets: *turn_minimum..=*turn_maximum,
     };
-    let records = match molframe::analysis::secondary_structure(&structure, &dssp) {
+    let records = match molframe::analysis::secondary_structure(structure.engine(), &dssp) {
         Ok(records) => records,
         Err(error) => {
             eprintln!("secondary-structure assignment failed: {error}");
@@ -183,7 +190,7 @@ pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Ex
     emit_rows(
         context,
         &["residue", "secondary_structure"],
-        records,
+        records.iter(),
         |record| {
             vec![
                 record.residue.get().to_string(),
@@ -203,7 +210,7 @@ pub(crate) fn interfaces(input: &Path, between: &[String], cutoff: f32, context:
         Err(exit) => return exit,
     };
     let residues = match molframe::analysis::chain_interface(
-        &structure,
+        structure.engine(),
         first,
         second,
         cutoff,
@@ -236,13 +243,13 @@ pub(crate) fn sasa(
     let mut radii = Vec::new();
     let mut indices = Vec::new();
     for raw in 0..structure.atom_count() {
-        let Some(atom) = structure.atom(AtomIndex::new(raw)) else {
+        let Some(atom) = structure.atom_at(raw as usize) else {
             continue;
         };
         let (Some(position), Some(element)) = (atom.position(), atom.element()) else {
             continue;
         };
-        let Some(radius) = molframe::vdw_radius(element, radius_set) else {
+        let Some(radius) = molframe::chemistry::vdw_radius(element, radius_set) else {
             eprintln!("radius set has no value for atom {raw}");
             return Exit::Indeterminate;
         };

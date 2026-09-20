@@ -54,7 +54,7 @@ fn json_lines_keeps_one_object_per_line() {
         provenance: None,
         ccd: None,
         ccd_version: None,
-        execution: Box::leak(Box::new(molframe::core::ExecutionContext::default())),
+        execution: Box::leak(Box::new(molframe_core::ExecutionContext::default())),
         missing_element_policy: molframe::MissingElementPolicy::PreserveUnknown,
         residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy::Reject,
     };
@@ -87,7 +87,7 @@ fn json_results_embed_policy_and_read_provenance() {
         provenance: None,
         ccd: None,
         ccd_version: None,
-        execution: Box::leak(Box::new(molframe::core::ExecutionContext::default())),
+        execution: Box::leak(Box::new(molframe_core::ExecutionContext::default())),
         missing_element_policy: molframe::MissingElementPolicy::InferFromAtomName,
         residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy::InferFromFileOrder,
     };
@@ -164,7 +164,7 @@ fn test_context(format: OutputKind, output: Option<&'static Path>) -> Context {
         provenance: None,
         ccd: None,
         ccd_version: None,
-        execution: Box::leak(Box::new(molframe::core::ExecutionContext::default())),
+        execution: Box::leak(Box::new(molframe_core::ExecutionContext::default())),
         missing_element_policy: molframe::MissingElementPolicy::PreserveUnknown,
         residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy::Reject,
     }

@@ -2,7 +2,7 @@
 
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table};
-use molframe::traj::{DmsSystem, read_dms, write_dms};
+use molframe::trajectory::{DmsSystem, read_dms, write_dms};
 use std::fmt::Write as _;
 use std::path::Path;
 

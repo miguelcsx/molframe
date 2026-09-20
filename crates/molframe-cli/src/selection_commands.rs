@@ -3,7 +3,7 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json, OutputKind, Table};
-use molframe::{AtomIndex, ChainIndex};
+use molframe::AtomIndex;
 use std::path::Path;
 
 pub(crate) fn select(
@@ -30,8 +30,9 @@ pub(crate) fn select(
         emit_count(evaluation.selection.len(), context);
         return Exit::Success;
     }
-    let selected = match structure.materialize(&evaluation.selection) {
-        Ok(selected) => selected,
+    let selected: molframe::Structure = match structure.engine().materialize(&evaluation.selection)
+    {
+        Ok(selected) => selected.into(),
         Err(findings) => {
             context.findings(&findings, &input.display().to_string());
             return Exit::of(&findings);
@@ -47,12 +48,14 @@ pub(crate) fn select(
 
 fn write_selection(output: &Path, selected: &molframe::Structure, context: Context) -> Exit {
     let table_result = match context.format {
-        OutputKind::Arrow => {
-            molframe::write_atom_ipc_with_metadata(output, selected, context.provenance_metadata())
-        }
-        OutputKind::Parquet => molframe::write_atom_parquet_with_metadata(
+        OutputKind::Arrow => molframe::interop::write_atom_ipc_with_metadata(
             output,
-            selected,
+            selected.engine(),
+            context.provenance_metadata(),
+        ),
+        OutputKind::Parquet => molframe::interop::write_atom_parquet_with_metadata(
+            output,
+            selected.engine(),
             context.provenance_metadata(),
         ),
         OutputKind::Text
@@ -195,14 +198,15 @@ impl AtomRow {
 }
 
 fn atom_row(structure: &molframe::Structure, index: AtomIndex) -> Option<AtomRow> {
-    let atom = structure.atom(index)?;
+    let atom = structure.atom_at(index.get() as usize)?;
     let residue = atom.residue()?;
     let chain_index = structure
+        .engine()
         .data()
         .topology
         .chains
         .containing(residue.index().get())?;
-    let chain = structure.chain(ChainIndex::new(chain_index.get()))?;
+    let chain = structure.chain_at(chain_index.get() as usize)?;
     Some(AtomRow {
         atom: index.get(),
         name: atom.name().map_or_else(String::new, str::to_owned),

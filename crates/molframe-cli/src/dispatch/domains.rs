@@ -44,7 +44,7 @@ pub(super) fn geometry(command: GeometryCommand, context: Context) -> Exit {
                     &input,
                     ccd,
                     version,
-                    molframe::EigenOptions {
+                    molframe::geometry::EigenOptions {
                         relative_tolerance: eigen_relative_tolerance,
                         maximum_sweeps: eigen_maximum_sweeps,
                     },

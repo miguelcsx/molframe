@@ -4,7 +4,8 @@ use crate::ValidationChoice;
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json, Table};
-use molframe::{RadiusSet, SpatialBackend};
+use molframe::chemistry::RadiusSet;
+use molframe::spatial::SpatialBackend;
 use std::path::Path;
 
 #[derive(Clone, Copy)]
@@ -96,12 +97,13 @@ fn b_factor_rows(
         eprintln!("B-factor validation requires --b-factor-z-score");
         return Err(Exit::Usage);
     };
-    let selection = molframe::AtomSelection::All(structure.atom_count());
-    let report = molframe::validate::b_factor_distribution(structure, &selection, threshold)
-        .map_err(|error| {
-            eprintln!("B-factor validation failed: {error}");
-            Exit::Consistency
-        })?;
+    let selection = molframe_core::selection::AtomSelection::All(structure.atom_count());
+    let report =
+        molframe::validation::b_factor_distribution(structure.engine(), &selection, threshold)
+            .map_err(|error| {
+                eprintln!("B-factor validation failed: {error}");
+                Exit::Consistency
+            })?;
     Ok(report
         .outliers
         .into_iter()
@@ -126,10 +128,10 @@ fn altloc_rows(
         eprintln!("altloc validation requires --altloc-expected-sum and --altloc-tolerance");
         return Err(Exit::Usage);
     };
-    let report = molframe::validate::altloc_occupancy_sums(
-        structure,
+    let report = molframe::validation::altloc_occupancy_sums(
+        structure.engine(),
         context.policy.identifiers,
-        molframe::validate::AltlocOccupancyOptions {
+        molframe::validation::AltlocOccupancyOptions {
             expected_sum,
             tolerance,
         },
@@ -160,11 +162,15 @@ fn ccd_rows(
 ) -> Result<Vec<Row>, Exit> {
     let source = crate::chemistry::resolve_ccd(options.ccd, options.ccd_version, context)?;
     let provider = crate::chemistry::load_ccd(source.path, source.version, source.context)?;
-    let report = molframe::validate::ccd_missing_atoms(structure, &provider, source.context.policy)
-        .map_err(|finding| {
-            source.context.findings(&[finding], "ccd-completeness");
-            Exit::Consistency
-        })?;
+    let report = molframe::validation::ccd_missing_atoms(
+        structure.engine(),
+        &provider,
+        source.context.policy,
+    )
+    .map_err(|finding| {
+        source.context.findings(&[finding], "ccd-completeness");
+        Exit::Consistency
+    })?;
     Ok(report
         .residues
         .into_iter()
@@ -184,7 +190,7 @@ fn ccd_rows(
 }
 
 fn core_rows(structure: &molframe::Structure, context: Context, input: &Path) -> Vec<Row> {
-    let findings = molframe::core::structure::validate(structure.data());
+    let findings = molframe_core::structure::validate(structure.engine().data());
     context.findings(&findings, &input.display().to_string());
     findings
         .iter()
@@ -193,7 +199,7 @@ fn core_rows(structure: &molframe::Structure, context: Context, input: &Path) ->
 }
 
 fn quality_rows(structure: &molframe::Structure) -> Vec<Row> {
-    molframe::validate::quality_flags(structure)
+    molframe::validation::quality_flags(structure.engine())
         .into_iter()
         .map(|flag| {
             Row::new(
@@ -227,21 +233,22 @@ fn geometry_rows(
         );
         return Err(Exit::Usage);
     };
-    let mut rows: Vec<Row> = molframe::validate::bond_length_deviations(structure, bond_tolerance)
-        .into_iter()
-        .map(|flag| {
-            Row::new(
-                "bond-length",
-                format!("{}-{}", flag.atom_a, flag.atom_b),
-                flag.deviation.to_string(),
-            )
-        })
-        .collect();
-    let planarity = molframe::validate::nonplanar_aromatic_rings(
-        structure,
-        molframe::validate::PlanarityOptions {
+    let mut rows: Vec<Row> =
+        molframe::validation::bond_length_deviations(structure.engine(), bond_tolerance)
+            .into_iter()
+            .map(|flag| {
+                Row::new(
+                    "bond-length",
+                    format!("{}-{}", flag.atom_a, flag.atom_b),
+                    flag.deviation.to_string(),
+                )
+            })
+            .collect();
+    let planarity = molframe::validation::nonplanar_aromatic_rings(
+        structure.engine(),
+        molframe::validation::PlanarityOptions {
             maximum_deviation: planarity_tolerance,
-            plane_fit: molframe::EigenOptions {
+            plane_fit: molframe::geometry::EigenOptions {
                 relative_tolerance: plane_relative_tolerance,
                 maximum_sweeps: plane_maximum_sweeps,
             },
@@ -264,16 +271,21 @@ fn geometry_rows(
 fn clash_rows(
     structure: &molframe::Structure,
     options: &ValidationOptions<'_>,
-    execution: &molframe::core::ExecutionContext,
+    execution: &molframe_core::ExecutionContext,
 ) -> Result<Vec<Row>, Exit> {
     let (Some(tolerance), Some(radii)) = (options.clash_tolerance, options.radii) else {
         eprintln!("clash validation requires --clash-tolerance and --radii");
         return Err(Exit::Usage);
     };
-    match molframe::validate::clashes(structure, tolerance, radii, SpatialBackend::Auto, execution)
-    {
+    match molframe::validation::clashes(
+        structure.engine(),
+        tolerance,
+        radii,
+        SpatialBackend::Auto,
+        execution,
+    ) {
         Ok(flags) => Ok(flags
-            .into_iter()
+            .iter()
             .map(|flag| {
                 Row::new(
                     "clash",
@@ -290,13 +302,14 @@ fn clash_rows(
 }
 
 fn completeness_rows(structure: &molframe::Structure, context: Context) -> Result<Vec<Row>, Exit> {
-    let report = match molframe::validate::completeness(structure, context.policy.identifiers) {
-        Ok(report) => report,
-        Err(error) => {
-            eprintln!("completeness validation failed: {error}");
-            return Err(Exit::Consistency);
-        }
-    };
+    let report =
+        match molframe::validation::completeness(structure.engine(), context.policy.identifiers) {
+            Ok(report) => report,
+            Err(error) => {
+                eprintln!("completeness validation failed: {error}");
+                return Err(Exit::Consistency);
+            }
+        };
     Ok(report
         .into_iter()
         .filter(|chain| !chain.missing.is_empty())

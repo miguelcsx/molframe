@@ -34,7 +34,7 @@ pub(crate) fn execute(command: Command, context: Context) -> Exit {
             generate_cif_connection_ids,
             cif_connection_type,
         } => {
-            let mut cif_options = molframe::CifWriteOptions::new();
+            let mut cif_options = molframe::formats::cif::CifWriteOptions::new();
             if let Some(block_id) = cif_block_id {
                 cif_options = cif_options.with_block_id(block_id);
             }
@@ -232,9 +232,9 @@ fn execute_comparison(command: Command, context: Context) -> Exit {
             &reference,
             &output,
             &on,
-            molframe::SuperposeOptions {
+            molframe::geometry::SuperposeOptions {
                 collinear_relative_tolerance,
-                eigen: molframe::EigenOptions {
+                eigen: molframe::geometry::EigenOptions {
                     relative_tolerance: eigen_relative_tolerance,
                     maximum_sweeps: eigen_maximum_sweeps,
                 },
@@ -261,7 +261,7 @@ fn execute_comparison(command: Command, context: Context) -> Exit {
                     ccd,
                     version,
                     min_identity,
-                    molframe::seq::Scoring {
+                    molframe::sequence::Scoring {
                         match_score,
                         mismatch_score,
                         gap_open,

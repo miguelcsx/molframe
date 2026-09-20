@@ -86,11 +86,11 @@ fn convert(patterns: &[String], format: &str, outdir: &Path, context: Context) -
 
 fn run<T: Sync, R: Send>(
     jobs: &[T],
-    context: &molframe::core::ExecutionContext,
+    context: &molframe_core::ExecutionContext,
     operation: impl Fn(&T) -> Result<R, String> + Sync + Send,
 ) -> Vec<Result<R, String>> {
-    let plan = molframe::core::parallel::BlockPlan::new(jobs.len(), 1);
-    match molframe::core::parallel::map_blocks_in(plan, context, |_, range| {
+    let plan = molframe_core::parallel::BlockPlan::new(jobs.len(), 1);
+    match molframe_core::parallel::map_blocks_in(plan, context, |_, range| {
         let Some(job) = jobs.get(range.start) else {
             return Err("batch plan produced an invalid job index".to_owned());
         };

@@ -55,7 +55,7 @@ pub struct Context {
     /// Exact release identifier paired with the configured dictionary.
     pub ccd_version: Option<&'static str>,
     /// Shared native executor, memory, cancellation, scratch and spill policy.
-    pub execution: &'static molframe::core::ExecutionContext,
+    pub execution: &'static molframe_core::ExecutionContext,
     /// Explicit missing-element behavior used by every structural reader.
     pub missing_element_policy: molframe::MissingElementPolicy,
     /// Explicit behavior for identifiers that cannot delimit adjacent residues.

@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 pub(crate) fn assemblies(input: &Path, context: Context) -> Exit {
-    use molframe::AssemblyExt as _;
+    use molframe::crystal::AssemblyExt as _;
     let structure = match open(input, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,
@@ -15,7 +15,7 @@ pub(crate) fn assemblies(input: &Path, context: Context) -> Exit {
     let rows = structure
         .assembly_set()
         .into_iter()
-        .flat_map(molframe::AssemblySet::assemblies)
+        .flat_map(molframe::crystal::AssemblySet::assemblies)
         .map(|assembly| {
             vec![
                 assembly.id.to_string(),
@@ -145,15 +145,17 @@ pub(crate) fn sequence(input: &Path, ccd: &Path, ccd_version: &str, context: Con
         Ok(provider) => provider,
         Err(exit) => return exit,
     };
-    let chains =
-        match molframe::compare::chain_sequences(&structure, &provider, context.policy.identifiers)
-        {
-            Ok(chains) => chains,
-            Err(finding) => {
-                context.findings(&[finding], &input.display().to_string());
-                return Exit::Consistency;
-            }
-        };
+    let chains = match molframe::compare::chain_sequences(
+        structure.engine(),
+        &provider,
+        context.policy.identifiers,
+    ) {
+        Ok(chains) => chains,
+        Err(finding) => {
+            context.findings(&[finding], &input.display().to_string());
+            return Exit::Consistency;
+        }
+    };
     if context.is_json() {
         let objects = chains
             .iter()
@@ -188,13 +190,13 @@ pub(crate) fn sequence(input: &Path, ccd: &Path, ccd_version: &str, context: Con
     Exit::Success
 }
 
-pub(super) fn value_text(value: Option<&molframe::CifValue>) -> String {
+pub(super) fn value_text(value: Option<&molframe::formats::cif::CifValue>) -> String {
     match value {
-        Some(molframe::CifValue::Inapplicable) => ".".to_owned(),
-        Some(molframe::CifValue::Unknown) | None => "?".to_owned(),
-        Some(molframe::CifValue::Text(value)) => value.to_string(),
-        Some(molframe::CifValue::Integer(value)) => value.to_string(),
-        Some(molframe::CifValue::Float(value)) => value.to_string(),
+        Some(molframe::formats::cif::CifValue::Inapplicable) => ".".to_owned(),
+        Some(molframe::formats::cif::CifValue::Unknown) | None => "?".to_owned(),
+        Some(molframe::formats::cif::CifValue::Text(value)) => value.to_string(),
+        Some(molframe::formats::cif::CifValue::Integer(value)) => value.to_string(),
+        Some(molframe::formats::cif::CifValue::Float(value)) => value.to_string(),
     }
 }
 

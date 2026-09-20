@@ -5,7 +5,7 @@ use crate::report::Context;
 use crate::{
     KmerOperation, MatrixChoice, PairwiseMode, SequenceCommand, SequenceFormat, TreeMethod,
 };
-use molframe::seq::{Alignment, FastaRecord};
+use molframe::sequence::{Alignment, FastaRecord};
 use std::io::Read as _;
 
 pub(crate) fn execute(command: SequenceCommand, context: Context) -> Exit {
@@ -35,7 +35,7 @@ pub(crate) fn execute(command: SequenceCommand, context: Context) -> Exit {
             refinement_passes,
         } => msa(
             &input,
-            molframe::seq::Scoring {
+            molframe::sequence::Scoring {
                 match_score,
                 mismatch_score,
                 gap_open,
@@ -65,8 +65,9 @@ pub(crate) fn execute(command: SequenceCommand, context: Context) -> Exit {
 
 fn convert(input: &str, from: SequenceFormat, to: SequenceFormat) -> Result<String, String> {
     let text = read_text(input)?;
-    let document = molframe::seq::read_sequence(&text, sequence_format(from)).map_err(display)?;
-    molframe::seq::write_sequence(&document, sequence_format(to)).map_err(display)
+    let document =
+        molframe::sequence::read_sequence(&text, sequence_format(from)).map_err(display)?;
+    molframe::sequence::write_sequence(&document, sequence_format(to)).map_err(display)
 }
 
 fn align(
@@ -86,13 +87,13 @@ fn align(
     let right = &records[1].sequence;
     let alignment = match mode {
         PairwiseMode::Global => {
-            molframe::seq::global_matrix(left, right, &matrix, gap_open, gap_extend)
+            molframe::sequence::global_matrix(left, right, &matrix, gap_open, gap_extend)
         }
         PairwiseMode::Local => {
-            molframe::seq::local_matrix(left, right, &matrix, gap_open, gap_extend)
+            molframe::sequence::local_matrix(left, right, &matrix, gap_open, gap_extend)
         }
         PairwiseMode::SemiGlobal => {
-            molframe::seq::semi_global_matrix(left, right, &matrix, gap_open, gap_extend)
+            molframe::sequence::semi_global_matrix(left, right, &matrix, gap_open, gap_extend)
         }
     }
     .map_err(display)?;
@@ -109,10 +110,10 @@ fn align(
             sequence: right_aligned,
         },
     ];
-    Ok(molframe::seq::write_fasta(&output))
+    Ok(molframe::sequence::write_fasta(&output))
 }
 
-fn msa(input: &str, scoring: molframe::seq::Scoring, passes: usize) -> Result<String, String> {
+fn msa(input: &str, scoring: molframe::sequence::Scoring, passes: usize) -> Result<String, String> {
     let text = read_text(input)?;
     let mut records = fasta_records(&text)?;
     if records.is_empty() {
@@ -122,12 +123,13 @@ fn msa(input: &str, scoring: molframe::seq::Scoring, passes: usize) -> Result<St
         .iter()
         .map(|record| record.sequence.as_slice())
         .collect();
-    let options = molframe::seq::MsaOptions::progressive(scoring).with_refinement_passes(passes);
-    let aligned = molframe::seq::progressive_msa(&sequences, options).map_err(display)?;
+    let options =
+        molframe::sequence::MsaOptions::progressive(scoring).with_refinement_passes(passes);
+    let aligned = molframe::sequence::progressive_msa(&sequences, options).map_err(display)?;
     for (record, sequence) in records.iter_mut().zip(aligned) {
         record.sequence = sequence;
     }
-    Ok(molframe::seq::write_fasta(&records))
+    Ok(molframe::sequence::write_fasta(&records))
 }
 
 fn kmer(
@@ -142,7 +144,7 @@ fn kmer(
         return Err("k-mer analysis requires at least one FASTA record".to_owned());
     };
     match operation {
-        KmerOperation::Counts => Ok(molframe::seq::kmer_counts(&record.sequence, k)
+        KmerOperation::Counts => Ok(molframe::sequence::kmer_counts(&record.sequence, k)
             .into_iter()
             .map(|(word, count)| format!("{}\t{count}", String::from_utf8_lossy(&word)))
             .collect::<Vec<_>>()
@@ -151,7 +153,7 @@ fn kmer(
             let Some(window) = window else {
                 return Err("minimizers require --window".to_owned());
             };
-            Ok(molframe::seq::minimizers(&record.sequence, k, window)
+            Ok(molframe::sequence::minimizers(&record.sequence, k, window)
                 .into_iter()
                 .map(|(position, word)| format!("{position}\t{}", String::from_utf8_lossy(&word)))
                 .collect::<Vec<_>>()
@@ -165,30 +167,32 @@ fn tree(input: &str, method: TreeMethod) -> Result<String, String> {
     let (labels, distances) = parse_distance_matrix(&text)?;
     let label_refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let tree = match method {
-        TreeMethod::NeighborJoining => molframe::seq::neighbor_joining(&label_refs, &distances),
-        TreeMethod::Upgma => molframe::seq::upgma(&label_refs, &distances),
+        TreeMethod::NeighborJoining => {
+            molframe::sequence::neighbor_joining(&label_refs, &distances)
+        }
+        TreeMethod::Upgma => molframe::sequence::upgma(&label_refs, &distances),
     };
     tree.map(|value| value.to_newick())
         .ok_or_else(|| "distance matrix cannot produce a tree".to_owned())
 }
 
-const fn sequence_format(format: SequenceFormat) -> molframe::seq::SequenceFormat {
+const fn sequence_format(format: SequenceFormat) -> molframe::sequence::SequenceFormat {
     match format {
-        SequenceFormat::Fasta => molframe::seq::SequenceFormat::Fasta,
-        SequenceFormat::Fastq => molframe::seq::SequenceFormat::Fastq,
-        SequenceFormat::A2m => molframe::seq::SequenceFormat::A2m,
-        SequenceFormat::A3m => molframe::seq::SequenceFormat::A3m,
-        SequenceFormat::Clustal => molframe::seq::SequenceFormat::Clustal,
-        SequenceFormat::Stockholm => molframe::seq::SequenceFormat::Stockholm,
-        SequenceFormat::Phylip => molframe::seq::SequenceFormat::Phylip,
+        SequenceFormat::Fasta => molframe::sequence::SequenceFormat::Fasta,
+        SequenceFormat::Fastq => molframe::sequence::SequenceFormat::Fastq,
+        SequenceFormat::A2m => molframe::sequence::SequenceFormat::A2m,
+        SequenceFormat::A3m => molframe::sequence::SequenceFormat::A3m,
+        SequenceFormat::Clustal => molframe::sequence::SequenceFormat::Clustal,
+        SequenceFormat::Stockholm => molframe::sequence::SequenceFormat::Stockholm,
+        SequenceFormat::Phylip => molframe::sequence::SequenceFormat::Phylip,
     }
 }
 
 fn fasta_records(text: &str) -> Result<Vec<FastaRecord>, String> {
-    match molframe::seq::read_sequence(text, molframe::seq::SequenceFormat::Fasta)
+    match molframe::sequence::read_sequence(text, molframe::sequence::SequenceFormat::Fasta)
         .map_err(display)?
     {
-        molframe::seq::SequenceDocument::Records(records) => Ok(records),
+        molframe::sequence::SequenceDocument::Records(records) => Ok(records),
         _ => Err("FASTA dispatcher returned an incompatible document".to_owned()),
     }
 }
@@ -259,14 +263,18 @@ fn display(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-fn substitution_matrix(choice: MatrixChoice) -> Result<molframe::seq::SubstitutionMatrix, String> {
+fn substitution_matrix(
+    choice: MatrixChoice,
+) -> Result<molframe::sequence::SubstitutionMatrix, String> {
     match choice {
-        MatrixChoice::Blosum62 => Ok(molframe::seq::blosum62()),
+        MatrixChoice::Blosum62 => Ok(molframe::sequence::blosum62()),
         MatrixChoice::Identity => {
-            molframe::seq::load_matrix(molframe::seq::MatrixProfile::Identity).map_err(display)
+            molframe::sequence::load_matrix(molframe::sequence::MatrixProfile::Identity)
+                .map_err(display)
         }
         MatrixChoice::Nuc44 => {
-            molframe::seq::load_matrix(molframe::seq::MatrixProfile::Nuc44).map_err(display)
+            molframe::sequence::load_matrix(molframe::sequence::MatrixProfile::Nuc44)
+                .map_err(display)
         }
     }
 }
