@@ -1,9 +1,12 @@
 use super::structure_side_chain_torsions;
+use crate::chemistry::{
+    Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider, PolymerAtomRole,
+};
 use crate::{
-    AnalysisPolicy, AnnotationColumn, AtomAnnotation, BondOrder, Component, ComponentAtom,
-    ComponentBond, ComponentKind, DictionaryVersion, Element, MemoryProvider, PolymerAtomRole,
+    AnalysisPolicy, AnnotationColumn, AtomAnnotation, BondOrder, DictionaryVersion, Element,
     ReadOptions, Structure,
 };
+use molframe_core::structure::Structure as CoreStructure;
 use std::sync::Arc;
 
 const ENTRY: &str = "data_s\n\
@@ -50,7 +53,7 @@ fn structure_projection_requires_explicit_polymer_roles() {
 }
 
 fn annotated(structure: &Structure) -> Structure {
-    let mut data = structure.data().clone();
+    let mut data = structure.engine().data().clone();
     let roles = [
         PolymerAtomRole::PROTEIN_NITROGEN,
         PolymerAtomRole::PROTEIN_ALPHA_CARBON,
@@ -67,7 +70,7 @@ fn annotated(structure: &Structure) -> Structure {
                 .expect("small annotation column"),
         ),
     );
-    Structure::new(data)
+    CoreStructure::new(data).into()
 }
 
 fn provider() -> MemoryProvider {

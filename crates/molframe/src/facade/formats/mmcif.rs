@@ -2,9 +2,9 @@
 //! `modelcif` share.
 
 use crate::facade::unsupported;
+use crate::structure::Structure;
 use molframe_core::diagnostic::{Code, Diagnostic, Findings};
 use molframe_core::io::{Format, InputBuffer, Limits};
-use molframe_core::structure::Structure;
 use std::io;
 use std::io::Write;
 use std::path::Path;
@@ -79,12 +79,13 @@ pub(crate) fn write_mmcif_to_with_options<W: Write>(
 ) -> Result<(), molframe_cif::CifWriteToError> {
     #[cfg(feature = "modelcif")]
     if let Some(model) = structure
+        .engine()
         .extensions()
         .get::<molframe_modelcif::ModelCif>(molframe_modelcif::MODEL_CIF_EXTENSION)
     {
-        return molframe_modelcif::write_canonical_to(structure, model, options, output);
+        return molframe_modelcif::write_canonical_to(structure.engine(), model, options, output);
     }
-    molframe_cif::write_canonical_to(structure, options, output)
+    molframe_cif::write_canonical_to(structure.engine(), options, output)
 }
 
 pub(crate) fn cif_write_findings(error: &molframe_cif::CifWriteToError) -> Findings {

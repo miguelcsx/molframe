@@ -7,7 +7,7 @@ _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 ATOM 1 C C1 LIG A 1 0 0 0\nATOM 2 C C2 LIG A 1 1 0 0\n";
 
-fn structure() -> Structure {
+fn structure() -> crate::Structure {
     match read_bytes(
         SOURCE.as_bytes().to_vec(),
         Some("query.cif"),

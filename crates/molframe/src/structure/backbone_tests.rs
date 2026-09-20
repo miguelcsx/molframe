@@ -26,7 +26,7 @@ fn structure_torsions_follow_explicit_connectivity_and_keep_residue_indices() {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture read failed: {findings:?}"),
     };
-    let mut data = structure.data().clone();
+    let mut data = structure.engine().data().clone();
     let roles = [
         PolymerAtomRole::PROTEIN_NITROGEN,
         PolymerAtomRole::PROTEIN_ALPHA_CARBON,

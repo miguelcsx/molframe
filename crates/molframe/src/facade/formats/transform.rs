@@ -2,8 +2,9 @@
 
 use molframe_core::diagnostic::{Code, Diagnostic, Findings};
 use molframe_core::selection::AtomSelection;
-use molframe_core::structure::Structure;
 use molframe_geom::Rigid;
+
+use crate::structure::Structure;
 
 /// Applies one rigid transform to selected atoms in every dense model.
 ///
@@ -20,21 +21,19 @@ pub fn transform(
     selection: &AtomSelection,
     rigid: &Rigid,
 ) -> Result<Structure, Findings> {
-    if structure.ragged_models().is_some() {
+    let core = structure.engine();
+    if core.ragged_models().is_some() {
         return Err(Diagnostic::new(Code::E6008).into());
     }
-    if let Some(atom) = selection
-        .iter()
-        .find(|atom| *atom >= structure.atom_count())
-    {
+    if let Some(atom) = selection.iter().find(|atom| *atom >= core.atom_count()) {
         return Err(Diagnostic::new(Code::E6009)
             .with_context("atom", atom.to_string())
             .into());
     }
 
-    let mut editor = structure.edit();
+    let mut editor = core.edit();
     editor
         .transform(selection, |position| rigid.apply(position))
         .map_err(Findings::from)?;
-    editor.commit().map_err(Findings::from)
+    editor.commit().map(Structure::from).map_err(Findings::from)
 }

@@ -8,18 +8,18 @@
 
 #[cfg(feature = "bcif")]
 mod bcif;
-#[cfg(feature = "chem")]
+#[cfg(feature = "chemistry")]
 mod chem;
 #[cfg(feature = "mmcif")]
 mod mmcif;
 #[cfg(feature = "pdb")]
 mod pdb;
-#[cfg(feature = "geom")]
+#[cfg(feature = "geometry")]
 mod transform;
 
 #[cfg(feature = "bcif")]
 pub use bcif::{write_bcif, write_bcif_with_options};
-#[cfg(feature = "chem")]
+#[cfg(feature = "chemistry")]
 pub use chem::read_component_dictionary;
 #[cfg(feature = "mmcif")]
 pub(crate) use mmcif::{cif_write_findings, write_mmcif_to_with_options};
@@ -27,5 +27,5 @@ pub(crate) use mmcif::{cif_write_findings, write_mmcif_to_with_options};
 pub use mmcif::{read_document, write_mmcif, write_mmcif_with_options};
 #[cfg(feature = "pdb")]
 pub use pdb::write_pdb;
-#[cfg(feature = "geom")]
+#[cfg(feature = "geometry")]
 pub use transform::transform;

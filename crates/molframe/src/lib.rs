@@ -1,24 +1,26 @@
 //! A batteries-included structural bioinformatics engine.
 //!
-//! This crate is the composition layer. It owns no kernel of its own: what lives
-//! here is the facade that dispatches reading and writing to whichever format
-//! crates are linked, the typed operation vocabulary over the analysis kernels
-//! ([`Plan`] and its requests), the policy configuration, and the prelude that
-//! puts all of it in scope. Everything else is re-exported from the crate that
-//! has the logic. The default feature set is the complete user surface; a caller
-//! that needs one format can disable default features and link just that format.
+//! This crate is the composition layer, and it is the whole 1.0 contract: what
+//! is reachable from the root or from [`prelude`] is curated and stable, and
+//! everything else — the raw storage engine — lives under [`engine`],
+//! documented there as the uncurated, lower-stability door. The default feature
+//! set includes mmCIF and PDB; callers opt into analysis domains independently.
 //!
 //! # What the root carries
 //!
 //! The root namespace is curated, not a mirror of the workspace. It holds the
-//! core data model, the reading and writing verbs, the typed operation
-//! vocabulary, and — as flat names — the crates whose surface is small enough
-//! to read flat: `chem`, `geom`, `ic`, `interop`, `query`, `spatial`, `xtal` and
-//! `audit`. Every one of those is also reachable as a module
-//! (`molframe::geom`, …), so a caller can always qualify. The large domain
-//! crates — `analysis`, `compare`, `seq`, `surface`, `traj`, `validate`, `fx` —
-//! are module-only: `molframe::analysis::hydrogen_bonds`, never a flat
-//! `molframe::hydrogen_bonds`, so the root stays a page a reader can hold.
+//! curated structure handles ([`Structure`], [`Selection`], [`StructureEditor`],
+//! the [`Chains`]/[`Residues`]/[`Atoms`]/[`Models`] collections), the reading and
+//! writing verbs, and the policy and diagnostic vocabulary.
+//!
+//! Everything else is module-only. `molframe::analysis::hydrogen_bonds`, never a
+//! flat `molframe::hydrogen_bonds`; `molframe::chemistry::vdw_radius`, never
+//! `molframe::vdw_radius`; `molframe::interop::AtomTable`, never
+//! `molframe::AtomTable`. `geometry`, `analysis`, `compare`, `sequence`,
+//! `surface`, `validation`, `trajectory`, `crystal`, `motif`, `chemistry`,
+//! `spatial`, `query`, `ic`, `interop`, `audit` and `adapters` are all reached
+//! that way, so the root stays a page a reader can hold. The four structure
+//! formats live under [`formats`].
 //!
 //! # Reading, and saying what was wrong with the file
 //!
@@ -50,10 +52,7 @@
 //! `?` above, and hence `anyhow::Result` or `Box<dyn Error>` at a `main` without
 //! a match anywhere.
 //!
-//! # Composing an operation
-//!
-//! The same structure drives the typed operation vocabulary, so a pipeline is
-//! data rather than a chain of calls:
+//! # Navigating and editing
 //!
 //! ```
 //! use molframe::prelude::*;
@@ -66,17 +65,16 @@
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let (structure, _) = read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;
 //!
-//!     let mut plan = Plan::new();
-//!     plan.add(
-//!         "alpha_carbons",
-//!         SelectionRequest::new("name CA", AnalysisPolicy::default())?,
-//!     )?;
+//!     for chain in structure.chains() {
+//!         println!("chain {:?}: {} residues", chain.label(), chain.residues().count());
+//!     }
 //!
-//!     let result = plan.execute(
-//!         PlanInput { structure: Some(&structure), ..PlanInput::default() },
-//!         &ExecutionContext::default(),
-//!     )?;
-//!     assert_eq!(result.entries.len(), 1);
+//!     let mut editor = structure.edit();
+//!     editor
+//!         .rename_chain(molframe::ChainIndex::new(0), "B")
+//!         .map_err(Findings::from)?;
+//!     let renamed = editor.finish().map_err(Findings::from)?;
+//!     assert_eq!(renamed.chain_at(0).and_then(|chain| chain.label()), Some("B"));
 //!     Ok(())
 //! }
 //! ```
@@ -90,8 +88,6 @@
 
 #![forbid(unsafe_code)]
 
-pub use molframe_core as core;
-
 pub use molframe_core::annotation::{
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn,
     AtomAnnotation, AtomAnnotations, COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION,
@@ -99,24 +95,19 @@ pub use molframe_core::annotation::{
     PLDDT_ANNOTATION, POLYMER_ATOM_ROLE_ANNOTATION, SEGMENT_ID_ANNOTATION,
     STEREO_CONFIGURATION_ANNOTATION,
 };
-pub use molframe_core::chunk::{
-    AtomChunk, AtomChunkStats, AtomRecord, ChunkBuilder, ElementMask, Extremes, ParentMapping,
-    TARGET_CHUNK_ATOMS,
-};
-pub use molframe_core::column::{BitVec, EncodedColumn, Presence, ValidityMask};
 pub use molframe_core::contract::{
     AlgorithmId, AltlocPolicy, Analysis, AnalysisParameters, AnalysisPolicy, AssemblyChoice,
     Assumption, AssumptionSource, Coverage, DictionaryVersion, ImpactEstimate, MissingPolicy,
     ModelChoice, Namespace, ParameterValue, PolicyField, ProfileId, Provenance, SourceRef, Status,
     Tolerance,
 };
-pub use molframe_core::coords::{Aabb, CoordinateBlock, CoordinateGeneration};
+pub use molframe_core::coords::Aabb;
 pub use molframe_core::diagnostic::{
     Class, Code, ContextItem, Diagnostic, Diagnostics, Findings, Kind, Rendered, Severity,
     Strictness,
 };
 pub use molframe_core::element::Element;
-pub use molframe_core::execution::ExecutionContext;
+pub use molframe_core::execution::{ExecutionContext, MemoryBudgetError};
 pub use molframe_core::index::{
     AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
 };
@@ -126,155 +117,57 @@ pub use molframe_core::io::{
     ReadResult, Reader, Select, SelectAll, StructureAtomRecord, StructureBatch,
     StructureBatchBuilder, StructureBatchError, collect_structure,
 };
-pub use molframe_core::provider::{
-    AtomEndpoint, BondChunk, BondChunkProvider, BondChunkRecord, ChunkDescriptor, ChunkId,
-    ChunkLayout, DatasetCatalog, DatasetDescriptor, DatasetId, FrameChunk, FrameChunkProvider,
-    LocalRow, LogicalRow, PayloadKind, PropertyChunk, PropertyChunkProvider, PropertyKind,
-    PropertyValue, ProviderError, StructureChunk, StructureChunkProvider, TARGET_CHUNK_BONDS,
-};
-pub use molframe_core::selection::AtomSelection;
 pub use molframe_core::span::{ByteSpan, Position};
 pub use molframe_core::structure::{
-    AtomRef, ChainRef, ChainSequenceExt, CoordinateEditor, CoordinateStore, CountDifference,
-    DifferenceError, EntryMetadata, ExtensionStore, MetadataDifference, MissingResidue, ModelRef,
+    AtomRef, ChainRef, ChainSequenceExt, CoordinateEditor, CountDifference, DifferenceError,
+    EntryMetadata, ExtensionStore, MetadataDifference, MissingResidue, ModelRef,
     ReferenceAlignment, ReferenceSequence, ResidueRef, SEQUENCE_REFERENCES_EXTENSION,
-    SequenceMapping, SequenceReferences, Structure, StructureData, StructureDifference,
-    StructureDifferenceOptions, StructureEditor, StructureView, UnitCell, ValueDifference,
-    structure_difference,
+    SequenceMapping, SequenceReferences, StructureDifference, StructureDifferenceOptions, UnitCell,
+    ValueDifference,
 };
-pub use molframe_core::symbol::{AltId, Interner, SymbolId};
+pub use molframe_core::symbol::{AltId, SymbolId};
 pub use molframe_core::topology::{EntityKind, PolymerKind, Topology};
 pub use molframe_core::{
     BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder,
+};
+pub use molframe_engine::{
+    CompiledWorkflow, Cost, Explanation, Input, Node, OperationMetadata, Output, PhysicalNode,
+    Workflow, WorkflowBuildError, WorkflowError, WorkflowInputs, WorkflowResults,
 };
 
 #[cfg(feature = "adapters")]
 pub use molframe_adapters as adapters;
 
 #[cfg(feature = "audit")]
-pub use molframe_audit::{
-    AuditPlan, AuditReport, AuditRun, DimensionSensitivity, PlanError, PolicyDimension,
-    PolicySpace, PolicyValue, SensitiveItem, audit, audit_batch,
-};
+pub use molframe_audit as audit;
 
-#[cfg(feature = "fx")]
-pub use molframe_fx as fx;
+#[cfg(feature = "motif")]
+pub use molframe_fx as motif;
 
 #[cfg(feature = "interop")]
 pub use molframe_interop as interop;
-#[cfg(feature = "interop")]
-pub use molframe_interop::{
-    ArrowStream, AtomTable, ChainTable, DLDataType, DLDevice, DLManagedTensor, DLTensor, Dataset,
-    DatasetError, DatasetFilter, DatasetSplit, DatasetWarning, DlpackError, DlpackTensor,
-    EdgeDirection, EdgeFeature, EdgeKind, ExportCost, Graph, GraphError, GraphOptions, LoadError,
-    ManifestEntry, MissingFeaturePolicy, MolframeExtension, NodeFeature, NodeLevel, ResidueTable,
-    SplitOptions, SplitRatios, SplitStrategy, TableFileError, extension_name, graph,
-    write_atom_ipc, write_atom_ipc_with_metadata, write_atom_parquet,
-    write_atom_parquet_with_metadata,
-};
-// `molframe_interop::BondTable` stays module-only: the root's `BondTable` is the
-// structure's bond table, and two tables of the same name on one root would
-// resurrect the ambiguity the aliases above used to hide.
 
-#[cfg(feature = "chem")]
-pub use molframe_chem as chem;
-#[cfg(feature = "chem")]
-pub use molframe_chem::{
-    AutomorphismLimit, ChemistryReport, CifProvider, Component, ComponentAtom, ComponentBond,
-    ComponentCoverage, ComponentKind, ComponentProvider, ElementProperties, EquivalenceCache,
-    EquivalenceClasses, IonicRadius, IonicSpin, MemoryProvider, PeoeAtom, PeoeAtomType, PeoeBond,
-    PeoeError, PeoeOptions, PeoeParameterProfile, PolymerAtomRole, PolymerLinkPolicy,
-    PolymerLinkRule, PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, RadiusSet,
-    RadiusTable, SideChainDefinition, SideChainRoles, SmartsDataError, SmartsError, SmartsMatch,
-    SmartsPattern, StereoConfiguration, apply_component_chemistry, apply_polymer_role_profile,
-    automorphisms, component_coverage, component_peoe_charges, element_properties,
-    equivalence_classes, ionic_radii, peoe_charges, side_chain_definition, vdw_radius,
-};
+#[cfg(feature = "chemistry")]
+pub use molframe_chem as chemistry;
 
-#[cfg(feature = "mmcif")]
-pub use molframe_cif as cif;
-#[cfg(feature = "mmcif")]
-pub use molframe_cif::{
-    Category, CifValue, CifWriteError, CifWriteOptions, CifWriteToError, Column, DataBlock,
-    Document, write_preserving, write_preserving_to,
-};
+pub mod formats;
 
-#[cfg(feature = "modelcif")]
-pub use molframe_modelcif as modelcif;
-#[cfg(feature = "modelcif")]
-pub use molframe_modelcif::{
-    GlobalMetric, LocalMetric, MODEL_CIF_EXTENSION, MetricDefinition, ModelCategory, ModelCif,
-    ModelCifExt, ModelDescription, ModelRow, PairwiseMetric, ProtocolStep, QualityMetrics,
-    SoftwareGroup, Target, Template,
-};
-
-#[cfg(feature = "bcif")]
-pub use molframe_bcif as bcif;
-#[cfg(feature = "bcif")]
-pub use molframe_bcif::{BcifReader, BinaryDocument};
-
-#[cfg(feature = "geom")]
-pub use molframe_geom as geom;
-#[cfg(feature = "geom")]
-pub use molframe_geom::{
-    BackboneFrame, BackboneResidue, BackboneTorsions, BatchGeometryError, CircularSummary,
-    Decomposition, DistanceMatrix, EigenError, EigenOptions, FluctuationError, HelixGeometry,
-    MatrixError, PeriodicAngle, PeriodicError, Plane, Rigid, Rotation3, RotationError,
-    RotationMeanOptions, RotationOptions, SuperposeError, SuperposeOptions, Superposition,
-    TorusMetric, angle, angles_into, asphericity, asphericity_with_options, backbone_frames,
-    backbone_torsions, best_fit_plane, best_fit_plane_with_options, centre_of_mass, centroid,
-    circular_summary, cross, degrees, dihedral, displacement, distance, distance_matrix,
-    distance_matrix_between, distance_squared, distances_into, dot, gyration_axes,
-    gyration_axes_with_options, helix_geometry, helix_geometry_with_options, inertia_tensor, norm,
-    normalise, path_torsions, plane_deviation, plane_deviation_with_options, principal_axes,
-    principal_axes_with_options, radius_of_gyration, rmsd, rmsd_flat, rmsf, rotation_mean,
-    rotation_mean_with_options, superpose, superpose_with_options, torsions_into, torus_summary,
-};
+#[cfg(feature = "geometry")]
+pub use molframe_geom as geometry;
 
 #[cfg(feature = "ic")]
 pub use molframe_ic as ic;
-#[cfg(feature = "ic")]
-pub use molframe_ic::{
-    BatFrame, Dihedron, Hedron, InternalAtom, InternalCoordinates, internal_coordinates, place_atom,
-};
-
-#[cfg(feature = "pdb")]
-pub use molframe_pdb as pdb;
-#[cfg(feature = "pdb")]
-pub use molframe_pdb::{
-    PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbHeadersExt, PdbIdentifierNamespace,
-    PdbOptions, write_mmtf, write_mmtf_to, write_pdbqt, write_pdbqt_to, write_pqr, write_pqr_to,
-};
 
 #[cfg(feature = "spatial")]
 pub use molframe_spatial as spatial;
-#[cfg(feature = "spatial")]
-pub use molframe_spatial::{
-    AutoBackendProfile, CellGridOptions, CellList, KdPeriodicOptions, KdTree, NeighborList,
-    NeighborListOptions, NeighborPair, NeighborSkinProfile, PeriodicBox, PeriodicImage,
-    SpatialBackend, SpatialError, SpatialOption, SpatialPlan, SpatialSearchOptions, pairs_within,
-    pairs_within_with_options, within, within_with_options,
-};
 
 #[cfg(feature = "query")]
 pub use molframe_query as query;
 #[cfg(feature = "query")]
-pub use molframe_query::{Builder, Evaluation, Groups, Query, col};
+pub use molframe_query::Query;
 
-#[cfg(feature = "xtal")]
-pub use molframe_xtal as xtal;
-#[cfg(feature = "xtal")]
-pub use molframe_xtal::{
-    ASSEMBLIES_EXTENSION, AffineTransform, AssemblyDef, AssemblyExt, AssemblyNeighbor, AssemblySet,
-    AssemblyView, AtomInstance, CellTransform, ChainInstance, CrystalImage, CrystalImageBatch,
-    CrystalImageBatchOptions, CrystalNeighbor, CrystalNeighborBatch, CrystalNeighborOptions,
-    DEFAULT_CRYSTAL_IMAGE_LIMIT, DEFAULT_INSTANCE_LIMIT, Generator, INSTANCE_ID_ANNOTATION,
-    NCS_EXTENSION, NcsAtomInstance, NcsCode, NcsExt, NcsOperator, NcsSet, NcsView, OperExpression,
-    Operator, Rational, SYMMETRY_EXTENSION, SpaceGroupSetting, SymmetryExt, SymmetryOperation,
-    SymmetrySet, collect_crystal_neighbors, crystal_image_batches, crystal_neighbor_batches,
-    lower_assemblies, lower_ncs, lower_symmetry, space_group_by_hall, space_group_setting,
-    space_group_settings, visit_crystal_images, visit_crystal_neighbors,
-};
+#[cfg(feature = "crystal")]
+pub use molframe_xtal as crystal;
 
 // The analysis crates carry many small, related items, so they are
 // re-exported under their own namespace rather than flattened into the root.
@@ -282,24 +175,36 @@ pub use molframe_xtal::{
 pub use molframe_analysis as analysis;
 #[cfg(feature = "compare")]
 pub use molframe_compare as compare;
-#[cfg(feature = "seq")]
-pub use molframe_seq as seq;
+#[cfg(feature = "sequence")]
+pub use molframe_seq as sequence;
 #[cfg(feature = "surface")]
 pub use molframe_surface as surface;
-#[cfg(feature = "traj")]
-pub use molframe_traj as traj;
-#[cfg(feature = "validate")]
-pub use molframe_validate as validate;
+#[cfg(feature = "trajectory")]
+pub use molframe_traj as trajectory;
+#[cfg(feature = "trajectory")]
+pub use molframe_traj::Trajectory;
+#[cfg(feature = "validation")]
+pub use molframe_validate as validation;
 
+/// The uncurated, low-level door onto the storage engine.
+///
+/// Everything under [`engine::core`] is a direct re-export of `molframe-core`
+/// internals: chunked columnar storage, provider machinery, and the snapshot
+/// representation the curated [`Structure`] wraps. Declarative execution is
+/// the stable typed [`Workflow`] API at the crate root; there is no second
+/// low-level batch executor.
+pub mod engine {
+    pub mod core;
+}
+
+mod extensions;
 mod facade;
-#[cfg(all(feature = "analysis", feature = "geom"))]
-mod operations;
 mod policy_config;
 pub mod prelude;
 mod structure;
 
 pub use facade::{
-    WriteOptions, read, read_bytes, read_with_diagnostics, read_with_options, write,
+    WriteOptions, read, read_buffer, read_bytes, read_with_diagnostics, read_with_options, write,
     write_with_options,
 };
 // The bounded batch reader needs a format crate to read with, so these two
@@ -316,35 +221,23 @@ pub use policy_config::{
     ApplicationConfiguration, ChemistryConfiguration, OutputConfiguration, PolicyConfigError,
     PolicyOverrides, read_configuration, read_policy,
 };
-
-#[cfg(all(feature = "analysis", feature = "geom"))]
-pub use operations::FloatInput;
-// The comparison requests live in `operations`, which needs the two kernels
-// its executor is built from, so selecting `compare` alone is not enough for
-// the module to exist.
-#[cfg(all(feature = "compare", feature = "analysis", feature = "geom"))]
-pub use operations::{ComparisonMetric, ComparisonRequest, ComparisonResult};
-#[cfg(all(feature = "analysis", feature = "geom"))]
-pub use operations::{
-    ContactsRequest, CoordinateInput, CoordinateSlot, ExecutionPlanError, FrameInput,
-    GeometryRequest, GeometryValue, IndexInput, PhysicalRequest, PhysicalValue, Plan, PlanInput,
-    PlanOperation, PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput,
-    SelectionRequest, SpatialRequest, SpatialValue, StructureRequest, StructureValue,
-};
-#[cfg(all(feature = "analysis", feature = "geom", feature = "surface"))]
-pub use operations::{MaskInput, SurfaceRequest, SurfaceValue};
-#[cfg(all(feature = "analysis", feature = "geom", feature = "traj"))]
-pub use operations::{TrajectoryRequest, TrajectoryValue};
-
-#[cfg(feature = "geom")]
-pub use facade::transform;
-
-#[cfg(all(feature = "geom", feature = "chem"))]
 pub use structure::{
-    BackboneTorsionRecord, ProteinAlphaTrace, SideChainTorsionRecord, SideChainTorsionReport,
-    structure_backbone_torsions, structure_backbone_torsions_model, structure_protein_alpha_traces,
-    structure_side_chain_torsions,
+    Atoms, AtomsIter, Chains, ChainsIter, Models, ModelsIter, Residues, ResiduesIter, Selection,
+    Structure, StructureEditor, structure_difference,
 };
+
+// The method syntax for the domain kernels whose first argument is a
+// structure. See `extensions` for why geometry, surface and the spatial
+// planners have no trait here.
+#[cfg(feature = "analysis")]
+pub use extensions::AnalysisExt;
+#[cfg(feature = "compare")]
+pub use extensions::CompareExt;
+#[cfg(feature = "validation")]
+pub use extensions::ValidationExt;
+
+#[cfg(feature = "geometry")]
+pub use facade::transform;
 
 #[cfg(feature = "mmcif")]
 pub use facade::{read_document, write_mmcif, write_mmcif_with_options};
@@ -352,16 +245,23 @@ pub use facade::{read_document, write_mmcif, write_mmcif_with_options};
 #[cfg(feature = "bcif")]
 pub use facade::{write_bcif, write_bcif_with_options};
 
-#[cfg(feature = "chem")]
-pub use facade::read_component_dictionary;
-
 #[cfg(feature = "pdb")]
 pub use facade::write_pdb;
+
+#[cfg(all(feature = "geometry", feature = "chemistry"))]
+pub use structure::{
+    BackboneTorsionRecord, ProteinAlphaTrace, SideChainTorsionRecord, SideChainTorsionReport,
+    structure_backbone_torsions, structure_backbone_torsions_model, structure_protein_alpha_traces,
+    structure_side_chain_torsions,
+};
+
+#[cfg(feature = "chemistry")]
+pub use facade::read_component_dictionary;
 
 #[cfg(feature = "query")]
 pub use structure::QueryStructure;
 
-#[cfg(all(feature = "chem", feature = "spatial"))]
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
 pub use structure::{
     BondInference, BondInferenceReport, DEFAULT_BOND_RADIUS_SCALE, DEFAULT_MINIMUM_BOND_DISTANCE,
     infer_bonds,

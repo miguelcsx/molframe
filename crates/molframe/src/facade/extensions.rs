@@ -6,7 +6,7 @@ use molframe_core::io::{ReadOptions, ReadResult};
 use molframe_core::{Diagnostic, Structure};
 
 pub(super) fn keep_non_model_extension_category(category: &str) -> bool {
-    #[cfg(feature = "xtal")]
+    #[cfg(feature = "crystal")]
     if matches!(
         category,
         "pdbx_struct_oper_list"
@@ -20,7 +20,7 @@ pub(super) fn keep_non_model_extension_category(category: &str) -> bool {
     ) {
         return true;
     }
-    #[cfg(not(feature = "xtal"))]
+    #[cfg(not(feature = "crystal"))]
     let _ = category;
     false
 }
@@ -106,7 +106,7 @@ fn attach_non_model(
     structure: Structure,
     findings: Vec<Diagnostic>,
 ) -> (Structure, Vec<Diagnostic>) {
-    #[cfg(feature = "xtal")]
+    #[cfg(feature = "crystal")]
     {
         let mut structure = structure;
         let mut findings = findings;
@@ -134,7 +134,7 @@ fn attach_non_model(
         }
         (structure, findings)
     }
-    #[cfg(not(feature = "xtal"))]
+    #[cfg(not(feature = "crystal"))]
     {
         let _ = document;
         (structure, findings)

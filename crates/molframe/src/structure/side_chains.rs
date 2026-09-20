@@ -4,7 +4,7 @@ use crate::{AnalysisPolicy, Diagnostic, Findings, ResidueIndex, Structure};
 use molframe_chem::{ComponentProvider, PolymerAtomRole, SideChainRoles, side_chain_definition};
 use molframe_core::Code;
 use molframe_core::contract::DictionaryVersion;
-use molframe_core::structure::ResidueRef;
+use molframe_core::structure::{ResidueRef, Structure as CoreStructure};
 
 use super::roles::{atom_role, require_polymer_roles};
 
@@ -47,11 +47,12 @@ pub fn structure_side_chain_torsions(
     provider: &dyn ComponentProvider,
     policy: &AnalysisPolicy,
 ) -> Result<SideChainTorsionReport, Findings> {
-    require_polymer_roles(structure)?;
-    let selected = structure.resolve_altlocs(policy);
+    let engine = structure.engine();
+    require_polymer_roles(engine)?;
+    let selected = engine.resolve_altlocs(policy);
     let mut findings = selected.warnings;
     let mut records = Vec::new();
-    for residue in structure.data().residues() {
+    for residue in engine.data().residues() {
         let Some(component_id) = residue.name() else {
             continue;
         };
@@ -60,7 +61,7 @@ pub fn structure_side_chain_torsions(
                 .push(Diagnostic::new(crate::Code::W3201).with_context("component", component_id));
             continue;
         };
-        let Some(resolved) = side_chain_roles(structure, residue, &selected.value)? else {
+        let Some(resolved) = side_chain_roles(engine, residue, &selected.value)? else {
             continue;
         };
         let roles = SideChainRoles {
@@ -103,7 +104,7 @@ pub fn structure_side_chain_torsions(
 }
 
 fn side_chain_roles<'a>(
-    structure: &'a Structure,
+    structure: &'a CoreStructure,
     residue: ResidueRef<'a>,
     selected: &molframe_core::AtomSelection,
 ) -> Result<Option<ResolvedSideChainRoles<'a>>, Diagnostic> {
@@ -139,7 +140,7 @@ fn side_chain_roles<'a>(
 }
 
 fn unique_role_name<'a>(
-    structure: &'a Structure,
+    structure: &'a CoreStructure,
     residue: ResidueRef<'a>,
     selected: &molframe_core::AtomSelection,
     required: PolymerAtomRole,

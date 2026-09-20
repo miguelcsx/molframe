@@ -1,6 +1,6 @@
 //! The names most programs want in scope.
 //!
-//! `use molframe::prelude::*;` brings in the verbs ([`read`], [`write`]), the
+//! `use molframe::prelude::*;` brings in the verbs ([`read`], [`write()`]), the
 //! vocabulary they speak (a [`Structure`], its [`ReadOptions`], the [`Diagnostic`]
 //! that reports what was wrong with a file), and the pieces needed to call them.
 //! Everything is gated by the feature that provides it, so a caller linking one
@@ -9,12 +9,12 @@
 // The data, and what a read says about it.
 pub use crate::{
     Analysis, AnalysisPolicy, Code, Coverage, Diagnostic, Diagnostics, Findings, Format,
-    Provenance, Rendered, Status, Structure, StructureView,
+    Provenance, Rendered, Status, Structure,
 };
 
 // The policies and identifiers a call takes.
 pub use crate::{
-    AltlocPolicy, AmbiguousResidueBoundaryPolicy, AssemblyChoice, AtomRef, AtomSelection, ChainRef,
+    AltlocPolicy, AmbiguousResidueBoundaryPolicy, AssemblyChoice, AtomRef, ChainRef,
     ChainSequenceExt, Element, ExecutionContext, Limits, MissingElementPolicy, MissingPolicy,
     ModelChoice, ModelIndex, ModelRef, Namespace, ParseMode, ReadOptions, ResidueRef,
 };
@@ -31,13 +31,15 @@ pub use crate::{WriteOptions, read_document, write_mmcif, write_mmcif_with_optio
 pub use crate::{write_bcif, write_bcif_with_options};
 
 #[cfg(feature = "pdb")]
-pub use crate::{PdbHeadersExt, write_pdb};
+pub use crate::{formats::pdb::PdbHeadersExt, write_pdb};
 
-#[cfg(feature = "chem")]
+#[cfg(feature = "chemistry")]
 pub use crate::read_component_dictionary;
 
-#[cfg(feature = "geom")]
-pub use crate::{Rigid, transform};
+#[cfg(feature = "geometry")]
+pub use crate::geometry::Rigid;
+#[cfg(feature = "geometry")]
+pub use crate::transform;
 
 // The bounded batch reader needs a format crate to read with, so it appears
 // under exactly the features that give `StructureBatchReader` a variant.
@@ -50,35 +52,24 @@ pub use crate::{Rigid, transform};
 pub use crate::{StructureBatchReader, open_structure_batches};
 
 // Selection.
+pub use crate::Selection;
 #[cfg(feature = "query")]
-pub use crate::{Groups, Query, QueryStructure};
-
-// The typed operation vocabulary.
-#[cfg(all(feature = "analysis", feature = "geom"))]
-pub use crate::{
-    ContactsRequest, CoordinateInput, CoordinateSlot, ExecutionPlanError, FloatInput, FrameInput,
-    GeometryRequest, GeometryValue, IndexInput, PhysicalRequest, PhysicalValue, Plan, PlanInput,
-    PlanOperation, PlanResult, PlanResultEntry, PlanValue, RmsdRequest, ScalarInput,
-    SelectionRequest, SpatialRequest, SpatialValue, StructureRequest, StructureValue,
-};
-
-#[cfg(all(feature = "analysis", feature = "geom", feature = "surface"))]
-pub use crate::{MaskInput, SurfaceRequest, SurfaceValue};
-
-#[cfg(all(feature = "analysis", feature = "geom", feature = "traj"))]
-pub use crate::{TrajectoryRequest, TrajectoryValue};
-
-// The comparison requests live in `operations`, which needs the two kernels
-// its executor is built from.
-#[cfg(all(feature = "compare", feature = "analysis", feature = "geom"))]
-pub use crate::{ComparisonMetric, ComparisonRequest, ComparisonResult};
+pub use crate::query::Groups;
+#[cfg(feature = "query")]
+pub use crate::{Query, QueryStructure};
 
 #[cfg(feature = "spatial")]
-pub use crate::SpatialBackend;
+pub use crate::spatial::SpatialBackend;
 
 // Structure extensions, so a handle's own methods are callable.
-#[cfg(feature = "xtal")]
-pub use crate::{AssemblyExt, NcsExt, SymmetryExt};
+#[cfg(feature = "analysis")]
+pub use crate::AnalysisExt;
+#[cfg(feature = "compare")]
+pub use crate::CompareExt;
+#[cfg(feature = "validation")]
+pub use crate::ValidationExt;
+#[cfg(feature = "crystal")]
+pub use crate::crystal::{AssemblyExt, NcsExt, SymmetryExt};
 
 #[cfg(feature = "modelcif")]
-pub use crate::ModelCifExt;
+pub use crate::formats::modelcif::ModelCifExt;

@@ -1,10 +1,12 @@
 //! Explicit distance-based connectivity inference.
 
 use crate::{
-    AtomIndex, AtomSelection, BondOrder, BondProvenance, BondRecord, Code, Diagnostic, Findings,
-    SpatialBackend, Structure,
+    AtomIndex, BondOrder, BondProvenance, BondRecord, Code, Diagnostic, Findings, Structure,
 };
 use molframe_core::bond::BondTableBuilder;
+use molframe_core::selection::AtomSelection;
+use molframe_core::structure::Structure as CoreStructure;
+use molframe_spatial::SpatialBackend;
 use std::collections::BTreeSet;
 
 /// Default multiplier applied to the sum of two CCD covalent radii.
@@ -74,10 +76,11 @@ pub fn infer_bonds(
             .with_context("parameter", BOND_INFERENCE_PARAMETER)
             .into());
     }
-    if !structure.data().coords.is_dense() {
+    let engine = structure.engine();
+    if !engine.data().coords.is_dense() {
         return Err(Diagnostic::new(Code::E6008).into());
     }
-    let radii: Vec<_> = structure
+    let radii: Vec<_> = engine
         .data()
         .atoms()
         .map(|atom| {
@@ -104,24 +107,24 @@ pub fn infer_bonds(
             .with_context("parameter", BOND_INFERENCE_PARAMETER)
             .into());
     }
-    let chains = atom_chains(structure);
-    let existing: BTreeSet<_> = structure
+    let chains = atom_chains(engine);
+    let existing: BTreeSet<_> = engine
         .data()
         .bonds
         .iter()
         .map(|bond| (bond.atom_a.get(), bond.atom_b.get()))
         .collect();
     let mut output = BondTableBuilder::new();
-    for bond in structure.data().bonds.iter() {
+    for bond in engine.data().bonds.iter() {
         output.push(bond);
     }
     // Only pairs that become bonds survive, a small fraction of the candidates,
     // so the candidates are filtered as they are produced rather than collected
     // into a vector sized by the quadratic candidate count.
-    let selection = AtomSelection::All(structure.atom_count());
+    let selection = AtomSelection::All(engine.atom_count());
     molframe_spatial::for_each_pairs_within_unsorted(
         &molframe_spatial::PairQuery {
-            positions: structure.positions(),
+            positions: engine.positions(),
             left: &selection,
             right: &selection,
             cutoff: maximum,
@@ -143,10 +146,10 @@ pub fn infer_bonds(
     )
     .map_err(|error| Diagnostic::new(Code::E9001).with_message(error.to_string()))?;
 
-    let mut data = structure.data().clone();
+    let mut data = engine.data().clone();
     data.bonds = output.finish();
     Ok(BondInferenceReport {
-        structure: Structure::new(data),
+        structure: CoreStructure::new(data).into(),
         skipped_atoms,
     })
 }
@@ -178,7 +181,7 @@ fn reject_pair(
     pair.distance_squared < lower_squared || pair.distance_squared > upper
 }
 
-fn atom_chains(structure: &Structure) -> Vec<Option<u32>> {
+fn atom_chains(structure: &CoreStructure) -> Vec<Option<u32>> {
     let mut chains = vec![None; AtomIndex::new(structure.atom_count()).as_usize()];
     for chain in structure.data().chains() {
         for residue in chain.residues() {

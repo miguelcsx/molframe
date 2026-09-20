@@ -3,7 +3,7 @@
 use molframe_core::ExecutionContext;
 use molframe_core::contract::AnalysisPolicy;
 use molframe_core::diagnostic::Findings;
-use molframe_core::structure::Structure;
+use molframe_core::structure::Structure as CoreStructure;
 use molframe_query::{Evaluation, Groups, Query};
 
 /// Selection methods implemented by immutable structure snapshots.
@@ -18,7 +18,7 @@ pub trait QueryStructure {
     ///
     /// Returns diagnostics when required data is unavailable or a geometric
     /// parameter is invalid.
-    fn select(&self, query: &Query, policy: &AnalysisPolicy) -> Result<Evaluation, Findings> {
+    fn select_query(&self, query: &Query, policy: &AnalysisPolicy) -> Result<Evaluation, Findings> {
         self.select_with_options(query, policy, &Groups::new(), &ExecutionContext::default())
     }
 
@@ -31,7 +31,7 @@ pub trait QueryStructure {
     /// Returns syntax, semantic or evaluation diagnostics.
     fn select_text(&self, source: &str, policy: &AnalysisPolicy) -> Result<Evaluation, Findings> {
         let query = Query::compile(source)?;
-        self.select(&query, policy)
+        self.select_query(&query, policy)
     }
 
     /// Evaluates a precompiled query with explicit named groups and
@@ -39,7 +39,7 @@ pub trait QueryStructure {
     ///
     /// # Errors
     ///
-    /// Returns the same diagnostics as [`QueryStructure::select`].
+    /// Returns the same diagnostics as [`QueryStructure::select_text`].
     fn select_with_options(
         &self,
         query: &Query,
@@ -49,7 +49,7 @@ pub trait QueryStructure {
     ) -> Result<Evaluation, Findings>;
 }
 
-impl QueryStructure for Structure {
+impl QueryStructure for CoreStructure {
     fn select_with_options(
         &self,
         query: &Query,
@@ -83,3 +83,17 @@ impl QueryStructure for Structure {
 #[cfg(test)]
 #[path = "query_tests.rs"]
 mod tests;
+
+/// The same selection API on the facade's own handle, so a caller never has to
+/// step through [`crate::Structure::engine`] to evaluate a query.
+impl QueryStructure for crate::Structure {
+    fn select_with_options(
+        &self,
+        query: &Query,
+        policy: &AnalysisPolicy,
+        groups: &Groups,
+        context: &ExecutionContext,
+    ) -> Result<Evaluation, Findings> {
+        QueryStructure::select_with_options(self.engine(), query, policy, groups, context)
+    }
+}

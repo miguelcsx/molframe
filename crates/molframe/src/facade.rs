@@ -8,15 +8,17 @@
 use formats::{cif_write_findings, write_mmcif_to_with_options};
 use molframe_core::diagnostic::{Code, Diagnostic, Findings};
 use molframe_core::io::{Format, InputBuffer, OutputOptions, OutputSink, ReadOptions};
-use molframe_core::structure::Structure;
+use molframe_core::structure::Structure as CoreStructure;
 use std::io::Write;
 use std::path::Path;
 
+use crate::structure::Structure;
+
 mod formats;
 
-#[cfg(feature = "chem")]
+#[cfg(feature = "chemistry")]
 pub use formats::read_component_dictionary;
-#[cfg(feature = "geom")]
+#[cfg(feature = "geometry")]
 pub use formats::transform;
 #[cfg(feature = "pdb")]
 pub use formats::write_pdb;
@@ -239,35 +241,55 @@ fn write_stream<W: Write>(
             .map_err(|error| cif_write_findings(&error)),
         #[cfg(feature = "bcif")]
         Format::BinaryCif => molframe_bcif::write_structure_to_with_memory_limit(
-            structure,
+            structure.engine(),
             options.cif(),
             options.output().memory_limit_bytes,
             output,
         )
         .map_err(Findings::from),
         #[cfg(feature = "pdb")]
-        Format::Pdb => {
-            molframe_pdb::write_to(structure, options.pdb(), output).map_err(Findings::from)
+        Format::Pdb => molframe_pdb::write_to(structure.engine(), options.pdb(), output)
+            .map_err(Findings::from),
+        #[cfg(feature = "pdb")]
+        Format::Mmtf => {
+            molframe_pdb::write_mmtf_to(structure.engine(), output).map_err(Findings::from)
         }
         #[cfg(feature = "pdb")]
-        Format::Mmtf => molframe_pdb::write_mmtf_to(structure, output).map_err(Findings::from),
+        Format::Pqr => molframe_pdb::write_pqr_to(structure.engine(), options.pdb(), output)
+            .map_err(Findings::from),
         #[cfg(feature = "pdb")]
-        Format::Pqr => {
-            molframe_pdb::write_pqr_to(structure, options.pdb(), output).map_err(Findings::from)
-        }
-        #[cfg(feature = "pdb")]
-        Format::Pdbqt => {
-            molframe_pdb::write_pdbqt_to(structure, options.pdb(), output).map_err(Findings::from)
-        }
+        Format::Pdbqt => molframe_pdb::write_pdbqt_to(structure.engine(), options.pdb(), output)
+            .map_err(Findings::from),
         other => Err(unsupported_writer(other).into()),
     }
 }
 
-fn read_buffer(
+/// Reads a structure from an already-acquired buffer, without a further copy.
+///
+/// This is the zero-copy entry point `read_bytes` builds on: `InputBuffer` is
+/// already `Arc`-backed and cheap to clone, so a caller holding one (an FFI
+/// boundary, a memory-mapped file) can read through it directly instead of
+/// paying `read_bytes`'s `Vec<u8>` copy.
+///
+/// `name` is only used to settle the format when the content does not.
+///
+/// # Errors
+///
+/// Returns the findings that stopped the read.
+pub fn read_buffer(
     input: &InputBuffer,
     name: Option<&str>,
     options: &ReadOptions,
 ) -> Result<(Structure, Vec<Diagnostic>), Findings> {
+    dispatch_read(input, name, options)
+        .map(|(structure, diagnostics)| (structure.into(), diagnostics))
+}
+
+fn dispatch_read(
+    input: &InputBuffer,
+    name: Option<&str>,
+    options: &ReadOptions,
+) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
     let format = Format::detect(options.format, input, name).map_err(Findings::from)?;
     match format {
         #[cfg(feature = "mmcif")]
@@ -292,7 +314,7 @@ fn read_buffer(
 fn read_pdbml_buffer(
     input: &InputBuffer,
     options: &ReadOptions,
-) -> Result<(Structure, Vec<Diagnostic>), Findings> {
+) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
     // `PdbmlReadError` renders its `Pdbml` variant by delegating to the inner
     // error, so the catch-all arm below produces the same finding the variant
     // arm would have.

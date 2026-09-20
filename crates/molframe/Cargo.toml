@@ -9,6 +9,7 @@ description = "A batteries-included structural bioinformatics engine"
 
 [dependencies]
 molframe-core.workspace = true
+molframe-engine.workspace = true
 molframe-adapters = { workspace = true, optional = true }
 molframe-audit = { workspace = true, optional = true }
 molframe-bcif = { workspace = true, optional = true }
@@ -64,42 +65,42 @@ required-features = ["full"]
 default = ["mmcif", "pdb"]
 
 # One format per feature, so a caller that reads one does not link the others.
-mmcif = ["dep:molframe-cif"]
-bcif = ["mmcif", "dep:molframe-bcif"]
-modelcif = ["mmcif", "dep:molframe-modelcif"]
-pdb = ["dep:molframe-pdb"]
+mmcif = ["dep:molframe-cif", "molframe-engine/mmcif"]
+bcif = ["mmcif", "dep:molframe-bcif", "molframe-engine/bcif"]
+modelcif = ["mmcif", "dep:molframe-modelcif", "molframe-engine/modelcif"]
+pdb = ["dep:molframe-pdb", "molframe-engine/pdb"]
 
 # Geometric kernels.
-geom = ["dep:molframe-geom"]
-ic = ["geom", "dep:molframe-ic"]
-query = ["dep:molframe-query"]
-spatial = ["query", "dep:molframe-spatial"]
-chem = ["dep:molframe-chem"]
+geometry = ["dep:molframe-geom", "molframe-engine/geometry"]
+ic = ["geometry", "dep:molframe-ic", "molframe-engine/ic"]
+query = ["dep:molframe-query", "molframe-engine/query"]
+spatial = ["query", "dep:molframe-spatial", "molframe-engine/spatial"]
+chemistry = ["dep:molframe-chem", "molframe-engine/chemistry"]
 # Arrow and Parquet together — pulls in molframe-interop (not separable without
 # splitting that crate).
-interop = ["dep:molframe-interop"]
+interop = ["dep:molframe-interop", "molframe-engine/interop"]
 # Neutral byte acquisition, of which network fetch is one client; this is
 # what covers reqwest/rustls.
-adapters = ["dep:molframe-adapters"]
-xtal = ["dep:molframe-xtal", "spatial"]
+adapters = ["dep:molframe-adapters", "molframe-engine/adapters"]
+crystal = ["dep:molframe-xtal", "spatial", "molframe-engine/crystal"]
 
 # Analysis domains over the kernels above.
-surface = ["spatial", "dep:molframe-surface"]
+surface = ["spatial", "dep:molframe-surface", "molframe-engine/surface"]
 # Pulls in faer.
-analysis = ["spatial", "geom", "chem", "dep:molframe-analysis"]
-validate = ["spatial", "geom", "chem", "dep:molframe-validate"]
-seq = ["dep:molframe-seq"]
-compare = ["geom", "chem", "seq", "dep:molframe-compare"]
-traj = ["dep:molframe-traj"]
-audit = ["analysis", "dep:molframe-audit"]
-fx = ["geom", "chem", "dep:molframe-fx"]
+analysis = ["spatial", "geometry", "chemistry", "dep:molframe-analysis", "dep:molframe-surface", "molframe-engine/analysis"]
+validation = ["spatial", "geometry", "chemistry", "dep:molframe-validate", "molframe-engine/validation"]
+sequence = ["dep:molframe-seq", "molframe-engine/sequence"]
+compare = ["geometry", "chemistry", "sequence", "dep:molframe-compare", "molframe-engine/compare"]
+trajectory = ["dep:molframe-traj", "molframe-engine/trajectory"]
+audit = ["analysis", "dep:molframe-audit", "molframe-engine/audit"]
+motif = ["geometry", "chemistry", "dep:molframe-fx", "molframe-engine/motif"]
 
 # Ways of getting bytes in.
-gzip = ["molframe-core/gzip"]
-zstd = ["molframe-core/zstd"]
-mmap = ["molframe-core/mmap"]
+gzip = ["molframe-core/gzip", "molframe-engine/gzip"]
+zstd = ["molframe-core/zstd", "molframe-engine/zstd"]
+mmap = ["molframe-core/mmap", "molframe-engine/mmap"]
 
-full = ["mmcif", "bcif", "modelcif", "pdb", "geom", "ic", "query", "spatial", "chem", "xtal", "surface", "analysis", "validate", "seq", "compare", "traj", "audit", "fx", "adapters", "interop", "gzip", "zstd", "mmap"]
+full = ["mmcif", "bcif", "modelcif", "pdb", "geometry", "ic", "query", "spatial", "chemistry", "crystal", "surface", "analysis", "validation", "sequence", "compare", "trajectory", "audit", "motif", "adapters", "interop", "gzip", "zstd", "mmap"]
 
 [lints]
 workspace = true
