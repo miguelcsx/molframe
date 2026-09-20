@@ -12,6 +12,7 @@ description = "A batteries-included structural bioinformatics engine"
 
 [workspace.dependencies]
 molframe-core = { path = "crates/molframe-core", version = "0.1.0" }
+molframe-engine = { path = "crates/molframe-engine", version = "0.1.0" }
 molframe-audit = { path = "crates/molframe-audit", version = "0.1.0" }
 molframe-analysis = { path = "crates/molframe-analysis", version = "0.1.0" }
 molframe-adapters = { path = "crates/molframe-adapters", version = "0.1.0" }

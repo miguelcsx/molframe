@@ -1,0 +1,41 @@
+[package]
+name = "molframe-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Typed workflow compilation and deterministic execution for MolFrame"
+
+[dependencies]
+molframe-core.workspace = true
+thiserror.workspace = true
+
+[features]
+default = []
+mmcif = []
+bcif = ["mmcif"]
+modelcif = ["mmcif"]
+pdb = []
+geometry = []
+ic = ["geometry"]
+query = []
+spatial = ["query"]
+chemistry = []
+interop = []
+adapters = []
+crystal = ["spatial"]
+surface = ["spatial"]
+analysis = ["spatial", "geometry", "chemistry"]
+validation = ["spatial", "geometry", "chemistry"]
+sequence = []
+compare = ["geometry", "chemistry", "sequence"]
+trajectory = []
+audit = ["analysis"]
+motif = ["geometry", "chemistry"]
+gzip = []
+zstd = []
+mmap = []
+
+[lints]
+workspace = true
