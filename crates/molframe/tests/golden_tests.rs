@@ -1,9 +1,13 @@
 //! Executable end-to-end correctness fixtures for shipped workflows.
 
+use molframe::formats::cif::CifWriteOptions;
+use molframe::formats::pdb::PdbOptions;
+use molframe::geometry::{Rigid, superpose};
 use molframe::{
-    AltlocPolicy, AnalysisPolicy, AtomSelection, CifWriteOptions, Code, PdbOptions, ReadOptions,
-    Rigid, read_bytes, superpose, transform, write_bcif, write_mmcif_with_options, write_pdb,
+    AltlocPolicy, AnalysisPolicy, Code, ReadOptions, read_bytes, transform, write_bcif,
+    write_mmcif_with_options, write_pdb,
 };
+use molframe_core::selection::AtomSelection;
 
 const MULTI_MODEL_PDB: &str = "\
 HEADER    GOLDEN                              01-JAN-00   1ABC
@@ -63,7 +67,7 @@ fn gw_001_reports_the_complete_normalised_hierarchy() {
         "models={} chains={} entities={} residues={} atoms={}",
         structure.model_count(),
         structure.chain_count(),
-        structure.entity_count(),
+        structure.engine().entity_count(),
         structure.residue_count(),
         structure.atom_count(),
     );
@@ -86,7 +90,7 @@ fn gw_002_round_trips_mmcif_through_binary_cif_semantically() {
     assert_eq!(round_tripped.chain_count(), source.chain_count());
     assert_eq!(round_tripped.residue_count(), source.residue_count());
     assert_eq!(round_tripped.atom_count(), source.atom_count());
-    assert_eq!(round_tripped.positions(), source.positions());
+    assert_eq!(round_tripped.coordinates(), source.coordinates());
 }
 
 #[test]
@@ -97,11 +101,13 @@ fn gw_003_converts_insertion_codes_and_deposited_models_to_mmcif() {
     let rendered = rendered.unwrap_or_else(|error| panic!("mmCIF write failed: {error}"));
     let round_tripped = read_fixture(&rendered, "golden.cif");
     let model_numbers: Vec<i32> = round_tripped
+        .engine()
         .data()
         .models()
         .filter_map(molframe::ModelRef::number)
         .collect();
     let insertion = round_tripped
+        .engine()
         .data()
         .residues()
         .next()
@@ -120,7 +126,7 @@ fn gw_003_converts_insertion_codes_and_deposited_models_to_mmcif() {
         let Ok(model_index) = u32::try_from(model) else {
             panic!("test model index does not fit in u32");
         };
-        let Some(actual) = round_tripped.model_positions(molframe::ModelIndex::new(model_index))
+        let Some(actual) = round_tripped.model_coordinates(molframe::ModelIndex::new(model_index))
         else {
             panic!("round-tripped model missing")
         };
@@ -160,6 +166,7 @@ fn gw_007_altloc_policies_produce_recorded_atom_counts() {
     .into_iter()
     .map(|altloc| {
         structure
+            .engine()
             .resolve_altlocs(&AnalysisPolicy::default().with_altloc(altloc))
             .value
             .len()
@@ -171,17 +178,19 @@ fn gw_007_altloc_policies_produce_recorded_atom_counts() {
 #[test]
 fn gw_009_keeps_both_chain_namespaces_addressable() {
     let structure = read_fixture(NAMESPACED_CIF, "golden.cif");
-    let label = structure.chain(molframe::ChainIndex::new(0));
+    let label = structure.chain_at(0);
     assert_eq!(label.and_then(molframe::ChainRef::label), Some("LONG"));
     assert_eq!(label.and_then(molframe::ChainRef::auth_label), Some("A"));
     assert!(
         structure
+            .engine()
             .data()
             .chains()
             .any(|chain| chain.label() == Some("LONG"))
     );
     assert!(
         structure
+            .engine()
             .data()
             .chains()
             .any(|chain| chain.auth_label() == Some("A"))
@@ -208,8 +217,9 @@ fn gw_011_superposes_and_applies_the_reported_rigid_transform() {
         Err(findings) => panic!("transform failed: {findings:?}"),
     };
     assert_eq!(
-        moved.generation().get(),
+        moved.engine().generation().get(),
         structure
+            .engine()
             .generation()
             .next()
             .expect("initial generation advances")

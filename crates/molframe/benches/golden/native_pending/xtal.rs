@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use molframe::{
-    AssemblyExt, InputBuffer, ModelIndex, ReadOptions, SpatialBackend, Structure, SymmetryExt,
-};
+use molframe::crystal::{AssemblyExt, SymmetryExt};
+use molframe::spatial::SpatialBackend;
+use molframe::{InputBuffer, ModelIndex, ReadOptions, Structure};
 
 trait BenchRequired<T> {
     fn required(self, context: &str) -> T;
@@ -187,10 +187,11 @@ fn bench_gw_021(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn assembly_structure() -> Structure {
     let input = InputBuffer::from_bytes(ASSEMBLY_CIF.as_bytes().to_vec());
-    let document = molframe::cif::parse(&input)
+    let document = molframe::formats::cif::parse(&input)
         .required("assembly document parse failed")
         .0;
-    let assemblies = molframe::lower_assemblies(&document).required("assembly lowering failed");
+    let assemblies =
+        molframe::crystal::lower_assemblies(&document).required("assembly lowering failed");
     let structure = molframe::read_bytes(
         ASSEMBLY_CIF.as_bytes().to_vec(),
         Some("assembly.cif"),
@@ -198,15 +199,19 @@ fn assembly_structure() -> Structure {
     )
     .required("assembly structure read failed")
     .0;
-    structure.with_extension(molframe::ASSEMBLIES_EXTENSION, assemblies)
+    structure
+        .engine()
+        .with_extension(molframe::crystal::ASSEMBLIES_EXTENSION, assemblies)
+        .into()
 }
 
 fn crystal_structure() -> Structure {
     let input = InputBuffer::from_bytes(CRYSTAL_CIF.as_bytes().to_vec());
-    let document = molframe::cif::parse(&input)
+    let document = molframe::formats::cif::parse(&input)
         .required("crystal document parse failed")
         .0;
-    let symmetry = molframe::lower_symmetry(&document).required("symmetry lowering failed");
+    let symmetry =
+        molframe::crystal::lower_symmetry(&document).required("symmetry lowering failed");
     let structure = molframe::read_bytes(
         CRYSTAL_CIF.as_bytes().to_vec(),
         Some("crystal.cif"),
@@ -214,5 +219,8 @@ fn crystal_structure() -> Structure {
     )
     .required("crystal structure read failed")
     .0;
-    structure.with_extension(molframe::SYMMETRY_EXTENSION, symmetry)
+    structure
+        .engine()
+        .with_extension(molframe::crystal::SYMMETRY_EXTENSION, symmetry)
+        .into()
 }

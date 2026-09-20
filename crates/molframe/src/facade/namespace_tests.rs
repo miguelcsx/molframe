@@ -1,26 +1,27 @@
-//! Each namespace re-exports the native type rather than a facade wrapper.
+//! Each namespace re-exports the native type rather than a facade wrapper,
+//! except the curated structure handles, which are the facade's own.
 
 #[test]
-fn core_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::core::Structure>();
+fn engine_core_namespace_exposes_native_types() {
+    let _ = std::mem::size_of::<crate::engine::core::StructureData>();
 }
 
-#[cfg(feature = "chem")]
+#[cfg(feature = "chemistry")]
 #[test]
 fn chemistry_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::chem::Component>();
+    let _ = std::mem::size_of::<crate::chemistry::Component>();
 }
 
-#[cfg(feature = "geom")]
+#[cfg(feature = "geometry")]
 #[test]
 fn geometry_namespace_exposes_native_kernels() {
-    let _ = crate::geom::distance;
+    let _ = crate::geometry::distance;
 }
 
-#[cfg(feature = "xtal")]
+#[cfg(feature = "crystal")]
 #[test]
 fn crystallography_namespace_exposes_native_types() {
-    let _ = std::mem::size_of::<crate::xtal::Operator>();
+    let _ = std::mem::size_of::<crate::crystal::Operator>();
 }
 
 #[cfg(feature = "query")]
@@ -44,25 +45,25 @@ fn internal_coordinate_namespace_exposes_native_types() {
 #[cfg(feature = "mmcif")]
 #[test]
 fn cif_namespace_exposes_native_document() {
-    let _ = std::mem::size_of::<crate::cif::Document>();
+    let _ = std::mem::size_of::<crate::formats::cif::Document>();
 }
 
 #[cfg(feature = "pdb")]
 #[test]
 fn pdb_namespace_exposes_native_options() {
-    let _ = std::mem::size_of::<crate::pdb::PdbOptions>();
+    let _ = std::mem::size_of::<crate::formats::pdb::PdbOptions>();
 }
 
 #[cfg(feature = "modelcif")]
 #[test]
 fn modelcif_namespace_exposes_native_model() {
-    let _ = std::mem::size_of::<crate::modelcif::ModelCif>();
+    let _ = std::mem::size_of::<crate::formats::modelcif::ModelCif>();
 }
 
 #[cfg(feature = "bcif")]
 #[test]
 fn binary_cif_namespace_exposes_native_document() {
-    let _ = std::mem::size_of::<crate::bcif::BinaryDocument>();
+    let _ = std::mem::size_of::<crate::formats::bcif::BinaryDocument>();
 }
 
 #[cfg(feature = "interop")]

@@ -1,7 +1,9 @@
 //! Criterion coverage for the all-features facade read/write path.
 
 use criterion::{Criterion, Throughput, black_box};
-use molframe::{ReadOptions, read_bytes, write_mmcif};
+use molframe::{
+    Cost, OperationMetadata, ReadOptions, Workflow, WorkflowInputs, read_bytes, write_mmcif,
+};
 use molframe_bench::{Sample, input};
 
 fn bench_facade(c: &mut Criterion) {
@@ -15,6 +17,7 @@ fn bench_facade(c: &mut Criterion) {
         Ok(result) => result,
         Err(findings) => panic!("facade fixture failed: {findings:?}"),
     };
+    let structure: molframe::Structure = structure.into();
     let mut group = c.benchmark_group("facade_io");
     group.throughput(Throughput::Bytes(bytes.len() as u64));
     group.bench_function("read_bytes", |b| {
@@ -25,6 +28,59 @@ fn bench_facade(c: &mut Criterion) {
         b.iter(|| black_box(write_mmcif(&structure)));
     });
     group.finish();
+
+    let coordinates = structure.coordinates().to_vec();
+    let build = || {
+        let mut workflow = Workflow::new();
+        let input = match workflow.input::<Vec<[f32; 3]>>("coordinates", Cost::Borrow) {
+            Ok(input) => input,
+            Err(error) => panic!("workflow input failed: {error}"),
+        };
+        let centroid = match workflow.map(
+            input,
+            OperationMetadata::new("geometry.centroid", Cost::Materialize)
+                .with_cse_key("geometry.centroid"),
+            |positions, _| {
+                let mut sum = [0.0_f64; 3];
+                for position in positions {
+                    for axis in 0..3 {
+                        sum[axis] += f64::from(position[axis]);
+                    }
+                }
+                let Ok(count) = u32::try_from(positions.len()) else {
+                    return Err(molframe::WorkflowError::Operation {
+                        operation: "geometry.centroid",
+                        message: "coordinate count exceeds u32".into(),
+                    });
+                };
+                let scale = 1.0 / f64::from(count);
+                Ok(sum.map(|value| value * scale))
+            },
+        ) {
+            Ok(centroid) => centroid,
+            Err(error) => panic!("workflow operation failed: {error}"),
+        };
+        if let Err(error) = workflow.output("centroid", centroid) {
+            panic!("workflow output failed: {error}");
+        }
+        workflow
+    };
+    c.bench_function("workflow_compile", |b| {
+        b.iter(|| {
+            let workflow = build();
+            black_box(workflow.compile())
+        });
+    });
+    let compiled = match build().compile() {
+        Ok(compiled) => compiled,
+        Err(error) => panic!("workflow compilation failed: {error}"),
+    };
+    let mut inputs = WorkflowInputs::new();
+    inputs.insert("coordinates", coordinates);
+    let context = molframe::ExecutionContext::default();
+    c.bench_function("workflow_reuse", |b| {
+        b.iter(|| black_box(compiled.run(&inputs, &context)));
+    });
 }
 
 fn main() {

@@ -1,8 +1,10 @@
 use std::fmt::Debug;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use molframe::{AnalysisPolicy, AtomSelection, SpatialBackend};
+use molframe::AnalysisPolicy;
+use molframe::spatial::SpatialBackend;
 use molframe_bench::{Sample, structure};
+use molframe_core::selection::AtomSelection;
 
 trait BenchRequired<T> {
     fn required(self, context: &str) -> T;
@@ -63,7 +65,7 @@ fn bench_gw_024(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.bench_function("GW-024", |b| {
         b.iter(|| {
             let mut neighbours =
-                molframe::traj::FrameNeighborList::new([0_u32, 1], [0_u32, 1], 2.0, 0.5);
+                molframe::trajectory::FrameNeighborList::new([0_u32, 1], [0_u32, 1], 2.0, 0.5);
             let counts: Vec<_> = positions
                 .into_iter()
                 .map(|frame| {
@@ -90,7 +92,7 @@ fn bench_gw_024(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 }
 
 fn bench_gw_025(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let frames = molframe::traj::parse_xyz(XYZ).required("GW-025 setup failed");
+    let frames = molframe::trajectory::parse_xyz(XYZ).required("GW-025 setup failed");
     let selected: Vec<_> = [0_usize, 2]
         .into_iter()
         .map(|index| frames[index].clone())
@@ -98,9 +100,9 @@ fn bench_gw_025(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Bytes(XYZ.len() as u64));
     group.bench_function("GW-025", |b| {
         b.iter(|| {
-            let rendered = molframe::traj::write_xyz(&selected);
+            let rendered = molframe::trajectory::write_xyz(&selected);
             let round_trip =
-                molframe::traj::parse_xyz(&rendered).required("GW-025 round trip failed");
+                molframe::trajectory::parse_xyz(&rendered).required("GW-025 round trip failed");
             black_box(round_trip.len());
         });
     });
@@ -108,9 +110,9 @@ fn bench_gw_025(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_026(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = structure(Sample::Tiny);
-    let trajectory = molframe::traj::Trajectory::from_frames(
+    let trajectory = molframe::trajectory::Trajectory::from_frames(
         (0_u16..128)
-            .map(|frame| molframe::traj::Frame {
+            .map(|frame| molframe::trajectory::Frame {
                 positions: structure
                     .positions()
                     .iter()

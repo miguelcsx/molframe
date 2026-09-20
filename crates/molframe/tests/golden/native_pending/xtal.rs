@@ -1,6 +1,6 @@
-use molframe::{
-    AssemblyExt, InputBuffer, ModelIndex, ReadOptions, SpatialBackend, Structure, SymmetryExt,
-};
+use molframe::crystal::{AssemblyExt, SymmetryExt};
+use molframe::spatial::SpatialBackend;
+use molframe::{InputBuffer, ModelIndex, ReadOptions, Structure};
 
 const ASSEMBLY_CIF: &str = r"data_demo
 loop_
@@ -87,7 +87,7 @@ fn gw_017_lists_assemblies_without_materialising_instances() {
     assert_eq!(view.atoms().count(), 2);
     assert!(std::ptr::eq(
         view.source().positions().as_ptr(),
-        structure.positions().as_ptr()
+        structure.coordinates().as_ptr()
     ));
 }
 
@@ -136,7 +136,7 @@ fn gw_019_lazy_and_materialised_assembly_interface_queries_agree() {
     )
     .unwrap_or_else(|error| panic!("eager assembly query failed: {error}"));
     assert_eq!(lazy.len(), eager.len());
-    assert!(lazy.iter().zip(&eager).all(|(left, right)| {
+    assert!(lazy.iter().zip(eager.iter()).all(|(left, right)| {
         (f64::from(left.distance_squared).sqrt() - f64::from(right.distance)).abs() < 1.0e-5
     }));
 }
@@ -164,21 +164,21 @@ fn gw_021_keeps_asymmetric_unit_and_biological_assembly_conclusions_distinct() {
     assert_eq!(structure.atom_count(), 2);
     assert_eq!(materialized.atom_count(), 2);
     assert_ne!(
-        structure.positions().as_ptr(),
+        structure.coordinates().as_ptr(),
         materialized.positions().as_ptr()
     );
     assert_ne!(
         materialized.positions()[0][0].to_bits(),
-        structure.positions()[0][0].to_bits()
+        structure.coordinates()[0][0].to_bits()
     );
 }
 
 fn assembly_structure() -> Structure {
     let input = InputBuffer::from_bytes(ASSEMBLY_CIF.as_bytes().to_vec());
-    let document = molframe::cif::parse(&input)
+    let document = molframe::formats::cif::parse(&input)
         .unwrap_or_else(|findings| panic!("assembly document parse failed: {findings:?}"))
         .0;
-    let assemblies = molframe::lower_assemblies(&document)
+    let assemblies = molframe::crystal::lower_assemblies(&document)
         .unwrap_or_else(|findings| panic!("assembly lowering failed: {findings:?}"));
     let structure = molframe::read_bytes(
         ASSEMBLY_CIF.as_bytes().to_vec(),
@@ -187,15 +187,18 @@ fn assembly_structure() -> Structure {
     )
     .unwrap_or_else(|findings| panic!("assembly structure read failed: {findings:?}"))
     .0;
-    structure.with_extension(molframe::ASSEMBLIES_EXTENSION, assemblies)
+    structure
+        .engine()
+        .with_extension(molframe::crystal::ASSEMBLIES_EXTENSION, assemblies)
+        .into()
 }
 
 fn crystal_structure() -> Structure {
     let input = InputBuffer::from_bytes(CRYSTAL_CIF.as_bytes().to_vec());
-    let document = molframe::cif::parse(&input)
+    let document = molframe::formats::cif::parse(&input)
         .unwrap_or_else(|findings| panic!("crystal document parse failed: {findings:?}"))
         .0;
-    let symmetry = molframe::lower_symmetry(&document)
+    let symmetry = molframe::crystal::lower_symmetry(&document)
         .unwrap_or_else(|findings| panic!("symmetry lowering failed: {findings:?}"));
     let structure = molframe::read_bytes(
         CRYSTAL_CIF.as_bytes().to_vec(),
@@ -204,5 +207,8 @@ fn crystal_structure() -> Structure {
     )
     .unwrap_or_else(|findings| panic!("crystal structure read failed: {findings:?}"))
     .0;
-    structure.with_extension(molframe::SYMMETRY_EXTENSION, symmetry)
+    structure
+        .engine()
+        .with_extension(molframe::crystal::SYMMETRY_EXTENSION, symmetry)
+        .into()
 }

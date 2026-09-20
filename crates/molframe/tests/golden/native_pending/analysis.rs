@@ -1,7 +1,9 @@
 use molframe::{
     AnnotationColumn, AtomAnnotation, AtomIndex, BondOrder, BondProvenance, BondRecord,
-    BondTableBuilder, Presence, ReadOptions, Structure,
+    BondTableBuilder, ReadOptions, Structure,
 };
+use molframe_core::column::Presence;
+use molframe_core::structure::Structure as CoreStructure;
 
 const HBOND_CIF: &str = r"data_hbond
 loop_
@@ -46,26 +48,23 @@ ATOM 8 O O GLY A 2 4 3 0
 fn gw_015_detects_oriented_hydrogen_bonds_from_explicit_chemistry() {
     let structure = annotated_hbond_structure();
     let bonds = molframe::analysis::hydrogen_bonds(
-        &structure,
+        structure.engine(),
         molframe::analysis::HydrogenBondOptions {
             maximum_donor_acceptor_distance: 3.5,
             minimum_angle_degrees: 150.0,
-            backend: molframe::SpatialBackend::BruteForce,
+            backend: molframe::spatial::SpatialBackend::BruteForce,
             periodic: false,
         },
         &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("hydrogen-bond workflow failed: {error}"));
     assert_eq!(bonds.len(), 1);
+    let bond = bonds.row(0).unwrap_or_else(|| panic!("one hydrogen bond"));
     assert_eq!(
-        (
-            bonds[0].donor.get(),
-            bonds[0].hydrogen.get(),
-            bonds[0].acceptor.get()
-        ),
+        (bond.donor.get(), bond.hydrogen.get(), bond.acceptor.get()),
         (0, 1, 2)
     );
-    assert!((bonds[0].angle_degrees - 180.0).abs() < 1.0e-4);
+    assert!((bond.angle_degrees - 180.0).abs() < 1.0e-4);
 }
 
 #[test]
@@ -73,7 +72,7 @@ fn gw_016_assigns_one_secondary_structure_record_per_backbone_residue() {
     let source = read(DSSP_CIF);
     let structure = with_polymer_roles(&source);
     let records = molframe::analysis::secondary_structure(
-        &structure,
+        structure.engine(),
         &molframe::analysis::DsspOptions {
             electrostatic_prefactor: 332.0 * 0.42 * 0.20,
             hydrogen_bond_energy: -0.5,
@@ -112,11 +111,11 @@ ATOM 2 C CA ALA B 1 2.5 0 0
 ",
     );
     let policies = [
-        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
-        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
-        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
-        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
-        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
+        molframe_core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
+        molframe_core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
+        molframe_core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
+        molframe_core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
+        molframe_core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
     ];
     let mut fingerprints = Vec::new();
     let mut counts = Vec::new();
@@ -126,26 +125,26 @@ ATOM 2 C CA ALA B 1 2.5 0 0
             ..molframe::AnalysisPolicy::default()
         };
         let count = match contact_def {
-            molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance } => {
+            molframe_core::contract::ContactDefinition::DistanceCutoff { tolerance } => {
                 molframe::analysis::atom_contacts(
-                    &structure,
+                    structure.engine(),
                     2.5 + tolerance,
-                    molframe::SpatialBackend::BruteForce,
+                    molframe::spatial::SpatialBackend::BruteForce,
                     &molframe::ExecutionContext::default(),
                 )
                 .unwrap_or_else(|error| panic!("distance contact workflow failed: {error}"))
                 .len()
             }
-            molframe::core::contract::ContactDefinition::SurfaceBased { probe } => {
+            molframe_core::contract::ContactDefinition::SurfaceBased { probe } => {
                 molframe::analysis::surface_contacts(
-                    &structure,
+                    structure.engine(),
                     &[1.7, 1.7],
                     molframe::analysis::SurfaceContactOptions {
                         tolerance: 0.5,
                         probe,
                         surface_density: 2.0,
                         minimum_area: 0.1,
-                        backend: molframe::SpatialBackend::BruteForce,
+                        backend: molframe::spatial::SpatialBackend::BruteForce,
                     },
                     &molframe::ExecutionContext::default(),
                 )
@@ -164,7 +163,7 @@ ATOM 2 C CA ALA B 1 2.5 0 0
 
 fn annotated_hbond_structure() -> Structure {
     let structure = read(HBOND_CIF);
-    let mut data = structure.data().clone();
+    let mut data = structure.engine().data().clone();
     let roles = |selected: u32| {
         AnnotationColumn::from_entries((0..3).map(|atom| {
             if atom == selected {
@@ -191,25 +190,26 @@ fn annotated_hbond_structure() -> Structure {
         provenance: BondProvenance::ChemicalComponentDictionary,
     });
     data.bonds = bonds.finish();
-    Structure::new(data)
+    CoreStructure::new(data).into()
 }
 
 fn with_polymer_roles(structure: &Structure) -> Structure {
     let values: Vec<_> = structure
+        .engine()
         .data()
         .atoms()
         .map(|atom| {
             let role = match atom.name() {
-                Some("N") => molframe::PolymerAtomRole::PROTEIN_NITROGEN,
-                Some("CA") => molframe::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
-                Some("C") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
-                Some("O") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
-                _ => molframe::PolymerAtomRole::UNKNOWN,
+                Some("N") => molframe::chemistry::PolymerAtomRole::PROTEIN_NITROGEN,
+                Some("CA") => molframe::chemistry::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+                Some("C") => molframe::chemistry::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+                Some("O") => molframe::chemistry::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
+                _ => molframe::chemistry::PolymerAtomRole::UNKNOWN,
             };
             (role.code(), Presence::Present)
         })
         .collect();
-    let mut data = structure.data().clone();
+    let mut data = structure.engine().data().clone();
     data.annotations.insert(
         molframe::POLYMER_ATOM_ROLE_ANNOTATION,
         AtomAnnotation::Integer(
@@ -217,7 +217,7 @@ fn with_polymer_roles(structure: &Structure) -> Structure {
                 .unwrap_or_else(|error| panic!("role fixture failed: {error}")),
         ),
     );
-    Structure::new(data)
+    CoreStructure::new(data).into()
 }
 
 fn read(source: &str) -> Structure {

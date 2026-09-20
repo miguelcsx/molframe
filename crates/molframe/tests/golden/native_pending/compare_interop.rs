@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use molframe::{Component, ComponentKind, DictionaryVersion, Element, ReadOptions};
+use molframe::chemistry::{Component, ComponentKind};
+use molframe::{DictionaryVersion, Element, ReadOptions};
 
 #[test]
 fn gw_027_maps_homomeric_chains_and_reports_alternatives() {
@@ -42,11 +43,11 @@ _atom_site.Cartn_z
     );
     let provider = provider();
     let assignment = molframe::compare::assign_chains(
-        &reference,
-        &target,
+        reference.engine(),
+        target.engine(),
         &provider,
         molframe::Namespace::Label,
-        molframe::seq::Scoring::simple(),
+        molframe::sequence::Scoring::simple(),
         1.0,
     )
     .unwrap_or_else(|finding| panic!("chain mapping failed: {finding}"));
@@ -99,7 +100,7 @@ ATOM 1 C CA ALA A 1 1 2 3
 ATOM 2 N N ALA A 1 4 5 6
 ",
     );
-    let tensor = molframe::DlpackTensor::coordinates(&structure)
+    let tensor = molframe::interop::DlpackTensor::coordinates(structure.engine())
         .unwrap_or_else(|error| panic!("DLPack export failed: {error}"));
     let (data, shape, dtype_bits) = {
         let managed = tensor
@@ -114,26 +115,26 @@ ATOM 2 N N ALA A 1 4 5 6
     };
     assert_eq!(shape, [2, 3]);
     assert_eq!(dtype_bits, 32);
-    assert_eq!(tensor.cost(), molframe::ExportCost::Copy);
-    assert_ne!(data.cast_const(), structure.positions().as_ptr().cast());
+    assert_eq!(tensor.cost(), molframe::interop::ExportCost::Copy);
+    assert_ne!(data.cast_const(), structure.coordinates().as_ptr().cast());
     unsafe { data.write(9.0) };
-    assert_eq!(structure.positions()[0][0].to_bits(), 1.0_f32.to_bits());
+    assert_eq!(structure.coordinates()[0][0].to_bits(), 1.0_f32.to_bits());
 }
 
 #[test]
 fn gw_036_splits_a_manifest_by_sequence_identity_without_loading_coordinates() {
-    let dataset = molframe::Dataset::new(vec![
+    let dataset = molframe::interop::Dataset::new(vec![
         entry("a", "AAAA", "2020-01-01"),
         entry("b", "AAAA", "2020-01-02"),
         entry("c", "GGGG", "2021-01-01"),
         entry("d", "GGGG", "2021-01-02"),
     ])
     .unwrap_or_else(|error| panic!("dataset fixture failed: {error}"));
-    let ratios = molframe::SplitRatios::new(0.5, 0.25, 0.25)
+    let ratios = molframe::interop::SplitRatios::new(0.5, 0.25, 0.25)
         .unwrap_or_else(|error| panic!("split ratios failed: {error}"));
     let split = dataset
-        .split(&molframe::SplitOptions {
-            strategy: molframe::SplitStrategy::SequenceIdentity { threshold: 1.0 },
+        .split(&molframe::interop::SplitOptions {
+            strategy: molframe::interop::SplitStrategy::SequenceIdentity { threshold: 1.0 },
             ratios,
         })
         .unwrap_or_else(|error| panic!("sequence split failed: {error}"));
@@ -162,11 +163,11 @@ fn gw_041_reexecutes_only_with_matching_provenance() {
     let policy = molframe::AnalysisPolicy::default();
     let provenance = molframe::Provenance::new(&policy)
         .with_source(molframe::SourceRef::Memory)
-        .with_input_fingerprint(molframe::core::contract::Fingerprint::of(input));
-    let replay = molframe::core::contract::reexecute_from_provenance(
+        .with_input_fingerprint(molframe_core::contract::Fingerprint::of(input));
+    let replay = molframe_core::contract::reexecute_from_provenance(
         &provenance,
         input,
-        molframe::core::contract::ReexecutionEnvironment::current(),
+        molframe_core::contract::ReexecutionEnvironment::current(),
         |bytes, replay_policy| (bytes.len(), replay_policy.fingerprint()),
     )
     .unwrap_or_else(|error| panic!("provenance replay failed: {error}"));
@@ -174,10 +175,10 @@ fn gw_041_reexecutes_only_with_matching_provenance() {
     assert_eq!(replay.value.1, policy.fingerprint());
     assert_eq!(replay.provenance.fingerprint(), provenance.fingerprint());
     assert!(
-        molframe::core::contract::reexecute_from_provenance(
+        molframe_core::contract::reexecute_from_provenance(
             &provenance,
             b"different-input",
-            molframe::core::contract::ReexecutionEnvironment::current(),
+            molframe_core::contract::ReexecutionEnvironment::current(),
             |_, _| (),
         )
         .is_err()
@@ -195,8 +196,8 @@ fn read(source: &str) -> molframe::Structure {
     }
 }
 
-fn provider() -> molframe::MemoryProvider {
-    molframe::MemoryProvider::new(
+fn provider() -> molframe::chemistry::MemoryProvider {
+    molframe::chemistry::MemoryProvider::new(
         DictionaryVersion::new("golden-ccd"),
         [component("GLY", b'G'), component("ALA", b'A')],
     )
@@ -232,14 +233,14 @@ fn symmetric_component() -> Component {
             atom("O2", Element::OXYGEN),
         ]),
         bonds: Arc::from([
-            molframe::ComponentBond {
+            molframe::chemistry::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O1".into(),
                 order: molframe::BondOrder::Double,
                 aromatic: false,
                 stereo: None,
             },
-            molframe::ComponentBond {
+            molframe::chemistry::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O2".into(),
                 order: molframe::BondOrder::Double,
@@ -252,8 +253,8 @@ fn symmetric_component() -> Component {
     }
 }
 
-fn atom(name: &str, element: Element) -> molframe::ComponentAtom {
-    molframe::ComponentAtom {
+fn atom(name: &str, element: Element) -> molframe::chemistry::ComponentAtom {
+    molframe::chemistry::ComponentAtom {
         name: name.into(),
         alternate_name: None,
         element,
@@ -264,8 +265,8 @@ fn atom(name: &str, element: Element) -> molframe::ComponentAtom {
     }
 }
 
-fn entry(id: &str, sequence: &str, date: &str) -> molframe::ManifestEntry {
-    molframe::ManifestEntry {
+fn entry(id: &str, sequence: &str, date: &str) -> molframe::interop::ManifestEntry {
+    molframe::interop::ManifestEntry {
         id: id.into(),
         path: id.into(),
         atom_count: 100,

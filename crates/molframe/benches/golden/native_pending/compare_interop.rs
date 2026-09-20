@@ -2,7 +2,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use molframe::{Component, ComponentKind, DictionaryVersion, Element, ReadOptions};
+use molframe::chemistry::{Component, ComponentKind};
+use molframe::{DictionaryVersion, Element, ReadOptions};
 
 trait BenchRequired<T> {
     fn required(self, context: &str) -> T;
@@ -76,11 +77,11 @@ _atom_site.Cartn_z
     group.bench_function("GW-027", |b| {
         b.iter(|| {
             let assignment = molframe::compare::assign_chains(
-                &reference,
-                &target,
+                reference.engine(),
+                target.engine(),
                 &provider,
                 molframe::Namespace::Label,
-                molframe::seq::Scoring::simple(),
+                molframe::sequence::Scoring::simple(),
                 1.0,
             )
             .required("GW-027 failed");
@@ -127,27 +128,29 @@ ATOM 2 N N ALA A 1 4 5 6
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-034", |b| {
         b.iter(|| {
-            let tensor = molframe::DlpackTensor::coordinates(&structure).required("GW-034 failed");
+            let tensor = molframe::interop::DlpackTensor::coordinates(structure.engine())
+                .required("GW-034 failed");
             black_box((tensor.cost(), tensor.as_managed().is_some()));
         });
     });
 }
 
 fn bench_gw_036(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let dataset = molframe::Dataset::new(vec![
+    let dataset = molframe::interop::Dataset::new(vec![
         entry("a", "AAAA", "2020-01-01"),
         entry("b", "AAAA", "2020-01-02"),
         entry("c", "GGGG", "2021-01-01"),
         entry("d", "GGGG", "2021-01-02"),
     ])
     .required("GW-036 fixture failed");
-    let ratios = molframe::SplitRatios::new(0.5, 0.25, 0.25).required("GW-036 ratios failed");
+    let ratios =
+        molframe::interop::SplitRatios::new(0.5, 0.25, 0.25).required("GW-036 ratios failed");
     group.throughput(Throughput::Elements(4));
     group.bench_function("GW-036", |b| {
         b.iter(|| {
             let split = dataset
-                .split(&molframe::SplitOptions {
-                    strategy: molframe::SplitStrategy::SequenceIdentity { threshold: 1.0 },
+                .split(&molframe::interop::SplitOptions {
+                    strategy: molframe::interop::SplitStrategy::SequenceIdentity { threshold: 1.0 },
                     ratios,
                 })
                 .required("GW-036 failed");
@@ -161,14 +164,14 @@ fn bench_gw_041(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     let policy = molframe::AnalysisPolicy::default();
     let provenance = molframe::Provenance::new(&policy)
         .with_source(molframe::SourceRef::Memory)
-        .with_input_fingerprint(molframe::core::contract::Fingerprint::of(input));
+        .with_input_fingerprint(molframe_core::contract::Fingerprint::of(input));
     group.throughput(Throughput::Bytes(input.len() as u64));
     group.bench_function("GW-041", |b| {
         b.iter(|| {
-            let replay = molframe::core::contract::reexecute_from_provenance(
+            let replay = molframe_core::contract::reexecute_from_provenance(
                 &provenance,
                 input,
-                molframe::core::contract::ReexecutionEnvironment::current(),
+                molframe_core::contract::ReexecutionEnvironment::current(),
                 |bytes, replay_policy| (bytes.len(), replay_policy.fingerprint()),
             )
             .required("GW-041 failed");
@@ -187,8 +190,8 @@ fn read(source: &str) -> molframe::Structure {
     .0
 }
 
-fn provider() -> molframe::MemoryProvider {
-    molframe::MemoryProvider::new(
+fn provider() -> molframe::chemistry::MemoryProvider {
+    molframe::chemistry::MemoryProvider::new(
         DictionaryVersion::new("golden-ccd"),
         [component("GLY", b'G'), component("ALA", b'A')],
     )
@@ -224,14 +227,14 @@ fn symmetric_component() -> Component {
             atom("O2", Element::OXYGEN),
         ]),
         bonds: Arc::from([
-            molframe::ComponentBond {
+            molframe::chemistry::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O1".into(),
                 order: molframe::BondOrder::Double,
                 aromatic: false,
                 stereo: None,
             },
-            molframe::ComponentBond {
+            molframe::chemistry::ComponentBond {
                 atom_a: "C".into(),
                 atom_b: "O2".into(),
                 order: molframe::BondOrder::Double,
@@ -244,8 +247,8 @@ fn symmetric_component() -> Component {
     }
 }
 
-fn atom(name: &str, element: Element) -> molframe::ComponentAtom {
-    molframe::ComponentAtom {
+fn atom(name: &str, element: Element) -> molframe::chemistry::ComponentAtom {
+    molframe::chemistry::ComponentAtom {
         name: name.into(),
         alternate_name: None,
         element,
@@ -256,8 +259,8 @@ fn atom(name: &str, element: Element) -> molframe::ComponentAtom {
     }
 }
 
-fn entry(id: &str, sequence: &str, date: &str) -> molframe::ManifestEntry {
-    molframe::ManifestEntry {
+fn entry(id: &str, sequence: &str, date: &str) -> molframe::interop::ManifestEntry {
+    molframe::interop::ManifestEntry {
         id: id.into(),
         path: id.into(),
         atom_count: 100,

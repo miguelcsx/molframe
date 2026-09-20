@@ -1,11 +1,13 @@
 use super::*;
-#[cfg(feature = "chem")]
+#[cfg(feature = "chemistry")]
 use molframe_core::contract::DictionaryVersion;
-#[cfg(feature = "geom")]
+#[cfg(feature = "geometry")]
 use molframe_core::selection::AtomSelection;
 
+#[cfg(feature = "modelcif")]
+use crate::formats::modelcif::ModelCifExt;
 #[cfg(feature = "pdb")]
-use crate::PdbOptions;
+use crate::formats::pdb::PdbOptions;
 
 mod namespace_tests;
 mod plddt_tests;
@@ -16,7 +18,7 @@ ATOM      2  CA  GLY A   1      26.266  25.413   2.842  1.00 11.00           C
 END
 ";
 
-#[cfg(all(feature = "mmcif", feature = "xtal"))]
+#[cfg(all(feature = "mmcif", feature = "crystal"))]
 const MMCIF_XTAL: &str = r"data_x
 _cell.length_a 10
 _cell.length_b 10
@@ -100,10 +102,10 @@ fn structured_text_is_dispatched_to_the_reader_its_content_names() {
     assert_eq!(findings.first().map(Diagnostic::code), Some(Code::E2001));
 }
 
-#[cfg(all(feature = "mmcif", feature = "xtal"))]
+#[cfg(all(feature = "mmcif", feature = "crystal"))]
 #[test]
 fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
-    use crate::{AssemblyExt, NcsExt, SymmetryExt};
+    use crate::crystal::{AssemblyExt, NcsExt, SymmetryExt};
 
     let (structure, direct_findings) = match read_bytes(
         MMCIF_XTAL.as_bytes().to_vec(),
@@ -125,6 +127,7 @@ fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
         &options,
     )
     .expect("lossless metadata lowering should succeed");
+    let lossless = crate::Structure::from(lossless);
     let difference = crate::structure_difference(
         &structure,
         &lossless,
@@ -137,7 +140,9 @@ fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
     assert_eq!(direct_findings, lossless_findings);
 
     assert_eq!(
-        structure.assembly_set().map(crate::AssemblySet::len),
+        structure
+            .assembly_set()
+            .map(crate::crystal::AssemblySet::len),
         Some(1)
     );
     assert!(
@@ -145,7 +150,10 @@ fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
             .assembly("1")
             .is_ok_and(|view| view.instance_count() == 1)
     );
-    assert_eq!(structure.ncs_set().map(crate::NcsSet::len), Some(1));
+    assert_eq!(
+        structure.ncs_set().map(crate::crystal::NcsSet::len),
+        Some(1)
+    );
     assert_eq!(
         structure.ncs_generated().map(|view| view.copy_count()),
         Some(1)
@@ -188,7 +196,7 @@ fn assert_bcif_roundtrip_matches(
     lossless_findings: &[Diagnostic],
     options: &ReadOptions,
 ) {
-    use crate::{AssemblyExt, NcsExt, SymmetryExt};
+    use crate::crystal::{AssemblyExt, NcsExt, SymmetryExt};
 
     let input = InputBuffer::from_bytes(MMCIF_XTAL.as_bytes().to_vec());
     let document = match molframe_cif::parse(&input) {
@@ -213,8 +221,11 @@ fn assert_bcif_roundtrip_matches(
     .expect("zero is a valid coordinate tolerance");
     assert!(difference.is_empty(), "BCIF difference: {difference:?}");
     assert_eq!(binary_findings.as_slice(), lossless_findings);
-    assert_eq!(binary.assembly_set().map(crate::AssemblySet::len), Some(1));
-    assert_eq!(binary.ncs_set().map(crate::NcsSet::len), Some(1));
+    assert_eq!(
+        binary.assembly_set().map(crate::crystal::AssemblySet::len),
+        Some(1)
+    );
+    assert_eq!(binary.ncs_set().map(crate::crystal::NcsSet::len), Some(1));
     assert_eq!(
         binary.symmetry_set().map(|set| set.operations().len()),
         Some(1)
@@ -242,10 +253,10 @@ fn an_unreadable_path_reports_a_finding_rather_than_panicking() {
     assert!(read("no/such/file.pdb").is_err());
 }
 
-#[cfg(feature = "chem")]
+#[cfg(feature = "chemistry")]
 #[test]
 fn component_dictionary_reading_is_explicit_and_returns_a_versioned_provider() {
-    use crate::ComponentProvider;
+    use crate::chemistry::ComponentProvider;
 
     let ccd = "data_HOH\n\
 _chem_comp.id HOH\n_chem_comp.name WATER\n_chem_comp.type water\n\
@@ -335,7 +346,8 @@ fn pdbml_input_remains_supported_without_an_eager_generic_writer() {
     )
     .unwrap_or_else(|findings| panic!("fixture read failed: {findings:?}"));
     let structure = with_entry_id(&structure, "test");
-    let canonical = molframe_cif::write_canonical(&structure).expect("canonical CIF render");
+    let canonical =
+        molframe_cif::write_canonical(structure.engine()).expect("canonical CIF render");
     let input = InputBuffer::from_bytes(canonical.into_bytes());
     let (document, _) = molframe_cif::parse(&input).expect("canonical CIF parse");
     let rendered = molframe_cif::write_pdbml(&document)
@@ -358,7 +370,7 @@ fn pdbml_input_remains_supported_without_an_eager_generic_writer() {
     assert!(output.is_empty());
 }
 
-#[cfg(feature = "geom")]
+#[cfg(feature = "geometry")]
 #[test]
 fn a_rigid_transform_reuses_coordinate_transactions_and_preserves_the_source() {
     let structure = match read_bytes(
@@ -378,24 +390,24 @@ fn a_rigid_transform_reuses_coordinate_transactions_and_preserves_the_source() {
         Err(findings) => panic!("transform failed: {findings:?}"),
     };
 
-    assert_eq!(structure.generation().get(), 0);
-    assert_eq!(moved.generation().get(), 1);
+    assert_eq!(structure.engine().generation().get(), 0);
+    assert_eq!(moved.engine().generation().get(), 1);
     assert!(
-        structure.positions()[1]
+        structure.coordinates()[1]
             .iter()
-            .zip(moved.positions()[1])
+            .zip(moved.coordinates()[1])
             .all(|(original, actual)| (*original - actual).abs() < f32::EPSILON)
     );
-    for ((actual, original), shift) in moved.positions()[0]
+    for ((actual, original), shift) in moved.coordinates()[0]
         .iter()
-        .zip(structure.positions()[0])
+        .zip(structure.coordinates()[0])
         .zip([1.0, 2.0, 3.0])
     {
         assert!((*actual - original - shift).abs() < 1.0e-5);
     }
 }
 
-#[cfg(feature = "geom")]
+#[cfg(feature = "geometry")]
 #[test]
 fn a_transform_rejects_atoms_outside_the_topology_before_editing() {
     let structure = match read_bytes(
@@ -422,8 +434,6 @@ fn a_transform_rejects_atoms_outside_the_topology_before_editing() {
 #[cfg(feature = "modelcif")]
 #[test]
 fn modelcif_metadata_is_attached_and_written_through_the_facade() {
-    use crate::ModelCifExt;
-
     let source = "data_model\n\
 loop_\n_ma_qa_metric.id\n_ma_qa_metric.name\n_ma_qa_metric.type\n_ma_qa_metric.mode\n1 score pLDDT local\n#\n\
 loop_\n_ma_qa_metric_local.model_id\n_ma_qa_metric_local.label_asym_id\n_ma_qa_metric_local.label_seq_id\n_ma_qa_metric_local.label_comp_id\n_ma_qa_metric_local.metric_id\n_ma_qa_metric_local.metric_value\n1 A 1 GLY 1 95.0\n#\n\
@@ -462,7 +472,7 @@ loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.l
 }
 
 fn with_entry_id(structure: &Structure, id: &str) -> Structure {
-    let mut data = structure.data().clone();
+    let mut data = structure.engine().data().clone();
     data.entry.id = Some(id.into());
-    Structure::from(data)
+    molframe_core::structure::Structure::new(data).into()
 }

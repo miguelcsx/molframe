@@ -3,8 +3,10 @@ use std::fmt::Debug;
 use criterion::{BenchmarkGroup, Throughput, black_box};
 use molframe::{
     AnnotationColumn, AtomAnnotation, AtomIndex, BondOrder, BondProvenance, BondRecord,
-    BondTableBuilder, Presence, ReadOptions, Structure,
+    BondTableBuilder, ReadOptions, Structure,
 };
+use molframe_core::column::Presence;
+use molframe_core::structure::Structure as CoreStructure;
 
 trait BenchRequired<T> {
     fn required(self, context: &str) -> T;
@@ -99,26 +101,26 @@ pub(super) fn register(group: &mut BenchmarkGroup<'_, criterion::measurement::Wa
 
 fn bench_gw_010(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = rama_structure();
-    let grid = molframe::validate::ReferenceDistribution::grid(
+    let grid = molframe::validation::ReferenceDistribution::grid(
         "general",
         vec![-180.0, 0.0, 180.0],
         vec![-180.0, 0.0, 180.0],
         vec![1.0, 1.0, 1.0, 1.0],
     )
     .required("GW-010 grid failed");
-    let library = molframe::validate::ReferenceLibrary::new("rama", "golden-1", [grid])
+    let library = molframe::validation::ReferenceLibrary::new("rama", "golden-1", [grid])
         .required("GW-010 library failed");
-    let basin = molframe::validate::RamachandranBasin::new(
-        molframe::validate::RamachandranRegion::AlphaHelixRight,
+    let basin = molframe::validation::RamachandranBasin::new(
+        molframe::validation::RamachandranRegion::AlphaHelixRight,
         "general",
     )
     .required("GW-010 basin failed");
-    let options = molframe::validate::RamachandranOptions::new(&library, [basin], 0.0)
+    let options = molframe::validation::RamachandranOptions::new(&library, [basin], 0.0)
         .required("GW-010 options failed");
     group.throughput(Throughput::Elements(structure.residue_count() as u64));
     group.bench_function("GW-010", |b| {
         b.iter(|| {
-            let records = molframe::validate::ramachandran(&structure, &options)
+            let records = molframe::validation::ramachandran(structure.engine(), &options)
                 .required("GW-010 classification failed");
             black_box(records.len());
         });
@@ -131,11 +133,11 @@ fn bench_gw_015(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.bench_function("GW-015", |b| {
         b.iter(|| {
             let bonds = molframe::analysis::hydrogen_bonds(
-                &structure,
+                structure.engine(),
                 molframe::analysis::HydrogenBondOptions {
                     maximum_donor_acceptor_distance: 3.5,
                     minimum_angle_degrees: 150.0,
-                    backend: molframe::SpatialBackend::BruteForce,
+                    backend: molframe::spatial::SpatialBackend::BruteForce,
                     periodic: false,
                 },
                 &molframe::ExecutionContext::default(),
@@ -153,7 +155,7 @@ fn bench_gw_016(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.bench_function("GW-016", |b| {
         b.iter(|| {
             let records = molframe::analysis::secondary_structure(
-                &structure,
+                structure.engine(),
                 &molframe::analysis::DsspOptions {
                     electrostatic_prefactor: 332.0 * 0.42 * 0.20,
                     hydrogen_bond_energy: -0.5,
@@ -188,11 +190,11 @@ ATOM 2 C CA ALA B 1 2.5 0 0
 ",
     );
     let policies = [
-        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
-        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
-        molframe::core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
-        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
-        molframe::core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
+        molframe_core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.0 },
+        molframe_core::contract::ContactDefinition::DistanceCutoff { tolerance: 0.5 },
+        molframe_core::contract::ContactDefinition::DistanceCutoff { tolerance: 1.0 },
+        molframe_core::contract::ContactDefinition::SurfaceBased { probe: 1.2 },
+        molframe_core::contract::ContactDefinition::SurfaceBased { probe: 1.4 },
     ];
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-038", |b| {
@@ -205,26 +207,26 @@ ATOM 2 C CA ALA B 1 2.5 0 0
                         ..molframe::AnalysisPolicy::default()
                     };
                     let count = match contact_def {
-                        molframe::core::contract::ContactDefinition::DistanceCutoff {
+                        molframe_core::contract::ContactDefinition::DistanceCutoff {
                             tolerance,
                         } => molframe::analysis::atom_contacts(
-                            &structure,
+                            structure.engine(),
                             2.5 + tolerance,
-                            molframe::SpatialBackend::BruteForce,
+                            molframe::spatial::SpatialBackend::BruteForce,
                             &molframe::ExecutionContext::default(),
                         )
                         .required("GW-038 distance failed")
                         .len(),
-                        molframe::core::contract::ContactDefinition::SurfaceBased { probe } => {
+                        molframe_core::contract::ContactDefinition::SurfaceBased { probe } => {
                             molframe::analysis::surface_contacts(
-                                &structure,
+                                structure.engine(),
                                 &[1.7, 1.7],
                                 molframe::analysis::SurfaceContactOptions {
                                     tolerance: 0.5,
                                     probe,
                                     surface_density: 2.0,
                                     minimum_area: 0.1,
-                                    backend: molframe::SpatialBackend::BruteForce,
+                                    backend: molframe::spatial::SpatialBackend::BruteForce,
                                 },
                                 &molframe::ExecutionContext::default(),
                             )
@@ -243,7 +245,7 @@ ATOM 2 C CA ALA B 1 2.5 0 0
 
 fn annotated_hbond_structure() -> Structure {
     let structure = read(HBOND_CIF);
-    let mut data = structure.data().clone();
+    let mut data = structure.engine().data().clone();
     let roles = |selected: u32| {
         AnnotationColumn::from_entries((0..3).map(|atom| {
             if atom == selected {
@@ -270,41 +272,42 @@ fn annotated_hbond_structure() -> Structure {
         provenance: BondProvenance::ChemicalComponentDictionary,
     });
     data.bonds = bonds.finish();
-    Structure::new(data)
+    CoreStructure::new(data).into()
 }
 
 fn with_polymer_roles(structure: &Structure) -> Structure {
     let values: Vec<_> = structure
+        .engine()
         .data()
         .atoms()
         .map(|atom| {
             let role = match atom.name() {
-                Some("N") => molframe::PolymerAtomRole::PROTEIN_NITROGEN,
-                Some("CA") => molframe::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
-                Some("C") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
-                Some("O") => molframe::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
-                _ => molframe::PolymerAtomRole::UNKNOWN,
+                Some("N") => molframe::chemistry::PolymerAtomRole::PROTEIN_NITROGEN,
+                Some("CA") => molframe::chemistry::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+                Some("C") => molframe::chemistry::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+                Some("O") => molframe::chemistry::PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
+                _ => molframe::chemistry::PolymerAtomRole::UNKNOWN,
             };
             (role.code(), Presence::Present)
         })
         .collect();
-    let mut data = structure.data().clone();
+    let mut data = structure.engine().data().clone();
     data.annotations.insert(
         molframe::POLYMER_ATOM_ROLE_ANNOTATION,
         AtomAnnotation::Integer(
             AnnotationColumn::from_entries(values).required("GW-016 role annotation failed"),
         ),
     );
-    Structure::new(data)
+    CoreStructure::new(data).into()
 }
 
 fn rama_structure() -> Structure {
     let source = read(RAMA_CIF);
-    let mut data = source.data().clone();
+    let mut data = source.engine().data().clone();
     let roles = [
-        molframe::PolymerAtomRole::PROTEIN_NITROGEN,
-        molframe::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
-        molframe::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+        molframe::chemistry::PolymerAtomRole::PROTEIN_NITROGEN,
+        molframe::chemistry::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+        molframe::chemistry::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
     ];
     let values = AnnotationColumn::from_entries(
         (0..9).map(|index| (roles[index % roles.len()].code(), Presence::Present)),
@@ -324,7 +327,7 @@ fn rama_structure() -> Structure {
         });
     }
     data.bonds = bonds.finish();
-    Structure::new(data)
+    CoreStructure::new(data).into()
 }
 
 fn read(source: &str) -> Structure {

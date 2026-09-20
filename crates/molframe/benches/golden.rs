@@ -1,11 +1,15 @@
 //! Criterion measurements for the executable golden workflows.
 
 use criterion::{Criterion, Throughput, black_box};
+use molframe::formats::cif::CifWriteOptions;
+use molframe::formats::pdb::PdbOptions;
+use molframe::geometry::{Rigid, superpose};
 use molframe::{
-    AltlocPolicy, AnalysisPolicy, AtomSelection, CifWriteOptions, Code, PdbOptions, ReadOptions,
-    Rigid, read_bytes, superpose, transform, write_bcif, write_mmcif_with_options, write_pdb,
+    AltlocPolicy, AnalysisPolicy, Code, ReadOptions, read_bytes, transform, write_bcif,
+    write_mmcif_with_options, write_pdb,
 };
 use molframe_bench::{Sample, structure_from_cif};
+use molframe_core::selection::AtomSelection;
 
 #[path = "golden/native.rs"]
 mod native;
@@ -70,7 +74,7 @@ fn medium_cif() -> (&'static [u8], molframe::Structure) {
     let Some(structure) = structure_from_cif(Sample::Medium) else {
         panic!("medium CIF structure is required")
     };
-    (bytes, structure)
+    (bytes, structure.into())
 }
 
 fn bench_gw_001(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>) {
@@ -85,7 +89,7 @@ fn bench_gw_001(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
             black_box((
                 structure.model_count(),
                 structure.chain_count(),
-                structure.entity_count(),
+                structure.engine().entity_count(),
                 structure.atom_count(),
             ));
         });
@@ -111,7 +115,10 @@ fn bench_gw_002(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
             else {
                 panic!("GW-002 BinaryCIF read failed")
             };
-            black_box((round_tripped.atom_count(), round_tripped.positions().len()));
+            black_box((
+                round_tripped.atom_count(),
+                round_tripped.coordinates().len(),
+            ));
         });
     });
 }
@@ -180,6 +187,7 @@ fn bench_gw_007(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
             .into_iter()
             .map(|altloc| {
                 structure
+                    .engine()
                     .resolve_altlocs(&AnalysisPolicy::default().with_altloc(altloc))
                     .value
                     .len()
@@ -195,7 +203,7 @@ fn bench_gw_009(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-009", |b| {
         b.iter(|| {
-            let chain = structure.chain(molframe::ChainIndex::new(0));
+            let chain = structure.chain_at(0);
             black_box((
                 chain.and_then(molframe::ChainRef::label),
                 chain.and_then(molframe::ChainRef::auth_label),
@@ -226,7 +234,7 @@ fn bench_gw_011(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
                     Ok(moved) => moved,
                     Err(findings) => panic!("GW-011 transform failed: {findings:?}"),
                 };
-            black_box((fitted.rmsd, moved.generation().get()));
+            black_box((fitted.rmsd, moved.engine().generation().get()));
         });
     });
 }

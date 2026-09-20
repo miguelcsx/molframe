@@ -2,12 +2,15 @@
 
 use std::collections::BTreeMap;
 
+use molframe::formats::modelcif::ModelCifExt;
+use molframe::geometry::Rigid;
 use molframe::{
-    AnalysisPolicy, AnnotationColumn, AtomAnnotation, AtomIndex, AtomSelection, BondOrder,
-    BondProvenance, BondRecord, BondTableBuilder, InputBuffer, ModelCifExt, Presence, ReadOptions,
-    Rigid,
+    AnalysisPolicy, AnnotationColumn, AtomAnnotation, AtomIndex, BondOrder, BondProvenance,
+    BondRecord, BondTableBuilder, InputBuffer, ReadOptions,
 };
 use molframe_bench::{Sample, coordinates, structure};
+use molframe_core::column::Presence;
+use molframe_core::selection::AtomSelection;
 
 #[path = "golden/native_pending.rs"]
 mod native_pending;
@@ -66,12 +69,13 @@ fn read_fixture(text: &str, name: &str) -> molframe::Structure {
 fn gw_004_preserves_unknown_categories_while_coordinates_are_edited() {
     let input = InputBuffer::from_bytes(UNKNOWN_CATEGORY_CIF.as_bytes().to_vec());
     let (document, structure, findings) =
-        match molframe::cif::read_with_document(&input, &ReadOptions::new()) {
+        match molframe::formats::cif::read_with_document(&input, &ReadOptions::new()) {
             Ok(result) => result,
             Err(findings) => panic!("document read failed: {findings:?}"),
         };
     assert!(findings.is_empty());
-    assert!(molframe::write_preserving(&document).contains("_custom.note"));
+    assert!(molframe::formats::cif::write_preserving(&document).contains("_custom.note"));
+    let structure: molframe::Structure = structure.into();
 
     let moved = molframe::transform(
         &structure,
@@ -80,7 +84,7 @@ fn gw_004_preserves_unknown_categories_while_coordinates_are_edited() {
     )
     .unwrap_or_else(|findings| panic!("coordinate edit failed: {findings:?}"));
     assert!(
-        moved.positions()[0]
+        moved.coordinates()[0]
             .iter()
             .zip([2.0_f32, 0.0, 0.0])
             .all(|(actual, expected)| (*actual - expected).abs() < 1.0e-6)
@@ -118,33 +122,33 @@ fn gw_008_evaluates_a_spatial_binding_pocket_selection() {
 #[test]
 fn gw_010_classifies_backbone_torsions_against_versioned_reference_data() {
     let structure = rama_structure();
-    let grid = molframe::validate::ReferenceDistribution::grid(
+    let grid = molframe::validation::ReferenceDistribution::grid(
         "general",
         vec![-180.0, 0.0, 180.0],
         vec![-180.0, 0.0, 180.0],
         vec![1.0, 1.0, 1.0, 1.0],
     )
     .unwrap_or_else(|error| panic!("Ramachandran grid failed: {error}"));
-    let library = molframe::validate::ReferenceLibrary::new("rama", "golden-1", [grid])
+    let library = molframe::validation::ReferenceLibrary::new("rama", "golden-1", [grid])
         .unwrap_or_else(|error| panic!("Ramachandran library failed: {error}"));
-    let basin = molframe::validate::RamachandranBasin::new(
-        molframe::validate::RamachandranRegion::AlphaHelixRight,
+    let basin = molframe::validation::RamachandranBasin::new(
+        molframe::validation::RamachandranRegion::AlphaHelixRight,
         "general",
     )
     .unwrap_or_else(|error| panic!("Ramachandran basin failed: {error}"));
-    let options = molframe::validate::RamachandranOptions::new(&library, [basin], 0.0)
+    let options = molframe::validation::RamachandranOptions::new(&library, [basin], 0.0)
         .unwrap_or_else(|error| panic!("Ramachandran options failed: {error}"));
-    let records = molframe::validate::ramachandran(&structure, &options)
+    let records = molframe::validation::ramachandran(structure.engine(), &options)
         .unwrap_or_else(|error| panic!("Ramachandran workflow failed: {error}"));
     assert_eq!(records.len(), 1);
     assert!(records.iter().all(|record| {
         record.phi.is_finite()
             && record.psi.is_finite()
-            && record.region == molframe::validate::RamachandranRegion::AlphaHelixRight
+            && record.region == molframe::validation::RamachandranRegion::AlphaHelixRight
             && record.reference.version.as_ref() == "golden-1"
     }));
     assert!(
-        molframe::validate::ramachandran_outliers(&structure, &options)
+        molframe::validation::ramachandran_outliers(structure.engine(), &options)
             .unwrap_or_else(|error| panic!("Ramachandran outlier workflow failed: {error}"))
             .is_empty()
     );
@@ -157,7 +161,7 @@ fn gw_012_contact_maps_are_monotonic_across_cutoffs() {
         &structure,
         4.0,
         1,
-        molframe::SpatialBackend::Auto,
+        molframe::spatial::SpatialBackend::Auto,
         &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("narrow contact map failed: {error}"));
@@ -165,17 +169,16 @@ fn gw_012_contact_maps_are_monotonic_across_cutoffs() {
         &structure,
         8.0,
         1,
-        molframe::SpatialBackend::Auto,
+        molframe::spatial::SpatialBackend::Auto,
         &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("broad contact map failed: {error}"));
     assert_eq!(narrow.residue_count(), structure.residue_count());
     assert!(broad.contacts().len() >= narrow.contacts().len());
+    let rows = broad.contacts().iter().collect::<Vec<_>>();
     assert!(
-        broad
-            .contacts()
-            .windows(2)
-            .all(|pair| (pair[0].first, pair[0].second) <= (pair[1].first, pair[1].second))
+        rows.windows(2)
+            .all(|pair| { (pair[0].first, pair[0].second) <= (pair[1].first, pair[1].second) })
     );
 }
 
@@ -223,42 +226,51 @@ fn gw_014_agrees_on_buried_and_solvent_excluded_surface() {
 fn gw_022_round_trips_xyz_and_measures_streamed_rmsd() {
     let source = "3\nframe-0\nC 0 0 0\nN 1 0 0\nO 0 1 0\n\
 3\nframe-1\nC 0 0 0\nN 1 0 0\nO 0 2 0\n";
-    let frames = molframe::traj::parse_xyz(source).unwrap_or_else(|| panic!("XYZ parse failed"));
-    let written = molframe::traj::write_xyz(&frames);
+    let frames =
+        molframe::trajectory::parse_xyz(source).unwrap_or_else(|| panic!("XYZ parse failed"));
+    let written = molframe::trajectory::write_xyz(&frames);
     let round_trip =
-        molframe::traj::parse_xyz(&written).unwrap_or_else(|| panic!("XYZ reparse failed"));
+        molframe::trajectory::parse_xyz(&written).unwrap_or_else(|| panic!("XYZ reparse failed"));
     assert_eq!(round_trip, frames);
 
     let timesteps: Vec<_> = frames
         .iter()
         .enumerate()
-        .map(|(frame, value)| molframe::traj::Timestep {
+        .map(|(frame, value)| molframe::trajectory::Timestep {
             frame,
             positions: value.atoms.iter().map(|atom| atom.position).collect(),
             ..Default::default()
         })
         .collect();
-    let rmsd =
-        molframe::traj::rmsd_to_reference(&timesteps, 0, molframe::traj::FrameAlignment::None)
-            .unwrap_or_else(|error| panic!("trajectory RMSD failed: {error}"));
+    let rmsd = molframe::trajectory::rmsd_to_reference(
+        &timesteps,
+        0,
+        molframe::trajectory::FrameAlignment::None,
+    )
+    .unwrap_or_else(|error| panic!("trajectory RMSD failed: {error}"));
     assert_eq!(rmsd.len(), 2);
     assert!(rmsd[0].abs() < 1.0e-6);
     assert!(rmsd[1] > 0.0);
 
     let directory = tempfile::tempdir().expect("trajectory directory");
     let path = directory.path().join("frames.trr");
-    let encoded = molframe::traj::write_trr(&timesteps, molframe::traj::TrrWriteOptions::default())
-        .expect("TRR encode");
+    let encoded = molframe::trajectory::write_trr(
+        &timesteps,
+        molframe::trajectory::TrrWriteOptions::default(),
+    )
+    .expect("TRR encode");
     std::fs::write(&path, encoded).expect("TRR fixture");
-    let mut reader =
-        molframe::traj::read_trajectory(&path, &molframe::traj::TrajectoryReaderOptions::default())
-            .expect("pull reader");
+    let mut reader = molframe::trajectory::read_trajectory(
+        &path,
+        &molframe::trajectory::TrajectoryReaderOptions::default(),
+    )
+    .expect("pull reader");
     let context = molframe::ExecutionContext::default();
     let mut streamed = Vec::new();
-    molframe::traj::rmsd_stream(
+    molframe::trajectory::rmsd_stream(
         &mut *reader,
         &timesteps[0].positions,
-        molframe::traj::FrameAlignment::None,
+        molframe::trajectory::FrameAlignment::None,
         &context,
         16384,
         |_, _, value| {
@@ -280,13 +292,17 @@ fn gw_023_rmsf_and_cartesian_pca_are_deterministic() {
     ];
     let views: Vec<_> = frames.iter().map(Vec::as_slice).collect();
     let fluctuation =
-        molframe::geom::rmsf(&views).unwrap_or_else(|error| panic!("RMSF failed: {error:?}"));
+        molframe::geometry::rmsf(&views).unwrap_or_else(|error| panic!("RMSF failed: {error:?}"));
     assert_eq!(fluctuation.len(), 3);
     assert!(fluctuation.iter().any(|value| *value > 0.0));
 
-    let pca =
-        molframe::traj::cartesian_pca(&frames, molframe::traj::CartesianFit::None, 2, 1024 * 1024)
-            .unwrap_or_else(|error| panic!("Cartesian PCA failed: {error}"));
+    let pca = molframe::trajectory::cartesian_pca(
+        &frames,
+        molframe::trajectory::CartesianFit::None,
+        2,
+        1024 * 1024,
+    )
+    .unwrap_or_else(|error| panic!("Cartesian PCA failed: {error}"));
     assert_eq!(pca.eigenvalues.len(), 2);
     assert_eq!(pca.projections.len(), frames.len());
 }
@@ -299,7 +315,7 @@ fn gw_028_structure_scores_are_perfect_for_identical_coordinates() {
         &coordinates,
         &coordinates,
         15.0,
-        &molframe::core::ExecutionContext::default(),
+        &molframe_core::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("lDDT failed: {error}"));
     let tm = molframe::compare::tm_score(&coordinates, &coordinates)
@@ -316,15 +332,15 @@ fn gw_028_structure_scores_are_perfect_for_identical_coordinates() {
 #[test]
 fn gw_030_validation_report_is_stable_and_structured() {
     let structure = structure(Sample::Tiny);
-    let first_flags = molframe::validate::quality_flags(&structure);
-    let second_flags = molframe::validate::quality_flags(&structure);
+    let first_flags = molframe::validation::quality_flags(&structure);
+    let second_flags = molframe::validation::quality_flags(&structure);
     assert_eq!(first_flags, second_flags);
-    assert!(molframe::validate::completeness(&structure, molframe::Namespace::Label).is_ok());
-    let clashes = molframe::validate::clashes(
+    assert!(molframe::validation::completeness(&structure, molframe::Namespace::Label).is_ok());
+    let clashes = molframe::validation::clashes(
         &structure,
         0.4,
-        molframe::RadiusSet::Bondi,
-        molframe::SpatialBackend::Auto,
+        molframe::chemistry::RadiusSet::Bondi,
+        molframe::spatial::SpatialBackend::Auto,
         &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("clash report failed: {error}"));
@@ -336,7 +352,7 @@ fn gw_033_writes_a_nonempty_arrow_atom_table() {
     let structure = structure(Sample::Tiny);
     let file = tempfile::NamedTempFile::new()
         .unwrap_or_else(|error| panic!("temporary Arrow file failed: {error}"));
-    molframe::write_atom_ipc(file.path(), &structure)
+    molframe::interop::write_atom_ipc(file.path(), &structure)
         .unwrap_or_else(|error| panic!("Arrow IPC export failed: {error}"));
     let size = file
         .as_file()
@@ -349,20 +365,20 @@ fn gw_033_writes_a_nonempty_arrow_atom_table() {
 #[test]
 fn gw_035_radius_graph_has_typed_nodes_and_edges() {
     let structure = structure(Sample::Tiny);
-    let graph = molframe::graph(
+    let graph = molframe::interop::graph(
         &structure,
-        &molframe::GraphOptions {
-            nodes: molframe::NodeLevel::Atoms,
-            edges: molframe::EdgeKind::Radius { cutoff: 3.0 },
-            direction: molframe::EdgeDirection::Symmetric,
+        &molframe::interop::GraphOptions {
+            nodes: molframe::interop::NodeLevel::Atoms,
+            edges: molframe::interop::EdgeKind::Radius { cutoff: 3.0 },
+            direction: molframe::interop::EdgeDirection::Symmetric,
             node_features: vec![
-                molframe::NodeFeature::PositionX,
-                molframe::NodeFeature::PositionY,
-                molframe::NodeFeature::PositionZ,
+                molframe::interop::NodeFeature::PositionX,
+                molframe::interop::NodeFeature::PositionY,
+                molframe::interop::NodeFeature::PositionZ,
             ],
-            edge_features: vec![molframe::EdgeFeature::Distance],
-            missing: molframe::MissingFeaturePolicy::Error,
-            backend: molframe::SpatialBackend::Auto,
+            edge_features: vec![molframe::interop::EdgeFeature::Distance],
+            missing: molframe::interop::MissingFeaturePolicy::Error,
+            backend: molframe::spatial::SpatialBackend::Auto,
             periodic: false,
         },
         &molframe::ExecutionContext::default(),
@@ -376,12 +392,12 @@ fn gw_035_radius_graph_has_typed_nodes_and_edges() {
 
 #[test]
 fn gw_039_policy_audit_expands_in_deterministic_order() {
-    let space = molframe::PolicySpace::new(AnalysisPolicy::default())
-        .vary(molframe::PolicyDimension::altloc([
+    let space = molframe::audit::PolicySpace::new(AnalysisPolicy::default())
+        .vary(molframe::audit::PolicyDimension::altloc([
             molframe::AltlocPolicy::KeepAll,
             molframe::AltlocPolicy::First,
         ]))
-        .vary(molframe::PolicyDimension::model([
+        .vary(molframe::audit::PolicyDimension::model([
             molframe::ModelChoice::First,
             molframe::ModelChoice::All,
         ]));
@@ -395,20 +411,20 @@ fn gw_039_policy_audit_expands_in_deterministic_order() {
 
 #[test]
 fn gw_040_versioned_fx_profile_returns_a_stable_verdict() {
-    let profile = molframe::fx::motifbench_1_0();
+    let profile = molframe::motif::motifbench_1_0();
     let metrics = BTreeMap::from([("rmsd".into(), 1.0), ("motif_rmsd".into(), 0.5)]);
     let verdict = profile.decide_candidate(&metrics);
     assert_eq!(profile.id(), "motifbench-1.0");
-    assert_eq!(verdict.status, molframe::fx::VerdictStatus::Pass);
+    assert_eq!(verdict.status, molframe::motif::VerdictStatus::Pass);
 }
 
 fn rama_structure() -> molframe::Structure {
     let source = read_fixture(RAMA_CIF, "rama.cif");
-    let mut data = source.data().clone();
+    let mut data = source.engine().data().clone();
     let roles = [
-        molframe::PolymerAtomRole::PROTEIN_NITROGEN,
-        molframe::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
-        molframe::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+        molframe::chemistry::PolymerAtomRole::PROTEIN_NITROGEN,
+        molframe::chemistry::PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+        molframe::chemistry::PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
     ];
     let role_values = AnnotationColumn::from_entries(
         (0..9).map(|index| (roles[index % roles.len()].code(), Presence::Present)),
@@ -428,5 +444,5 @@ fn rama_structure() -> molframe::Structure {
         });
     }
     data.bonds = bonds.finish();
-    molframe::Structure::new(data)
+    molframe_core::structure::Structure::new(data).into()
 }

@@ -3,11 +3,11 @@
 use std::collections::BTreeMap;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
-use molframe::{
-    AltlocPolicy, AnalysisPolicy, AtomSelection, InputBuffer, ModelChoice, ModelCifExt,
-    ReadOptions, Rigid,
-};
+use molframe::formats::modelcif::ModelCifExt;
+use molframe::geometry::Rigid;
+use molframe::{AltlocPolicy, AnalysisPolicy, InputBuffer, ModelChoice, ReadOptions};
 use molframe_bench::{Sample, coordinates, structure};
+use molframe_core::selection::AtomSelection;
 
 const UNKNOWN_CATEGORY_CIF: &str = "data_unknown\n\
 _custom.note 'keep this category'\n\
@@ -62,7 +62,7 @@ pub(super) fn register(group: &mut BenchmarkGroup<'_, criterion::measurement::Wa
 fn bench_gw_004(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let input = InputBuffer::from_bytes(UNKNOWN_CATEGORY_CIF.as_bytes().to_vec());
     let (document, structure, findings) =
-        match molframe::cif::read_with_document(&input, &ReadOptions::new()) {
+        match molframe::formats::cif::read_with_document(&input, &ReadOptions::new()) {
             Ok(result) => result,
             Err(findings) => panic!("GW-004 setup failed: {findings:?}"),
         };
@@ -70,11 +70,12 @@ fn bench_gw_004(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
         findings.is_empty(),
         "GW-004 setup emitted findings: {findings:?}"
     );
+    let structure: molframe::Structure = structure.into();
     let selection = AtomSelection::All(structure.atom_count());
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-004", |b| {
         b.iter(|| {
-            let preserved = molframe::write_preserving(&document);
+            let preserved = molframe::formats::cif::write_preserving(&document);
             let moved = match molframe::transform(
                 &structure,
                 &selection,
@@ -83,7 +84,7 @@ fn bench_gw_004(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                 Ok(moved) => moved,
                 Err(findings) => panic!("GW-004 transform failed: {findings:?}"),
             };
-            black_box((preserved.len(), moved.generation().get()));
+            black_box((preserved.len(), moved.engine().generation().get()));
         });
     });
 }
@@ -129,7 +130,7 @@ fn bench_gw_012(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                 &structure,
                 4.0,
                 1,
-                molframe::SpatialBackend::Auto,
+                molframe::spatial::SpatialBackend::Auto,
                 &molframe::ExecutionContext::default(),
             ) {
                 Ok(map) => map,
@@ -139,7 +140,7 @@ fn bench_gw_012(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                 &structure,
                 8.0,
                 1,
-                molframe::SpatialBackend::Auto,
+                molframe::spatial::SpatialBackend::Auto,
                 &molframe::ExecutionContext::default(),
             ) {
                 Ok(map) => map,
@@ -192,29 +193,29 @@ fn bench_gw_014(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 }
 
 fn bench_gw_022(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let Some(frames) = molframe::traj::parse_xyz(XYZ) else {
+    let Some(frames) = molframe::trajectory::parse_xyz(XYZ) else {
         panic!("GW-022 setup XYZ is invalid");
     };
     group.throughput(Throughput::Bytes(XYZ.len() as u64));
     group.bench_function("GW-022", |b| {
         b.iter(|| {
-            let written = molframe::traj::write_xyz(&frames);
-            let Some(round_trip) = molframe::traj::parse_xyz(&written) else {
+            let written = molframe::trajectory::write_xyz(&frames);
+            let Some(round_trip) = molframe::trajectory::parse_xyz(&written) else {
                 panic!("GW-022 XYZ round trip failed");
             };
             let timesteps: Vec<_> = round_trip
                 .iter()
                 .enumerate()
-                .map(|(frame, value)| molframe::traj::Timestep {
+                .map(|(frame, value)| molframe::trajectory::Timestep {
                     frame,
                     positions: value.atoms.iter().map(|atom| atom.position).collect(),
                     ..Default::default()
                 })
                 .collect();
-            let rmsd = match molframe::traj::rmsd_to_reference(
+            let rmsd = match molframe::trajectory::rmsd_to_reference(
                 &timesteps,
                 0,
-                molframe::traj::FrameAlignment::None,
+                molframe::trajectory::FrameAlignment::None,
             ) {
                 Ok(rmsd) => rmsd,
                 Err(error) => panic!("GW-022 RMSD failed: {error}"),
@@ -234,10 +235,10 @@ fn bench_gw_023(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(frames.len() as u64));
     group.bench_function("GW-023", |b| {
         b.iter(|| {
-            let fluctuation = molframe::geom::rmsf(&views);
-            let pca = molframe::traj::cartesian_pca(
+            let fluctuation = molframe::geometry::rmsf(&views);
+            let pca = molframe::trajectory::cartesian_pca(
                 &frames,
-                molframe::traj::CartesianFit::None,
+                molframe::trajectory::CartesianFit::None,
                 2,
                 1024 * 1024,
             );
@@ -256,7 +257,7 @@ fn bench_gw_028(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                 &coordinates,
                 &coordinates,
                 15.0,
-                &molframe::core::ExecutionContext::default(),
+                &molframe_core::ExecutionContext::default(),
             );
             let tm = molframe::compare::tm_score(&coordinates, &coordinates);
             let ts = molframe::compare::gdt_ts(&coordinates, &coordinates);
@@ -271,14 +272,15 @@ fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-030", |b| {
         b.iter(|| {
-            let first_flags = molframe::validate::quality_flags(&structure);
-            let second_flags = molframe::validate::quality_flags(&structure);
-            let complete = molframe::validate::completeness(&structure, molframe::Namespace::Label);
-            let clashes = molframe::validate::clashes(
+            let first_flags = molframe::validation::quality_flags(&structure);
+            let second_flags = molframe::validation::quality_flags(&structure);
+            let complete =
+                molframe::validation::completeness(&structure, molframe::Namespace::Label);
+            let clashes = molframe::validation::clashes(
                 &structure,
                 0.4,
-                molframe::RadiusSet::Bondi,
-                molframe::SpatialBackend::Auto,
+                molframe::chemistry::RadiusSet::Bondi,
+                molframe::spatial::SpatialBackend::Auto,
                 &molframe::ExecutionContext::default(),
             );
             black_box((
@@ -293,7 +295,7 @@ fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_033(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = structure(Sample::Tiny);
-    let table = molframe::AtomTable::new(&structure);
+    let table = molframe::interop::AtomTable::new(&structure);
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-033/arrow_stream", |b| {
         b.iter(|| black_box(table.arrow_stream()));
@@ -302,24 +304,24 @@ fn bench_gw_033(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_035(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = structure(Sample::Tiny);
-    let options = molframe::GraphOptions {
-        nodes: molframe::NodeLevel::Atoms,
-        edges: molframe::EdgeKind::Radius { cutoff: 3.0 },
-        direction: molframe::EdgeDirection::Symmetric,
+    let options = molframe::interop::GraphOptions {
+        nodes: molframe::interop::NodeLevel::Atoms,
+        edges: molframe::interop::EdgeKind::Radius { cutoff: 3.0 },
+        direction: molframe::interop::EdgeDirection::Symmetric,
         node_features: vec![
-            molframe::NodeFeature::PositionX,
-            molframe::NodeFeature::PositionY,
-            molframe::NodeFeature::PositionZ,
+            molframe::interop::NodeFeature::PositionX,
+            molframe::interop::NodeFeature::PositionY,
+            molframe::interop::NodeFeature::PositionZ,
         ],
-        edge_features: vec![molframe::EdgeFeature::Distance],
-        missing: molframe::MissingFeaturePolicy::Error,
-        backend: molframe::SpatialBackend::Auto,
+        edge_features: vec![molframe::interop::EdgeFeature::Distance],
+        missing: molframe::interop::MissingFeaturePolicy::Error,
+        backend: molframe::spatial::SpatialBackend::Auto,
         periodic: false,
     };
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-035", |b| {
         b.iter(|| {
-            black_box(molframe::graph(
+            black_box(molframe::interop::graph(
                 &structure,
                 &options,
                 &molframe::ExecutionContext::default(),
@@ -329,12 +331,12 @@ fn bench_gw_035(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 }
 
 fn bench_gw_039(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let space = molframe::PolicySpace::new(AnalysisPolicy::default())
-        .vary(molframe::PolicyDimension::altloc([
+    let space = molframe::audit::PolicySpace::new(AnalysisPolicy::default())
+        .vary(molframe::audit::PolicyDimension::altloc([
             AltlocPolicy::KeepAll,
             AltlocPolicy::First,
         ]))
-        .vary(molframe::PolicyDimension::model([
+        .vary(molframe::audit::PolicyDimension::model([
             ModelChoice::First,
             ModelChoice::All,
         ]));
@@ -344,7 +346,7 @@ fn bench_gw_039(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 }
 
 fn bench_gw_040(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
-    let profile = molframe::fx::motifbench_1_0();
+    let profile = molframe::motif::motifbench_1_0();
     let metrics = BTreeMap::from([("rmsd".into(), 1.0), ("motif_rmsd".into(), 0.5)]);
     group.bench_function("GW-040", |b| {
         b.iter(|| black_box(profile.decide_candidate(&metrics)));

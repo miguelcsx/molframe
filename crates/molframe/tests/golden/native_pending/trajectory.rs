@@ -1,4 +1,6 @@
-use molframe::{AnalysisPolicy, AtomSelection, SpatialBackend};
+use molframe::AnalysisPolicy;
+use molframe::spatial::SpatialBackend;
+use molframe_core::selection::AtomSelection;
 
 #[test]
 fn gw_024_reuses_a_neighbour_list_across_trajectory_frames() {
@@ -14,7 +16,8 @@ fn gw_024_reuses_a_neighbour_list_across_trajectory_frames() {
         volume: 100.0,
         backend: SpatialBackend::BruteForce,
     };
-    let mut neighbours = molframe::traj::FrameNeighborList::new([0_u32, 1], [0_u32, 1], 2.0, 0.5);
+    let mut neighbours =
+        molframe::trajectory::FrameNeighborList::new([0_u32, 1], [0_u32, 1], 2.0, 0.5);
     let mut radial_counts = Vec::new();
     for frame in positions {
         let _ = neighbours
@@ -55,14 +58,15 @@ frame-2
 C 2 0 0
 N 3 0 0
 ";
-    let frames = molframe::traj::parse_xyz(source).unwrap_or_else(|| panic!("XYZ parse failed"));
+    let frames =
+        molframe::trajectory::parse_xyz(source).unwrap_or_else(|| panic!("XYZ parse failed"));
     let selected: Vec<_> = [0_usize, 2]
         .iter()
         .map(|index| frames[*index].clone())
         .collect();
-    let rendered = molframe::traj::write_xyz(&selected);
-    let round_trip =
-        molframe::traj::parse_xyz(&rendered).unwrap_or_else(|| panic!("selected XYZ parse failed"));
+    let rendered = molframe::trajectory::write_xyz(&selected);
+    let round_trip = molframe::trajectory::parse_xyz(&rendered)
+        .unwrap_or_else(|| panic!("selected XYZ parse failed"));
     assert_eq!(round_trip, selected);
     assert_eq!(round_trip.len(), 2);
     assert_eq!(round_trip[1].comment, "frame-2");
@@ -71,9 +75,9 @@ N 3 0 0
 #[test]
 fn gw_026_parallel_trajectory_analysis_is_byte_identical() {
     let structure = molframe_bench::structure(molframe_bench::Sample::Tiny);
-    let trajectory = molframe::traj::Trajectory::from_frames(
+    let trajectory = molframe::trajectory::Trajectory::from_frames(
         (0_u16..1_025)
-            .map(|frame| molframe::traj::Frame {
+            .map(|frame| molframe::trajectory::Frame {
                 positions: structure
                     .positions()
                     .iter()
