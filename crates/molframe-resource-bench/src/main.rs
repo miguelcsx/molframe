@@ -128,8 +128,8 @@ fn snapshot() -> CounterSnapshot {
 
 fn stabilize_shared_runtime() -> Result<(), String> {
     let context = molframe::ExecutionContext::default();
-    let plan = molframe::core::parallel::BlockPlan::new(context.worker_budget(), 1);
-    let warmed = molframe::core::parallel::map_blocks_in(plan, &context, |index, _| index)
+    let plan = molframe_core::parallel::BlockPlan::new(context.worker_budget(), 1);
+    let warmed = molframe_core::parallel::map_blocks_in(plan, &context, |index, _| index)
         .map_err(|error| format!("shared runtime warm-up failed: {error}"))?;
     black_box(warmed);
     black_box(context);
@@ -220,10 +220,10 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
                 .cif()
                 .ok_or_else(|| "medium mmCIF fixture is missing".to_owned())?;
             let input = molframe::InputBuffer::from_bytes(bytes.to_vec());
-            let document = molframe::cif::parse(&input)
+            let document = molframe::formats::cif::parse(&input)
                 .map_err(|findings| format!("CIF parse failed: {findings:?}"))?
                 .0;
-            let structure = molframe::cif::lower(&document, &molframe::ReadOptions::new())
+            let structure = molframe::formats::cif::lower(&document, &molframe::ReadOptions::new())
                 .map_err(|findings| format!("CIF lowering failed: {findings:?}"))?
                 .0;
             Ok(black_box(u64::from(structure.atom_count())))
@@ -248,7 +248,7 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
                 let contacts = molframe::analysis::atom_contacts(
                     &structure,
                     4.0,
-                    molframe::SpatialBackend::Auto,
+                    molframe::spatial::SpatialBackend::Auto,
                     &molframe::ExecutionContext::default(),
                 )
                 .map_err(|error| format!("contacts failed: {error}"))?;
@@ -276,7 +276,7 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
             let reference = structure.positions().to_vec();
             let mobile = molframe_bench::perturbed(&reference, 0.001);
             measure_case("rmsd_medium", || {
-                let rmsd = molframe::rmsd(&mobile, &reference)
+                let rmsd = molframe::geometry::rmsd(&mobile, &reference)
                     .map_err(|error| format!("RMSD failed: {error:?}"))?;
                 Ok(black_box(rmsd.to_bits()))
             })
@@ -292,7 +292,7 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
         "dlpack_coordinates" => {
             let structure = molframe_bench::structure(molframe_bench::Sample::Medium);
             measure_case("dlpack_coordinates", || {
-                let tensor = molframe::DlpackTensor::coordinates(&structure)
+                let tensor = molframe::interop::DlpackTensor::coordinates(&structure)
                     .map_err(|error| format!("DLPack failed: {error}"))?;
                 Ok(black_box(u64::from(tensor.cost() as u8)))
             })
@@ -344,7 +344,7 @@ fn read_file(
 }
 
 fn total_atom_rows(structure: &molframe::Structure) -> Result<u64, String> {
-    if let Some(models) = structure.ragged_models() {
+    if let Some(models) = structure.engine().ragged_models() {
         return models.iter().try_fold(0_u64, |total, model| {
             total
                 .checked_add(u64::from(model.atom_count()))
@@ -375,7 +375,7 @@ fn write_bcif_file(path: &Path) -> Result<ResourceRecord, String> {
     let atom_count = u64::from(structure.atom_count());
     let model_count =
         u64::try_from(structure.model_count()).map_err(|_| "model count exceeds u64".to_owned())?;
-    let options = molframe::CifWriteOptions::new()
+    let options = molframe::formats::cif::CifWriteOptions::new()
         .with_generated_connection_ids()
         .with_connection_type_id("covale");
     measure_retained_case("file_write_bcif", || {

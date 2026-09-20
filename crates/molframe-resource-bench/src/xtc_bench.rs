@@ -8,13 +8,13 @@ use super::{ResourceRecord, measure_case};
 pub(super) fn read_file(path: &Path) -> Result<ResourceRecord, String> {
     let mut model_count = 0_u64;
     let mut record = measure_case("xtc_file", || {
-        let mut reader = molframe::traj::read_trajectory(
+        let mut reader = molframe::trajectory::read_trajectory(
             path,
-            &molframe::traj::TrajectoryReaderOptions::default(),
+            &molframe::trajectory::TrajectoryReaderOptions::default(),
         )
         .map_err(|error| format!("{} XTC open failed: {error}", path.display()))?;
         let atoms = reader.n_atoms();
-        let mut timestep = molframe::traj::Timestep::default();
+        let mut timestep = molframe::trajectory::Timestep::default();
         let mut frames = 0_u64;
         while reader
             .read_next(&mut timestep)

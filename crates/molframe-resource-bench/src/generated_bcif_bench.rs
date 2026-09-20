@@ -3,10 +3,8 @@
 use super::generated_structure_bench::drain;
 use super::{ResourceRecord, measure_case};
 use molframe::ReadOptions;
-use molframe::bcif::{DataType, EncodedData, Encoding};
-use molframe::core::{
-    ChunkId, DatasetId, ExecutionContext, InputBuffer, LogicalRow, ScratchPolicy,
-};
+use molframe::formats::bcif::{DataType, EncodedData, Encoding};
+use molframe_core::{ChunkId, DatasetId, ExecutionContext, InputBuffer, LogicalRow, ScratchPolicy};
 use serde::Serialize;
 
 const LOGICAL_ROW_BYTES: u64 = 49;
@@ -22,7 +20,7 @@ pub(super) fn run(minimum_logical_bytes: u64) -> Result<ResourceRecord, String> 
             .scratch_policy(ScratchPolicy::new(0))
             .build()
             .map_err(|error| format!("generated_bcif_batches: context failed: {error}"))?;
-        let source = molframe::bcif::BcifBatchSource::new(
+        let source = molframe::formats::bcif::BcifBatchSource::new(
             InputBuffer::from_bytes(bytes),
             ReadOptions::new(),
             DatasetId::new(0),

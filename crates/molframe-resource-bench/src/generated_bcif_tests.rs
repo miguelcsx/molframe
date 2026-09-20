@@ -1,12 +1,12 @@
 use super::*;
-use molframe::core::{Backpressure, BatchDemand, BatchSource};
+use molframe_core::{Backpressure, BatchDemand, BatchSource};
 
 #[test]
 fn run_length_fixture_decodes_more_than_one_batch_exactly() {
     let rows = 200_000_u64;
     let context = ExecutionContext::default();
     let bytes = encoded_file(rows).expect("fixture");
-    let mut source = molframe::bcif::BcifBatchSource::new(
+    let mut source = molframe::formats::bcif::BcifBatchSource::new(
         InputBuffer::from_bytes(bytes),
         ReadOptions::new(),
         DatasetId::new(0),

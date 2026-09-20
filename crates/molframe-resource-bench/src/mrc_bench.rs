@@ -20,9 +20,11 @@ pub(super) fn run_mrc_block_1g() -> Result<ResourceRecord, String> {
 
 pub(super) fn read_file(name: &'static str, path: &Path) -> Result<ResourceRecord, String> {
     measure_case(name, || {
-        let mut reader =
-            molframe::xtal::MrcBlockReader::open(path, molframe::xtal::MrcBlockOptions::default())
-                .map_err(|error| format!("MRC block reader open failed: {error}"))?;
+        let mut reader = molframe::crystal::MrcBlockReader::open(
+            path,
+            molframe::crystal::MrcBlockOptions::default(),
+        )
+        .map_err(|error| format!("MRC block reader open failed: {error}"))?;
         let mut values = Vec::new();
         reader
             .read_block_into([113, 271, 509], [BLOCK; 3], &mut values)

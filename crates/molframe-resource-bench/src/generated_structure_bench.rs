@@ -2,7 +2,7 @@
 
 use super::{ResourceRecord, measure_case};
 use molframe::ReadOptions;
-use molframe::core::{
+use molframe_core::{
     Backpressure, BatchDemand, BatchSource, ByteWindow, ChunkId, DatasetId, ExecutionContext,
     LogicalRow, MemoryReservation, ScratchPolicy, SourceBytes, StructureBatch, StructureBatchError,
 };
@@ -79,7 +79,7 @@ pub(super) fn run(format: GeneratedFormat, minimum_bytes: u64) -> Result<Resourc
         let logical_row = LogicalRow::new(0);
         let rows = match format {
             GeneratedFormat::Mmcif => drain(
-                molframe::cif::MmcifBatchSource::new(
+                molframe::formats::cif::MmcifBatchSource::new(
                     source,
                     options,
                     dataset,
@@ -93,7 +93,7 @@ pub(super) fn run(format: GeneratedFormat, minimum_bytes: u64) -> Result<Resourc
                 name,
             )?,
             GeneratedFormat::ModelCif => drain(
-                molframe::modelcif::ModelCifBatchSource::new(
+                molframe::formats::modelcif::ModelCifBatchSource::new(
                     source,
                     options,
                     dataset,
@@ -107,7 +107,7 @@ pub(super) fn run(format: GeneratedFormat, minimum_bytes: u64) -> Result<Resourc
                 name,
             )?,
             GeneratedFormat::Pdb => drain(
-                molframe::pdb::PdbBatchSource::new(
+                molframe::formats::pdb::PdbBatchSource::new(
                     source,
                     options,
                     dataset,

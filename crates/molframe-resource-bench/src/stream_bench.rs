@@ -12,12 +12,12 @@
 //! fixture generation and optional full-structure collection.
 
 use super::{ResourceRecord, measure_case, measure_retained_case};
-use molframe::core::{
+use molframe::{InputBuffer, Limits, ReadOptions};
+use molframe_bench::{Sample, Seed, SyntheticCifSource, Tile, structure};
+use molframe_core::{
     Backpressure, BatchDemand, BatchSource, ExecutionContext, MemoryBudget, ScratchPolicy,
     SourceBytes, WindowedFile,
 };
-use molframe::{InputBuffer, Limits, ReadOptions};
-use molframe_bench::{Sample, Seed, SyntheticCifSource, Tile, structure};
 use std::hint::black_box;
 use std::io::Write;
 use std::path::Path;
@@ -124,7 +124,7 @@ pub(super) fn run_structure_batch_file(
             .map_err(|error| format!("compressed spill directory failed: {error}"))?;
         let context = ExecutionContext::builder()
             .scratch_policy(ScratchPolicy::new(0))
-            .temp_storage_policy(molframe::core::TempStoragePolicy::directory(
+            .temp_storage_policy(molframe_core::TempStoragePolicy::directory(
                 directory.path(),
                 maximum_spill_bytes,
             ))
@@ -175,7 +175,7 @@ pub(super) fn run_file_copied_1g() -> Result<ResourceRecord, String> {
     measure_case("file_copied_1g", || {
         let buffer = InputBuffer::open(&path, unbounded())
             .map_err(|finding| format!("open failed: {finding:?}"))?;
-        let (structure, _findings) = molframe::cif::read(&buffer, &ReadOptions::new())
+        let (structure, _findings) = molframe::formats::cif::read(&buffer, &ReadOptions::new())
             .map_err(|findings| format!("read failed: {findings:?}"))?;
         Ok(black_box(u64::from(structure.atom_count())))
     })
@@ -196,7 +196,7 @@ pub(super) fn run_file_mapped_1g() -> Result<ResourceRecord, String> {
         let mapped = unsafe { molframe_mmap::MappedFile::map_file_unchecked(&file) }
             .map_err(|error| format!("map failed: {error}"))?;
         let buffer = InputBuffer::from_mapped(mapped);
-        let (structure, _findings) = molframe::cif::read(&buffer, &ReadOptions::new())
+        let (structure, _findings) = molframe::formats::cif::read(&buffer, &ReadOptions::new())
             .map_err(|findings| format!("read failed: {findings:?}"))?;
         Ok(black_box(u64::from(structure.atom_count())))
     })
@@ -256,7 +256,7 @@ struct CountingSink {
     cells: u64,
 }
 
-impl molframe::cif::CifEventSink for CountingSink {
+impl molframe::formats::cif::CifEventSink for CountingSink {
     type Output = u64;
 
     fn block(&mut self, _name: &str) {}
@@ -265,7 +265,7 @@ impl molframe::cif::CifEventSink for CountingSink {
         &mut self,
         _category: &str,
         _item: &str,
-        _value: molframe::cif::CifScalar<'_>,
+        _value: molframe::formats::cif::CifScalar<'_>,
         _span: molframe::ByteSpan,
     ) {
         self.cells = self.cells.saturating_add(1);
@@ -293,7 +293,7 @@ fn lex_stream(name: &'static str, bytes: u64) -> Result<ResourceRecord, String> 
         let source = SyntheticCifSource::new(tile, copies);
         let buffer = InputBuffer::from_reader(source, unbounded())
             .map_err(|finding| format!("{name}: input was refused: {finding:?}"))?;
-        let mut lexer = molframe::cif::lexer::Lexer::new(buffer.as_bytes())
+        let mut lexer = molframe::formats::cif::lexer::Lexer::new(buffer.as_bytes())
             .map_err(|error| format!("{name}: lexer refused the input: {error:?}"))?;
         let mut tokens = 0_u64;
         loop {
@@ -324,8 +324,9 @@ fn scan_stream(name: &'static str, bytes: u64) -> Result<ResourceRecord, String>
         let source = SyntheticCifSource::new(tile, copies);
         let buffer = InputBuffer::from_reader(source, unbounded())
             .map_err(|finding| format!("{name}: input was refused: {finding:?}"))?;
-        let (cells, _findings) = molframe::cif::parse_events(&buffer, CountingSink { cells: 0 })
-            .map_err(|findings| format!("{name}: parse failed: {findings:?}"))?;
+        let (cells, _findings) =
+            molframe::formats::cif::parse_events(&buffer, CountingSink { cells: 0 })
+                .map_err(|findings| format!("{name}: parse failed: {findings:?}"))?;
         Ok(black_box(cells))
     })
 }

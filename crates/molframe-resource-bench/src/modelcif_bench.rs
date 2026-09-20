@@ -9,7 +9,7 @@ pub(super) fn read_file(path: &Path) -> Result<ResourceRecord, String> {
         .map_err(|error| format!("{} cannot be read: {error}", path.display()))?;
     let input = molframe::InputBuffer::from_bytes(bytes);
     measure_retained_case("modelcif_file", || {
-        let (model, findings) = molframe::modelcif::read_compact(&input)
+        let (model, findings) = molframe::formats::modelcif::read_compact(&input)
             .map_err(|error| format!("{} projection failed: {error}", path.display()))?;
         if !findings.is_empty() {
             return Err(format!(
@@ -19,7 +19,7 @@ pub(super) fn read_file(path: &Path) -> Result<ResourceRecord, String> {
         }
         let rows = model
             .category("ma_qa_metric_local_pairwise")
-            .map_or(0, molframe::ModelCategory::row_count);
+            .map_or(0, molframe::formats::modelcif::ModelCategory::row_count);
         let digest = u64::try_from(rows).map_err(|_| "ModelCIF rows exceed u64".to_owned())?;
         black_box(&model);
         Ok((digest, None, model))

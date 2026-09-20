@@ -5,9 +5,9 @@ use std::hint::black_box;
 
 pub(super) fn run_trajectory_contacts() -> Result<ResourceRecord, String> {
     let structure = molframe_bench::structure(molframe_bench::Sample::Tiny);
-    let trajectory = molframe::traj::Trajectory::from_frames(
+    let trajectory = molframe::trajectory::Trajectory::from_frames(
         (0_u16..64)
-            .map(|frame| molframe::traj::Frame {
+            .map(|frame| molframe::trajectory::Frame {
                 positions: structure
                     .positions()
                     .iter()
@@ -18,7 +18,7 @@ pub(super) fn run_trajectory_contacts() -> Result<ResourceRecord, String> {
     )
     .map_err(|error| format!("trajectory construction failed: {error}"))?;
     let policy = molframe::AnalysisPolicy::default();
-    let kernel = molframe::analysis::contacts_kernel(3.0, molframe::SpatialBackend::Auto);
+    let kernel = molframe::analysis::contacts_kernel(3.0, molframe::spatial::SpatialBackend::Auto);
     measure_case("trajectory_contacts", || {
         let analysis = molframe::analysis::analyse_trajectory(
             &structure,
@@ -83,9 +83,9 @@ pub(super) fn run_msa_eight_512() -> Result<ResourceRecord, String> {
     });
     let views = sequences.each_ref().map(Vec::as_slice);
     measure_case("msa_eight_512", || {
-        let alignment = molframe::seq::progressive_msa(
+        let alignment = molframe::sequence::progressive_msa(
             &views,
-            molframe::seq::MsaOptions::progressive(molframe::seq::Scoring::simple()),
+            molframe::sequence::MsaOptions::progressive(molframe::sequence::Scoring::simple()),
         )
         .map_err(|error| format!("MSA failed: {error}"))?;
         alignment_digest(&alignment)
@@ -111,9 +111,9 @@ pub(super) fn run_msa_sixty_four_128() -> Result<ResourceRecord, String> {
         .collect::<Vec<_>>();
     let views = sequences.iter().map(Vec::as_slice).collect::<Vec<_>>();
     measure_case("msa_sixty_four_128", || {
-        let alignment = molframe::seq::progressive_msa(
+        let alignment = molframe::sequence::progressive_msa(
             &views,
-            molframe::seq::MsaOptions::progressive(molframe::seq::Scoring::simple()),
+            molframe::sequence::MsaOptions::progressive(molframe::sequence::Scoring::simple()),
         )
         .map_err(|error| format!("MSA failed: {error}"))?;
         alignment_digest(&alignment)

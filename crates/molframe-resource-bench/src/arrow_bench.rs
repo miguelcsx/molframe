@@ -8,7 +8,7 @@ const LARGE_ARROW_RESIDUE_ATOMS: u32 = 16;
 
 pub(super) fn run_arrow_stream_large() -> Result<ResourceRecord, String> {
     let structure = large_arrow_structure()?;
-    let table = molframe::AtomTable::new(&structure);
+    let table = molframe::interop::AtomTable::new(structure.engine());
     measure_case("arrow_stream_large", || {
         let stream = table
             .arrow_stream()
@@ -24,7 +24,7 @@ pub(super) fn run_arrow_stream_large() -> Result<ResourceRecord, String> {
 
 pub(super) fn run_arrow_batches_large() -> Result<ResourceRecord, String> {
     let structure = large_arrow_structure()?;
-    let table = molframe::AtomTable::new(&structure);
+    let table = molframe::interop::AtomTable::new(structure.engine());
     measure_case("arrow_batches_large", || {
         let batches = table
             .record_batches()
@@ -43,10 +43,10 @@ fn add_rows(rows: u64, batch_rows: usize) -> Result<u64, String> {
 }
 
 fn large_arrow_structure() -> Result<molframe::Structure, String> {
-    use molframe::core::optional::{OptionalI32, OptionalSymbol};
-    use molframe::core::topology::ResidueRecord;
+    use molframe_core::optional::{OptionalI32, OptionalSymbol};
+    use molframe_core::topology::ResidueRecord;
 
-    let mut data = molframe::StructureData::empty();
+    let mut data = molframe::engine::core::StructureData::empty();
     let atom_name = data
         .dictionary
         .intern("CA")
@@ -55,7 +55,7 @@ fn large_arrow_structure() -> Result<molframe::Structure, String> {
         .dictionary
         .intern("ALA")
         .map_err(|error| format!("component interning failed: {error}"))?;
-    let mut chunks = molframe::ChunkBuilder::new();
+    let mut chunks = molframe::engine::core::ChunkBuilder::new();
     let atom_capacity = usize::try_from(LARGE_ARROW_ATOMS)
         .map_err(|_| "Arrow stress atom count exceeds usize".to_owned())?;
     chunks.reserve(atom_capacity);
@@ -84,7 +84,7 @@ fn large_arrow_structure() -> Result<molframe::Structure, String> {
             )
             .map_err(|error| format!("Arrow stress residue failed: {error}"))?;
         for atom in first..end {
-            chunks.push(molframe::AtomRecord {
+            chunks.push(molframe::engine::core::AtomRecord {
                 position: Some([0.0, 0.0, 0.0]),
                 element: molframe::Element::CARBON,
                 atom_name,
@@ -92,9 +92,9 @@ fn large_arrow_structure() -> Result<molframe::Structure, String> {
                 alternate_component_id: OptionalSymbol::NONE,
                 alt_id: molframe::AltId::BLANK,
                 residue,
-                occupancy: (1.0, molframe::Presence::Present),
-                b_factor: (10.0, molframe::Presence::Present),
-                formal_charge: (0, molframe::Presence::Inapplicable),
+                occupancy: (1.0, molframe::engine::core::Presence::Present),
+                b_factor: (10.0, molframe::engine::core::Presence::Present),
+                formal_charge: (0, molframe::engine::core::Presence::Inapplicable),
                 atom_site_id: atom + 1,
             });
         }
@@ -102,6 +102,8 @@ fn large_arrow_structure() -> Result<molframe::Structure, String> {
     }
     let (atom_chunks, coordinates) = chunks.finish();
     data.chunks = atom_chunks.into();
-    data.coords = molframe::CoordinateStore::Single(coordinates);
-    Ok(molframe::Structure::new(data))
+    data.coords = molframe::engine::core::CoordinateStore::Single(coordinates);
+    Ok(molframe::Structure::from(
+        molframe_core::structure::Structure::new(data),
+    ))
 }
