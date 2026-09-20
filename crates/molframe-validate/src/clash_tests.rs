@@ -37,8 +37,9 @@ ATOM 2 C C2 LIG A 2 2 0 0\n"
         panic!("valid");
     };
     assert_eq!(found.len(), 1);
-    assert_eq!((found[0].first.get(), found[0].second.get()), (0, 1));
-    assert!(found[0].overlap > 0.4);
+    let clash = found.iter().next().expect("one clash");
+    assert_eq!((clash.first.get(), clash.second.get()), (0, 1));
+    assert!(clash.overlap > 0.4);
 }
 
 #[test]

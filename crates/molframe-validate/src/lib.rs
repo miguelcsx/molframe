@@ -108,7 +108,7 @@ pub use sidechain_conformation::{
 pub use stereocentre::{
     ChiralityFlag, ChiralityIssue, ChiralityOptions, ChiralityReport, chirality_outliers,
 };
-pub use steric_overlap::{Clash, clashes};
+pub use steric_overlap::{Clash, ClashTable, clashes};
 pub use thermal_motion::{
     BFactorDistribution, BFactorError, BFactorOutlier, TlsBFactorFlag, TlsBFactorReport, TlsGroup,
     TlsModel, b_factor_distribution, tls_b_factor_consistency,

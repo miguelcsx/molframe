@@ -1,6 +1,6 @@
 use crate::{
     AltlocOccupancyError, AltlocOccupancyOptions, AltlocOccupancyReport, BondDeviation,
-    CcdCompletenessReport, ChainCompleteness, CisPeptide, Clash, CompletenessError,
+    CcdCompletenessReport, ChainCompleteness, CisPeptide, ClashTable, CompletenessError,
     LigandGeometryReport, PlanarityError, PlanarityFlag, PlanarityOptions, QualityFlag,
     ValenceError, altloc_occupancy_sums, bond_length_deviations, ccd_missing_atoms, cis_peptides,
     clashes, completeness, ligand_geometry, nonplanar_aromatic_rings, overvalent_atoms,
@@ -74,7 +74,7 @@ pub fn clashes_kernel(
     tolerance: f32,
     radii: RadiusSet,
     spatial: SpatialBackend,
-) -> impl StructureKernel<Output = Vec<Clash>, Error = SpatialError> {
+) -> impl StructureKernel<Output = ClashTable, Error = SpatialError> {
     structure_kernel(
         descriptor("steric-clashes")
             .with_parameter("tolerance", float(tolerance))

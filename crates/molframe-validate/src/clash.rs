@@ -30,6 +30,93 @@ pub struct Clash {
     pub overlap: f32,
 }
 
+/// Native structure-of-arrays storage for an unbounded clash result.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ClashTable {
+    first: Vec<AtomIndex>,
+    second: Vec<AtomIndex>,
+    overlap: Vec<f32>,
+}
+
+impl ClashTable {
+    /// Number of aligned rows.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        debug_assert_eq!(self.first.len(), self.second.len());
+        debug_assert_eq!(self.first.len(), self.overlap.len());
+        self.first.len()
+    }
+
+    /// Whether the table has no rows.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.first.is_empty()
+    }
+
+    /// Lower atom-index column.
+    #[must_use]
+    pub fn first(&self) -> &[AtomIndex] {
+        &self.first
+    }
+
+    /// Higher atom-index column.
+    #[must_use]
+    pub fn second(&self) -> &[AtomIndex] {
+        &self.second
+    }
+
+    /// Van der Waals overlap column.
+    #[must_use]
+    pub fn overlaps(&self) -> &[f32] {
+        &self.overlap
+    }
+
+    /// Rows in deterministic table order.
+    #[must_use]
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = Clash> + '_ {
+        self.first
+            .iter()
+            .copied()
+            .zip(self.second.iter().copied())
+            .zip(self.overlap.iter().copied())
+            .map(|((first, second), overlap)| Clash {
+                first,
+                second,
+                overlap,
+            })
+    }
+
+    /// Appends one row while preserving column alignment.
+    pub fn push(&mut self, clash: Clash) {
+        self.first.push(clash.first);
+        self.second.push(clash.second);
+        self.overlap.push(clash.overlap);
+    }
+
+    /// Moves a complete reducer block into this table.
+    pub fn append(&mut self, other: &mut Self) {
+        self.first.append(&mut other.first);
+        self.second.append(&mut other.second);
+        self.overlap.append(&mut other.overlap);
+    }
+}
+
+impl FromIterator<Clash> for ClashTable {
+    fn from_iter<T: IntoIterator<Item = Clash>>(rows: T) -> Self {
+        let iterator = rows.into_iter();
+        let (lower, _) = iterator.size_hint();
+        let mut table = Self {
+            first: Vec::with_capacity(lower),
+            second: Vec::with_capacity(lower),
+            overlap: Vec::with_capacity(lower),
+        };
+        for row in iterator {
+            table.push(row);
+        }
+        table
+    }
+}
+
 /// Finds steric clashes under a van der Waals radius set.
 ///
 /// `tolerance` is the overlap tolerated before a pair counts as a clash; a
@@ -47,7 +134,7 @@ pub fn clashes(
     radius_set: RadiusSet,
     backend: SpatialBackend,
     context: &ExecutionContext,
-) -> Result<Vec<Clash>, SpatialError> {
+) -> Result<ClashTable, SpatialError> {
     let count = structure.atom_count() as usize;
     let mut radii = vec![f32::NAN; count];
     let mut widest = 0.0f32;
@@ -67,7 +154,7 @@ pub fn clashes(
     let all = AtomSelection::All(structure.atom_count());
     let cutoff = 2.0 * widest - tolerance;
     if cutoff <= 0.0 {
-        return Ok(Vec::new());
+        return Ok(ClashTable::default());
     }
     let bonds = structure.data().bonds.adjacency(structure.atom_count());
 
@@ -124,7 +211,7 @@ pub fn clashes(
     // here. Sorting the survivors is far cheaper than materialising and sorting
     // every candidate.
     result.sort_by_key(|clash| (clash.first.get(), clash.second.get()));
-    Ok(result)
+    Ok(result.into_iter().collect())
 }
 
 #[cfg(test)]
