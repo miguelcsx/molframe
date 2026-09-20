@@ -1,5 +1,3 @@
-"""Analysis namespace backed exclusively by native Rust kernels."""
-
-from .._native.analysis import *
-from .._native.analysis import __all__
-from . import hbond, salt_bridge, surface_contact_analysis
+"""Structure analyses."""
+from .._native.analysis import atom_contacts
+__all__ = ["atom_contacts"]

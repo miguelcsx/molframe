@@ -13,7 +13,11 @@ license = "MIT"
 license-files = ["LICENSE"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pyright>=1.1.405", "pytest>=8"]
+
+[tool.pyright]
+include = ["python/molframe"]
+typeCheckingMode = "strict"
 
 [tool.maturin]
 manifest-path = "crates/molframe-py/Cargo.toml"

@@ -1,1 +1,0 @@
-from .._trajectory import DielectricEstimate, TrajectoryDielectricOptions as DielectricOptions, dielectric_from_dipoles
