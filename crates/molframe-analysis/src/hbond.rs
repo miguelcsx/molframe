@@ -42,6 +42,24 @@ pub struct HydrogenBond {
     pub angle_degrees: f64,
 }
 
+define_soa_table! {
+    /// Native columnar storage for hydrogen-bond records.
+    pub struct HydrogenBondTable for HydrogenBond {
+        /// Donor atom indices.
+        donor: AtomIndex,
+        /// Explicit hydrogen atom indices.
+        hydrogen: AtomIndex,
+        /// Acceptor atom indices.
+        acceptor: AtomIndex,
+        /// Donor-to-acceptor distances.
+        donor_acceptor_distance: f32,
+        /// Hydrogen-to-acceptor distances.
+        hydrogen_acceptor_distance: f32,
+        /// Donor-hydrogen-acceptor angles.
+        angle_degrees: f64,
+    }
+}
+
 /// Hydrogen-bond detection failure.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 #[non_exhaustive]
@@ -73,7 +91,7 @@ pub fn hydrogen_bonds(
     structure: &Structure,
     options: HydrogenBondOptions,
     context: &ExecutionContext,
-) -> Result<Vec<HydrogenBond>, HydrogenBondError> {
+) -> Result<HydrogenBondTable, HydrogenBondError> {
     validate_options(options)?;
     if !structure.data().bonds.is_available() {
         return Err(HydrogenBondError::MissingChemistry);
@@ -133,7 +151,7 @@ pub fn hydrogen_bonds(
 
     output.sort_by_key(|bond| (bond.donor.get(), bond.hydrogen.get(), bond.acceptor.get()));
     output.dedup_by_key(|bond| (bond.donor.get(), bond.hydrogen.get(), bond.acceptor.get()));
-    Ok(output)
+    Ok(output.into_iter().collect())
 }
 
 fn validate_options(options: HydrogenBondOptions) -> Result<(), HydrogenBondError> {

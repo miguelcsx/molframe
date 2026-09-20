@@ -36,10 +36,11 @@ fn adjacent_residues_touch_at_their_closest_atoms() {
     assert_eq!(map.residue_count(), 2);
     let contacts = map.contacts();
     assert_eq!(contacts.len(), 1);
-    assert_eq!(contacts[0].first.get(), 0);
-    assert_eq!(contacts[0].second.get(), 1);
+    let contact = contacts.row(0).expect("one contact");
+    assert_eq!(contact.first.get(), 0);
+    assert_eq!(contact.second.get(), 1);
     // C2-C3 are the closest atoms of the two residues, 0.5 Å apart.
-    assert!((contacts[0].min_distance - 0.5).abs() < 1e-5);
+    assert!((contact.min_distance - 0.5).abs() < 1e-5);
 }
 
 #[test]

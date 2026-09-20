@@ -48,6 +48,18 @@ pub struct CationPi {
     pub distance: f32,
 }
 
+define_soa_table! {
+    /// Native columnar storage for cation-pi interactions.
+    pub struct CationPiTable for CationPi {
+        /// Cation-bearing residue indices.
+        cation_residue: ResidueIndex,
+        /// Aromatic residue indices.
+        ring_residue: ResidueIndex,
+        /// Cation-to-ring distances.
+        distance: f32,
+    }
+}
+
 /// Finds cation–π interactions with the cation within `max_distance` of a ring.
 ///
 /// Results are ordered by `(cation residue, ring residue)`. A cation off to the
@@ -61,7 +73,7 @@ pub struct CationPi {
 pub fn cation_pi(
     structure: &Structure,
     options: CationPiOptions,
-) -> Result<Vec<CationPi>, CationPiError> {
+) -> Result<CationPiTable, CationPiError> {
     validate_options(options)?;
     let rings = aromatic_rings(structure, options.plane_fit)?;
     let limit = f64::from(options.maximum_distance);

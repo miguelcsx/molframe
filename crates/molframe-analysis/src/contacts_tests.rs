@@ -115,7 +115,7 @@ fn visitor_emits_the_materialized_contact_set_without_retaining_it() {
     );
     assert!(visited.is_ok());
     observed.sort_unstable_by_key(|contact| (contact.first, contact.second));
-    assert_eq!(observed, expected);
+    assert_eq!(observed, expected.iter().collect::<Vec<_>>());
 }
 
 #[test]
@@ -144,4 +144,26 @@ fn worker_count_does_not_change_the_contacts() {
             "worker count {workers} changed the contacts"
         );
     }
+}
+
+#[test]
+fn columnar_contact_blocks_append_without_losing_alignment() {
+    let mut first = super::ContactTable::with_capacity(1);
+    first.push(super::Contact {
+        first: molframe_core::AtomIndex::new(1),
+        second: molframe_core::AtomIndex::new(3),
+        distance: 2.5,
+    });
+    let mut second = super::ContactTable::with_capacity(1);
+    second.push(super::Contact {
+        first: molframe_core::AtomIndex::new(4),
+        second: molframe_core::AtomIndex::new(8),
+        distance: 1.25,
+    });
+    first.append(&mut second);
+    assert_eq!(first.len(), 2);
+    assert!(second.is_empty());
+    assert_eq!(first.first().len(), first.second().len());
+    assert_eq!(first.first().len(), first.distances().len());
+    assert_eq!(first.row(1).map(|row| row.distance), Some(1.25));
 }

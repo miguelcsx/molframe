@@ -44,9 +44,10 @@ fn a_lysine_amine_over_the_ring_face_is_a_cation_pi() {
     let structure = annotated_structure(lysine);
     let hits = cation_pi(&structure, options()).expect("options are valid");
     assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].cation_residue.get(), 1);
-    assert_eq!(hits[0].ring_residue.get(), 0);
-    assert!((hits[0].distance - 4.0).abs() < 1e-4);
+    let hit = hits.row(0).expect("one cation-pi interaction");
+    assert_eq!(hit.cation_residue.get(), 1);
+    assert_eq!(hit.ring_residue.get(), 0);
+    assert!((hit.distance - 4.0).abs() < 1e-4);
 }
 
 #[test]

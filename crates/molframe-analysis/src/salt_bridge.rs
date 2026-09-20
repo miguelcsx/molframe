@@ -28,6 +28,18 @@ pub struct SaltBridge {
     pub distance: f32,
 }
 
+define_soa_table! {
+    /// Native columnar storage for salt bridges.
+    pub struct SaltBridgeTable for SaltBridge {
+        /// Anion atom indices.
+        anion: AtomIndex,
+        /// Cation atom indices.
+        cation: AtomIndex,
+        /// Interatomic distances.
+        distance: f32,
+    }
+}
+
 /// Finds salt bridges no further apart than `max_distance` (about 4 Å typically).
 ///
 /// Runs in `O(charged atoms · local density)` time.
@@ -40,7 +52,7 @@ pub fn salt_bridges(
     max_distance: f32,
     backend: SpatialBackend,
     context: &ExecutionContext,
-) -> Result<Vec<SaltBridge>, SpatialError> {
+) -> Result<SaltBridgeTable, SpatialError> {
     let positions = structure.positions();
     let mut anions = Vec::new();
     let mut cations = Vec::new();
@@ -96,7 +108,7 @@ pub fn salt_bridges(
     }
 
     result.sort_by_key(|bridge| (bridge.anion.get(), bridge.cation.get()));
-    Ok(result)
+    Ok(result.into_iter().collect())
 }
 
 #[cfg(test)]

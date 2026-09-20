@@ -35,9 +35,10 @@ ATOM 2 N NZ LYS A 2 3.5 0 0\n"
         panic!("valid");
     };
     assert_eq!(bridges.len(), 1);
-    assert_eq!(bridges[0].anion.get(), 0);
-    assert_eq!(bridges[0].cation.get(), 1);
-    assert!((bridges[0].distance - 3.5).abs() < 1e-5);
+    let bridge = bridges.row(0).expect("one bridge");
+    assert_eq!(bridge.anion.get(), 0);
+    assert_eq!(bridge.cation.get(), 1);
+    assert!((bridge.distance - 3.5).abs() < 1e-5);
 }
 
 #[test]

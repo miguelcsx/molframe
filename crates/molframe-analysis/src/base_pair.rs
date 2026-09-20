@@ -103,7 +103,7 @@ pub fn base_pairs(
     let bases = base_identities(structure, provider)?;
     let bonds = hydrogen_bonds(structure, options.hydrogen_bonds, context)?;
     let mut support: BTreeMap<(ResidueIndex, ResidueIndex), Vec<f32>> = BTreeMap::new();
-    for bond in bonds {
+    for bond in bonds.iter() {
         let Some(donor_residue) = structure
             .atom(bond.donor)
             .and_then(molframe_core::structure::AtomRef::residue)

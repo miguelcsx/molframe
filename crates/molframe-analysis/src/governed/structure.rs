@@ -4,7 +4,7 @@ use super::common::{backend, complete, descriptor, float, integer};
 use super::{StructureKernel, structure_kernel};
 use crate::{
     DsspError, DsspOptions, GaussianNetworkModel, GnmError, GnmOptions, HalfSphereExposure,
-    HseError, NucleicTorsionError, NucleicTorsions, SseRecord, chain_interface,
+    HseError, NucleicTorsionError, NucleicTorsions, SseTable, chain_interface,
     gaussian_network_model, half_sphere_exposure, nucleic_torsions, secondary_structure,
 };
 use molframe_core::ExecutionContext;
@@ -46,7 +46,7 @@ pub fn chain_interface_kernel<'a>(
 #[must_use]
 pub fn secondary_structure_kernel(
     options: &DsspOptions,
-) -> impl StructureKernel<Output = Vec<SseRecord>, Error = DsspError> + '_ {
+) -> impl StructureKernel<Output = SseTable, Error = DsspError> + '_ {
     structure_kernel(
         descriptor("secondary-structure-dssp")
             .with_parameter(

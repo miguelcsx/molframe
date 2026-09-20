@@ -74,6 +74,16 @@ pub struct SseRecord {
     pub kind: SseKind,
 }
 
+define_soa_table! {
+    /// Native columnar storage for secondary-structure assignments.
+    pub struct SseTable for SseRecord {
+        /// Residue indices.
+        residue: ResidueIndex,
+        /// Assigned secondary-structure states.
+        kind: SseKind,
+    }
+}
+
 /// Assigns secondary structure to every backbone residue of a structure.
 ///
 /// Residues without the required semantic backbone roles are treated as coil.
@@ -90,7 +100,7 @@ pub struct SseRecord {
 pub fn secondary_structure(
     structure: &Structure,
     options: &DsspOptions,
-) -> Result<Vec<SseRecord>, DsspError> {
+) -> Result<SseTable, DsspError> {
     validate_options(options)?;
     if !crate::chemistry::has_polymer_roles(structure) {
         return Err(DsspError::MissingRoleAnnotation);
@@ -109,7 +119,7 @@ pub fn secondary_structure(
         }
     }
     records.sort_by_key(|record| record.residue.get());
-    Ok(records)
+    Ok(records.into_iter().collect())
 }
 
 fn validate_options(options: &DsspOptions) -> Result<(), DsspError> {

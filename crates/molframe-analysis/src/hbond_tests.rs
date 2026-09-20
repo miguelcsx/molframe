@@ -1,5 +1,6 @@
 use super::{
-    HydrogenBond, HydrogenBondError, HydrogenBondOptions, hydrogen_bonds as hydrogen_bonds_native,
+    HydrogenBondError, HydrogenBondOptions, HydrogenBondTable,
+    hydrogen_bonds as hydrogen_bonds_native,
 };
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{
@@ -11,7 +12,7 @@ use molframe_spatial::SpatialBackend;
 fn hydrogen_bonds(
     structure: &molframe_core::Structure,
     options: HydrogenBondOptions,
-) -> Result<Vec<HydrogenBond>, HydrogenBondError> {
+) -> Result<HydrogenBondTable, HydrogenBondError> {
     hydrogen_bonds_native(structure, options, &ExecutionContext::default())
 }
 
@@ -28,11 +29,12 @@ fn explicit_hydrogen_and_ccd_roles_define_direction_and_angle() {
     let structure = annotated_structure(SOURCE);
     let bonds = hydrogen_bonds(&structure, options(150.0)).expect("valid hydrogen bonds");
     assert_eq!(bonds.len(), 1);
-    assert_eq!(bonds[0].donor.get(), 0);
-    assert_eq!(bonds[0].hydrogen.get(), 1);
-    assert_eq!(bonds[0].acceptor.get(), 2);
-    assert!((bonds[0].donor_acceptor_distance - 2.8).abs() < 1.0e-5);
-    assert!((bonds[0].angle_degrees - 180.0).abs() < 1.0e-4);
+    let bond = bonds.row(0).expect("one bond");
+    assert_eq!(bond.donor.get(), 0);
+    assert_eq!(bond.hydrogen.get(), 1);
+    assert_eq!(bond.acceptor.get(), 2);
+    assert!((bond.donor_acceptor_distance - 2.8).abs() < 1.0e-5);
+    assert!((bond.angle_degrees - 180.0).abs() < 1.0e-4);
 }
 
 #[test]

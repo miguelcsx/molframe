@@ -26,6 +26,18 @@ pub struct WaterBridge {
     pub second: AtomIndex,
 }
 
+define_soa_table! {
+    /// Native columnar storage for water-mediated interactions.
+    pub struct WaterBridgeTable for WaterBridge {
+        /// Bridging solvent atom indices.
+        water: AtomIndex,
+        /// Lower partner atom indices.
+        first: AtomIndex,
+        /// Higher partner atom indices.
+        second: AtomIndex,
+    }
+}
+
 /// Builds water bridges from two or more oriented hydrogen bonds to one solvent.
 ///
 /// Component identity and donor/acceptor roles come exclusively from CCD
@@ -38,10 +50,10 @@ pub fn water_bridges(
     structure: &Structure,
     options: WaterBridgeOptions,
     context: &ExecutionContext,
-) -> Result<Vec<WaterBridge>, HydrogenBondError> {
+) -> Result<WaterBridgeTable, HydrogenBondError> {
     let bonds = hydrogen_bonds(structure, options.hydrogen_bonds, context)?;
     let mut partners: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
-    for bond in bonds {
+    for bond in bonds.iter() {
         let donor_water = crate::chemistry::component_kind(structure, bond.donor.get())
             == Some(molframe_chem::ComponentKind::Solvent);
         let acceptor_water = crate::chemistry::component_kind(structure, bond.acceptor.get())
@@ -72,7 +84,7 @@ pub fn water_bridges(
             }
         }
     }
-    Ok(bridges)
+    Ok(bridges.into_iter().collect())
 }
 
 #[cfg(test)]

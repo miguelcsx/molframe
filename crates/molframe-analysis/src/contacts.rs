@@ -29,6 +29,109 @@ pub struct Contact {
     pub distance: f32,
 }
 
+/// Native structure-of-arrays storage for an unbounded contact result.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ContactTable {
+    first: Vec<AtomIndex>,
+    second: Vec<AtomIndex>,
+    distance: Vec<f32>,
+}
+
+impl ContactTable {
+    /// Starts an empty table with capacity for `capacity` rows.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            first: Vec::with_capacity(capacity),
+            second: Vec::with_capacity(capacity),
+            distance: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Number of aligned rows.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        debug_assert_eq!(self.first.len(), self.second.len());
+        debug_assert_eq!(self.first.len(), self.distance.len());
+        self.first.len()
+    }
+
+    /// Whether the table has no rows.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.first.is_empty()
+    }
+
+    /// Lower atom-index column.
+    #[must_use]
+    pub fn first(&self) -> &[AtomIndex] {
+        &self.first
+    }
+
+    /// Higher atom-index column.
+    #[must_use]
+    pub fn second(&self) -> &[AtomIndex] {
+        &self.second
+    }
+
+    /// Distance column in ångström.
+    #[must_use]
+    pub fn distances(&self) -> &[f32] {
+        &self.distance
+    }
+
+    /// One row reconstructed without allocating.
+    #[must_use]
+    pub fn row(&self, index: usize) -> Option<Contact> {
+        Some(Contact {
+            first: *self.first.get(index)?,
+            second: *self.second.get(index)?,
+            distance: *self.distance.get(index)?,
+        })
+    }
+
+    /// Rows in deterministic table order.
+    #[must_use]
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = Contact> + '_ {
+        self.first
+            .iter()
+            .copied()
+            .zip(self.second.iter().copied())
+            .zip(self.distance.iter().copied())
+            .map(|((first, second), distance)| Contact {
+                first,
+                second,
+                distance,
+            })
+    }
+
+    /// Appends one row while preserving column alignment.
+    pub fn push(&mut self, contact: Contact) {
+        self.first.push(contact.first);
+        self.second.push(contact.second);
+        self.distance.push(contact.distance);
+    }
+
+    /// Moves a complete canonical reducer block into this table.
+    pub fn append(&mut self, other: &mut Self) {
+        self.first.append(&mut other.first);
+        self.second.append(&mut other.second);
+        self.distance.append(&mut other.distance);
+    }
+}
+
+impl FromIterator<Contact> for ContactTable {
+    fn from_iter<T: IntoIterator<Item = Contact>>(iter: T) -> Self {
+        let iterator = iter.into_iter();
+        let (lower, _) = iterator.size_hint();
+        let mut table = Self::with_capacity(lower);
+        for contact in iterator {
+            table.push(contact);
+        }
+        table
+    }
+}
+
 /// Finds every pair of atoms no further apart than `cutoff`.
 ///
 /// Pairs are unordered and unique, sorted by `(first, second)`, and never
@@ -45,7 +148,7 @@ pub fn atom_contacts(
     cutoff: f32,
     backend: SpatialBackend,
     context: &ExecutionContext,
-) -> Result<Vec<Contact>, SpatialError> {
+) -> Result<ContactTable, SpatialError> {
     let all = AtomSelection::All(structure.atom_count());
     collect_contacts(structure, &all, &all, cutoff, backend, context)
 }
@@ -67,7 +170,7 @@ pub fn atom_contacts_between(
     cutoff: f32,
     backend: SpatialBackend,
     context: &ExecutionContext,
-) -> Result<Vec<Contact>, SpatialError> {
+) -> Result<ContactTable, SpatialError> {
     collect_contacts(structure, left, right, cutoff, backend, context)
 }
 
@@ -144,7 +247,7 @@ pub fn atom_contacts_between_with_spatial(
     cutoff: f32,
     backend: SpatialBackend,
     spatial: &StructureSpatial<'_>,
-) -> Result<Vec<Contact>, molframe_core::diagnostic::Diagnostic> {
+) -> Result<ContactTable, molframe_core::diagnostic::Diagnostic> {
     let pairs = spatial.pairs_with_backend(left, right, cutoff, backend)?;
     let positions = structure.positions();
     Ok(pairs
@@ -160,7 +263,7 @@ fn collect_contacts(
     cutoff: f32,
     backend: SpatialBackend,
     context: &ExecutionContext,
-) -> Result<Vec<Contact>, SpatialError> {
+) -> Result<ContactTable, SpatialError> {
     let positions = structure.positions();
     let mut contacts = Vec::new();
     visit_atom_contacts_between(
@@ -177,7 +280,7 @@ fn collect_contacts(
         positions.get(contact.first.get() as usize).is_some()
             && positions.get(contact.second.get() as usize).is_some()
     }));
-    Ok(contacts)
+    Ok(contacts.into_iter().collect())
 }
 
 fn contact_from_pair(

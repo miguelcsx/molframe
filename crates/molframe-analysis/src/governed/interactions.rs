@@ -3,11 +3,11 @@
 use super::common::{backend, complete, descriptor, float, integer};
 use super::{StructureKernel, structure_kernel};
 use crate::{
-    BasePair, BasePairError, BasePairOptions, CationPi, CationPiError, CationPiOptions, Contact,
-    ContactMap, HydrogenBond, HydrogenBondError, HydrogenBondOptions, PiStacking, PiStackingError,
-    PiStackingOptions, SaltBridge, SurfaceContactOptions, WaterBridge, WaterBridgeOptions,
-    atom_contacts, base_pairs, cation_pi, hydrogen_bonds, pi_stacking, residue_contact_map,
-    salt_bridges, surface_contacts, water_bridges,
+    BasePair, BasePairError, BasePairOptions, CationPiError, CationPiOptions, CationPiTable,
+    Contact, ContactMap, ContactTable, HydrogenBondError, HydrogenBondOptions, HydrogenBondTable,
+    PiStackingError, PiStackingOptions, PiStackingTable, SaltBridgeTable, SurfaceContactOptions,
+    WaterBridgeOptions, WaterBridgeTable, atom_contacts, base_pairs, cation_pi, hydrogen_bonds,
+    pi_stacking, residue_contact_map, salt_bridges, surface_contacts, water_bridges,
 };
 use molframe_chem::ComponentProvider;
 use molframe_core::ExecutionContext;
@@ -50,7 +50,7 @@ fn with_plane_fit(
 pub fn contacts_kernel(
     cutoff: f32,
     spatial: SpatialBackend,
-) -> impl StructureKernel<Output = Vec<Contact>, Error = SpatialError> {
+) -> impl StructureKernel<Output = ContactTable, Error = SpatialError> {
     structure_kernel(
         descriptor("atom-contacts")
             .with_parameter("cutoff", float(cutoff))
@@ -88,7 +88,7 @@ pub fn contact_map_kernel(
 #[must_use]
 pub fn hydrogen_bonds_kernel(
     options: HydrogenBondOptions,
-) -> impl StructureKernel<Output = Vec<HydrogenBond>, Error = HydrogenBondError> {
+) -> impl StructureKernel<Output = HydrogenBondTable, Error = HydrogenBondError> {
     structure_kernel(
         with_hydrogen_bond_parameters(descriptor("hydrogen-bonds"), options),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
@@ -102,7 +102,7 @@ pub fn hydrogen_bonds_kernel(
 pub fn salt_bridges_kernel(
     maximum_distance: f32,
     spatial: SpatialBackend,
-) -> impl StructureKernel<Output = Vec<SaltBridge>, Error = SpatialError> {
+) -> impl StructureKernel<Output = SaltBridgeTable, Error = SpatialError> {
     structure_kernel(
         descriptor("salt-bridges")
             .with_parameter("maximum_distance", float(maximum_distance))
@@ -118,7 +118,7 @@ pub fn salt_bridges_kernel(
 #[must_use]
 pub fn pi_stacking_kernel(
     options: PiStackingOptions,
-) -> impl StructureKernel<Output = Vec<PiStacking>, Error = PiStackingError> {
+) -> impl StructureKernel<Output = PiStackingTable, Error = PiStackingError> {
     structure_kernel(
         with_plane_fit(
             descriptor("pi-stacking")
@@ -146,7 +146,7 @@ pub fn pi_stacking_kernel(
 #[must_use]
 pub fn cation_pi_kernel(
     options: CationPiOptions,
-) -> impl StructureKernel<Output = Vec<CationPi>, Error = CationPiError> {
+) -> impl StructureKernel<Output = CationPiTable, Error = CationPiError> {
     structure_kernel(
         with_plane_fit(
             descriptor("cation-pi")
@@ -164,7 +164,7 @@ pub fn cation_pi_kernel(
 #[must_use]
 pub fn water_bridges_kernel(
     options: WaterBridgeOptions,
-) -> impl StructureKernel<Output = Vec<WaterBridge>, Error = HydrogenBondError> {
+) -> impl StructureKernel<Output = WaterBridgeTable, Error = HydrogenBondError> {
     structure_kernel(
         with_hydrogen_bond_parameters(descriptor("water-bridges"), options.hydrogen_bonds),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {

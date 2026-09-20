@@ -64,6 +64,22 @@ pub struct PiStacking {
     pub kind: StackingKind,
 }
 
+define_soa_table! {
+    /// Native columnar storage for aromatic stacking interactions.
+    pub struct PiStackingTable for PiStacking {
+        /// Lower residue indices.
+        first: ResidueIndex,
+        /// Higher residue indices.
+        second: ResidueIndex,
+        /// Ring-centre distances.
+        centre_distance: f32,
+        /// Acute plane angles.
+        angle: f64,
+        /// Interaction classifications.
+        kind: StackingKind,
+    }
+}
+
 /// One aromatic ring reduced to its centre and plane normal.
 pub(crate) struct Ring {
     pub(crate) residue: ResidueIndex,
@@ -84,7 +100,7 @@ pub(crate) struct Ring {
 pub fn pi_stacking(
     structure: &Structure,
     options: PiStackingOptions,
-) -> Result<Vec<PiStacking>, PiStackingError> {
+) -> Result<PiStackingTable, PiStackingError> {
     validate_options(options)?;
     let rings = aromatic_rings(structure, options.plane_fit)?;
     let limit = f64::from(options.maximum_centre_distance);
@@ -113,7 +129,7 @@ pub fn pi_stacking(
         }
     }
     stacks.sort_by_key(|stack| (stack.first.get(), stack.second.get()));
-    Ok(stacks)
+    Ok(stacks.into_iter().collect())
 }
 
 fn validate_options(options: PiStackingOptions) -> Result<(), PiStackingError> {

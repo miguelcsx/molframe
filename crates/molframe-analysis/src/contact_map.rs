@@ -29,17 +29,29 @@ pub struct ResidueContact {
     pub min_distance: f32,
 }
 
+define_soa_table! {
+    /// Native columnar storage for residue contacts.
+    pub struct ResidueContactTable for ResidueContact {
+        /// Lower residue indices.
+        first: ResidueIndex,
+        /// Higher residue indices.
+        second: ResidueIndex,
+        /// Minimum atom-to-atom distances.
+        min_distance: f32,
+    }
+}
+
 /// The residue contacts of a structure, sorted by residue pair.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContactMap {
     residue_count: usize,
-    contacts: Vec<ResidueContact>,
+    contacts: ResidueContactTable,
 }
 
 impl ContactMap {
     /// The residue pairs in contact, ordered by `(first, second)`.
     #[must_use]
-    pub fn contacts(&self) -> &[ResidueContact] {
+    pub const fn contacts(&self) -> &ResidueContactTable {
         &self.contacts
     }
 
@@ -129,7 +141,7 @@ pub fn residue_contact_map(
 
     Ok(ContactMap {
         residue_count: structure.residue_count(),
-        contacts,
+        contacts: contacts.into_iter().collect(),
     })
 }
 

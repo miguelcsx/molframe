@@ -31,9 +31,10 @@ fn two_oriented_hydrogen_bonds_form_one_water_bridge() {
     )
     .expect("valid bridge network");
     assert_eq!(bridges.len(), 1);
-    assert_eq!(bridges[0].water.get(), 2);
-    assert_eq!(bridges[0].first.get(), 0);
-    assert_eq!(bridges[0].second.get(), 4);
+    let bridge = bridges.row(0).expect("one bridge");
+    assert_eq!(bridge.water.get(), 2);
+    assert_eq!(bridge.first.get(), 0);
+    assert_eq!(bridge.second.get(), 4);
 }
 
 fn annotated_structure() -> molframe_core::Structure {

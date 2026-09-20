@@ -46,9 +46,10 @@ ATOM 6 C CD2 PHE A 2 0 1 4\n";
     )
     .expect("options are valid");
     assert_eq!(stacks.len(), 1);
-    assert_eq!((stacks[0].first.get(), stacks[0].second.get()), (0, 1));
-    assert_eq!(stacks[0].kind, StackingKind::Parallel);
-    assert!(stacks[0].angle < 1e-6, "angle {}", stacks[0].angle);
+    let stack = stacks.row(0).expect("one stack");
+    assert_eq!((stack.first.get(), stack.second.get()), (0, 1));
+    assert_eq!(stack.kind, StackingKind::Parallel);
+    assert!(stack.angle < 1e-6, "angle {}", stack.angle);
 }
 
 #[test]
@@ -64,12 +65,9 @@ ATOM 6 C CD2 PHE A 2 0 0 5\n";
     )
     .expect("options are valid");
     assert_eq!(stacks.len(), 1);
-    assert_eq!(stacks[0].kind, StackingKind::TShaped);
-    assert!(
-        (stacks[0].angle - 90.0).abs() < 1e-4,
-        "angle {}",
-        stacks[0].angle
-    );
+    let stack = stacks.row(0).expect("one stack");
+    assert_eq!(stack.kind, StackingKind::TShaped);
+    assert!((stack.angle - 90.0).abs() < 1e-4, "angle {}", stack.angle);
 }
 
 #[test]
