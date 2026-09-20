@@ -4,8 +4,8 @@ use criterion::{Criterion, Throughput, black_box};
 use molframe_bench::{Sample, coordinates, perturbed, structure};
 use molframe_geom::{
     angle, angles_into, asphericity, best_fit_plane, centroid, dihedral, distance, distance_matrix,
-    distances_into, inertia_tensor, principal_axes, radius_of_gyration, rmsd, rmsf, superpose,
-    torsions_into,
+    distance_matrix_into, distances_into, inertia_tensor, principal_axes, radius_of_gyration, rmsd,
+    rmsf, superpose, torsions_into,
 };
 
 fn bench_coordinate_kernels(c: &mut Criterion) {
@@ -18,6 +18,10 @@ fn bench_coordinate_kernels(c: &mut Criterion) {
     group.bench_function("centroid", |b| b.iter(|| black_box(centroid(&reference))));
     group.bench_function("distance_matrix", |b| {
         b.iter(|| black_box(distance_matrix(&reference)));
+    });
+    let mut matrix = vec![0.0; reference.len() * reference.len()];
+    group.bench_function("distance_matrix_into", |b| {
+        b.iter(|| black_box(distance_matrix_into(&reference, &mut matrix)));
     });
     group.bench_function("rmsd", |b| b.iter(|| black_box(rmsd(&model, &reference))));
     group.bench_function("superpose", |b| {

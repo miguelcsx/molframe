@@ -41,7 +41,10 @@ pub use backbone::{
 pub use batch_measure::{BatchGeometryError, angles_into, distances_into, torsions_into};
 pub use eigen::{Decomposition, EigenError, EigenOptions, symmetric, symmetric_with_options};
 pub use fluctuation::{FluctuationError, rmsf};
-pub use matrix::{DistanceMatrix, MatrixError, distance_matrix, distance_matrix_between};
+pub use matrix::{
+    DistanceMatrix, MatrixError, distance_matrix, distance_matrix_between, distance_matrix_into,
+    distance_matrix_with_context,
+};
 pub use measure::{
     angle, cross, degrees, dihedral, displacement, distance, distance_squared, dot, norm, normalise,
 };
