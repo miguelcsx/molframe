@@ -105,7 +105,7 @@ impl PyStructure {
         }
     }
 
-    fn _molframe_source_v1<'py>(
+    fn _molframe_source_v2<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {

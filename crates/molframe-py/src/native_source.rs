@@ -16,8 +16,8 @@ use std::sync::OnceLock;
 #[path = "native_source_tests.rs"]
 mod tests;
 
-const CAPSULE_NAME: &CStr = c"molframe.StructureSource.v1";
-const ABI_VERSION: u32 = 1;
+const CAPSULE_NAME: &CStr = c"molframe.StructureSource.v2";
+const ABI_VERSION: u32 = 2;
 
 /// Compact renderer-facing atom metadata.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -37,6 +37,9 @@ pub struct NativeBond {
     pub first: u32,
     /// Second atom row.
     pub second: u32,
+    /// One when the source assigns aromatic order.
+    pub aromatic: u8,
+    reserved: [u8; 3],
 }
 
 /// Owned compact topology copied once from the parser's compressed columns.
@@ -55,11 +58,11 @@ pub struct NativeTopology {
 }
 
 type SelectFn =
-    unsafe extern "C" fn(*const NativeSourceV1, *const c_char, usize, *mut u32, usize) -> i64;
-type EncodeFn = unsafe extern "C" fn(*const NativeSourceV1, *mut u8, usize) -> i64;
+    unsafe extern "C" fn(*const NativeSourceV2, *const c_char, usize, *mut u32, usize) -> i64;
+type EncodeFn = unsafe extern "C" fn(*const NativeSourceV2, *mut u8, usize) -> i64;
 
 #[repr(C)]
-struct NativeSourceV1 {
+struct NativeSourceV2 {
     abi_version: u32,
     coordinate_generation: u64,
     coordinates: *const f32,
@@ -81,11 +84,11 @@ struct NativeSourceV1 {
 // The raw pointers refer only to immutable buffers retained by the same
 // capsule. Python owns capsule destruction, and access requires an attached
 // interpreter through `NativeStructureSource`.
-unsafe impl Send for NativeSourceV1 {}
+unsafe impl Send for NativeSourceV2 {}
 
 #[repr(C)]
 struct NativeCapsule {
-    api: NativeSourceV1,
+    api: NativeSourceV2,
     structure: molframe::Structure,
     topology: NativeTopology,
     encoded_bcif: OnceLock<Result<Vec<u8>, ()>>,
@@ -126,11 +129,11 @@ impl NativeStructureSource {
     /// Returns a Python exception when the object is not a compatible
     /// `molframe.Structure` or exposes a different ABI version.
     pub fn from_python(object: &Bound<'_, PyAny>) -> PyResult<Self> {
-        let capsule = object.call_method0("_molframe_source_v1")?;
+        let capsule = object.call_method0("_molframe_source_v2")?;
         let capsule = capsule.cast_into::<PyCapsule>()?;
         let pointer = capsule.pointer_checked(Some(CAPSULE_NAME))?;
         let api = pointer.as_ptr() as usize;
-        // SAFETY: the checked capsule name identifies a `NativeSourceV1`, its
+        // SAFETY: the checked capsule name identifies a `NativeSourceV2`, its
         // first field is the ABI version, and the producer retains its storage.
         let version = unsafe { api_ref(api).abi_version };
         if version != ABI_VERSION {
@@ -247,9 +250,9 @@ impl NativeStructureSource {
     }
 }
 
-unsafe fn api_ref<'a>(address: usize) -> &'a NativeSourceV1 {
+unsafe fn api_ref<'a>(address: usize) -> &'a NativeSourceV2 {
     // SAFETY: callers obtain this address only from a checked, retained capsule.
-    unsafe { &*(address as *const NativeSourceV1) }
+    unsafe { &*(address as *const NativeSourceV2) }
 }
 
 pub(crate) fn capsule<'py>(
@@ -258,7 +261,7 @@ pub(crate) fn capsule<'py>(
 ) -> PyResult<Bound<'py, PyCapsule>> {
     let topology = compact_topology(structure);
     let coordinates = structure.coordinates();
-    let api = NativeSourceV1 {
+    let api = NativeSourceV2 {
         abi_version: ABI_VERSION,
         coordinate_generation: structure.engine().generation().get(),
         coordinates: coordinates.as_ptr().cast::<f32>(),
@@ -289,7 +292,7 @@ pub(crate) fn capsule<'py>(
 }
 
 unsafe extern "C" fn encode_bcif(
-    source: *const NativeSourceV1,
+    source: *const NativeSourceV2,
     output: *mut u8,
     capacity: usize,
 ) -> i64 {
@@ -344,6 +347,8 @@ fn compact_topology(structure: &molframe::Structure) -> NativeTopology {
         .map(|bond| NativeBond {
             first: bond.atom_a.get(),
             second: bond.atom_b.get(),
+            aromatic: u8::from(bond.order == molframe::BondOrder::Aromatic),
+            reserved: [0; 3],
         })
         .collect();
     NativeTopology {
@@ -376,7 +381,7 @@ where
 }
 
 unsafe extern "C" fn select(
-    api: *const NativeSourceV1,
+    api: *const NativeSourceV2,
     source: *const c_char,
     source_len: usize,
     output: *mut u32,
@@ -386,7 +391,7 @@ unsafe extern "C" fn select(
         return -1;
     }
     // SAFETY: the consumer passes back the API pointer supplied by this
-    // producer; `NativeSourceV1` is the first field of `NativeCapsule`.
+    // producer; `NativeSourceV2` is the first field of `NativeCapsule`.
     let capsule = unsafe { &*api.cast::<NativeCapsule>() };
     // SAFETY: the caller promises a readable query buffer of `source_len`.
     let bytes = unsafe { slice::from_raw_parts(source.cast::<u8>(), source_len) };
