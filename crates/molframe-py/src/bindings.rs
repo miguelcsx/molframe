@@ -256,6 +256,12 @@ impl PyQuery {
         self.compiled.fingerprint().to_string()
     }
 
+    /// Canonical text accepted by every `MolFrame` query consumer.
+    #[getter]
+    fn source(&self) -> &str {
+        self.compiled.source()
+    }
+
     fn __and__(&self, other: &Self) -> Self {
         Self::from_native(self.compiled.clone() & other.compiled.clone())
     }
