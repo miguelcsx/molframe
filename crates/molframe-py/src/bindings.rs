@@ -104,6 +104,13 @@ impl PyStructure {
             inner: Some(self.inner.edit()),
         }
     }
+
+    fn _molframe_source_v1<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
+        crate::native_source::capsule(py, &self.inner)
+    }
 }
 #[derive(Debug)]
 #[pyclass(name = "StructureEditor", skip_from_py_object)]

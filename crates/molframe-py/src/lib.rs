@@ -9,6 +9,7 @@
 mod bindings;
 mod catalog;
 mod hierarchy;
+mod native_source;
 #[cfg(feature = "query")]
 mod selection_expr;
 #[cfg(feature = "analysis")]
@@ -38,6 +39,8 @@ pub fn structure_from_python(object: &Bound<'_, PyAny>) -> PyResult<molframe::St
         .extract::<PyRef<'_, PyStructure>>()
         .map(|structure| structure.inner.clone())?)
 }
+
+pub use native_source::{NativeAtom, NativeBond, NativeStructureSource, NativeTopology};
 
 #[pymodule]
 #[pyo3(name = "_native")]
