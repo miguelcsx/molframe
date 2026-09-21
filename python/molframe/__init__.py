@@ -32,6 +32,7 @@ motif = _native.motif
 chemistry = _native.chemistry
 compare = _native.compare
 query = _native.query
+sel = _native.sel
 spatial = _native.spatial
 surface = _native.surface
 formats = _native.formats
@@ -62,6 +63,7 @@ __all__ = [
     "motif",
     "query",
     "read",
+    "sel",
     "sequence",
     "spatial",
     "surface",

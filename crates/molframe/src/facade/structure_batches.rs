@@ -15,16 +15,16 @@ const MINIMUM_SOURCE_WINDOW_BYTES: usize = 4 * 1024;
 pub enum StructureBatchReader {
     /// `BinaryCIF` source.
     #[cfg(feature = "bcif")]
-    BinaryCif(molframe_bcif::BcifBatchSource<WindowedSourceFile>),
+    BinaryCif(Box<molframe_bcif::BcifBatchSource<WindowedSourceFile>>),
     /// Text PDB source.
     #[cfg(feature = "pdb")]
-    Pdb(molframe_pdb::PdbBatchSource<WindowedSourceFile>),
+    Pdb(Box<molframe_pdb::PdbBatchSource<WindowedSourceFile>>),
     /// Text mmCIF source.
     #[cfg(feature = "mmcif")]
-    Mmcif(molframe_cif::MmcifBatchSource<WindowedSourceFile>),
+    Mmcif(Box<molframe_cif::MmcifBatchSource<WindowedSourceFile>>),
     /// Text `ModelCIF` source selected explicitly by its constructor.
     #[cfg(feature = "modelcif")]
-    ModelCif(molframe_modelcif::ModelCifBatchSource<WindowedSourceFile>),
+    ModelCif(Box<molframe_modelcif::ModelCifBatchSource<WindowedSourceFile>>),
 }
 
 impl BatchSource for StructureBatchReader {
@@ -67,7 +67,7 @@ pub fn open_structure_batches(
     let format = detect_format(&mut source, path, options.format, window_bytes)?;
     match format {
         #[cfg(feature = "pdb")]
-        Format::Pdb => Ok(StructureBatchReader::Pdb(
+        Format::Pdb => Ok(StructureBatchReader::Pdb(Box::new(
             molframe_pdb::PdbBatchSource::new(
                 source,
                 options.clone(),
@@ -76,9 +76,9 @@ pub fn open_structure_batches(
                 LogicalRow::new(0),
                 window_bytes,
             )?,
-        )),
+        ))),
         #[cfg(feature = "mmcif")]
-        Format::Mmcif => Ok(StructureBatchReader::Mmcif(
+        Format::Mmcif => Ok(StructureBatchReader::Mmcif(Box::new(
             molframe_cif::MmcifBatchSource::new(
                 source,
                 options.clone(),
@@ -88,9 +88,9 @@ pub fn open_structure_batches(
                 window_bytes,
                 context,
             )?,
-        )),
+        ))),
         #[cfg(feature = "bcif")]
-        Format::BinaryCif => Ok(StructureBatchReader::BinaryCif(
+        Format::BinaryCif => Ok(StructureBatchReader::BinaryCif(Box::new(
             molframe_bcif::BcifBatchSource::new(
                 source,
                 options.clone(),
@@ -100,7 +100,7 @@ pub fn open_structure_batches(
                 window_bytes,
                 context,
             )?,
-        )),
+        ))),
         other => Err(StructureBatchError::Diagnostic(
             Diagnostic::new(Code::E1001)
                 .with_message("format has no bounded structural batch reader")

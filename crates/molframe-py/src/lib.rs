@@ -9,15 +9,35 @@
 mod bindings;
 mod catalog;
 mod hierarchy;
+#[cfg(feature = "query")]
+mod selection_expr;
+#[cfg(feature = "analysis")]
 mod workflow;
 
-use bindings::{
-    PyContactTable, PyQuery, PyReader, PySelection, PyStructure, PyStructureEditor, atom_contacts,
-    centroid, distance_matrix, read, rmsd,
-};
+#[cfg(feature = "analysis")]
+use bindings::{PyContactTable, atom_contacts};
+use bindings::{PyQuery, PyReader, PySelection, PyStructure, PyStructureEditor, read};
+#[cfg(feature = "geometry")]
+use bindings::{centroid, distance_matrix, rmsd};
 use hierarchy::{PyAtom, PyAtoms, PyChain, PyChains, PyModel, PyModels, PyResidue, PyResidues};
 use pyo3::prelude::*;
+#[cfg(feature = "analysis")]
 use workflow::{PyCompiledWorkflow, PyWorkflow, PyWorkflowNode};
+
+/// Borrows the native snapshot retained by a Python `molframe.Structure`.
+///
+/// Cloning the returned value only increments its shared storage ownership;
+/// coordinate columns are not copied.
+///
+/// # Errors
+///
+/// Returns Python's type error when `object` is not a native `MolFrame`
+/// structure.
+pub fn structure_from_python(object: &Bound<'_, PyAny>) -> PyResult<molframe::Structure> {
+    Ok(object
+        .extract::<PyRef<'_, PyStructure>>()
+        .map(|structure| structure.inner.clone())?)
+}
 
 #[pymodule]
 #[pyo3(name = "_native")]
@@ -35,9 +55,13 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PySelection>()?;
     module.add_class::<PyQuery>()?;
     module.add_class::<PyReader>()?;
+    #[cfg(feature = "analysis")]
     module.add_class::<PyContactTable>()?;
+    #[cfg(feature = "analysis")]
     module.add_class::<PyWorkflow>()?;
+    #[cfg(feature = "analysis")]
     module.add_class::<PyWorkflowNode>()?;
+    #[cfg(feature = "analysis")]
     module.add_class::<PyCompiledWorkflow>()?;
     module.add_function(wrap_pyfunction!(read, module)?)?;
     register_namespaces(module)?;
@@ -47,15 +71,26 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
 fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = module.py();
     let geometry = PyModule::new(py, "geometry")?;
-    geometry.add_function(wrap_pyfunction!(centroid, &geometry)?)?;
-    geometry.add_function(wrap_pyfunction!(distance_matrix, &geometry)?)?;
-    geometry.add_function(wrap_pyfunction!(rmsd, &geometry)?)?;
+    #[cfg(feature = "geometry")]
+    {
+        geometry.add_function(wrap_pyfunction!(centroid, &geometry)?)?;
+        geometry.add_function(wrap_pyfunction!(distance_matrix, &geometry)?)?;
+        geometry.add_function(wrap_pyfunction!(rmsd, &geometry)?)?;
+    }
     module.add_submodule(&geometry)?;
 
     let analysis = PyModule::new(py, "analysis")?;
-    analysis.add_function(wrap_pyfunction!(atom_contacts, &analysis)?)?;
-    analysis.add("ContactTable", module.getattr("ContactTable")?)?;
+    #[cfg(feature = "analysis")]
+    {
+        analysis.add_function(wrap_pyfunction!(atom_contacts, &analysis)?)?;
+        analysis.add("ContactTable", module.getattr("ContactTable")?)?;
+    }
     module.add_submodule(&analysis)?;
+
+    let selection = PyModule::new(py, "sel")?;
+    #[cfg(feature = "query")]
+    selection_expr::register(&selection)?;
+    module.add_submodule(&selection)?;
 
     for name in [
         "trajectory",

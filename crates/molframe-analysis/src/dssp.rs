@@ -55,6 +55,8 @@ pub enum DsspError {
 /// A residue's assigned secondary-structure state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SseKind {
+    /// The residue could not be evaluated from the available backbone data.
+    Unknown,
     /// An α-helix residue.
     AlphaHelix,
     /// A β-strand (bridge) residue.
@@ -86,7 +88,8 @@ define_soa_table! {
 
 /// Assigns secondary structure to every backbone residue of a structure.
 ///
-/// Residues without the required semantic backbone roles are treated as coil.
+/// Residues without the required semantic backbone roles are unknown. `Coil`
+/// means the residue was evaluable but matched no helix, strand or turn.
 /// Results are ordered by residue index.
 ///
 /// Runs in `O(chain length²)` per chain.
@@ -110,7 +113,11 @@ pub fn secondary_structure(
         let residues: Vec<ResidueRef<'_>> = chain.residues().collect();
         let backbones = backbones(structure, &residues, options.amide_hydrogen_distance)?;
         let bonds = hydrogen_bonds(&backbones, options);
-        let kinds = classify(&bonds, residues.len(), options);
+        let evaluable = backbones
+            .iter()
+            .map(Backbone::is_evaluable)
+            .collect::<Vec<_>>();
+        let kinds = classify(&bonds, &evaluable, options);
         for (residue, kind) in residues.iter().zip(kinds) {
             records.push(SseRecord {
                 residue: residue.index(),
@@ -142,6 +149,15 @@ struct Backbone {
     carbon: Option<[f32; 3]>,
     oxygen: Option<[f32; 3]>,
     hydrogen: Option<[f32; 3]>,
+}
+
+impl Backbone {
+    const fn is_evaluable(&self) -> bool {
+        self.nitrogen.is_some()
+            && self.carbon.is_some()
+            && self.oxygen.is_some()
+            && self.hydrogen.is_some()
+    }
 }
 
 /// Extracts each residue's backbone, placing the amide H from the prior carbonyl.
@@ -266,9 +282,23 @@ fn hbond_energy(carbonyl: &Backbone, amide: &Backbone, prefactor: f64) -> f64 {
 }
 
 /// Assigns a state to each residue from the hydrogen-bond pattern.
-fn classify(bonds: &BTreeSet<(usize, usize)>, count: usize, options: &DsspOptions) -> Vec<SseKind> {
+fn classify(
+    bonds: &BTreeSet<(usize, usize)>,
+    evaluable: &[bool],
+    options: &DsspOptions,
+) -> Vec<SseKind> {
+    let count = evaluable.len();
     let has = |i: usize, j: usize| bonds.contains(&(i, j));
-    let mut kinds = vec![SseKind::Coil; count];
+    let mut kinds = evaluable
+        .iter()
+        .map(|value| {
+            if *value {
+                SseKind::Coil
+            } else {
+                SseKind::Unknown
+            }
+        })
+        .collect::<Vec<_>>();
 
     // α-helix: residues bracketed by an i→i+4 backbone hydrogen bond.
     for &(i, j) in bonds {
@@ -311,7 +341,7 @@ fn classify(bonds: &BTreeSet<(usize, usize)>, count: usize, options: &DsspOption
 
 /// Marks a residue as a strand unless it is already a helix.
 fn mark_strand(kinds: &mut [SseKind], residue: usize) {
-    if kinds[residue] != SseKind::AlphaHelix {
+    if kinds[residue] != SseKind::AlphaHelix && kinds[residue] != SseKind::Unknown {
         kinds[residue] = SseKind::Strand;
     }
 }

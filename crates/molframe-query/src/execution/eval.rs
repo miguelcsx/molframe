@@ -30,6 +30,7 @@ pub struct Evaluation {
 pub struct Query {
     expr: Expr,
     warnings: Vec<Diagnostic>,
+    source: Box<str>,
 }
 
 impl PhysicalQuery {

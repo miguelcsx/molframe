@@ -59,7 +59,7 @@ fn a_distant_pair_is_not_a_hydrogen_bond() {
 #[test]
 fn consecutive_i_to_i_plus_four_bonds_make_a_helix() {
     let bonds: BTreeSet<(usize, usize)> = [(0, 4), (1, 5), (2, 6)].into_iter().collect();
-    let kinds = classify(&bonds, 8, &options());
+    let kinds = classify(&bonds, &[true; 8], &options());
     for kind in &kinds[1..=5] {
         assert_eq!(*kind, SseKind::AlphaHelix);
     }
@@ -68,7 +68,7 @@ fn consecutive_i_to_i_plus_four_bonds_make_a_helix() {
 #[test]
 fn reciprocal_distant_bonds_make_a_strand_bridge() {
     let bonds: BTreeSet<(usize, usize)> = [(2, 8), (8, 2)].into_iter().collect();
-    let kinds = classify(&bonds, 10, &options());
+    let kinds = classify(&bonds, &[true; 10], &options());
     assert_eq!(kinds[2], SseKind::Strand);
     assert_eq!(kinds[8], SseKind::Strand);
 }
@@ -76,7 +76,7 @@ fn reciprocal_distant_bonds_make_a_strand_bridge() {
 #[test]
 fn a_lone_short_bond_makes_a_turn() {
     let bonds: BTreeSet<(usize, usize)> = [(0, 3)].into_iter().collect();
-    let kinds = classify(&bonds, 5, &options());
+    let kinds = classify(&bonds, &[true; 5], &options());
     assert_eq!(kinds[1], SseKind::Turn);
     assert_eq!(kinds[2], SseKind::Turn);
 }
@@ -105,7 +105,13 @@ ATOM 8 O O GLY A 2 4 3 0\n";
         panic!("valid explicit DSSP definition");
     };
     assert_eq!(records.len(), 2);
-    assert!(records.iter().all(|record| record.kind == SseKind::Coil));
+    assert_eq!(records.kind(), [SseKind::Unknown, SseKind::Coil]);
+}
+
+#[test]
+fn incomplete_backbones_are_unknown_instead_of_coil() {
+    let kinds = classify(&BTreeSet::new(), &[true, false, true], &options());
+    assert_eq!(kinds, [SseKind::Coil, SseKind::Unknown, SseKind::Coil]);
 }
 
 fn with_roles(structure: &Structure) -> Structure {

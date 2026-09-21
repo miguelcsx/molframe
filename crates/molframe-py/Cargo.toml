@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 numpy.workspace = true
-molframe = { path = "../molframe", version = "0.1.0", default-features = false, features = ["full"] }
+molframe = { path = "../molframe", version = "0.1.0", default-features = false }
 pyo3.workspace = true
 
 [lints.rust]
@@ -36,3 +36,12 @@ too_many_arguments = "allow"
 unused_self = "allow"
 manual_unwrap_or_default = "allow"
 manual_unwrap_or = "allow"
+
+[features]
+default = ["full"]
+formats = ["molframe/mmcif", "molframe/pdb"]
+query = ["molframe/query"]
+geometry = ["molframe/geometry"]
+chemistry = ["molframe/chemistry"]
+analysis = ["geometry", "chemistry", "molframe/analysis", "molframe/interop"]
+full = ["formats", "query", "analysis", "molframe/full"]

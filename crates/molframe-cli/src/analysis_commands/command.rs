@@ -314,6 +314,7 @@ fn output_error(error: &std::io::Error) -> Exit {
 
 pub(super) fn sse_name(kind: molframe::analysis::SseKind) -> &'static str {
     match kind {
+        molframe::analysis::SseKind::Unknown => "unknown",
         molframe::analysis::SseKind::AlphaHelix => "alpha-helix",
         molframe::analysis::SseKind::Strand => "strand",
         molframe::analysis::SseKind::Turn => "turn",

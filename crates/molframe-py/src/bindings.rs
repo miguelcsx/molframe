@@ -1,15 +1,22 @@
 //! Central facade handles and stateless namespace functions.
 
 use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidues};
-use numpy::ndarray::{ArrayView1, ArrayView2};
-use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods,
-};
+#[cfg(feature = "geometry")]
+use numpy::PyReadonlyArray2;
+#[cfg(feature = "geometry")]
+use numpy::PyUntypedArrayMethods;
+#[cfg(feature = "analysis")]
+use numpy::ndarray::ArrayView1;
+use numpy::ndarray::ArrayView2;
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedBytes;
-use pyo3::types::{PyAny, PyCapsule};
+use pyo3::types::PyAny;
+#[cfg(feature = "analysis")]
+use pyo3::types::PyCapsule;
 use std::fmt;
 use std::path::PathBuf;
+#[cfg(feature = "analysis")]
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -204,6 +211,16 @@ pub(crate) struct PyQuery {
     compiled: molframe::Query,
 }
 
+impl PyQuery {
+    pub(crate) fn from_native(compiled: molframe::Query) -> Self {
+        Self { compiled }
+    }
+
+    pub(crate) fn native(&self) -> &molframe::Query {
+        &self.compiled
+    }
+}
+
 #[pymethods]
 impl PyQuery {
     #[new]
@@ -225,6 +242,18 @@ impl PyQuery {
             structure.clone(),
             molframe::Selection::from(view),
         ))
+    }
+
+    fn __and__(&self, other: &Self) -> Self {
+        Self::from_native(self.compiled.clone() & other.compiled.clone())
+    }
+
+    fn __or__(&self, other: &Self) -> Self {
+        Self::from_native(self.compiled.clone() | other.compiled.clone())
+    }
+
+    fn __invert__(&self) -> Self {
+        Self::from_native(!self.compiled.clone())
     }
 }
 
@@ -304,6 +333,7 @@ fn selection(structure: &PyStructure, source: &str) -> PyResult<PySelection> {
         .map_err(findings_error)
 }
 
+#[cfg(feature = "geometry")]
 pub(crate) fn coordinates<'a>(array: &'a PyReadonlyArray2<'_, f32>) -> PyResult<&'a [[f32; 3]]> {
     let shape = array.shape();
     if shape.len() != 2 || shape[1] != 3 {
@@ -320,11 +350,13 @@ pub(crate) fn coordinates<'a>(array: &'a PyReadonlyArray2<'_, f32>) -> PyResult<
 }
 
 #[pyfunction]
+#[cfg(feature = "geometry")]
 pub(crate) fn centroid(array: PyReadonlyArray2<'_, f32>) -> PyResult<Option<[f64; 3]>> {
     Ok(molframe::geometry::centroid(coordinates(&array)?))
 }
 
 #[pyfunction]
+#[cfg(feature = "geometry")]
 pub(crate) fn rmsd(
     mobile: PyReadonlyArray2<'_, f32>,
     reference: PyReadonlyArray2<'_, f32>,
@@ -334,6 +366,7 @@ pub(crate) fn rmsd(
 }
 
 #[pyfunction]
+#[cfg(feature = "geometry")]
 pub(crate) fn distance_matrix<'py>(
     py: Python<'py>,
     array: PyReadonlyArray2<'_, f32>,
@@ -345,6 +378,7 @@ pub(crate) fn distance_matrix<'py>(
 }
 
 #[derive(Debug)]
+#[cfg(feature = "analysis")]
 #[pyclass(name = "ContactTable", frozen, skip_from_py_object)]
 pub(crate) struct PyContactTable {
     len: usize,
@@ -355,11 +389,13 @@ pub(crate) struct PyContactTable {
 }
 
 #[derive(Clone, Debug)]
+#[cfg(feature = "analysis")]
 #[pyclass(frozen, skip_from_py_object)]
 struct ContactTableOwner {
     table: Arc<molframe::analysis::ContactTable>,
 }
 
+#[cfg(feature = "analysis")]
 impl PyContactTable {
     pub(crate) fn from_native(
         py: Python<'_>,
@@ -410,6 +446,7 @@ impl PyContactTable {
 }
 
 #[pymethods]
+#[cfg(feature = "analysis")]
 impl PyContactTable {
     fn __len__(&self) -> usize {
         self.len
@@ -444,6 +481,7 @@ impl PyContactTable {
 }
 
 #[pyfunction]
+#[cfg(feature = "analysis")]
 #[pyo3(signature = (value, cutoff, *, backend="auto"))]
 pub(crate) fn atom_contacts(
     py: Python<'_>,
