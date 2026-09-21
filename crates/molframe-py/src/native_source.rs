@@ -10,6 +10,7 @@ use pyo3::types::{PyAny, PyCapsule, PyCapsuleMethods};
 use std::ffi::{CStr, c_char};
 use std::fmt;
 use std::slice;
+use std::sync::OnceLock;
 
 #[cfg(test)]
 #[path = "native_source_tests.rs"]
@@ -55,6 +56,7 @@ pub struct NativeTopology {
 
 type SelectFn =
     unsafe extern "C" fn(*const NativeSourceV1, *const c_char, usize, *mut u32, usize) -> i64;
+type EncodeFn = unsafe extern "C" fn(*const NativeSourceV1, *mut u8, usize) -> i64;
 
 #[repr(C)]
 struct NativeSourceV1 {
@@ -73,6 +75,7 @@ struct NativeSourceV1 {
     bonds: *const NativeBond,
     bond_count: usize,
     select: SelectFn,
+    encode_bcif: EncodeFn,
 }
 
 // The raw pointers refer only to immutable buffers retained by the same
@@ -85,6 +88,7 @@ struct NativeCapsule {
     api: NativeSourceV1,
     structure: molframe::Structure,
     topology: NativeTopology,
+    encoded_bcif: OnceLock<Result<Vec<u8>, ()>>,
 }
 
 unsafe impl Send for NativeCapsule {}
@@ -213,6 +217,34 @@ impl NativeStructureSource {
         rows.truncate(count);
         Ok(rows)
     }
+
+    /// Lazily encodes and caches browser-ready BCIF bytes in the producer.
+    ///
+    /// # Errors
+    ///
+    /// Returns a value error when the source cannot be encoded.
+    pub fn encode_bcif(&self) -> PyResult<Vec<u8>> {
+        // SAFETY: the retained checked capsule owns the callback and source.
+        let size = unsafe {
+            let api = api_ref(self.api);
+            (api.encode_bcif)(api, std::ptr::null_mut(), 0)
+        };
+        let size = usize::try_from(size).map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err("MolFrame BCIF encoding failed")
+        })?;
+        let mut bytes = vec![0; size];
+        // SAFETY: `bytes` has the exact capacity returned by the first call.
+        let written = unsafe {
+            let api = api_ref(self.api);
+            (api.encode_bcif)(api, bytes.as_mut_ptr(), bytes.len())
+        };
+        if usize::try_from(written).ok() != Some(size) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "MolFrame BCIF encoding failed",
+            ));
+        }
+        Ok(bytes)
+    }
 }
 
 unsafe fn api_ref<'a>(address: usize) -> &'a NativeSourceV1 {
@@ -242,6 +274,7 @@ pub(crate) fn capsule<'py>(
         bonds: topology.bonds.as_ptr(),
         bond_count: topology.bonds.len(),
         select,
+        encode_bcif,
     };
     PyCapsule::new_with_value(
         py,
@@ -249,9 +282,37 @@ pub(crate) fn capsule<'py>(
             api,
             structure: structure.clone(),
             topology,
+            encoded_bcif: OnceLock::new(),
         },
         CAPSULE_NAME,
     )
+}
+
+unsafe extern "C" fn encode_bcif(
+    source: *const NativeSourceV1,
+    output: *mut u8,
+    capacity: usize,
+) -> i64 {
+    // SAFETY: the API is the first field of its retained capsule allocation.
+    let capsule = unsafe { &*source.cast::<NativeCapsule>() };
+    let encoded = capsule
+        .encoded_bcif
+        .get_or_init(|| molframe::write_bcif(&capsule.structure).map_err(|_| ()));
+    let Ok(encoded) = encoded else {
+        return -1;
+    };
+    let Ok(length) = i64::try_from(encoded.len()) else {
+        return -1;
+    };
+    if output.is_null() || capacity == 0 {
+        return length;
+    }
+    if capacity < encoded.len() {
+        return -1;
+    }
+    // SAFETY: the caller supplies at least `encoded.len()` writable bytes.
+    unsafe { std::ptr::copy_nonoverlapping(encoded.as_ptr(), output, encoded.len()) };
+    length
 }
 
 fn compact_topology(structure: &molframe::Structure) -> NativeTopology {
