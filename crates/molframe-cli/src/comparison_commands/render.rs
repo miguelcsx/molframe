@@ -38,10 +38,7 @@ pub(super) fn emit_metrics(context: Context, rows: &[(&str, f64)]) {
         }
         context.result(&json.finish());
     } else {
-        let delimiter = match context.delimiter() {
-            Some(value) => value,
-            None => '\t',
-        };
+        let delimiter = context.table_delimiter();
         let mut table = Table::new(delimiter, &["metric", "value"]);
         for (name, value) in rows {
             let value = value.to_string();
@@ -66,10 +63,7 @@ pub(super) fn emit_mappings(context: Context, rows: &[(&str, String, String, f64
             .collect::<Vec<_>>();
         context.result(&context.json_records(&objects));
     } else {
-        let delimiter = match context.delimiter() {
-            Some(value) => value,
-            None => '\t',
-        };
+        let delimiter = context.table_delimiter();
         let mut table = Table::new(
             delimiter,
             &["assignment", "reference_chain", "model_chain", "identity"],

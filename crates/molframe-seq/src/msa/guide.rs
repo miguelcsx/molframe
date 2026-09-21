@@ -11,13 +11,12 @@ pub(super) fn single_linkage_guide(
         return Ok(Vec::new());
     }
     let size = sequences.len();
-    let max_length = match sequences
+    let Some(max_length) = sequences
         .iter()
         .map(|sequence| ungapped_len(sequence))
         .max()
-    {
-        Some(length) => length,
-        None => 0,
+    else {
+        return Ok(Vec::new());
     };
     let (symbol_slots, alphabet_size) = symbol_slots(sequences);
     let required = guide_workspace_bytes(size, max_length, alphabet_size)?;

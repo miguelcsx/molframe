@@ -444,17 +444,17 @@ fn synthetic_value(row: usize, column: usize) -> f64 {
 }
 
 pub(crate) fn usize_to_u32(value: usize) -> u32 {
-    match u32::try_from(value) {
-        Ok(value) => value,
-        Err(_) => u32::MAX,
-    }
+    let Ok(value) = u32::try_from(value) else {
+        return u32::MAX;
+    };
+    value
 }
 
 fn usize_to_u16(value: usize) -> u16 {
-    match u16::try_from(value) {
-        Ok(value) => value,
-        Err(_) => u16::MAX,
-    }
+    let Ok(value) = u16::try_from(value) else {
+        return u16::MAX;
+    };
+    value
 }
 
 fn main() {

@@ -126,10 +126,7 @@ pub(crate) fn share_model_topology(
         Ok(count) => 0..count,
         Err(_) => 0..0,
     };
-    let number = match i32::try_from(frame.number) {
-        Ok(number) => number,
-        Err(_) => i32::MAX,
-    };
+    let number = model_number_or_max(frame.number);
     let _model_was_not_representable = models.push(number, chains).is_err();
     data.topology.models = models;
     StreamModelParts {
@@ -138,6 +135,13 @@ pub(crate) fn share_model_topology(
         findings: frame.findings,
         coordinates: frame.coordinates,
     }
+}
+
+fn model_number_or_max(number: i64) -> i32 {
+    let Ok(number) = i32::try_from(number) else {
+        return i32::MAX;
+    };
+    number
 }
 
 pub(crate) fn finish_streamed(

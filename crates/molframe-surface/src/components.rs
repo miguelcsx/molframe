@@ -196,8 +196,8 @@ fn validate_filter(filter: SurfaceComponentFilter) -> Result<(), SurfaceComponen
 }
 
 fn first_face(component: &SurfaceComponent) -> u32 {
-    match component.faces.first().copied() {
-        Some(face) => face,
-        None => u32::MAX,
-    }
+    let Some(face) = component.faces.first().copied() else {
+        return u32::MAX;
+    };
+    face
 }

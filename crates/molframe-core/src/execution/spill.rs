@@ -359,9 +359,8 @@ impl SpillReader {
         if length_u64 > file_bytes.saturating_sub(payload_offset) {
             return Err(SpillError::CorruptRecord);
         }
-        let limit_u64 = match u64::try_from(max_bytes) {
-            Ok(limit) => limit,
-            Err(_error) => u64::MAX,
+        let Ok(limit_u64) = u64::try_from(max_bytes) else {
+            return Err(SpillError::RecordTooLarge(length_u64));
         };
         if length_u64 > limit_u64 {
             self.file.seek(SeekFrom::Current(RECORD_HEADER_REWIND))?;

@@ -14,5 +14,6 @@ pub(crate) use language::{
 
 pub use api::{Builder, ColumnBuilder, col};
 pub use execution::{
-    Evaluation, GeometricRequest, Groups, LogicalPlan, PhysicalQuery, Query, SpatialResolver,
+    Evaluation, GeometricRequest, Groups, LogicalPlan, PhysicalQuery, Query, QueryFingerprint,
+    SpatialResolver,
 };

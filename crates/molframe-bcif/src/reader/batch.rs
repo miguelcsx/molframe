@@ -290,13 +290,10 @@ impl RowView<'_> {
             occupancy: self.real_presence(Field::Occupancy, 1.0),
             b_factor: self.real_presence(Field::BFactor, 0.0),
             formal_charge: self.integer_presence(Field::Charge),
-            atom_site_id: match self
-                .integer(Field::Id)
-                .and_then(|value| u32::try_from(value).ok())
-            {
-                Some(value) => value,
-                None => 0,
-            },
+            atom_site_id: identifier_or_zero(
+                self.integer(Field::Id)
+                    .and_then(|value| u32::try_from(value).ok()),
+            ),
             heterogen: self.text(Field::Group).eq_ignore_ascii_case("HETATM"),
         }
     }
@@ -367,13 +364,10 @@ impl RowView<'_> {
             return (0, Presence::Unknown);
         };
         let validity = presence(chunk, self.row);
-        let value = match self
-            .integer(field)
-            .and_then(|value| i8::try_from(value).ok())
-        {
-            Some(value) => value,
-            None => 0,
-        };
+        let value = charge_or_zero(
+            self.integer(field)
+                .and_then(|value| i8::try_from(value).ok()),
+        );
         (value, validity)
     }
 
@@ -436,14 +430,7 @@ fn field_index(name: &str) -> Option<usize> {
 }
 
 fn row_capacity(demand: BatchDemand) -> Result<u32, StructureBatchError> {
-    let retained = match demand
-        .max_bytes
-        .saturating_sub(DICTIONARY_HEADROOM)
-        .checked_div(RETAINED_BYTES_PER_ROW)
-    {
-        Some(rows) => rows,
-        None => 0,
-    };
+    let retained = demand.max_bytes.saturating_sub(DICTIONARY_HEADROOM) / RETAINED_BYTES_PER_ROW;
     let rows = retained.min(demand.max_rows).min(u32::MAX as usize);
     if rows == 0 {
         return Err(StructureBatchError::DemandTooSmall {
@@ -452,6 +439,20 @@ fn row_capacity(demand: BatchDemand) -> Result<u32, StructureBatchError> {
         });
     }
     u32::try_from(rows).map_err(|_| address_overflow())
+}
+
+fn identifier_or_zero(value: Option<u32>) -> u32 {
+    let Some(value) = value else {
+        return 0;
+    };
+    value
+}
+
+fn charge_or_zero(value: Option<i8>) -> i8 {
+    let Some(value) = value else {
+        return 0;
+    };
+    value
 }
 
 #[cfg(test)]

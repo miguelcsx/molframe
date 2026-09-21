@@ -34,10 +34,11 @@ pub(crate) fn angles_into(
         offset += LANES;
     }
     for row in offset..first.len() {
-        output[row] = match crate::measure::angle(first[row], vertices[row], third[row]) {
-            Some(angle) => angle,
-            None => f64::NAN,
+        let Some(angle) = crate::measure::angle(first[row], vertices[row], third[row]) else {
+            output[row] = f64::NAN;
+            continue;
         };
+        output[row] = angle;
     }
 }
 
@@ -72,11 +73,13 @@ pub(crate) fn torsions_into(
         offset += LANES;
     }
     for row in offset..first.len() {
-        output[row] =
-            match crate::measure::dihedral(first[row], second[row], third[row], fourth[row]) {
-                Some(dihedral) => dihedral,
-                None => f64::NAN,
-            };
+        let Some(dihedral) =
+            crate::measure::dihedral(first[row], second[row], third[row], fourth[row])
+        else {
+            output[row] = f64::NAN;
+            continue;
+        };
+        output[row] = dihedral;
     }
 }
 

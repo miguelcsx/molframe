@@ -110,12 +110,16 @@ fn accumulate_face(
         let opposite = (face.0[(local + 1) % 3], face.0[(local + 2) % 3]);
         let edge = (opposite.0.min(opposite.1), opposite.0.max(opposite.1));
         let cotangent = angle.cos() / angle.sin().max(f64::EPSILON);
-        let current = match weights.get(&edge).copied() {
-            Some(value) => value,
-            None => 0.0,
-        };
+        let current = weight_or_zero(weights.get(&edge).copied());
         weights.insert(edge, current + cotangent);
     }
+}
+
+fn weight_or_zero(value: Option<f64>) -> f64 {
+    let Some(value) = value else {
+        return 0.0;
+    };
+    value
 }
 
 fn curvature_at(

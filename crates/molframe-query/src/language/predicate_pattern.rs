@@ -64,10 +64,7 @@ impl NumericMatcher {
                     .filter(|pattern| matches!(pattern, NumericPattern::Value(_)))
                     .count();
                 let mut values = Vec::with_capacity(value_count);
-                let range_count = match patterns.len().checked_sub(value_count) {
-                    Some(count) => count,
-                    None => 0,
-                };
+                let range_count = patterns.len().saturating_sub(value_count);
                 let mut ranges = Vec::with_capacity(range_count);
 
                 for &pattern in patterns {
@@ -404,10 +401,10 @@ pub(super) fn residue_number(
 /// The lookup is `O(1)` and performs no allocation.
 #[inline]
 pub(super) fn residue_insertion(residue: ResidueRef<'_>) -> &str {
-    match residue.ins_code() {
-        Some(insertion) => insertion,
-        None => "",
-    }
+    let Some(insertion) = residue.ins_code() else {
+        return "";
+    };
+    insertion
 }
 
 /// Splits scalar/range syntax using `:`, case-insensitive `to`, or `-` delimiters.

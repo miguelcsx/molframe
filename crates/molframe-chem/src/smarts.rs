@@ -5,7 +5,7 @@ use molframe_core::{BondOrder, Element, Structure};
 use std::fmt;
 
 /// A parsed SMARTS query graph.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SmartsPattern {
     pub(crate) atoms: Vec<AtomExpression>,
     pub(crate) bonds: Vec<PatternBond>,
@@ -117,19 +117,19 @@ impl fmt::Display for SmartsDataError {
 
 impl std::error::Error for SmartsDataError {}
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct AtomExpression {
     /// Comma-separated alternatives, each containing AND-connected tests.
     pub(crate) alternatives: Vec<Vec<SignedAtomTest>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct SignedAtomTest {
     pub(crate) negated: bool,
     pub(crate) test: AtomTest,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum AtomTest {
     Any,
     Element(Element),
@@ -147,14 +147,14 @@ pub(crate) enum AtomTest {
     Recursive(Box<SmartsPattern>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct PatternBond {
     pub(crate) first: usize,
     pub(crate) second: usize,
     pub(crate) expression: BondExpression,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum BondExpression {
     Default,
     Any,

@@ -449,10 +449,10 @@ fn integer_u32(values: &[i64; 4], present: u32, index: usize) -> u32 {
     if present & (1 << (7 + index)) == 0 {
         return 0;
     }
-    match u32::try_from(values[index]) {
-        Ok(value) => value,
-        Err(_) => 0,
-    }
+    let Ok(value) = u32::try_from(values[index]) else {
+        return 0;
+    };
+    value
 }
 
 fn integer_presence(values: &[i64; 4], present: u32, index: usize) -> (i8, Presence) {

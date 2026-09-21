@@ -453,9 +453,13 @@ fn present_value<T: Copy + Default>(
     validity: &molframe_core::column::ValidityMask,
     position: u32,
 ) -> (T, Presence) {
-    let value = match values.get(position as usize).copied() {
-        Some(value) => value,
-        None => T::default(),
-    };
+    let value = value_or_default(values.get(position as usize).copied());
     (value, validity.get(position))
+}
+
+fn value_or_default<T: Default>(value: Option<T>) -> T {
+    let Some(value) = value else {
+        return T::default();
+    };
+    value
 }

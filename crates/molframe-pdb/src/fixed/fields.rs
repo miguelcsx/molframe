@@ -28,10 +28,10 @@ pub fn raw(line: &str, from: usize, to: usize) -> &str {
     if start >= end {
         return "";
     }
-    match line.get(start..end) {
-        Some(field) => field,
-        None => "",
-    }
+    let Some(field) = line.get(start..end) else {
+        return "";
+    };
+    field
 }
 
 /// The record name a line carries.

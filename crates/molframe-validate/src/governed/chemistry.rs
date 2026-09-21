@@ -106,10 +106,7 @@ fn ramachandran_result(
         .chains()
         .map(|chain| {
             let residues = chain.residues().count();
-            match residues.checked_sub(2) {
-                Some(interior) => interior,
-                None => 0,
-            }
+            residues.saturating_sub(2)
         })
         .sum::<usize>();
     let intended = u32::try_from(intended).map_err(|_| RamachandranError::CoverageOverflow)?;

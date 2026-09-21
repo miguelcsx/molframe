@@ -130,10 +130,7 @@ fn emit_atoms(structure: &molframe::Structure, context: Context) {
         let records: Vec<String> = rows.iter().map(AtomRow::json).collect();
         context.result(&context.json_records(&records));
     } else {
-        let delimiter = match context.delimiter() {
-            Some(delimiter) => delimiter,
-            None => '\t',
-        };
+        let delimiter = context.table_delimiter();
         let mut table = Table::new(
             delimiter,
             &["atom", "name", "element", "chain", "residue", "x", "y", "z"],

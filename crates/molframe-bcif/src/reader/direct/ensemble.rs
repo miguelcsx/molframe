@@ -71,10 +71,7 @@ fn ranges(atoms: &AtomColumns) -> Vec<ModelRange> {
     let model = atoms.column("pdbx_PDB_model_num");
     let mut ranges: Vec<ModelRange> = Vec::new();
     for row in 0..atoms.row_count() {
-        let number = match model.and_then(|column| column.integer(row)) {
-            Some(number) => number,
-            None => 1,
-        };
+        let number = model_or_one(model.and_then(|column| column.integer(row)));
         if let Some(current) = ranges.last_mut()
             && current.number == number
         {
@@ -88,6 +85,13 @@ fn ranges(atoms: &AtomColumns) -> Vec<ModelRange> {
         }
     }
     ranges
+}
+
+fn model_or_one(number: Option<i64>) -> i64 {
+    let Some(number) = number else {
+        return 1;
+    };
+    number
 }
 
 fn same_models(column: &DecodedColumn, ranges: &[ModelRange]) -> bool {

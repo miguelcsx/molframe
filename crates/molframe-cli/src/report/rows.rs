@@ -71,10 +71,7 @@ impl RowWriter {
                 }
             }
             OutputKind::Csv | OutputKind::Tsv | OutputKind::Text => {
-                let delimiter = match self.context.delimiter() {
-                    Some(value) => value,
-                    None => '\t',
-                };
+                let delimiter = self.context.table_delimiter();
                 for (position, value) in values.into_iter().enumerate() {
                     if position != 0 {
                         row.push(delimiter);
@@ -166,10 +163,7 @@ impl RowWriter {
             OutputKind::Json => self.write_all(b"{\"result\":["),
             OutputKind::JsonLines => Ok(()),
             OutputKind::Csv | OutputKind::Tsv | OutputKind::Text => {
-                let delimiter = match self.context.delimiter() {
-                    Some(value) => value,
-                    None => '\t',
-                };
+                let delimiter = self.context.table_delimiter();
                 let mut line = String::new();
                 append_delimited(&mut line, self.header.iter().map(String::as_str), delimiter);
                 self.write_all(line.as_bytes())

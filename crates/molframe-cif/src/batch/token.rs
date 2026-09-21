@@ -232,16 +232,16 @@ fn incomplete(available: usize) -> Result<usize, StructureBatchError> {
 fn trim_token(text: &str, line_start: bool) -> &str {
     let bytes = text.as_bytes();
     if line_start && bytes.first() == Some(&b';') {
-        return match text.get(1..text.len().saturating_sub(2)) {
-            Some(value) => value,
-            None => "",
+        let Some(value) = text.get(1..text.len().saturating_sub(2)) else {
+            return "";
         };
+        return value;
     }
     if matches!(bytes.first(), Some(b'\'' | b'"')) {
-        return match text.get(1..text.len().saturating_sub(1)) {
-            Some(value) => value,
-            None => "",
+        let Some(value) = text.get(1..text.len().saturating_sub(1)) else {
+            return "";
         };
+        return value;
     }
     text
 }

@@ -439,10 +439,10 @@ fn sequence_identifier(sequence: i64) -> OptionalI32 {
 
 /// The file-local atom label, or the reserved unlabeled value.
 fn serial_of(line: &Line<'_>) -> u32 {
-    match hybrid36::decode(fixed::raw(line.text, 7, 11), 5)
+    let Some(serial) = hybrid36::decode(fixed::raw(line.text, 7, 11), 5)
         .and_then(|serial| u32::try_from(serial).ok())
-    {
-        Some(serial) => serial,
-        None => 0,
-    }
+    else {
+        return 0;
+    };
+    serial
 }

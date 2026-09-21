@@ -46,10 +46,7 @@ impl PayloadInput {
 
     pub(super) fn checkpoint(&self) -> u64 {
         let unread = self.buffer.len().saturating_sub(self.position);
-        let unread = match u64::try_from(unread) {
-            Ok(unread) => unread,
-            Err(_) => u64::MAX,
-        };
+        let unread = saturating_u64(unread);
         self.next.saturating_sub(unread)
     }
 
@@ -89,6 +86,13 @@ impl PayloadInput {
         self.position = 0;
         Ok(())
     }
+}
+
+fn saturating_u64(value: usize) -> u64 {
+    let Ok(value) = u64::try_from(value) else {
+        return u64::MAX;
+    };
+    value
 }
 
 pub(super) fn read_encoding<S: SourceBytes>(

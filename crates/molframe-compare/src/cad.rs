@@ -141,10 +141,7 @@ pub fn cad_score(reference: &[ContactArea], model: &[ContactArea]) -> Result<Cad
     let mut reference_area = 0.0;
     let mut lost_area = 0.0;
     for ((first, second), target_area) in reference {
-        let model_area = match model.get(&(first, second)).copied() {
-            Some(area) => area,
-            None => 0.0,
-        };
+        let model_area = area_or_zero(model.get(&(first, second)).copied());
         let difference = (target_area - model_area).abs().min(target_area);
         reference_area += target_area;
         lost_area += difference;
@@ -174,6 +171,13 @@ pub fn cad_score(reference: &[ContactArea], model: &[ContactArea]) -> Result<Cad
         contacts,
         local,
     })
+}
+
+fn area_or_zero(area: Option<f64>) -> f64 {
+    let Some(area) = area else {
+        return 0.0;
+    };
+    area
 }
 
 fn normalize(areas: &[ContactArea]) -> Result<BTreeMap<(u32, u32), f64>, CadError> {

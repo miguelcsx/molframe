@@ -73,10 +73,7 @@ pub fn ccd_missing_atoms(
             ambiguous: Vec::new(),
         };
         for expected in component.atoms.iter().filter(|atom| !atom.leaving) {
-            let count = match observed.get(expected.name.as_ref()).copied() {
-                Some(count) => count,
-                None => 0,
-            };
+            let count = count_or_zero(observed.get(expected.name.as_ref()).copied());
             if !hydrogen_intended(expected.element, count, policy.hydrogens) {
                 continue;
             }
@@ -93,6 +90,13 @@ pub fn ccd_missing_atoms(
         report.residues.push(local);
     }
     Ok(report)
+}
+
+fn count_or_zero(count: Option<usize>) -> usize {
+    let Some(count) = count else {
+        return 0;
+    };
+    count
 }
 
 fn observed_atoms<'a>(

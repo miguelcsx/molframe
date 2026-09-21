@@ -83,10 +83,16 @@ impl<'a> RaggedBuilder<'a> {
 
 impl AtomSiteRowSink for RaggedBuilder<'_> {
     fn feed(&mut self, row: &dyn AtomSiteRow) {
-        let number = match row.integer(Field::ModelNum) {
-            Some(number) => number,
-            None => 1,
+        let Some(number) = row.integer(Field::ModelNum) else {
+            self.feed_model(row, 1);
+            return;
         };
+        self.feed_model(row, number);
+    }
+}
+
+impl RaggedBuilder<'_> {
+    fn feed_model(&mut self, row: &dyn AtomSiteRow, number: i64) {
         if self.current_number != Some(number) {
             self.start_model(number);
         }

@@ -97,6 +97,15 @@ impl Context {
         }
     }
 
+    /// Delimiter for tabular output, including the text-mode tab fallback.
+    #[must_use]
+    pub const fn table_delimiter(self) -> char {
+        match self.delimiter() {
+            Some(delimiter) => delimiter,
+            None => '\t',
+        }
+    }
+
     /// Whether a binary Arrow-backed file was requested.
     #[must_use]
     pub const fn is_table_file(self) -> bool {

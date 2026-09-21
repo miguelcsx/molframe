@@ -101,10 +101,7 @@ impl ContactGraph {
         }
         edges.sort_unstable_by_key(|edge| (edge.left, edge.right));
 
-        let maximum_degree = match degrees.iter().copied().max() {
-            Some(maximum) => maximum,
-            None => 0,
-        };
+        let maximum_degree = maximum_or_zero(degrees.iter().copied().max());
         drop(degrees);
         let (component_of, component_sizes) = union.components(budget, edges.capacity())?;
         Ok(Self {
@@ -128,6 +125,13 @@ impl ContactGraph {
             + self.component_of.capacity() * size_of::<u32>()
             + self.component_sizes.capacity() * size_of::<u32>()
     }
+}
+
+fn maximum_or_zero(value: Option<u32>) -> u32 {
+    let Some(value) = value else {
+        return 0;
+    };
+    value
 }
 
 fn ensure_edge_capacity(

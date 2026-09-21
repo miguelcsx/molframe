@@ -3,10 +3,10 @@
 use num_traits::ToPrimitive;
 
 pub(crate) fn usize_to_f64(value: usize) -> f64 {
-    match value.to_f64() {
-        Some(converted) => converted,
-        None => f64::INFINITY,
-    }
+    let Some(converted) = value.to_f64() else {
+        return f64::INFINITY;
+    };
+    converted
 }
 
 pub(crate) fn f64_to_f32(value: f64) -> f32 {

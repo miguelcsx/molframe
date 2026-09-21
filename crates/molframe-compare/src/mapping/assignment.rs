@@ -183,15 +183,19 @@ fn padded_costs(scores: &[Vec<f64>], threshold: f64, size: usize) -> Vec<Vec<f64
                         .and_then(|values| values.get(column))
                         .copied()
                         .filter(|value| *value >= threshold);
-                    let weight = match candidate {
-                        Some(value) => value,
-                        None => 0.0,
-                    };
+                    let weight = weight_or_zero(candidate);
                     1.0 - weight
                 })
                 .collect()
         })
         .collect()
+}
+
+fn weight_or_zero(weight: Option<f64>) -> f64 {
+    let Some(weight) = weight else {
+        return 0.0;
+    };
+    weight
 }
 
 fn hungarian(costs: &[Vec<f64>]) -> Vec<usize> {

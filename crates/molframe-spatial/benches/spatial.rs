@@ -188,10 +188,10 @@ fn periodic_positions(lengths: [f64; 3], atom_count: u32) -> Vec<[f32; 3]> {
     use num_traits::ToPrimitive;
 
     fn f32_lossless(value: f64) -> f32 {
-        match value.to_f32() {
-            Some(converted) => converted,
-            None => f32::INFINITY,
-        }
+        let Some(converted) = value.to_f32() else {
+            return f32::INFINITY;
+        };
+        converted
     }
 
     let mut seed = molframe_bench::Seed::new(0x5EED);

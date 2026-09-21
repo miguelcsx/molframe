@@ -53,14 +53,12 @@ pub fn write_trajectory(
             std::fs::write(path, crate::write_dcd(&frames, &writer)?)?;
         }
         TrajectoryFormat::AmberNetcdf => {
-            let writer = match options
-                .amber_netcdf
-                .clone()
-                .or(amber_netcdf_options(&trajectory.metadata.format)?)
-            {
-                Some(writer) => writer,
-                None => crate::AmberNetcdfWriteOptions::default(),
-            };
+            let writer = amber_options_or_default(
+                options
+                    .amber_netcdf
+                    .clone()
+                    .or(amber_netcdf_options(&trajectory.metadata.format)?),
+            );
             std::fs::write(path, crate::write_amber_netcdf(&frames, writer)?)?;
         }
         TrajectoryFormat::Tng => {
@@ -117,6 +115,15 @@ pub fn write_trajectory(
         }
     }
     Ok(())
+}
+
+fn amber_options_or_default(
+    options: Option<crate::AmberNetcdfWriteOptions>,
+) -> crate::AmberNetcdfWriteOptions {
+    let Some(options) = options else {
+        return crate::AmberNetcdfWriteOptions::default();
+    };
+    options
 }
 
 fn amber_netcdf_options(

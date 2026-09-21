@@ -398,10 +398,7 @@ fn string_array<'a>(
     else {
         return Err(type_error("StringArray offsets are not integers"));
     };
-    let source_capacity = match offsets.len().checked_sub(1) {
-        Some(capacity) => capacity,
-        None => 0,
-    };
+    let source_capacity = offsets.len().saturating_sub(1);
     let mut lookup = IndexMap::<&str, u32>::with_capacity(source_capacity);
     let mut dictionary = Vec::with_capacity(source_capacity);
     let mut source_to_compact = Vec::with_capacity(source_capacity);

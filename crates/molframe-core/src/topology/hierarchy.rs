@@ -23,10 +23,10 @@ impl Topology {
     ///
     #[must_use]
     pub fn atom_count(&self) -> u32 {
-        match self.residues.last_atom_end() {
-            Some(end) => end,
-            None => 0,
-        }
+        let Some(end) = self.residues.last_atom_end() else {
+            return 0;
+        };
+        end
     }
 }
 

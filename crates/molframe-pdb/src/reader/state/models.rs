@@ -157,10 +157,7 @@ impl ReadState<'_> {
         let variant_matches = self.variant_atom_matches(line);
         self.requires_ragged |= !standard_matches || !variant_matches;
 
-        self.frame.push(match position {
-            Some(position) => position,
-            None => [f32::NAN; 3],
-        });
+        self.frame.push(position_or_nan(position));
         self.atom_position += 1;
         self.saw_atoms = true;
     }
@@ -228,4 +225,11 @@ impl ReadState<'_> {
             None => 0,
         }
     }
+}
+
+fn position_or_nan(position: Option<[f32; 3]>) -> [f32; 3] {
+    let Some(position) = position else {
+        return [f32::NAN; 3];
+    };
+    position
 }

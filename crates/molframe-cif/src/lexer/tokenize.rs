@@ -370,18 +370,18 @@ impl<'a> Lexer<'a> {
 
 /// The text from `start` onwards, or nothing when `start` is past the end.
 fn slice_from(text: &str, start: usize) -> &str {
-    match text.get(start..) {
-        Some(slice) => slice,
-        None => "",
-    }
+    let Some(slice) = text.get(start..) else {
+        return "";
+    };
+    slice
 }
 
 /// The text up to `end`, or nothing when `end` does not fall on a boundary.
 fn slice_to(text: &str, end: usize) -> &str {
-    match text.get(..end) {
-        Some(slice) => slice,
-        None => "",
-    }
+    let Some(slice) = text.get(..end) else {
+        return "";
+    };
+    slice
 }
 
 /// The bytes from `start` onwards, or nothing when `start` is past the end.

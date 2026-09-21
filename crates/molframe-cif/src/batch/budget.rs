@@ -6,14 +6,7 @@ const RETAINED_BYTES_PER_ROW: usize = 128;
 const DICTIONARY_HEADROOM: usize = 64 * 1024;
 
 pub(super) fn row_capacity(demand: BatchDemand) -> Result<u32, StructureBatchError> {
-    let retained = match demand
-        .max_bytes
-        .saturating_sub(DICTIONARY_HEADROOM)
-        .checked_div(RETAINED_BYTES_PER_ROW)
-    {
-        Some(rows) => rows,
-        None => 0,
-    };
+    let retained = demand.max_bytes.saturating_sub(DICTIONARY_HEADROOM) / RETAINED_BYTES_PER_ROW;
     let rows = retained.min(demand.max_rows).min(u32::MAX as usize);
     if rows == 0 {
         return Err(StructureBatchError::DemandTooSmall {

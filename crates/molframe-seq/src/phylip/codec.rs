@@ -43,9 +43,8 @@ pub fn parse_phylip(text: &str) -> Vec<FastaRecord> {
 /// Writes records as relaxed sequential PHYLIP with a recomputed header.
 #[must_use]
 pub fn write_phylip(records: &[FastaRecord]) -> String {
-    let longest = match records.iter().map(|record| record.sequence.len()).max() {
-        Some(length) => length,
-        None => 0,
+    let Some(longest) = records.iter().map(|record| record.sequence.len()).max() else {
+        return "0 0\n".to_owned();
     };
     let mut out = format!("{} {}\n", records.len(), longest);
     for record in records {

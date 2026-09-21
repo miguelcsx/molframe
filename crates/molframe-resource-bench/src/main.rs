@@ -97,16 +97,20 @@ fn subtract_current(size: usize) {
 
 fn signed_difference(after: u64, before: u64) -> i64 {
     if after >= before {
-        match i64::try_from(after - before) {
-            Ok(value) => value,
-            Err(_) => i64::MAX,
-        }
+        positive_difference(after - before)
     } else {
         match i64::try_from(before - after) {
             Ok(value) => -value,
             Err(_) => i64::MIN,
         }
     }
+}
+
+fn positive_difference(value: u64) -> i64 {
+    let Ok(value) = i64::try_from(value) else {
+        return i64::MAX;
+    };
+    value
 }
 
 #[derive(Clone, Copy)]

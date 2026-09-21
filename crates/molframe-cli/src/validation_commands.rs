@@ -355,10 +355,7 @@ fn emit(rows: &[Row], context: Context) {
             .collect();
         context.result(&context.json_records(&records));
     } else {
-        let delimiter = match context.delimiter() {
-            Some(value) => value,
-            None => '\t',
-        };
+        let delimiter = context.table_delimiter();
         let mut table = Table::new(delimiter, &["check", "item", "value"]);
         for row in rows {
             table.row([row.check.as_str(), row.item.as_str(), row.value.as_str()]);

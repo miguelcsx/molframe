@@ -459,10 +459,10 @@ fn record_atom_choice(
 
 /// Returns the recorded atom occupancy, defaulting absent values to one.
 fn occupancy(atom: AtomRef<'_>) -> f32 {
-    match atom.occupancy() {
-        Some(value) => value,
-        None => 1.0,
-    }
+    let Some(value) = atom.occupancy() else {
+        return 1.0;
+    };
+    value
 }
 
 /// Returns whether an atom belongs to the selected conformation.

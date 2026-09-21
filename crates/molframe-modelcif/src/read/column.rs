@@ -322,10 +322,7 @@ impl IntegerBuilder {
         match self.states.as_ref().and_then(|states| states.get(row)) {
             Some(1) => CifScalar::Unknown,
             Some(2) => CifScalar::Inapplicable,
-            _ => CifScalar::Integer(match self.values.get(row) {
-                Some(value) => value,
-                None => 0,
-            }),
+            _ => CifScalar::Integer(integer_value(&self.values, row)),
         }
     }
 
@@ -393,10 +390,7 @@ impl NumberBuilder {
     }
 
     fn scalar(&self, row: usize) -> CifScalar<'static> {
-        let bits = match self.payload.get(row).copied() {
-            Some(bits) => bits,
-            None => 0,
-        };
+        let bits = payload_bits(&self.payload, row);
         match self.kinds.as_ref().and_then(|kinds| kinds.get(row)) {
             Some(1) => CifScalar::Integer(i64::from_ne_bytes(bits.to_ne_bytes())),
             Some(2) => CifScalar::Unknown,
@@ -423,6 +417,20 @@ impl NumberBuilder {
             kinds: self.kinds,
         }
     }
+}
+
+fn integer_value(values: &GrowingIntegers, row: usize) -> i64 {
+    let Some(value) = values.get(row) else {
+        return 0;
+    };
+    value
+}
+
+fn payload_bits(values: &[u64], row: usize) -> u64 {
+    let Some(value) = values.get(row) else {
+        return 0;
+    };
+    *value
 }
 
 fn table_bytes<K, V>(values: &HashMap<K, V>) -> usize {

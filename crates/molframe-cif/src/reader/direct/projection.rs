@@ -146,10 +146,7 @@ impl<'input> ValueSink<'input> for ProjectionSink {
             return;
         }
         self.layout.atom_rows += 1;
-        let model = match self.row_model {
-            Some(model) => model,
-            None => 1,
-        };
+        let model = model_or_one(self.row_model);
         if self.layout.models.last().copied() != Some(model) {
             self.layout.models.push(model);
         }
@@ -172,4 +169,11 @@ impl<'input> ValueSink<'input> for ProjectionSink {
             layout: self.layout,
         }
     }
+}
+
+fn model_or_one(model: Option<i64>) -> i64 {
+    let Some(model) = model else {
+        return 1;
+    };
+    model
 }

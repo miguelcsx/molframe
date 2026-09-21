@@ -113,10 +113,7 @@ impl Tile {
             let asym_id = intern(&mut names, chain.label());
             for residue in chain.residues() {
                 let comp_id = intern(&mut names, residue.name());
-                let seq_id = match residue.label_seq_id() {
-                    Some(seq_id) => seq_id,
-                    None => 1,
-                };
+                let seq_id = sequence_or_one(residue.label_seq_id());
                 for atom in residue.atoms() {
                     let Some(position) = atom.position() else {
                         continue;
@@ -227,10 +224,7 @@ impl Tile {
 
 /// Returns the position of `text` in `names`, appending it when it is new.
 fn intern(names: &mut Vec<Box<str>>, text: Option<&str>) -> u32 {
-    let text = match text {
-        Some(text) => text,
-        None => "",
-    };
+    let text = text_or_empty(text);
     if let Some(position) = names.iter().position(|name| name.as_ref() == text) {
         return narrow(position);
     }
@@ -244,10 +238,24 @@ fn intern(names: &mut Vec<Box<str>>, text: Option<&str>) -> u32 {
 /// A tile has a few hundred distinct names, so the saturating branch is
 /// unreachable in practice and exists so the conversion needs no absence helper.
 fn narrow(position: usize) -> u32 {
-    match u32::try_from(position) {
-        Ok(position) => position,
-        Err(_) => u32::MAX,
-    }
+    let Ok(position) = u32::try_from(position) else {
+        return u32::MAX;
+    };
+    position
+}
+
+fn sequence_or_one(value: Option<i32>) -> i32 {
+    let Some(value) = value else {
+        return 1;
+    };
+    value
+}
+
+fn text_or_empty(value: Option<&str>) -> &str {
+    let Some(value) = value else {
+        return "";
+    };
+    value
 }
 
 /// Lattice spacing that clears the tile's own extent under any rotation.

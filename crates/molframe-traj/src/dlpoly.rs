@@ -247,12 +247,16 @@ pub fn parse_dlpoly_history(text: &str) -> Result<DlPolyHistory, DlPolyError> {
         title,
         level,
         boundary,
-        atoms: match topology {
-            Some(atoms) => atoms,
-            None => Vec::new(),
-        },
+        atoms: topology_or_empty(topology),
         frames,
     })
+}
+
+fn topology_or_empty(topology: Option<Vec<DlPolyAtom>>) -> Vec<DlPolyAtom> {
+    let Some(atoms) = topology else {
+        return Vec::new();
+    };
+    atoms
 }
 
 type AtomValues = (

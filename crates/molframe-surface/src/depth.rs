@@ -288,7 +288,7 @@ fn offset_cell(centre: CellIndex, delta: CellIndex) -> Option<CellIndex> {
 /// queried atom and therefore remains correct even when the atom lies far
 /// outside the surface-point coordinate extent.
 fn furthest_required_ring(centre: CellIndex, bounds: CellBounds) -> i64 {
-    match [
+    let maximum = [
         cell_distance(centre.0, bounds.min.0),
         cell_distance(centre.0, bounds.max.0),
         cell_distance(centre.1, bounds.min.1),
@@ -297,11 +297,11 @@ fn furthest_required_ring(centre: CellIndex, bounds: CellBounds) -> i64 {
         cell_distance(centre.2, bounds.max.2),
     ]
     .into_iter()
-    .max()
-    {
-        Some(distance) => distance,
-        None => 0,
-    }
+    .max();
+    let Some(distance) = maximum else {
+        return 0;
+    };
+    distance
 }
 
 /// Computes the saturated absolute difference between two cell coordinates.

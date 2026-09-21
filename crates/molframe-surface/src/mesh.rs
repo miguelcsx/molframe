@@ -131,14 +131,18 @@ pub(crate) fn edge_incidence(faces: &[SurfaceFace]) -> BTreeMap<(u32, u32), u32>
             (face.0[2], face.0[0]),
         ] {
             let edge = (left.min(right), left.max(right));
-            let count = match edges.get(&edge).copied() {
-                Some(value) => value,
-                None => 0,
-            };
+            let count = edge_count(edges.get(&edge).copied());
             edges.insert(edge, count + 1);
         }
     }
     edges
+}
+
+fn edge_count(value: Option<u32>) -> u32 {
+    let Some(value) = value else {
+        return 0;
+    };
+    value
 }
 
 fn mesh_report(

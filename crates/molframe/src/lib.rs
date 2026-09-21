@@ -164,7 +164,7 @@ pub use molframe_spatial as spatial;
 #[cfg(feature = "query")]
 pub use molframe_query as query;
 #[cfg(feature = "query")]
-pub use molframe_query::Query;
+pub use molframe_query::{Query, QueryFingerprint};
 
 #[cfg(feature = "crystal")]
 pub use molframe_xtal as crystal;

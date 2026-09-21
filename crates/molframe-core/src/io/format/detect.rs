@@ -149,9 +149,10 @@ impl Format {
             return Ok(format);
         }
 
-        let name = match name {
-            Some(name) => name,
-            None => "(none)",
+        let Some(name) = name else {
+            return Err(Diagnostic::new(Code::E1001)
+                .with_context("tried", "content, then file name")
+                .with_context("name", "(none)"));
         };
         Err(Diagnostic::new(Code::E1001)
             .with_context("tried", "content, then file name")

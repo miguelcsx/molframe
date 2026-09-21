@@ -204,13 +204,7 @@ fn parse_optimization(
         });
         cursor = start + atom_count;
     }
-    Ok((
-        match topology {
-            Some(atoms) => atoms,
-            None => Vec::new(),
-        },
-        frames,
-    ))
+    Ok((topology_or_empty(topology), frames))
 }
 
 fn optimization_energies(lines: &[&str]) -> BTreeMap<i64, f64> {
@@ -299,13 +293,14 @@ fn parse_surface(
         });
         cursor = start + atom_count;
     }
-    Ok((
-        match topology {
-            Some(atoms) => atoms,
-            None => Vec::new(),
-        },
-        frames,
-    ))
+    Ok((topology_or_empty(topology), frames))
+}
+
+fn topology_or_empty(topology: Option<Vec<GamessAtom>>) -> Vec<GamessAtom> {
+    let Some(atoms) = topology else {
+        return Vec::new();
+    };
+    atoms
 }
 
 fn read_surface_atoms(

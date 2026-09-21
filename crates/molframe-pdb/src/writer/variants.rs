@@ -2,7 +2,7 @@
 
 use crate::writer::{
     PdbOptions, RequiredAtomFields, alt_field, atom_name, atom_name_field, chain_label,
-    check_capacity, component_name, residue_field, residue_sequence, serial_field,
+    check_capacity, component_name, insertion_code, residue_field, residue_sequence, serial_field,
 };
 use molframe_core::annotation::{
     ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn, AtomAnnotation,
@@ -199,10 +199,7 @@ fn write_atom(
         serial = serial_field(serial, context.options),
         alt = alt_field(structure, atom),
         sequence = residue_field(sequence, context.options),
-        ins = match residue.ins_code() {
-            Some(code) => code,
-            None => " ",
-        },
+        ins = insertion_code(*residue),
         x = f64::from(position[0]),
         y = f64::from(position[1]),
         z = f64::from(position[2]),

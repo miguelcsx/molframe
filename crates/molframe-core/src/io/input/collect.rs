@@ -67,10 +67,7 @@ pub(super) fn map_checked<R: Read>(
     failure_message: &'static str,
     path: Option<&Path>,
 ) -> Result<molframe_mmap::MappedFile, Diagnostic> {
-    let read_limit = match limit.maximum().checked_add(1) {
-        Some(value) => value,
-        None => u64::MAX,
-    };
+    let read_limit = limit.maximum().saturating_add(1);
     let mapped = molframe_mmap::MappedFile::private_snapshot_from_reader(reader.take(read_limit))
         .map_err(|error| read_failure(failure_message, path, &error))?;
     let expanded = u64::try_from(mapped.as_bytes().len())
@@ -193,10 +190,7 @@ fn ratio_byte_limit(compressed: u64, ratio: u64) -> u64 {
     if compressed == 0 {
         return u64::MAX;
     }
-    match compressed.checked_mul(ratio) {
-        Some(value) => value,
-        None => u64::MAX,
-    }
+    compressed.saturating_mul(ratio)
 }
 
 #[cfg(any(feature = "gzip", feature = "zstd", test))]

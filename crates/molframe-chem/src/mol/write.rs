@@ -88,10 +88,7 @@ fn write_v2000(record: &MolRecord, output: &mut String) -> Result<(), MolError> 
         let x = coordinate(atom.position[0], MolVersion::V2000)?;
         let y = coordinate(atom.position[1], MolVersion::V2000)?;
         let z = coordinate(atom.position[2], MolVersion::V2000)?;
-        let parity = match metadata.stereo_parity {
-            Some(value) => value,
-            None => 0,
-        };
+        let parity = stereo_or_zero(metadata.stereo_parity);
         writeln!(
             output,
             "{x}{y}{z} {:<3} 0  0 {:>2}  0  0  0  0  0  0  0  0  0  0",
@@ -101,10 +98,7 @@ fn write_v2000(record: &MolRecord, output: &mut String) -> Result<(), MolError> 
         .map_err(|_| MolError::Malformed)?;
     }
     for (bond, metadata) in record.molecule.bonds.iter().zip(&record.bond_metadata) {
-        let stereo = match metadata.stereo {
-            Some(value) => value,
-            None => 0,
-        };
+        let stereo = stereo_or_zero(metadata.stereo);
         writeln!(
             output,
             "{:>3}{:>3}{:>3}{:>3}  0  0  0",
@@ -123,6 +117,13 @@ fn write_v2000(record: &MolRecord, output: &mut String) -> Result<(), MolError> 
     })?;
     output.push_str("M  END\n");
     Ok(())
+}
+
+fn stereo_or_zero(value: Option<u8>) -> u8 {
+    let Some(value) = value else {
+        return 0;
+    };
+    value
 }
 
 fn write_v3000(record: &MolRecord, output: &mut String) -> Result<(), MolError> {

@@ -57,14 +57,12 @@ fn perceive(
         || adjacency[index]
             .iter()
             .any(|(_, order)| *order == BondOrder::Aromatic);
-    let highest = match adjacency[index]
-        .iter()
-        .map(|(_, order)| bond_rank(*order))
-        .max()
-    {
-        Some(rank) => rank,
-        None => 1,
-    };
+    let highest = highest_bond_rank(
+        adjacency[index]
+            .iter()
+            .map(|(_, order)| bond_rank(*order))
+            .max(),
+    );
     let atom_type = match atom.element.atomic_number() {
         1 => PeoeAtomType::H,
         6 => orbital(
@@ -119,6 +117,13 @@ fn perceive(
         }
     };
     Ok(atom_type)
+}
+
+fn highest_bond_rank(rank: Option<u8>) -> u8 {
+    let Some(rank) = rank else {
+        return 1;
+    };
+    rank
 }
 
 const fn orbital(

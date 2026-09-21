@@ -258,10 +258,7 @@ fn read_orbitals<'a>(
     atom_count: i32,
     declared_fields: Option<i32>,
 ) -> Result<(Vec<i32>, usize), GridError> {
-    let fallback = match declared_fields {
-        Some(fields) => fields,
-        None => 1,
-    };
+    let fallback = fields_or_one(declared_fields);
     if atom_count >= 0 {
         let Ok(fields) = usize::try_from(fallback.max(1)) else {
             return Err(GridError::SizeOverflow { format: FORMAT });
@@ -292,6 +289,13 @@ fn read_orbitals<'a>(
         return Err(GridError::SizeOverflow { format: FORMAT });
     };
     Ok((orbitals, fields))
+}
+
+fn fields_or_one(value: Option<i32>) -> i32 {
+    let Some(value) = value else {
+        return 1;
+    };
+    value
 }
 
 fn read_i32<'a>(

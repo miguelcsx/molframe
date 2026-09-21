@@ -30,10 +30,7 @@ pub(super) fn write_crystal_header(
             table.sort_order[4]
         ),
     );
-    let lattice = match name.chars().find(|character| !character.is_whitespace()) {
-        Some(value) => value,
-        None => 'P',
-    };
+    let lattice = lattice_or_primitive(name);
     push_record(
         output,
         &format!(
@@ -48,13 +45,11 @@ pub(super) fn write_crystal_header(
     for operation in &table.symmetry_operations {
         push_record(output, &format!("SYMM {operation}"));
     }
-    let resolution = match table
-        .resolution_range
-        .or_else(|| calculate_resolution(table, cell).ok())
-    {
-        Some(value) => value,
-        None => [0.0, 0.0],
-    };
+    let resolution = resolution_or_unknown(
+        table
+            .resolution_range
+            .or_else(|| calculate_resolution(table, cell).ok()),
+    );
     push_record(
         output,
         &format!("RESO {:.12} {:.12}", resolution[0], resolution[1]),
@@ -65,6 +60,20 @@ pub(super) fn write_crystal_header(
         None => push_record(output, "VALM NAN"),
     }
     Ok(())
+}
+
+fn lattice_or_primitive(name: &str) -> char {
+    let Some(value) = name.chars().find(|character| !character.is_whitespace()) else {
+        return 'P';
+    };
+    value
+}
+
+fn resolution_or_unknown(value: Option<[f64; 2]>) -> [f64; 2] {
+    let Some(value) = value else {
+        return [0.0, 0.0];
+    };
+    value
 }
 
 pub(super) fn write_column_headers(

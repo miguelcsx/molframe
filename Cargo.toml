@@ -89,8 +89,6 @@ pedantic = { level = "warn", priority = -1 }
 cognitive_complexity = "warn"
 # Absence is always handled with an explicit match, so that what happens when a
 # value is missing is written down at the site rather than implied by a default.
-manual_unwrap_or_default = "allow"
-manual_unwrap_or = "allow"
 
 [profile.release]
 # Twenty-seven crates with cross-crate generics and per-atom calls that cross

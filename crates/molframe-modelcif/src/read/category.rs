@@ -200,10 +200,7 @@ impl CategoryBuilder {
     }
 
     fn normalize(&mut self) -> Result<PushMemory, ModelCifError> {
-        self.rows = match self.columns.iter().map(ColumnBuilder::len).max() {
-            Some(rows) => rows,
-            None => 0,
-        };
+        self.rows = maximum_rows(&self.columns);
         let mut peak = self.live_bytes;
         for index in 0..self.columns.len() {
             while self.columns[index].len() < self.rows {
@@ -291,6 +288,13 @@ impl CategoryBuilder {
                     .sum::<usize>(),
             );
     }
+}
+
+fn maximum_rows(columns: &[ColumnBuilder]) -> usize {
+    let Some(rows) = columns.iter().map(ColumnBuilder::len).max() else {
+        return 0;
+    };
+    rows
 }
 
 fn table_bytes<K, V>(values: &HashMap<K, V>) -> usize {

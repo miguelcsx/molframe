@@ -100,19 +100,24 @@ fn finish_model(
         return Ok(());
     };
     let (model, model_findings) = state.finish()?;
-    let number = match model
-        .data()
-        .models()
-        .next()
-        .and_then(molframe_core::structure::ModelRef::number)
-    {
-        Some(number) => number,
-        None => 1,
-    };
+    let number = model_number_or_one(
+        model
+            .data()
+            .models()
+            .next()
+            .and_then(molframe_core::structure::ModelRef::number),
+    );
     models.push(model);
     numbers.push(number);
     findings.extend(model_findings);
     Ok(())
+}
+
+fn model_number_or_one(number: Option<i32>) -> i32 {
+    let Some(number) = number else {
+        return 1;
+    };
+    number
 }
 
 fn finish_ensemble(

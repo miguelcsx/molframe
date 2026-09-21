@@ -64,6 +64,21 @@ fn evaluate(source: &str) -> Evaluation {
 }
 
 #[test]
+fn query_fingerprints_identify_the_normalized_plan() {
+    let first = Query::compile("protein and name CA")
+        .unwrap_or_else(|findings| panic!("query must compile: {findings:?}"));
+    let second = Query::compile("  protein   and   name CA  ")
+        .unwrap_or_else(|findings| panic!("query must compile: {findings:?}"));
+    let builder = Query::from_builder(crate::col::is_protein() & crate::col::name().eq("CA"));
+
+    assert_eq!(first.fingerprint(), second.fingerprint());
+    assert_eq!(first.fingerprint(), builder.fingerprint());
+    let different = Query::compile("protein")
+        .unwrap_or_else(|findings| panic!("query must compile: {findings:?}"));
+    assert_ne!(first.fingerprint(), different.fingerprint());
+}
+
+#[test]
 fn boolean_membership_ranges_and_numeric_comparisons_execute() {
     assert_eq!(
         evaluate("name N CA and bfactor >= 30")

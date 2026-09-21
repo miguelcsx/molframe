@@ -36,26 +36,30 @@ pub(super) fn ragged_model_numbers(category: &Category, only_first: bool) -> Vec
 fn ranges(category: &Category) -> Vec<ModelRange> {
     let mut ranges: Vec<ModelRange> = Vec::new();
     for row in 0..category.row_count() {
-        let number = match category
+        let candidate = category
             .value("pdbx_PDB_model_num", row)
-            .and_then(crate::document::CifValue::as_integer)
-        {
-            Some(number) => number,
-            None => 1,
+            .and_then(crate::document::CifValue::as_integer);
+        let Some(number) = candidate else {
+            push_range(&mut ranges, 1, row);
+            continue;
         };
-        if let Some(current) = ranges.last_mut()
-            && current.number == number
-        {
-            current.end = row + 1;
-        } else {
-            ranges.push(ModelRange {
-                number,
-                start: row,
-                end: row + 1,
-            });
-        }
+        push_range(&mut ranges, number, row);
     }
     ranges
+}
+
+fn push_range(ranges: &mut Vec<ModelRange>, number: i64, row: usize) {
+    if let Some(current) = ranges.last_mut()
+        && current.number == number
+    {
+        current.end = row + 1;
+    } else {
+        ranges.push(ModelRange {
+            number,
+            start: row,
+            end: row + 1,
+        });
+    }
 }
 
 fn same_atoms(category: &Category, left: ModelRange, right: ModelRange) -> bool {

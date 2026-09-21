@@ -72,10 +72,7 @@ fn bench_batch_measurements(c: &mut Criterion, reference: &[[f32; 3]], model: &[
     let paired = &model[..rows];
     let mut output = vec![0.0; rows];
     let mut group = c.benchmark_group("geom_batch");
-    let rows_u64 = match u64::try_from(rows) {
-        Ok(rows) => rows,
-        Err(_) => u64::MAX,
-    };
+    let rows_u64 = saturating_u64(rows);
     group.throughput(Throughput::Elements(rows_u64));
     group.bench_function("distances_scalar", |b| {
         b.iter(|| {
@@ -91,10 +88,7 @@ fn bench_batch_measurements(c: &mut Criterion, reference: &[[f32; 3]], model: &[
     group.bench_function("angles_scalar", |b| {
         b.iter(|| {
             for row in 0..rows {
-                output[row] = match angle(first[row], second[row], third[row]) {
-                    Some(angle) => angle,
-                    None => f64::NAN,
-                };
+                output[row] = value_or_nan(angle(first[row], second[row], third[row]));
             }
             black_box(&output);
         });
@@ -105,10 +99,8 @@ fn bench_batch_measurements(c: &mut Criterion, reference: &[[f32; 3]], model: &[
     group.bench_function("torsions_scalar", |b| {
         b.iter(|| {
             for row in 0..rows {
-                output[row] = match dihedral(first[row], second[row], third[row], fourth[row]) {
-                    Some(dihedral) => dihedral,
-                    None => f64::NAN,
-                };
+                output[row] =
+                    value_or_nan(dihedral(first[row], second[row], third[row], fourth[row]));
             }
             black_box(&output);
         });
@@ -117,6 +109,20 @@ fn bench_batch_measurements(c: &mut Criterion, reference: &[[f32; 3]], model: &[
         b.iter(|| black_box(torsions_into(first, second, third, fourth, &mut output)));
     });
     group.finish();
+}
+
+fn saturating_u64(value: usize) -> u64 {
+    let Ok(value) = u64::try_from(value) else {
+        return u64::MAX;
+    };
+    value
+}
+
+fn value_or_nan(value: Option<f64>) -> f64 {
+    let Some(value) = value else {
+        return f64::NAN;
+    };
+    value
 }
 
 fn main() {

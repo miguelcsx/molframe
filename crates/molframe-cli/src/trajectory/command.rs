@@ -136,10 +136,7 @@ fn emit_rmsd(context: Context, data: &TrajectoryData, values: &[f64]) {
             .collect::<Vec<_>>();
         context.result(&context.json_records(&objects));
     } else {
-        let delimiter = match context.delimiter() {
-            Some(value) => value,
-            None => '\t',
-        };
+        let delimiter = context.table_delimiter();
         let mut table = Table::new(delimiter, &["frame", "time_picosecond", "rmsd_angstrom"]);
         for (frame, value) in data.frames.iter().zip(values) {
             let values = [

@@ -91,10 +91,7 @@ impl<'options> DirectSink<'options, '_> {
     }
 
     fn end_atom_row(&mut self) {
-        let number = match self.row.integer(Field::ModelNum) {
-            Some(number) => number,
-            None => 1,
-        };
+        let number = model_or_one(self.row.integer(Field::ModelNum));
         if self.current_number != Some(number) {
             self.close_model();
             if self.options.only_first_model && self.models.has_model() {
@@ -124,6 +121,13 @@ impl<'options> DirectSink<'options, '_> {
         }
         self.current_number = None;
     }
+}
+
+fn model_or_one(model: Option<i64>) -> i64 {
+    let Some(model) = model else {
+        return 1;
+    };
+    model
 }
 
 impl<'input> ValueSink<'input> for DirectSink<'_, 'input> {

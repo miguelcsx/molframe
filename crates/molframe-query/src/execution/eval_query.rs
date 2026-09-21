@@ -2,6 +2,7 @@
 
 use super::{Evaluation, Groups, Query};
 use crate::builder::Builder;
+use crate::execution::QueryFingerprint;
 use crate::plan::{LogicalPlan, PhysicalQuery};
 use crate::spatial::SpatialResolver;
 use molframe_core::contract::AnalysisPolicy;
@@ -40,6 +41,12 @@ impl Query {
     #[must_use]
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    /// Stable identity of the normalized typed query plan.
+    #[must_use]
+    pub fn fingerprint(&self) -> QueryFingerprint {
+        QueryFingerprint::of(&self.expr)
     }
 
     /// Selects atoms within `radius` of `target`.

@@ -137,10 +137,7 @@ impl<'a> AtomBuilder<'a> {
             return;
         }
 
-        let atom_name = self.intern(match name_text.as_deref() {
-            Some(name) => name,
-            None => "",
-        });
+        let atom_name = self.intern(text_or_empty(name_text.as_deref()));
         let Some(alt_id) = self.alt_of(rows) else {
             self.findings.push(
                 Diagnostic::new(Code::E1901)
@@ -186,13 +183,10 @@ impl<'a> AtomBuilder<'a> {
                 },
                 None => (0, Presence::Inapplicable),
             },
-            atom_site_id: match rows
-                .integer(Field::Id)
-                .and_then(|id| u32::try_from(id).ok())
-            {
-                Some(id) => id,
-                None => 0,
-            },
+            atom_site_id: identifier_or_zero(
+                rows.integer(Field::Id)
+                    .and_then(|id| u32::try_from(id).ok()),
+            ),
         };
         self.observe_atom(
             rows,
@@ -314,10 +308,8 @@ impl<'a> AtomBuilder<'a> {
         self.current = Some(*key);
         self.names_in_residue.clear();
 
-        let comp = self.intern(match rows.identifier(Field::LabelCompId).as_deref() {
-            Some(name) => name,
-            None => "",
-        });
+        let component = rows.identifier(Field::LabelCompId);
+        let comp = self.intern(text_or_empty(component.as_deref()));
         let auth_comp = match rows.identifier(Field::AuthCompId) {
             Some(text) => OptionalSymbol::some(self.intern(&text)),
             None => OptionalSymbol::NONE,
@@ -393,6 +385,20 @@ impl<'a> AtomBuilder<'a> {
             ins_code,
         }
     }
+}
+
+fn text_or_empty(value: Option<&str>) -> &str {
+    let Some(value) = value else {
+        return "";
+    };
+    value
+}
+
+fn identifier_or_zero(value: Option<u32>) -> u32 {
+    let Some(value) = value else {
+        return 0;
+    };
+    value
 }
 
 impl AtomSiteRowSink for AtomBuilder<'_> {

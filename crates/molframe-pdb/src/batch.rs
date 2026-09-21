@@ -65,14 +65,8 @@ impl<S: SourceBytes> PdbBatchSource<S> {
     }
 
     fn row_capacity(demand: BatchDemand) -> Result<u32, StructureBatchError> {
-        let byte_rows = match demand
-            .max_bytes
-            .saturating_sub(DICTIONARY_HEADROOM)
-            .checked_div(RETAINED_BYTES_PER_ROW)
-        {
-            Some(rows) => rows,
-            None => 0,
-        };
+        let byte_rows =
+            demand.max_bytes.saturating_sub(DICTIONARY_HEADROOM) / RETAINED_BYTES_PER_ROW;
         let rows = demand.max_rows.min(byte_rows).min(u32::MAX as usize);
         u32::try_from(rows).map_err(|_| StructureBatchError::DemandTooSmall {
             required: RETAINED_BYTES_PER_ROW,
@@ -265,11 +259,9 @@ fn parse_window(
             .map_err(|_| Diagnostic::new(Code::E1201).with_message("input is not valid text"))?;
         let record = fixed::record(line);
         if record == "MODEL" {
-            *model = match fixed::integer(line, 11, 14).and_then(|value| i32::try_from(value).ok())
-            {
-                Some(value) => value,
-                None => 1,
-            };
+            *model = model_number_or_one(
+                fixed::integer(line, 11, 14).and_then(|value| i32::try_from(value).ok()),
+            );
         } else if matches!(record, "ATOM" | "HETATM") {
             if rows == capacity {
                 break;
@@ -311,16 +303,15 @@ fn atom_record<'a>(line: &'a str, model: i32, options: &ReadOptions) -> Structur
         .zip(fixed::real(line, 39, 46).and_then(|value| value.to_f32()))
         .zip(fixed::real(line, 47, 54).and_then(|value| value.to_f32()))
         .map(|((x, y), z)| [x, y, z]);
+    let sequence =
+        hybrid36::decode(fixed::raw(line, 23, 26), 4).and_then(|value| i32::try_from(value).ok());
+    let atom_site_id =
+        hybrid36::decode(fixed::raw(line, 7, 11), 5).and_then(|value| u32::try_from(value).ok());
     StructureAtomRecord {
         model,
         chain: fixed::text(line, 22, 22),
         component: fixed::text(line, 18, 20),
-        sequence: match hybrid36::decode(fixed::raw(line, 23, 26), 4)
-            .and_then(|value| i32::try_from(value).ok())
-        {
-            Some(sequence) => sequence,
-            None => i32::MIN,
-        },
+        sequence: value_or_min(sequence),
         insertion: fixed::text(line, 27, 27),
         atom: raw_atom.trim(),
         alternate: fixed::text(line, 17, 17),
@@ -329,14 +320,30 @@ fn atom_record<'a>(line: &'a str, model: i32, options: &ReadOptions) -> Structur
         occupancy: optional_real(line, 55, 60, 1.0),
         b_factor: optional_real(line, 61, 66, 0.0),
         formal_charge: formal_charge(fixed::text(line, 79, 80)),
-        atom_site_id: match hybrid36::decode(fixed::raw(line, 7, 11), 5)
-            .and_then(|value| u32::try_from(value).ok())
-        {
-            Some(identifier) => identifier,
-            None => 0,
-        },
+        atom_site_id: identifier_or_zero(atom_site_id),
         heterogen: fixed::record(line) == "HETATM",
     }
+}
+
+fn value_or_min(value: Option<i32>) -> i32 {
+    let Some(value) = value else {
+        return i32::MIN;
+    };
+    value
+}
+
+fn model_number_or_one(value: Option<i32>) -> i32 {
+    let Some(value) = value else {
+        return 1;
+    };
+    value
+}
+
+fn identifier_or_zero(value: Option<u32>) -> u32 {
+    let Some(value) = value else {
+        return 0;
+    };
+    value
 }
 
 fn optional_real(line: &str, start: usize, end: usize, absent: f32) -> (f32, Presence) {

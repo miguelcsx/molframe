@@ -244,10 +244,7 @@ fn write_atom(
         alt = alt_field(structure, atom),
         comp = component,
         seq = residue_field(seq, options),
-        ins = match residue.ins_code() {
-            Some(code) => code,
-            None => " ",
-        },
+        ins = insertion_code(*residue),
         x = f64::from(position[0]),
         y = f64::from(position[1]),
         z = f64::from(position[2]),
@@ -306,10 +303,17 @@ pub(crate) fn chain_label<'a>(
     chain: &'a ChainRef<'a>,
     namespace: PdbIdentifierNamespace,
 ) -> &'a str {
-    match chain_name(*chain, namespace) {
-        Some(name) => name,
-        None => "",
-    }
+    let Some(name) = chain_name(*chain, namespace) else {
+        return "";
+    };
+    name
+}
+
+pub(crate) fn insertion_code(residue: ResidueRef<'_>) -> &str {
+    let Some(code) = residue.ins_code() else {
+        return " ";
+    };
+    code
 }
 
 #[derive(Clone, Copy)]

@@ -172,10 +172,7 @@ fn emit_batch(results: &[Result<Vec<String>, String>], header: &[&str], context:
             );
         context.result(&envelope.finish());
     } else {
-        let delimiter = match context.delimiter() {
-            Some(delimiter) => delimiter,
-            None => '\t',
-        };
+        let delimiter = context.table_delimiter();
         let mut table = Table::new(delimiter, header);
         for row in &rows {
             table.row(row.iter().map(String::as_str));

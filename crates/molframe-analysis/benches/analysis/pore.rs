@@ -121,10 +121,10 @@ fn transverse_coordinate(index: usize, steps: usize, radius: f32) -> f32 {
 }
 
 fn usize_to_f32(value: usize) -> f32 {
-    match value.to_f32() {
-        Some(value) => value,
-        None => f32::INFINITY,
-    }
+    let Some(value) = value.to_f32() else {
+        return f32::INFINITY;
+    };
+    value
 }
 
 fn minimum_clearance(point: [f32; 3], positions: &[[f32; 3]], radii: &[f32]) -> f32 {

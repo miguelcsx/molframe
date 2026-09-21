@@ -280,10 +280,10 @@ impl Category {
     #[must_use]
     pub fn row_count(&self) -> usize {
         // A category with no items has no rows, rather than an unknown number.
-        match self.columns.values().map(Column::len).max() {
-            Some(rows) => rows,
-            None => 0,
-        }
+        let Some(rows) = self.columns.values().map(Column::len).max() else {
+            return 0;
+        };
+        rows
     }
 
     /// The number of items.

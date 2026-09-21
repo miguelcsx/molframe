@@ -3,24 +3,24 @@
 use num_traits::ToPrimitive;
 
 pub(crate) fn usize_to_f64(value: usize) -> f64 {
-    match value.to_f64() {
-        Some(converted) => converted,
-        None => f64::INFINITY,
-    }
+    let Some(converted) = value.to_f64() else {
+        return f64::INFINITY;
+    };
+    converted
 }
 
 pub(crate) fn usize_to_u64(value: usize) -> u64 {
-    match u64::try_from(value) {
-        Ok(converted) => converted,
-        Err(_) => u64::MAX,
-    }
+    let Ok(converted) = u64::try_from(value) else {
+        return u64::MAX;
+    };
+    converted
 }
 
 pub(crate) fn usize_to_u32(value: usize) -> u32 {
-    match u32::try_from(value) {
-        Ok(converted) => converted,
-        Err(_) => u32::MAX,
-    }
+    let Ok(converted) = u32::try_from(value) else {
+        return u32::MAX;
+    };
+    converted
 }
 
 pub(crate) fn u64_to_usize(value: u64) -> usize {
@@ -47,10 +47,10 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
 }
 
 pub(crate) fn u32_to_f32(value: u32) -> f32 {
-    match value.to_f32() {
-        Some(converted) => converted,
-        None => f32::INFINITY,
-    }
+    let Some(converted) = value.to_f32() else {
+        return f32::INFINITY;
+    };
+    converted
 }
 
 pub(crate) fn i64_to_f64(value: i64) -> f64 {

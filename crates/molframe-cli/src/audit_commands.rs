@@ -334,10 +334,7 @@ fn emit<R>(report: &molframe::audit::AuditReport<R, u32>, context: Context) {
             .raw("dimensions", &format!("[{}]", dimensions.join(",")));
         context.result(&json.finish());
     } else {
-        let delimiter = match context.delimiter() {
-            Some(delimiter) => delimiter,
-            None => '\t',
-        };
+        let delimiter = context.table_delimiter();
         let mut table = Table::new(
             delimiter,
             &["field", "mean_change", "sensitive_items", "runs"],

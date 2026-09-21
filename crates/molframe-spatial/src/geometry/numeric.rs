@@ -46,10 +46,10 @@ pub(crate) fn f64_f32(value: f64) -> f32 {
     if value < -limit {
         return f32::NEG_INFINITY;
     }
-    match value.to_f32() {
-        Some(converted) => converted,
-        None => f32::NAN,
-    }
+    let Some(converted) = value.to_f32() else {
+        return f32::NAN;
+    };
+    converted
 }
 
 pub(crate) fn rounded_i64(value: f64) -> i64 {

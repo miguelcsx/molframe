@@ -283,15 +283,16 @@ fn assign_groups(mut groups: Vec<Vec<usize>>, ratios: SplitRatios) -> [Vec<usize
     let total = usize_to_f64(groups.iter().map(Vec::len).sum());
     let mut output: [Vec<usize>; 3] = std::array::from_fn(|_| Vec::new());
     for group in groups {
-        let partition = match (0..3)
+        let candidate = (0..3)
             .filter(|index| targets[*index] > 0.0)
             .min_by(|left, right| {
                 let left_fill = usize_to_f64(output[*left].len()) / (total * targets[*left]);
                 let right_fill = usize_to_f64(output[*right].len()) / (total * targets[*right]);
                 left_fill.total_cmp(&right_fill).then(left.cmp(right))
-            }) {
-            Some(index) => index,
-            None => 0,
+            });
+        let Some(partition) = candidate else {
+            output[0].extend(group);
+            continue;
         };
         output[partition].extend(group);
     }
