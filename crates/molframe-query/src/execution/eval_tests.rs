@@ -126,15 +126,17 @@ fn hierarchy_expansion_and_macros_execute_over_one_store() {
 }
 
 #[test]
-fn a_chemistry_macro_refuses_absent_component_chemistry() {
+fn broad_chemistry_macros_do_not_require_ccd_annotations() {
     let query = Query::compile("protein").expect("query compiles");
-    let result = query.evaluate(
-        &structure(),
-        &AnalysisPolicy::default(),
-        &Groups::new(),
-        None,
-    );
-    assert!(result.is_err());
+    let evaluation = query
+        .evaluate(
+            &structure(),
+            &AnalysisPolicy::default(),
+            &Groups::new(),
+            None,
+        )
+        .expect("broad structural query evaluates");
+    assert!(evaluation.selection.is_empty());
 }
 
 #[test]

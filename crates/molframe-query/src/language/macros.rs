@@ -43,7 +43,7 @@ pub(crate) fn macro_selection(
             atoms.contains(&context.atom.index())
         }));
     }
-    if chemistry_macro(macro_name)
+    if annotation_only_macro(macro_name)
         && structure
             .annotations()
             .get(molframe_core::COMPONENT_KIND_ANNOTATION)
@@ -78,21 +78,17 @@ const fn polymer_role_macro(macro_name: Macro) -> bool {
     )
 }
 
-const fn chemistry_macro(macro_name: Macro) -> bool {
+const fn annotation_only_macro(macro_name: Macro) -> bool {
     matches!(
         macro_name,
-        Macro::Protein
-            | Macro::Backbone
+        Macro::Backbone
             | Macro::Sidechain
-            | Macro::Nucleic
             | Macro::NucleicBackbone
             | Macro::NucleicBase
             | Macro::NucleicSugar
-            | Macro::Water
             | Macro::Ion
             | Macro::Lipid
             | Macro::Saccharide
-            | Macro::Ligand
     )
 }
 
@@ -121,9 +117,19 @@ pub(crate) fn chirality_selection(
 fn macro_matches(structure: &Structure, context: AtomContext<'_>, macro_name: Macro) -> bool {
     let component_kind = crate::annotation::component_kind(structure, context.atom.index().get());
     let polymer_role = crate::annotation::polymer_atom_role(structure, context.atom.index().get());
-    let protein = component_kind == Some(molframe_chem::ComponentKind::AminoAcid);
-    let nucleic = component_kind == Some(molframe_chem::ComponentKind::Nucleotide);
-    let water = component_kind == Some(molframe_chem::ComponentKind::Solvent);
+    let entity_kind = context
+        .chain
+        .entity()
+        .and_then(|entity| structure.data().topology.entities.kind(entity));
+    let protein = component_kind == Some(molframe_chem::ComponentKind::AminoAcid)
+        || matches!(
+            context.chain.polymer_kind(),
+            molframe_core::PolymerKind::Protein
+        );
+    let nucleic = component_kind == Some(molframe_chem::ComponentKind::Nucleotide)
+        || context.chain.polymer_kind().is_nucleic();
+    let water = component_kind == Some(molframe_chem::ComponentKind::Solvent)
+        || entity_kind == Some(molframe_core::EntityKind::Water);
     let hydrogen = context
         .atom
         .element()
@@ -171,7 +177,10 @@ fn macro_matches(structure: &Structure, context: AtomContext<'_>, macro_name: Ma
         Macro::Hydrogen => hydrogen,
         Macro::Heavy => !hydrogen,
         Macro::Polymer => context.chain.polymer_kind().is_polymer(),
-        Macro::Ligand => component_kind == Some(molframe_chem::ComponentKind::NonPolymer),
+        Macro::Ligand => {
+            component_kind == Some(molframe_chem::ComponentKind::NonPolymer)
+                || entity_kind == Some(molframe_core::EntityKind::NonPolymer)
+        }
         Macro::Aromatic => false,
     }
 }
