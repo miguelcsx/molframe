@@ -19,5 +19,5 @@ pub use molframe_core::provider::{
     PropertyValue, ProviderError, StructureChunk, StructureChunkProvider, TARGET_CHUNK_BONDS,
 };
 pub use molframe_core::selection::AtomSelection;
-pub use molframe_core::structure::{CoordinateStore, StructureData, StructureView};
+pub use molframe_core::structure::{CoordinateStore, Structure, StructureData, StructureView};
 pub use molframe_core::symbol::Interner;
