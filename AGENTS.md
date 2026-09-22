@@ -33,6 +33,7 @@ self-contained: it is the whole contract for this repository.
 | `molframe-resource-bench` | Allocation and resident-memory measurement. Not published. |
 | `molframe-mmap` | The single audited `unsafe` boundary for OS memory mapping. |
 | `molframe-py` | PyO3 bindings: zero-copy NumPy views, Arrow C-stream, scoped coordinate mutation. |
+| `molframe-engine` | The declarative layer: a typed heterogeneous DAG whose compile step validates, orders, eliminates common and dead nodes, and plans lifetimes. |
 | `molframe` | Facade crate re-exporting the public surface. |
 | `molframe-cli` | `info`, `convert`, `validate`, `measure`, `rmsd`, `policy`. |
 
@@ -86,7 +87,7 @@ that is not a crate name must appear below.
 
 ```
 core cif pdb geom cli py query spatial chem xtal surface interop traj compare
-validate spec repo ci
+validate spec repo ci engine
 ```
 
 - `py` — Python bindings (PyO3 + NumPy zero-copy views + `python/` stubs).
@@ -97,6 +98,7 @@ validate spec repo ci
 - `surface` — solvent-accessible / molecular surfaces.
 - `traj` — trajectory / multi-frame handling.
 - `compare` — structural alignment, RMSD, similarity.
+- `engine` — the declarative DAG and its compile step.
 - `validate` — diagnostic registry, schema validation.
 - `spec` — specification documents at `docs/`.
 - `repo` — workspace manifests, CI, developer-facing setup.

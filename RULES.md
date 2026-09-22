@@ -195,9 +195,10 @@ happen to both emit text do not.
 ## 9. The facade's vocabulary is closed
 
 **No `#[non_exhaustive]` on the facade's own enums.** A variant added to
-`PlanOperation`, `StructureRequest` or any other request enum is an API change,
-and the compiler says where: the match sites that must grow a conversion arm. An
-`_ =>` in one of them would turn that compile error into a silent misdispatch, so
+`StructureBatchReader`, `PolicyConfigError` or any other enum the facade owns is
+an API change, and the compiler says where: the match sites that must grow a
+conversion arm. An `_ =>` in one of them would turn that compile error into a
+silent misdispatch, so
 the exhaustive match is the guard. `Format` is the exception — it comes from core
 and crosses a version boundary between crates, which is what `#[non_exhaustive]`
 is for.
