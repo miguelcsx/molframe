@@ -55,7 +55,19 @@ pub(crate) fn scan(
     if universe.is_empty() {
         return AtomSelection::Empty;
     }
-    let mut selected = Vec::new();
+    // The universe's own count is the ceiling on what a predicate can accept,
+    // so reserving it once replaces a growth sequence that reallocated as the
+    // matches accumulated. A predicate accepting few atoms wastes the
+    // reservation only until the buffer is dropped, while one accepting most of
+    // the molecule — the common case for a broad selection — would otherwise
+    // rebuild the buffer repeatedly as it grows.
+    // The universe's own count is the ceiling on what a predicate can accept,
+    // so reserving it once replaces a growth sequence that reallocated as the
+    // matches accumulated. A predicate accepting few atoms wastes the
+    // reservation only until the buffer is dropped, while one accepting most of
+    // the molecule — the common case for a broad selection — would otherwise
+    // rebuild the buffer repeatedly as it grows.
+    let mut selected = Vec::with_capacity(usize::try_from(universe.len()).unwrap_or(0));
     visit(structure, universe, |context| {
         if accepts(context) {
             selected.push(context.atom.index().get());
