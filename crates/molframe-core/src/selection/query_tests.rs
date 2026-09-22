@@ -176,3 +176,51 @@ fn every_selection_shape_iterates_ascending_and_reports_its_exact_length() {
         assert_eq!(drained.next(), None);
     }
 }
+
+#[test]
+fn a_position_bound_is_derived_from_the_shape_and_never_understates_it() {
+    let empty = AtomSelection::Empty;
+    assert_eq!(empty.position_bound(), 0, "nothing can name a position");
+
+    let all = AtomSelection::All(7);
+    assert_eq!(all.position_bound(), 7, "the count bounds every position");
+
+    let range = AtomSelection::Range(3..9);
+    assert_eq!(range.position_bound(), 9, "a run is bounded by its end");
+
+    let ranges = AtomSelection::Ranges([(1..3), (5..8)].into_iter().collect());
+    assert_eq!(ranges.position_bound(), 8, "the last run carries the bound");
+
+    let sparse = AtomSelection::Sparse(vec![2, 9, 40]);
+    assert_eq!(sparse.position_bound(), 41, "the last position plus one");
+
+    let dense =
+        AtomSelection::from_sorted(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+    assert_eq!(
+        dense.position_bound(),
+        16,
+        "a mask is bounded by its own length"
+    );
+}
+
+#[test]
+fn every_position_of_every_shape_stays_inside_its_position_bound() {
+    let shapes = [
+        AtomSelection::Empty,
+        AtomSelection::All(5),
+        AtomSelection::Range(2..12),
+        AtomSelection::Sparse(vec![0, 7, 30]),
+        AtomSelection::from_sorted((0..64).filter(|position| position % 3 == 0).collect()),
+    ];
+    for shape in &shapes {
+        let bound = shape.position_bound();
+        // Iterating the selection is `AtomSelection::iter`, through the
+        // `IntoIterator` the type already exposes.
+        for position in shape {
+            assert!(
+                position < bound,
+                "position {position} escaped the bound {bound}"
+            );
+        }
+    }
+}

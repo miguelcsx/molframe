@@ -68,9 +68,16 @@ impl PhysicalQuery {
         groups: &Groups,
         spatial: Option<&dyn SpatialResolver>,
     ) -> Result<Evaluation, Vec<Diagnostic>> {
-        if let Some(atom) = universe.iter().find(|atom| *atom >= structure.atom_count()) {
+        // The universe's own shape bounds every position it can name, so one
+        // comparison replaces a walk over the atoms it contains. Asking about
+        // each atom instead made every evaluation read the whole structure
+        // before doing any work, which is what an `all` or `none` selection
+        // cannot afford: their evaluation is otherwise constant.
+        let atom_count = structure.atom_count();
+        let bound = universe.position_bound();
+        if bound > atom_count {
             return Err(vec![
-                Diagnostic::new(Code::E6009).with_context("atom", atom.to_string()),
+                Diagnostic::new(Code::E6009).with_context("atom", bound.to_string()),
             ]);
         }
 

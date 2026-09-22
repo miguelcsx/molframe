@@ -106,6 +106,35 @@ impl AtomSelection {
         }
     }
 
+    /// One past the largest position this selection could name.
+    ///
+    /// Derived from the shape rather than the positions, so a whole-structure
+    /// selection answers from its own count and a run from its end. A caller
+    /// that has to prove every position is inside a structure compares this once
+    /// instead of asking about each atom — which matters because the cheapest
+    /// selections, `All` and `Empty`, are exactly the ones a per-atom walk would
+    /// read as a full traversal of the structure.
+    ///
+    /// The bound is exact: no position in the selection reaches it, and every
+    /// shape reports the smallest bound that says so.
+    #[must_use]
+    pub fn position_bound(&self) -> u32 {
+        match self {
+            Self::Empty => 0,
+            Self::All(count) => *count,
+            Self::Range(run) => run.end,
+            Self::Ranges(runs) => match runs.last() {
+                Some(run) => run.end,
+                None => 0,
+            },
+            Self::Sparse(positions) => match positions.last() {
+                Some(last) => last.saturating_add(1),
+                None => 0,
+            },
+            Self::Dense(mask) => mask.len(),
+        }
+    }
+
     /// The selected positions, ascending.
     ///
     /// A concrete iterator rather than a boxed one: the boxed form cost a heap
