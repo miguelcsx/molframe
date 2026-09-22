@@ -9,7 +9,7 @@
 //! handles are how it is computed.
 
 use super::data::StructureData;
-use super::handle_helpers::{range_or_empty, recorded_value};
+use super::handle_helpers::{find_named, range_or_empty, recorded_value};
 use crate::chunk::AtomChunk;
 use crate::element::Element;
 use crate::index::{AtomIndex, ChainIndex, EntityIndex, ModelIndex, ResidueIndex};
@@ -232,11 +232,18 @@ impl<'a> ResidueRef<'a> {
     }
 
     /// The atom with this name.
+    ///
+    /// Resolves the name once and then reads names straight from the chunks
+    /// that hold this residue's atoms, so the lookup costs the residue rather
+    /// than the structure. A residue's atoms are contiguous and never split
+    /// across chunks, which is what lets the walk hold still.
     #[must_use]
     pub fn atom(self, name: &str) -> Option<AtomRef<'a>> {
         let wanted = self.data.dictionary.get(name)?;
+        let range = range_or_empty(self.data.topology.residues.atoms(self.index));
+        let position = find_named(&self.data.chunks, range, wanted)?;
 
-        self.atoms().find(|atom| atom.has_name(wanted))
+        Some(AtomRef::new(self.data, AtomIndex::new(position)))
     }
 
     fn has_number(self, number: i32) -> bool {
@@ -405,10 +412,6 @@ impl<'a> AtomRef<'a> {
         let index = chunk.residue(local, &self.data.topology.residues)?;
 
         Some(ResidueRef::new(self.data, index))
-    }
-
-    fn has_name(self, wanted: SymbolId) -> bool {
-        self.name_symbol() == Some(wanted)
     }
 }
 
