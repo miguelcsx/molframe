@@ -1,7 +1,7 @@
 //! Allocation-bounded position iteration and sparse merging.
 
 use super::representation::AtomSelection;
-use crate::column::{BitVec, Ones};
+use crate::column::Ones;
 use std::iter::Peekable;
 use std::ops::Range;
 use std::slice;
@@ -68,16 +68,10 @@ pub(super) fn copy_selection(selection: &AtomSelection) -> AtomSelection {
             AtomSelection::Ranges(runs.iter().map(|run| run.start..run.end).collect())
         }
         AtomSelection::Sparse(positions) => AtomSelection::Sparse(positions.clone()),
-        AtomSelection::Dense(mask) => AtomSelection::Dense(copy_mask(mask)),
+        // The mask is reference-counted, so copying one is a count bump
+        // rather than a per-bit rebuild of the same words.
+        AtomSelection::Dense(mask) => AtomSelection::Dense(mask.clone()),
     }
-}
-
-fn copy_mask(mask: &BitVec) -> BitVec {
-    let mut copied = BitVec::repeat(false, mask.len());
-    for position in mask.ones() {
-        copied.set(position, true);
-    }
-    copied
 }
 
 pub(super) fn visit_positions(selection: &AtomSelection, mut visit: impl FnMut(u32)) {

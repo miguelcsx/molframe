@@ -224,19 +224,27 @@ impl BondAdjacency {
         for position in 1..offsets.len() {
             offsets[position] += offsets[position - 1];
         }
-        let mut cursor = offsets.clone();
         let neighbour_count = match offsets.last() {
             Some(count) => *count,
             None => 0,
         };
         let mut neighbours = vec![AtomIndex::new(0); neighbour_count as usize];
+        // The prefix sums are spent as write cursors and restored afterwards,
+        // so the traversal needs one buffer rather than a second copy of the
+        // offsets held only to keep the sums while the cursors advance.
         for record in table.iter() {
             if record.atom_a.get() >= atom_count || record.atom_b.get() >= atom_count {
                 continue;
             }
-            insert(&mut neighbours, &mut cursor, record.atom_a, record.atom_b);
-            insert(&mut neighbours, &mut cursor, record.atom_b, record.atom_a);
+            insert(&mut neighbours, &mut offsets, record.atom_a, record.atom_b);
+            insert(&mut neighbours, &mut offsets, record.atom_b, record.atom_a);
         }
+        // Each cursor advanced past its own start by exactly the degree it
+        // filled, so walking backwards restores every prefix sum.
+        for position in (1..offsets.len()).rev() {
+            offsets[position] = offsets[position - 1];
+        }
+        offsets[0] = 0;
         for atom in 0..atom_count as usize {
             let range = offsets[atom] as usize..offsets[atom + 1] as usize;
             neighbours[range].sort_unstable();
