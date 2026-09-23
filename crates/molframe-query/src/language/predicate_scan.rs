@@ -61,13 +61,14 @@ pub(crate) fn scan(
     // reservation only until the buffer is dropped, while one accepting most of
     // the molecule — the common case for a broad selection — would otherwise
     // rebuild the buffer repeatedly as it grows.
-    // The universe's own count is the ceiling on what a predicate can accept,
-    // so reserving it once replaces a growth sequence that reallocated as the
-    // matches accumulated. A predicate accepting few atoms wastes the
-    // reservation only until the buffer is dropped, while one accepting most of
-    // the molecule — the common case for a broad selection — would otherwise
-    // rebuild the buffer repeatedly as it grows.
-    let mut selected = Vec::with_capacity(usize::try_from(universe.len()).unwrap_or(0));
+    //
+    // A universe larger than the address space reserves nothing and grows as it
+    // did before: the reservation is an optimisation, and the selection it is
+    // sized for cannot exist on a platform that cannot index it.
+    let mut selected = match usize::try_from(universe.len()) {
+        Ok(ceiling) => Vec::with_capacity(ceiling),
+        Err(_) => Vec::new(),
+    };
     visit(structure, universe, |context| {
         if accepts(context) {
             selected.push(context.atom.index().get());
