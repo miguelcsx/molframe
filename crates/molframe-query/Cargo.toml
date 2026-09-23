@@ -15,7 +15,14 @@ molframe-core.workspace = true
 criterion.workspace = true
 molframe-bench.workspace = true
 molframe-cif.workspace = true
-molframe-spatial.workspace = true
+# Path-only, deliberately, not `.workspace = true`. `molframe-spatial` depends
+# on this crate, so a versioned dev-dependency here is a cycle between the two
+# published manifests: the packaged `molframe-query` would require a registry
+# copy of `molframe-spatial`, which in turn requires `molframe-query`, and no
+# publish order exists. Cargo drops a path-only dev-dependency from the packaged
+# manifest, which is the sanctioned way to break such a cycle while leaving the
+# benchmark below able to link both crates from this workspace.
+molframe-spatial = { path = "../molframe-spatial" }
 
 [[bench]]
 name = "query"
