@@ -7,7 +7,8 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.98.1"
 license = "MIT"
-repository = "https://github.com/molframe/molframe"
+license-file = "LICENSE"
+repository = "https://github.com/miguelcsx/molframe"
 description = "A batteries-included structural bioinformatics engine"
 
 [workspace.dependencies]
