@@ -258,7 +258,7 @@ impl Default for Tolerance {
 pub struct ProfileId(&'static str);
 
 impl ProfileId {
-    /// The profile [`AnalysisPolicy::default`] returns.
+    /// The profile [`AnalysisPolicy::default`](crate::AnalysisPolicy::default) returns.
     pub const DEFAULT: Self = Self("molframe-default-1.0");
 
     /// The profile's name.

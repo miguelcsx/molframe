@@ -3,7 +3,7 @@
 //! This crate holds the vocabulary every other molframe crate speaks: the typed
 //! positions into a structure's tables, the interned identifiers, the chunked
 //! columnar store the coordinates and annotations live in, the immutable
-//! [`Structure`](structure::Structure) built over it, and the contract types
+//! [`Structure`] built over it, and the contract types
 //! that make an analysis state what it assumed.
 //!
 //! It has almost no dependencies and no input or output of its own, so a project

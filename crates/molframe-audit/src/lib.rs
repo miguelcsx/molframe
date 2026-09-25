@@ -1,4 +1,5 @@
-//! Bounded, deterministic sensitivity audits over [`AnalysisPolicy`] values.
+//! Bounded, deterministic sensitivity audits over
+//! [`AnalysisPolicy`](molframe_core::contract::AnalysisPolicy) values.
 //!
 //! A caller declares the defensible alternatives for each policy field, inspects
 //! the resulting cost, and then supplies an analysis plus a projection of its

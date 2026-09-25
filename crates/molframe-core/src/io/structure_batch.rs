@@ -109,7 +109,7 @@ pub struct BatchContinuity {
     pub after: ContinuityLevel,
 }
 
-/// One atom row accepted by [`StructureBatchBuilder`].
+/// One atom row accepted by [`StructureBatchBuilder`](crate::io::StructureBatchBuilder).
 #[derive(Clone, Copy, Debug)]
 pub struct StructureAtomRecord<'a> {
     /// Deposited model number.

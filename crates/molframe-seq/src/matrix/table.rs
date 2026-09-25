@@ -22,8 +22,9 @@ const ANY_INDEX: u8 = 22;
 
 /// A dense substitution matrix over the standard amino-acid alphabet.
 ///
-/// The scores are held as a `24 × 24` grid in the [`ORDER`] layout, with a
-/// side table turning a residue byte into its index in that grid.
+/// The scores are held as a `24 × 24` grid in the standard order
+/// `ARNDCQEGHILKMFPSTWYVBZX*`, with a side table turning a residue byte into
+/// its index in that grid.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SubstitutionMatrix {
     scores: Vec<i32>,

@@ -123,7 +123,8 @@ pub fn buried_surface(
 /// # Errors
 ///
 /// Returns [`BuriedSurfaceError::LengthMismatch`] when atom-aligned inputs differ
-/// in length, and otherwise forwards errors from [`solvent_excluded_surface`].
+/// in length, and otherwise forwards errors from
+/// [`solvent_excluded_surface`](crate::solvent_excluded_surface).
 pub fn buried_solvent_excluded_surface(
     positions: &[[f32; 3]],
     radii: &[f32],

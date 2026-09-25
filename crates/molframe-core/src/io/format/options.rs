@@ -34,7 +34,7 @@ impl ParseMode {
 /// Policy for atom rows whose format-specific element field is absent or invalid.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum MissingElementPolicy {
-    /// Preserve the missing value as [`Element::UNKNOWN`].
+    /// Preserve the missing value as [`Element::UNKNOWN`](crate::Element::UNKNOWN).
     #[default]
     PreserveUnknown,
     /// Explicitly apply the naming convention of the selected input format.
