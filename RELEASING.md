@@ -14,6 +14,24 @@ Environments**, and require a reviewer on it if a human should approve every
 upload; the workflows already declare `environment: release`, and crates.io
 checks that name as part of the publisher identity.
 
+The environment also carries two secrets, which are the only credentials this
+repository holds and the only ones a release ever uses:
+
+| Secret | For |
+|---|---|
+| `RELEASE_GPG_PRIVATE_KEY` | the exported private key, ASCII-armoured |
+| `RELEASE_GPG_KEY_ID` | that key's id, so the tag is signed by the intended key |
+
+Export with `gpg --armor --export-secret-keys <KEY_ID>`. The key must have no
+passphrase: `git tag -s` would otherwise block at the agent prompt, and there is
+no terminal in a workflow to answer it. That is the same key already used for
+commits, and it is protected by the environment rather than by a passphrase —
+which is why requiring a reviewer on the `release` environment matters more here
+than it would otherwise.
+
+The tag step fails rather than falling back to an unsigned tag if the key is
+missing. An unverifiable release tag is worse than a release that stops.
+
 ## The version is the input
 
 Dispatch **Actions → Release → Run workflow** and give the version without the
