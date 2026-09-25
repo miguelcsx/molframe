@@ -123,6 +123,10 @@ jobs:
       - name: Package preflight
         run: cargo publish --workspace --dry-run --locked
 
+      # `tar -tzf | grep -q` under `pipefail` is a trap: `grep -q` exits at the
+      # first match, `tar` takes SIGPIPE and dies with 141, and the pipeline
+      # reports failure for a file that *did* match. So each listing is taken
+      # once into a variable, and the matching is done without early exit.
       - name: Package sizes and contents
         run: |
           set -euo pipefail
@@ -133,12 +137,13 @@ jobs:
               echo "::error::$crate is $bytes bytes, at or over the 10 MB crates.io limit"
               exit 1
             fi
-            if tar -tzf "$crate" \
+            listing=$(tar -tzf "$crate")
+            if printf '%s\n' "$listing" \
                 | grep -E '/(\.env|credentials|target/|\.git/|idea/|inspo/)'; then
               echo "::error::$crate carries a file that must not be published"
               exit 1
             fi
-            if ! tar -tzf "$crate" | grep -qE '^[^/]+/LICENSE$'; then
+            if ! printf '%s\n' "$listing" | grep -E '^[^/]+/LICENSE$' >/dev/null; then
               echo "::error::$crate does not carry the licence text"
               exit 1
             fi
