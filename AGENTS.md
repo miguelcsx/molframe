@@ -5,6 +5,12 @@ self-contained: it is the whole contract for this repository.
 
 ---
 
+## Stack and tooling
+
+- **Nix** is the build system and package manager, use it over `cargo`, use `nix develop` to set up the development environment.
+- **Rust edition 2024**, stable toolchain (pinned in `rust-toolchain.toml`). No
+  nightly.
+
 ## 1. The crate map
 
 | Crate | Responsibility |
