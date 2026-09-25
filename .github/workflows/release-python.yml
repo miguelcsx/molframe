@@ -1,0 +1,173 @@
+# Publish the Python distribution to PyPI from a single dispatched version.
+#
+# Separate from `release.yml` on purpose. PyPI is a different registry with a
+# different trusted publisher, a different upload mechanism and a different
+# failure domain: a crates.io release that succeeded must not be reported as
+# failed because a wheel would not build, and vice versa. The two are dispatched
+# independently, and either can be re-run alone.
+#
+# Authentication is OIDC via PyPI's trusted publisher, so no token is stored
+# here. Configure it at https://pypi.org/manage/project/molframe/settings/publishing/
+# with owner `miguelcsx`, repository `molframe`, workflow `release-python.yml`
+# and environment `release`.
+#
+# `molframe-py` is `publish = false` in Cargo: it is a `cdylib` for the
+# interpreter, not a crate anyone depends on. Its version still comes from the
+# workspace manifest, which is what makes the two releases name the same version.
+
+name: Release Python
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 0.1.1)"
+        required: true
+        type: string
+      dry-run:
+        description: "Build and check every wheel, then stop before uploading"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-python
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the version input
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          declared=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          manifest=$(cargo metadata --format-version 1 --no-deps \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          if [ "$INPUT_VERSION" != "$declared" ] || [ "$INPUT_VERSION" != "$manifest" ]; then
+            echo "::error::input $INPUT_VERSION, pyproject.toml $declared and Cargo.toml $manifest must agree"
+            exit 1
+          fi
+          echo "VERSION=$INPUT_VERSION" >> "$GITHUB_ENV"
+
+      # The Cargo version and the packaging version are two files that must
+      # name one release, and nothing in either build reads the other.
+      - name: Verify the packaging metadata
+        run: |
+          set -euo pipefail
+          if grep -q '^version = ' crates/molframe-py/Cargo.toml; then
+            echo "::error::molframe-py declares its own version; it must inherit the workspace's"
+            exit 1
+          fi
+
+      - name: uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Python tests
+        run: |
+          set -euo pipefail
+          uv python install 3.13
+          uv sync --group dev --no-install-project
+          uvx maturin develop
+          uv run --no-sync pytest python/tests -q
+          uv run --no-sync pyright --verifytypes molframe
+
+  wheels:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            label: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            label: linux-aarch64
+          # `macos-13` is retired. The Intel macOS labels are now named for
+          # their version, with `-intel`; `macos-latest` is arm64.
+          - runner: macos-15-intel
+            label: macos-x86_64
+          - runner: macos-14
+            label: macos-aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: rustup show active-toolchain
+
+      - name: Rebuild the manifest check
+        run: |
+          set -euo pipefail
+          cargo metadata --format-version 1 --no-deps \
+            | python3 -c 'import json,sys; p=json.load(sys.stdin)["packages"][0]; assert p["version"] == "${{ inputs.version }}", p["version"]'
+
+      # maturin reads the version from the crate it builds, so the wheel and the
+      # crates.io release cannot disagree about which version this is.
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          args: --release --out dist --manifest-path crates/molframe-py/Cargo.toml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.label }}
+          path: dist
+
+      # A wheel that installs but cannot import is the failure this catches.
+      - name: Install and import
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv
+          .venv/bin/pip install --force-reinstall dist/*.whl
+          .venv/bin/python -c 'import molframe; print(molframe.__name__, "imports")'
+
+  sdist:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist --manifest-path crates/molframe-py/Cargo.toml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+  publish:
+    needs: [wheels, sdist]
+    if: ${{ !inputs.dry-run }}
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+      - name: List the distribution
+        run: ls -la dist
+
+      # Trusted publishing: this step exchanges the job's OIDC identity for a
+      # short-lived PyPI credential. No `PYPI_API_TOKEN` exists in this
+      # repository, so there is no long-lived secret to leak or rotate.
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

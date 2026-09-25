@@ -1,0 +1,218 @@
+# Release MolFrame to crates.io and PyPI from a single dispatched version.
+#
+# The tag is created *after* the registry upload succeeds, never before: a tag
+# says "this commit is the release", and a half-published version is not one.
+# Everything before the first upload step is a gate, so a red run means nothing
+# was published and the version number is still free to use.
+#
+# Authentication is OIDC, not a stored secret. `crates-io-auth-action` exchanges
+# this job's GitHub identity for a crates.io token scoped to the crates whose
+# trusted publisher names this workflow and environment, and revokes it when the
+# job ends. Once every crate has its trusted publisher set to "trusted
+# publishing only", a crates.io token leaked from anywhere else cannot publish
+# them, because provenance is the only accepted credential.
+#
+# `environment: release` is part of the identity crates.io checks, so it is
+# required, not decorative. It is also the natural place to require a human
+# approval before anything is uploaded.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 0.1.1)"
+        required: true
+        type: string
+      dry-run:
+        description: "Run every gate and stop before uploading"
+        required: false
+        default: false
+        type: boolean
+
+# Least privilege: `contents: write` for the tag and GitHub Release,
+# `id-token: write` for the OIDC exchange. Nothing else is needed.
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Toolchain
+        run: rustup show active-toolchain
+
+      # The input is untrusted. It reaches `cargo publish`, a git tag name and
+      # a release title, so it is checked against the manifest before any of
+      # those, and rejected unless it is exactly the version in Cargo.toml.
+      - name: Verify the version input
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          manifest=$(cargo metadata --format-version 1 --no-deps \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          if [ "$INPUT_VERSION" != "$manifest" ]; then
+            echo "::error::input version $INPUT_VERSION does not match the workspace version $manifest"
+            exit 1
+          fi
+          case "$INPUT_VERSION" in
+            *[!0-9A-Za-z.+-]*)
+              echo "::error::version $INPUT_VERSION is not a valid semver"
+              exit 1
+              ;;
+          esac
+          echo "VERSION=$INPUT_VERSION" >> "$GITHUB_ENV"
+
+      # A release must come from a commit that exists on the default branch.
+      # Dispatching from a side branch is the easy way to publish something
+      # that no reviewer ever saw.
+      - name: Verify the commit is on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not an ancestor of origin/main"
+            exit 1
+          fi
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Doc tests
+        run: cargo test -p molframe --doc --features full
+
+      # Documentation is what a consumer sees first on docs.rs, and the only
+      # check that resolves every intra-doc link in every feature combination.
+      - name: Documentation
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --workspace --all-features --no-deps
+
+      - name: Facade features
+        run: |
+          set -e
+          for f in "" pdb mmcif bcif modelcif geometry ic query spatial chemistry interop crystal \
+                   surface analysis validation sequence compare trajectory audit motif adapters \
+                   gzip zstd mmap; do
+            cargo check -p molframe --no-default-features ${f:+--features "$f"}
+          done
+
+      # The packaged archives are what crates.io actually receives, so they are
+      # built and checked here rather than trusted to the upload step.
+      - name: Package preflight
+        run: cargo publish --workspace --dry-run --locked
+
+      - name: Package sizes and contents
+        run: |
+          set -euo pipefail
+          limit=$((10 * 1024 * 1024))
+          for crate in target/package/*.crate; do
+            bytes=$(wc -c < "$crate")
+            if [ "$bytes" -ge "$limit" ]; then
+              echo "::error::$crate is $bytes bytes, at or over the 10 MB crates.io limit"
+              exit 1
+            fi
+            if tar -tzf "$crate" \
+                | grep -E '/(\.env|credentials|target/|\.git/|idea/|inspo/)'; then
+              echo "::error::$crate carries a file that must not be published"
+              exit 1
+            fi
+            if ! tar -tzf "$crate" | grep -qE '^[^/]+/LICENSE$'; then
+              echo "::error::$crate does not carry the licence text"
+              exit 1
+            fi
+          done
+
+      - name: Install the Python toolchain
+        if: ${{ !inputs.dry-run }}
+        uses: astral-sh/setup-uv@v5
+
+      - name: Python tests
+        if: ${{ !inputs.dry-run }}
+        run: uv python install 3.13 && uv sync --group dev --no-install-project && uvx maturin develop && uv run --no-sync pytest python/tests -q
+
+      - name: Authenticate with crates.io
+        if: ${{ !inputs.dry-run }}
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      # `cargo publish --workspace` publishes in dependency order and waits for
+      # each crate to reach the index, but it *aborts* the whole run on a
+      # version that already exists -- there is no skip and no `--idempotent`
+      # (rust-lang/cargo#13397 is still open). With 25 irreversible uploads
+      # that is the wrong failure mode: one flaky upload mid-run would leave
+      # the workspace half-published and the retry would refuse to start.
+      #
+      # So the archives are built here, the order is computed from the
+      # manifests, and each crate is published on its own. A crate already
+      # present at this version with the checksum the local archive has is a
+      # no-op, which makes the step safe to re-run and safe to resume. A
+      # version that exists but does *not* match is a hard error: that is a
+      # real inconsistency, not a retry.
+      - name: Package archives
+        run: |
+          cargo package --workspace \
+            --exclude molframe-bench \
+            --exclude molframe-py \
+            --exclude molframe-resource-bench \
+            --no-verify --locked
+
+      - name: Publish to crates.io
+        if: ${{ !inputs.dry-run }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: python3 .github/scripts/publish.py
+
+      # Only now does the commit become a release. The tag is signed and
+      # annotated, matching the commit convention.
+      - name: Tag
+        if: ${{ !inputs.dry-run }}
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${GPG_PRIVATE_KEY:-}" ]; then
+            printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          fi
+          git tag -s "v$VERSION" -m "MolFrame $VERSION"
+          git push origin "v$VERSION"
+
+      - name: GitHub Release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" \
+            --title "MolFrame $VERSION" \
+            --generate-notes \
+            --verify-tag
+
+      # PyPI is a separate registry with a separate trusted publisher, so it
+      # gets its own workflow, its own environment and its own failure domain.
+      # It is not chained here: a crates.io release that succeeded should not
+      # be reported as failed because a wheel would not build.
+      - name: Python note
+        if: ${{ !inputs.dry-run }}
+        run: |
+          echo "::notice::crates.io published v$VERSION. Run the Release Python workflow to publish the wheels."
