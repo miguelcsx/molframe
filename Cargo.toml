@@ -6,8 +6,14 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98.1"
+# `license` alone is the SPDX expression, and cargo's own manifest guidance is
+# that a standard licence uses this field and not `license-file`. Setting both
+# makes every package print "only one of `license` or `license-file` is
+# necessary" on each `cargo publish`, so the text ships the other way: a
+# `LICENSE` file in each package directory, which cargo packs automatically and
+# which `crates/molframe-chem/data/LICENSE.mendeleev` and its spglib sibling are
+# deliberately *not* — those are third-party notices, not this package's terms.
 license = "MIT"
-license-file = "LICENSE"
 repository = "https://github.com/miguelcsx/molframe"
 description = "A batteries-included structural bioinformatics engine"
 
