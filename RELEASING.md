@@ -78,10 +78,28 @@ Trusted publishing is configured on crates that already exist, so `0.1.0` has to
 be published once with a real token before any of the above applies.
 
 ```
-cargo login                     # paste the token, stdin only
+cargo login                      # paste the token, stdin only; never as an argument
 cargo publish --workspace --dry-run --locked
-cargo publish --workspace --locked
+
+cargo package --workspace \
+  --exclude molframe-bench --exclude molframe-py --exclude molframe-resource-bench \
+  --no-verify --locked
+python3 .github/scripts/publish.py
 ```
+
+Use the script here too, not `cargo publish --workspace`. The bootstrap is the
+run most likely to be interrupted, and it is the one where a half-published
+workspace is most expensive to reason about. The script publishes the same 25
+crates in the same order and can simply be run again.
+
+Two prerequisites before the first upload, both website actions:
+
+1. **A verified email address on the crates.io account.** crates.io refuses
+   every publish with `A verified email address is required to publish crates to
+   crates.io` until this is set, under https://crates.io/settings/profile.
+2. **The bootstrap token itself**, from https://crates.io/settings/tokens. It
+   needs `publish-new` for the first release, because none of the 25 names exist
+   yet; `publish-update` alone cannot create them.
 
 Then, for each of the 25 crates, add the trusted publisher on crates.io. Enable
 **Trusted Publishing Only** for each once the setting exists for it, so a leaked
