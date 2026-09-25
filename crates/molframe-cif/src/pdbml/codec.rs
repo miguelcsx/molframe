@@ -242,7 +242,10 @@ impl Row {
             if name == "nil" || name == "schemaLocation" || name.starts_with("xmlns") {
                 continue;
             }
-            let text = attribute.decode_and_unescape_value(reader.decoder())?;
+            let text = attribute.decoded_and_normalized_value(
+                quick_xml::XmlVersion::Implicit1_0,
+                reader.decoder(),
+            )?;
             values.push((name.to_owned(), CifValue::parse(&text, Quoting::Bare)));
         }
         Ok(Self { values })
@@ -255,27 +258,37 @@ struct Item {
 }
 
 fn datablock_name(element: &BytesStart<'_>, reader: &Reader<&[u8]>) -> Result<String, PdbmlError> {
+    let _ = reader;
+
     for attribute in element.attributes().with_checks(false) {
         let attribute = attribute.map_err(quick_xml::Error::from)?;
+
         if local_name(attribute.key.as_ref()) == "datablockName" {
             return Ok(attribute
-                .decode_and_unescape_value(reader.decoder())?
+                .normalized_value(quick_xml::XmlVersion::Implicit1_0)?
                 .into_owned());
         }
     }
+
     Err(PdbmlError::MissingDatablock)
 }
+
 fn nil_attribute(element: &BytesStart<'_>, reader: &Reader<&[u8]>) -> Result<bool, PdbmlError> {
+    let _ = reader;
+
     for attribute in element.attributes().with_checks(false) {
         let attribute = attribute.map_err(quick_xml::Error::from)?;
+
         if local_name(attribute.key.as_ref()) == "nil" {
             return Ok(attribute
-                .decode_and_unescape_value(reader.decoder())?
+                .normalized_value(quick_xml::XmlVersion::Implicit1_0)?
                 .eq_ignore_ascii_case("true"));
         }
     }
+
     Ok(false)
 }
+
 fn local_name(name: &[u8]) -> &str {
     let local = name
         .iter()
