@@ -53,6 +53,10 @@ def test_root_is_curated_and_domains_use_final_names():
 
 def test_read_selection_and_coordinate_ownership():
     structure = molframe.read(DATA / "basic.pdb")
+    assert structure.atom_count == 2
+    assert structure.residue_count == 1
+    assert structure.chain_count == 1
+    assert structure.model_count == 1
     assert len(structure.atoms) == 2
     assert len(structure.models) == 1
     assert len(structure.chains) == 1

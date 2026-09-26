@@ -315,7 +315,7 @@ The Python API is a native interface to the Rust engine rather than a reimplemen
 ```python
 structure = molframe.read("1ubq.cif")
 
-xyz = structure.xyz
+xyz = structure.coordinates
 ```
 
 Coordinate buffers can be exposed directly to NumPy-compatible code.

@@ -68,6 +68,25 @@ impl PyStructure {
     fn coordinates<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f32>>> {
         self.coordinates_view(py)
     }
+    #[getter]
+    fn atom_count(&self) -> u32 {
+        self.inner.atom_count()
+    }
+
+    #[getter]
+    fn residue_count(&self) -> u32 {
+        self.inner.residue_count()
+    }
+
+    #[getter]
+    fn chain_count(&self) -> u32 {
+        self.inner.chain_count()
+    }
+
+    #[getter]
+    fn model_count(&self) -> u32 {
+        self.inner.model_count()
+    }
 
     #[getter]
     fn atoms(&self) -> PyAtoms {
@@ -90,15 +109,21 @@ impl PyStructure {
     }
 
     #[pyo3(signature = (query, *, policy=None))]
-    fn select(&self, query: &str, policy: Option<&Bound<'_, PyAny>>) -> PyResult<PySelection> {
+    fn select(
+        &self,
+        query: &Bound<'_, PyAny>,
+        policy: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PySelection> {
         if policy.is_some() {
             return Err(pyo3::exceptions::PyNotImplementedError::new_err(
                 "custom policy objects are not yet accepted by this binding",
             ));
         }
-        selection(self, query)
+        if let Ok(query) = query.extract::<PyRef<'_, PyQuery>>() {
+            return select_compiled(self, &query.compiled);
+        }
+        selection(self, query.extract::<&str>()?)
     }
-
     fn edit(&self) -> PyStructureEditor {
         PyStructureEditor {
             inner: Some(self.inner.edit()),
@@ -341,6 +366,20 @@ pub(crate) fn read(
     }
     let bytes = source.extract::<PyBackedBytes>()?;
     PyReader::new(bytes, name).read(py)
+}
+
+fn select_compiled(structure: &PyStructure, query: &molframe::Query) -> PyResult<PySelection> {
+    use molframe::QueryStructure;
+
+    let evaluation = structure
+        .inner
+        .select_query(query, &molframe::AnalysisPolicy::default())
+        .map_err(|findings| findings_error(&findings))?;
+    let view = structure.inner.engine().view_of(evaluation.selection);
+    Ok(PySelection::from_native(
+        structure.clone(),
+        molframe::Selection::from(view),
+    ))
 }
 
 fn selection(structure: &PyStructure, source: &str) -> PyResult<PySelection> {
