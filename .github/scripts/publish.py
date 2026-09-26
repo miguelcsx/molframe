@@ -125,18 +125,19 @@ def await_published(name: str, version: str) -> str:
 
 
 def archive_contents(data: bytes, name: str, version: str) -> dict[str, bytes]:
-    """Every file in a `.crate` archive except its lockfile, keyed by path.
+    """Every source file in a `.crate` archive, keyed by path.
 
-    The lockfile is left out because it records whatever the registry held at
-    packaging time: a dependency released between two packagings changes it
-    while every source file stays the same. A library's consumers never read
-    it, so it is not part of what "the same crate" means here.
+    Two files cargo generates are left out, because they describe the moment of
+    packaging rather than the crate: the lockfile records whatever the registry
+    held (a dependency released between two packagings changes it), and
+    `.cargo_vcs_info.json` records the commit (a commit that touches nothing in
+    the crate changes it). A library's consumers read neither.
     """
-    lockfile = f"{name}-{version}/Cargo.lock"
+    generated = {f"{name}-{version}/Cargo.lock", f"{name}-{version}/.cargo_vcs_info.json"}
     contents: dict[str, bytes] = {}
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
         for member in tar.getmembers():
-            if member.isfile() and member.name != lockfile:
+            if member.isfile() and member.name not in generated:
                 extracted = tar.extractfile(member)
                 if extracted is not None:
                     contents[member.name] = extracted.read()
@@ -147,7 +148,7 @@ def same_crate(name: str, version: str, published: str, local: str) -> bool:
     """Whether the registry's archive matches the local one.
 
     Equal checksums settle it. Otherwise the published archive is downloaded
-    and compared file by file, lockfile aside, so a resumed run is not stopped
+    and compared file by file, generated files aside, so a resumed run is not stopped
     by a dependency that was released between two packagings.
     """
     if published == local:
