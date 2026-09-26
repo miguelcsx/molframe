@@ -74,17 +74,17 @@ impl PyStructure {
     }
 
     #[getter]
-    fn residue_count(&self) -> u32 {
+    fn residue_count(&self) -> usize {
         self.inner.residue_count()
     }
 
     #[getter]
-    fn chain_count(&self) -> u32 {
+    fn chain_count(&self) -> usize {
         self.inner.chain_count()
     }
 
     #[getter]
-    fn model_count(&self) -> u32 {
+    fn model_count(&self) -> usize {
         self.inner.model_count()
     }
 
