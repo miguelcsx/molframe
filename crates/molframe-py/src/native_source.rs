@@ -291,6 +291,21 @@ pub(crate) fn capsule<'py>(
     )
 }
 
+/// The canonical-write decisions the capsule payload makes on its own.
+///
+/// The payload is a transport between two extensions, not a file anyone keeps,
+/// so it may invent what canonical output otherwise refuses to: a block
+/// identifier for a structure read from a format with no `_entry.id`, and
+/// `_struct_conn` identifiers and a generic connection type for the bond graph,
+/// which retains neither. Without them a structure that carries bonds, or no
+/// entry identifier, could not cross the boundary at all.
+fn transport_options() -> molframe::formats::cif::CifWriteOptions {
+    molframe::formats::cif::CifWriteOptions::new()
+        .with_block_id("molframe")
+        .with_generated_connection_ids()
+        .with_connection_type_id("covale")
+}
+
 unsafe extern "C" fn encode_bcif(
     source: *const NativeSourceV2,
     output: *mut u8,
@@ -298,9 +313,9 @@ unsafe extern "C" fn encode_bcif(
 ) -> i64 {
     // SAFETY: the API is the first field of its retained capsule allocation.
     let capsule = unsafe { &*source.cast::<NativeCapsule>() };
-    let encoded = capsule
-        .encoded_bcif
-        .get_or_init(|| molframe::write_bcif(&capsule.structure).map_err(|_| ()));
+    let encoded = capsule.encoded_bcif.get_or_init(|| {
+        molframe::write_bcif_with_options(&capsule.structure, &transport_options()).map_err(|_| ())
+    });
     let Ok(encoded) = encoded else {
         return -1;
     };
