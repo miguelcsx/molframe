@@ -123,6 +123,30 @@ jobs:
       - name: Package preflight
         run: cargo publish --workspace --dry-run --locked
 
+      # `cargo publish --workspace` publishes in dependency order and waits for
+      # each crate to reach the index, but it *aborts* the whole run on a
+      # version that already exists -- there is no skip and no `--idempotent`
+      # (rust-lang/cargo#13397 is still open). With 25 irreversible uploads
+      # that is the wrong failure mode: one flaky upload mid-run would leave
+      # the workspace half-published and the retry would refuse to start.
+      #
+      # So the archives are built here, the order is computed from the
+      # manifests, and each crate is published on its own. A crate already
+      # present at this version with the checksum the local archive has is a
+      # no-op, which makes the step safe to re-run and safe to resume. A
+      # version that exists but does *not* match is a hard error: that is a
+      # real inconsistency, not a retry.
+      # `cargo publish --dry-run` verifies the archives but does not leave them
+      # in `target/package`, so they are built again here, once, and the size
+      # and contents checks below read the same files the upload will send.
+      - name: Package archives
+        run: |
+          cargo package --workspace \
+            --exclude molframe-bench \
+            --exclude molframe-py \
+            --exclude molframe-resource-bench \
+            --no-verify --locked
+
       # `tar -tzf | grep -q` under `pipefail` is a trap: `grep -q` exits at the
       # first match, `tar` takes SIGPIPE and dies with 141, and the pipeline
       # reports failure for a file that *did* match. So each listing is taken
@@ -161,27 +185,6 @@ jobs:
         if: ${{ !inputs.dry-run }}
         id: auth
         uses: rust-lang/crates-io-auth-action@v1
-
-      # `cargo publish --workspace` publishes in dependency order and waits for
-      # each crate to reach the index, but it *aborts* the whole run on a
-      # version that already exists -- there is no skip and no `--idempotent`
-      # (rust-lang/cargo#13397 is still open). With 25 irreversible uploads
-      # that is the wrong failure mode: one flaky upload mid-run would leave
-      # the workspace half-published and the retry would refuse to start.
-      #
-      # So the archives are built here, the order is computed from the
-      # manifests, and each crate is published on its own. A crate already
-      # present at this version with the checksum the local archive has is a
-      # no-op, which makes the step safe to re-run and safe to resume. A
-      # version that exists but does *not* match is a hard error: that is a
-      # real inconsistency, not a retry.
-      - name: Package archives
-        run: |
-          cargo package --workspace \
-            --exclude molframe-bench \
-            --exclude molframe-py \
-            --exclude molframe-resource-bench \
-            --no-verify --locked
 
       - name: Publish to crates.io
         if: ${{ !inputs.dry-run }}
