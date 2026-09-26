@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 numpy.workspace = true
-molframe = { path = "../molframe", version = "0.1.1", default-features = false }
+molframe = { path = "../molframe", version = "0.1.2", default-features = false }
 pyo3.workspace = true
 
 [lints.rust]

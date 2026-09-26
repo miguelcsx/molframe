@@ -12,7 +12,7 @@ use std::collections::hash_map::Entry;
 use std::io::Write;
 
 const VERSION: &str = "1.0.0";
-const PRODUCER: &str = "molframe 0.1.1";
+const PRODUCER: &str = "molframe 0.1.2";
 const CHAIN_WIDTH: usize = 4;
 
 /// Writes a deterministic standards-conforming MMTF `MessagePack` document.

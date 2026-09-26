@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.98.1"
 # `license` alone is the SPDX expression, and cargo's own manifest guidance is
@@ -18,30 +18,30 @@ repository = "https://github.com/miguelcsx/molframe"
 description = "A batteries-included structural bioinformatics engine"
 
 [workspace.dependencies]
-molframe-core = { path = "crates/molframe-core", version = "0.1.1" }
-molframe-engine = { path = "crates/molframe-engine", version = "0.1.1" }
-molframe-audit = { path = "crates/molframe-audit", version = "0.1.1" }
-molframe-analysis = { path = "crates/molframe-analysis", version = "0.1.1" }
-molframe-adapters = { path = "crates/molframe-adapters", version = "0.1.1" }
-molframe-cif = { path = "crates/molframe-cif", version = "0.1.1" }
-molframe-bcif = { path = "crates/molframe-bcif", version = "0.1.1" }
-molframe-chem = { path = "crates/molframe-chem", version = "0.1.1" }
-molframe-compare = { path = "crates/molframe-compare", version = "0.1.1" }
-molframe-geom = { path = "crates/molframe-geom", version = "0.1.1" }
-molframe-fx = { path = "crates/molframe-fx", version = "0.1.1" }
-molframe-ic = { path = "crates/molframe-ic", version = "0.1.1" }
-molframe-pdb = { path = "crates/molframe-pdb", version = "0.1.1" }
-molframe-mmap = { path = "crates/molframe-mmap", version = "0.1.1" }
-molframe-interop = { path = "crates/molframe-interop", version = "0.1.1" }
-molframe-modelcif = { path = "crates/molframe-modelcif", version = "0.1.1" }
-molframe-query = { path = "crates/molframe-query", version = "0.1.1" }
-molframe-seq = { path = "crates/molframe-seq", version = "0.1.1" }
-molframe-spatial = { path = "crates/molframe-spatial", version = "0.1.1" }
-molframe-surface = { path = "crates/molframe-surface", version = "0.1.1" }
-molframe-traj = { path = "crates/molframe-traj", version = "0.1.1" }
-molframe-validate = { path = "crates/molframe-validate", version = "0.1.1" }
-molframe-xtal = { path = "crates/molframe-xtal", version = "0.1.1" }
-molframe = { path = "crates/molframe", version = "0.1.1" }
+molframe-core = { path = "crates/molframe-core", version = "0.1.2" }
+molframe-engine = { path = "crates/molframe-engine", version = "0.1.2" }
+molframe-audit = { path = "crates/molframe-audit", version = "0.1.2" }
+molframe-analysis = { path = "crates/molframe-analysis", version = "0.1.2" }
+molframe-adapters = { path = "crates/molframe-adapters", version = "0.1.2" }
+molframe-cif = { path = "crates/molframe-cif", version = "0.1.2" }
+molframe-bcif = { path = "crates/molframe-bcif", version = "0.1.2" }
+molframe-chem = { path = "crates/molframe-chem", version = "0.1.2" }
+molframe-compare = { path = "crates/molframe-compare", version = "0.1.2" }
+molframe-geom = { path = "crates/molframe-geom", version = "0.1.2" }
+molframe-fx = { path = "crates/molframe-fx", version = "0.1.2" }
+molframe-ic = { path = "crates/molframe-ic", version = "0.1.2" }
+molframe-pdb = { path = "crates/molframe-pdb", version = "0.1.2" }
+molframe-mmap = { path = "crates/molframe-mmap", version = "0.1.2" }
+molframe-interop = { path = "crates/molframe-interop", version = "0.1.2" }
+molframe-modelcif = { path = "crates/molframe-modelcif", version = "0.1.2" }
+molframe-query = { path = "crates/molframe-query", version = "0.1.2" }
+molframe-seq = { path = "crates/molframe-seq", version = "0.1.2" }
+molframe-spatial = { path = "crates/molframe-spatial", version = "0.1.2" }
+molframe-surface = { path = "crates/molframe-surface", version = "0.1.2" }
+molframe-traj = { path = "crates/molframe-traj", version = "0.1.2" }
+molframe-validate = { path = "crates/molframe-validate", version = "0.1.2" }
+molframe-xtal = { path = "crates/molframe-xtal", version = "0.1.2" }
+molframe = { path = "crates/molframe", version = "0.1.2" }
 molframe-bench = { path = "crates/molframe-bench" }
 
 bytemuck = { version = "1", features = ["derive"] }
