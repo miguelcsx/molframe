@@ -70,9 +70,12 @@ def test_read_selection_and_coordinate_ownership():
     assert numpy.shares_memory(first, second)
 
     selection = structure.select("name CA")
-    compiled = molframe.Query("name CA").select(structure)
+    compiled_query = molframe.Query("name CA")
+    compiled = compiled_query.select(structure)
+    through_structure = structure.select(compiled_query)
     assert len(selection) == 1
     assert selection.indices.tolist() == compiled.indices.tolist()
+    assert compiled.indices.tolist() == through_structure.indices.tolist()
     assert selection.to_coordinates().shape == (1, 3)
 
 
