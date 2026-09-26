@@ -52,7 +52,7 @@ jobs:
         env:
           PYO3_NO_PYTHON: "1"
           PYO3_BUILD_EXTENSION_MODULE: "1"
-        run: cargo check -p molframe-py --features pyo3/abi3-py313
+        run: cargo check -p molframe-py --features pyo3/abi3-py312
 
       # The two greps. No `unwrap` or `expect` outside test code, and no source
       # file over 500 lines.

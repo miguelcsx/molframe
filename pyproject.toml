@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "molframe"
 version = "0.1.2"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = ["numpy>=2"]
 # PEP 639. maturin gained full support for the SPDX expression and
 # `license-files` in 1.9.0; the build backend below already requires 1.9.4.
@@ -28,11 +28,12 @@ module-name = "molframe._native"
 # `PYO3_BUILD_EXTENSION_MODULE` environment variable, which maturin >= 1.9.4
 # sets for extension-module builds. Keeping abi3 here rather than in the crate's
 # Cargo.toml leaves the 18 tests that call `Python::initialize()` on the full
-# interpreter API. Checked, without maturin and without a 3.13 interpreter, by
+# interpreter API. Checked, without maturin and without a 3.12 interpreter, by
 # PYO3_NO_PYTHON=1 PYO3_BUILD_EXTENSION_MODULE=1 cargo check -p molframe-py
-# --features pyo3/abi3-py313 -- which compiles the same Py_LIMITED_API
+# --features pyo3/abi3-py312 -- which compiles the same Py_LIMITED_API
 # configuration, since PYO3_BUILD_EXTENSION_MODULE is what maturin sets. It is
 # not in AGENTS.md §4: it is a packaging property that maturin already enforces
 # when it produces the wheel, and alternating it with the default feature set
 # rebuilds pyo3 on every green run.
-features = ["pyo3/abi3-py313"]
+# The floor is 3.12 because that is what Google Colab runs.
+features = ["pyo3/abi3-py312"]

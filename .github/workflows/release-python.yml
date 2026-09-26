@@ -145,8 +145,8 @@ jobs:
       - name: Toolchain
         run: rustup show active-toolchain
 
-      # The wheel is abi3-py313, so the interpreter that installs it must be at
-      # least 3.13; a runner's default python is not guaranteed to be.
+      # The wheel is abi3-py312, so the interpreter that installs it must be at
+      # least 3.12; a runner's default python is not guaranteed to be.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
