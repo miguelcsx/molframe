@@ -11,6 +11,9 @@ mod catalog;
 mod hierarchy;
 mod native_source;
 #[cfg(feature = "query")]
+mod query_aliases;
+mod query_cache;
+#[cfg(feature = "query")]
 mod selection_expr;
 #[cfg(feature = "analysis")]
 mod workflow;
@@ -57,6 +60,8 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyModels>()?;
     module.add_class::<PySelection>()?;
     module.add_class::<PyQuery>()?;
+    #[cfg(feature = "query")]
+    module.add_class::<query_aliases::PyQueryAliases>()?;
     module.add_class::<PyReader>()?;
     #[cfg(feature = "analysis")]
     module.add_class::<PyContactTable>()?;

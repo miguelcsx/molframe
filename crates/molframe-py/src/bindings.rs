@@ -281,6 +281,16 @@ impl PyQuery {
         self.compiled.fingerprint().to_string()
     }
 
+    /// Named queries this query refers to with `$name`, sorted.
+    #[getter]
+    fn references(&self) -> Vec<String> {
+        self.compiled
+            .references()
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+    }
+
     /// Canonical text accepted by every `MolFrame` query consumer.
     #[getter]
     fn source(&self) -> &str {
@@ -438,6 +448,6 @@ pub(crate) fn distance_matrix<'py>(
     matrix.into_values().into_pyarray(py).reshape((rows, rows))
 }
 
-fn findings_error(findings: &molframe::Findings) -> PyErr {
+pub(crate) fn findings_error(findings: &molframe::Findings) -> PyErr {
     pyo3::exceptions::PyValueError::new_err(findings.to_string())
 }

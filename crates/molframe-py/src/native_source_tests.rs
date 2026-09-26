@@ -68,3 +68,65 @@ fn native_source_retains_coordinates_and_evaluates_queries() {
         assert_eq!(first, second);
     });
 }
+
+fn imported(py: Python<'_>) -> NativeStructureSource {
+    let object = match Bound::new(py, PyStructure::new(structure())) {
+        Ok(value) => value,
+        Err(error) => panic!("structure should bind: {error}"),
+    };
+    match NativeStructureSource::from_python(object.as_any()) {
+        Ok(value) => value,
+        Err(error) => panic!("native source should import: {error}"),
+    }
+}
+
+#[test]
+fn a_sparse_selection_allocates_only_the_selected_rows() {
+    Python::initialize();
+    Python::attach(|py| {
+        let source = imported(py);
+        let rows = match source.select("index 1") {
+            Ok(value) => value,
+            Err(error) => panic!("query should evaluate: {error}"),
+        };
+        assert_eq!(rows, [1]);
+        assert_eq!(rows.capacity(), 1);
+        let none = match source.select("none") {
+            Ok(value) => value,
+            Err(error) => panic!("query should evaluate: {error}"),
+        };
+        assert!(none.is_empty());
+        assert_eq!(none.capacity(), 0);
+    });
+}
+
+#[test]
+fn repeated_and_interleaved_queries_return_their_own_rows() {
+    Python::initialize();
+    Python::attach(|py| {
+        let source = imported(py);
+        for _ in 0..3 {
+            for (query, expected) in [
+                ("index 0", vec![0]),
+                ("all", vec![0, 1]),
+                ("index 1", vec![1]),
+            ] {
+                let rows = match source.select(query) {
+                    Ok(value) => value,
+                    Err(error) => panic!("{query} should evaluate: {error}"),
+                };
+                assert_eq!(rows, expected, "{query}");
+            }
+        }
+    });
+}
+
+#[test]
+fn a_malformed_query_is_a_value_error_and_leaves_the_source_usable() {
+    Python::initialize();
+    Python::attach(|py| {
+        let source = imported(py);
+        assert!(source.select("resname (").is_err());
+        assert!(matches!(source.select("all"), Ok(rows) if rows == [0, 1]));
+    });
+}

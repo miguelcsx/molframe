@@ -154,3 +154,38 @@ def test_workflow_materializes_owner_backed_contact_tables():
     table = result["contacts"]
     assert len(table.first) == len(table.second) == len(table.distance) == len(table)
     assert compiled.explain()["spatial_consumers"] == 1
+
+
+def test_named_queries_resolve_to_closed_queries():
+    structure = molframe.read(DATA / "basic.pdb")
+    aliases = molframe.QueryAliases()
+    aliases.define("first", molframe.Query("index 0"))
+    aliases.define("both", molframe.Query("$first or index 1"))
+    assert aliases.names == ["both", "first"]
+    assert "first" in aliases and len(aliases) == 2
+    reference = molframe.Query("$both and not $first")
+    assert reference.references == ["both", "first"]
+    closed = aliases.resolve(reference)
+    assert closed.references == []
+    assert structure.select(closed).indices.tolist() == [1]
+    assert closed.fingerprint == molframe.Query(closed.source).fingerprint
+
+
+def test_named_query_failures_are_value_errors():
+    aliases = molframe.QueryAliases()
+    aliases.define("loop", molframe.Query("$loop"))
+    with pytest.raises(ValueError, match="E4006"):
+        aliases.resolve(molframe.Query("$loop"))
+    with pytest.raises(ValueError, match="E4005"):
+        aliases.resolve(molframe.Query("$missing"))
+    with pytest.raises(ValueError):
+        aliases.define("1bad", molframe.Query("all"))
+
+
+def test_select_accepts_text_and_compiled_queries_alike():
+    structure = molframe.read(DATA / "basic.pdb")
+    assert (
+        structure.select("index 1").indices.tolist()
+        == structure.select(molframe.Query("index 1")).indices.tolist()
+        == structure.select(molframe.sel.all() & molframe.Query("index 1")).indices.tolist()
+    )
