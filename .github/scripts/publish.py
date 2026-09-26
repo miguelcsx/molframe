@@ -21,12 +21,16 @@ from __future__ import annotations
 import graphlib
 import hashlib
 import json
+import re
 import subprocess
 import sys
+import tarfile
 import time
 import tomllib
 import urllib.error
 import urllib.request
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 INDEX = "https://index.crates.io"
@@ -38,6 +42,14 @@ HEADERS = {"User-Agent": "molframe-release-workflow (github.com/miguelcsx/molfra
 # is there.
 INDEX_TIMEOUT = 600
 INDEX_POLL = 5
+
+# crates.io throttles new-crate uploads with a 429 that names the time to retry
+# after. Waiting that out is worth it when short; a longer wait is better left
+# to a re-run, which skips everything already published.
+RATE_LIMIT_MAX_WAIT = 1800
+RATE_LIMIT_SLACK = 5
+RATE_LIMIT_ATTEMPTS = 5
+DEPENDENCY_TABLES = ("dependencies", "build-dependencies", "dev-dependencies")
 
 
 def run(*args: str) -> str:
@@ -120,28 +132,85 @@ def local_checksums(version: str) -> dict[str, str]:
     return checksums
 
 
-def publish_order() -> list[str]:
-    """Package names to publish, dependencies first.
+def packaged_dependencies(archive: Path, version: str) -> set[str]:
+    """The crates a `.crate` archive depends on, per its normalised manifest.
 
-    `publish = false` members are dropped, and so are dev-dependency edges: a
-    dev-dependency is stripped from the packaged manifest, so it cannot
-    constrain the order of two published crates. That is what keeps
-    `molframe-query` and `molframe-spatial` from being a cycle here.
+    Cargo rewrites `Cargo.toml` when it packages: a path-only dev-dependency is
+    dropped, and one that carries a version is kept and must resolve against the
+    registry at publish time. Reading the result, rather than re-deriving
+    Cargo's rules from `cargo metadata`, makes Cargo's own decision the source
+    of truth for the order.
     """
-    metadata = json.loads(run("cargo", "metadata", "--format-version", "1", "--no-deps"))
-    packages = {package["name"]: package for package in metadata["packages"]}
-    publishable = {name for name, package in packages.items() if package["publish"] != []}
-    graph: dict[str, set[str]] = {}
-    for name in publishable:
-        dependencies = set()
-        for dependency in packages[name]["dependencies"]:
-            if dependency.get("kind") == "dev":
-                continue
-            if dependency["name"] in publishable and dependency.get("path"):
-                dependencies.add(dependency["name"])
-        dependencies.discard(name)
-        graph[name] = dependencies
-    return [name for name in graphlib.TopologicalSorter(graph).static_order() if name in publishable]
+    root = archive.name[: -len(".crate")]
+    with tarfile.open(archive, "r:gz") as tar:
+        member = tar.extractfile(f"{root}/Cargo.toml")
+        if member is None:
+            raise SystemExit(f"{archive.name} has no Cargo.toml")
+        manifest = tomllib.loads(member.read().decode())
+
+    tables = [manifest.get(table, {}) for table in DEPENDENCY_TABLES]
+    for target in manifest.get("target", {}).values():
+        tables.extend(target.get(table, {}) for table in DEPENDENCY_TABLES)
+
+    names: set[str] = set()
+    for table in tables:
+        for key, spec in table.items():
+            # A renamed dependency is keyed by its alias; `package` is the crate.
+            names.add(spec.get("package", key) if isinstance(spec, dict) else key)
+    return names
+
+
+def publish_order(version: str) -> list[str]:
+    """Package names to publish, dependencies first, deterministically.
+
+    The graph comes from the manifests inside the packaged archives, so an edge
+    exists exactly when Cargo kept the dependency. That is what keeps a
+    version-carrying dev-dependency ahead of its dependent, and the path-only
+    `molframe-query` -> `molframe-spatial` one out of a cycle.
+    """
+    suffix = f"-{version}.crate"
+    archives = {
+        archive.name[: -len(suffix)]: archive
+        for archive in sorted(Path("target/package").glob("*.crate"))
+    }
+    graph = {
+        name: sorted((packaged_dependencies(archive, version) & archives.keys()) - {name})
+        for name, archive in sorted(archives.items())
+    }
+    return list(graphlib.TopologicalSorter(graph).static_order())
+
+
+def rate_limit_wait(output: str) -> float | None:
+    """Seconds to wait if `output` is a crates.io 429, else `None`."""
+    if "429" not in output and "Too Many Requests" not in output:
+        return None
+    match = re.search(r"try again (?:after|at) ([A-Za-z]{3}, [^\n]*?GMT)", output)
+    if match is None:
+        return float(RATE_LIMIT_MAX_WAIT)
+    retry_at = parsedate_to_datetime(match.group(1))
+    return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+
+
+def publish(name: str) -> None:
+    """Publishes one crate, waiting out a short crates.io rate limit."""
+    for attempt in range(1, RATE_LIMIT_ATTEMPTS + 1):
+        result = subprocess.run(
+            ["cargo", "publish", "-p", name, "--locked"], capture_output=True, text=True
+        )
+        sys.stdout.write(result.stdout)
+        sys.stderr.write(result.stderr)
+        if result.returncode == 0:
+            return
+        wait = rate_limit_wait(result.stdout + result.stderr)
+        if wait is None:
+            raise SystemExit(f"cargo publish failed for {name} ({result.returncode})")
+        if wait > RATE_LIMIT_MAX_WAIT or attempt == RATE_LIMIT_ATTEMPTS:
+            raise SystemExit(
+                f"rate limited by crates.io while publishing {name}; retry in {wait:.0f}s. "
+                f"Re-run the workflow later: crates already published are skipped."
+            )
+        print(f"rate limited; waiting {wait + RATE_LIMIT_SLACK:.0f}s before retrying {name}")
+        time.sleep(wait + RATE_LIMIT_SLACK)
 
 
 def main() -> int:
@@ -153,7 +222,7 @@ def main() -> int:
     if not checksums:
         raise SystemExit("no archives in target/package; the preflight must package first")
 
-    order = publish_order()
+    order = publish_order(version)
     missing = sorted(set(order) - set(checksums))
     if missing:
         raise SystemExit(f"no archive was built for {', '.join(missing)}")
@@ -176,7 +245,7 @@ def main() -> int:
             continue
 
         print(f"{prefix} publishing {name} {version}")
-        subprocess.run(["cargo", "publish", "-p", name, "--locked"], check=True)
+        publish(name)
         actual = await_published(name, version)
         if actual != expected:
             raise SystemExit(
