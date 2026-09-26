@@ -1,6 +1,8 @@
 //! Owned read-only snapshots and explicitly unsafe file-backed mappings.
 
-use memmap2::{Advice, Mmap, MmapMut, MmapOptions};
+#[cfg(unix)]
+use memmap2::Advice;
+use memmap2::{Mmap, MmapMut, MmapOptions};
 use std::fs::File;
 use std::io::{self, Read, Seek, Write};
 use std::ops::Deref;
@@ -149,9 +151,14 @@ impl MappedFile {
     pub fn advise_sequential(&self) -> io::Result<()> {
         match &self.mapping {
             Mapping::Empty => Ok(()),
+            #[cfg(unix)]
             Mapping::Snapshot(mapping) | Mapping::FileBacked { mapping, .. } => {
                 mapping.advise(Advice::Sequential)
             }
+            // `memmap2` has no advice call off Unix, and a platform that
+            // cannot take the hint reads the file just the same.
+            #[cfg(not(unix))]
+            Mapping::Snapshot(_) | Mapping::FileBacked { .. } => Ok(()),
         }
     }
 
