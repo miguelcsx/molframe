@@ -1,17 +1,19 @@
 //! Precedence parser from tokens into the typed selection IR.
 
-use crate::ast::{Column, Expr, GeometricExpr, Macro, Operator, SameKey};
+use crate::ast::{Column, Expr, Macro, Operator, SameKey};
 use crate::lexer::{Token, TokenKind, lex};
 use molframe_chem::SmartsPattern;
 use molframe_core::diagnostic::{Code, Diagnostic};
 
 #[path = "parser_helpers.rs"]
 mod helpers;
-use helpers::{
-    canonical_name, geometric_keyword, is_boundary, mixes_boolean_precedence, syntax, unescape,
-};
+use helpers::{canonical_name, mixes_boolean_precedence, unescape};
+use molframe_core::span::ByteSpan;
 #[path = "parser_cursor.rs"]
 mod cursor;
+#[path = "parser_geometric.rs"]
+mod geometric;
+pub(crate) use helpers::{is_boundary, is_query_name};
 
 pub(crate) struct Parsed {
     pub(crate) expr: Expr,
@@ -25,9 +27,10 @@ pub(crate) struct Parsed {
 /// cloned through temporary `String`s.
 pub(crate) fn parse(source: &str) -> Result<Parsed, Vec<Diagnostic>> {
     let tokens = lex(source).map_err(|finding| vec![finding])?;
+    let end = crate::lexer::end_of(source);
 
     if tokens.is_empty() {
-        return Err(vec![syntax(0, "selection is empty")]);
+        return Err(vec![crate::lexer::syntax(end, "selection is empty")]);
     }
 
     let mixed = mixes_boolean_precedence(&tokens);
@@ -35,6 +38,8 @@ pub(crate) fn parse(source: &str) -> Result<Parsed, Vec<Diagnostic>> {
     let mut parser = Parser {
         tokens: tokens.into_iter(),
         warnings: Vec::new(),
+        last: ByteSpan::default(),
+        end,
     };
 
     let expr = parser.parse_or().map_err(|finding| vec![finding])?;
@@ -57,6 +62,10 @@ pub(crate) fn parse(source: &str) -> Result<Parsed, Vec<Diagnostic>> {
 struct Parser {
     tokens: std::vec::IntoIter<Token>,
     warnings: Vec<Diagnostic>,
+    /// Where the most recently consumed token was read from.
+    last: ByteSpan,
+    /// The empty span just past the source, for "expected more" findings.
+    end: ByteSpan,
 }
 
 /// Geometric prefix recognized without allocating a lowercase copy.
@@ -149,106 +158,6 @@ impl Parser {
         self.parse_primary()
     }
 
-    /// Parses a geometric prefix if the next value is a geometric keyword.
-    ///
-    /// Keyword recognition is ASCII case-insensitive and allocation-free.
-    fn parse_geometric(&mut self) -> Result<Option<GeometricExpr>, Diagnostic> {
-        let Some(kind) = self.peek_value().and_then(geometric_keyword) else {
-            return Ok(None);
-        };
-
-        let _ = self.take_value();
-
-        let geometric = match kind {
-            GeometricKeyword::Within => {
-                let radius = self.number()?;
-                self.require_keyword("of")?;
-
-                GeometricExpr::Within {
-                    radius,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::Beyond => {
-                let radius = self.number()?;
-                self.require_keyword("of")?;
-
-                GeometricExpr::Beyond {
-                    radius,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::Around => {
-                let radius = self.number()?;
-
-                GeometricExpr::Around {
-                    radius,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::SphereZone => {
-                let radius = self.number()?;
-
-                GeometricExpr::SphereZone {
-                    radius,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::SphereLayer => {
-                let inner = self.number()?;
-                let outer = self.number()?;
-
-                GeometricExpr::SphereLayer {
-                    inner,
-                    outer,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::IsoLayer => {
-                let inner = self.number()?;
-                let outer = self.number()?;
-
-                GeometricExpr::IsoLayer {
-                    inner,
-                    outer,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::CylinderZone => {
-                let radius = self.number()?;
-                let z_max = self.number()?;
-                let z_min = self.number()?;
-
-                GeometricExpr::CylinderZone {
-                    radius,
-                    z_max,
-                    z_min,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::CylinderLayer => {
-                let inner = self.number()?;
-                let outer = self.number()?;
-                let z_max = self.number()?;
-                let z_min = self.number()?;
-
-                GeometricExpr::CylinderLayer {
-                    inner,
-                    outer,
-                    z_max,
-                    z_min,
-                    target: Box::new(self.parse_modifier()?),
-                }
-            }
-            GeometricKeyword::Point => GeometricExpr::Point {
-                point: [self.number()?, self.number()?, self.number()?],
-                radius: self.number()?,
-            },
-        };
-
-        Ok(Some(geometric))
-    }
-
     /// Parses a primary selection expression.
     ///
     /// Fixed keywords are recognized without lowercase allocation. Lowercase
@@ -281,6 +190,15 @@ impl Parser {
             return Ok(Expr::Group(self.required_value("group name expected")?));
         }
 
+        if let Some(name) = value.strip_prefix('$') {
+            if helpers::is_query_name(name) {
+                return Ok(Expr::Group(name.into()));
+            }
+            return Err(Diagnostic::new(Code::E4001)
+                .with_message("a named query reference is `$` followed by a name")
+                .at(self.last));
+        }
+
         if value.eq_ignore_ascii_case("atom") {
             return self.parse_atom();
         }
@@ -292,9 +210,11 @@ impl Parser {
         if value.eq_ignore_ascii_case("smarts") {
             let source = self.required_value("SMARTS pattern expected")?;
             let pattern = SmartsPattern::parse(&source).map_err(|error| {
-                Diagnostic::new(Code::E4004).with_context("smarts", error.to_string())
+                Diagnostic::new(Code::E4004)
+                    .with_context("smarts", error.to_string())
+                    .at(self.last)
             })?;
-            return Ok(Expr::Smarts(pattern));
+            return Ok(Expr::Smarts { pattern, source });
         }
 
         if value.eq_ignore_ascii_case("prop") {
@@ -315,7 +235,9 @@ impl Parser {
             return self.parse_flipped_comparison(number);
         }
 
-        Err(Diagnostic::new(Code::E4004).with_context("keyword", value.to_string()))
+        Err(Diagnostic::new(Code::E4004)
+            .with_context("keyword", value.to_string())
+            .at(self.last))
     }
 
     /// Parses the `prop` comparison surface.
@@ -333,7 +255,9 @@ impl Parser {
         let canonical = canonical_name(&first);
 
         let Some(column) = Column::from_name(canonical.as_ref()) else {
-            return Err(Diagnostic::new(Code::E4004).with_context("property", first.to_string()));
+            return Err(Diagnostic::new(Code::E4004)
+                .with_context("property", first.to_string())
+                .at(self.last));
         };
 
         self.comparison(column, absolute)
@@ -369,7 +293,9 @@ impl Parser {
     /// Parses a numeric column comparison.
     fn comparison(&mut self, column: Column, absolute: bool) -> Result<Expr, Diagnostic> {
         if !column.is_numeric() {
-            return Err(Diagnostic::new(Code::E4002).with_context("column", format!("{column:?}")));
+            return Err(Diagnostic::new(Code::E4002)
+                .with_context("column", format!("{column:?}"))
+                .at(self.last));
         }
 
         let operator = self.operator()?;
@@ -403,13 +329,15 @@ impl Parser {
         let canonical = canonical_name(&column_name);
 
         let Some(column) = Column::from_name(canonical.as_ref()) else {
-            return Err(
-                Diagnostic::new(Code::E4004).with_context("property", column_name.to_string())
-            );
+            return Err(Diagnostic::new(Code::E4004)
+                .with_context("property", column_name.to_string())
+                .at(self.last));
         };
 
         if !column.is_numeric() {
-            return Err(Diagnostic::new(Code::E4002).with_context("column", format!("{column:?}")));
+            return Err(Diagnostic::new(Code::E4002)
+                .with_context("column", format!("{column:?}"))
+                .at(self.last));
         }
 
         if matches!(operator, Operator::Equal | Operator::NotEqual) {
@@ -430,7 +358,9 @@ impl Parser {
         let residue_text = self.required_value("atom selector residue expected")?;
 
         let residue = residue_text.parse::<i32>().map_err(|_| {
-            Diagnostic::new(Code::E4002).with_context("value", residue_text.to_string())
+            Diagnostic::new(Code::E4002)
+                .with_context("value", residue_text.to_string())
+                .at(self.last)
         })?;
 
         let name = self.required_value("atom selector name expected")?;
@@ -474,7 +404,9 @@ impl Parser {
 
         match Column::from_name(canonical.as_ref()) {
             Some(column) => Ok(SameKey::Column(column)),
-            None => Err(Diagnostic::new(Code::E4004).with_context("same key", key.to_string())),
+            None => Err(Diagnostic::new(Code::E4004)
+                .with_context("same key", key.to_string())
+                .at(self.last)),
         }
     }
 }

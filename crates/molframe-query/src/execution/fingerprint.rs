@@ -96,7 +96,7 @@ impl Encoder {
                 value.hash(self);
             }
             Expr::Chirality(value) => self.tagged_text(15, value),
-            Expr::Smarts(value) => {
+            Expr::Smarts { pattern: value, .. } => {
                 self.tag(16);
                 value.hash(self);
             }

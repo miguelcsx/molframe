@@ -28,9 +28,9 @@ pub struct Evaluation {
 /// A parsed and reusable selection plan.
 #[derive(Clone, Debug)]
 pub struct Query {
-    expr: Expr,
-    warnings: Vec<Diagnostic>,
-    source: Box<str>,
+    pub(crate) expr: Expr,
+    pub(crate) warnings: Vec<Diagnostic>,
+    pub(crate) source: Box<str>,
 }
 
 impl PhysicalQuery {
@@ -262,7 +262,7 @@ impl Context<'_> {
             Expr::Chirality(configuration) => {
                 crate::macros::chirality_selection(self.structure, universe, configuration)
             }
-            Expr::Smarts(pattern) => smarts_selection(pattern, self.structure, universe),
+            Expr::Smarts { pattern, .. } => smarts_selection(pattern, self.structure, universe),
         }
     }
 

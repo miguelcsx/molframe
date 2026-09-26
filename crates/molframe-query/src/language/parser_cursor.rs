@@ -4,6 +4,7 @@ use super::Parser;
 use crate::ast::Operator;
 use crate::lexer::{Token, TokenKind};
 use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::span::ByteSpan;
 
 impl Parser {
     pub(super) fn operator(&mut self) -> Result<Operator, Diagnostic> {
@@ -17,15 +18,19 @@ impl Parser {
             ">=" => Ok(Operator::GreaterEqual),
             "==" => Ok(Operator::Equal),
             "!=" => Ok(Operator::NotEqual),
-            _ => Err(Diagnostic::new(Code::E4001).with_context("operator", operator.to_string())),
+            _ => Err(Diagnostic::new(Code::E4001)
+                .with_context("operator", operator.to_string())
+                .at(self.last)),
         }
     }
 
     pub(super) fn number(&mut self) -> Result<f32, Diagnostic> {
         let value = self.required_value("number expected")?;
-        value
-            .parse::<f32>()
-            .map_err(|_| Diagnostic::new(Code::E4002).with_context("value", value.to_string()))
+        value.parse::<f32>().map_err(|_| {
+            Diagnostic::new(Code::E4002)
+                .with_context("value", value.to_string())
+                .at(self.last)
+        })
     }
 
     pub(super) fn require_keyword(&mut self, keyword: &str) -> Result<(), Diagnostic> {
@@ -57,7 +62,7 @@ impl Parser {
         ) {
             return None;
         }
-        match self.tokens.next() {
+        match self.advance() {
             Some(Token {
                 kind: TokenKind::Value(value),
                 ..
@@ -80,7 +85,7 @@ impl Parser {
         ) {
             return None;
         }
-        match self.tokens.next() {
+        match self.advance() {
             Some(Token {
                 kind: TokenKind::Operator(operator),
                 ..
@@ -94,7 +99,7 @@ impl Parser {
             .peek_value()
             .is_some_and(|value| value.eq_ignore_ascii_case(expected))
         {
-            let _ = self.tokens.next();
+            let _ = self.advance();
             true
         } else {
             false
@@ -108,18 +113,32 @@ impl Parser {
             .first()
             .is_some_and(|token| &token.kind == expected)
         {
-            let _ = self.tokens.next();
+            let _ = self.advance();
             true
         } else {
             false
         }
     }
 
+    /// Consumes the next token, remembering where it was read from.
+    ///
+    /// Every production consumes through here, so a diagnostic about the value
+    /// just read can point at exactly that value.
+    pub(super) fn advance(&mut self) -> Option<Token> {
+        let token = self.tokens.next()?;
+        self.last = token.span;
+        Some(token)
+    }
+
+    /// The span of the next unread token, or the end of the source.
+    pub(super) fn next_span(&self) -> ByteSpan {
+        match self.tokens.as_slice().first() {
+            Some(token) => token.span,
+            None => self.end,
+        }
+    }
+
     pub(super) fn error_here(&self, message: &'static str) -> Diagnostic {
-        let offset = match self.tokens.as_slice().first() {
-            Some(token) => token.offset,
-            None => 0,
-        };
-        super::syntax(offset, message)
+        crate::lexer::syntax(self.next_span(), message)
     }
 }

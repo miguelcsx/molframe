@@ -1,4 +1,5 @@
 use super::*;
+use crate::ast::GeometricExpr;
 
 fn expression(source: &str) -> Expr {
     match parse(source) {
@@ -103,4 +104,49 @@ fn malformed_and_unknown_selections_return_registered_diagnostics() {
             .and_then(|findings| findings.first().map(Diagnostic::code)),
         Some(Code::E4004)
     );
+}
+
+fn span_of(source: &str) -> (u64, u64) {
+    let Err(findings) = parse(source) else {
+        panic!("{source:?} should not parse");
+    };
+    let Some(span) = findings[0].span() else {
+        panic!("{source:?} produced an unlocated finding: {findings:?}");
+    };
+    (span.start.byte_offset, span.end)
+}
+
+#[test]
+fn an_unknown_keyword_is_located_at_the_keyword() {
+    assert_eq!(span_of("protein and resnam HEM"), (12, 18));
+}
+
+#[test]
+fn a_missing_closing_parenthesis_points_past_the_end() {
+    assert_eq!(span_of("(protein and water"), (18, 18));
+}
+
+#[test]
+fn a_bad_number_is_located_at_the_number() {
+    assert_eq!(span_of("within five of protein"), (7, 11));
+}
+
+#[test]
+fn an_empty_selection_is_located_at_the_end_of_the_source() {
+    assert_eq!(span_of("   "), (3, 3));
+}
+
+#[test]
+fn a_trailing_token_is_located() {
+    assert_eq!(span_of("protein )"), (8, 9));
+}
+
+#[test]
+fn a_malformed_dollar_reference_is_a_located_syntax_error() {
+    assert_eq!(span_of("protein or $9x"), (11, 14));
+}
+
+#[test]
+fn a_dollar_name_is_a_group_reference() {
+    assert!(matches!(expression("$pocket"), Expr::Group(name) if &*name == "pocket"));
 }

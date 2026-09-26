@@ -2,7 +2,6 @@
 
 use super::GeometricKeyword;
 use crate::lexer::{Token, TokenKind};
-use molframe_core::diagnostic::{Code, Diagnostic};
 use std::borrow::Cow;
 
 pub(super) fn geometric_keyword(value: &str) -> Option<GeometricKeyword> {
@@ -62,7 +61,7 @@ pub(super) fn mixes_boolean_precedence(tokens: &[Token]) -> bool {
 }
 
 #[inline]
-pub(super) fn is_boundary(value: &str) -> bool {
+pub(crate) fn is_boundary(value: &str) -> bool {
     value.eq_ignore_ascii_case("and") || value.eq_ignore_ascii_case("or")
 }
 
@@ -76,8 +75,16 @@ pub(super) fn unescape(value: Box<str>) -> Box<str> {
     }
 }
 
-pub(super) fn syntax(offset: usize, message: &'static str) -> Diagnostic {
-    Diagnostic::new(Code::E4001)
-        .with_message(message)
-        .with_context("offset", offset.to_string())
+/// Whether `name` can follow `$` as a named query reference.
+///
+/// A name starts with a letter or underscore and continues with letters,
+/// digits and underscores: the same spelling rule an interactive session
+/// applies to the names it defines, so every definable name is referable.
+pub(crate) fn is_query_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }

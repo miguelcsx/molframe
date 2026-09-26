@@ -160,6 +160,15 @@ registry! {
     E4004 = Error 4004, Invalidating,
         "unknown selection keyword",
         "check the spelling against the keyword list; an annotation column can also be selected by its own name";
+    E4005 = Error 4005, Invalidating,
+        "named query is not defined",
+        "define the name before referring to it, or check its spelling";
+    E4006 = Error 4006, Invalidating,
+        "named query definitions refer to each other in a cycle",
+        "break the cycle so that every name eventually resolves to atoms rather than to itself";
+    E4007 = Error 4007, Invalidating,
+        "named query nesting is too deep",
+        "flatten the chain of definitions; each name may refer to at most a bounded depth of other names";
     E4101 = Error 4101, Invalidating,
         "atom count exceeds legacy format capacity",
         "write mmCIF or BinaryCIF, or enable hybrid-36 serials explicitly";

@@ -56,7 +56,7 @@ pub use crate::Selection;
 #[cfg(feature = "query")]
 pub use crate::query::Groups;
 #[cfg(feature = "query")]
-pub use crate::{Query, QueryStructure};
+pub use crate::{Query, QueryAliases, QueryStructure};
 
 #[cfg(feature = "spatial")]
 pub use crate::spatial::SpatialBackend;

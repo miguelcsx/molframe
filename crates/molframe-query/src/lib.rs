@@ -9,10 +9,10 @@ mod language;
 pub(crate) use api::builder;
 pub(crate) use execution::{annotation, connectivity, plan, spatial};
 pub(crate) use language::{
-    ast, expand, glob, lexer, macros, model_pattern, parser, predicate, predicate_pattern,
+    ast, expand, glob, lexer, macros, model_pattern, parser, predicate, predicate_pattern, print,
 };
 
-pub use api::{Builder, ColumnBuilder, col};
+pub use api::{Builder, ColumnBuilder, QueryAliases, col};
 pub use execution::{
     Evaluation, GeometricRequest, Groups, LogicalPlan, PhysicalQuery, Query, QueryFingerprint,
     SpatialResolver,

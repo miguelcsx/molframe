@@ -290,5 +290,12 @@ pub(crate) enum Expr {
     },
     Macro(Macro),
     Chirality(Box<str>),
-    Smarts(SmartsPattern),
+    /// A substructure pattern and the text it was parsed from.
+    ///
+    /// The text is kept because a pattern does not retain it, and printing a
+    /// query back to canonical syntax needs something to print.
+    Smarts {
+        pattern: SmartsPattern,
+        source: Box<str>,
+    },
 }

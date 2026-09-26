@@ -345,6 +345,58 @@ The same selection semantics can then be reused across compatible analyses.
 
 This prevents each algorithm from inventing its own interpretation of what constitutes the selected structure.
 
+### Textual, typed, and reusable queries
+
+A query is compiled once into a typed plan and reused. Text and the typed
+builder produce the same plan, and the plan's fingerprint is its identity:
+
+```python
+import molframe
+
+structure = molframe.read("4hhb.cif")
+
+text = molframe.Query("byres (within 5 of resname HEM) and protein")
+typed = molframe.sel.residues_within(5.0, molframe.sel.residue("HEM")) & molframe.sel.protein()
+
+structure.select(text)            # a compiled Query is evaluated directly
+structure.select("chain A")       # text is compiled and evaluated
+text.fingerprint                  # stable identity of the normalized plan
+```
+
+```rust
+use molframe::{Query, QueryStructure, AnalysisPolicy};
+
+let query = Query::compile("byres (within 5 of resname HEM) and protein")?;
+let selected = structure.select_query(&query, &AnalysisPolicy::default())?;
+```
+
+Syntax errors carry the exact byte range of the offending token (with its line
+and column), so a caller embedding a query inside a larger text can point at it.
+
+### Named queries
+
+A query can refer to a named definition with `$name` (or the longer
+`group name`). `QueryAliases` holds definitions and resolves a query into a
+*closed* query that mentions no name, by substituting typed plans — nothing is
+re-parsed and no atom is evaluated to do it:
+
+```python
+aliases = molframe.QueryAliases()
+aliases.define("heme", molframe.Query("resname HEM"))
+aliases.define("pocket", molframe.Query("byres (within 5 of $heme) and protein"))
+
+pocket = aliases.resolve(molframe.Query("$pocket"))
+pocket.source        # canonical closed text: no names remain
+pocket.references    # []
+molframe.Query("$pocket and not $heme").references   # ['heme', 'pocket']
+```
+
+Definitions are live: redefining `heme` changes what `$pocket` resolves to.
+Resolution is deterministic, rejects unknown names (`E4005`), cycles such as
+`a -> b -> a` (`E4006`), and chains nested deeper than a fixed bound (`E4007`).
+A runtime `Groups` map — atoms already selected, supplied at evaluation time —
+remains available for `group` names that are meant to be evaluated as given.
+
 ## Geometry and spatial analysis
 
 MolFrame provides reusable kernels for common structural operations including:

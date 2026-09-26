@@ -15,6 +15,9 @@ use molframe_core::selection::AtomSelection;
 #[path = "golden/native_pending.rs"]
 mod native_pending;
 
+#[path = "golden/named_queries.rs"]
+mod named_queries;
+
 const UNKNOWN_CATEGORY_CIF: &str = "data_unknown\n\
 _custom.note 'keep this category'\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\

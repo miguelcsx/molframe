@@ -9,3 +9,4 @@ pub(crate) mod model_pattern;
 pub(crate) mod parser;
 pub(crate) mod predicate;
 pub(crate) mod predicate_pattern;
+pub(crate) mod print;
