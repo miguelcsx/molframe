@@ -171,3 +171,46 @@ fn read_structure(source: &str) -> molframe_core::Structure {
         Err(findings) => panic!("fixture failed: {findings:?}"),
     }
 }
+
+/// [`SIMPLE`] with its entity declared a protein.
+fn declared_polymer() -> String {
+    SIMPLE.replacen(
+        "E1 polymer\n",
+        "E1 polymer\nloop_\n_entity_poly.entity_id\n_entity_poly.type\nE1 'polypeptide(L)'\n",
+        1,
+    )
+}
+
+#[test]
+fn binary_round_trip_keeps_a_declared_polymer_kind() {
+    let structure = read_structure(&declared_polymer());
+    let chains = &structure.data().topology.chains;
+    let chain = chains.iter().next().expect("fixture has a chain");
+    assert_eq!(
+        chains.polymer_kind(chain),
+        Some(molframe_core::topology::PolymerKind::Protein)
+    );
+
+    let bytes = write_structure_with_options(&structure, &CifWriteOptions::new())
+        .expect("binary write succeeds");
+    let input = InputBuffer::from_bytes(bytes);
+    let (reread, _) = crate::read(&input, &ReadOptions::new()).expect("binary reads back");
+    let chains = &reread.data().topology.chains;
+    let chain = chains.iter().next().expect("round trip keeps the chain");
+    assert_eq!(
+        chains.polymer_kind(chain),
+        Some(molframe_core::topology::PolymerKind::Protein)
+    );
+}
+
+#[test]
+fn direct_structure_bytes_match_the_projection_with_declared_polymers() {
+    let structure = read_structure(&declared_polymer());
+    let options = CifWriteOptions::new();
+    let actual = write_structure_with_options(&structure, &options).expect("direct write succeeds");
+    let canonical = write_canonical_with_options(&structure, &options).expect("CIF writes");
+    let input = InputBuffer::from_bytes(canonical.into_bytes());
+    let (document, findings) = parse(&input).expect("canonical CIF parses");
+    assert!(findings.is_empty(), "findings: {findings:?}");
+    assert_eq!(actual, write_document(&document).expect("document writes"));
+}

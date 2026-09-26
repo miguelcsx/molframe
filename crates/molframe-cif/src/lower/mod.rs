@@ -11,6 +11,7 @@ mod ensemble;
 mod entry;
 mod keys;
 mod metadata;
+mod polymer;
 mod ragged;
 mod references;
 mod stream;

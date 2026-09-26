@@ -104,6 +104,7 @@ pub(in crate::reader) fn keep_lowering_category(category: &str) -> bool {
             | "exptl"
             | "cell"
             | "entity"
+            | "entity_poly"
             | "entity_poly_seq"
             | "struct_asym"
             | "struct_conn"

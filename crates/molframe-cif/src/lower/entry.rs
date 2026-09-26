@@ -90,6 +90,7 @@ pub(super) fn finish_model(
     coords: CoordinateStore,
 ) -> (Structure, Vec<Diagnostic>) {
     data.coords = coords;
+    super::polymer::classify(block, &mut data, &mut findings);
     super::bonds::read(block, &mut data, &mut findings);
 
     for finding in molframe_core::structure::validate(&data) {

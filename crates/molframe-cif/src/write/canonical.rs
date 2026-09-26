@@ -128,7 +128,22 @@ fn write_entities(out: &mut impl fmt::Write, structure: &Structure) {
         let _ = writeln!(out, "{id} {kind} {description}");
     }
     let _ = out.write_str("#\n");
+    write_entity_polymers(out, structure);
     write_entity_sequences(out, structure);
+}
+
+fn write_entity_polymers(out: &mut impl fmt::Write, structure: &Structure) {
+    let declared = super::declared_polymer_types(structure);
+    if declared.is_empty() {
+        return;
+    }
+    let entities = &structure.data().topology.entities;
+    let _ = out.write_str("loop_\n_entity_poly.entity_id\n_entity_poly.type\n");
+    for (entity, kind) in declared {
+        let id = symbol_or_dot(structure, entities.id(entity));
+        let _ = writeln!(out, "{id} {}", quoted(kind));
+    }
+    let _ = out.write_str("#\n");
 }
 
 fn write_entity_sequences(out: &mut impl fmt::Write, structure: &Structure) {

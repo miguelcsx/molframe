@@ -110,7 +110,37 @@ fn encode_entities(
         row_count: entities.len(),
         columns: vec![ids.finish()?, kinds.finish()?, descriptions.finish()?],
     });
+    encode_entity_polymers(projection, target)?;
     encode_entity_sequence(projection, target)
+}
+
+/// Declares each polymer entity's type, so a reader recovers the chain's kind.
+fn encode_entity_polymers(
+    projection: CanonicalProjection<'_>,
+    target: &mut Vec<EncodedCategory>,
+) -> Result<(), Diagnostic> {
+    let structure = projection.structure();
+    let declared = molframe_cif::declared_polymer_types(structure);
+    if declared.is_empty() {
+        return Ok(());
+    }
+    let entities = &structure.data().topology.entities;
+    let mut ids = TextColumnBuilder::new("entity_id", declared.len());
+    let mut kinds = TextColumnBuilder::new("type", declared.len());
+    for &(entity, kind) in &declared {
+        ids.push(inapplicable(
+            entities
+                .id(entity)
+                .and_then(|value| structure.resolve(value)),
+        ));
+        kinds.push(CanonicalValue::Present(kind));
+    }
+    target.push(EncodedCategory {
+        name: "_entity_poly".to_owned(),
+        row_count: declared.len(),
+        columns: vec![ids.finish()?, kinds.finish()?],
+    });
+    Ok(())
 }
 
 fn encode_entity_sequence(
