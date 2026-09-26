@@ -189,3 +189,13 @@ def test_select_accepts_text_and_compiled_queries_alike():
         == structure.select(molframe.Query("index 1")).indices.tolist()
         == structure.select(molframe.sel.all() & molframe.Query("index 1")).indices.tolist()
     )
+
+
+def test_bonds_are_inferred_only_when_asked():
+    structure = molframe.read(DATA / "basic.pdb")
+    assert structure.bond_count == 0
+    bonded = structure.infer_bonds()
+    assert bonded.bond_count == 1
+    assert structure.bond_count == 0
+    with pytest.raises(ValueError):
+        structure.infer_bonds(scale=0.0)

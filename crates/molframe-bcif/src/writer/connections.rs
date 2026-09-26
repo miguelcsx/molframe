@@ -59,6 +59,9 @@ struct EndpointColumns {
     component: TextColumnBuilder,
     atom: TextColumnBuilder,
     alternate: TextColumnBuilder,
+    /// A partner with no label sequence — any non-polymer — is identified
+    /// by its author sequence number, which the reader falls back to.
+    author_sequence: IntegerColumnBuilder,
 }
 
 impl EndpointColumns {
@@ -70,6 +73,7 @@ impl EndpointColumns {
                 "ptnr1_label_comp_id",
                 "ptnr1_label_atom_id",
                 "pdbx_ptnr1_label_alt_id",
+                "ptnr1_auth_seq_id",
             )
         } else {
             (
@@ -78,6 +82,7 @@ impl EndpointColumns {
                 "ptnr2_label_comp_id",
                 "ptnr2_label_atom_id",
                 "pdbx_ptnr2_label_alt_id",
+                "ptnr2_auth_seq_id",
             )
         };
         Self {
@@ -86,6 +91,7 @@ impl EndpointColumns {
             component: TextColumnBuilder::new(names.2, rows),
             atom: TextColumnBuilder::new(names.3, rows),
             alternate: TextColumnBuilder::new(names.4, rows),
+            author_sequence: IntegerColumnBuilder::new(names.5, rows),
         }
     }
 
@@ -102,6 +108,11 @@ impl EndpointColumns {
             Some(value) if !value.is_empty() => CanonicalValue::Present(value),
             Some(_) | None => CanonicalValue::Inapplicable,
         });
+        self.author_sequence
+            .push(match endpoint.residue.auth_seq_id() {
+                Some(value) => CanonicalValue::Present(i64::from(value)),
+                None => CanonicalValue::Inapplicable,
+            });
     }
 
     fn finish(self) -> Result<Vec<crate::container::EncodedColumn>, Diagnostic> {
@@ -111,6 +122,7 @@ impl EndpointColumns {
             self.component.finish()?,
             self.atom.finish()?,
             self.alternate.finish()?,
+            self.author_sequence.finish()?,
         ])
     }
 }

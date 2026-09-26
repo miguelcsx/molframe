@@ -16,6 +16,8 @@ use std::path::PathBuf;
 #[cfg(feature = "analysis")]
 mod analysis;
 #[cfg(feature = "analysis")]
+mod bonds;
+#[cfg(feature = "analysis")]
 pub(crate) use analysis::{PyContactTable, atom_contacts};
 
 #[derive(Clone, Debug)]
@@ -128,6 +130,19 @@ impl PyStructure {
         PyStructureEditor {
             inner: Some(self.inner.edit()),
         }
+    }
+
+    /// Covalent bonds the structure carries.
+    #[getter]
+    fn bond_count(&self) -> usize {
+        self.inner.engine().data().bonds.len()
+    }
+
+    /// A copy with bonds inferred from covalent radii and distances.
+    #[cfg(feature = "analysis")]
+    #[pyo3(signature = (*, scale=molframe::DEFAULT_BOND_RADIUS_SCALE, lower_bound=molframe::DEFAULT_MINIMUM_BOND_DISTANCE, across_chains=true))]
+    fn infer_bonds(&self, scale: f32, lower_bound: f32, across_chains: bool) -> PyResult<Self> {
+        bonds::infer(self, scale, lower_bound, across_chains)
     }
 
     fn _molframe_source_v2<'py>(

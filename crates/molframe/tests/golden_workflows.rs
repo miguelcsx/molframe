@@ -18,6 +18,9 @@ mod native_pending;
 #[path = "golden/named_queries.rs"]
 mod named_queries;
 
+#[path = "golden/connection_round_trip.rs"]
+mod connection_round_trip;
+
 const UNKNOWN_CATEGORY_CIF: &str = "data_unknown\n\
 _custom.note 'keep this category'\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\

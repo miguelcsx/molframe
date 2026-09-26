@@ -10,10 +10,10 @@ const HEADER: &str = "loop_\n\
 _struct_conn.id\n_struct_conn.conn_type_id\n\
 _struct_conn.ptnr1_label_asym_id\n_struct_conn.ptnr1_label_seq_id\n\
 _struct_conn.ptnr1_label_comp_id\n_struct_conn.ptnr1_label_atom_id\n\
-_struct_conn.pdbx_ptnr1_label_alt_id\n\
+_struct_conn.pdbx_ptnr1_label_alt_id\n_struct_conn.ptnr1_auth_seq_id\n\
 _struct_conn.ptnr2_label_asym_id\n_struct_conn.ptnr2_label_seq_id\n\
 _struct_conn.ptnr2_label_comp_id\n_struct_conn.ptnr2_label_atom_id\n\
-_struct_conn.pdbx_ptnr2_label_alt_id\n\
+_struct_conn.pdbx_ptnr2_label_alt_id\n_struct_conn.ptnr2_auth_seq_id\n\
 _struct_conn.pdbx_value_order\n_struct_conn.details\n";
 
 pub(super) fn preflight(
@@ -110,6 +110,9 @@ const fn missing(bond: usize, endpoint: u8, field: &'static str) -> CifWriteErro
 struct Endpoint<'a> {
     chain: Quoted<'a>,
     seq: Option<i32>,
+    /// A partner with no label sequence — any non-polymer — is identified
+    /// by its author sequence number, which the reader falls back to.
+    auth_seq: Option<i32>,
     component: Quoted<'a>,
     atom: Quoted<'a>,
     alt: Option<Quoted<'a>>,
@@ -138,6 +141,7 @@ fn endpoint<'a>(
     Ok(Endpoint {
         chain: quoted(chain),
         seq: residue.label_seq_id(),
+        auth_seq: residue.auth_seq_id(),
         component: quoted(component),
         atom: quoted(name),
         alt: atom.alt_label().map(quoted),
@@ -148,12 +152,13 @@ impl Display for Endpoint<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "{} {} {} {} {}",
+            "{} {} {} {} {} {}",
             self.chain,
             OptionalInteger(self.seq),
             self.component,
             self.atom,
             OptionalQuoted(self.alt.as_ref()),
+            OptionalInteger(self.auth_seq),
         )
     }
 }
