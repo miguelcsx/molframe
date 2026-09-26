@@ -20,6 +20,7 @@ from ._native import (
     StructureEditor,
     Workflow,
     WorkflowNode,
+    __version__,
     read,
 )
 
@@ -39,6 +40,7 @@ surface = _native.surface
 formats = _native.formats
 
 __all__ = [
+    "__version__",
     "CompiledWorkflow",
     "Atom",
     "Atoms",

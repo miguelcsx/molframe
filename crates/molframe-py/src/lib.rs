@@ -48,6 +48,9 @@ pub use native_source::{NativeAtom, NativeBond, NativeStructureSource, NativeTop
 #[pymodule]
 #[pyo3(name = "_native")]
 fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    // The version of the crate this binary was compiled from, which is the
+    // version of the wheel: maturin takes the package version from it.
+    module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<PyStructure>()?;
     module.add_class::<PyStructureEditor>()?;
     module.add_class::<PyAtom>()?;

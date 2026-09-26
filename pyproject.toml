@@ -5,12 +5,39 @@ build-backend = "maturin"
 [project]
 name = "molframe"
 version = "0.1.2"
+description = "Structural bioinformatics on a columnar engine: read, select, measure, analyze and compare molecular structures"
+readme = "README.md"
+authors = [{ name = "Miguel Cárdenas", email = "miguelecsx@gmail.com" }]
+keywords = ["structural-biology", "bioinformatics", "mmcif", "pdb", "protein", "molecular-structure"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Typing :: Typed",
+]
 requires-python = ">=3.12"
 dependencies = ["numpy>=2"]
 # PEP 639. maturin gained full support for the SPDX expression and
 # `license-files` in 1.9.0; the build backend below already requires 1.9.4.
 license = "MIT"
 license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/miguelcsx/molframe"
+Repository = "https://github.com/miguelcsx/molframe"
+Issues = "https://github.com/miguelcsx/molframe/issues"
+Documentation = "https://github.com/miguelcsx/molframe#readme"
 
 [dependency-groups]
 dev = ["pyright>=1.1.405", "pytest>=8"]

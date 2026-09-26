@@ -51,6 +51,12 @@ def test_root_is_curated_and_domains_use_final_names():
         assert not hasattr(molframe, removed)
 
 
+def test_version_is_the_installed_distribution_version():
+    from importlib.metadata import version
+
+    assert molframe.__version__ == version("molframe")
+
+
 def test_read_selection_and_coordinate_ownership():
     structure = molframe.read(DATA / "basic.pdb")
     assert structure.atom_count == 2

@@ -583,17 +583,17 @@ cargo test --workspace
 
 The repository also contains project-specific verification tooling for formatting, linting, packaging, bindings, scientific fixtures, and reproducibility checks.
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development workflow.
+See [`CONTRIBUTING.md`](https://github.com/miguelcsx/molframe/blob/main/CONTRIBUTING.md) for the development workflow.
 
 ## Citation
 
 If MolFrame contributes to published research, please cite the software.
 
-Machine-readable citation metadata is provided in [`CITATION.cff`](CITATION.cff).
+Machine-readable citation metadata is provided in [`CITATION.cff`](https://github.com/miguelcsx/molframe/blob/main/CITATION.cff).
 
 ## License
 
-MolFrame is released under the [MIT License](LICENSE).
+MolFrame is released under the [MIT License](https://github.com/miguelcsx/molframe/blob/main/LICENSE).
 
 The bundled reference data keeps the licence of its upstream source, carried
 beside the data it covers: mendeleev's MIT notice in

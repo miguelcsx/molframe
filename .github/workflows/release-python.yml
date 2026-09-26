@@ -160,9 +160,16 @@ jobs:
 
       # maturin reads the version from the crate it builds, so the wheel and the
       # crates.io release cannot disagree about which version this is.
+      # Linux wheels are built inside the manylinux_2_28 container, so they
+      # need glibc 2.28 rather than whatever the runner's newer glibc lets the
+      # linker reach for. A wheel built on the bare runner carried the tag of
+      # that runner's symbols -- manylinux_2_35, exactly Google Colab's glibc,
+      # one symbol away from not installing there at all. The input is ignored
+      # on macOS and Windows.
       - name: Build the wheel
         uses: PyO3/maturin-action@v1
         with:
+          manylinux: "2_28"
           args: --release --out dist --manifest-path crates/molframe-py/Cargo.toml
 
       - uses: actions/upload-artifact@v4
