@@ -192,24 +192,16 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: python3 .github/scripts/publish.py
 
-      # Only now does the commit become a release. The tag is signed and
-      # annotated, matching every commit in this repository, so the key is
-      # required rather than optional: a release that silently produced an
-      # unsigned tag would be the one tag nobody could verify.
+      # Only now does the commit become a release. The tag is annotated, not
+      # signed: CI holds no signing key, and the provenance of the published
+      # crates is already attested by crates.io's trusted publishing.
       - name: Tag
         if: ${{ !inputs.dry-run }}
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
-          GPG_KEY_ID: ${{ secrets.RELEASE_GPG_KEY_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${GPG_PRIVATE_KEY:-}" ] || [ -z "${GPG_KEY_ID:-}" ]; then
-            echo "::error::RELEASE_GPG_PRIVATE_KEY and RELEASE_GPG_KEY_ID must both be set on the release environment"
-            exit 1
-          fi
-          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
-          git config user.signingkey "$GPG_KEY_ID"
-          git tag -s "v$VERSION" -m "MolFrame $VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "MolFrame $VERSION"
           git push origin "v$VERSION"
 
       - name: GitHub Release
