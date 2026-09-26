@@ -1,9 +1,9 @@
-# Publish the Python distribution to PyPI from a single dispatched version.
+# Publish the Python distribution to PyPI when a push to main bumps the version.
 #
 # Separate from `release.yml` on purpose. PyPI is a different registry with a
 # different trusted publisher, a different upload mechanism and a different
 # failure domain: a crates.io release that succeeded must not be reported as
-# failed because a wheel would not build, and vice versa. The two are dispatched
+# failed because a wheel would not build, and vice versa. The two run
 # independently, and either can be re-run alone.
 #
 # Authentication is OIDC via PyPI's trusted publisher, so no token is stored
@@ -18,11 +18,17 @@
 name: Release Python
 
 on:
+  # Every push to main runs; `detect` below stops it unless the manifest names
+  # a version that has not been released. Bumping the version is the release.
+  push:
+    branches: [main]
+  # Kept for re-running a release by hand. The version is optional and, when
+  # given, must equal the manifest's.
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, without the leading v (e.g. 0.1.1)"
-        required: true
+        description: "Version to release, without the leading v (defaults to the manifest's)"
+        required: false
         type: string
       dry-run:
         description: "Build and check every wheel, then stop before uploading"
@@ -39,24 +45,58 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
+  # A version already on PyPI stops here, so only a push that bumps the
+  # version publishes, and a failed upload is retried by the next push or a
+  # manual run. pyproject.toml must name the same version as Cargo.toml.
+  detect:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify the version input
+      - id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          declared=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
-          manifest=$(cargo metadata --format-version 1 --no-deps \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
-          if [ "$INPUT_VERSION" != "$declared" ] || [ "$INPUT_VERSION" != "$manifest" ]; then
-            echo "::error::input $INPUT_VERSION, pyproject.toml $declared and Cargo.toml $manifest must agree"
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["workspace"]["package"]["version"])')
+          case "$version" in
+            *[!0-9A-Za-z.+-]*)
+              echo "::error::version $version is not a valid semver"
+              exit 1
+              ;;
+          esac
+          if [ -n "${INPUT_VERSION:-}" ] && [ "$INPUT_VERSION" != "$version" ]; then
+            echo "::error::input version $INPUT_VERSION does not match the workspace version $version"
             exit 1
           fi
-          echo "VERSION=$INPUT_VERSION" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          project=$(python3 -c 'import tomllib; p=tomllib.load(open("pyproject.toml","rb"))["project"]; print(p["name"], p["version"])')
+          name=${project% *}
+          declared=${project#* }
+          if [ "$declared" != "$version" ]; then
+            echo "::error::pyproject.toml declares $declared but Cargo.toml declares $version"
+            exit 1
+          fi
+          status=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/$name/$version/json")
+          if [ "$status" = "200" ]; then
+            echo "::notice::$name $version is already on PyPI"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          elif [ "$status" = "404" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::PyPI answered $status for $name $version"
+            exit 1
+          fi
+
+  verify:
+    needs: detect
+    if: needs.detect.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       # The Cargo version and the packaging version are two files that must
       # name one release, and nothing in either build reads the other.
@@ -81,7 +121,7 @@ jobs:
           uv run --no-sync pyright --verifytypes molframe
 
   wheels:
-    needs: verify
+    needs: [detect, verify]
     strategy:
       fail-fast: false
       matrix:
@@ -116,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo metadata --format-version 1 --no-deps \
-            | python3 -c 'import json,sys; p=json.load(sys.stdin)["packages"][0]; assert p["version"] == "${{ inputs.version }}", p["version"]'
+            | python3 -c 'import json,sys; p=json.load(sys.stdin)["packages"][0]; assert p["version"] == "${{ needs.detect.outputs.version }}", p["version"]'
 
       # maturin reads the version from the crate it builds, so the wheel and the
       # crates.io release cannot disagree about which version this is.

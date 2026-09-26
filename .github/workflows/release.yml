@@ -1,4 +1,4 @@
-# Release MolFrame to crates.io and PyPI from a single dispatched version.
+# Release MolFrame to crates.io when a push to main bumps the workspace version.
 #
 # The tag is created *after* the registry upload succeeds, never before: a tag
 # says "this commit is the release", and a half-published version is not one.
@@ -19,11 +19,17 @@
 name: Release
 
 on:
+  # Every push to main runs; `detect` below stops it unless the manifest names
+  # a version that has not been released. Bumping the version is the release.
+  push:
+    branches: [main]
+  # Kept for re-running a release by hand. The version is optional and, when
+  # given, must equal the manifest's.
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, without the leading v (e.g. 0.1.1)"
-        required: true
+        description: "Version to release, without the leading v (defaults to the manifest's)"
+        required: false
         type: string
       dry-run:
         description: "Run every gate and stop before uploading"
@@ -45,9 +51,49 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The tag is the last thing a release creates, so a version without one was
+  # never finished: that is the only case that proceeds. A push that does not
+  # change the version finds its tag and stops here, and a release that failed
+  # half-way is resumed by the next push or a manual run.
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["workspace"]["package"]["version"])')
+          case "$version" in
+            *[!0-9A-Za-z.+-]*)
+              echo "::error::version $version is not a valid semver"
+              exit 1
+              ;;
+          esac
+          if [ -n "${INPUT_VERSION:-}" ] && [ "$INPUT_VERSION" != "$version" ]; then
+            echo "::error::input version $INPUT_VERSION does not match the workspace version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "::notice::v$version is already released"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: detect
+    if: needs.detect.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment: release
+    env:
+      VERSION: ${{ needs.detect.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,28 +101,6 @@ jobs:
 
       - name: Toolchain
         run: rustup show active-toolchain
-
-      # The input is untrusted. It reaches `cargo publish`, a git tag name and
-      # a release title, so it is checked against the manifest before any of
-      # those, and rejected unless it is exactly the version in Cargo.toml.
-      - name: Verify the version input
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          manifest=$(cargo metadata --format-version 1 --no-deps \
-            | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
-          if [ "$INPUT_VERSION" != "$manifest" ]; then
-            echo "::error::input version $INPUT_VERSION does not match the workspace version $manifest"
-            exit 1
-          fi
-          case "$INPUT_VERSION" in
-            *[!0-9A-Za-z.+-]*)
-              echo "::error::version $INPUT_VERSION is not a valid semver"
-              exit 1
-              ;;
-          esac
-          echo "VERSION=$INPUT_VERSION" >> "$GITHUB_ENV"
 
       # A release must come from a commit that exists on the default branch.
       # Dispatching from a side branch is the easy way to publish something
@@ -221,4 +245,4 @@ jobs:
       - name: Python note
         if: ${{ !inputs.dry-run }}
         run: |
-          echo "::notice::crates.io published v$VERSION. Run the Release Python workflow to publish the wheels."
+          echo "::notice::crates.io published v$VERSION. The Release Python workflow publishes the wheels on its own."
