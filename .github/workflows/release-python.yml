@@ -96,6 +96,8 @@ jobs:
             label: macos-x86_64
           - runner: macos-14
             label: macos-aarch64
+          - runner: windows-latest
+            label: windows-x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -103,7 +105,14 @@ jobs:
       - name: Toolchain
         run: rustup show active-toolchain
 
+      # The wheel is abi3-py313, so the interpreter that installs it must be at
+      # least 3.13; a runner's default python is not guaranteed to be.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Rebuild the manifest check
+        shell: bash
         run: |
           set -euo pipefail
           cargo metadata --format-version 1 --no-deps \
@@ -123,11 +132,13 @@ jobs:
 
       # A wheel that installs but cannot import is the failure this catches.
       - name: Install and import
+        shell: bash
         run: |
           set -euo pipefail
-          python3 -m venv .venv
-          .venv/bin/pip install --force-reinstall dist/*.whl
-          .venv/bin/python -c 'import molframe; print(molframe.__name__, "imports")'
+          python -m venv .venv
+          if [ -d .venv/Scripts ]; then py=.venv/Scripts/python; else py=.venv/bin/python; fi
+          "$py" -m pip install --force-reinstall dist/*.whl
+          "$py" -c 'import molframe; print(molframe.__name__, "imports")'
 
   sdist:
     needs: verify
