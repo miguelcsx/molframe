@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import graphlib
 import hashlib
+import io
 import json
 import re
 import subprocess
@@ -34,6 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 INDEX = "https://index.crates.io"
+DOWNLOAD = "https://static.crates.io/crates"
 # crates.io asks that automated clients identify themselves.
 HEADERS = {"User-Agent": "molframe-release-workflow (github.com/miguelcsx/molframe)"}
 
@@ -120,6 +122,43 @@ def await_published(name: str, version: str) -> str:
             return checksum
         time.sleep(INDEX_POLL)
     raise SystemExit(f"{name} {version} did not reach the index within {INDEX_TIMEOUT}s")
+
+
+def archive_contents(data: bytes, name: str, version: str) -> dict[str, bytes]:
+    """Every file in a `.crate` archive except its lockfile, keyed by path.
+
+    The lockfile is left out because it records whatever the registry held at
+    packaging time: a dependency released between two packagings changes it
+    while every source file stays the same. A library's consumers never read
+    it, so it is not part of what "the same crate" means here.
+    """
+    lockfile = f"{name}-{version}/Cargo.lock"
+    contents: dict[str, bytes] = {}
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+        for member in tar.getmembers():
+            if member.isfile() and member.name != lockfile:
+                extracted = tar.extractfile(member)
+                if extracted is not None:
+                    contents[member.name] = extracted.read()
+    return contents
+
+
+def same_crate(name: str, version: str, published: str, local: str) -> bool:
+    """Whether the registry's archive matches the local one.
+
+    Equal checksums settle it. Otherwise the published archive is downloaded
+    and compared file by file, lockfile aside, so a resumed run is not stopped
+    by a dependency that was released between two packagings.
+    """
+    if published == local:
+        return True
+    body = fetch(f"{DOWNLOAD}/{name}/{name}-{version}.crate")
+    if body is None:
+        return False
+    archive = Path("target/package") / f"{name}-{version}.crate"
+    return archive_contents(body, name, version) == archive_contents(
+        archive.read_bytes(), name, version
+    )
 
 
 def local_checksums(version: str) -> dict[str, str]:
@@ -234,11 +273,11 @@ def main() -> int:
         prefix = f"[{position}/{len(order)}]"
         existing = published_checksum(name, version)
         if existing is not None:
-            if existing != expected:
+            if not same_crate(name, version, existing, expected):
                 raise SystemExit(
                     f"{name} {version} is already on crates.io with checksum {existing}, "
-                    f"but the local archive hashes to {expected}. The version is taken and "
-                    f"cannot be replaced; bump the workspace version instead."
+                    f"and its files differ from the local archive's. The version is taken "
+                    f"and cannot be replaced; bump the workspace version instead."
                 )
             print(f"{prefix} {name} {version} already published, skipping")
             skipped += 1
@@ -247,10 +286,10 @@ def main() -> int:
         print(f"{prefix} publishing {name} {version}")
         publish(name)
         actual = await_published(name, version)
-        if actual != expected:
+        if not same_crate(name, version, actual, expected):
             raise SystemExit(
-                f"{name} {version} reached the index with checksum {actual}, but the local "
-                f"archive hashes to {expected}"
+                f"{name} {version} reached the index with checksum {actual}, and its files "
+                f"differ from the local archive's"
             )
         published += 1
 
