@@ -205,3 +205,27 @@ def test_bonds_are_inferred_only_when_asked():
     assert structure.bond_count == 0
     with pytest.raises(ValueError):
         structure.infer_bonds(scale=0.0)
+
+
+def test_a_failed_query_quotes_itself_and_names_the_fix():
+    structure = molframe.read(DATA / "basic.pdb")
+    with pytest.raises(molframe.QueryError) as raised:
+        structure.select("name CA and bogus")
+    message = str(raised.value)
+    assert "MOLFRAME-E4004" in message
+    assert "bogus" in message
+    assert "^" in message
+    assert "help:" in message
+    assert isinstance(raised.value, ValueError)
+
+
+def test_a_valid_but_suspicious_query_warns():
+    structure = molframe.read(DATA / "basic.pdb")
+    with pytest.warns(molframe.QueryWarning, match="W4001"):
+        structure.select("name CA and name N or name C")
+
+
+def test_atom_names_and_elements_match_as_written():
+    structure = molframe.read(DATA / "basic.pdb")
+    assert len(structure.select("name CA")) == 1
+    assert len(structure.select("element c")) == len(structure.select("element C"))

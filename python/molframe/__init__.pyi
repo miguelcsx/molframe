@@ -116,6 +116,16 @@ class Query:
     def __or__(self, other: Query) -> Query: ...
     def __invert__(self) -> Query: ...
 
+class QueryError(ValueError):
+    """A selection query that cannot be compiled or evaluated.
+
+    The message quotes the query, underlines the offending token, and names
+    the details and the remedy.
+    """
+
+class QueryWarning(UserWarning):
+    """A selection query that is valid but probably not what was meant."""
+
 class QueryAliases:
     def __init__(self) -> None: ...
     def define(self, name: str, query: Query) -> Query | None: ...

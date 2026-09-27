@@ -13,6 +13,7 @@ mod native_source;
 #[cfg(feature = "query")]
 mod query_aliases;
 mod query_cache;
+mod query_messages;
 #[cfg(feature = "query")]
 mod selection_expr;
 #[cfg(feature = "analysis")]
@@ -63,6 +64,14 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyModels>()?;
     module.add_class::<PySelection>()?;
     module.add_class::<PyQuery>()?;
+    module.add(
+        "QueryError",
+        module.py().get_type::<query_messages::QueryError>(),
+    )?;
+    module.add(
+        "QueryWarning",
+        module.py().get_type::<query_messages::QueryWarning>(),
+    )?;
     #[cfg(feature = "query")]
     module.add_class::<query_aliases::PyQueryAliases>()?;
     module.add_class::<PyReader>()?;

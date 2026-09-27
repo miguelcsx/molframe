@@ -113,6 +113,7 @@ impl PyStructure {
     #[pyo3(signature = (query, *, policy=None))]
     fn select(
         &self,
+        py: Python<'_>,
         query: &Bound<'_, PyAny>,
         policy: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PySelection> {
@@ -122,9 +123,13 @@ impl PyStructure {
             ));
         }
         if let Ok(query) = query.extract::<PyRef<'_, PyQuery>>() {
-            return select_compiled(self, &query.compiled);
+            return select_compiled(py, self, &query.compiled);
         }
-        selection(self, query.extract::<&str>()?)
+        let source = query.extract::<&str>()?;
+        let compiled = molframe::Query::compile(source).map_err(|findings| {
+            crate::query_messages::query_error(&molframe::Findings::from(findings), source)
+        })?;
+        select_compiled(py, self, &compiled)
     }
     fn edit(&self) -> PyStructureEditor {
         PyStructureEditor {
@@ -271,23 +276,14 @@ impl PyQuery {
 impl PyQuery {
     #[new]
     fn new(source: &str) -> PyResult<Self> {
-        let compiled = molframe::Query::compile(source)
-            .map_err(|findings| findings_error(&molframe::Findings::from(findings)))?;
+        let compiled = molframe::Query::compile(source).map_err(|findings| {
+            crate::query_messages::query_error(&molframe::Findings::from(findings), source)
+        })?;
         Ok(Self { compiled })
     }
 
-    fn select(&self, structure: &PyStructure) -> PyResult<PySelection> {
-        use molframe::QueryStructure;
-
-        let evaluation = structure
-            .inner
-            .select_query(&self.compiled, &molframe::AnalysisPolicy::default())
-            .map_err(|findings| findings_error(&findings))?;
-        let view = structure.inner.engine().view_of(evaluation.selection);
-        Ok(PySelection::from_native(
-            structure.clone(),
-            molframe::Selection::from(view),
-        ))
+    fn select(&self, py: Python<'_>, structure: &PyStructure) -> PyResult<PySelection> {
+        select_compiled(py, structure, &self.compiled)
     }
 
     /// Stable identity of the normalized typed query plan.
@@ -393,26 +389,25 @@ pub(crate) fn read(
     PyReader::new(bytes, name).read(py)
 }
 
-fn select_compiled(structure: &PyStructure, query: &molframe::Query) -> PyResult<PySelection> {
+/// Evaluates a compiled query, raising its warnings and rendering its errors
+/// against the query text.
+fn select_compiled(
+    py: Python<'_>,
+    structure: &PyStructure,
+    query: &molframe::Query,
+) -> PyResult<PySelection> {
     use molframe::QueryStructure;
 
     let evaluation = structure
         .inner
         .select_query(query, &molframe::AnalysisPolicy::default())
-        .map_err(|findings| findings_error(&findings))?;
+        .map_err(|findings| crate::query_messages::query_error(&findings, query.source()))?;
+    crate::query_messages::warn(py, &evaluation.warnings, query.source())?;
     let view = structure.inner.engine().view_of(evaluation.selection);
     Ok(PySelection::from_native(
         structure.clone(),
         molframe::Selection::from(view),
     ))
-}
-
-fn selection(structure: &PyStructure, source: &str) -> PyResult<PySelection> {
-    structure
-        .inner
-        .select(source, &molframe::AnalysisPolicy::default())
-        .map(|selection| PySelection::from_native(structure.clone(), selection))
-        .map_err(|findings| findings_error(&findings))
 }
 
 #[cfg(feature = "geometry")]

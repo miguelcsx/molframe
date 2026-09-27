@@ -326,76 +326,61 @@ MolFrame is designed to integrate with the Python scientific ecosystem rather th
 
 ## Query and selection
 
-Selections are part of the computational model rather than string filters bolted onto individual algorithms.
-
-A selection can describe structural concepts such as:
-
-```text
-polymer
-ligand
-water
-chain
-residue range
-element
-spatial neighborhood
-arbitrary predicate
-```
-
-The same selection semantics can then be reused across compatible analyses.
-
-This prevents each algorithm from inventing its own interpretation of what constitutes the selected structure.
-
-### Textual, typed, and reusable queries
-
-A query is compiled once into a typed plan and reused. Text and the typed
-builder produce the same plan, and the plan's fingerprint is its identity:
+A query is a short sentence that picks atoms: `resname HEM`, `protein and
+chain A`, `byres (within 5 of resname HEM) and protein`. The complete language,
+with every keyword, column and operator, is in the
+**[query reference](https://github.com/miguelcsx/molframe/blob/main/crates/molframe-query/README.md)**.
 
 ```python
 import molframe
 
 structure = molframe.read("4hhb.cif")
 
-text = molframe.Query("byres (within 5 of resname HEM) and protein")
-typed = molframe.sel.residues_within(5.0, molframe.sel.residue("HEM")) & molframe.sel.protein()
+heme = structure.select("resname HEM")         # 172 atoms
+len(heme), heme.indices, heme.to_coordinates()
 
-structure.select(text)            # a compiled Query is evaluated directly
-structure.select("chain A")       # text is compiled and evaluated
-text.fingerprint                  # stable identity of the normalized plan
+pocket = molframe.Query("byres (within 5 of resname HEM) and protein")
+structure.select(pocket)                       # compile once, run many times
 ```
 
 ```rust
-use molframe::{Query, QueryStructure, AnalysisPolicy};
+use molframe::{AnalysisPolicy, Query, QueryStructure};
 
 let query = Query::compile("byres (within 5 of resname HEM) and protein")?;
-let selected = structure.select_query(&query, &AnalysisPolicy::default())?;
+let evaluation = structure.select_query(&query, &AnalysisPolicy::default())?;
 ```
 
-Syntax errors carry the exact byte range of the offending token (with its line
-and column), so a caller embedding a query inside a larger text can point at it.
+| You want | Write |
+|---|---|
+| A kind of molecule | `protein`, `nucleic`, `water`, `ligand`, `polymer` |
+| Residues, chains, atoms | `resname HIS HEM`, `chain A B`, `name CA`, `element Fe` |
+| Residue numbers | `resid 87`, `resid 1:10` |
+| Wildcards | `name C*`, `resname H?S` |
+| A numeric condition | `bfactor > 50`, `occupancy < 1` |
+| Logic | `protein and not chain A`, `(chain A or chain C) and resid 1:5` |
+| Distance | `within 5 of resname HEM`, `around 5 resname HEM` |
+| Whole residues | `byres (within 5 of resname HEM)` |
+
+A query that cannot run raises `molframe.QueryError`, which quotes the query,
+underlines the problem and says what to do. A query that runs but probably
+does not mean what it says (such as `and` and `or` mixed without parentheses)
+warns with `molframe.QueryWarning`.
 
 ### Named queries
 
-A query can refer to a named definition with `$name` (or the longer
-`group name`). `QueryAliases` holds definitions and resolves a query into a
-*closed* query that mentions no name, by substituting typed plans — nothing is
-re-parsed and no atom is evaluated to do it:
+`$name` refers to another query, defined with `QueryAliases`. Resolving
+substitutes every name, so what runs is an ordinary query:
 
 ```python
 aliases = molframe.QueryAliases()
 aliases.define("heme", molframe.Query("resname HEM"))
 aliases.define("pocket", molframe.Query("byres (within 5 of $heme) and protein"))
-
-pocket = aliases.resolve(molframe.Query("$pocket"))
-pocket.source        # canonical closed text: no names remain
-pocket.references    # []
-molframe.Query("$pocket and not $heme").references   # ['heme', 'pocket']
+structure.select(aliases.resolve(molframe.Query("$pocket")))
 ```
 
 Definitions are live: redefining `heme` changes what `$pocket` resolves to.
-Resolution is deterministic, rejects unknown names (`E4005`), cycles such as
-`a -> b -> a` (`E4006`), and chains nested deeper than a fixed bound (`E4007`).
-A runtime `Groups` map — atoms already selected, supplied at evaluation time —
-remains available for `group` names that are meant to be evaluated as given.
+Text and the typed builder (`molframe.sel.protein() & molframe.sel.chain("A")`)
+compile to the same plan, whose `fingerprint` is its identity.
 
 ## Geometry and spatial analysis
 
