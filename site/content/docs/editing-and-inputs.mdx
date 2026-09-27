@@ -1,0 +1,32 @@
+---
+title: Reading bytes and editing structures
+description: Use Reader for in-memory data and StructureEditor for the supported structural edit.
+---
+
+## Read an in-memory file
+
+Use `Reader` when a structure arrives as bytes rather than a filesystem path. Supply `name` when the bytes have no filename so MolFrame can identify the format.
+
+```python
+from pathlib import Path
+import molframe
+
+payload = Path("model.cif").read_bytes()
+reader = molframe.Reader(payload, name="model.cif")
+print(reader.byte_length)
+structure = reader.read()
+```
+
+`molframe.read(payload, name="model.cif")` is the equivalent one-call form. The `name` is format-identification metadata; it does not change the bytes.
+
+## Rename a chain
+
+`Structure.edit()` returns a `StructureEditor`. The currently exposed edit is `rename_chain(chain, label)`. Edits become visible only after `finish()` returns a new `Structure`.
+
+```python
+edited = structure.edit()
+edited.rename_chain(0, "A")
+renamed = edited.finish()
+```
+
+The chain argument is a zero-based hierarchy index, not an author-provided chain label. Keep the original structure if later work needs its original identifiers.

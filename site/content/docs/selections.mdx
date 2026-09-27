@@ -1,0 +1,54 @@
+---
+title: Selecting atoms
+description: Select structural data with the query language, compiled queries, and selection set operations.
+---
+
+## Start with a query string
+
+Pass a query string to `Structure.select()`. The returned `Selection` is tied to that structure and can be converted to coordinates.
+
+```python
+ca = structure.select("name CA")
+coordinates = ca.to_coordinates()
+print(len(ca), coordinates.shape)
+```
+
+For a query you use repeatedly, compile it once with `Query`. This validates the expression before running it on a structure.
+
+```python
+import molframe
+
+alpha_carbons = molframe.Query("name CA")
+ca = alpha_carbons.select(structure)
+# Equivalent convenience form:
+ca = structure.select(alpha_carbons)
+```
+
+## Combine results, not strings
+
+Selections support union (`|`), intersection (`&`), and difference (`-`). Combine selections that came from the same structure.
+
+```python
+protein_alpha = structure.select("name CA")
+all_nitrogen = structure.select("element N")
+alpha_nitrogen = protein_alpha & all_nitrogen
+```
+
+## Typed constructors
+
+`molframe.sel` supplies immutable query constructors for common categories and columns, including `protein()`, `backbone()`, `water()`, `chain(value)`, `residue(value)`, `atom(value)`, and `within(radius, target)`. They are useful when a query should be built in Python rather than parsed from text.
+
+```python
+from molframe import sel
+
+chain_a = sel.chain("A")
+chain_a_atoms = structure.select(chain_a)
+```
+
+<Callout type="warn">
+A spatial query depends on the coordinate model and the chosen radius. State the radius and its Å units in analysis methods and reports; “near” is not a scientific definition.
+</Callout>
+
+## Query failures
+
+`Query("…")` and `Structure.select("…")` raise a Python exception when the expression cannot be compiled. Keep the original query text in application error messages; it is the actionable context for a user correcting a selection.

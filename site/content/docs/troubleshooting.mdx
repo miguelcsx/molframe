@@ -1,0 +1,30 @@
+---
+title: Troubleshooting
+description: Diagnose format, query, and scientific-input problems without guessing.
+---
+
+## A file does not read
+
+Pass a path with a meaningful extension, or give a `name=` when reading bytes. MolFrame uses that information for format detection. Check that the file is actually PDB or mmCIF before treating an extension mismatch as malformed scientific data.
+
+## A query fails
+
+Compile it in isolation with `molframe.Query(query_text)`. The failure identifies a query-language problem before it is mixed with later analysis code.
+
+```python
+import molframe
+
+query = molframe.Query("name CA")
+```
+
+## An analysis result is empty or indeterminate
+
+Inspect the selection first: `len(selection)` and `selection.to_coordinates().shape` distinguish an empty query result from an unexpected coordinate shape. `geometry.centroid()` returns `None` for an empty coordinate set.
+
+## RMSD is surprising
+
+RMSD does not infer atom correspondence. Ensure both arrays contain equivalent atoms in the same order, use the same model and conformer policy, and confirm that both shapes are `(N, 3)`.
+
+## Rust symbol is unavailable
+
+The Rust facade gates many analysis domains behind Cargo features. Enable the documented feature for the capability you are using, then rebuild. Python wheels ship the curated binding surface configured by the package build.

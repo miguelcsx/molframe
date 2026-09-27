@@ -1,0 +1,47 @@
+---
+title: Getting started
+description: Install MolFrame, load a real protein, select Cα atoms, and inspect its geometry.
+---
+
+## Install
+
+MolFrame requires **Python 3.13 or later** and NumPy 2 or later.
+
+```bash
+python -m pip install molframe
+```
+
+## Read a structure
+
+The example downloads ubiquitin (`1UBQ`) explicitly, so it does not depend on a pre-existing file. PDB coordinates are expressed in ångström (Å).
+
+```python
+from pathlib import Path
+from urllib.request import urlretrieve
+
+import molframe
+from molframe import geometry
+
+path = Path("1ubq.pdb")
+urlretrieve("https://files.rcsb.org/download/1UBQ.pdb", path)
+
+structure = molframe.read(path)
+print(structure.atom_count, structure.residue_count, structure.chain_count)
+
+ca = structure.select("name CA")
+coordinates = ca.to_coordinates()
+print(coordinates.shape)        # one (x, y, z) row per selected atom
+print(geometry.centroid(coordinates))
+```
+
+`Structure` owns the complete parsed structure. A `Selection` records the atoms chosen from that structure. `Selection.to_coordinates()` returns a two-dimensional NumPy-compatible array with shape `(selected_atom_count, 3)`.
+
+<Callout type="info">
+The selection above targets atom **names**, not element symbols. `CA` in a PDB file conventionally means the protein Cα atom; it is not calcium in this query.
+</Callout>
+
+## Where next
+
+- [Read and inspect structures](/docs/structures) explains the hierarchy and input formats.
+- [Select atoms](/docs/selections) explains reusable queries and selection set operations.
+- [Structural analysis](/docs/analysis) introduces geometry and contacts.

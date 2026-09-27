@@ -1,0 +1,47 @@
+---
+title: Structural analysis
+description: Use selected coordinates for geometry and atom-contact analysis.
+---
+
+## Geometry
+
+The `molframe.geometry` module provides centroid, pairwise distance matrix, and RMSD functions. Inputs are coordinate arrays with shape `(N, 3)`.
+
+```python
+from molframe import geometry
+
+ca = structure.select("name CA")
+xyz = ca.to_coordinates()
+
+centre = geometry.centroid(xyz)
+distances = geometry.distance_matrix(xyz)
+self_rmsd = geometry.rmsd(xyz, xyz)
+```
+
+`centroid()` returns `None` for an empty coordinate set. RMSD compares rows by position: select and order equivalent atoms in both inputs before interpreting a result. Distances and RMSD are in Å.
+
+## Atom contacts
+
+Use `molframe.analysis.atom_contacts()` to find atom pairs at or below a cutoff. It accepts a structure or selection and returns a `ContactTable` with `first`, `second`, and `distance` columns.
+
+```python
+from molframe import analysis
+
+protein = structure.select("protein")
+contacts = analysis.atom_contacts(protein, cutoff=4.0)
+print(len(contacts))
+print(contacts.distance.shape)
+```
+
+The cutoff is in Å. Contact counts depend strongly on alternate locations, model choice, solvent inclusion, and which atoms you pass. Make those choices explicit in a scientific workflow.
+
+## Choosing a method
+
+| Goal | API |
+| --- | --- |
+| Centre a selected coordinate set | `geometry.centroid()` |
+| Inspect all pairwise distances in a small set | `geometry.distance_matrix()` |
+| Compare already-corresponding coordinate rows | `geometry.rmsd()` |
+| Find nearby atom pairs in a structure or selection | `analysis.atom_contacts()` |
+
+For larger contact analyses, prefer passing a narrow selection to avoid doing work on atoms that cannot affect the answer.

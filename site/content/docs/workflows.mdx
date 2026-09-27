@@ -1,0 +1,40 @@
+---
+title: Compiled workflows
+description: Build a reusable calculation graph when inputs change but the computation does not.
+---
+
+A `Workflow` is useful when the same calculation is applied repeatedly to different coordinate arrays or structures. Build nodes, name outputs, compile once, then run with input values.
+
+```python
+import molframe
+
+workflow = molframe.Workflow()
+coordinates = workflow.input("coordinates", kind="coordinates")
+centre = workflow.centroid(coordinates)
+workflow.output("centre", centre)
+
+compiled = workflow.compile()
+result = compiled.run({"coordinates": structure.coordinates})
+print(result["centre"])
+```
+
+## Node operations
+
+The public workflow builder supports:
+
+| Builder method | Input kind | Result |
+| --- | --- | --- |
+| `centroid(node)` | coordinates | centroid tuple |
+| `distance_matrix(node)` | coordinates | distance matrix |
+| `rmsd(mobile, reference)` | coordinates | RMSD |
+| `atom_contacts(node, cutoff)` | structure | contact table |
+
+`input()` accepts `coordinates`, `float`, or `structure` kinds. Its `cost` describes how the caller provides data: `borrow`, `adopt`, `decode`, `copy`, or `materialize`. Use the default `borrow` unless an input boundary requires a different ownership decision.
+
+## Inspect and run
+
+`CompiledWorkflow.explain()` returns a dictionary describing the compiled graph. `run(values, copy=False)` returns a dictionary keyed by the output names passed to `output()`.
+
+<Callout type="warn">
+Workflow nodes belong to the workflow that created them. Do not pass a node from one `Workflow` into another.
+</Callout>

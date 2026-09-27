@@ -1,0 +1,27 @@
+---
+title: Rust facade
+description: Use the curated molframe crate from a Rust application.
+---
+
+Add the facade crate with only the features you use. Its default features include mmCIF and PDB.
+
+```toml
+[dependencies]
+molframe = "0.1.2"
+```
+
+Read a structure through the prelude:
+
+```rust
+use molframe::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let structure = read("model.pdb")?;
+    println!("{} atoms", structure.atom_count());
+    Ok(())
+}
+```
+
+Analysis domains are feature-gated. Enable the corresponding feature deliberately when you need geometry, query, spatial, chemistry, crystallography, surface, analysis, validation, sequence, comparison, trajectory, audit, motif, or adapters support.
+
+For exhaustive Rust symbols and feature details, use the generated [Rust API documentation](https://docs.rs/molframe/).

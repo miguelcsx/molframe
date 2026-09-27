@@ -1,0 +1,32 @@
+---
+title: NumPy and Arrow interoperability
+description: Move coordinates and contact results into scientific Python without rebuilding the structure.
+---
+
+## Coordinates in NumPy workflows
+
+`Structure.coordinates` and `Selection.to_coordinates()` expose NumPy-compatible arrays. Their shape is always `(N, 3)` for Cartesian positions in Å.
+
+```python
+import numpy as np
+
+ca = structure.select("name CA")
+xyz = np.asarray(ca.to_coordinates())
+centre = xyz.mean(axis=0)
+```
+
+Use `np.asarray()` when a downstream library requires a NumPy ndarray explicitly. The structure-backed coordinate view must not outlive the `Structure` from which it came.
+
+## Contact tables in Arrow
+
+A `ContactTable` implements the Arrow C stream protocol through `__arrow_c_stream__`. Arrow-aware Python libraries can import it without a row-by-row Python loop.
+
+```python
+from molframe import analysis
+
+contacts = analysis.atom_contacts(structure, cutoff=4.0)
+# Pass `contacts` directly to an Arrow-aware consumer.
+# Columns: first, second, distance
+```
+
+`first` and `second` identify atoms by index within the supplied structural input; `distance` is in Å. Keep that structural input available whenever indices must be resolved back to atoms.

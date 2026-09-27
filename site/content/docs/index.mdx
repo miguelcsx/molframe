@@ -1,0 +1,23 @@
+---
+title: Documentation
+description: A practical path from a structure file to scientific results.
+---
+
+MolFrame is a structural-bioinformatics library for Python and Rust. It reads molecular structures into one navigable model, then lets you select atoms and perform calculations without translating between unrelated object types.
+
+<Cards>
+  <Card title="Quickstart" href="/docs/getting-started" description="Install MolFrame and analyse a real PDB structure." />
+  <Card title="Read and inspect" href="/docs/structures" description="Navigate models, chains, residues, atoms, and coordinates." />
+  <Card title="Select atoms" href="/docs/selections" description="Use the query language, reusable queries, and set operations." />
+  <Card title="Analyse structures" href="/docs/analysis" description="Geometry and atom-contact workflows." />
+</Cards>
+
+## Choose an interface
+
+| Interface | Best for |
+| --- | --- |
+| **Python** | Notebooks, scientific scripts, NumPy workflows, and application integration. |
+| **Rust** | Native applications that need the curated `molframe` facade. |
+| **CLI** | Inspection, conversion, and reproducible shell pipelines. |
+
+Python is the shortest route to a first result. The pages in this guide show Python first, then point to the equivalent Rust or CLI entry point where it is useful.

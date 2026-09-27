@@ -1,0 +1,63 @@
+---
+title: Python API index
+description: Curated map of every currently exported MolFrame Python class and function.
+---
+
+This is an index of the supported Python facade, not a second copy of every task guide. Start with the linked guides for examples and scientific interpretation.
+
+## Root functions
+
+| API | Purpose |
+| --- | --- |
+| `read(source, *, name=None)` | Read a path, path-like value, or bytes into a `Structure`. |
+
+## Structure and hierarchy
+
+| API | Purpose |
+| --- | --- |
+| `Structure` | Root object: counts, hierarchy collections, coordinates, `select()`, and `edit()`. |
+| `Models` / `Model` | Indexable model collection and an individual model. |
+| `Chains` / `Chain` | Indexable chain collection and an individual chain with residues. |
+| `Residues` / `Residue` | Indexable residue collection and an individual residue with atoms. |
+| `Atoms` / `Atom` | Indexable atom collection and an atom's index, name, element, and coordinate. |
+
+Collections support `len()` and integer indexing. Negative indexes follow Python collection conventions. See [Structures](/docs/structures).
+
+## Selection and input objects
+
+| API | Purpose |
+| --- | --- |
+| `Selection` | Atom indices, stale-selection check, model-specific coordinates, and `|`, `&`, `-` set operations. |
+| `Query` | Compiled selection text with `source`, stable `fingerprint`, `select()`, and query `&`, `|`, `~` composition. |
+| `Reader` | Read named in-memory bytes; exposes `byte_length`. |
+| `StructureEditor` | Rename a chain by hierarchy index, then `finish()` a new structure. |
+
+See [Selecting atoms](/docs/selections) and [Reading bytes and editing structures](/docs/editing-and-inputs).
+
+## Analysis and interoperability
+
+| Module or object | Public entry points |
+| --- | --- |
+| `molframe.geometry` | `centroid`, `distance_matrix`, `rmsd` |
+| `molframe.analysis` | `atom_contacts`, `ContactTable.first`, `.second`, `.distance` |
+| `molframe.sel` | Category, column, and spatial query constructors including `within()` |
+| `ContactTable` | `len()` and Arrow C-stream export through `__arrow_c_stream__()` |
+
+See [Structural analysis](/docs/analysis) and [NumPy and Arrow interoperability](/docs/interop).
+
+## Workflows
+
+| API | Purpose |
+| --- | --- |
+| `Workflow` / `WorkflowNode` | Declare typed calculation inputs, operations, and named outputs. |
+| `CompiledWorkflow` | Run a compiled graph and inspect its explanation. |
+
+See [Compiled workflows](/docs/workflows).
+
+## Array protocols
+
+`Float32Array` and `UInt32Array` are typing protocols for coordinate and index arrays. At runtime, MolFrame returns NumPy-compatible values; users normally work with their `.shape` or pass them to NumPy-aware libraries.
+
+<Callout type="info">
+Subpackages such as `trajectory`, `validation`, `surface`, `spatial`, `sequence`, and `compare` are present as namespace modules in this checkout, but their Python stubs export no callable public API. They are intentionally not presented as usable Python features.
+</Callout>

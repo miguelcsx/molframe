@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+:root { --fd-font: ui-sans-serif, system-ui, sans-serif; }
+html { scrollbar-gutter: stable; }
+body { background: color-mix(in srgb, var(--color-fd-background) 97%, #0b6e69 3%); }
+[data-theme='dark'] body { background: #0d1214; }
+.prose :where(code):not(:where(pre code)) { color: #087f78; font-weight: 600; }
+[data-theme='dark'] .prose :where(code):not(:where(pre code)) { color: #55d6ca; }
+.hero-grid { background-image: linear-gradient(color-mix(in srgb, var(--color-fd-border) 45%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--color-fd-border) 45%, transparent) 1px, transparent 1px); background-size: 28px 28px; }

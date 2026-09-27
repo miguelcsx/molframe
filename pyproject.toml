@@ -37,7 +37,7 @@ license-files = ["LICENSE"]
 Homepage = "https://github.com/miguelcsx/molframe"
 Repository = "https://github.com/miguelcsx/molframe"
 Issues = "https://github.com/miguelcsx/molframe/issues"
-Documentation = "https://github.com/miguelcsx/molframe#readme"
+Documentation = "https://miguelcsx.github.io/molframe/"
 
 [dependency-groups]
 dev = ["pyright>=1.1.405", "pytest>=8"]
