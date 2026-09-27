@@ -3,82 +3,230 @@ title: Query language
 description: Describe molecular subsets with MolFrame's textual, typed, and reusable selection language.
 ---
 
-A MolFrame query describes atoms by their structural identity, chemistry, or geometry. Compile it once when you will reuse it; evaluate it with `Structure.select()` whenever you need the matching atoms.
+A MolFrame query is a short sentence that picks atoms: `resname HEM`,
+`protein and chain A`, `byres (within 5 of resname HEM) and protein`.
+Keywords are case-insensitive; values such as residue names are not
+(`resname HEM`, not `hem`), except elements, which match in any case.
 
-`Structure.select()` returns a structure-bound `Selection`. It is cheap to pass to another MolFrame operation; call `to_coordinates()` only when an API requires a gathered coordinate array.
+Every example on this page runs against haemoglobin, PDB
+[4HHB](https://www.rcsb.org/structure/4HHB), and the atom counts are what it
+returns.
 
-## Start with structural selectors
-
-The built-in chemistry terms are the quickest way to state common molecular sets:
-
-| Query | Selects |
-| --- | --- |
-| `protein` | Protein atoms. |
-| `ligand` | Ligand atoms. |
-| `water` / `ion` | Water or ion atoms. |
-| `polymer` | Polymer atoms. |
-| `backbone` / `sidechain` | Protein backbone or side-chain atoms. |
-| `nucleic` | Nucleic-acid atoms. |
-| `heavy` / `hydrogen` | Non-hydrogen or hydrogen atoms. |
-
-Columns constrain structural identifiers. A column can accept one or more values:
-
-```text
-chain A
-resname HEM
-name CA
-(element N or element O) and protein
-```
-
-Use `chain`, `resid`, `resname`, `name`, and `element` for ordinary structure work. MolFrame also exposes label and author variants such as `label_chain` / `auth_chain` and `label_resid` / `auth_resid` when a format carries both identifier systems.
-
-## Combine terms deliberately
-
-`not` binds most tightly, then `and`, then `or`. Parenthesize a mixed expression so its scientific meaning remains obvious.
-
-```text
-protein and name CA
-(chain A or chain B) and not water
-protein and (name CA or name CB)
-```
-
-`all` and `none` are explicit complete and empty selections. Query keywords are case-insensitive; identifier values retain the meaning supplied by the structure.
-
-## Expand a molecular neighborhood
-
-Spatial predicates take distances in Å. `within` matches atoms near a target; `byres` expands those atoms to their complete residues.
-
-```python
-pocket = structure.select("byres (within 5 of resname HEM) and protein")
-```
-
-Other useful structural expansions are `same residue as QUERY`, `same chain as QUERY`, and `bonded QUERY` (or `bonded DEPTH QUERY`). Keep the radius and the target in reports: a spatial selection is defined by both.
-
-## Filter numeric properties
-
-Numeric columns support `<`, `<=`, `>`, `>=`, `=`, and `!=`. Common properties include `bfactor`, `occupancy`, `charge`, `mass`, `plddt`, and Cartesian `x`, `y`, `z` coordinates.
-
-```text
-bfactor > 40
-occupancy >= 0.5 and not altloc B
-plddt < 50 and protein
-```
-
-Exact floating-point equality is rarely a useful scientific criterion. Prefer a range or threshold when a property originated in a calculation.
-
-## Reuse a compiled query
-
-`Query` validates text once and has a stable fingerprint. It is the right form for a filter used repeatedly across one or more structures.
+## Run a query
 
 ```python
 import molframe
 
+structure = molframe.read("4hhb.cif")
+
+heme = structure.select("resname HEM")   # a Selection
+len(heme)                                # 172
+heme.indices                             # NumPy array of atom indices
+heme.to_coordinates()                    # (172, 3) float32 array
+```
+
+To test a query, run it alone and look at `len()`. To see *which residues*
+it touched, walk the hierarchy:
+
+```python
+def residues_in(structure, selection):
+    """(chain, residue name) for every residue with a selected atom."""
+    chosen = set(selection.indices.tolist())
+    found = []
+    for c in range(structure.chain_count):
+        chain = structure.chains[c]
+        for r in range(len(chain.residues)):
+            residue = chain.residues[r]
+            atoms = residue.atoms
+            if any(atoms[a].index in chosen for a in range(len(atoms))):
+                found.append((chain.label, residue.name))
+    return found
+
+residues_in(structure, structure.select("resname HEM"))
+# [('E', 'HEM'), ('G', 'HEM'), ('H', 'HEM'), ('J', 'HEM')]
+```
+
+`chain.label` is the archive's label chain; mmCIF gives each haem its own,
+which is why these are not A to D.
+
+From Rust, compile once and evaluate; see [Rust](/docs/rust):
+
+```rust
+use molframe::{AnalysisPolicy, Query, QueryStructure};
+
+let query = Query::compile("byres (within 5 of resname HEM) and protein")?;
+let evaluation = structure.select_query(&query, &AnalysisPolicy::default())?;
+println!("{} atoms", evaluation.selection.len());   // 758
+```
+
+## The language at a glance
+
+| You want | Write |
+| --- | --- |
+| Everything / nothing | `all`, `none` |
+| A kind of molecule | `protein`, `nucleic`, `water`, `ligand`, `polymer`, `hetero` |
+| Residues by name | `resname HEM`, `resname HIS HEM` |
+| A chain | `chain A`, `chain A B` |
+| Residue numbers | `resid 87`, `resid 1:10`, `resid 1-10 20 30` |
+| Atoms by name | `name CA`, `name N CA C O`, `name C*` |
+| Elements | `element Fe`, `element C N` |
+| A numeric condition | `bfactor > 50`, `occupancy < 1`, `50 < bfactor` |
+| Both / either / not | `protein and chain A`, `water or ligand`, `not water` |
+| Near something | `within 5 of resname HEM` |
+| Whole residues | `byres (within 5 of resname HEM)` |
+| A named query | `$pocket` |
+
+## Structural keywords
+
+| Query | Selects |
+| --- | --- |
+| `all`, `none` | Every atom; no atom. |
+| `protein` | Amino-acid residues, or chains typed as protein. |
+| `nucleic` | Nucleotides, or chains typed as nucleic acid. |
+| `polymer` | Atoms of polymer chains. |
+| `water` | Solvent. |
+| `ligand` | Non-polymer, non-water residues (4HHB: the four haems and a phosphate). |
+| `hetero` | Atoms recorded as `HETATM`. |
+| `heavy` / `hydrogen` | Non-hydrogen or hydrogen atoms. |
+| `backbone` / `sidechain` | Protein backbone or side-chain atoms. [Needs extra data.](#keywords-that-need-extra-data) |
+| `ion`, `lipid`, `saccharide` | Chemical component classes. [Needs extra data.](#keywords-that-need-extra-data) |
+| `nucleicbackbone`, `nucleicbase`, `nucleicsugar` | Nucleic-acid parts. [Needs extra data.](#keywords-that-need-extra-data) |
+| `aromatic` | Atoms of aromatic bonds or annotations. |
+
+On a plain mmCIF or PDB file, write the backbone by atom name:
+`protein and name N CA C O` (2296 atoms in 4HHB).
+
+## Columns
+
+A column followed by one or more values selects atoms whose column holds
+**any** of them:
+
+```text
+resname HEM              # 172
+resname HIS HEM          # HIS or HEM: 554
+chain A B
+name N CA C O
+```
+
+| Column | Meaning |
+| --- | --- |
+| `name` | Atom name (`CA`, `FE`). |
+| `resname` | Residue name (`HEM`, `HIS`). |
+| `resid` | Residue number. |
+| `chain` | Chain identifier. |
+| `element` | Element symbol, any case (`Fe`, `FE`, `fe`). |
+| `altloc` | Alternate location (`altloc A`; `altloc none` for atoms without one). |
+| `icode` | Insertion code. |
+| `entity`, `entity_type` | Entity identifier and type. |
+| `segid` | Segment identifier (PDB files). |
+| `record_type` | `ATOM` or `HETATM`. |
+| `model` | Model number. |
+| `index`, `bynum`, `id` | 0-based atom position, 1-based position, the file's atom serial. |
+| `resindex`, `chainindex`, `modelindex` | 0-based positions of the residue, chain, model. |
+| `x`, `y`, `z` | Coordinates in Å. |
+| `bfactor` (or `tempfactor`), `occupancy` | Per-atom values from the file. |
+| `mass`, `radius`, `charge`, `formalcharge` | Chemistry values. |
+| `plddt`, `pae` | Model-confidence values (predicted-model files). |
+
+**Author or label names.** mmCIF files carry two naming systems: the
+depositor's (*author*) and the archive's (*label*). `name`, `resname`,
+`resid`, and `chain` use the author names, which papers and PDB files use.
+Prefix a column to choose explicitly: `label_chain A`, `auth_resid 87`,
+`label_name CA`. In 4HHB, `chain A` has 1168 atoms (the protein with its haem
+and waters) and `label_chain A` has 1069 (the protein only), because the
+archive gives each haem and water group its own label chain.
+
+**Ranges.** Numeric columns take inclusive ranges written `1:10`, `1-10`, or
+`1to10`, mixed with single values: `resid 1:10 87 92`.
+
+**Wildcards.** Text values take `*` (any run of characters), `?` (one
+character), and `[...]` (one of a set): `name C*`, `resname H?S`,
+`name C[AB]`.
+
+**Quoting.** Quote a value that contains a space or looks like a keyword:
+`resname "A B"`, `name "and"`.
+
+## Numeric conditions
+
+Numeric columns take `<`, `<=`, `>`, `>=`, `==`, and `!=`, with the column on
+either side:
+
+```text
+bfactor > 50                     # 271
+50 < bfactor                     # the same
+bfactor >= 50 and bfactor <= 60  # 126
+bfactor 19.5:20.5                # a range, instead of == on a measurement
+prop abs x < 5                   # prop is optional; abs compares |value|
+```
+
+Exact floating-point equality is rarely a useful scientific criterion, and
+`==` on a measured value warns. Prefer a range or threshold.
+
+## Combine terms deliberately
+
+`not` binds most tightly, then `and`, then `or`; parentheses group:
+
+```text
+protein and not water
+protein and (chain A or chain C)
+(chain A and resid 1:5) or resname HEM
+```
+
+Mixing `and` and `or` without parentheses warns, because it is easy to
+misread: `protein and chain A or water` means `(protein and chain A) or
+water` (1290 atoms), not `protein and (chain A or water)` (1069).
+
+`global` evaluates its target over the whole structure even inside a narrowed
+selection.
+
+## Expand a molecular neighborhood
+
+Distances are in Å. Keep the radius and the target in reports: a spatial
+selection is defined by both.
+
+| Form | Selects |
+| --- | --- |
+| `within R of QUERY` | Atoms within R of any target atom, **including** the target. |
+| `around R QUERY` | The same, **excluding** the target. |
+| `beyond R of QUERY` | Atoms farther than R from every target atom. |
+| `sphzone R QUERY` | Atoms within R of the target's centre. |
+| `sphlayer INNER OUTER QUERY` | A spherical shell around the target's centre. |
+| `isolayer INNER OUTER QUERY` | Shells around each target atom. |
+| `cyzone R ZMAX ZMIN QUERY` | A cylinder along z around the target's centre. |
+| `cylayer INNER OUTER ZMAX ZMIN QUERY` | A cylindrical shell along z. |
+| `point X Y Z R` | Atoms within R of a point. |
+
+```text
+within 5 of resname HEM          # 535: the haems and their shell
+around 5 resname HEM             # 363: the shell only
+```
+
+Expansions grow a selection to whole structural units:
+
+| Form | Selects |
+| --- | --- |
+| `byres QUERY` | Every atom of every residue with a selected atom. |
+| `same residue as QUERY` | The same; also `chain`, `model`, `entity`, `fragment`, `segment`. |
+| `same COLUMN as QUERY` | Atoms sharing a column value: `same resname as resid 87`. |
+| `bonded QUERY`, `bonded DEPTH QUERY` | Atoms up to DEPTH bonds away (default 1). Needs bonds. |
+
+```python
+pocket = structure.select("byres (within 5 of resname HEM) and protein")   # 758
+```
+
+## Reuse a compiled query
+
+`Query` validates text once and has a stable fingerprint. It is the right form
+for a filter used repeatedly across one or more structures.
+
+```python
 pocket_query = molframe.Query("byres (within 5 of resname HEM) and protein")
 pocket = pocket_query.select(structure)
 # The equivalent convenience call is structure.select(pocket_query).
 ```
 
-The typed builders in `molframe.sel` describe the same query model without parsing a string:
+The typed builders in `molframe.sel` describe the same query model without
+parsing a string:
 
 ```python
 from molframe import sel
@@ -90,7 +238,9 @@ pocket = structure.select(pocket_query)
 
 ## Name a query definition
 
-Use `QueryAliases` when one query should refer to another. References use `$name`; resolution returns a closed query, detects unknown names and cycles, and never depends on atoms selected by an earlier evaluation.
+Use `QueryAliases` when one query should refer to another. References use
+`$name`; resolution returns a closed query, detects unknown names and cycles,
+and never depends on atoms selected by an earlier evaluation.
 
 ```python
 aliases = molframe.QueryAliases()
@@ -98,13 +248,62 @@ aliases.define("heme", molframe.Query("resname HEM"))
 aliases.define("pocket", molframe.Query("byres (within 5 of $heme) and protein"))
 
 pocket_query = aliases.resolve(molframe.Query("$pocket"))
+pocket_query.source      # (byres (within 5 of (resname HEM))) and (protein)
 pocket = structure.select(pocket_query)
 ```
 
-## Handle a query failure
+A `$name` that is never resolved selects nothing and warns.
 
-`Query("…")` and `Structure.select("…")` raise when the expression cannot compile. Preserve the original source text beside the exception: it identifies exactly which scientific subset needs correction.
+## Errors and warnings
+
+A query that cannot run raises `molframe.QueryError`, a `ValueError`. The
+message quotes the query, underlines the problem, and says what to do:
+
+```text
+error[MOLFRAME-E4004]: unknown selection keyword
+  ┌─ 1:13
+   │
+ 1 │ name CA and bogus
+   │             ^^^^^
+  = keyword: bogus
+  = help: check the spelling against the keyword list; an annotation column can also be selected by its own name
+```
+
+A query that runs but probably does not mean what it says warns with
+`molframe.QueryWarning`, a `UserWarning` that `warnings.filterwarnings` can
+silence or turn into an error.
+
+| Code | Means | Usually |
+| --- | --- | --- |
+| `E4001` | The query is malformed. | A missing value, operator, or parenthesis. |
+| `E4002` | A value does not fit its column. | A word where a number belongs: `bfactor > high`. |
+| `E4003` | The structure lacks data the keyword needs. | See below. |
+| `E4004` | An unknown keyword. | A typo: `resnam HEM`. |
+| `E4005` | An unknown `$name`. | Define it first. |
+| `E4006` | Named queries refer to each other in a cycle. | |
+| `W4001` | `and` and `or` mixed without parentheses. | Add parentheses. |
+| `W4002` | `==` on a measured value. | Use a range. |
+| `W4003` | A value or name matches nothing here. | Check the spelling and case. |
+
+## Keywords that need extra data
+
+Some keywords rely on chemistry a file does not state. On a plain mmCIF or
+PDB file they fail with `E4003` instead of guessing:
+
+| Keyword | Needs | Without it, write |
+| --- | --- | --- |
+| `backbone` | Chemical component annotations | `protein and name N CA C O` |
+| `sidechain` | Chemical component annotations | `protein and not name N CA C O` |
+| `ion`, `lipid`, `saccharide`, `nucleic*` parts | Chemical component annotations | `resname …` for the components you mean |
+| `plddt`, `pae` | A predicted-model file | |
+| `bonded` | Bonds | Infer them first: `structure.infer_bonds()` |
+| `chirality`, `smarts` | Chemical component annotations | |
+| `atom SEG RESID NAME` | Segment identifiers (PDB) | `chain A and resid 87 and name NE2` |
+
+Component annotations come from the wwPDB Chemical Component Dictionary: in
+Rust, `molframe::chemistry::apply_component_chemistry`; on the command line,
+`--ccd components.cif`.
 
 <Callout type="info" title="Visualize a query in MolGFX">
-MolGFX uses this exact language for representation targets and Workbench selections. See [Query-driven visualization](https://miguelcsx.github.io/molgfx/docs/commands/visual-selections/) for the `select → show → color → focus` workflow.
+MolGFX uses this exact language for representation targets and Workbench selections. See [Writing queries and commands](https://miguelcsx.github.io/molgfx/docs/commands/queries/) for how queries sit inside commands, and [Query-driven visualization](https://miguelcsx.github.io/molgfx/docs/commands/visual-selections/) for the `select → show → color → focus` workflow.
 </Callout>

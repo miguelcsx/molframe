@@ -29,6 +29,8 @@ Collections support `len()` and integer indexing. Negative indexes follow Python
 | --- | --- |
 | `Selection` | Atom indices, stale-selection check, model-specific coordinates, and `|`, `&`, `-` set operations. |
 | `Query` | Compiled selection text with `source`, stable `fingerprint`, `select()`, and query `&`, `|`, `~` composition. |
+| `QueryError` | Raised by a query that cannot run; a `ValueError` whose message quotes and underlines the query. |
+| `QueryWarning` | Warned by a query that runs but is probably not what was meant; a `UserWarning`. |
 | `Reader` | Read named in-memory bytes; exposes `byte_length`. |
 | `StructureEditor` | Rename a chain by hierarchy index, then `finish()` a new structure. |
 

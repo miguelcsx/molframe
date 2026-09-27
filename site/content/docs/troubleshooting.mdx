@@ -9,13 +9,22 @@ Pass a path with a meaningful extension, or give a `name=` when reading bytes. M
 
 ## A query fails
 
-Compile it in isolation with `molframe.Query(query_text)`. The failure identifies a query-language problem before it is mixed with later analysis code.
+Compile it in isolation with `molframe.Query(query_text)`. The `QueryError` message quotes the query, underlines the problem, and says what to do:
 
 ```python
 import molframe
 
-query = molframe.Query("name CA")
+try:
+    molframe.Query("resnam HEM")
+except molframe.QueryError as error:
+    print(error)   # error[MOLFRAME-E4004]: unknown selection keyword ... keyword: resnam
 ```
+
+A query that fails with `E4003` asks for data the file does not carry: `backbone`, `sidechain`, and `ion` need chemical component annotations. Write the backbone as `protein and name N CA C O` instead. See [keywords that need extra data](/docs/query-language#keywords-that-need-extra-data).
+
+## A query selects nothing
+
+Run it alone and check `len(structure.select(...))`. Values are case-sensitive (`resname HEM`, not `hem`), and a `QueryWarning` names a value that does not occur in the structure. For mmCIF, `chain` is the author chain; `label_chain` is the archive's.
 
 ## An analysis result is empty or indeterminate
 

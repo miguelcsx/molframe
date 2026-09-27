@@ -329,7 +329,7 @@ MolFrame is designed to integrate with the Python scientific ecosystem rather th
 A query is a short sentence that picks atoms: `resname HEM`, `protein and
 chain A`, `byres (within 5 of resname HEM) and protein`. The complete language,
 with every keyword, column and operator, is in the
-**[query reference](https://github.com/miguelcsx/molframe/blob/main/crates/molframe-query/README.md)**.
+**[query language reference](https://miguelcsx.github.io/molframe/docs/query-language/)**.
 
 ```python
 import molframe
