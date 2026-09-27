@@ -1,0 +1,110 @@
+---
+title: Query language
+description: Describe molecular subsets with MolFrame's textual, typed, and reusable selection language.
+---
+
+A MolFrame query describes atoms by their structural identity, chemistry, or geometry. Compile it once when you will reuse it; evaluate it with `Structure.select()` whenever you need the matching atoms.
+
+`Structure.select()` returns a structure-bound `Selection`. It is cheap to pass to another MolFrame operation; call `to_coordinates()` only when an API requires a gathered coordinate array.
+
+## Start with structural selectors
+
+The built-in chemistry terms are the quickest way to state common molecular sets:
+
+| Query | Selects |
+| --- | --- |
+| `protein` | Protein atoms. |
+| `ligand` | Ligand atoms. |
+| `water` / `ion` | Water or ion atoms. |
+| `polymer` | Polymer atoms. |
+| `backbone` / `sidechain` | Protein backbone or side-chain atoms. |
+| `nucleic` | Nucleic-acid atoms. |
+| `heavy` / `hydrogen` | Non-hydrogen or hydrogen atoms. |
+
+Columns constrain structural identifiers. A column can accept one or more values:
+
+```text
+chain A
+resname HEM
+name CA
+(element N or element O) and protein
+```
+
+Use `chain`, `resid`, `resname`, `name`, and `element` for ordinary structure work. MolFrame also exposes label and author variants such as `label_chain` / `auth_chain` and `label_resid` / `auth_resid` when a format carries both identifier systems.
+
+## Combine terms deliberately
+
+`not` binds most tightly, then `and`, then `or`. Parenthesize a mixed expression so its scientific meaning remains obvious.
+
+```text
+protein and name CA
+(chain A or chain B) and not water
+protein and (name CA or name CB)
+```
+
+`all` and `none` are explicit complete and empty selections. Query keywords are case-insensitive; identifier values retain the meaning supplied by the structure.
+
+## Expand a molecular neighborhood
+
+Spatial predicates take distances in Å. `within` matches atoms near a target; `byres` expands those atoms to their complete residues.
+
+```python
+pocket = structure.select("byres (within 5 of resname HEM) and protein")
+```
+
+Other useful structural expansions are `same residue as QUERY`, `same chain as QUERY`, and `bonded QUERY` (or `bonded DEPTH QUERY`). Keep the radius and the target in reports: a spatial selection is defined by both.
+
+## Filter numeric properties
+
+Numeric columns support `<`, `<=`, `>`, `>=`, `=`, and `!=`. Common properties include `bfactor`, `occupancy`, `charge`, `mass`, `plddt`, and Cartesian `x`, `y`, `z` coordinates.
+
+```text
+bfactor > 40
+occupancy >= 0.5 and not altloc B
+plddt < 50 and protein
+```
+
+Exact floating-point equality is rarely a useful scientific criterion. Prefer a range or threshold when a property originated in a calculation.
+
+## Reuse a compiled query
+
+`Query` validates text once and has a stable fingerprint. It is the right form for a filter used repeatedly across one or more structures.
+
+```python
+import molframe
+
+pocket_query = molframe.Query("byres (within 5 of resname HEM) and protein")
+pocket = pocket_query.select(structure)
+# The equivalent convenience call is structure.select(pocket_query).
+```
+
+The typed builders in `molframe.sel` describe the same query model without parsing a string:
+
+```python
+from molframe import sel
+
+heme = sel.residue("HEM")
+pocket_query = sel.residues_within(5.0, heme) & sel.protein()
+pocket = structure.select(pocket_query)
+```
+
+## Name a query definition
+
+Use `QueryAliases` when one query should refer to another. References use `$name`; resolution returns a closed query, detects unknown names and cycles, and never depends on atoms selected by an earlier evaluation.
+
+```python
+aliases = molframe.QueryAliases()
+aliases.define("heme", molframe.Query("resname HEM"))
+aliases.define("pocket", molframe.Query("byres (within 5 of $heme) and protein"))
+
+pocket_query = aliases.resolve(molframe.Query("$pocket"))
+pocket = structure.select(pocket_query)
+```
+
+## Handle a query failure
+
+`Query("…")` and `Structure.select("…")` raise when the expression cannot compile. Preserve the original source text beside the exception: it identifies exactly which scientific subset needs correction.
+
+<Callout type="info" title="Visualize a query in MolGFX">
+MolGFX uses this exact language for representation targets and Workbench selections. See [Query-driven visualization](https://miguelcsx.github.io/molgfx/docs/commands/visual-selections/) for the `select → show → color → focus` workflow.
+</Callout>

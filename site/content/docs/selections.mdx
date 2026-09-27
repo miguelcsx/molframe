@@ -52,3 +52,5 @@ A spatial query depends on the coordinate model and the chosen radius. State the
 ## Query failures
 
 `Query("…")` and `Structure.select("…")` raise a Python exception when the expression cannot be compiled. Keep the original query text in application error messages; it is the actionable context for a user correcting a selection.
+
+For the full syntax, including boolean composition, spatial predicates, numeric columns, and reusable aliases, see [Query language](/docs/query-language).
