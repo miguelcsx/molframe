@@ -68,7 +68,9 @@ pub(super) fn text_resolved<'a>(
         Column::LabelResidueName => context.atom.component_name(),
         Column::AuthResidueName => context.residue.auth_name(),
         Column::LabelAtomName => context.atom.name(),
-        Column::AuthAtomName => context.atom.auth_name(),
+        // Storage keeps an author atom name only where it differs from the
+        // label name, so an atom without one is named by its label.
+        Column::AuthAtomName => context.atom.auth_name().or_else(|| context.atom.name()),
         Column::AlternateLocation => context
             .atom
             .alt_id()

@@ -138,7 +138,12 @@ pub(super) fn symbol_value(
         Column::LabelResidueName => context.residue.label_comp_id(),
         Column::AuthResidueName => context.residue.auth_comp_id(),
         Column::LabelAtomName => context.atom.name_symbol(),
-        Column::AuthAtomName => context.atom.auth_name_symbol(),
+        // Storage keeps an author atom name only where it differs from the
+        // label name, so an atom without one is named by its label.
+        Column::AuthAtomName => context
+            .atom
+            .auth_name_symbol()
+            .or_else(|| context.atom.name_symbol()),
         Column::AlternateLocation => context.atom.alt_id()?.symbol(),
         Column::Entity => context
             .chain

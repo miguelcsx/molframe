@@ -142,7 +142,9 @@ fn cost(expr: &PhysicalExpr) -> u8 {
 
 /// Returns whether `column` can be lowered to dictionary symbol membership.
 ///
-/// Explicit identifier-policy restrictions are preserved.
+/// Explicit identifier-policy restrictions are preserved. Elements are not
+/// text: a file may write iron as `FE` and a query as `Fe`, so they are
+/// compared as elements rather than through the symbol dictionary.
 fn symbol_column(column: Column, policy: &AnalysisPolicy) -> bool {
     if policy.identifiers == molframe_core::contract::Namespace::Explicit
         && matches!(
@@ -163,7 +165,6 @@ fn symbol_column(column: Column, policy: &AnalysisPolicy) -> bool {
             | Column::AuthAtomName
             | Column::AlternateLocation
             | Column::Entity
-            | Column::Element
             | Column::SegmentId
             | Column::InsertionCode
     )

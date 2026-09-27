@@ -103,6 +103,10 @@ pub(crate) fn membership(
         }));
     }
 
+    if column == Column::Element {
+        return Ok(element_membership(structure, universe, values));
+    }
+
     let resolved = resolved_column(column, policy);
     let globs: Vec<Glob> = values.iter().map(|value| Glob::new(value)).collect();
     let matches_empty_alternate = column == Column::AlternateLocation
@@ -116,6 +120,38 @@ pub(crate) fn membership(
         &globs,
         matches_empty_alternate,
     ))
+}
+
+/// Selects atoms whose element is among `values`.
+///
+/// Elements are compared as elements, not as stored text: `Fe`, `FE` and `fe`
+/// all name iron whatever case the file wrote, and a pattern such as `C*` is
+/// matched against each element symbol without regard to case.
+fn element_membership(
+    structure: &Structure,
+    universe: &AtomSelection,
+    values: &[Box<str>],
+) -> AtomSelection {
+    let mut named = Vec::new();
+    let mut patterns = Vec::new();
+    for value in values {
+        if value.bytes().any(|byte| matches!(byte, b'*' | b'?' | b'[')) {
+            patterns.push(Glob::new(&value.to_ascii_uppercase()));
+        } else if let Some(element) = molframe_core::Element::from_symbol(value) {
+            named.push(element);
+        }
+    }
+    if named.is_empty() && patterns.is_empty() {
+        return AtomSelection::Empty;
+    }
+    scan(structure, universe, |context| {
+        context.atom.element().is_some_and(|element| {
+            named.contains(&element)
+                || patterns
+                    .iter()
+                    .any(|pattern| pattern.matches(&element.symbol().to_ascii_uppercase()))
+        })
+    })
 }
 
 fn text_membership<'a>(
@@ -188,20 +224,6 @@ pub(crate) fn membership_symbols(
     if symbols.is_empty() || universe.is_empty() {
         return Ok(AtomSelection::Empty);
     }
-    let elements = if column == Column::Element {
-        let resolved: Vec<molframe_core::Element> = symbols
-            .iter()
-            .filter_map(|symbol| structure.resolve(*symbol))
-            .filter_map(molframe_core::Element::from_symbol)
-            .collect();
-        if resolved.is_empty() {
-            return Ok(AtomSelection::Empty);
-        }
-        Some(resolved)
-    } else {
-        None
-    };
-
     let mut selected = Vec::new();
     let mut universe = SelectionCursor::new(universe.iter());
     for chunk in structure.data().chunks.iter() {
@@ -212,16 +234,6 @@ pub(crate) fn membership_symbols(
         universe.skip_before(atoms.start);
         if universe.is_exhausted() {
             break;
-        }
-        let chunk_matches = match &elements {
-            Some(elements) => elements
-                .iter()
-                .any(|element| chunk.stats().elements.contains(*element)),
-            None => true,
-        };
-        if !chunk_matches {
-            universe.skip_before(atoms.end);
-            continue;
         }
         while let Some(position) = universe.next_before(atoms.end) {
             let Some(atom) = structure.atom(molframe_core::AtomIndex::new(position)) else {
