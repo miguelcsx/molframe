@@ -14,9 +14,10 @@ pub(super) fn synthetic() -> Result<ResourceRecord, String> {
     let frames: Vec<_> = (0..128)
         .map(|frame| Timestep {
             frame,
-            time: Some(f64::from(
-                u32::try_from(frame).expect("synthetic frame index fits in u32"),
-            )),
+            time: Some(f64::from(match u32::try_from(frame) {
+                Ok(value) => value,
+                Err(_) => unreachable!("synthetic frame index fits in u32"),
+            })),
             positions: positions.clone(),
             ..Timestep::default()
         })

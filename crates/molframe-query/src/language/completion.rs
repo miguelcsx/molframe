@@ -247,7 +247,7 @@ pub fn complete(
             .map(|(index, _)| index)
             .take_while(|&index| index < cursor)
             .last()
-            .unwrap_or(0);
+            .map_or(0, |value| value);
         return CompletionResult {
             replacement_start: boundary,
             replacement_end: boundary,
@@ -358,7 +358,7 @@ fn token_fragment(source: &str) -> (usize, &str) {
             (character.is_whitespace() || matches!(character, '(' | ')' | ','))
                 .then_some(index + character.len_utf8())
         })
-        .unwrap_or(0);
+        .map_or(0, |value| value);
     (start, &source[start..])
 }
 

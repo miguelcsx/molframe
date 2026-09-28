@@ -235,7 +235,7 @@ impl PySelection {
     /// for callers that apply a selection across structure versions.
     #[pyo3(signature = (structure=None))]
     fn residues(&self, structure: Option<&PyStructure>) -> PyResult<PyResidueSelection> {
-        let structure = structure.unwrap_or(&self.parent);
+        let structure = structure.map_or(&self.parent, |value| value);
         if self.selection.is_stale_for(&structure.inner) {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "selection is stale for the supplied structure",
