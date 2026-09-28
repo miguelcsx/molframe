@@ -247,7 +247,8 @@ pub fn complete(
             .map(|(index, _)| index)
             .take_while(|&index| index < cursor)
             .last()
-            .map_or(0, |value| value);
+            .into_iter()
+            .fold(0, |_, value| value);
         return CompletionResult {
             replacement_start: boundary,
             replacement_end: boundary,
@@ -349,7 +350,6 @@ fn column_name_of(column: crate::ast::Column) -> &'static str {
         _ => "",
     }
 }
-
 fn token_fragment(source: &str) -> (usize, &str) {
     let start = source
         .char_indices()
@@ -358,7 +358,8 @@ fn token_fragment(source: &str) -> (usize, &str) {
             (character.is_whitespace() || matches!(character, '(' | ')' | ','))
                 .then_some(index + character.len_utf8())
         })
-        .map_or(0, |value| value);
+        .into_iter()
+        .fold(0, |_, value| value);
     (start, &source[start..])
 }
 
