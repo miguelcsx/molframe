@@ -17,6 +17,7 @@ const PICOSECONDS_TO_SECONDS: f64 = 1.0e-12;
 const VALUES_PER_VECTOR: i64 = 3;
 const VALUES_PER_CELL: i64 = 9;
 const TIME_TOLERANCE: f64 = 1.0e-9;
+const MAX_FRAMES_PER_FRAME_SET: usize = 128;
 
 /// Writes a complete TNG trajectory to `path`.
 ///
@@ -51,58 +52,64 @@ fn write_inner(path: &Path, frames: &[Timestep], options: TngWriteOptions) -> Re
     output.set_time_per_frame(time_per_step * PICOSECONDS_TO_SECONDS)?;
     add_anonymous_particles(&mut output, atoms);
     output.file_headers_write(options.hashes)?;
-    let first = frames.first().ok_or(TngError::InvalidShape)?;
-    let last = frames.last().ok_or(TngError::InvalidShape)?;
-    let first_step = i64::try_from(first.frame).map_err(|_| TngError::InvalidSteps)?;
-    let last_step = i64::try_from(last.frame).map_err(|_| TngError::InvalidSteps)?;
-    let span = last_step
-        .checked_sub(first_step)
-        .and_then(|value| value.checked_add(1))
-        .ok_or(TngError::InvalidSteps)?;
-    let first_time = first.time.ok_or(TngError::InvalidValue)? * PICOSECONDS_TO_SECONDS;
-    output.frame_set_with_time_new(first_step, span, first_time)?;
-    let particle_blocks = ParticleBlockContext {
-        atoms,
-        span,
-        stride,
-    };
+    for frames in frames.chunks(MAX_FRAMES_PER_FRAME_SET) {
+        let first = frames.first().ok_or(TngError::InvalidShape)?;
+        let last = frames.last().ok_or(TngError::InvalidShape)?;
+        let first_step = i64::try_from(first.frame).map_err(|_| TngError::InvalidSteps)?;
+        let last_step = i64::try_from(last.frame).map_err(|_| TngError::InvalidSteps)?;
+        let span = last_step
+            .checked_sub(first_step)
+            .and_then(|value| value.checked_add(1))
+            .ok_or(TngError::InvalidSteps)?;
+        let first_time = first.time.ok_or(TngError::InvalidValue)? * PICOSECONDS_TO_SECONDS;
+        output.frame_set_with_time_new(first_step, span, first_time)?;
+        let particle_blocks = ParticleBlockContext {
+            atoms,
+            span,
+            stride,
+        };
 
-    let positions = collect_vectors(frames, |frame| Some(&frame.positions), 1.0 / length_scale)?;
-    particle_blocks.write(
-        &mut output,
-        BlockID::TrajPositions,
-        "POSITIONS",
-        &positions,
-        compression,
-    )?;
-    if first.velocities.is_some() {
-        let velocities = collect_vectors(
+        let positions = collect_vectors(
             frames,
-            |frame| frame.velocities.as_ref(),
+            |frame| Some(frame.positions.as_slice()),
             1.0 / length_scale,
         )?;
         particle_blocks.write(
             &mut output,
-            BlockID::TrajVelocities,
-            "VELOCITIES",
-            &velocities,
+            BlockID::TrajPositions,
+            "POSITIONS",
+            &positions,
             compression,
         )?;
+        if first.velocities.is_some() {
+            let velocities = collect_vectors(
+                frames,
+                |frame| frame.velocities.as_deref(),
+                1.0 / length_scale,
+            )?;
+            particle_blocks.write(
+                &mut output,
+                BlockID::TrajVelocities,
+                "VELOCITIES",
+                &velocities,
+                compression,
+            )?;
+        }
+        if first.forces.is_some() {
+            let forces = collect_vectors(frames, |frame| frame.forces.as_deref(), length_scale)?;
+            particle_blocks.write(
+                &mut output,
+                BlockID::TrajForces,
+                "FORCES",
+                &forces,
+                Compression::GZip,
+            )?;
+        }
+        if first.cell.is_some() {
+            write_cells(&mut output, frames, length_scale, span, stride)?;
+        }
+        output.frame_set_write(options.hashes)?;
     }
-    if first.forces.is_some() {
-        let forces = collect_vectors(frames, |frame| frame.forces.as_ref(), length_scale)?;
-        particle_blocks.write(
-            &mut output,
-            BlockID::TrajForces,
-            "FORCES",
-            &forces,
-            Compression::GZip,
-        )?;
-    }
-    if first.cell.is_some() {
-        write_cells(&mut output, frames, length_scale, span, stride)?;
-    }
-    output.frame_set_write(options.hashes)?;
     Ok(())
 }
 
@@ -240,7 +247,7 @@ impl ParticleBlockContext {
             0,
             i64::try_from(self.atoms).map_err(|_| TngError::InvalidShape)?,
             compression,
-            Some(&bytes),
+            Some(bytes),
         )?;
         Ok(())
     }
@@ -248,7 +255,7 @@ impl ParticleBlockContext {
 
 fn collect_vectors<'a>(
     frames: &'a [Timestep],
-    select: impl Fn(&'a Timestep) -> Option<&'a Vec<[f32; 3]>>,
+    select: impl Fn(&'a Timestep) -> Option<&'a [[f32; 3]]>,
     scale: f64,
 ) -> Result<Vec<f32>, TngError> {
     let mut output = Vec::new();
@@ -298,16 +305,13 @@ fn write_cells(
         VALUES_PER_CELL,
         stride,
         Compression::GZip,
-        Some(&bytes),
+        Some(bytes),
     )?;
     Ok(())
 }
 
-fn native_bytes(values: &[f32]) -> Vec<u8> {
-    values
-        .iter()
-        .flat_map(|value| value.to_ne_bytes())
-        .collect()
+fn native_bytes(values: &[f32]) -> &[u8] {
+    bytemuck::cast_slice(values)
 }
 
 fn compression(value: TngCompression) -> Result<(Compression, f64), TngError> {

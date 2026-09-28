@@ -3,10 +3,12 @@
 #![forbid(unsafe_code)]
 
 mod download;
+mod identifier;
 mod topology;
 mod topology_import;
 
 pub use download::{DownloadError, DownloadOptions, VerifiedDownload, fetch_verified};
+pub use identifier::{IdentifierFetchError, fetch_identifier};
 
 pub use topology::{MISSING_STRING, TopologyBatch, TopologyBatchError};
 pub use topology_import::TopologyImportError;

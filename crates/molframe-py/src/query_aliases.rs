@@ -1,7 +1,9 @@
 //! Python view of named query definitions.
 
-use crate::bindings::PyQuery;
+use crate::bindings::{PyQuery, PyStructure};
 use pyo3::prelude::*;
+
+use molframe::CompletionKind;
 
 /// Named query definitions resolved to closed queries.
 ///
@@ -63,4 +65,38 @@ impl PyQueryAliases {
     fn __contains__(&self, name: &str) -> bool {
         self.inner.contains(name)
     }
+}
+
+/// Complete a query at a UTF-8 byte cursor using the native language registry.
+///
+/// `structure` is optional; when supplied, identifier-valued columns such as
+/// `chain`, `resname`, and `name` are completed from the structure's own
+/// native indexes rather than any client-maintained vocabulary.
+#[pyfunction]
+#[pyo3(signature = (source, cursor, aliases = None, structure = None))]
+pub(crate) fn complete(
+    source: &str,
+    cursor: usize,
+    aliases: Option<&PyQueryAliases>,
+    structure: Option<&PyStructure>,
+) -> (usize, usize, Vec<(String, String)>) {
+    let empty = molframe::QueryAliases::default();
+    let aliases = aliases.map_or(&empty, |value| &value.inner);
+    let values = structure.map(|structure| &structure.inner as &dyn molframe::StructureValues);
+    let result = molframe::complete(source, cursor, aliases, values);
+    let items = result
+        .items
+        .into_iter()
+        .map(|item| {
+            let kind = match item.kind {
+                CompletionKind::Keyword => "keyword",
+                CompletionKind::Column => "column",
+                CompletionKind::Macro => "macro",
+                CompletionKind::Alias => "alias",
+                CompletionKind::Value => "value",
+            };
+            (item.label, kind.to_owned())
+        })
+        .collect();
+    (result.replacement_start, result.replacement_end, items)
 }

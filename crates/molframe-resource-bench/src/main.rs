@@ -7,6 +7,7 @@ mod kernel_bench;
 mod modelcif_bench;
 mod mrc_bench;
 mod stream_bench;
+mod tng_bench;
 mod xtc_bench;
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -321,6 +322,7 @@ fn run_extended(name: &str) -> Result<ResourceRecord, String> {
         "scan_synthetic_1g" => stream_bench::run_scan_synthetic_1g(),
         "file_copied_1g" => stream_bench::run_file_copied_1g(),
         "file_mapped_1g" => stream_bench::run_file_mapped_1g(),
+        "tng_synthetic_128x660" => tng_bench::synthetic(),
         "bcif_stream_file" => measure_case("bcif_stream_file", || {
             let path = std::env::var_os("MOLFRAME_BENCH_FILE")
                 .map(std::path::PathBuf::from)
@@ -424,8 +426,9 @@ fn main() -> Result<(), String> {
             | "mrc_block_file"
             | "structure_batch_file"
             | "window_scan_file"
-    ) || case == "xtc_file"
-    {
+            | "tng_file"
+            | "xtc_file"
+    ) {
         let path = arguments
             .next()
             .ok_or_else(|| format!("usage: molframe-resource-bench {case} PATH"))?;
@@ -445,6 +448,9 @@ fn main() -> Result<(), String> {
         } else if case == "window_scan_file" {
             require_no_more_arguments(&mut arguments, &case)?;
             stream_bench::run_window_scan_file(Path::new(&path))?
+        } else if case == "tng_file" {
+            require_no_more_arguments(&mut arguments, &case)?;
+            tng_bench::read_file(Path::new(&path))?
         } else if case == "xtc_file" {
             require_no_more_arguments(&mut arguments, &case)?;
             xtc_bench::read_file(Path::new(&path))?

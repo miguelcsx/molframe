@@ -1,6 +1,6 @@
 //! Central facade handles and stateless namespace functions.
 
-use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidues};
+use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidueSelection, PyResidues};
 #[cfg(feature = "geometry")]
 use numpy::PyReadonlyArray2;
 #[cfg(feature = "geometry")]
@@ -227,6 +227,24 @@ impl PySelection {
         let flat = coordinates.into_iter().flatten().collect::<Vec<_>>();
         let array = flat.into_pyarray(py);
         array.reshape((rows, 3))
+    }
+    /// Return the residues covered by this selection.
+    ///
+    /// With no argument, the selection's retained parent snapshot is used.
+    /// Supplying a structure keeps the explicit stale-snapshot check available
+    /// for callers that apply a selection across structure versions.
+    #[pyo3(signature = (structure=None))]
+    fn residues(&self, structure: Option<&PyStructure>) -> PyResult<PyResidueSelection> {
+        let structure = structure.unwrap_or(&self.parent);
+        if self.selection.is_stale_for(&structure.inner) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "selection is stale for the supplied structure",
+            ));
+        }
+        Ok(PyResidueSelection::from_selection(
+            structure.clone(),
+            &self.selection,
+        ))
     }
 
     fn __or__(&self, other: &Self) -> Self {

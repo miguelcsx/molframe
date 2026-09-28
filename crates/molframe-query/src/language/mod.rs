@@ -1,6 +1,7 @@
 //! Selection language parsing and semantics.
 
 pub(crate) mod ast;
+pub(crate) mod completion;
 pub(crate) mod expand;
 pub(crate) mod glob;
 pub(crate) mod lexer;

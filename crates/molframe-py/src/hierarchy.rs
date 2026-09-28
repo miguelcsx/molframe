@@ -50,6 +50,19 @@ impl PyAtom {
             .and_then(|atom| atom.name().map(str::to_owned))
     }
 
+    /// The effective chemical component identifier for this atom.
+    ///
+    /// This is the native component identity, including an atom-level
+    /// alternate component when one is present; no chemistry is inferred.
+    #[getter]
+    fn component_name(&self) -> Option<String> {
+        self.parent
+            .inner
+            .atoms()
+            .get(self.index as usize)
+            .and_then(molframe::AtomRef::component_name)
+            .map(str::to_owned)
+    }
     #[getter]
     fn coordinate(&self) -> Option<[f32; 3]> {
         self.parent
@@ -57,6 +70,18 @@ impl PyAtom {
             .coordinates()
             .get(self.index as usize)
             .copied()
+    }
+    #[getter]
+    fn residue(&self) -> Option<PyResidue> {
+        self.parent
+            .inner
+            .atoms()
+            .get(self.index as usize)
+            .and_then(molframe::AtomRef::residue)
+            .map(|residue| PyResidue {
+                parent: self.parent.clone(),
+                index: residue.index().get(),
+            })
     }
 }
 
@@ -138,6 +163,51 @@ impl PyResidue {
                 contiguous_range(residue.atoms().map(|atom| atom.index().get()))
             });
         PyAtoms::range(self.parent.clone(), range.0, range.1)
+    }
+    fn atom(&self, name: &str) -> Option<PyAtom> {
+        self.parent
+            .inner
+            .residues()
+            .get(self.index as usize)
+            .and_then(|residue| residue.atom(name))
+            .map(|atom| PyAtom {
+                parent: self.parent.clone(),
+                index: atom.index().get(),
+            })
+    }
+}
+
+#[derive(Clone, Debug)]
+#[pyclass(name = "ResidueSelection", frozen, skip_from_py_object)]
+pub(crate) struct PyResidueSelection {
+    parent: PyStructure,
+    indices: Vec<u32>,
+}
+
+#[pymethods]
+impl PyResidueSelection {
+    const fn __len__(&self) -> usize {
+        self.indices.len()
+    }
+
+    fn __getitem__(&self, index: isize) -> PyResult<PyResidue> {
+        let index = position(index, self.indices.len())?;
+        Ok(PyResidue {
+            parent: self.parent.clone(),
+            index: self.indices[index],
+        })
+    }
+}
+
+impl PyResidueSelection {
+    pub(crate) fn from_selection(parent: PyStructure, selection: &molframe::Selection) -> Self {
+        let mut indices = selection
+            .atoms()
+            .filter_map(|atom| atom.residue().map(|residue| residue.index().get()))
+            .collect::<Vec<_>>();
+        indices.sort_unstable();
+        indices.dedup();
+        Self { parent, indices }
     }
 }
 

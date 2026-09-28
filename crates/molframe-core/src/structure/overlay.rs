@@ -184,7 +184,7 @@ impl StructureEditor {
     /// Returns every violated structural invariant. The original structure is
     /// unaffected whether commit succeeds or fails.
     pub fn commit(mut self) -> Result<Structure, Vec<Diagnostic>> {
-        if self.coordinates_changed {
+        if self.coordinates_changed || self.requires_full_validation {
             let Some(generation) = self.data.generation.next() else {
                 return Err(vec![
                     Diagnostic::new(Code::E6003).with_context("coordinate_generation", "exhausted"),

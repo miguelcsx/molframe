@@ -119,6 +119,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `read_with_diagnostics` preserves problems and ambiguities encountered while loading a structure instead of reducing parsing to a success/failure decision.
 
+`molframe read` parses a path, bytes, or reader; it does not turn an identifier into a guessed network URL. Use the CLI verified acquisition boundary when retrieving an external resource:
+
+```bash
+molframe fetch 1HHO --url-template 'https://example.org/structures/{id}.cif' --sha256 <64-hex-digest> --max-bytes 50000000 --timeout-seconds 30 --redirect-limit 0 --output 1HHO.cif
+```
+
+The URL must contain `{id}`. The fetch command enforces the byte limit, timeout, redirect policy, and SHA-256 digest before atomically creating the destination; existing files are not replaced. A digest proves that the bytes match the expected value, not who published them, so retain the HTTPS origin and provider/version metadata. CCD downloads use `molframe ccd update` with the same verification controls and require `--replace` for replacement. The Python API intentionally keeps acquisition separate from parsing.
+
+
 ## Workflow and data-movement contract
 
 `Workflow` builds an immutable typed DAG with named inputs and outputs. Compile

@@ -1,0 +1,61 @@
+---
+title: 0.3.0 evidence ledger
+description: Acceptance status and reproducible evidence requirements for the 0.3.0 workbench scope.
+---
+
+# 0.3.0 evidence ledger
+
+This page is the acceptance ledger for the 0.3.0 workbench scope. It separates
+implemented code from behavior that has been exercised at the public boundary.
+A capability is not marked complete because a type, binding, or handle exists.
+The ledger must be updated with a reproducible command, fixture, and observed
+result when a row changes.
+
+## Status vocabulary
+
+- **Exercised** — the consumer-visible path was run and its expected result was
+  observed. The evidence column identifies the test, fixture, or UI workflow.
+- **Partial** — some implementation or lower-level coverage exists, but an
+  acceptance boundary, error path, or integration path remains unverified.
+- **Missing** — the required behavior is not implemented or no usable evidence
+  exists.
+- **Blocked** — implementation is present, but an external prerequisite (for
+  example unavailable hardware or a provider) prevents the specified scenario.
+  A blocked row is not a pass.
+
+The status applies to the requirement, not to the apparent maturity of its
+implementation. `cargo check`, a binding smoke test, or a non-empty result is
+not evidence for an end-to-end row.
+
+## MolFrame acceptance matrix
+
+| Area | Acceptance boundary | Status | Evidence / remaining proof |
+| --- | --- | --- | --- |
+| Structure identity | Author and label namespaces, insertion codes, absent fields, and ownership-preserving hierarchy accessors agree across Rust, Python, and source formats. | Partial | Native hierarchy and format changes are present in `crates/molframe-py/src/hierarchy.rs` and CIF/PDB paths. Exercise equal, unequal, absent, and insertion-coded identifiers through CIF, BCIF, PDB, and Python. |
+| Canonical sequence | Canonical positions preserve gaps, observed substitutions, optional residue indices, atom ranges, and all applicable reference-alignment intervals. | Partial | The sequence model is an existing native boundary. Add evidence for explicit gaps, disjoint intervals, ambiguous alignments, and unmapped observed residues; ordinal `1..N` inference is not acceptance evidence. |
+| Chemistry and analysis | Component chemistry, provenance, coverage diagnostics, declared-SSE precedence, cached fallback, and the five interaction classes are exposed through public APIs. | Partial | Chemistry and DSSP-like native paths exist in `crates/molframe-chem/` and `crates/molframe-analysis/`. Exercise missing-role diagnostics, provenance, declared-SSE precedence, and genuine interaction outputs. |
+| Query language | Every supported query example parses, evaluates, prints canonically, and reports invalid spans and suggestions consistently across Rust, Python, and workbench. | Partial | Parser, AST, evaluator, and completion modules are present under `crates/molframe-query/`. Run the original example matrix, W4003 context checks, non-ASCII cursor checks, `$selection` dependency invalidation, and concurrent result ownership scenarios. |
+| Verified acquisition | Fetch/cache hit, miss, offline, corruption, digest mismatch, bounded transfer, and concurrent materialization are distinguishable and atomic. | Partial | The verified adapter and CLI paths are present in `crates/molframe-adapters/`. Exercise a controlled provider and a real 1HHO acquisition; record provider/version, HTTPS origin, format validation, and whether an authoritative checksum exists. |
+| Semantic selection | A pick resolves against structure/topology identity and instance provenance; click modifiers, granularity, stale events, ordering, and acknowledgement converge on one Session transaction. | Partial | Selection/session code and viewer interaction boundaries exist, but binding and UI behavior must be exercised with real canvas picks, rapid Shift/Alt operations, replacement during readback, duplicate events, and identical rows from different structures. |
+| Sequence and focus UI | The mounted sequence model displays canonical gaps and numbering, emits compact native intervals, and focus creates editable retained layers with requested radius and controls. | Partial | Run the actual shared viewer in Chromium and AnyWidget with 4HHB and 1HHO. Verify tooltip, drag selection, layer edit/delete/undo, ligand preset radius, and acknowledged-selection highlighting. |
+| Measurements and density | Exact atom references, units, degeneracy errors, retained measurement lifecycle, and real map sigma/provenance survive serialization, patching, undo, and round trips. | Partial | Native scene/science operations exist. Exercise two/three/four-atom gestures, stale cancellation, coordinate updates, map acquisition, sigma controls, and resource retirement; density picks must remain separate from atom selection. |
+| Trajectory | Real frame/topology data, coalesced playback, pause drain, stable topology selections, and coordinate-revision invalidation are visible at the public boundary. | Partial | Run play/pause/scrub against an actual trajectory and verify frame/time, errors, stable selections, and measurement/analysis invalidation. A time setter alone is insufficient evidence. |
+| Crystallography and comparison | Assembly/symmetry/unit-cell instance identity, native correspondence/superposition diagnostics, validation coloring, and provenance are exposed in the workbench. | Partial | Native domains exist. Exercise assembly picks, insufficient-correspondence errors, legends, missing data, and source/instance identity through Python/WASM and the viewer. |
+| Snapshot and movie export | Retained layers, selections, measurements, camera, and resource references restore; movie output contains deterministic trajectory/camera samples and supports cancellation/cleanup. | Partial | Snapshot mechanisms are present under `crates/molgfx-api/src/interop/`. Decode a real movie and verify frame/time values; a screenshot sequence is not movie evidence. |
+| Renderer lifecycle | Settled scenes stop RAF/submissions, completion metrics distinguish CPU, queue, callback, and GPU timing, in-flight ownership is bounded, and final completed frames are sampled. | Partial | The known Python run reported 65 tests with one established failure: `test_a_settled_scene_does_not_schedule_more_browser_frames` observed two frames instead of zero (`python/tests/test_workbench_viewer.py:325`). Fix at the producer and rerun the targeted regression and full suite. Unsupported GPU timestamps remain unavailable, not zero. |
+| Cross-host release | Authoritative viewer source builds website and AnyWidget artifacts; actual Chromium, Firefox, WebKit, Jupyter, and available notebook hosts are exercised with capability skips recorded. | Partial | Use `molgfx-viewer/package.json`, CI, and manifests to determine exact commands before recording results. Generated widget output must be regenerated by the supported build, never hand-edited. |
+
+## Required evidence record
+
+For each exercised row, record:
+
+1. the exact command or UI workflow and repository revision;
+2. fixture identity, source format, viewport/DPR/device, and relevant options;
+3. observed output, including expected failures and diagnostics;
+4. test discovery count and process exit status where a test runner is used;
+5. external limitations, unsupported capabilities, and raw artifact paths.
+
+A skipped WebGPU backend, unavailable notebook host, provider outage, or
+missing redistributable chemistry resource must be recorded as a limitation;
+none converts a partial row into an exercised row. Keep implementation notes in
+the owning module and keep this page limited to acceptance evidence and status.

@@ -24,7 +24,10 @@ use bindings::{PyContactTable, atom_contacts};
 use bindings::{PyQuery, PyReader, PySelection, PyStructure, PyStructureEditor, read};
 #[cfg(feature = "geometry")]
 use bindings::{centroid, distance_matrix, rmsd};
-use hierarchy::{PyAtom, PyAtoms, PyChain, PyChains, PyModel, PyModels, PyResidue, PyResidues};
+use hierarchy::{
+    PyAtom, PyAtoms, PyChain, PyChains, PyModel, PyModels, PyResidue, PyResidueSelection,
+    PyResidues,
+};
 use pyo3::prelude::*;
 #[cfg(feature = "analysis")]
 use workflow::{PyCompiledWorkflow, PyWorkflow, PyWorkflowNode};
@@ -57,6 +60,7 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyAtom>()?;
     module.add_class::<PyAtoms>()?;
     module.add_class::<PyResidue>()?;
+    module.add_class::<PyResidueSelection>()?;
     module.add_class::<PyResidues>()?;
     module.add_class::<PyChain>()?;
     module.add_class::<PyChains>()?;
@@ -112,6 +116,11 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     selection_expr::register(&selection)?;
     module.add_submodule(&selection)?;
 
+    let query = PyModule::new(py, "query")?;
+    #[cfg(feature = "query")]
+    query.add_function(wrap_pyfunction!(query_aliases::complete, &query)?)?;
+    module.add_submodule(&query)?;
+
     for name in [
         "trajectory",
         "sequence",
@@ -120,7 +129,6 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
         "motif",
         "chemistry",
         "compare",
-        "query",
         "spatial",
         "surface",
     ] {

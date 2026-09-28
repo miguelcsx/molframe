@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Trajectory frames and formats for molframe"
 
 [dependencies]
+bytemuck.workspace = true
 hoomd-gsd.workspace = true
 hdf5-reader.workspace = true
 hdf5-writer.workspace = true

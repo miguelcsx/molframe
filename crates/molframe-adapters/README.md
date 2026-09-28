@@ -1,15 +1,9 @@
-# molframe-adapters
-
-Boundary adapters for external topology and verified remote data.
+# MolFrame adapters
 
 This crate handles integration problems that sit outside the scientific kernels: transferring topology across representation boundaries and acquiring external resources under explicit integrity constraints.
 
 ```mermaid
 flowchart LR
-    External["External topology"] --> Batch["TopologyBatch<br/>neutral columnar form"]
-    Batch --> Validate["Validation"]
-    Validate --> Structure["Structure"]
-
     Remote["Remote resource"] --> Fetch["bounded fetch"]
     Fetch --> Hash["SHA-256 verification"]
     Hash --> Bytes["VerifiedDownload"]
@@ -23,6 +17,6 @@ Import validates column lengths, hierarchy offsets, indices, elements, and conne
 
 ## Resource acquisition
 
-Network retrieval requires both a byte ceiling and an expected SHA-256 digest. Redirect behavior and timeouts are explicit, and bytes are published only after integrity verification succeeds.
+`fetch_verified` retrieves a caller-supplied URL only when the caller also supplies an expected SHA-256 digest, byte ceiling, timeout, and redirect policy. Bytes are published only after integrity verification succeeds. A digest calculated from received bytes establishes content identity, not publisher authenticity.
 
-The crate therefore acts as an integration boundary, not as another analysis layer.
+The crate does not currently ship an authoritative identifier-to-resource manifest. `fetch_identifier` therefore returns the typed `IdentifierFetchError::ProviderUnavailable` diagnostic for non-empty identifiers rather than guessing an archive URL or treating a local digest as an authoritative checksum. Local path and caller-supplied byte loading remain available through the facade's normal readers.

@@ -42,6 +42,40 @@ fn lossless_round_trip_preserves_all_standard_frame_blocks() {
     assert!((cell.lengths[1] - 21.0).abs() < 1.0e-5);
     assert!((parsed.frames[1].time.expect("time") - 2.0).abs() < 1.0e-9);
 }
+#[test]
+fn round_trip_crosses_frame_set_boundary() {
+    let directory = tempdir().expect("temporary directory");
+    let path = directory.path().join("multiple-frame-sets.tng");
+    let frames: Vec<_> = (0..129)
+        .map(|index| {
+            frame(
+                index * 5,
+                f64::from(u32::try_from(index).expect("test index fits in u32")),
+                f32::from(u16::try_from(index).expect("test index fits in u16")),
+            )
+        })
+        .collect();
+
+    write_tng(&path, &frames, TngWriteOptions::default()).expect("write TNG");
+    let parsed = parse_tng(&path).expect("read TNG");
+
+    assert_eq!(parsed.steps.len(), frames.len());
+    assert_eq!(
+        parsed.steps[127],
+        i64::try_from(frames[127].frame).expect("test frame fits in i64")
+    );
+    assert_eq!(
+        parsed.steps[128],
+        i64::try_from(frames[128].frame).expect("test frame fits in i64")
+    );
+    assert_eq!(parsed.frames[128].positions, frames[128].positions);
+    let velocities = parsed.frames[128].velocities.as_ref().expect("velocities");
+    assert!(
+        (velocities[1][0] - frames[128].velocities.as_ref().expect("velocities")[1][0]).abs()
+            < 1.0e-6
+    );
+    assert_eq!(parsed.frames[128].forces, frames[128].forces);
+}
 
 #[test]
 fn angstrom_files_are_converted_at_the_boundary() {

@@ -21,7 +21,8 @@ mod smarts_match;
 mod smarts_parse;
 
 pub use annotate::{
-    ChemistryReport, PolymerLinkPolicy, PolymerLinkRule, apply_component_chemistry,
+    ChemistryProvenance, ChemistryReport, PolymerLinkPolicy, PolymerLinkRule,
+    apply_component_chemistry,
 };
 pub use coverage::{ComponentCoverage, component_coverage};
 pub use element::{ElementProperties, RadiusSet, RadiusTable, element_properties, vdw_radius};

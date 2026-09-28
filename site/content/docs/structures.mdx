@@ -15,18 +15,16 @@ structure = molframe.read("model.cif")
 structure = molframe.read("model.pdb")
 ```
 
-The default Python build includes PDB and mmCIF support.
+The default Python build includes PDB and mmCIF support. Reading local paths and caller-supplied bytes is the verified loading boundary. Identifier acquisition is not silently mapped to a guessed archive URL: the current adapters expose a typed unavailable-provider diagnostic until a provider manifest supplies a canonical URL and authoritative checksum. For a direct remote resource, use the Rust adapter's verified-download boundary with an expected SHA-256 digest, byte limit, timeout, and redirect policy.
 
 ## The hierarchy
 
-```mermaid
-flowchart LR
+<Mermaid chart={`flowchart LR
   S[Structure] --> M[Models]
   M --> C[Chains]
   C --> R[Residues]
   R --> A[Atoms]
-  S --> XYZ[coordinates: N × 3]
-```
+  S --> XYZ[coordinates: N × 3]`} />
 
 The collections are indexable and report their length. Individual handles expose identifiers and their immediate children.
 
@@ -60,3 +58,30 @@ For an analysis over a subset, use `selection.to_coordinates()` rather than manu
 ## Ambiguity in input
 
 PDB and mmCIF files can contain multiple models, alternate locations, missing coordinates, or ambiguous residue boundaries. MolFrame records input findings as diagnostics. Choose an explicit parsing policy when your scientific interpretation depends on these cases; do not silently merge conformers or models.
+
+## Verified acquisition
+
+`molframe read` does not resolve identifiers or access the network. For reproducible acquisition, use the CLI `fetch` command with an explicit provider URL, pinned SHA-256 digest, and resource limits:
+
+```bash
+molframe fetch 1HHO --url-template 'https://example.org/structures/{id}.cif' --sha256 <64-hex-digest> --max-bytes 50000000 --timeout-seconds 30 --redirect-limit 0 --output 1HHO.cif
+```
+
+The URL must contain the literal `{id}` placeholder. The command validates response size and SHA-256 before writing; a failed transfer, response-limit violation, malformed digest, or checksum mismatch leaves the destination untouched. The destination is created atomically, and an existing file is not replaced by `fetch`. HTTPS identifies the transport origin, but a locally checked digest does not establish publisher authenticity when the provider does not publish an authoritative checksum. Record the provider URL, digest, format, and source/version alongside a downloaded resource.
+
+CCD resources use the same verified boundary:
+
+```bash
+molframe ccd update --url <provider-url> --sha256 <64-hex-digest> --max-bytes 500000000 --timeout-seconds 120 --redirect-limit 0 --version <ccd-version> --output components.cif.gz
+```
+
+`ccd update` atomically replaces an existing destination only when `--replace` is supplied. Keep downloaded bytes in an application-managed cache and verify the digest whenever an entry is reused; do not treat a path’s existence as proof that its contents are valid. The Python `read` API currently accepts paths, bytes, and readers; identifier acquisition is intentionally separate.
+## Identity, numbering, and canonical gaps
+
+Hierarchy handles retain source identity rather than rewriting it: atom, residue, and chain accessors distinguish author and label namespaces, preserve insertion codes, and report an absent author number as absent. Namespace-aware lookups must reject an ambiguous match instead of choosing the first chain. Selections remain owned by their source structure; an equal row index from a different topology is not the same atom.
+
+Canonical sequence projections distinguish an observed residue from a canonical gap. A gap has no fabricated residue or atom index, while an observed residue without a reliable reference mapping remains explicitly unmapped. Alignment intervals are checked and may be disjoint or ambiguous; ordinal 1..N extrapolation is not a valid mapping.
+
+## Verification status
+
+The local-path/bytes loading and verified-download contracts documented above are implemented boundaries. No test, formatter, or linter command was run for this documentation-only change. Identifier acquisition through a provider manifest, cache corruption/concurrency/offline cases, CIF/BCIF/PDB namespace round trips, canonical-gap fixtures, and Python hierarchy scenarios remain unverified here. HTTPS origin plus a locally computed digest does not establish publisher authenticity when the provider supplies no authoritative checksum.

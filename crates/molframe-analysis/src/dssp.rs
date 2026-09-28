@@ -67,6 +67,14 @@ pub enum SseKind {
     Coil,
 }
 
+impl SseKind {
+    /// Whether this value represents an evaluated assignment rather than a missing backbone result.
+    #[must_use]
+    pub const fn is_evaluated(self) -> bool {
+        !matches!(self, Self::Unknown)
+    }
+}
+
 /// One residue and its secondary-structure state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SseRecord {
@@ -86,20 +94,43 @@ define_soa_table! {
     }
 }
 
-/// Assigns secondary structure to every backbone residue of a structure.
+impl SseTable {
+    /// Returns the computed DSSP rows as typed placement input.
+    /// This reuses the existing result and performs no coordinate or frame work.
+    pub fn placements(&self) -> impl Iterator<Item = (ResidueIndex, SseKind)> + '_ {
+        self.residue()
+            .iter()
+            .copied()
+            .zip(self.kind().iter().copied())
+    }
+}
+
+/// Assigns DSSP-like secondary structure to every residue in `structure`.
 ///
-/// Residues without the required semantic backbone roles are unknown. `Coil`
-/// means the residue was evaluable but matched no helix, strand or turn.
-/// Results are ordered by residue index.
+/// The assignment uses the Kabsch–Sander electrostatic energy of backbone
+/// carbonyl and amide groups, followed by the hydrogen-bond pattern rules in
+/// `options`. Backbone roles are resolved from the structure's explicit
+/// semantic polymer-role annotations; an amide hydrogen is estimated from the
+/// preceding carbonyl when the structure does not provide one.
 ///
-/// Runs in `O(chain length²)` per chain.
+/// Residues are processed independently within each chain and the returned
+/// rows preserve chain/residue traversal order. A residue whose required
+/// backbone roles are not all present is reported as [`SseKind::Unknown`]. An
+/// evaluable residue that matches no helix, strand, or turn is reported as
+/// [`SseKind::Coil`].
+///
+/// The hydrogen-bond search takes `O(n²)` time for a chain containing `n`
+/// residues. The caller must provide options with finite, meaningful numeric
+/// values; use [`DsspOptions`] to start from the standard definition.
 ///
 /// # Errors
 ///
-/// Returns [`DsspError::MissingRoleAnnotation`] when no explicit semantic role
-/// profile has been applied, [`DsspError::InvalidOptions`] for an invalid
-/// numerical definition, or [`DsspError::AmbiguousRole`] for non-unique
-/// backbone roles.
+/// Returns [`DsspError::InvalidOptions`] if any numerical option is non-finite
+/// or outside its allowed domain. Returns
+/// [`DsspError::MissingRoleAnnotation`] when the structure has no explicit
+/// semantic polymer atom-role profile. Returns [`DsspError::AmbiguousRole`]
+/// when a residue contains more than one atom for a backbone role that must be
+/// unique.
 pub fn secondary_structure(
     structure: &Structure,
     options: &DsspOptions,

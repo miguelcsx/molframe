@@ -152,7 +152,7 @@ impl<'a> AtomBuilder<'a> {
         let alternate_component_id = self.alternate_component_of(rows, residue);
 
         let position = self.position_of(rows);
-        let auth_atom_name = self.auth_name_of(rows, name_text.as_deref());
+        let auth_atom_name = self.auth_name_of(rows);
         let primary_component_id = match self.data.topology.residues.label_comp_id(residue) {
             Some(component) => component,
             None => SymbolId::from_raw(0),

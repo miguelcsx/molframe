@@ -85,17 +85,11 @@ impl AtomBuilder<'_> {
         inferred
     }
 
-    pub(super) fn auth_name_of(
-        &mut self,
-        rows: &dyn AtomSiteRow,
-        label: Option<&str>,
-    ) -> OptionalSymbol {
-        if let Some(text) = rows.identifier(Field::AuthAtomId)
-            && Some(text.as_ref()) != label
-        {
-            return OptionalSymbol::some(self.intern(&text));
-        }
-        OptionalSymbol::NONE
+    pub(super) fn auth_name_of(&mut self, rows: &dyn AtomSiteRow) -> OptionalSymbol {
+        rows.identifier(Field::AuthAtomId)
+            .map_or(OptionalSymbol::NONE, |text| {
+                OptionalSymbol::some(self.intern(&text))
+            })
     }
 
     pub(super) fn alt_of(&mut self, rows: &dyn AtomSiteRow) -> Option<AltId> {

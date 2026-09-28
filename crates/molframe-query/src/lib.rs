@@ -17,3 +17,6 @@ pub use execution::{
     Evaluation, GeometricRequest, Groups, LogicalPlan, PhysicalQuery, Query, QueryFingerprint,
     SpatialResolver,
 };
+pub use language::completion::{
+    CompletionItem, CompletionKind, CompletionResult, StructureValues, complete,
+};

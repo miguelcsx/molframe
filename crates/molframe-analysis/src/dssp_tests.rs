@@ -2,6 +2,7 @@ use super::{Backbone, DsspOptions, SseKind, classify, hbond_energy, secondary_st
 use molframe_chem::PolymerAtomRole;
 use molframe_core::Presence;
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
+use molframe_core::index::ResidueIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use std::collections::BTreeSet;
@@ -82,6 +83,19 @@ fn a_lone_short_bond_makes_a_turn() {
 }
 
 #[test]
+fn only_unknown_is_not_evaluated() {
+    assert!(!SseKind::Unknown.is_evaluated());
+    for kind in [
+        SseKind::AlphaHelix,
+        SseKind::Strand,
+        SseKind::Turn,
+        SseKind::Coil,
+    ] {
+        assert!(kind.is_evaluated(), "{kind:?}");
+    }
+}
+
+#[test]
 fn a_short_peptide_runs_and_yields_one_record_per_residue() {
     let source = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -106,6 +120,13 @@ ATOM 8 O O GLY A 2 4 3 0\n";
     };
     assert_eq!(records.len(), 2);
     assert_eq!(records.kind(), [SseKind::Unknown, SseKind::Coil]);
+    assert_eq!(
+        records.placements().collect::<Vec<_>>(),
+        vec![
+            (ResidueIndex::new(0), SseKind::Unknown),
+            (ResidueIndex::new(1), SseKind::Coil),
+        ]
+    );
 }
 
 #[test]

@@ -17,6 +17,17 @@ use molframe_core::topology::PolymerKind;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+/// Provenance for the native component-chemistry pass.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChemistryProvenance {
+    /// Stable identity of the native pipeline.
+    pub algorithm: &'static str,
+    /// Exact component dictionary version used for lookup.
+    pub dictionary_version: DictionaryVersion,
+    /// Explicit policy used for inter-residue polymer bonds.
+    pub polymer_link_policy: PolymerLinkPolicy,
+}
+
 /// A chemically annotated snapshot and what could not be resolved.
 #[derive(Clone, Debug)]
 pub struct ChemistryReport {
@@ -28,6 +39,8 @@ pub struct ChemistryReport {
     pub dictionary_version: DictionaryVersion,
     /// Explicit rule used to create inter-residue polymer bonds.
     pub polymer_link_policy: PolymerLinkPolicy,
+    /// Input provenance for the native chemistry pipeline.
+    pub provenance: ChemistryProvenance,
 }
 
 /// Explicit policy for constructing bonds between consecutive polymer components.
@@ -142,7 +155,12 @@ pub fn apply_component_chemistry(
         structure: Structure::new(data),
         findings: state.findings.finish(),
         dictionary_version: provider.version().clone(),
-        polymer_link_policy,
+        polymer_link_policy: polymer_link_policy.clone(),
+        provenance: ChemistryProvenance {
+            algorithm: "component-chemistry",
+            dictionary_version: provider.version().clone(),
+            polymer_link_policy,
+        },
     })
 }
 

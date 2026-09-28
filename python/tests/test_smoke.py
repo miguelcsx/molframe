@@ -69,6 +69,13 @@ def test_read_selection_and_coordinate_ownership():
     assert len(structure.residues) == 1
     assert structure.chains[0].label == "A"
     assert structure.chains["A"].residues[0].atoms[1].name == "CA"
+    atom = structure.atoms[1]
+    assert atom.residue is not None
+    assert atom.residue.index == 0
+    assert atom.residue.name == "GLY"
+    residue = structure.residues[0]
+    assert residue.atom("CA").index == atom.index
+    assert residue.atom("missing") is None
     first = structure.coordinates
     second = structure.coordinates
     assert first.dtype == numpy.float32
@@ -83,13 +90,26 @@ def test_read_selection_and_coordinate_ownership():
     assert selection.indices.tolist() == compiled.indices.tolist()
     assert compiled.indices.tolist() == through_structure.indices.tolist()
     assert selection.to_coordinates().shape == (1, 3)
+    residues = selection.residues()
+    assert len(residues) == 1
+    assert residues[0].index == 0
+
+    editor = structure.edit()
+    editor.rename_chain(0, "B")
+    mismatched = editor.finish()
+    with pytest.raises(ValueError, match="stale"):
+        selection.residues(mismatched)
 
 
+def test_atom_component_name_preserves_native_chemistry_identity():
+    structure = molframe.read(DATA / "basic.pdb")
+
+    assert structure.atoms[0].component_name == "GLY"
+    assert structure.atoms[1].component_name == "GLY"
 def test_reader_reuses_owner_backed_input():
     payload = (DATA / "basic.cif").read_bytes()
     reader = molframe.Reader(payload, name="basic.cif")
     assert reader.byte_length == len(payload)
-    assert len(reader.read().atoms) == 2
     assert len(reader.read().atoms) == 2
 
 

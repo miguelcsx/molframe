@@ -14,7 +14,7 @@ flowchart LR
     RSS --> Record
 ```
 
-The executable contains deterministic probes for parsing, generated structures, BinaryCIF, ModelCIF, MRC maps, XTC trajectories, Arrow interoperability, and scientific kernels.
+The executable contains deterministic probes for parsing, generated structures, BinaryCIF, ModelCIF, MRC maps, TNG and XTC trajectories, Arrow interoperability, and scientific kernels.
 
 Large generated-input cases are designed specifically to distinguish memory proportional to **input size** from memory proportional to an explicit **working-memory budget**.
 

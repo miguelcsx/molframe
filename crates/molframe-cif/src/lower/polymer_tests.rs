@@ -1,5 +1,6 @@
 use super::polymer_kind;
 use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::structure::{AtomRef, ChainRef, ModelRef, ResidueRef};
 use molframe_core::topology::PolymerKind;
 
 /// One protein chain, one DNA chain, one water chain, one `other` polymer.
@@ -98,4 +99,54 @@ fn every_dictionary_type_maps_and_unmodelled_types_do_not() {
     );
     assert_eq!(polymer_kind("peptide nucleic acid"), None);
     assert_eq!(polymer_kind("other"), None);
+}
+#[test]
+fn canonical_round_trip_distinguishes_present_equal_author_atom_name() {
+    let source = "data_AUTH
+\
+loop_
+\
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+\
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+\
+_atom_site.label_seq_id
+_atom_site.auth_atom_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+\
+ATOM 1 C CA GLY A 1 CA 0 0 0
+ATOM 2 N N GLY A 1 . 1 0 0
+";
+    let structure = read(source);
+    assert_eq!(
+        structure
+            .data()
+            .models()
+            .flat_map(ModelRef::chains)
+            .flat_map(ChainRef::residues)
+            .flat_map(ResidueRef::atoms)
+            .map(AtomRef::auth_name)
+            .collect::<Vec<_>>(),
+        [Some("CA"), None]
+    );
+
+    let written = crate::write_canonical(&structure).expect("canonical CIF writes");
+    let round_trip = read(written.as_str());
+    assert_eq!(
+        round_trip
+            .data()
+            .models()
+            .flat_map(ModelRef::chains)
+            .flat_map(ChainRef::residues)
+            .flat_map(ResidueRef::atoms)
+            .map(AtomRef::auth_name)
+            .collect::<Vec<_>>(),
+        [Some("CA"), None]
+    );
 }

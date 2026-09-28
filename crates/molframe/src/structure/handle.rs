@@ -226,3 +226,19 @@ impl std::fmt::Display for Structure {
         std::fmt::Display::fmt(&self.0, f)
     }
 }
+
+/// Forwards structure-derived completion values to the underlying snapshot.
+#[cfg(feature = "query")]
+impl molframe_query::StructureValues for Structure {
+    fn chain_labels(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        molframe_query::StructureValues::chain_labels(&self.0)
+    }
+
+    fn residue_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        molframe_query::StructureValues::residue_names(&self.0)
+    }
+
+    fn atom_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        molframe_query::StructureValues::atom_names(&self.0)
+    }
+}

@@ -11,6 +11,8 @@ This is an index of the supported Python facade, not a second copy of every task
 | --- | --- |
 | `read(source, *, name=None)` | Read a path, path-like value, or bytes into a `Structure`. |
 
+Identifier acquisition is not currently part of the Python facade. The verified boundary is local paths or caller-supplied bytes through `read()`. The Rust adapters expose a typed unavailable-provider diagnostic rather than guessing a remote URL when no authoritative identifier manifest and checksum are configured. See [Structures](/docs/structures) for the distinction between loading and acquisition.
+
 ## Structure and hierarchy
 
 | API | Purpose |
@@ -63,3 +65,8 @@ See [Compiled workflows](/docs/workflows).
 <Callout type="info">
 Subpackages such as `trajectory`, `validation`, `surface`, `spatial`, `sequence`, and `compare` are present as namespace modules in this checkout, but their Python stubs export no callable public API. They are intentionally not presented as usable Python features.
 </Callout>
+## Verification status
+
+This index describes the public contract; it is not evidence that every binding has passed a Python or browser integration run. The observed MolGFX Python run reported 65 tests with one failure: `test_a_settled_scene_does_not_schedule_more_browser_frames` in `molgfx/python/tests/test_workbench_viewer.py:325` (two frames were observed, where zero were expected). No Python or browser scenario should be treated as passing from this page.
+
+For MolFrame, hierarchy ownership, author/label identity, query completion, chemistry provenance, and analysis outputs require the corresponding native and binding checks. Those checks, including non-ASCII completion offsets, canonical gaps, stale selections, and Arrow/NumPy lifetime behavior, were not run for this documentation-only change. The exact workspace verification commands are maintained in `molframe/AGENTS.md`.

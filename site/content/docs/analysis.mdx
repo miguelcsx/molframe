@@ -35,6 +35,36 @@ print(contacts.distance.shape)
 
 The cutoff is in Å. Contact counts depend strongly on alternate locations, model choice, solvent inclusion, and which atoms you pass. Make those choices explicit in a scientific workflow.
 
+## Chemistry provenance
+
+Chemistry-dependent workflows use the native component-chemistry pipeline. Its report records the provider and coverage used to annotate the structure, atom roles and bonds that were applied, and provenance for the reference data. A missing component or incomplete provider coverage is reported as a diagnostic; MolFrame does not invent atom roles or bonds to fill the gap. Preserve the returned provenance with derived contacts, geometry, or rendered annotations so the result can be traced to the coordinate and chemistry inputs.
+
+The public Python facade exposes chemistry operations through `molframe.chemistry` when the chemistry feature is enabled. The adapter's direct network boundary is separate: an already-known URL requires an authoritative SHA-256 digest and explicit size/timeout controls, while identifier acquisition is unavailable until an authoritative provider manifest exists.
+## Secondary structure
+
+MolFrame provides two distinct secondary-structure paths. The native analysis kernel is **DSSP-like**, not a claim of exact DSSP compatibility: it applies the documented Kabsch–Sander-style hydrogen-bond energy and pattern rules to explicit polymer atom-role annotations. It returns one typed assignment per residue. Residues missing a required role are reported as `Unknown`; an evaluable residue that matches no pattern is `Coil`. Missing chemistry annotations are an explicit prerequisite error, never inferred from atom names.
+
+The native kernel is available from Rust:
+
+~~~rust
+use molframe_analysis::{secondary_structure, DsspOptions};
+
+let options = DsspOptions {
+    electrostatic_prefactor: 332.0 * 0.42 * 0.20,
+    hydrogen_bond_energy: -0.5,
+    amide_hydrogen_distance: 1.0,
+    minimum_sequence_separation: 2,
+    helix_offset: 4,
+    turn_offsets: 3..=4,
+};
+let table = secondary_structure(structure.engine(), &options)?;
+for (residue, kind) in table.placements() {
+    println!("{residue:?}: {kind:?}");
+}
+~~~
+
+For comparison with the reference DSSP program, the explicit `run_dssp` adapter executes a caller-selected DSSP 4 executable and parses its annotated mmCIF output into typed segments. It does not locate or download an executable, and it reports process, exit-status, and parse failures separately. Keep the executable version, input coordinates, options, and output provenance with any result. Do not label native assignments as “exact DSSP” without validation against a reference corpus.
+
 ## Choosing a method
 
 | Goal | API |
@@ -45,3 +75,8 @@ The cutoff is in Å. Contact counts depend strongly on alternate locations, mode
 | Find nearby atom pairs in a structure or selection | `analysis.atom_contacts()` |
 
 For larger contact analyses, prefer passing a narrow selection to avoid doing work on atoms that cannot affect the answer.
+## Implementation and verification status
+
+Chemistry application, provenance-bearing atom roles and bonds, native hydrogen-bond, salt-bridge, pi, cation-pi, and water analyses, and the DSSP-like secondary-structure boundary belong to the native MolFrame analysis surface. File-declared secondary structure takes precedence where covered; uncovered residues use the native DSSP-like method only when chemistry prerequisites are available. “DSSP-like” is intentional: no exact-DSSP claim is made without reference validation.
+
+This page records the implementation contract, not a completed scientific validation run. The required workspace checks, large-fixture performance measurement, declared-SSE precedence cases, missing-role diagnostics, all interaction classes, validation coloring, and Python/browser round trips were not run for this documentation-only change. Do not interpret the examples as an observed Python success.
