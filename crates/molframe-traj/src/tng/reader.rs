@@ -175,6 +175,7 @@ struct AxisData {
 }
 
 /// Timestep numbering and clock inputs shared by every appended frame.
+#[derive(Clone, Copy)]
 struct Timebase {
     offset: usize,
     first_frame: i64,
