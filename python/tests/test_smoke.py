@@ -217,12 +217,14 @@ def test_select_accepts_text_and_compiled_queries_alike():
     )
 
 
-def test_bonds_are_inferred_only_when_asked():
+def test_file_reads_infer_bonds_and_leave_their_input_unchanged():
+    # A file read applies the default perception pass, so the GLY backbone
+    # carries its standard bond without the caller asking for it.
     structure = molframe.read(DATA / "basic.pdb")
-    assert structure.bond_count == 0
+    assert structure.bond_count == 1
     bonded = structure.infer_bonds()
     assert bonded.bond_count == 1
-    assert structure.bond_count == 0
+    assert structure.bond_count == 1
     with pytest.raises(ValueError):
         structure.infer_bonds(scale=0.0)
 
