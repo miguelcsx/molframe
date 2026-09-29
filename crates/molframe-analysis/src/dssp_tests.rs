@@ -20,6 +20,7 @@ fn options() -> DsspOptions {
 
 fn carbonyl(carbon: [f32; 3], oxygen: [f32; 3]) -> Backbone {
     Backbone {
+        ca: None,
         nitrogen: None,
         carbon: Some(carbon),
         oxygen: Some(oxygen),
@@ -29,6 +30,7 @@ fn carbonyl(carbon: [f32; 3], oxygen: [f32; 3]) -> Backbone {
 
 fn amide(nitrogen: [f32; 3], hydrogen: [f32; 3]) -> Backbone {
     Backbone {
+        ca: None,
         nitrogen: Some(nitrogen),
         carbon: None,
         oxygen: None,

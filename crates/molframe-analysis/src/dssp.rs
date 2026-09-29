@@ -13,8 +13,11 @@
 use molframe_chem::PolymerAtomRole;
 use molframe_core::index::ResidueIndex;
 use molframe_core::structure::{ResidueRef, Structure};
+use num_traits::ToPrimitive;
 use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
+
+const CA_GRID_CUTOFF: f32 = 9.0;
 
 /// Explicit numerical and pattern definition of a DSSP-like assignment.
 #[derive(Clone, Debug, PartialEq)]
@@ -176,6 +179,7 @@ fn validate_options(options: &DsspOptions) -> Result<(), DsspError> {
 /// The backbone atoms a residue needs, with the amide hydrogen estimated.
 #[derive(Clone, Copy)]
 struct Backbone {
+    ca: Option<[f32; 3]>,
     nitrogen: Option<[f32; 3]>,
     carbon: Option<[f32; 3]>,
     oxygen: Option<[f32; 3]>,
@@ -226,6 +230,7 @@ fn backbones(
             _ => None,
         };
         backbones.push(Backbone {
+            ca: role_position(structure, *residue, PolymerAtomRole::PROTEIN_ALPHA_CARBON)?,
             nitrogen,
             carbon: role_position(
                 structure,
@@ -270,19 +275,64 @@ fn place_hydrogen(
 
 /// The set of `(carbonyl residue, amide residue)` backbone hydrogen bonds.
 fn hydrogen_bonds(backbones: &[Backbone], options: &DsspOptions) -> BTreeSet<(usize, usize)> {
+    let mut entries = backbones
+        .iter()
+        .enumerate()
+        .filter_map(|(residue, backbone)| {
+            let position = backbone.ca?;
+            let cell = ca_cell(position)?;
+            Some(CaEntry { cell, residue })
+        })
+        .collect::<Vec<_>>();
+    entries.sort_unstable();
+
     let mut bonds = BTreeSet::new();
-    for donor in 0..backbones.len() {
-        for acceptor in 0..backbones.len() {
-            if donor.abs_diff(acceptor) < options.minimum_sequence_separation {
-                continue;
-            }
-            if hbond_energy(
-                &backbones[acceptor],
-                &backbones[donor],
-                options.electrostatic_prefactor,
-            ) < options.hydrogen_bond_energy
-            {
-                bonds.insert((donor, acceptor));
+    for left in &entries {
+        let Some(left_backbone) = backbones.get(left.residue) else {
+            continue;
+        };
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                for dz in -1..=1 {
+                    let cell = [
+                        left.cell[0].saturating_add(dx),
+                        left.cell[1].saturating_add(dy),
+                        left.cell[2].saturating_add(dz),
+                    ];
+                    let range = ca_range(&entries, cell);
+                    for right in &entries[range] {
+                        if right.residue <= left.residue
+                            || right.residue.abs_diff(left.residue)
+                                < options.minimum_sequence_separation
+                        {
+                            continue;
+                        }
+                        let Some(right_backbone) = backbones.get(right.residue) else {
+                            continue;
+                        };
+                        if ca_distance_sq(left_backbone.ca, right_backbone.ca)
+                            > CA_GRID_CUTOFF * CA_GRID_CUTOFF
+                        {
+                            continue;
+                        }
+                        if hbond_energy(
+                            left_backbone,
+                            right_backbone,
+                            options.electrostatic_prefactor,
+                        ) < options.hydrogen_bond_energy
+                        {
+                            bonds.insert((right.residue, left.residue));
+                        }
+                        if hbond_energy(
+                            right_backbone,
+                            left_backbone,
+                            options.electrostatic_prefactor,
+                        ) < options.hydrogen_bond_energy
+                        {
+                            bonds.insert((left.residue, right.residue));
+                        }
+                    }
+                }
             }
         }
     }
@@ -293,6 +343,36 @@ fn hydrogen_bonds(backbones: &[Backbone], options: &DsspOptions) -> BTreeSet<(us
 ///
 /// Returns a large positive value — no bond — when any of the four atoms is
 /// missing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct CaEntry {
+    cell: [i32; 3],
+    residue: usize,
+}
+
+fn ca_range(entries: &[CaEntry], cell: [i32; 3]) -> std::ops::Range<usize> {
+    let start = entries.partition_point(|entry| entry.cell < cell);
+    let end = entries.partition_point(|entry| entry.cell <= cell);
+    start..end
+}
+
+fn ca_cell(position: [f32; 3]) -> Option<[i32; 3]> {
+    if !position.iter().all(|value| value.is_finite()) {
+        return None;
+    }
+    Some([
+        (position[0] / CA_GRID_CUTOFF).floor().to_i32()?,
+        (position[1] / CA_GRID_CUTOFF).floor().to_i32()?,
+        (position[2] / CA_GRID_CUTOFF).floor().to_i32()?,
+    ])
+}
+
+fn ca_distance_sq(left: Option<[f32; 3]>, right: Option<[f32; 3]>) -> f32 {
+    let (Some(left), Some(right)) = (left, right) else {
+        return f32::INFINITY;
+    };
+    left.iter().zip(right).map(|(a, b)| (a - b) * (a - b)).sum()
+}
+
 fn hbond_energy(carbonyl: &Backbone, amide: &Backbone, prefactor: f64) -> f64 {
     let (Some(c), Some(o), Some(n), Some(h)) = (
         carbonyl.carbon,
@@ -341,19 +421,18 @@ fn classify(
     }
 
     // β-bridges: reciprocal or offset bonds between residues over two apart.
-    for i in 0..count {
-        for j in 0..count {
-            if i.abs_diff(j) <= 2 {
-                continue;
-            }
-            let antiparallel = (has(i, j) && has(j, i))
-                || (i >= 1 && j + 1 < count && has(i - 1, j + 1) && has(j - 1, i + 1));
-            let parallel = (i >= 1 && has(i - 1, j) && has(j, i + 1))
-                || (j >= 1 && has(j - 1, i) && has(i, j + 1));
-            if antiparallel || parallel {
-                mark_strand(&mut kinds, i);
-                mark_strand(&mut kinds, j);
-            }
+    // Iterate the sparse bond set rather than the full residue Cartesian product.
+    for &(i, j) in bonds {
+        if i.abs_diff(j) <= 2 {
+            continue;
+        }
+        let antiparallel = (has(i, j) && has(j, i))
+            || (i >= 1 && j + 1 < count && has(i - 1, j + 1) && has(j - 1, i + 1));
+        let parallel = (i >= 1 && has(i - 1, j) && has(j, i + 1))
+            || (j >= 1 && has(j - 1, i) && has(i, j + 1));
+        if antiparallel || parallel {
+            mark_strand(&mut kinds, i);
+            mark_strand(&mut kinds, j);
         }
     }
 
