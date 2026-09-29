@@ -20,6 +20,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod anisotropy;
 pub mod annotation;
 pub mod bond;
 pub mod chunk;
@@ -36,12 +37,14 @@ pub mod limits;
 pub mod optional;
 pub mod parallel;
 pub mod provider;
+pub mod secondary;
 pub mod selection;
 pub mod span;
 pub mod structure;
 pub mod symbol;
 pub mod topology;
 
+pub use anisotropy::{AnisotropicDisplacement, AnisotropyTable, AnisotropyTableBuilder};
 pub use annotation::{
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn,
     AtomAnnotation, AtomAnnotations, COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION,
@@ -69,7 +72,8 @@ pub use execution::{
     TempStoragePolicy,
 };
 pub use index::{
-    AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
+    AnisotropyIndex, AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex,
+    ResidueIndex,
 };
 pub use io::{
     AmbiguousResidueBoundaryPolicy, BatchContinuity, ByteWindow, ContinuityLevel, Format,
@@ -86,6 +90,7 @@ pub use provider::{
     LocalRow, LogicalRow, PayloadKind, PropertyChunk, PropertyChunkProvider, PropertyKind,
     PropertyValue, ProviderError, StructureChunk, StructureChunkProvider, TARGET_CHUNK_BONDS,
 };
+pub use secondary::SecondaryStructure;
 pub use selection::AtomSelection;
 pub use span::{ByteSpan, Position};
 pub use structure::{

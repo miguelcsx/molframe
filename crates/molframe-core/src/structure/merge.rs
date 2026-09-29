@@ -2,6 +2,7 @@
 
 use super::merge_annotations::merge_annotations;
 use super::{CoordinateStore, EntryMetadata, Structure, StructureData, UnitCell, validate};
+use crate::anisotropy::{AnisotropicDisplacement, AnisotropyTableBuilder};
 use crate::bond::{BondRecord, BondTableBuilder};
 use crate::chunk::{AtomRecord, ChunkBuilder};
 use crate::coords::{CoordinateBlock, CoordinateGeneration};
@@ -44,6 +45,7 @@ struct Merger<'a> {
     data: StructureData,
     chunks: ChunkBuilder,
     bonds: BondTableBuilder,
+    anisotropy: AnisotropyTableBuilder,
     atom_offset: u32,
     residue_offset: u32,
     entity_offset: u32,
@@ -58,6 +60,7 @@ impl<'a> Merger<'a> {
             data: StructureData::empty(),
             chunks: ChunkBuilder::new(),
             bonds: BondTableBuilder::new(),
+            anisotropy: AnisotropyTableBuilder::new(),
             atom_offset: 0,
             residue_offset: 0,
             entity_offset: 0,
@@ -73,6 +76,7 @@ impl<'a> Merger<'a> {
             self.append_chains(source).map_err(single)?;
             self.append_atoms(source).map_err(single)?;
             self.append_bonds(source).map_err(single)?;
+            self.append_anisotropy(source).map_err(single)?;
             self.advance_offsets(source).map_err(single)?;
         }
         Ok(())
@@ -240,6 +244,16 @@ impl<'a> Merger<'a> {
         Ok(())
     }
 
+    fn append_anisotropy(&mut self, source: &Structure) -> Result<(), Diagnostic> {
+        for record in source.data().anisotropy.iter() {
+            self.anisotropy.push(AnisotropicDisplacement {
+                atom: AtomIndex::new(checked_add(record.atom.get(), self.atom_offset)?),
+                ..record
+            });
+        }
+        Ok(())
+    }
+
     fn advance_offsets(&mut self, source: &Structure) -> Result<(), Diagnostic> {
         self.atom_offset = checked_add(self.atom_offset, source.atom_count())?;
         self.residue_offset = checked_add(self.residue_offset, u32_of(source.residue_count())?)?;
@@ -256,6 +270,11 @@ impl<'a> Merger<'a> {
             self.sources
                 .iter()
                 .all(|source| source.data().bonds.is_available()),
+        );
+        self.data.anisotropy = self.anisotropy.finish_with_availability(
+            self.sources
+                .iter()
+                .all(|source| source.data().anisotropy.is_available()),
         );
         self.data.annotations = annotations;
         self.data.coords = merged_coordinates(self.sources, self.frame_count, first)?;

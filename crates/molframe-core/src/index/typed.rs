@@ -109,6 +109,11 @@ index_newtype!(
     "bond"
 );
 index_newtype!(
+    /// Position of an anisotropic displacement row in the anisotropy table.
+    AnisotropyIndex,
+    "anisotropy"
+);
+index_newtype!(
     /// Identifier of one generated copy of an assembly's contents.
     ///
     /// Assemblies name their own instances; materialising one keeps that name

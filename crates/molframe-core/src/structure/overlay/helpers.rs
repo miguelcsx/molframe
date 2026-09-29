@@ -2,6 +2,7 @@
 
 use super::super::{CoordinateStore, StructureData};
 use super::DELETED_ATOM;
+use crate::anisotropy::{AnisotropicDisplacement, AnisotropyTableBuilder};
 use crate::bond::{BondRecord, BondTableBuilder};
 use crate::chunk::ChunkBuilder;
 use crate::coords::CoordinateBlock;
@@ -141,6 +142,7 @@ pub(super) fn delete_from(
     candidate.coords = filtered_store(&data.coords, &remap, first_coords)?;
     remap_residue_ranges(&mut candidate, &remap)?;
     candidate.bonds = remap_bonds(&data.bonds, &remap);
+    candidate.anisotropy = remap_anisotropy(&data.anisotropy, &remap);
     candidate.annotations = data
         .annotations
         .filter(|atom| {
@@ -249,6 +251,28 @@ fn remap_bonds(table: &crate::bond::BondTable, remap: &[u32]) -> crate::bond::Bo
             order: bond.order,
             provenance: bond.provenance,
         });
+    }
+    builder.finish()
+}
+
+/// Remaps ellipsoid rows onto compacted atom positions.
+///
+/// An atom's deletion drops its row, matching how a bond whose endpoint vanished
+/// is dropped. An unavailable table stays unavailable so absence of data never
+/// turns into an empty-but-resolved claim.
+fn remap_anisotropy(
+    table: &crate::anisotropy::AnisotropyTable,
+    remap: &[u32],
+) -> crate::anisotropy::AnisotropyTable {
+    if !table.is_available() {
+        return crate::anisotropy::AnisotropyTable::default();
+    }
+    let mut builder = AnisotropyTableBuilder::new();
+    for record in table.iter() {
+        let Some(atom) = remapped(record.atom, remap) else {
+            continue;
+        };
+        builder.push(AnisotropicDisplacement { atom, ..record });
     }
     builder.finish()
 }

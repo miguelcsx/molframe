@@ -29,6 +29,7 @@ pub fn validate(data: &StructureData) -> Vec<Diagnostic> {
     check_atom_coverage(data, atoms, &mut findings);
     check_entity_references(data, &mut findings);
     check_bonds(data, atoms, &mut findings);
+    check_anisotropy(data, atoms, &mut findings);
     check_annotations(data, &mut findings);
     check_coordinate_counts(data, atoms, &mut findings);
     check_coordinates(data, &mut findings);
@@ -101,6 +102,23 @@ fn check_bond_endpoint(bond: usize, atom: u32, atom_count: u32, findings: &mut D
             .with_context("bond", bond.to_string())
             .with_context("atom", atom.to_string()),
     );
+}
+
+/// Verifies that every ellipsoid names a valid atom row.
+///
+/// An endpoint beyond the atom extent is reported with both the row position
+/// and the atom index so a malformed row does not conceal what it pointed at.
+fn check_anisotropy(data: &StructureData, atom_count: u32, findings: &mut Diagnostics) {
+    for (position, record) in data.anisotropy.iter().enumerate() {
+        if record.atom.get() < atom_count {
+            continue;
+        }
+        findings.push(
+            Diagnostic::new(Code::E3006)
+                .with_context("anisotropy", position.to_string())
+                .with_context("atom", record.atom.get().to_string()),
+        );
+    }
 }
 
 /// Verifies coordinate values for every position declared present.

@@ -14,6 +14,7 @@ use crate::annotation::AtomAnnotations;
 use crate::chunk::AtomChunk;
 use crate::coords::{CoordinateBlock, CoordinateGeneration};
 use crate::index::ModelIndex;
+use crate::secondary::SecondaryStructure;
 use crate::symbol::{Interner, SymbolId};
 use crate::topology::Topology;
 use std::fmt;
@@ -153,6 +154,10 @@ pub struct StructureData {
     pub chunks: Arc<Vec<AtomChunk>>,
     /// Chemical connectivity as compact edge columns.
     pub bonds: crate::bond::BondTable,
+    /// Anisotropic displacement ellipsoids as a sparse per-atom table.
+    pub anisotropy: crate::anisotropy::AnisotropyTable,
+    /// File or analysis secondary-structure state aligned to residue rows.
+    pub secondary_structure: Arc<Vec<SecondaryStructure>>,
     /// Structure-local typed columns aligned exactly to atom rows.
     pub annotations: AtomAnnotations,
     /// Cold, typed domain metadata attached to this snapshot.
@@ -196,6 +201,8 @@ impl StructureData {
             topology: Topology::default(),
             chunks: Arc::new(Vec::new()),
             bonds: crate::bond::BondTable::default(),
+            anisotropy: crate::anisotropy::AnisotropyTable::default(),
+            secondary_structure: Arc::new(Vec::new()),
             annotations: AtomAnnotations::default(),
             extensions: ExtensionStore::new(),
             coords: CoordinateStore::Single(CoordinateBlock::new()),
@@ -352,6 +359,12 @@ impl Structure {
     #[must_use]
     pub fn annotations(&self) -> &AtomAnnotations {
         &self.0.annotations
+    }
+
+    /// Secondary-structure assignments aligned to residue rows.
+    #[must_use]
+    pub fn secondary_structure(&self) -> &[SecondaryStructure] {
+        &self.0.secondary_structure
     }
 
     /// Cold, typed domain metadata attached to this snapshot.

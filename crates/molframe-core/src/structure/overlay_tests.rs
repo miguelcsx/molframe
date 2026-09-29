@@ -74,6 +74,26 @@ fn a_transform_is_transactional_and_advances_generation_once() {
 }
 
 #[test]
+fn deleting_atoms_drops_their_anisotropy_rows_and_remaps_survivors() {
+    let fixture = crate::structure::fixture::sample();
+    let original = with_anisotropy(&with_bonds(&fixture));
+    let mut editor = original.edit();
+    let deleted = AtomSelection::from_sorted(vec![1, 5, 23]);
+    if let Err(finding) = editor.delete_atoms(&deleted) {
+        panic!("delete failed: {finding}")
+    }
+    let edited = match editor.commit() {
+        Ok(structure) => structure,
+        Err(findings) => panic!("commit failed: {findings:?}"),
+    };
+    let anisotropy = &edited.data().anisotropy;
+    // Atoms 1 and 23 were both deleted, so both rows are gone; a delete that
+    // removes every covered atom leaves an empty but resolved table.
+    assert!(anisotropy.is_available());
+    assert_eq!(anisotropy.len(), 0);
+}
+
+#[test]
 fn deleting_atoms_compacts_rows_residue_ranges_coordinates_and_bonds() {
     let fixture = crate::structure::fixture::sample();
     let original = with_annotation(&with_bonds(&fixture));
@@ -223,6 +243,21 @@ fn with_bonds(structure: &Structure) -> Structure {
         });
     }
     data.bonds = bonds.finish();
+    Structure::new(data)
+}
+
+fn with_anisotropy(structure: &Structure) -> Structure {
+    let mut data = structure.data().clone();
+    let mut builder = crate::anisotropy::AnisotropyTableBuilder::new();
+    builder.push(crate::AnisotropicDisplacement {
+        atom: AtomIndex::new(1),
+        u: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+    });
+    builder.push(crate::AnisotropicDisplacement {
+        atom: AtomIndex::new(23),
+        u: [7.0; 6],
+    });
+    data.anisotropy = builder.finish();
     Structure::new(data)
 }
 

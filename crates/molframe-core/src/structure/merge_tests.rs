@@ -113,3 +113,63 @@ fn single_source_merge_preserves_extensions() {
         Some("kept")
     );
 }
+
+#[test]
+fn merge_offsets_anisotropy_rows_and_propagates_availability() {
+    let left = with_anisotropy(&fixture::sample(), true);
+    let right = with_anisotropy(&fixture::sample(), true);
+    let merged = match Structure::merge(&[left, right]) {
+        Ok(merged) => merged,
+        Err(findings) => panic!("merge failed: {findings:?}"),
+    };
+    let anisotropy = &merged.data().anisotropy;
+    assert!(anisotropy.is_available());
+    assert_eq!(anisotropy.len(), 4);
+    let Some(record) = anisotropy.get(crate::AnisotropyIndex::new(2)) else {
+        panic!("second input's first ellipsoid absent")
+    };
+    // The second input's atoms moved by the first input's atom count.
+    assert_eq!(record.atom, crate::AtomIndex::new(24));
+    assert_tensor(record.u, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    let Some(later) = anisotropy.get(crate::AnisotropyIndex::new(3)) else {
+        panic!("second input's last ellipsoid absent");
+    };
+    assert_eq!(later.atom, crate::AtomIndex::new(47));
+}
+
+#[test]
+fn an_unavailable_anisotropy_source_makes_the_merge_unavailable() {
+    let left = with_anisotropy(&fixture::sample(), true);
+    let right = with_anisotropy(&fixture::sample(), false);
+    let merged = match Structure::merge(&[left, right]) {
+        Ok(merged) => merged,
+        Err(findings) => panic!("merge failed: {findings:?}"),
+    };
+    let anisotropy = &merged.data().anisotropy;
+    assert!(!anisotropy.is_available());
+    // The rows from the available source survive; availability is about the
+    // whole set being resolved, not about rows existing.
+    assert_eq!(anisotropy.len(), 4);
+}
+
+fn with_anisotropy(structure: &Structure, available: bool) -> Structure {
+    let mut data = structure.data().clone();
+    let mut builder = crate::anisotropy::AnisotropyTableBuilder::new();
+    builder.push(crate::AnisotropicDisplacement {
+        atom: crate::AtomIndex::new(0),
+        u: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+    });
+    builder.push(crate::AnisotropicDisplacement {
+        atom: crate::AtomIndex::new(structure.atom_count() - 1),
+        u: [7.0; 6],
+    });
+    data.anisotropy = builder.finish_with_availability(available);
+    Structure::new(data)
+}
+
+/// Asserts two six-component tensors agree componentwise.
+fn assert_tensor(actual: [f32; 6], expected: [f32; 6]) {
+    for (actual, expected) in actual.iter().zip(expected) {
+        assert!((actual - expected).abs() <= f32::EPSILON);
+    }
+}
