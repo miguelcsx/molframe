@@ -2,7 +2,7 @@
 
 use super::options::{CifWriteError, CifWriteOptions};
 use super::value::{Quoted, quoted};
-use molframe_core::bond::BondOrder;
+use molframe_core::bond::{BondOrder, BondProvenance};
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
 use std::fmt::{self, Display, Formatter};
 
@@ -20,7 +20,17 @@ pub(super) fn preflight(
     structure: &Structure,
     options: &CifWriteOptions,
 ) -> Result<(), CifWriteError> {
-    if structure.data().bonds.is_empty() {
+    let bonds = structure
+        .data()
+        .bonds
+        .iter()
+        .filter(|bond| bond.provenance != BondProvenance::InferredDistance);
+    if !structure
+        .data()
+        .bonds
+        .iter()
+        .any(|bond| bond.provenance != BondProvenance::InferredDistance)
+    {
         return Ok(());
     }
     if !options.generates_connection_ids() {
@@ -29,7 +39,7 @@ pub(super) fn preflight(
     if options.connection_type_id().is_none_or(str::is_empty) {
         return Err(CifWriteError::MissingConnectionTypeId);
     }
-    for (position, bond) in structure.data().bonds.iter().enumerate() {
+    for (position, bond) in bonds.enumerate() {
         let atom_a = atom(structure, position, bond.atom_a.get())?;
         let atom_b = atom(structure, position, bond.atom_b.get())?;
         validate_endpoint(structure, atom_a, position, 1)?;
@@ -43,7 +53,17 @@ pub(super) fn write(
     structure: &Structure,
     options: &CifWriteOptions,
 ) -> Result<(), CifWriteError> {
-    if structure.data().bonds.is_empty() {
+    let bonds = structure
+        .data()
+        .bonds
+        .iter()
+        .filter(|bond| bond.provenance != BondProvenance::InferredDistance);
+    if !structure
+        .data()
+        .bonds
+        .iter()
+        .any(|bond| bond.provenance != BondProvenance::InferredDistance)
+    {
         return Ok(());
     }
     let Some(connection_type) = options.connection_type_id() else {
@@ -51,7 +71,7 @@ pub(super) fn write(
     };
     let connection_type = quoted(connection_type);
     let _ = out.write_str(HEADER);
-    for (position, bond) in structure.data().bonds.iter().enumerate() {
+    for (position, bond) in bonds.enumerate() {
         let atom_a = atom(structure, position, bond.atom_a.get())?;
         let atom_b = atom(structure, position, bond.atom_b.get())?;
         let a = endpoint(structure, atom_a, position, 1)?;

@@ -161,7 +161,6 @@ fn read_frame_set(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 fn append_frames(
     frames: &mut Vec<Timestep>,
     steps: &[i64],

@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod annotate;
+mod bonds;
 mod coverage;
 mod element;
 mod element_data;
@@ -15,15 +16,19 @@ mod numeric;
 mod peoe;
 mod provider;
 mod roles;
+mod secondary;
 mod side_chain;
 mod smarts;
 mod smarts_match;
 mod smarts_parse;
+mod standard_bonds;
+mod standard_components;
 
 pub use annotate::{
     ChemistryProvenance, ChemistryReport, PolymerLinkPolicy, PolymerLinkRule,
     apply_component_chemistry,
 };
+pub use bonds::perceive_bonds;
 pub use coverage::{ComponentCoverage, component_coverage};
 pub use element::{ElementProperties, RadiusSet, RadiusTable, element_properties, vdw_radius};
 pub use equivalence::{
@@ -49,5 +54,10 @@ pub use provider::{CifProvider, ComponentProvider, MemoryProvider, read_ccd};
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };
+pub use secondary::assign_secondary_structure;
 pub use side_chain::{SideChainDefinition, SideChainRoles, side_chain_definition};
 pub use smarts::{SmartsDataError, SmartsError, SmartsMatch, SmartsPattern};
+pub use standard_bonds::{
+    is_amino_acid_component, is_nucleotide_component, is_water_component, standard_bond_order,
+};
+pub use standard_components::{annotate_standard_components, standard_component_kind};

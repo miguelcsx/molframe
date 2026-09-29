@@ -4,6 +4,7 @@ use super::column::{IntegerColumnBuilder, TextColumnBuilder};
 use crate::container::EncodedCategory;
 use molframe_cif::{CanonicalProjection, CanonicalValue};
 use molframe_core::BondOrder;
+use molframe_core::bond::BondProvenance;
 use molframe_core::diagnostic::Diagnostic;
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
 
@@ -11,8 +12,13 @@ pub(super) fn encode(
     projection: CanonicalProjection<'_>,
 ) -> Result<Option<EncodedCategory>, Diagnostic> {
     let structure = projection.structure();
-    let bonds = &structure.data().bonds;
-    if bonds.is_empty() {
+    let rows = structure
+        .data()
+        .bonds
+        .iter()
+        .filter(|bond| bond.provenance != BondProvenance::InferredDistance)
+        .count();
+    if rows == 0 {
         return Ok(None);
     }
     let Some(connection_type) = projection.connection_type_id() else {
@@ -20,14 +26,19 @@ pub(super) fn encode(
             &molframe_cif::CifWriteError::MissingConnectionTypeId,
         ));
     };
-    let rows = bonds.len();
     let mut ids = IntegerColumnBuilder::new("id", rows);
     let mut types = TextColumnBuilder::new("conn_type_id", rows);
     let mut a = EndpointColumns::new(1, rows);
     let mut b = EndpointColumns::new(2, rows);
     let mut orders = TextColumnBuilder::new("pdbx_value_order", rows);
     let mut details = TextColumnBuilder::new("details", rows);
-    for (position, bond) in bonds.iter().enumerate() {
+    for (position, bond) in structure
+        .data()
+        .bonds
+        .iter()
+        .filter(|bond| bond.provenance != BondProvenance::InferredDistance)
+        .enumerate()
+    {
         let number =
             i64::try_from(position + 1).map_or(CanonicalValue::Unknown, CanonicalValue::Present);
         ids.push(number);

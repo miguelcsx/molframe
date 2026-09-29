@@ -176,7 +176,7 @@ fn macro_matches(structure: &Structure, context: AtomContext<'_>, macro_name: Ma
         Macro::Hetero => context.residue.is_het(),
         Macro::Hydrogen => hydrogen,
         Macro::Heavy => !hydrogen,
-        Macro::Polymer => context.chain.polymer_kind().is_polymer(),
+        Macro::Polymer => context.chain.polymer_kind().is_polymer() || protein || nucleic,
         Macro::Ligand => {
             component_kind == Some(molframe_chem::ComponentKind::NonPolymer)
                 || entity_kind == Some(molframe_core::EntityKind::NonPolymer)
