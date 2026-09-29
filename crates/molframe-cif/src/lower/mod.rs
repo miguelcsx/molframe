@@ -4,6 +4,7 @@
 //! Everything interpretive happens on this side of the line, and every decision
 //! that the data did not force is reported.
 
+mod anisotropy;
 mod atoms;
 mod bonds;
 mod diagnostics;
@@ -14,6 +15,7 @@ mod metadata;
 mod polymer;
 mod ragged;
 mod references;
+mod secondary;
 mod stream;
 
 pub use atoms::{AtomSiteRow, AtomSiteRowSink, Field};

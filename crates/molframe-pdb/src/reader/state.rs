@@ -8,6 +8,7 @@ mod connectivity;
 mod finalize;
 mod metadata;
 mod models;
+mod secondary;
 mod variants;
 
 use models::{AtomIdentity, ModelRead};
@@ -62,6 +63,10 @@ pub(super) struct ReadState<'a> {
     requires_ragged: bool,
     serial_to_atom: BTreeMap<u32, AtomIndex>,
     conect: Vec<(u32, u32, Position)>,
+    /// Ellipsoid rows awaiting their atom, joined by deposited serial.
+    anisou: Vec<(u32, [f32; 6])>,
+    /// The serial of the most recently read atom row, if it carried one.
+    last_atom_serial: Option<u32>,
     variant: Format,
     partial_charges: Vec<(f64, Presence)>,
     radii: Vec<(f64, Presence)>,
@@ -93,6 +98,8 @@ impl<'a> ReadState<'a> {
             requires_ragged: false,
             serial_to_atom: BTreeMap::new(),
             conect: Vec::new(),
+            anisou: Vec::new(),
+            last_atom_serial: None,
             variant,
             partial_charges: Vec::new(),
             radii: Vec::new(),
@@ -114,12 +121,43 @@ impl<'a> ReadState<'a> {
             "TITLE" => self.title(line),
             "EXPDTA" => self.method(line),
             "CONECT" => self.conect(line),
+            "ANISOU" => self.anisou(line),
             _ => {}
         }
     }
 
     fn end_model(&mut self) {
         self.close_chain();
+    }
+
+    /// Reads one anisotropic displacement record.
+    ///
+    /// The six integer fields at columns 28 to 70 are B-style displacements in
+    /// units of 0.0001 ångström squared, so each divides by 10 000 to become
+    /// its U component. The record belongs to the atom it names a serial for;
+    /// a serial that does not match the atom just read, or a row the file
+    /// introduced before any atom, describes no atom this reader has and is
+    /// ignored rather than guessed onto a neighbour.
+    fn anisou(&mut self, line: &Line<'_>) {
+        let serial = serial_of(line);
+        let Some(last) = self.last_atom_serial else {
+            return;
+        };
+        if serial != last {
+            return;
+        }
+        let mut components = [0.0_f32; 6];
+        let columns = [(29, 35), (36, 42), (43, 49), (50, 56), (57, 63), (64, 70)];
+        for (position, (from, to)) in columns.iter().enumerate() {
+            let Some(value) = fixed::integer(line.text, *from, *to) else {
+                return;
+            };
+            let Some(scaled) = value.to_f64().and_then(|value| (value / 10_000.0).to_f32()) else {
+                return;
+            };
+            components[position] = scaled;
+        }
+        self.anisou.push((last, components));
     }
 
     fn atom(&mut self, line: &Line<'_>) {
@@ -179,6 +217,7 @@ impl<'a> ReadState<'a> {
             self.serial_to_atom
                 .entry(serial)
                 .or_insert(AtomIndex::new(self.atom_position));
+            self.last_atom_serial = Some(serial);
         }
 
         self.builder.push(AtomRecord {

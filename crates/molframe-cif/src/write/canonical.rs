@@ -73,6 +73,7 @@ fn render_canonical(
     super::references::write(out, structure);
     write_atoms(out, projection)?;
     super::bonds::write(out, structure, options)?;
+    write_anisotropy(out, structure);
     Ok(())
 }
 
@@ -217,6 +218,60 @@ fn write_atom(out: &mut impl fmt::Write, row: CanonicalAtomRow<'_>) -> fmt::Resu
         text_value(row.auth_atom_id()),
         row.model_number(),
     )
+}
+
+/// Writes the `atom_site_anisotrop` category when any atom carries a tensor.
+///
+/// Rows join back to `atom_site` by the deposited `_atom_site.id` the atom rows
+/// themselves carry, so a structure with no deposited identifiers cannot name
+/// its rows and the category is left out entirely — the join key would have to
+/// be invented.
+fn write_anisotropy(out: &mut impl fmt::Write, structure: &Structure) {
+    let anisotropy = &structure.data().anisotropy;
+    if anisotropy.iter().next().is_none() {
+        return;
+    }
+    let _ = out.write_str(
+        "loop_\n\
+         _atom_site_anisotrop.id\n\
+         _atom_site_anisotrop.type_symbol\n\
+         _atom_site_anisotrop.U[1][1]\n\
+         _atom_site_anisotrop.U[2][2]\n\
+         _atom_site_anisotrop.U[3][3]\n\
+         _atom_site_anisotrop.U[1][2]\n\
+         _atom_site_anisotrop.U[1][3]\n\
+         _atom_site_anisotrop.U[2][3]\n",
+    );
+    for record in anisotropy.iter() {
+        let Some(atom) = structure.atom(record.atom) else {
+            continue;
+        };
+        let Some(id) = atom.atom_site_id().filter(|value| *value != 0) else {
+            continue;
+        };
+        let element = match atom.element() {
+            Some(element) => element.symbol(),
+            None => "",
+        };
+        let _ = writeln!(
+            out,
+            "{} {} {u11} {u22} {u33} {u12} {u13} {u23}",
+            id,
+            element,
+            u11 = u_field(record.u[0]),
+            u22 = u_field(record.u[1]),
+            u33 = u_field(record.u[2]),
+            u12 = u_field(record.u[3]),
+            u13 = u_field(record.u[4]),
+            u23 = u_field(record.u[5]),
+        );
+    }
+    let _ = out.write_str("#\n");
+}
+
+/// One displacement component, written as a decimal ångström-squared value.
+fn u_field(value: f32) -> String {
+    format!("{value:.5}")
 }
 
 fn text_value(value: CanonicalValue<&str>) -> TextValue<'_> {

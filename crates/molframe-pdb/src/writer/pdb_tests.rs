@@ -29,6 +29,66 @@ fn written(text: &str) -> String {
 }
 
 #[test]
+fn an_anisou_record_parses_into_the_atom_it_precedes() {
+    let text = concat!(
+        "ATOM      1  N   GLY A   1      27.340  24.430   2.614  1.00 10.00           N\n",
+        "ANISOU    1  N   GLY A   1   100000 200000 300000  40000  50000  60000       N\n",
+        "END\n",
+    );
+    let structure = parse(text);
+    let anisotropy = &structure.data().anisotropy;
+    assert!(anisotropy.is_available());
+    assert_eq!(anisotropy.len(), 1);
+    let Some(record) = anisotropy.get(molframe_core::AnisotropyIndex::new(0)) else {
+        panic!("the parsed ellipsoid was lost");
+    };
+    assert_eq!(record.atom, AtomIndex::new(0));
+    for (stored, expected) in record.u.iter().zip([10.0, 20.0, 30.0, 4.0, 5.0, 6.0]) {
+        assert!((stored - expected).abs() <= f32::EPSILON);
+    }
+}
+
+#[test]
+fn an_anisou_serial_its_atom_never_carried_is_ignored() {
+    let text = concat!(
+        "ATOM      1  N   GLY A   1      27.340  24.430   2.614  1.00 10.00           N\n",
+        "ANISOU    7  N   GLY A   1   100000 200000 300000  40000  50000  60000       N\n",
+        "END\n",
+    );
+    let structure = parse(text);
+    let anisotropy = &structure.data().anisotropy;
+    assert_eq!(anisotropy.len(), 0);
+}
+
+#[test]
+fn an_anisou_record_round_trips_through_the_writer_at_stated_precision() {
+    let text = concat!(
+        "ATOM      1  N   GLY A   1      27.340  24.430   2.614  1.00 10.00           N\n",
+        "ANISOU    1  N   GLY A   1   123456 234567 345678  45678  56789  67890       N\n",
+        "END\n",
+    );
+    let out = written(text);
+    let round = parse(&out);
+    let anisotropy = &round.data().anisotropy;
+    let record = anisotropy
+        .get(molframe_core::AnisotropyIndex::new(0))
+        .expect("round-tripped");
+    // Each field was an integer in units of 0.0001, so dividing and multiplying
+    // by 10 000 lands on the same six values within float rounding.
+    let expected = [12.3456, 23.4567, 34.5678, 4.5678, 5.6789, 6.789];
+    for (position, value) in expected.iter().enumerate() {
+        assert!((record.u[position] - *value).abs() < 1e-5);
+    }
+    // And the written record itself carries 7-wide integer columns.
+    let anisou = out
+        .lines()
+        .find(|line| line.starts_with("ANISOU"))
+        .expect("the writer emitted an ANISOU record");
+    assert_eq!(anisou[27..35].trim(), "123456");
+    assert!(anisou.len() >= 70);
+}
+
+#[test]
 fn a_written_file_reads_back_to_the_same_structure() {
     let original = parse(DIPEPTIDE);
     let round_tripped = parse(&written(DIPEPTIDE));

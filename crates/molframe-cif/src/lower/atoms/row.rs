@@ -61,11 +61,23 @@ pub enum Field {
     FormalCharge,
     /// `_atom_site.pdbx_PDB_model_num`
     ModelNum,
+    /// `_atom_site.aniso_U[1][1]` — the inline U-tensor spelling.
+    AnisoU11,
+    /// `_atom_site.aniso_U[2][2]`
+    AnisoU22,
+    /// `_atom_site.aniso_U[3][3]`
+    AnisoU33,
+    /// `_atom_site.aniso_U[1][2]`
+    AnisoU12,
+    /// `_atom_site.aniso_U[1][3]`
+    AnisoU13,
+    /// `_atom_site.aniso_U[2][3]`
+    AnisoU23,
 }
 
 impl Field {
     /// How many fields there are, for a row that stores them by position.
-    pub const COUNT: usize = 21;
+    pub const COUNT: usize = 27;
 
     /// The item name this field carries in an `atom_site` category.
     #[must_use]
@@ -92,6 +104,12 @@ impl Field {
             Self::BFactor => "B_iso_or_equiv",
             Self::FormalCharge => "pdbx_formal_charge",
             Self::ModelNum => "pdbx_PDB_model_num",
+            Self::AnisoU11 => "aniso_U[1][1]",
+            Self::AnisoU22 => "aniso_U[2][2]",
+            Self::AnisoU33 => "aniso_U[3][3]",
+            Self::AnisoU12 => "aniso_U[1][2]",
+            Self::AnisoU13 => "aniso_U[1][3]",
+            Self::AnisoU23 => "aniso_U[2][3]",
         }
     }
 
@@ -120,6 +138,15 @@ impl Field {
             b"B_iso_or_equiv" => Some(Self::BFactor),
             b"pdbx_formal_charge" => Some(Self::FormalCharge),
             b"pdbx_PDB_model_num" => Some(Self::ModelNum),
+            // The legacy spelling kept the ellipsoid inside `atom_site` itself,
+            // beside the coordinate items rather than in its own category. The
+            // item is spelled either way in the wild, lowercase included.
+            b"aniso_U[1][1]" | b"aniso_u[1][1]" => Some(Self::AnisoU11),
+            b"aniso_U[2][2]" | b"aniso_u[2][2]" => Some(Self::AnisoU22),
+            b"aniso_U[3][3]" | b"aniso_u[3][3]" => Some(Self::AnisoU33),
+            b"aniso_U[1][2]" | b"aniso_u[1][2]" => Some(Self::AnisoU12),
+            b"aniso_U[1][3]" | b"aniso_u[1][3]" => Some(Self::AnisoU13),
+            b"aniso_U[2][3]" | b"aniso_u[2][3]" => Some(Self::AnisoU23),
             _ => None,
         }
     }

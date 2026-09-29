@@ -14,6 +14,13 @@ impl AtomBuilder<'_> {
         if self.data.chunks.is_empty() {
             self.data.chunks = chunks.into();
         }
+        // The inline spelling and the dedicated category are alternative homes
+        // for the same ellipsoids; a file uses one or the other. The category
+        // read that follows replaces this table when the category exists, so
+        // the canonical modern spelling is the tie-breaker.
+        if let Some(builder) = self.inline_anisotropy.take() {
+            self.data.anisotropy = builder.finish();
+        }
         self.frames.push(coords);
 
         let mut chains = 0..0;

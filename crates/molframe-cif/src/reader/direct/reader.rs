@@ -110,5 +110,6 @@ pub(in crate::reader) fn keep_lowering_category(category: &str) -> bool {
             | "struct_conn"
             | "struct_ref"
             | "struct_ref_seq"
+            | "atom_site_anisotrop"
     )
 }

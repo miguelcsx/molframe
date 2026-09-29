@@ -41,6 +41,48 @@ fn absent_atom_site_identity_is_never_replaced_by_an_ordinal() {
 }
 
 #[test]
+fn anisotropy_writes_its_own_category_joined_by_deposited_id_and_round_trips() {
+    let mut data = read(SOURCE).data().clone();
+    let mut builder = molframe_core::anisotropy::AnisotropyTableBuilder::new();
+    builder.push(molframe_core::AnisotropicDisplacement {
+        atom: molframe_core::AtomIndex::new(0),
+        u: [0.011, 0.022, 0.033, 0.001, -0.002, 0.003],
+    });
+    data.anisotropy = builder.finish();
+    let structure = molframe_core::Structure::new(data);
+    let options = CifWriteOptions::new().with_block_id("chosen");
+    let Ok(output) = write_canonical_with_options(&structure, &options) else {
+        panic!("structure with ellipsoids should write");
+    };
+    assert!(output.contains("_atom_site_anisotrop.U[1][1]"), "{output}");
+    assert!(
+        output.contains("44 C 0.01100 0.02200 0.03300 0.00100 -0.00200 0.003"),
+        "{output}"
+    );
+    // The emitted category reads back as the same tensor on the same atoms.
+    let read_back = read(&output);
+    let anisotropy = &read_back.data().anisotropy;
+    assert!(anisotropy.is_available());
+    assert_eq!(anisotropy.len(), 1);
+    let record = anisotropy
+        .get(molframe_core::AnisotropyIndex::new(0))
+        .expect("round-tripped");
+    assert_eq!(record.atom, molframe_core::AtomIndex::new(0));
+    assert!((record.u[0] - 0.011).abs() <= 1e-6);
+    assert!((record.u[5] - 0.003).abs() <= 1e-6);
+}
+
+#[test]
+fn a_structure_without_anisotropy_writes_no_anisotrop_category() {
+    let structure = read(SOURCE);
+    let options = CifWriteOptions::new().with_block_id("chosen");
+    let Ok(output) = write_canonical_with_options(&structure, &options) else {
+        panic!("plain structure should write");
+    };
+    assert!(!output.contains("_atom_site_anisotrop"), "{output}");
+}
+
+#[test]
 fn bond_identifiers_require_explicit_generation_permission() {
     let source = format!(
         "{SOURCE}loop_\n_struct_conn.id\n_struct_conn.conn_type_id\n\

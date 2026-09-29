@@ -92,6 +92,8 @@ pub(super) fn finish_model(
     data.coords = coords;
     super::polymer::classify(block, &mut data, &mut findings);
     super::bonds::read(block, &mut data, &mut findings);
+    super::anisotropy::read(block, &mut data, &mut findings);
+    data.secondary_structure = super::secondary::read(block, &data, &mut findings).into();
 
     for finding in molframe_core::structure::validate(&data) {
         findings.push(finding);

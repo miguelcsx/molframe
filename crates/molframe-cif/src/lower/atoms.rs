@@ -22,16 +22,18 @@ use super::entry::AsymEntity;
 use super::keys::{Boundary, ResidueKey, boundary};
 use crate::document::Category;
 use crate::parser::Rows;
+use molframe_core::anisotropy::AnisotropicDisplacement;
 use molframe_core::chunk::{AtomRecord, ChunkBuilder};
 use molframe_core::column::Presence;
 use molframe_core::coords::CoordinateBlock;
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
-use molframe_core::index::{EntityIndex, ResidueIndex};
+use molframe_core::index::{AtomIndex, EntityIndex, ResidueIndex};
 use molframe_core::io::{AmbiguousResidueBoundaryPolicy, ReadOptions};
 use molframe_core::optional::{OptionalI32, OptionalSymbol};
 use molframe_core::structure::{CoordinateStore, StructureData};
 use molframe_core::symbol::{AltId, SymbolId};
 use molframe_core::topology::ResidueRecord;
+use num_traits::ToPrimitive;
 
 /// Builds the atoms, residues, chains and models of a structure.
 pub struct AtomBuilder<'a> {
@@ -44,6 +46,8 @@ pub struct AtomBuilder<'a> {
     frames: Vec<CoordinateBlock>,
     model_numbers: Vec<i32>,
     signatures: Vec<AtomSignature>,
+    /// Ellipsoids from the inline `_atom_site.aniso_*` spelling, if any row had one.
+    inline_anisotropy: Option<molframe_core::AnisotropyTableBuilder>,
     expected: Option<models::ExpectedAtoms>,
     track_identity: bool,
     /// The residue being filled, and the atom names already in it.
@@ -79,6 +83,7 @@ impl<'a> AtomBuilder<'a> {
             frames: Vec::new(),
             model_numbers: Vec::new(),
             signatures: Vec::new(),
+            inline_anisotropy: None,
             expected: None,
             track_identity: true,
             current: None,
@@ -204,7 +209,41 @@ impl<'a> AtomBuilder<'a> {
             &record,
         );
         self.builder.push(record);
+        let atom = AtomIndex::new(self.atom_position);
+        self.record_inline_tensor(rows, atom);
         self.atom_position += 1;
+    }
+
+    /// Records an inline `_atom_site.aniso_*` tensor beside its atom row.
+    ///
+    /// The legacy spelling kept the ellipsoid in `atom_site` itself, so one
+    /// coordinate row carries both the coordinates and all six components. A
+    /// row missing any component is left unattached: completing the tensor
+    /// from the values that happened to be written would invent data.
+    fn record_inline_tensor(&mut self, rows: &dyn AtomSiteRow, atom: AtomIndex) {
+        let components = [
+            Field::AnisoU11,
+            Field::AnisoU22,
+            Field::AnisoU33,
+            Field::AnisoU12,
+            Field::AnisoU13,
+            Field::AnisoU23,
+        ];
+        let Some(u) = components
+            .iter()
+            .map(|field| rows.float(*field).and_then(|value| value.to_f32()))
+            .collect::<Option<Vec<f32>>>()
+            .map(|values| {
+                [
+                    values[0], values[1], values[2], values[3], values[4], values[5],
+                ]
+            })
+        else {
+            return;
+        };
+        self.inline_anisotropy
+            .get_or_insert_with(molframe_core::AnisotropyTableBuilder::new)
+            .push(AnisotropicDisplacement { atom, u });
     }
 
     /// Where this atom's residue sits, opening a new one if the row starts one.

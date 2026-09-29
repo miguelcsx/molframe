@@ -1,6 +1,7 @@
 //! Final assembly of parsed frames, topology and format extensions.
 
 use super::ReadState;
+use super::secondary;
 use crate::header::PDB_HEADERS_EXTENSION;
 use molframe_core::coords::CoordinateBlock;
 use molframe_core::diagnostic::{Code, Diagnostic};
@@ -8,6 +9,20 @@ use molframe_core::io::ReadResult;
 use molframe_core::structure::{CoordinateStore, Structure};
 
 impl ReadState<'_> {
+    pub(in crate::reader) fn finish_anisou(&mut self) {
+        if self.anisou.is_empty() {
+            return;
+        }
+        let mut builder = molframe_core::AnisotropyTableBuilder::new();
+        for (serial, u) in self.anisou.drain(..) {
+            let Some(atom) = self.serial_to_atom.get(&serial).copied() else {
+                continue;
+            };
+            builder.push(molframe_core::AnisotropicDisplacement { atom, u });
+        }
+        self.data.anisotropy = builder.finish();
+    }
+
     pub(in crate::reader) fn finish(mut self) -> ReadResult {
         self.close_chain();
         self.verify_frame_len();
@@ -20,6 +35,8 @@ impl ReadState<'_> {
         }
 
         self.finish_bonds();
+        self.finish_anisou();
+        self.data.secondary_structure = secondary::read(&self.data, &self.headers).into();
         self.finish_variant_annotations();
         if self.topology_locked {
             self.finish_dense_frames();

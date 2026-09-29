@@ -1,5 +1,6 @@
 //! PDB, PQR, and PDBQT output.
 
+mod aniso;
 mod pdb;
 mod stream;
 mod variants;

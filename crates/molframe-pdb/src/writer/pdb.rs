@@ -251,6 +251,22 @@ fn write_atom(
         occ = f64::from(occupancy),
         b = f64::from(b_factor),
     );
+    // A tensor recorded for this atom follows under the same serial and the
+    // same identity columns, as the record pairs by serial.
+    if let Some(u) = structure.data().anisotropy.for_atom(atom.index()) {
+        super::aniso::Record {
+            atom,
+            structure,
+            residue,
+            name,
+            component,
+            chain,
+            seq: &residue_field(seq, options),
+            serial: &serial_field(serial, options),
+            u: &u,
+        }
+        .write(out);
+    }
     Ok(())
 }
 
