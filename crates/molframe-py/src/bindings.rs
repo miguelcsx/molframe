@@ -156,6 +156,20 @@ impl PyStructure {
     ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
         crate::native_source::capsule(py, &self.inner)
     }
+    fn _molframe_secondary_structure(&self) -> Vec<u8> {
+        self.inner
+            .engine()
+            .secondary_structure()
+            .iter()
+            .map(|value| match value {
+                molframe::SecondaryStructure::Unknown => 0,
+                molframe::SecondaryStructure::Coil => 1,
+                molframe::SecondaryStructure::Helix => 2,
+                molframe::SecondaryStructure::Strand => 3,
+                molframe::SecondaryStructure::Turn => 4,
+            })
+            .collect()
+    }
 }
 #[derive(Debug)]
 #[pyclass(name = "StructureEditor", skip_from_py_object)]

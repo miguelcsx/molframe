@@ -26,7 +26,30 @@ pub struct NativeBond {
     pub second: u32,
     /// One when the source assigns aromatic order.
     pub aromatic: u8,
-    pub(super) reserved: [u8; 3],
+    /// Compact `MolFrame` bond-order code.
+    ///
+    /// The byte occupied the first slot of the old reserved tail, so the
+    /// capsule layout remains compatible with consumers that only read
+    /// endpoints and aromaticity.
+    pub order: u8,
+    pub(super) reserved: [u8; 2],
+}
+
+impl NativeBond {
+    /// Unknown or unavailable source order.
+    pub const ORDER_UNKNOWN: u8 = 0;
+    /// Single source order.
+    pub const ORDER_SINGLE: u8 = 1;
+    /// Double source order.
+    pub const ORDER_DOUBLE: u8 = 2;
+    /// Triple source order.
+    pub const ORDER_TRIPLE: u8 = 3;
+    /// Quadruple source order.
+    pub const ORDER_QUADRUPLE: u8 = 4;
+    /// Aromatic source order.
+    pub const ORDER_AROMATIC: u8 = 5;
+    /// Polymeric source order.
+    pub const ORDER_POLYMERIC: u8 = 6;
 }
 
 /// Owned compact topology copied once from the parser's compressed columns.

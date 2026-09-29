@@ -15,6 +15,7 @@ molframe-audit = { workspace = true, optional = true }
 molframe-bcif = { workspace = true, optional = true }
 molframe-cif = { workspace = true, optional = true }
 molframe-chem = { workspace = true, optional = true }
+molframe-spatial = { workspace = true, optional = true }
 molframe-geom = { workspace = true, optional = true }
 molframe-fx = { workspace = true, optional = true }
 molframe-ic = { workspace = true, optional = true }
@@ -22,7 +23,6 @@ molframe-interop = { workspace = true, optional = true }
 molframe-modelcif = { workspace = true, optional = true }
 molframe-pdb = { workspace = true, optional = true }
 molframe-query = { workspace = true, optional = true }
-molframe-spatial = { workspace = true, optional = true }
 molframe-xtal = { workspace = true, optional = true }
 molframe-surface = { workspace = true, optional = true }
 molframe-analysis = { workspace = true, optional = true }
@@ -62,7 +62,7 @@ required-features = ["full"]
 [features]
 # Core + the two basic structure formats: pure-Rust, no C toolchain, no
 # numeric stack, no network. Everything else is opt-in.
-default = ["mmcif", "pdb"]
+default = ["mmcif", "pdb", "chemistry", "spatial"]
 
 # One format per feature, so a caller that reads one does not link the others.
 mmcif = ["dep:molframe-cif", "molframe-engine/mmcif"]

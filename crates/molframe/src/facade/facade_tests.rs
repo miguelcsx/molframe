@@ -90,6 +90,20 @@ fn bytes_are_dispatched_to_the_reader_their_content_names() {
     );
 }
 
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+#[test]
+fn caller_created_structures_can_opt_into_the_same_perception_contract() {
+    let options = ReadOptions::new().only_atomic_coords(true);
+    let (raw, _) = read_bytes(DIPEPTIDE.as_bytes().to_vec(), Some("raw.pdb"), &options)
+        .expect("coordinate-only read should succeed");
+    assert!(raw.bonds().is_empty());
+
+    let (perceived, findings) = perceive(&raw).expect("perception should accept the structure");
+    assert!(findings.is_empty());
+    assert!(!perceived.bonds().is_empty());
+    assert_eq!(perceived.coordinates().as_ptr(), raw.coordinates().as_ptr());
+}
+
 #[cfg(feature = "mmcif")]
 #[test]
 fn structured_text_is_dispatched_to_the_reader_its_content_names() {
@@ -475,4 +489,54 @@ fn with_entry_id(structure: &Structure, id: &str) -> Structure {
     let mut data = structure.engine().data().clone();
     data.entry.id = Some(id.into());
     molframe_core::structure::Structure::new(data).into()
+}
+
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+#[test]
+fn default_read_adds_distance_bonds_with_inferred_provenance() {
+    let pdb = concat!(
+        "ATOM      1  N   GLY A   1       0.000   0.000   0.000  1.00 10.00           N\n",
+        "ATOM      2  CA  GLY A   1       1.450   0.000   0.000  1.00 10.00           C\n",
+        "ATOM      3  C   GLY A   1       2.900   0.000   0.000  1.00 10.00           C\n",
+        "ATOM      4  O   GLY A   1       4.100   0.000   0.000  1.00 10.00           O\n",
+        "END\n",
+    );
+    let Ok((structure, _)) = read_bytes(
+        pdb.as_bytes().to_vec(),
+        Some("inferred.pdb"),
+        &ReadOptions::new(),
+    ) else {
+        panic!("inferred fixture must parse")
+    };
+    let bonds: Vec<_> = structure.engine().data().bonds.iter().collect();
+    assert!(bonds.len() >= 3, "bonds: {bonds:?}");
+    assert!(
+        bonds
+            .iter()
+            .all(|bond| bond.provenance == molframe_core::BondProvenance::InferredDistance)
+    );
+}
+
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+#[test]
+fn file_secondary_structure_survives_automatic_fallback_assignment() {
+    let pdb = concat!(
+        "HELIX    1   1 GLY A   1  GLY A   4  1                                  4\n",
+        "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 10.00           C\n",
+        "ATOM      2  CA  GLY A   2       2.100   0.000   0.000  1.00 10.00           C\n",
+        "ATOM      3  CA  GLY A   3       4.200   0.000   0.000  1.00 10.00           C\n",
+        "ATOM      4  CA  GLY A   4       6.300   0.000   0.000  1.00 10.00           C\n",
+        "END\n",
+    );
+    let Ok((structure, _)) = read_bytes(
+        pdb.as_bytes().to_vec(),
+        Some("secondary.pdb"),
+        &ReadOptions::new(),
+    ) else {
+        panic!("secondary fixture must parse")
+    };
+    assert_eq!(
+        structure.engine().secondary_structure(),
+        &[molframe_core::SecondaryStructure::Helix; 4]
+    );
 }

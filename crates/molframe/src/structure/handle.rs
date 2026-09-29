@@ -67,6 +67,22 @@ impl Structure {
         &self.0.data().bonds
     }
 
+    /// Anisotropic displacement ellipsoids, keyed by atom.
+    ///
+    /// Most structures carry none, so the table reports `is_available() == false`
+    /// rather than an empty-but-known set. Per-atom lookup is
+    /// [`AnisotropyTable::for_atom`](molframe_core::AnisotropyTable::for_atom).
+    #[must_use]
+    pub fn anisotropy(&self) -> &molframe_core::AnisotropyTable {
+        &self.0.data().anisotropy
+    }
+
+    /// Per-residue secondary-structure assignments from the file or fallback analysis.
+    #[must_use]
+    pub fn secondary_structure(&self) -> &[molframe_core::SecondaryStructure] {
+        self.0.secondary_structure()
+    }
+
     /// Per-atom annotation columns.
     #[must_use]
     pub fn annotations(&self) -> &molframe_core::annotation::AtomAnnotations {

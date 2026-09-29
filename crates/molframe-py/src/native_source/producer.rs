@@ -120,7 +120,8 @@ fn compact_topology(structure: &molframe::Structure) -> NativeTopology {
             first: bond.atom_a.get(),
             second: bond.atom_b.get(),
             aromatic: u8::from(bond.order == molframe::BondOrder::Aromatic),
-            reserved: [0; 3],
+            order: bond_order_code(bond.order),
+            reserved: [0; 2],
         })
         .collect();
     NativeTopology {
@@ -129,6 +130,18 @@ fn compact_topology(structure: &molframe::Structure) -> NativeTopology {
         chain_residue_start,
         model_chain_start,
         bonds,
+    }
+}
+
+const fn bond_order_code(order: molframe::BondOrder) -> u8 {
+    match order {
+        molframe::BondOrder::Unknown => NativeBond::ORDER_UNKNOWN,
+        molframe::BondOrder::Single => NativeBond::ORDER_SINGLE,
+        molframe::BondOrder::Double => NativeBond::ORDER_DOUBLE,
+        molframe::BondOrder::Triple => NativeBond::ORDER_TRIPLE,
+        molframe::BondOrder::Quadruple => NativeBond::ORDER_QUADRUPLE,
+        molframe::BondOrder::Aromatic => NativeBond::ORDER_AROMATIC,
+        molframe::BondOrder::Polymeric => NativeBond::ORDER_POLYMERIC,
     }
 }
 

@@ -1,4 +1,4 @@
-use super::NativeStructureSource;
+use super::{NativeBond, NativeStructureSource};
 use crate::bindings::PyStructure;
 use pyo3::prelude::*;
 
@@ -128,5 +128,41 @@ fn a_malformed_query_is_a_value_error_and_leaves_the_source_usable() {
         let source = imported(py);
         assert!(source.select("resname (").is_err());
         assert!(matches!(source.select("all"), Ok(rows) if rows == [0, 1]));
+    });
+}
+
+#[test]
+fn native_topology_preserves_file_bond_order() {
+    const MMCIF: &str = "data_bond\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 C CA GLY A 1 0 0 0\nATOM 2 N N GLY A 1 1 0 0\n\
+loop_\n_struct_conn.id\n_struct_conn.conn_type_id\n\
+_struct_conn.ptnr1_label_asym_id\n_struct_conn.ptnr1_label_seq_id\n\
+_struct_conn.ptnr1_label_comp_id\n_struct_conn.ptnr1_label_atom_id\n\
+_struct_conn.ptnr2_label_asym_id\n_struct_conn.ptnr2_label_seq_id\n\
+_struct_conn.ptnr2_label_comp_id\n_struct_conn.ptnr2_label_atom_id\n\
+_struct_conn.pdbx_value_order\n1 covale A 1 GLY CA A 1 GLY N SING\n";
+    let input = molframe::InputBuffer::from_bytes(MMCIF.as_bytes().to_vec());
+    let structure =
+        match molframe::read_buffer(&input, Some("bonded.cif"), &molframe::ReadOptions::new()) {
+            Ok((structure, _)) => structure,
+            Err(findings) => panic!("bond fixture should parse: {findings:?}"),
+        };
+    Python::initialize();
+    Python::attach(|py| {
+        let object = match Bound::new(py, PyStructure::new(structure)) {
+            Ok(value) => value,
+            Err(error) => panic!("structure should bind: {error}"),
+        };
+        let source = match NativeStructureSource::from_python(object.as_any()) {
+            Ok(value) => value,
+            Err(error) => panic!("native source should import: {error}"),
+        };
+        let bonds = source.topology().bonds;
+        assert_eq!(bonds.len(), 1);
+        assert_eq!(bonds[0].order, NativeBond::ORDER_SINGLE);
+        assert_eq!(bonds[0].aromatic, 0);
     });
 }

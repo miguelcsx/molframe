@@ -281,8 +281,74 @@ pub fn read_buffer(
     name: Option<&str>,
     options: &ReadOptions,
 ) -> Result<(Structure, Vec<Diagnostic>), Findings> {
-    dispatch_read(input, name, options)
+    enrich_read(dispatch_read(input, name, options), options)
         .map(|(structure, diagnostics)| (structure.into(), diagnostics))
+}
+
+/// Applies the default chemistry perception pass to a caller-created structure.
+///
+/// File reads perform this step automatically unless [`ReadOptions::only_atomic_coords`]
+/// is set. Structures assembled by a custom reader or provider deliberately do
+/// not run perception behind the caller's back; call this function when the
+/// same file-like bond and secondary-structure guarantees are desired. The
+/// returned structure shares the existing coordinate storage.
+///
+/// # Errors
+///
+/// Returns findings only if the supplied structure cannot be used as a valid
+/// perception input.
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+pub fn perceive(structure: &Structure) -> Result<(Structure, Vec<Diagnostic>), Findings> {
+    enrich_read(
+        Ok((structure.engine().clone(), Vec::new())),
+        &ReadOptions::new(),
+    )
+    .map(|(structure, diagnostics)| (structure.into(), diagnostics))
+}
+
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+fn enrich_read(
+    result: Result<(CoreStructure, Vec<Diagnostic>), Findings>,
+    options: &ReadOptions,
+) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
+    let (structure, mut findings) = result?;
+    if options.only_atomic_coords {
+        return Ok((structure, findings));
+    }
+    let structure = match molframe_chem::perceive_bonds(&structure) {
+        Ok(structure) => structure,
+        Err(finding) => {
+            findings.push(finding);
+            structure
+        }
+    };
+    let structure = match molframe_chem::annotate_standard_components(&structure) {
+        Ok(structure) => structure,
+        Err(finding) => {
+            findings.push(finding);
+            structure
+        }
+    };
+    let inferred = molframe_chem::assign_secondary_structure(&structure);
+    let mut secondary = structure.data().secondary_structure.as_ref().clone();
+    for (target, inferred) in secondary.iter_mut().zip(inferred) {
+        if *target == molframe_core::SecondaryStructure::Unknown
+            && inferred != molframe_core::SecondaryStructure::Unknown
+        {
+            *target = inferred;
+        }
+    }
+    let mut data = structure.data().clone();
+    data.secondary_structure = secondary.into();
+    Ok((CoreStructure::new(data), findings))
+}
+
+#[cfg(not(all(feature = "chemistry", feature = "spatial")))]
+fn enrich_read(
+    result: Result<(CoreStructure, Vec<Diagnostic>), Findings>,
+    _options: &ReadOptions,
+) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
+    result
 }
 
 fn dispatch_read(

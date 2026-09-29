@@ -179,10 +179,23 @@ Outstanding deterministic work, roughly in dependency order: the rest of each of
 those crates (Lee–Richards/SES/cavities; secondary structure, π-stacking, water
 bridges; bond/angle deviation, planarity, chirality, rotamer/valence/stereo,
 completeness; MSA, phylogenetics, k-mers, sequence formats, substitution
-matrices; chain/atom mapping, DockQ/CAD/QS, CE alignment); `molframe-query`
-altloc/entity/assembly and chirality selectors; PEOE charges in `molframe-chem`;
-and the format breadth (trajectories, density maps, remaining structural
-formats).
+matrices; chain/atom mapping, DockQ/CAD/QS, CE alignment); the `molframe-query`
+assembly/instance selector; and the format breadth (trajectories, density maps,
+remaining structural formats). PEOE charges are **not** outstanding: they are
+implemented in `molframe-chem/src/peoe/` (Gasteiger–Marsili via
+`component_peoe_charges`, benchmarked).
+
+The `altloc`, `entity`, `entity_type` and `chirality` selectors are **not**
+outstanding: they are fully evaluated with tests. `Column::AlternateLocation`,
+`Column::Entity` and `Column::EntityType` have arms in
+`predicate_values.rs`/`predicate_helpers.rs` and lower through `plan.rs`;
+`Expr::Chirality` evaluates in `eval.rs:262`; `SameKey::Entity` expands in
+`expand.rs`. A true gap remains: there is no assembly/instance selector at all —
+neither `Column::Assembly` nor `SameKey::Assembly` exists — even though
+`molframe-xtal` already exposes `AssemblyView::neighbors` (per-instance pairs)
+and `collect_crystal_neighbors` (symmetry mates). Anisotropic ADPs are also
+absent: no `_atom_site.aniso_U*` column, PDB `ANISOU` record, or anisotropic
+field exists in `molframe-cif`, `molframe-pdb`, or `molframe-core`'s atom storage.
 
 Track B (`molframe-audit`, `molframe-fx`) and `molframe-adapters` have landed
 natively alongside the rest and are held to the same bar; what they still lack is

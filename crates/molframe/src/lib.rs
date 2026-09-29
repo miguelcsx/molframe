@@ -88,6 +88,7 @@
 
 #![forbid(unsafe_code)]
 
+pub use molframe_core::SecondaryStructure;
 pub use molframe_core::annotation::{
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn,
     AtomAnnotation, AtomAnnotations, COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION,
@@ -109,7 +110,8 @@ pub use molframe_core::diagnostic::{
 pub use molframe_core::element::Element;
 pub use molframe_core::execution::{ExecutionContext, MemoryBudgetError};
 pub use molframe_core::index::{
-    AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex, ResidueIndex,
+    AnisotropyIndex, AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex,
+    ResidueIndex,
 };
 pub use molframe_core::io::{
     AmbiguousResidueBoundaryPolicy, BatchContinuity, Compression, ContinuityLevel, Format,
@@ -128,7 +130,8 @@ pub use molframe_core::structure::{
 pub use molframe_core::symbol::{AltId, SymbolId};
 pub use molframe_core::topology::{EntityKind, PolymerKind, Topology};
 pub use molframe_core::{
-    BondAdjacency, BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder,
+    AnisotropicDisplacement, AnisotropyTable, AnisotropyTableBuilder, BondAdjacency, BondOrder,
+    BondProvenance, BondRecord, BondTable, BondTableBuilder,
 };
 pub use molframe_engine::{
     CompiledWorkflow, Cost, Explanation, Input, Node, OperationMetadata, Output, PhysicalNode,
@@ -206,6 +209,8 @@ mod policy_config;
 pub mod prelude;
 mod structure;
 
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+pub use facade::perceive;
 pub use facade::{
     WriteOptions, read, read_buffer, read_bytes, read_with_diagnostics, read_with_options, write,
     write_with_options,
