@@ -149,36 +149,64 @@ fn read_frame_set(
     append_frames(
         frames,
         &steps[start..end],
-        start,
-        positions,
-        velocities,
-        forces,
-        cells,
-        first_frame,
-        first_seconds,
-        time_per_frame,
-        scale,
+        Timebase {
+            offset: start,
+            first_frame,
+            first_seconds,
+            time_per_frame,
+            scale,
+        },
+        AxisData {
+            positions,
+            velocities,
+            forces,
+            cells,
+        },
     )
+}
+
+/// The per-frame axis sequences a TNG frame set contributes, consumed one
+/// element each until the steps are exhausted.
+struct AxisData {
+    positions: Vec<Vec<[f32; 3]>>,
+    velocities: Option<Vec<Vec<[f32; 3]>>>,
+    forces: Option<Vec<Vec<[f32; 3]>>>,
+    cells: Option<Vec<Vec<f64>>>,
+}
+
+/// Timestep numbering and clock inputs shared by every appended frame.
+struct Timebase {
+    offset: usize,
+    first_frame: i64,
+    first_seconds: f64,
+    time_per_frame: f64,
+    scale: f64,
+}
+
+impl Timebase {
+    /// The wall-clock time of one step, absent when the source records none.
+    fn time(&self, step: i64) -> Result<Option<f64>, TngError> {
+        optional_time(
+            self.first_frame,
+            self.first_seconds,
+            self.time_per_frame,
+            step,
+        )
+    }
 }
 
 fn append_frames(
     frames: &mut Vec<Timestep>,
     steps: &[i64],
-    offset: usize,
-    positions: Vec<Vec<[f32; 3]>>,
-    velocities: Option<Vec<Vec<[f32; 3]>>>,
-    forces: Option<Vec<Vec<[f32; 3]>>>,
-    cells: Option<Vec<Vec<f64>>>,
-    first_frame: i64,
-    first_seconds: f64,
-    time_per_frame: f64,
-    scale: f64,
+    timebase: Timebase,
+    axes: AxisData,
 ) -> Result<(), TngError> {
-    let mut positions = positions.into_iter();
-    let mut velocities = velocities.map(Vec::into_iter);
-    let mut forces = forces.map(Vec::into_iter);
-    let mut cells = cells.map(Vec::into_iter);
+    let mut positions = axes.positions.into_iter();
+    let mut velocities = axes.velocities.map(Vec::into_iter);
+    let mut forces = axes.forces.map(Vec::into_iter);
+    let mut cells = axes.cells.map(Vec::into_iter);
     for (frame, step) in steps.iter().copied().enumerate() {
+        let time = timebase.time(step)?;
         let positions = positions.next().ok_or(TngError::InvalidShape)?;
         let velocities = velocities
             .as_mut()
@@ -191,13 +219,16 @@ fn append_frames(
         let cell = cells
             .as_mut()
             .map(|values| {
-                optional_cell(Ok((values.next().ok_or(TngError::InvalidShape)?, 1)), scale)
+                optional_cell(
+                    Ok((values.next().ok_or(TngError::InvalidShape)?, 1)),
+                    timebase.scale,
+                )
             })
             .transpose()?
             .flatten();
         frames.push(Timestep {
-            frame: offset + frame,
-            time: optional_time(first_frame, first_seconds, time_per_frame, step)?,
+            frame: timebase.offset + frame,
+            time,
             positions,
             velocities,
             forces,
