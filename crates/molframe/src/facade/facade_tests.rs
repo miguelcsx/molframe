@@ -10,6 +10,9 @@ use crate::formats::modelcif::ModelCifExt;
 use crate::formats::pdb::PdbOptions;
 
 mod namespace_tests;
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+#[path = "perception_tests.rs"]
+mod perception;
 mod plddt_tests;
 
 const DIPEPTIDE: &str = "\
@@ -489,54 +492,4 @@ fn with_entry_id(structure: &Structure, id: &str) -> Structure {
     let mut data = structure.engine().data().clone();
     data.entry.id = Some(id.into());
     molframe_core::structure::Structure::new(data).into()
-}
-
-#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
-#[test]
-fn default_read_adds_distance_bonds_with_inferred_provenance() {
-    let pdb = concat!(
-        "ATOM      1  N   GLY A   1       0.000   0.000   0.000  1.00 10.00           N\n",
-        "ATOM      2  CA  GLY A   1       1.450   0.000   0.000  1.00 10.00           C\n",
-        "ATOM      3  C   GLY A   1       2.900   0.000   0.000  1.00 10.00           C\n",
-        "ATOM      4  O   GLY A   1       4.100   0.000   0.000  1.00 10.00           O\n",
-        "END\n",
-    );
-    let Ok((structure, _)) = read_bytes(
-        pdb.as_bytes().to_vec(),
-        Some("inferred.pdb"),
-        &ReadOptions::new(),
-    ) else {
-        panic!("inferred fixture must parse")
-    };
-    let bonds: Vec<_> = structure.engine().data().bonds.iter().collect();
-    assert!(bonds.len() >= 3, "bonds: {bonds:?}");
-    assert!(
-        bonds
-            .iter()
-            .all(|bond| bond.provenance == molframe_core::BondProvenance::InferredDistance)
-    );
-}
-
-#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
-#[test]
-fn file_secondary_structure_survives_automatic_fallback_assignment() {
-    let pdb = concat!(
-        "HELIX    1   1 GLY A   1  GLY A   4  1                                  4\n",
-        "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 10.00           C\n",
-        "ATOM      2  CA  GLY A   2       2.100   0.000   0.000  1.00 10.00           C\n",
-        "ATOM      3  CA  GLY A   3       4.200   0.000   0.000  1.00 10.00           C\n",
-        "ATOM      4  CA  GLY A   4       6.300   0.000   0.000  1.00 10.00           C\n",
-        "END\n",
-    );
-    let Ok((structure, _)) = read_bytes(
-        pdb.as_bytes().to_vec(),
-        Some("secondary.pdb"),
-        &ReadOptions::new(),
-    ) else {
-        panic!("secondary fixture must parse")
-    };
-    assert_eq!(
-        structure.engine().secondary_structure(),
-        &[molframe_core::SecondaryStructure::Helix; 4]
-    );
 }
