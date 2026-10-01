@@ -203,12 +203,29 @@ impl ReflectionTable {
         })
     }
 
-    /// Returns Miller indices from mmCIF (`index_h/k/l`) or MTZ (`H/K/L`).
+    /// Borrows Miller indices from mmCIF (`index_h/k/l`) or MTZ (`H/K/L`).
+    ///
+    /// Shape errors are returned before iteration; invalid indices are reported
+    /// at their row without allocating or copying the reflection table.
     ///
     /// # Errors
     ///
-    /// Returns an error when a required column is absent or non-integral.
-    pub fn miller_indices(&self) -> Result<Vec<[i32; 3]>, ReflectionError> {
+    /// Returns an error when a required column is absent or the table is ragged.
+    pub fn miller_indices(
+        &self,
+    ) -> Result<
+        impl ExactSizeIterator<Item = Result<[i32; 3], ReflectionError>> + '_,
+        ReflectionError,
+    > {
+        let rows = self.row_count();
+        if rows == 0
+            || self
+                .columns
+                .iter()
+                .any(|column| column.values.len() != rows)
+        {
+            return Err(ReflectionError::ColumnLength);
+        }
         let h = self
             .column_any(&["index_h", "H"])
             .ok_or(ReflectionError::MillerIndices)?;
@@ -218,20 +235,16 @@ impl ReflectionTable {
         let l = self
             .column_any(&["index_l", "L"])
             .ok_or(ReflectionError::MillerIndices)?;
-        (0..self.row_count())
-            .map(|row| {
+        Ok(h.values
+            .iter()
+            .zip(&k.values)
+            .zip(&l.values)
+            .map(|((h, k), l)| {
                 Ok([
-                    h.values[row]
-                        .as_i32()
-                        .ok_or(ReflectionError::MillerIndices)?,
-                    k.values[row]
-                        .as_i32()
-                        .ok_or(ReflectionError::MillerIndices)?,
-                    l.values[row]
-                        .as_i32()
-                        .ok_or(ReflectionError::MillerIndices)?,
+                    h.as_i32().ok_or(ReflectionError::MillerIndices)?,
+                    k.as_i32().ok_or(ReflectionError::MillerIndices)?,
+                    l.as_i32().ok_or(ReflectionError::MillerIndices)?,
                 ])
-            })
-            .collect()
+            }))
     }
 }

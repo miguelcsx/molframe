@@ -23,6 +23,7 @@ mod ncs;
 mod numeric;
 mod reflection;
 mod reflection_cif;
+mod reflection_symmetry;
 mod restraints;
 mod space_group;
 mod symmetry;
@@ -62,6 +63,7 @@ pub use reflection::{
     ReflectionValue,
 };
 pub use reflection_cif::{lower_structure_factor_cif, write_structure_factor_cif};
+pub use reflection_symmetry::ReflectionSymmetry;
 pub use restraints::{
     AngleRestraint, BondRestraint, ChiralRestraint, ChiralVolumeSign, MonomerLibrary,
     MonomerLibraryReadError, MonomerRestraints, PlaneAtomRestraint, PlaneRestraint, RestraintError,

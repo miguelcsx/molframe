@@ -14,7 +14,12 @@ fn all_refln_columns_missing_kinds_and_metadata_are_lowered() {
     let table = lower_structure_factor_cif(&document(CIF)).expect("table should lower");
     assert_eq!(table.row_count(), 2);
     assert_eq!(
-        table.miller_indices().expect("indices should exist")[1],
+        table
+            .miller_indices()
+            .expect("indices should exist")
+            .nth(1)
+            .expect("second row")
+            .expect("integer indices"),
         [1, 0, 0]
     );
     assert_eq!(table.space_group_number, Some(4));

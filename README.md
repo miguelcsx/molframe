@@ -508,6 +508,37 @@ Benchmark sources live beside the subsystem they measure in each crate's
 `benches/` directory; deterministic allocation and resident-memory cases live
 in `crates/molframe-resource-bench`.
 
+### Reciprocal crystallography
+
+With the Rust `crystal` feature, `CellTransform` exposes reciprocal vectors
+(inverse ångström, without a `2π` factor), `reciprocal_spacing_squared` and
+`d_spacing`. The origin has zero reciprocal length and infinite spacing.
+`SymmetrySet::reflection_symmetry` reports centricity, systematic absences
+and epsilon including centring, using exact rational translation phases.
+Missing operations and unrepresentable transformed indices are errors.
+
+Python exposes the same calculations through `molframe.crystal`:
+
+```python
+from molframe.crystal import UnitCell, SpaceGroup
+
+cell = UnitCell([43.1, 51.7, 62.3], [73, 81, 67])
+spacing = cell.d_spacing([2, -3, 5])
+group = SpaceGroup(hall_number=6)  # Hall catalogue setting, not IT group number
+constraints = group.reflection_symmetry([0, 1, 0])
+```
+
+`ReflectionTable::miller_indices()` now returns a borrowed exact-size iterator
+of row results, not an allocated vector. Shape errors are returned before
+iteration; missing/non-integral indices are errors at the corresponding row.
+Collect explicitly when owned indices are required. MTZ resolution calculation
+uses this iterator and the same reciprocal geometry.
+
+Differential verification against local Gemmi `97c808222f468f8188f2ed87266e0d7c5a854ce2`
+matched all 530 Hall settings over indices `[-4, 4]³` (386,370 reflections),
+plus 2,187 spacings in orthorhombic, triclinic and hexagonal cells. This covers
+these operations only, not general Gemmi feature parity or a speed comparison.
+
 ## Rust features
 
 The Rust facade is modular.

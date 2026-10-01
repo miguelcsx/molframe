@@ -69,7 +69,11 @@ fn merged_mtz_round_trip_preserves_columns_datasets_and_history() {
     let bytes = write_mtz(&expected).expect("table should encode");
     let actual = read_mtz(&bytes).expect("MTZ should decode");
     assert_eq!(
-        actual.miller_indices().expect("indices should exist"),
+        actual
+            .miller_indices()
+            .expect("indices should exist")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("indices are integral"),
         [[0, 0, 1], [1, 0, 0]]
     );
     assert_eq!(actual.columns[3].values[1], ReflectionValue::Missing);
@@ -88,7 +92,12 @@ fn configured_gemmi_fixture_is_read_differentially() {
     assert_eq!(table.row_count(), 441);
     assert_eq!(table.columns.len(), 8);
     assert_eq!(
-        table.miller_indices().expect("indices should exist")[0],
+        table
+            .miller_indices()
+            .expect("indices should exist")
+            .next()
+            .expect("first row")
+            .expect("integer indices"),
         [-5, 0, 1]
     );
 }
@@ -101,4 +110,20 @@ fn text_columns_are_refused_instead_of_silently_encoded() {
         write_mtz(&table),
         Err(ReflectionError::Unsupported(_))
     ));
+}
+
+#[test]
+fn miller_indices_reject_ragged_columns_and_report_invalid_rows() {
+    let mut reflections = table();
+    reflections.columns[1].values.pop();
+    assert!(matches!(
+        reflections.miller_indices(),
+        Err(ReflectionError::ColumnLength)
+    ));
+    let mut reflections = table();
+    reflections.columns[0].values[1] = ReflectionValue::Real(0.5);
+    let mut indices = reflections.miller_indices().expect("rectangular table");
+    assert_eq!(indices.next(), Some(Ok([0, 0, 1])));
+    assert_eq!(indices.next(), Some(Err(ReflectionError::MillerIndices)));
+    assert_eq!(indices.next(), None);
 }

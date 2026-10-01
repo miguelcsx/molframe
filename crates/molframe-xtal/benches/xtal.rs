@@ -40,6 +40,20 @@ fn bench_space_groups(c: &mut Criterion) {
     group.bench_function("settings_for_type", |b| {
         b.iter(|| black_box(space_group_settings(19)));
     });
+    let symmetry = space_group_by_hall("-F 4 2 3")
+        .required("cubic symmetry benchmark fixture")
+        .symmetry_set();
+    group.bench_function("reflection_constraints_fm3m", |b| {
+        b.iter(|| black_box(symmetry.reflection_symmetry(black_box([2, 4, 6]))));
+    });
+    let cell = CellTransform::new(&UnitCell {
+        lengths: [43.1, 51.7, 62.3],
+        angles: [73.0, 81.0, 67.0],
+    })
+    .required("triclinic benchmark cell");
+    group.bench_function("reciprocal_spacing_triclinic", |b| {
+        b.iter(|| black_box(cell.d_spacing(black_box([2, -3, 5]))));
+    });
     group.finish();
 }
 
@@ -236,7 +250,13 @@ fn bench_reflection_workflows(
         b.iter(|| black_box(reflection.validate()));
     });
     group.bench_function("reflection_miller_indices/512", |b| {
-        b.iter(|| black_box(reflection.miller_indices()));
+        b.iter(|| {
+            if let Ok(indices) = reflection.miller_indices() {
+                for row in indices {
+                    let _ = black_box(row);
+                }
+            }
+        });
     });
     group.bench_function("mtz_write/512x4", |b| {
         b.iter(|| black_box(write_mtz(reflection)));

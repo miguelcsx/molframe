@@ -8,6 +8,8 @@
 
 mod bindings;
 mod catalog;
+#[cfg(feature = "crystal")]
+mod crystal;
 mod hierarchy;
 mod native_source;
 #[cfg(feature = "query")]
@@ -121,10 +123,14 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     query.add_function(wrap_pyfunction!(query_aliases::complete, &query)?)?;
     module.add_submodule(&query)?;
 
+    let crystal = PyModule::new(py, "crystal")?;
+    #[cfg(feature = "crystal")]
+    crystal::register(&crystal)?;
+    module.add_submodule(&crystal)?;
+
     for name in [
         "trajectory",
         "sequence",
-        "crystal",
         "validation",
         "motif",
         "chemistry",

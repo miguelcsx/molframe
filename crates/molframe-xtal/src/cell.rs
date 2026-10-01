@@ -68,6 +68,28 @@ impl CellTransform {
         multiply(&self.cartesian_to_fractional, cartesian)
     }
 
+    /// Cartesian reciprocal vector in inverse ångström, without a `2π` factor.
+    #[must_use]
+    pub fn reciprocal_vector(&self, hkl: [i32; 3]) -> [f64; 3] {
+        std::array::from_fn(|axis| {
+            (0..3)
+                .map(|row| self.cartesian_to_fractional[row][axis] * f64::from(hkl[row]))
+                .sum()
+        })
+    }
+
+    /// Squared reciprocal spacing `1/d²`; the origin has value zero.
+    #[must_use]
+    pub fn reciprocal_spacing_squared(&self, hkl: [i32; 3]) -> f64 {
+        self.reciprocal_vector(hkl).into_iter().map(|v| v * v).sum()
+    }
+
+    /// Plane spacing in ångström; the origin has infinite spacing.
+    #[must_use]
+    pub fn d_spacing(&self, hkl: [i32; 3]) -> f64 {
+        self.reciprocal_spacing_squared(hkl).sqrt().recip()
+    }
+
     /// Fractional-to-Cartesian matrix, stored by rows.
     #[must_use]
     pub const fn forward_matrix(&self) -> &[[f64; 3]; 3] {

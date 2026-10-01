@@ -437,21 +437,10 @@ fn calculate_resolution(
     cell: UnitCell,
 ) -> Result<[f64; 2], ReflectionError> {
     let transform = CellTransform::new(&cell).map_err(|_| ReflectionError::Metadata)?;
-    let inverse = transform.inverse_matrix();
     let mut minimum = f64::INFINITY;
     let mut maximum = f64::NEG_INFINITY;
     for hkl in table.miller_indices()? {
-        let reciprocal = (0..3)
-            .map(|axis| {
-                (0..3)
-                    .map(|index| inverse[index][axis] * f64::from(hkl[index]))
-                    .sum::<f64>()
-            })
-            .collect::<Vec<_>>();
-        let value = reciprocal
-            .iter()
-            .map(|component| component * component)
-            .sum::<f64>();
+        let value = transform.reciprocal_spacing_squared(hkl?);
         minimum = minimum.min(value);
         maximum = maximum.max(value);
     }
