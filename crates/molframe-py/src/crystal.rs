@@ -1,7 +1,9 @@
 //! Mechanical adapters for reciprocal geometry and exact reflection symmetry.
 
+use crate::bindings::PyStructure;
 use molframe::UnitCell;
 use molframe::crystal::{CellTransform, ReflectionSymmetry, SymmetrySet, space_group_setting};
+use numpy::{Complex64, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::{exceptions::PyValueError, prelude::*};
 
 #[derive(Clone, Copy, Debug)]
@@ -96,7 +98,40 @@ impl PyReflectionSymmetry {
     }
 }
 
+/// X-ray structure factors of the first model, one complex value per `(h, k, l)` row.
+///
+/// The cell, space group, occupancies and displacement parameters come from the
+/// structure itself; the model is taken to be the asymmetric unit.
+#[pyfunction]
+fn structure_factors<'py>(
+    py: Python<'py>,
+    structure: &PyStructure,
+    hkl: &Bound<'py, PyArray2<i32>>,
+) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
+    let hkl = hkl.readonly();
+    let shape = hkl.shape();
+    if shape.len() != 2 || shape[1] != 3 {
+        return Err(PyValueError::new_err("hkl must have shape (n, 3)"));
+    }
+    let rows: Vec<[i32; 3]> = hkl
+        .as_array()
+        .rows()
+        .into_iter()
+        .map(|row| [row[0], row[1], row[2]])
+        .collect();
+    let structure = structure.inner.clone();
+    let values = py
+        .detach(move || molframe::crystal::structure_factors(structure.engine(), &rows))
+        .map_err(|diagnostic| PyValueError::new_err(diagnostic.to_string()))?;
+    let values: Vec<Complex64> = values
+        .into_iter()
+        .map(|value| Complex64::new(value.re, value.im))
+        .collect();
+    Ok(values.to_pyarray(py))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(structure_factors, module)?)?;
     module.add_class::<PyUnitCell>()?;
     module.add_class::<PySpaceGroup>()?;
     module.add_class::<PyReflectionSymmetry>()

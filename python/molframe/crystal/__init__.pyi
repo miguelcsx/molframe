@@ -1,5 +1,15 @@
 from collections.abc import Sequence
-from typing import final
+from typing import Protocol, final
+
+from .. import Structure
+
+class IntArray(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
+class ComplexArray(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
 
 @final
 class UnitCell:
@@ -25,5 +35,7 @@ class ReflectionSymmetry:
     def systematically_absent(self) -> bool: ...
     @property
     def epsilon_factor(self) -> int: ...
+
+def structure_factors(structure: Structure, hkl: IntArray) -> ComplexArray: ...
 
 __all__: list[str]

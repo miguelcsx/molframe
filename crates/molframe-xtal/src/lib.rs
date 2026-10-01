@@ -25,7 +25,11 @@ mod reflection;
 mod reflection_cif;
 mod reflection_symmetry;
 mod restraints;
+mod scattering;
+mod scattering_table;
 mod space_group;
+mod structure_factor;
+mod structure_factor_model;
 mod symmetry;
 mod symmetry_inverse;
 mod view;
@@ -69,9 +73,15 @@ pub use restraints::{
     MonomerLibraryReadError, MonomerRestraints, PlaneAtomRestraint, PlaneRestraint, RestraintError,
     TorsionRestraint, lower_monomer_library, read_monomer_library,
 };
+pub use scattering::GaussianFormFactor;
 pub use space_group::{
-    SpaceGroupSetting, space_group_by_hall, space_group_setting, space_group_settings,
+    SpaceGroupSetting, space_group_by_hall, space_group_by_hermann_mauguin, space_group_setting,
+    space_group_settings,
 };
+pub use structure_factor::{
+    Complex64, Displacement, ScatteringSite, StructureFactorCalculator, StructureFactorError,
+};
+pub use structure_factor_model::structure_factors;
 pub use symmetry::{
     Rational, SYMMETRY_EXTENSION, SymmetryExt, SymmetryOperation, SymmetrySet, lower_symmetry,
 };
