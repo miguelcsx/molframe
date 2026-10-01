@@ -72,6 +72,39 @@ pub fn space_group_by_hall(symbol: &str) -> Result<&'static SpaceGroupSetting, D
         .ok_or_else(catalogue_error)
 }
 
+/// Looks up a setting by its Hermann–Mauguin symbol, short or full.
+///
+/// Case, whitespace and screw-axis underscores are ignored, so the spelling of
+/// a PDB `CRYST1` record (`P 21 21 21`) resolves like the catalogue's. When a
+/// symbol belongs to several settings the first catalogue entry, the standard
+/// setting of that type, is returned.
+///
+/// # Errors
+///
+/// Returns `E6018` when no setting carries the symbol or bundled data is invalid.
+pub fn space_group_by_hermann_mauguin(
+    symbol: &str,
+) -> Result<&'static SpaceGroupSetting, Diagnostic> {
+    let requested = symbol_key(symbol);
+    settings()?
+        .iter()
+        .find(|setting| {
+            symbol_key(&setting.international_full) == requested
+                || symbol_key(&setting.international_short) == requested
+        })
+        .ok_or_else(catalogue_error)
+}
+
+/// A symbol with case, spacing and screw-axis subscripts removed, so the
+/// catalogue's `P 2_1 2_1 2_1` and a PDB file's `P 21 21 21` compare equal.
+fn symbol_key(symbol: &str) -> String {
+    symbol
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != '_')
+        .map(|character| character.to_ascii_uppercase())
+        .collect()
+}
+
 /// Returns every Hall setting belonging to one International Tables type.
 ///
 /// # Errors

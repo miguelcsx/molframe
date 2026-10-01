@@ -39,6 +39,8 @@ impl ReadState<'_> {
             lengths: [a, b, c],
             angles: [alpha, beta, gamma],
         });
+        let symbol = fixed::text(line.text, 56, 66);
+        self.data.entry.space_group = (!symbol.is_empty()).then(|| symbol.into());
     }
 
     pub(super) fn header(&mut self, line: &Line<'_>) {

@@ -365,7 +365,9 @@ fn dispatch_read(
         #[cfg(feature = "bcif")]
         Format::BinaryCif => read_bcif_buffer(input, options),
         #[cfg(feature = "pdb")]
-        Format::Pdb => molframe_pdb::read(input, options).map_err(Findings::from),
+        Format::Pdb => molframe_pdb::read(input, options)
+            .map(|(structure, findings)| extensions::attach_pdb_symmetry(structure, findings))
+            .map_err(Findings::from),
         #[cfg(feature = "pdb")]
         Format::Mmtf => molframe_pdb::read_mmtf(input, options).map_err(Findings::from),
         #[cfg(feature = "pdb")]
@@ -425,6 +427,9 @@ fn crate_for(format: Format) -> &'static str {
     }
 }
 
+#[cfg(all(test, feature = "pdb"))]
+#[path = "facade/pdb_symmetry_tests.rs"]
+mod pdb_symmetry_tests;
 #[cfg(test)]
 #[path = "facade/facade_tests.rs"]
 mod tests;

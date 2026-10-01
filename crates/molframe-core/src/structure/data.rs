@@ -37,6 +37,9 @@ pub struct EntryMetadata {
     pub method: Option<Box<str>>,
     /// Resolution in ångström, where the method reports one.
     pub resolution: Option<f32>,
+    /// The space-group symbol as the file wrote it, for formats that carry
+    /// only a name (a PDB `CRYST1` record) rather than symmetry operations.
+    pub space_group: Option<Box<str>>,
 }
 
 /// The crystallographic cell.

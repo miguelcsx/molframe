@@ -57,3 +57,29 @@ fn every_operation_has_an_exact_inverse_representative() {
         }
     }
 }
+
+#[test]
+fn hermann_mauguin_lookup_accepts_pdb_and_catalogue_spellings() {
+    for (spelling, hall_number_of_type) in [
+        ("P 21 21 21", 19),
+        ("p212121", 19),
+        ("P 2_1 2_1 2_1", 19),
+        ("I 2 2 2", 23),
+        ("P 21 3", 198),
+        ("P 1", 1),
+    ] {
+        let Ok(setting) = super::space_group_by_hermann_mauguin(spelling) else {
+            panic!("{spelling} resolves")
+        };
+        assert_eq!(
+            setting.international_number, hall_number_of_type,
+            "{spelling}"
+        );
+    }
+    // The full symbol names the unique axis; the short one means the first setting.
+    let Ok(unique_c) = super::space_group_by_hermann_mauguin("P 1 1 21") else {
+        panic!("the c-axis setting resolves")
+    };
+    assert_eq!(&*unique_c.hall_symbol, "P 2c");
+    assert!(super::space_group_by_hermann_mauguin("Q 9 9 9").is_err());
+}

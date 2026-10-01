@@ -185,13 +185,14 @@ fn write_generated_metadata(out: &mut impl fmt::Write, structure: &Structure) {
     if let Some(cell) = data.cell {
         let _ = writeln!(
             out,
-            "CRYST1{:9.3}{:9.3}{:9.3}{:7.2}{:7.2}{:7.2}",
+            "CRYST1{:9.3}{:9.3}{:9.3}{:7.2}{:7.2}{:7.2} {:<11}",
             cell.lengths[0],
             cell.lengths[1],
             cell.lengths[2],
             cell.angles[0],
             cell.angles[1],
             cell.angles[2],
+            data.entry.space_group.as_deref().unwrap_or("P 1"),
         );
     }
 }
