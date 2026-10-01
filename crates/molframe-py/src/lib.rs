@@ -20,6 +20,8 @@ mod query_cache;
 mod query_messages;
 #[cfg(feature = "query")]
 mod selection_expr;
+#[cfg(feature = "sequence")]
+mod sequence;
 #[cfg(feature = "surface")]
 mod surface;
 #[cfg(feature = "analysis")]
@@ -142,14 +144,12 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     surface::register(&surface)?;
     module.add_submodule(&surface)?;
 
-    for name in [
-        "trajectory",
-        "sequence",
-        "validation",
-        "motif",
-        "chemistry",
-        "spatial",
-    ] {
+    let sequence = PyModule::new(py, "sequence")?;
+    #[cfg(feature = "sequence")]
+    sequence::register(&sequence)?;
+    module.add_submodule(&sequence)?;
+
+    for name in ["trajectory", "validation", "motif", "chemistry", "spatial"] {
         module.add_submodule(&PyModule::new(py, name)?)?;
     }
     let formats = PyModule::new(py, "formats")?;
