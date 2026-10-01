@@ -31,6 +31,8 @@ mod sequence;
 mod spatial;
 #[cfg(feature = "surface")]
 mod surface;
+#[cfg(feature = "trajectory")]
+mod trajectory;
 #[cfg(feature = "validation")]
 mod validation;
 #[cfg(feature = "analysis")]
@@ -173,9 +175,12 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     spatial::register(&spatial)?;
     module.add_submodule(&spatial)?;
 
-    for name in ["trajectory", "motif"] {
-        module.add_submodule(&PyModule::new(py, name)?)?;
-    }
+    let trajectory = PyModule::new(py, "trajectory")?;
+    #[cfg(feature = "trajectory")]
+    trajectory::register(&trajectory)?;
+    module.add_submodule(&trajectory)?;
+
+    module.add_submodule(&PyModule::new(py, "motif")?)?;
     let formats = PyModule::new(py, "formats")?;
     formats::register(&formats)?;
     module.add_submodule(&formats)

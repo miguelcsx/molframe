@@ -1,3 +1,7 @@
 """Trajectory operations."""
 from .._native import trajectory as _native
-__all__: list[str] = []
+
+Trajectory = _native.Trajectory
+read = _native.read
+
+__all__ = ["Trajectory", "read"]
