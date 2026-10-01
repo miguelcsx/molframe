@@ -1,5 +1,7 @@
 from __future__ import annotations
-from typing import Protocol
+from typing import Literal, Protocol
+
+from .. import Analysis, AnalysisPolicy, Structure
 
 class ArrayColumn(Protocol):
     @property
@@ -16,3 +18,10 @@ class ContactTable:
     def distance(self) -> ArrayColumn: ...
 
 def atom_contacts(value: object, cutoff: float, *, backend: str = ...) -> ContactTable: ...
+def contacts(
+    structure: Structure,
+    cutoff: float,
+    *,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+) -> Analysis[ContactTable]: ...

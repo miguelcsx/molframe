@@ -18,7 +18,7 @@ mod analysis;
 #[cfg(feature = "analysis")]
 mod bonds;
 #[cfg(feature = "analysis")]
-pub(crate) use analysis::{PyContactTable, atom_contacts};
+pub(crate) use analysis::{PyContactTable, atom_contacts, contacts};
 
 #[derive(Clone, Debug)]
 #[pyclass(name = "Structure", frozen, skip_from_py_object)]

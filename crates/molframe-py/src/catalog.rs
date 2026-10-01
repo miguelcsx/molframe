@@ -317,6 +317,18 @@ pub(crate) const CAPABILITIES: &[Capability] = &[
         execution_needs: "cpu,memory",
         cost: molframe::Cost::Materialize,
     },
+    Capability {
+        name: "contacts",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure",
+        result: "Analysis",
+        policy: true,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,spatial,memory",
+        cost: molframe::Cost::Materialize,
+    },
 ];
 
 pub(crate) fn validate_registration(module: &Bound<'_, PyModule>) -> PyResult<()> {

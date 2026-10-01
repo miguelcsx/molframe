@@ -55,16 +55,18 @@ impl PyClashTable {
     }
 }
 
-/// Steric clashes: pairs overlapping by more than `tolerance` ångström.
+/// Steric clashes under an explicit policy: pairs overlapping by more than
+/// `tolerance` ångström, with status, coverage and provenance.
 #[pyfunction]
-#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", backend="auto"))]
+#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", backend="auto", policy=None))]
 fn clashes(
     py: Python<'_>,
     structure: &PyStructure,
     tolerance: f32,
     radii: &str,
     backend: &str,
-) -> PyResult<PyClashTable> {
+    policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
+) -> PyResult<crate::analysis_result::PyAnalysis> {
     if !tolerance.is_finite() || tolerance < 0.0 {
         return Err(PyValueError::new_err(
             "tolerance must be finite and non-negative",
@@ -72,19 +74,14 @@ fn clashes(
     }
     let set = crate::chemistry::radius_set(radii)?;
     let backend = crate::backend::parse(backend)?;
-    let structure = structure.inner.clone();
-    let table = py
-        .detach(move || {
-            molframe::validation::clashes(
-                structure.engine(),
-                tolerance,
-                set,
-                backend,
-                &molframe::ExecutionContext::default(),
-            )
-        })
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    Ok(PyClashTable { table })
+    let kernel = molframe::validation::clashes_kernel(tolerance, set, backend);
+    crate::governed::run(
+        py,
+        structure,
+        &crate::governed::policy_of(policy),
+        &kernel,
+        |py, table| Ok(Py::new(py, PyClashTable { table })?.into_any()),
+    )
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

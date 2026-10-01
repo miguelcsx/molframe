@@ -147,3 +147,29 @@ pub(crate) fn atom_contacts(
     .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
     PyContactTable::from_native(py, rows)
 }
+
+/// Atom contacts under an explicit policy, with status, coverage and provenance.
+#[pyfunction]
+#[pyo3(signature = (structure, cutoff, *, backend="auto", policy=None))]
+pub(crate) fn contacts(
+    py: Python<'_>,
+    structure: &PyStructure,
+    cutoff: f32,
+    backend: &str,
+    policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
+) -> PyResult<crate::analysis_result::PyAnalysis> {
+    let backend = crate::backend::parse(backend)?;
+    let kernel = molframe::analysis::contacts_kernel(cutoff, backend);
+    crate::governed::run(
+        py,
+        structure,
+        &crate::governed::policy_of(policy),
+        &kernel,
+        |py, table| {
+            Ok(PyContactTable::from_native(py, table)?
+                .into_pyobject(py)?
+                .into_any()
+                .unbind())
+        },
+    )
+}

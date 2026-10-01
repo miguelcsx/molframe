@@ -39,8 +39,8 @@ def test_per_atom_radii_feed_the_surface_kernels():
 
 def test_clashes_report_overlapping_pairs_only():
     structure = molframe.read(DATA / "basic.cif")
-    loose = molframe.validation.clashes(structure, tolerance=10.0)
-    tight = molframe.validation.clashes(structure, tolerance=0.0)
+    loose = molframe.validation.clashes(structure, tolerance=10.0).value
+    tight = molframe.validation.clashes(structure, tolerance=0.0).value
     assert len(tight) >= len(loose)
     assert len(loose) == len(loose.first) == len(loose.second) == len(loose.overlap)
     assert all(a < b for a, b in zip(tight.first, tight.second, strict=True))

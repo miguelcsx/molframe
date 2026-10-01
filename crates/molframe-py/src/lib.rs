@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod analysis_result;
 #[cfg(any(feature = "analysis", feature = "validation", feature = "spatial"))]
 mod backend;
 mod bindings;
@@ -17,6 +18,8 @@ mod compare;
 #[cfg(feature = "crystal")]
 mod crystal;
 mod formats;
+#[cfg(feature = "analysis")]
+mod governed;
 mod hierarchy;
 mod native_source;
 mod policy;
@@ -88,6 +91,7 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyModels>()?;
     module.add_class::<PySelection>()?;
     module.add_class::<policy::PyAnalysisPolicy>()?;
+    analysis_result::register(module)?;
     module.add_class::<PyQuery>()?;
     module.add(
         "QueryError",
@@ -128,6 +132,7 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "analysis")]
     {
         analysis.add_function(wrap_pyfunction!(atom_contacts, &analysis)?)?;
+        analysis.add_function(wrap_pyfunction!(bindings::contacts, &analysis)?)?;
         analysis.add("ContactTable", module.getattr("ContactTable")?)?;
     }
     module.add_submodule(&analysis)?;

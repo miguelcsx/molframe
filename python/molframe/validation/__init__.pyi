@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Literal, Protocol, final
 
-from .. import Structure
+from .. import Analysis, AnalysisPolicy, Structure
 
 class UInt32Array(Protocol):
     @property
@@ -27,4 +27,5 @@ def clashes(
     tolerance: float = 0.4,
     radii: Literal["bondi", "amber_united", "charmm", "alvarez"] = "bondi",
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
-) -> ClashTable: ...
+    policy: AnalysisPolicy | None = None,
+) -> Analysis[ClashTable]: ...

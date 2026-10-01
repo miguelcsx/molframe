@@ -4,9 +4,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from os import PathLike
 from types import ModuleType
-from typing import Literal, Protocol
+from typing import Generic, Literal, Protocol, TypeVar
 
 from . import sel as sel
+
+T_co = TypeVar("T_co", covariant=True)
 
 class Float32Array(Protocol):
     @property
@@ -15,6 +17,34 @@ class Float32Array(Protocol):
 class UInt32Array(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...
+
+class Coverage:
+    @property
+    def intended(self) -> int: ...
+    @property
+    def used(self) -> int: ...
+    @property
+    def missing(self) -> int: ...
+    @property
+    def ambiguous(self) -> int: ...
+    @property
+    def fraction(self) -> float: ...
+
+class Analysis(Generic[T_co]):
+    @property
+    def value(self) -> T_co: ...
+    @property
+    def status(self) -> Literal["complete", "partial", "ambiguous", "indeterminate"]: ...
+    @property
+    def coverage(self) -> Coverage: ...
+    @property
+    def warnings(self) -> list[str]: ...
+    @property
+    def assumptions(self) -> list[str]: ...
+    @property
+    def provenance(self) -> str: ...
+    @property
+    def profile(self) -> str | None: ...
 
 class AnalysisPolicy:
     def __init__(
