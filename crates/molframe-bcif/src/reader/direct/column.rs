@@ -139,7 +139,14 @@ struct BinaryAtomRow<'a> {
 
 impl BinaryAtomRow<'_> {
     fn value(&self, field: Field) -> Option<ValueRef<'_>> {
-        self.columns.column(field.item())?.value(self.row)
+        // A field's position in the row is its slot in the column table, which
+        // spares a name match on every access: lowering reads about fifteen
+        // fields per atom.
+        self.columns
+            .columns
+            .get(field.position())?
+            .as_ref()?
+            .value(self.row)
     }
 }
 
@@ -282,3 +289,7 @@ const FIELD_NAMES: [&str; FIELD_COUNT] = [
     "pdbx_formal_charge",
     "pdbx_PDB_model_num",
 ];
+
+#[cfg(test)]
+#[path = "column_tests.rs"]
+mod tests;
