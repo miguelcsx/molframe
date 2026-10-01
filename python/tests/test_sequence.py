@@ -49,7 +49,7 @@ def test_kmer_counts_count_repeats_and_reject_zero():
 
 
 @pytest.mark.parametrize(
-    "name", ["geometry", "surface", "compare", "sequence", "crystal", "analysis", "sel", "formats", "chemistry", "validation"]
+    "name", ["geometry", "surface", "compare", "sequence", "crystal", "analysis", "sel", "formats", "chemistry", "validation", "spatial"]
 )
 def test_every_domain_subpackage_imports_and_matches_the_root_attribute(name):
     import importlib

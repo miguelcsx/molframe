@@ -49,3 +49,31 @@ def test_clashes_report_overlapping_pairs_only():
         molframe.validation.clashes(structure, tolerance=-1.0)
     with pytest.raises(ValueError):
         molframe.validation.clashes(structure, backend="octree")
+
+
+def test_neighbor_pairs_agree_across_backends_and_match_brute_force():
+    rng = numpy.random.default_rng(7)
+    xyz = rng.uniform(0, 12, size=(200, 3)).astype(numpy.float32)
+    reference = None
+    for backend in ("auto", "cell", "kd_tree", "brute_force"):
+        first, second, distance = molframe.spatial.neighbor_pairs(xyz, 3.0, backend=backend)
+        pairs = list(zip(first.tolist(), second.tolist(), strict=True))
+        assert pairs == sorted(pairs) and all(a < b for a, b in pairs)
+        if reference is None:
+            reference = pairs
+        assert pairs == reference
+    delta = xyz[:, None, :] - xyz[None, :, :]
+    full = numpy.sqrt((delta**2).sum(-1))
+    expected = sorted(
+        (int(i), int(j)) for i in range(200) for j in range(i + 1, 200) if full[i, j] <= 3.0
+    )
+    assert reference == expected
+    assert numpy.all(distance <= 3.0 + 1e-4)
+
+
+def test_neighbor_pairs_reject_a_bad_cutoff_and_backend():
+    xyz = numpy.zeros((2, 3), dtype=numpy.float32)
+    with pytest.raises(ValueError):
+        molframe.spatial.neighbor_pairs(xyz, -1.0)
+    with pytest.raises(ValueError):
+        molframe.spatial.neighbor_pairs(xyz, 1.0, backend="octree")
