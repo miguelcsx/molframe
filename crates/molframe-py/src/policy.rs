@@ -220,3 +220,8 @@ pub(crate) fn select_compiled(
         molframe::Selection::from(view),
     ))
 }
+
+/// The policy a call names, or the default profile.
+pub(crate) fn policy_of(policy: Option<PyRef<'_, PyAnalysisPolicy>>) -> molframe::AnalysisPolicy {
+    policy.map_or_else(molframe::AnalysisPolicy::default, |policy| policy.0.clone())
+}

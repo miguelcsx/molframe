@@ -163,7 +163,7 @@ pub(crate) fn contacts(
     crate::governed::run(
         py,
         structure,
-        &crate::governed::policy_of(policy),
+        &crate::policy::policy_of(policy),
         &kernel,
         |py, table| {
             Ok(PyContactTable::from_native(py, table)?

@@ -78,7 +78,7 @@ fn clashes(
     crate::governed::run(
         py,
         structure,
-        &crate::governed::policy_of(policy),
+        &crate::policy::policy_of(policy),
         &kernel,
         |py, table| Ok(Py::new(py, PyClashTable { table })?.into_any()),
     )

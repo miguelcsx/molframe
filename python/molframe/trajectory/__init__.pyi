@@ -2,6 +2,8 @@ from __future__ import annotations
 from os import PathLike
 from typing import Literal, Protocol, final
 
+from .. import Analysis, AnalysisPolicy
+
 class Array(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...
@@ -26,3 +28,10 @@ def read(
     format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
     | None = None,
 ) -> Trajectory: ...
+def rmsd(
+    positions: Array,
+    *,
+    reference: int = 0,
+    align: bool = True,
+    policy: AnalysisPolicy | None = None,
+) -> Analysis[Array]: ...

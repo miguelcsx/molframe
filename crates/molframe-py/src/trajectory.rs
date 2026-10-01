@@ -1,7 +1,12 @@
 //! Mechanical adapters for reading whole trajectories into `NumPy` arrays.
 
-use molframe::trajectory::{TrajectoryFormat, TrajectoryReadOptions, read_trajectory_materialized};
-use numpy::{PyArray1, PyArray3, PyArrayMethods, PyUntypedArrayMethods};
+use crate::analysis_result::PyAnalysis;
+use crate::policy::PyAnalysisPolicy;
+use molframe::trajectory::{
+    FrameAlignment, FrameView, TrajectoryFormat, TrajectoryReadOptions,
+    analyse_rmsd_to_reference_view, read_trajectory_materialized,
+};
+use numpy::{PyArray1, PyArray3, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use std::path::PathBuf;
 
@@ -134,7 +139,48 @@ fn read(py: Python<'_>, path: PathBuf, format: Option<&str>) -> PyResult<PyTraje
     })
 }
 
+/// RMSD of every frame against one reference frame, with provenance.
+///
+/// `positions` has shape `(frames, atoms, 3)`. With `align=True` each frame is
+/// rigidly fitted onto the reference first, so the series measures shape change
+/// rather than drift and rotation.
+#[pyfunction]
+#[pyo3(signature = (positions, *, reference=0, align=true, policy=None))]
+fn rmsd(
+    py: Python<'_>,
+    positions: &Bound<'_, PyArray3<f32>>,
+    reference: usize,
+    align: bool,
+    policy: Option<PyRef<'_, PyAnalysisPolicy>>,
+) -> PyResult<PyAnalysis> {
+    let array = positions.readonly();
+    let shape = array.shape();
+    let flat = array.as_slice().map_err(|_| {
+        PyValueError::new_err("positions must be C-contiguous; call numpy.ascontiguousarray")
+    })?;
+    if shape[2] != 3 {
+        return Err(PyValueError::new_err(
+            "positions must have shape (frames, atoms, 3)",
+        ));
+    }
+    let view = FrameView::new(flat.as_chunks::<3>().0, shape[0], shape[1])
+        .map_err(|error| PyValueError::new_err(format!("{error:?}")))?;
+    let alignment = if align {
+        FrameAlignment::Rigid
+    } else {
+        FrameAlignment::None
+    };
+    let policy = crate::policy::policy_of(policy);
+    let analysis = py
+        .detach(|| analyse_rmsd_to_reference_view(view, reference, alignment, &policy))
+        .map_err(|error| PyValueError::new_err(format!("{error:?}")))?;
+    let series = analysis.value.to_pyarray(py);
+    series.readwrite().make_nonwriteable();
+    Ok(PyAnalysis::new(&analysis, series.into_any().unbind()))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyTrajectory>()?;
-    module.add_function(wrap_pyfunction!(read, module)?)
+    module.add_function(wrap_pyfunction!(read, module)?)?;
+    module.add_function(wrap_pyfunction!(rmsd, module)?)
 }

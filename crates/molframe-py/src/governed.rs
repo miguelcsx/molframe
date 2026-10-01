@@ -2,16 +2,11 @@
 
 use crate::analysis_result::PyAnalysis;
 use crate::bindings::PyStructure;
-use crate::policy::PyAnalysisPolicy;
+use crate::policy::{PyAnalysisPolicy, policy_of};
 use crate::table::TableBuilder;
 use molframe::analysis::{StructureKernel, analyse_structure};
 use pyo3::{exceptions::PyValueError, prelude::*};
 use std::fmt::Debug;
-
-/// The policy a call names, or the default profile.
-pub(crate) fn policy_of(policy: Option<PyRef<'_, PyAnalysisPolicy>>) -> molframe::AnalysisPolicy {
-    policy.map_or_else(molframe::AnalysisPolicy::default, |policy| policy.0.clone())
-}
 
 /// Runs `kernel` on the first model under `policy` and converts the value.
 ///
