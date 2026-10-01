@@ -26,7 +26,7 @@ def test_unknown_modes_and_positive_gap_costs_are_rejected():
     with pytest.raises(ValueError):
         molframe.sequence.align("A", "A", mode="banded")
     with pytest.raises(ValueError):
-        molframe.sequence.align("A", "A", gap_open=1)
+        molframe.sequence.Scoring(gap_open=1)
 
 
 def test_fasta_round_trips_and_strips_whitespace():

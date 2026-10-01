@@ -23,15 +23,31 @@ class FastaRecord:
     def sequence(self) -> str: ...
     def __len__(self) -> int: ...
 
+@final
+class Scoring:
+    def __init__(
+        self,
+        *,
+        match_score: int = 1,
+        mismatch_score: int = -1,
+        gap_open: int = -2,
+        gap_extend: int = -1,
+    ) -> None: ...
+    @property
+    def match_score(self) -> int: ...
+    @property
+    def mismatch_score(self) -> int: ...
+    @property
+    def gap_open(self) -> int: ...
+    @property
+    def gap_extend(self) -> int: ...
+
 def align(
     left: str,
     right: str,
     *,
     mode: Literal["global", "local", "semi_global"] = "global",
-    match_score: int = 1,
-    mismatch_score: int = -1,
-    gap_open: int = -2,
-    gap_extend: int = -1,
+    scoring: Scoring | None = None,
 ) -> Alignment: ...
 def parse_fasta(text: str) -> list[FastaRecord]: ...
 def write_fasta(records: Sequence[FastaRecord]) -> str: ...

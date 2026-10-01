@@ -69,7 +69,7 @@ impl PyAlignment {
 #[pyclass(
     name = "FastaRecord",
     frozen,
-    skip_from_py_object,
+    from_py_object,
     module = "molframe.sequence"
 )]
 struct PyFastaRecord {
@@ -118,30 +118,66 @@ impl PyFastaRecord {
     }
 }
 
+/// Match, mismatch and affine gap scores, validated once.
+#[derive(Clone, Copy, Debug)]
+#[pyclass(name = "Scoring", frozen, from_py_object, module = "molframe.sequence")]
+struct PyScoring(Scoring);
+
+#[pymethods]
+impl PyScoring {
+    #[new]
+    #[pyo3(signature = (*, match_score=1, mismatch_score=-1, gap_open=-2, gap_extend=-1))]
+    fn new(
+        match_score: i32,
+        mismatch_score: i32,
+        gap_open: i32,
+        gap_extend: i32,
+    ) -> PyResult<Self> {
+        if gap_open > 0 || gap_extend > 0 {
+            return Err(PyValueError::new_err(
+                "gap_open and gap_extend must be zero or negative",
+            ));
+        }
+        Ok(Self(Scoring {
+            match_score,
+            mismatch_score,
+            gap_open,
+            gap_extend,
+        }))
+    }
+
+    #[getter]
+    fn match_score(&self) -> i32 {
+        self.0.match_score
+    }
+
+    #[getter]
+    fn mismatch_score(&self) -> i32 {
+        self.0.mismatch_score
+    }
+
+    #[getter]
+    fn gap_open(&self) -> i32 {
+        self.0.gap_open
+    }
+
+    #[getter]
+    fn gap_extend(&self) -> i32 {
+        self.0.gap_extend
+    }
+}
+
 /// Aligns two sequences globally, locally or semi-globally.
 #[pyfunction]
-#[pyo3(signature = (left, right, *, mode="global", match_score=1, mismatch_score=-1, gap_open=-2, gap_extend=-1))]
+#[pyo3(signature = (left, right, *, mode="global", scoring=None))]
 fn align(
     py: Python<'_>,
     left: &str,
     right: &str,
     mode: &str,
-    match_score: i32,
-    mismatch_score: i32,
-    gap_open: i32,
-    gap_extend: i32,
+    scoring: Option<PyScoring>,
 ) -> PyResult<PyAlignment> {
-    let scoring = Scoring {
-        match_score,
-        mismatch_score,
-        gap_open,
-        gap_extend,
-    };
-    if gap_open > 0 || gap_extend > 0 {
-        return Err(PyValueError::new_err(
-            "gap_open and gap_extend must be zero or negative",
-        ));
-    }
+    let scoring = scoring.map_or_else(Scoring::simple, |value| value.0);
     let solve = match mode {
         "global" => seq::global,
         "local" => seq::local,
@@ -174,8 +210,8 @@ fn parse_fasta(text: &str) -> Vec<PyFastaRecord> {
 
 /// Writes records as FASTA text.
 #[pyfunction]
-fn write_fasta(records: Vec<PyRef<'_, PyFastaRecord>>) -> String {
-    let records: Vec<FastaRecord> = records.iter().map(|record| record.inner.clone()).collect();
+fn write_fasta(records: Vec<PyFastaRecord>) -> String {
+    let records: Vec<FastaRecord> = records.into_iter().map(|record| record.inner).collect();
     seq::write_fasta(&records)
 }
 
@@ -194,6 +230,7 @@ fn kmer_counts(sequence: &str, k: usize) -> PyResult<Vec<(String, u32)>> {
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyAlignment>()?;
     module.add_class::<PyFastaRecord>()?;
+    module.add_class::<PyScoring>()?;
     module.add_function(wrap_pyfunction!(align, module)?)?;
     module.add_function(wrap_pyfunction!(parse_fasta, module)?)?;
     module.add_function(wrap_pyfunction!(write_fasta, module)?)?;
