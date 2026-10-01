@@ -265,6 +265,31 @@ Analysis<T>
 
 This allows the value and the conditions under which it was produced to travel together.
 
+In Python this is `molframe.Analysis`, returned by the governed analyses, and the
+decisions are an `AnalysisPolicy` you pass in:
+
+```python
+import molframe
+
+structure = molframe.read("1abc.pdb")
+policy = molframe.AnalysisPolicy(altloc="highest_occupancy_per_residue", identifiers="label")
+
+result = molframe.analysis.contacts(structure, 4.5, policy=policy)
+result.status        # "complete" | "partial" | "ambiguous" | "indeterminate"
+result.coverage      # used / intended atoms, missing, ambiguous
+result.assumptions   # decisions made on your behalf
+result.provenance    # deterministic JSON: version, policy, parameters
+result.value         # the ContactTable
+
+structure.select("chain B", policy=policy)  # the same policy decides what "chain" means
+```
+
+`contacts`, `hydrogen_bonds`, `salt_bridges`, `validation.clashes` and
+`trajectory.rmsd` return an `Analysis`; the hydrogen-bond and salt-bridge
+analyses need charges and roles from a Chemical Component Dictionary, supplied
+with `molframe.chemistry.annotate(structure, "components.cif")`, and say so when
+they are missing.
+
 An analysis may also be **indeterminate** when the available structure does not support a scientifically defensible result.
 
 Producing no answer is preferable to silently producing a misleading one.
@@ -538,6 +563,27 @@ Differential verification against local Gemmi `97c808222f468f8188f2ed87266e0d7c5
 matched all 530 Hall settings over indices `[-4, 4]³` (386,370 reflections),
 plus 2,187 spacings in orthorhombic, triclinic and hexagonal cells. This covers
 these operations only, not general Gemmi feature parity or a speed comparison.
+
+### Structure factors
+
+With the `crystal` feature, `GaussianFormFactor::xray(element)` gives the
+International Tables (Cromer–Mann) form factor for hydrogen to californium, and
+`StructureFactorCalculator` sums atoms over the complete space group with
+occupancy and isotropic or anisotropic displacement. A structure supplies all of
+that itself, including the space group a legacy PDB `CRYST1` record names:
+
+```python
+import numpy, molframe
+
+structure = molframe.read("1orc.pdb")
+hkl = numpy.array([[1, 2, 3], [0, 4, 0]], dtype=numpy.int32)
+f = molframe.crystal.structure_factors(structure, hkl)   # complex128, one per row
+```
+
+Verified against Gemmi 0.7.5 on P 21 21 21, P 1 21 1 (anisotropic) and I 2 2 2:
+agreement to about 1e-5 relative, limited by Gemmi's single-precision
+coefficients. Anomalous dispersion, neutron and electron tables, and ions are not
+yet covered.
 
 ## Rust features
 
