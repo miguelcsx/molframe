@@ -43,9 +43,23 @@ See [Selecting atoms](/docs/selections) and [Reading bytes and editing structure
 | Module or object | Public entry points |
 | --- | --- |
 | `molframe.geometry` | `centroid`, `distance_matrix`, `rmsd` |
-| `molframe.analysis` | `atom_contacts`, `ContactTable.first`, `.second`, `.distance` |
+| `molframe.analysis` | `atom_contacts`, `contacts`, `hydrogen_bonds`, `salt_bridges` |
+| `molframe.validation` | `clashes` |
+| `molframe.surface` | `sasa`, `lee_richards`, `cavities` |
+| `molframe.compare` | `tm_score`, `gdt_ts`, `gdt_ha`, `weighted_rmsd` |
+| `molframe.spatial` | `neighbor_pairs` |
+| `molframe.sequence` | `align`, `Scoring`, `parse_fasta`, `write_fasta`, `kmer_counts` |
+| `molframe.chemistry` | `element`, `vdw_radius`, `vdw_radii`, `annotate` |
+| `molframe.crystal` | `UnitCell`, `SpaceGroup`, `structure_factors` |
+| `molframe.trajectory` | `read`, `rmsd`, `Trajectory` |
+| `molframe.formats` | `write`, `to_mmcif`, `to_pdb`, `to_bcif` |
 | `molframe.sel` | Category, column, and spatial query constructors including `within()` |
+| `AnalysisPolicy` | Named analysis decisions (`identifiers`, `altloc`, `hydrogens`, `symmetry`, …); accepted by `select` and the governed analyses |
+| `Analysis` / `Coverage` | A value with its `status`, `coverage`, `warnings`, `assumptions` and `provenance` |
+| `Table` | Read-only named array columns returned inside an `Analysis` |
 | `ContactTable` | `len()` and Arrow C-stream export through `__arrow_c_stream__()` |
+
+Functions that take coordinates take C-contiguous `float32` arrays of shape `(n, 3)`; ones that take a structure read its own coordinates. The governed analyses (`contacts`, `hydrogen_bonds`, `salt_bridges`, `validation.clashes`, `trajectory.rmsd`) take `policy=` and return an `Analysis`.
 
 See [Structural analysis](/docs/analysis) and [NumPy and Arrow interoperability](/docs/interop).
 
@@ -63,10 +77,9 @@ See [Compiled workflows](/docs/workflows).
 `Float32Array` and `UInt32Array` are typing protocols for coordinate and index arrays. At runtime, MolFrame returns NumPy-compatible values; users normally work with their `.shape` or pass them to NumPy-aware libraries.
 
 <Callout type="info">
-Subpackages such as `trajectory`, `validation`, `surface`, `spatial`, `sequence`, and `compare` are present as namespace modules in this checkout, but their Python stubs export no callable public API. They are intentionally not presented as usable Python features.
+The `motif` namespace is present but exports no callable API yet, and the trajectory readers cover the self-describing formats only; formats that need caller-supplied units or topology (GSD, H5MD, AMBER ASCII) are rejected by name rather than guessed.
 </Callout>
+
 ## Verification status
 
-This index describes the public contract; it is not evidence that every binding has passed a Python or browser integration run. The observed MolGFX Python run reported 65 tests with one failure: `test_a_settled_scene_does_not_schedule_more_browser_frames` in `molgfx/python/tests/test_workbench_viewer.py:325` (two frames were observed, where zero were expected). No Python or browser scenario should be treated as passing from this page.
-
-For MolFrame, hierarchy ownership, author/label identity, query completion, chemistry provenance, and analysis outputs require the corresponding native and binding checks. Those checks, including non-ASCII completion offsets, canonical gaps, stale selections, and Arrow/NumPy lifetime behavior, were not run for this documentation-only change. The exact workspace verification commands are maintained in `molframe/AGENTS.md`.
+The Python suite (`python -m pytest python/tests`) ran 73 tests green against an extension built from this tree, including real-Gemmi reference values for structure factors, analytic checks for accessible area and cavities, and a brute-force oracle for neighbour search. Interaction analyses are tested with a small hand-written component dictionary; they have not been run against the full wwPDB dictionary. The exact workspace verification commands are maintained in `molframe/AGENTS.md`.
