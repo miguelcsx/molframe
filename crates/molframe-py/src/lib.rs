@@ -8,6 +8,8 @@
 
 mod bindings;
 mod catalog;
+#[cfg(feature = "compare")]
+mod compare;
 #[cfg(feature = "crystal")]
 mod crystal;
 mod hierarchy;
@@ -18,6 +20,8 @@ mod query_cache;
 mod query_messages;
 #[cfg(feature = "query")]
 mod selection_expr;
+#[cfg(feature = "surface")]
+mod surface;
 #[cfg(feature = "analysis")]
 mod workflow;
 
@@ -128,15 +132,23 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     crystal::register(&crystal)?;
     module.add_submodule(&crystal)?;
 
+    let compare = PyModule::new(py, "compare")?;
+    #[cfg(feature = "compare")]
+    compare::register(&compare)?;
+    module.add_submodule(&compare)?;
+
+    let surface = PyModule::new(py, "surface")?;
+    #[cfg(feature = "surface")]
+    surface::register(&surface)?;
+    module.add_submodule(&surface)?;
+
     for name in [
         "trajectory",
         "sequence",
         "validation",
         "motif",
         "chemistry",
-        "compare",
         "spatial",
-        "surface",
     ] {
         module.add_submodule(&PyModule::new(py, name)?)?;
     }

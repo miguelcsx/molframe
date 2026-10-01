@@ -1,3 +1,4 @@
 """Molecular surface operations."""
-from .._native import surface as _native
-__all__: list[str] = []
+from .._native.surface import cavities, lee_richards, sasa
+
+__all__ = ["cavities", "lee_richards", "sasa"]
