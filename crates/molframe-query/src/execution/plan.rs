@@ -102,14 +102,19 @@ fn lower(
 
 /// Folds and cost-orders one binary conjunction.
 ///
-/// Existing ordering semantics are retained: operands are exchanged only when
-/// the right-hand side has strictly lower estimated cost.
+/// The right operand is evaluated inside the left operand's result, so operands
+/// are exchanged only when the right-hand side has strictly lower estimated
+/// cost *and* both read nothing but the atom they test. Exchanging an operand
+/// that reads its surroundings (`within`, `byres`, `bonded`, ...) would change
+/// what it sees and therefore the answer: `within 4 of X and not X` selects the
+/// shell around `X`, while its mirror would test `X` against a universe that
+/// already excludes it.
 fn conjunction(left: PhysicalExpr, right: PhysicalExpr) -> PhysicalExpr {
     match (left, right) {
         (PhysicalExpr::None, _) | (_, PhysicalExpr::None) => PhysicalExpr::None,
         (PhysicalExpr::All, right) => right,
         (left, PhysicalExpr::All) => left,
-        (left, right) if cost(&right) < cost(&left) => {
+        (left, right) if cost(&right) < cost(&left) && atom_local(&left) && atom_local(&right) => {
             PhysicalExpr::And(Box::new(right), Box::new(left))
         }
         (left, right) => PhysicalExpr::And(Box::new(left), Box::new(right)),
@@ -123,6 +128,35 @@ fn disjunction(left: PhysicalExpr, right: PhysicalExpr) -> PhysicalExpr {
         (PhysicalExpr::None, right) => right,
         (left, PhysicalExpr::None) => left,
         (left, right) => PhysicalExpr::Or(Box::new(left), Box::new(right)),
+    }
+}
+
+/// Whether the expression's answer for one atom is independent of the universe
+/// it is evaluated in, so its position in a conjunction cannot change results.
+fn atom_local(expr: &PhysicalExpr) -> bool {
+    match expr {
+        PhysicalExpr::All | PhysicalExpr::None | PhysicalExpr::ResolvedMembership { .. } => true,
+        PhysicalExpr::And(left, right) | PhysicalExpr::Or(left, right) => {
+            atom_local(left) && atom_local(right)
+        }
+        PhysicalExpr::Not(target) => atom_local(target),
+        PhysicalExpr::Logical(logical) => logical_atom_local(logical),
+    }
+}
+
+fn logical_atom_local(expr: &Expr) -> bool {
+    match expr {
+        Expr::All
+        | Expr::None
+        | Expr::Comparison { .. }
+        | Expr::Membership { .. }
+        | Expr::Group(_)
+        | Expr::Atom { .. } => true,
+        Expr::And(left, right) | Expr::Or(left, right) => {
+            logical_atom_local(left) && logical_atom_local(right)
+        }
+        Expr::Not(target) => logical_atom_local(target),
+        _ => false,
     }
 }
 
