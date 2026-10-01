@@ -59,3 +59,29 @@ A skipped WebGPU backend, unavailable notebook host, provider outage, or
 missing redistributable chemistry resource must be recorded as a limitation;
 none converts a partial row into an exercised row. Keep implementation notes in
 the owning module and keep this page limited to acceptance evidence and status.
+
+## Measured performance against the specification targets
+
+Release build on an Apple M5 Pro, Criterion with warm-up, revision `787a0a7` plus
+the selection scans described below. Inputs are the embedded 1AON (58,870 atoms),
+4HHB and smaller structures. Linear scaling to 100,000 atoms is stated as
+extrapolation, not as a measurement.
+
+| Target | Measured | Verdict |
+| --- | --- | --- |
+| mmCIF read to a `Structure` above 200 MB/s | 198–211 MiB/s (1CRN, 1UBQ, 4HHB) | Met at the margin; it includes building the structure |
+| BinaryCIF container parse above 1 GB/s | 0.37–4.4 GiB/s (1CRN to 1AON) | Met for the larger inputs |
+| BinaryCIF read to a `Structure` above 1 GB/s | 0.19–0.30 GiB/s of encoded input | Not met |
+| Topological selection, 100,000 atoms, under 1 ms | `chain A` 0.014 ms, `bfactor > 20` 0.31 ms on 58,870 atoms | Met |
+| SASA, 100,000 atoms, 960 points, under 2 s | 94 ms on 58,870 atoms | Met (about 160 ms extrapolated) |
+| Radius query, 100,000 atoms, 5 Å, under 100 µs | Not isolated; a within-5-Å query that includes target selection takes about 1.0 ms on the 4,400-atom 4HHB | Not measured separately |
+| Cell-list build, 100,000 atoms, under 5 ms | The build is lazy, so a construct-only timing reads zero | Not measured |
+| Python import under 50 ms | Not measured on a release wheel | Not measured |
+
+Column predicates used to cost one hierarchy walk and a binary search per atom.
+Residue- and chain-level predicates now decide once per residue and return runs,
+and the thresholded `bfactor` and `occupancy` columns read each chunk directly.
+On 58,870 atoms `chain A` fell from 1.05 ms to 0.014 ms and `bfactor > 20` from
+0.72 ms to 0.31 ms; on 4HHB the typed and textual selection benchmarks fell from
+44 µs and 93 µs to 17 µs. `bfactor > 20` keeps most atoms, so the rest of its
+cost is building the selection rather than comparing values.
