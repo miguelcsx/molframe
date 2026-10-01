@@ -1,9 +1,17 @@
 from collections.abc import Sequence
-from typing import Protocol, final
+from typing import Literal, Protocol, Self, final
 
 from .. import Structure
 
 class IntArray(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
+class FloatArray(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
+class IntArray64(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...
 
@@ -43,6 +51,32 @@ class AssemblyInstance:
     @property
     def chains(self) -> list[str]: ...
 
+@final
+class ResolutionBins:
+    def __new__(
+        cls,
+        cell: UnitCell,
+        hkl: IntArray,
+        *,
+        bins: int = 20,
+        method: Literal["equal_count", "dstar", "dstar2", "dstar3"] = "equal_count",
+    ) -> Self: ...
+    def __len__(self) -> int: ...
+    @property
+    def limits(self) -> FloatArray: ...
+    @property
+    def midpoints(self) -> FloatArray: ...
+    def indices(self, inverse_d2: FloatArray) -> IntArray64: ...
+    def d_min(self, bin: int) -> float: ...
+    def d_max(self, bin: int) -> float: ...
+
+def normalizers(
+    cell: UnitCell,
+    space_group: SpaceGroup,
+    hkl: IntArray,
+    amplitudes: FloatArray,
+    bins: ResolutionBins,
+) -> FloatArray: ...
 def assemblies(structure: Structure) -> list[str]: ...
 def assembly(structure: Structure, id: str) -> list[AssemblyInstance]: ...
 def structure_factors(structure: Structure, hkl: IntArray) -> ComplexArray: ...

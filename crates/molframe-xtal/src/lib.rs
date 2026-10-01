@@ -22,6 +22,7 @@ mod mtz;
 mod ncs;
 mod numeric;
 mod reflection;
+mod reflection_binning;
 mod reflection_cif;
 mod reflection_symmetry;
 mod restraints;
@@ -65,6 +66,9 @@ pub use ncs::{
 pub use reflection::{
     ReflectionColumn, ReflectionColumnType, ReflectionDataset, ReflectionError, ReflectionTable,
     ReflectionValue,
+};
+pub use reflection_binning::{
+    BinMethod, ReflectionBinningError, ResolutionBinner, amplitude_normalizers,
 };
 pub use reflection_cif::{lower_structure_factor_cif, write_structure_factor_cif};
 pub use reflection_symmetry::ReflectionSymmetry;

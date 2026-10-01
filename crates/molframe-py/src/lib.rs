@@ -17,6 +17,8 @@ mod chemistry;
 mod compare;
 #[cfg(feature = "crystal")]
 mod crystal;
+#[cfg(feature = "crystal")]
+mod crystal_statistics;
 mod formats;
 #[cfg(feature = "analysis")]
 mod governed;

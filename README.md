@@ -585,6 +585,25 @@ agreement to about 1e-5 relative, limited by Gemmi's single-precision
 coefficients. Anomalous dispersion, neutron and electron tables, and ions are not
 yet covered.
 
+Resolution shells and normalized amplitudes follow Gemmi's `Binner` and
+`calculate_amplitude_normalizers`. The shells come in four spacings
+(`equal_count`, `dstar`, `dstar2`, `dstar3`); a normalizer is
+`1/(sqrt(epsilon) * rms)` per reflection, where `rms` is the shell mean of
+`F**2 / epsilon` smoothed over neighbouring shells and interpolated in `1/d**2`,
+so `E = F * multiplier`:
+
+```python
+cell = molframe.crystal.UnitCell([31.5, 40.2, 52.7], [80.0, 101.3, 95.0])
+group = molframe.crystal.SpaceGroup(1)                      # Hall number 1, P 1
+bins = molframe.crystal.ResolutionBins(cell, hkl, bins=12, method="dstar3")
+e = amplitudes * molframe.crystal.normalizers(cell, group, hkl, amplitudes, bins)
+```
+
+Dstar-spaced shells and the multipliers agree with Gemmi 0.7.5 to about 1e-15
+relative in P 1 21 1, P 21 21 21, C 1 2 1 and P 1. Equal-count shells have the
+same limits, but a reflection whose `1/d**2` lies within an ulp of a limit can
+fall in the neighbouring shell, which moves other multipliers by about 1e-3.
+
 ## Rust features
 
 The Rust facade is modular.

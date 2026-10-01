@@ -14,7 +14,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
     skip_from_py_object,
     module = "molframe.crystal"
 )]
-struct PyUnitCell(CellTransform);
+pub(crate) struct PyUnitCell(pub(crate) CellTransform);
 
 #[pymethods]
 impl PyUnitCell {
@@ -45,7 +45,7 @@ impl PyUnitCell {
     skip_from_py_object,
     module = "molframe.crystal"
 )]
-struct PySpaceGroup(SymmetrySet);
+pub(crate) struct PySpaceGroup(pub(crate) SymmetrySet);
 
 #[pymethods]
 impl PySpaceGroup {
@@ -166,12 +166,11 @@ impl PyAssemblyInstance {
 /// Identifiers of the biological assemblies a structure declares.
 #[pyfunction]
 fn assemblies(structure: &PyStructure) -> Vec<String> {
-    structure
-        .inner
-        .engine()
-        .assembly_set()
-        .map(|set| set.assemblies().map(|each| each.id.to_string()).collect())
-        .unwrap_or_default()
+    match structure.inner.engine().assembly_set() {
+        Some(set) => set.assemblies().map(|each| each.id.to_string()).collect(),
+        // A structure that declares no assemblies has none to list.
+        None => Vec::new(),
+    }
 }
 
 /// The placements that make up one biological assembly.
@@ -222,5 +221,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(structure_factors, module)?)?;
     module.add_class::<PyUnitCell>()?;
     module.add_class::<PySpaceGroup>()?;
-    module.add_class::<PyReflectionSymmetry>()
+    module.add_class::<PyReflectionSymmetry>()?;
+    crate::crystal_statistics::register(module)
 }
