@@ -329,6 +329,30 @@ pub(crate) const CAPABILITIES: &[Capability] = &[
         execution_needs: "cpu,spatial,memory",
         cost: molframe::Cost::Materialize,
     },
+    Capability {
+        name: "hydrogen_bonds",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure",
+        result: "Analysis",
+        policy: true,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,spatial,memory",
+        cost: molframe::Cost::Materialize,
+    },
+    Capability {
+        name: "salt_bridges",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure",
+        result: "Analysis",
+        policy: true,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,spatial,memory",
+        cost: molframe::Cost::Materialize,
+    },
 ];
 
 pub(crate) fn validate_registration(module: &Bound<'_, PyModule>) -> PyResult<()> {

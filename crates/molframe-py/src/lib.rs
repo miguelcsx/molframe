@@ -35,6 +35,7 @@ mod sequence;
 mod spatial;
 #[cfg(feature = "surface")]
 mod surface;
+mod table;
 #[cfg(feature = "trajectory")]
 mod trajectory;
 #[cfg(feature = "validation")]
@@ -92,6 +93,7 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PySelection>()?;
     module.add_class::<policy::PyAnalysisPolicy>()?;
     analysis_result::register(module)?;
+    module.add_class::<table::PyTable>()?;
     module.add_class::<PyQuery>()?;
     module.add(
         "QueryError",
@@ -133,6 +135,8 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     {
         analysis.add_function(wrap_pyfunction!(atom_contacts, &analysis)?)?;
         analysis.add_function(wrap_pyfunction!(bindings::contacts, &analysis)?)?;
+        analysis.add_function(wrap_pyfunction!(governed::hydrogen_bonds, &analysis)?)?;
+        analysis.add_function(wrap_pyfunction!(governed::salt_bridges, &analysis)?)?;
         analysis.add("ContactTable", module.getattr("ContactTable")?)?;
     }
     module.add_submodule(&analysis)?;

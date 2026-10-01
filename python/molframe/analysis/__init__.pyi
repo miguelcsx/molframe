@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Literal, Protocol
 
-from .. import Analysis, AnalysisPolicy, Structure
+from .. import Analysis, AnalysisPolicy, Structure, Table
 
 class ArrayColumn(Protocol):
     @property
@@ -25,3 +25,18 @@ def contacts(
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
 ) -> Analysis[ContactTable]: ...
+def hydrogen_bonds(
+    structure: Structure,
+    *,
+    max_distance: float = 3.5,
+    min_angle: float = 120.0,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+) -> Analysis[Table]: ...
+def salt_bridges(
+    structure: Structure,
+    *,
+    max_distance: float = 4.0,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+) -> Analysis[Table]: ...

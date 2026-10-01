@@ -1,4 +1,5 @@
 from __future__ import annotations
+from os import PathLike
 from typing import Literal, Protocol, final
 
 from .. import Structure
@@ -31,3 +32,9 @@ class ElementProperties:
 def element(symbol: str) -> ElementProperties: ...
 def vdw_radius(symbol: str, *, radii: _RadiusSet = "bondi") -> float | None: ...
 def vdw_radii(structure: Structure, *, radii: _RadiusSet = "bondi") -> Float32Array: ...
+def annotate(
+    structure: Structure,
+    components: str | PathLike[str],
+    *,
+    version: str = "unversioned",
+) -> Structure: ...

@@ -1,10 +1,11 @@
 //! Mechanical adapters for element data and per-atom radii.
 
-use crate::bindings::PyStructure;
+use crate::bindings::{PyStructure, findings_error};
 use molframe::Element;
 use molframe::chemistry::{self as chem, RadiusSet};
 use numpy::{PyArray1, ToPyArray};
 use pyo3::{exceptions::PyValueError, prelude::*};
+use std::path::PathBuf;
 
 pub(crate) fn radius_set(name: &str) -> PyResult<RadiusSet> {
     match name {
@@ -125,9 +126,62 @@ fn vdw_radii<'py>(
     Ok(values.to_pyarray(py))
 }
 
+/// Applies a Chemical Component Dictionary to a structure.
+///
+/// Adds the dictionary's internal bonds and the per-atom roles (charge,
+/// hydrogen-bond donor and acceptor, aromaticity, component kind) that the
+/// interaction analyses need. File connectivity is kept. Components the
+/// dictionary lacks are reported as one warning, not an error.
+#[pyfunction]
+#[pyo3(signature = (structure, components, *, version="unversioned"))]
+fn annotate(
+    py: Python<'_>,
+    structure: &PyStructure,
+    components: PathBuf,
+    version: &str,
+) -> PyResult<PyStructure> {
+    let source = structure.inner.clone();
+    let version = molframe::DictionaryVersion::new(version);
+    let report = py.detach(move || {
+        let (provider, _) = molframe::read_component_dictionary(&components, version)
+            .map_err(|findings| findings_error(&findings))?;
+        chem::apply_component_chemistry(
+            source.engine(),
+            &provider,
+            chem::PolymerLinkPolicy::Disabled,
+        )
+        .map_err(|diagnostic| PyValueError::new_err(diagnostic.to_string()))
+    })?;
+    if !report.findings.is_empty() {
+        let first: Vec<String> = report
+            .findings
+            .iter()
+            .take(3)
+            .map(ToString::to_string)
+            .collect();
+        PyErr::warn(
+            py,
+            &py.get_type::<pyo3::exceptions::PyUserWarning>(),
+            &std::ffi::CString::new(
+                format!(
+                    "{} component finding(s), e.g. {}",
+                    report.findings.len(),
+                    first.join("; ")
+                )
+                .replace('\0', " "),
+            )?,
+            1,
+        )?;
+    }
+    Ok(PyStructure::new(molframe::Structure::from(
+        report.structure,
+    )))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyElementProperties>()?;
     module.add_function(wrap_pyfunction!(element, module)?)?;
     module.add_function(wrap_pyfunction!(vdw_radius, module)?)?;
-    module.add_function(wrap_pyfunction!(vdw_radii, module)?)
+    module.add_function(wrap_pyfunction!(vdw_radii, module)?)?;
+    module.add_function(wrap_pyfunction!(annotate, module)?)
 }
