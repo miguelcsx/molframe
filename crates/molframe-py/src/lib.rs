@@ -12,6 +12,7 @@ mod catalog;
 mod compare;
 #[cfg(feature = "crystal")]
 mod crystal;
+mod formats;
 mod hierarchy;
 mod native_source;
 #[cfg(feature = "query")]
@@ -153,9 +154,7 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
         module.add_submodule(&PyModule::new(py, name)?)?;
     }
     let formats = PyModule::new(py, "formats")?;
-    for name in ["cif", "bcif", "pdb", "modelcif"] {
-        formats.add_submodule(&PyModule::new(py, name)?)?;
-    }
+    formats::register(&formats)?;
     module.add_submodule(&formats)
 }
 
