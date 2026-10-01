@@ -2,6 +2,7 @@
 
 use crate::bindings::PyStructure;
 use molframe::UnitCell;
+use molframe::crystal::{AssemblyExt as _, AssemblyView};
 use molframe::crystal::{CellTransform, ReflectionSymmetry, SymmetrySet, space_group_setting};
 use numpy::{Complex64, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::{exceptions::PyValueError, prelude::*};
@@ -130,7 +131,94 @@ fn structure_factors<'py>(
     Ok(values.to_pyarray(py))
 }
 
+/// One placement of an assembly: a transform and the chains it applies to.
+#[derive(Clone, Debug)]
+#[pyclass(
+    name = "AssemblyInstance",
+    frozen,
+    skip_from_py_object,
+    module = "molframe.crystal"
+)]
+struct PyAssemblyInstance {
+    matrix: [f64; 16],
+    chains: Vec<String>,
+}
+
+#[pymethods]
+impl PyAssemblyInstance {
+    /// Column-major 4×4 affine matrix in ångström.
+    #[getter]
+    fn matrix(&self) -> Vec<f64> {
+        self.matrix.to_vec()
+    }
+
+    /// `label_asym_id` of every chain the transform applies to.
+    #[getter]
+    fn chains(&self) -> Vec<String> {
+        self.chains.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("AssemblyInstance(chains={})", self.chains.join(","))
+    }
+}
+
+/// Identifiers of the biological assemblies a structure declares.
+#[pyfunction]
+fn assemblies(structure: &PyStructure) -> Vec<String> {
+    structure
+        .inner
+        .engine()
+        .assembly_set()
+        .map(|set| set.assemblies().map(|each| each.id.to_string()).collect())
+        .unwrap_or_default()
+}
+
+/// The placements that make up one biological assembly.
+///
+/// Each carries a transform and the chains it applies to; the transform of
+/// every chain is the product of the operators the entry lists for it.
+#[pyfunction]
+fn assembly(structure: &PyStructure, id: &str) -> PyResult<Vec<PyAssemblyInstance>> {
+    let engine = structure.inner.engine();
+    let set = engine
+        .assembly_set()
+        .ok_or_else(|| PyValueError::new_err("the structure declares no biological assemblies"))?;
+    let view = AssemblyView::new(engine, set, id)
+        .map_err(|diagnostic| PyValueError::new_err(diagnostic.to_string()))?;
+    view.groups_by_transform()
+        .into_iter()
+        .map(|(transform, chains)| {
+            let mut matrix = [0.0_f64; 16];
+            for column in 0..3 {
+                for row in 0..3 {
+                    matrix[column * 4 + row] = transform.rotation[row][column];
+                }
+            }
+            matrix[12..15].copy_from_slice(&transform.translation);
+            matrix[15] = 1.0;
+            let labels = chains
+                .into_iter()
+                .map(|chain| {
+                    engine
+                        .chain(chain)
+                        .and_then(molframe::ChainRef::label)
+                        .map(str::to_owned)
+                        .ok_or_else(|| PyValueError::new_err("an assembly chain has no label"))
+                })
+                .collect::<PyResult<Vec<_>>>()?;
+            Ok(PyAssemblyInstance {
+                matrix,
+                chains: labels,
+            })
+        })
+        .collect()
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<PyAssemblyInstance>()?;
+    module.add_function(wrap_pyfunction!(assemblies, module)?)?;
+    module.add_function(wrap_pyfunction!(assembly, module)?)?;
     module.add_function(wrap_pyfunction!(structure_factors, module)?)?;
     module.add_class::<PyUnitCell>()?;
     module.add_class::<PySpaceGroup>()?;

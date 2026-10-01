@@ -166,6 +166,26 @@ impl AssemblyView {
         })
     }
 
+    /// Chain copies grouped by the transform that produced them.
+    ///
+    /// Each group is one placement of the deposited structure and lists the
+    /// source chains it applies to; groups appear in the order their transform
+    /// first occurs, and chains in assembly declaration order.
+    #[must_use]
+    pub fn groups_by_transform(&self) -> Vec<(Rigid, Vec<ChainIndex>)> {
+        let mut groups: Vec<(Rigid, Vec<ChainIndex>)> = Vec::new();
+        for instance in self.chains() {
+            match groups
+                .iter_mut()
+                .find(|(known, _)| *known == instance.transform)
+            {
+                Some((_, chains)) => chains.push(instance.source_chain),
+                None => groups.push((instance.transform, vec![instance.source_chain])),
+            }
+        }
+        groups
+    }
+
     /// Generated atoms in chain-instance then source-atom order.
     pub fn atoms(&self) -> impl Iterator<Item = AtomInstance> + '_ {
         self.instances.iter().flat_map(|instance| {

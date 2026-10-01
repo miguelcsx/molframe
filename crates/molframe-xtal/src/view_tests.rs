@@ -113,3 +113,24 @@ fn assert_near(actual: [f32; 3], expected: [f32; 3]) {
         "{actual:?} != {expected:?}"
     );
 }
+
+#[test]
+fn chains_are_grouped_by_the_transform_that_placed_them() {
+    let structure = attached(ENTRY);
+    let view = match structure.assembly("1") {
+        Ok(view) => view,
+        Err(finding) => panic!("assembly failed: {finding}"),
+    };
+    let groups = view.groups_by_transform();
+    let placed: usize = groups.iter().map(|(_, chains)| chains.len()).sum();
+    assert_eq!(placed, view.instance_count());
+    assert!(!groups.is_empty());
+    for (index, (transform, _)) in groups.iter().enumerate() {
+        assert!(
+            groups[..index]
+                .iter()
+                .all(|(earlier, _)| earlier != transform),
+            "a transform appears in two groups"
+        );
+    }
+}
