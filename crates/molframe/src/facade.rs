@@ -31,6 +31,8 @@ pub use formats::{write_bcif, write_bcif_with_options};
 mod cif_family;
 #[cfg(feature = "mmcif")]
 mod extensions;
+#[cfg(feature = "pdb")]
+mod pdb_symmetry;
 // The enum holds one variant per format crate, so with none of them linked it
 // would be an empty type whose `next_batch` match has no arms to reach. The
 // module is gated by the same four features that gate its variants, rather
@@ -366,7 +368,7 @@ fn dispatch_read(
         Format::BinaryCif => read_bcif_buffer(input, options),
         #[cfg(feature = "pdb")]
         Format::Pdb => molframe_pdb::read(input, options)
-            .map(|(structure, findings)| extensions::attach_pdb_symmetry(structure, findings))
+            .map(|(structure, findings)| pdb_symmetry::attach_pdb_symmetry(structure, findings))
             .map_err(Findings::from),
         #[cfg(feature = "pdb")]
         Format::Mmtf => molframe_pdb::read_mmtf(input, options).map_err(Findings::from),
