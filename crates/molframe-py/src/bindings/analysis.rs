@@ -114,7 +114,7 @@ pub(crate) fn atom_contacts(
     cutoff: f32,
     backend: &str,
 ) -> PyResult<PyContactTable> {
-    let backend = parse_backend(backend)?;
+    let backend = crate::backend::parse(backend)?;
     let rows = if let Ok(structure) = value.extract::<PyRef<'_, PyStructure>>() {
         let structure = structure.inner.clone();
         py.detach(move || {
@@ -146,16 +146,4 @@ pub(crate) fn atom_contacts(
     }
     .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
     PyContactTable::from_native(py, rows)
-}
-
-fn parse_backend(value: &str) -> PyResult<molframe::spatial::SpatialBackend> {
-    match value {
-        "auto" => Ok(molframe::spatial::SpatialBackend::Auto),
-        "cell" => Ok(molframe::spatial::SpatialBackend::CellList),
-        "kd_tree" => Ok(molframe::spatial::SpatialBackend::KdTree),
-        "brute_force" => Ok(molframe::spatial::SpatialBackend::BruteForce),
-        _ => Err(pyo3::exceptions::PyValueError::new_err(
-            "backend must be 'auto', 'cell', 'kd_tree', or 'brute_force'",
-        )),
-    }
 }

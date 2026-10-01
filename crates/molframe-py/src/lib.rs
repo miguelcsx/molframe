@@ -6,8 +6,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+#[cfg(any(feature = "analysis", feature = "validation"))]
+mod backend;
 mod bindings;
 mod catalog;
+#[cfg(feature = "chemistry")]
+mod chemistry;
 #[cfg(feature = "compare")]
 mod compare;
 #[cfg(feature = "crystal")]
@@ -25,6 +29,8 @@ mod selection_expr;
 mod sequence;
 #[cfg(feature = "surface")]
 mod surface;
+#[cfg(feature = "validation")]
+mod validation;
 #[cfg(feature = "analysis")]
 mod workflow;
 
@@ -150,7 +156,17 @@ fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> {
     sequence::register(&sequence)?;
     module.add_submodule(&sequence)?;
 
-    for name in ["trajectory", "validation", "motif", "chemistry", "spatial"] {
+    let chemistry = PyModule::new(py, "chemistry")?;
+    #[cfg(feature = "chemistry")]
+    chemistry::register(&chemistry)?;
+    module.add_submodule(&chemistry)?;
+
+    let validation = PyModule::new(py, "validation")?;
+    #[cfg(feature = "validation")]
+    validation::register(&validation)?;
+    module.add_submodule(&validation)?;
+
+    for name in ["trajectory", "motif", "spatial"] {
         module.add_submodule(&PyModule::new(py, name)?)?;
     }
     let formats = PyModule::new(py, "formats")?;
