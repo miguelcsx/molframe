@@ -224,3 +224,33 @@ fn every_position_of_every_shape_stays_inside_its_position_bound() {
         }
     }
 }
+
+#[test]
+fn runs_build_the_same_selection_as_their_positions() {
+    let runs = [0..3, 3..5, 9..9, 12..14, 13..20, 30..31];
+    let positions: Vec<u32> = (0..5).chain(12..20).chain(30..31).collect();
+    let from_runs = AtomSelection::from_runs(runs);
+    assert_eq!(
+        from_runs.iter().collect::<Vec<_>>(),
+        positions,
+        "the merged runs enumerate the same atoms"
+    );
+    assert_eq!(from_runs.len(), 14);
+    assert_eq!(
+        AtomSelection::from_runs(std::iter::once(4..4)),
+        AtomSelection::Empty
+    );
+    assert_eq!(
+        AtomSelection::from_runs([2..6, 6..9]),
+        AtomSelection::Range(2..9)
+    );
+}
+
+#[test]
+fn runs_out_of_order_are_sorted_before_merging() {
+    let shuffled = AtomSelection::from_runs([30..31, 1..4, 3..6, 12..14]);
+    assert_eq!(
+        shuffled.iter().collect::<Vec<_>>(),
+        vec![1, 2, 3, 4, 5, 12, 13, 30]
+    );
+}

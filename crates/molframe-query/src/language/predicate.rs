@@ -14,15 +14,17 @@ use crate::predicate_pattern::{
     residue_number,
 };
 use helpers::{
-    compare, is_residue_id_column, require_namespace, require_numeric, same_by_key, symbol_value,
+    compare, is_residue_id_column, require_namespace, require_numeric, residue_symbol, same_by_key,
+    symbol_residue_level, symbol_value,
 };
+use molframe_core::chunk::AtomChunk;
 use molframe_core::contract::AnalysisPolicy;
 use molframe_core::diagnostic::Diagnostic;
 use molframe_core::selection::AtomSelection;
 use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
-use scan::{SelectionCursor, selection_from_sorted, visit};
+use scan::{SelectionCursor, scan_residues, selection_from_sorted, visit};
 use std::collections::{BTreeSet, HashMap, hash_map::Entry};
-use values::{numeric, text_resolved};
+use values::{numeric, residue_level, residue_text, text_resolved};
 
 pub(crate) use helpers::atom_selector;
 pub(crate) use scan::scan;
@@ -49,6 +51,29 @@ pub(crate) fn comparison(
     require_numeric(structure, column)?;
     let tolerance =
         policy.float_tolerance.absolute + policy.float_tolerance.relative * expected.abs();
+    let test = |mut actual: f64| {
+        if absolute {
+            actual = actual.abs();
+        }
+        compare(actual, expected, operator, tolerance)
+    };
+    // The two columns most often thresholded are read from each chunk directly.
+    let chunked = match column {
+        Column::BFactor => Some(scan::F32Column {
+            plain: AtomChunk::b_factors_plain,
+            validity: AtomChunk::b_factor_validity,
+            get: AtomChunk::b_factor,
+        }),
+        Column::Occupancy => Some(scan::F32Column {
+            plain: AtomChunk::occupancies_plain,
+            validity: AtomChunk::occupancy_validity,
+            get: AtomChunk::occupancy,
+        }),
+        _ => None,
+    };
+    if let Some(chunked) = chunked {
+        return Ok(scan::scan_f32(structure, universe, &chunked, test));
+    }
     Ok(scan(structure, universe, |context| {
         numeric(structure, context, column, policy).is_some_and(|mut actual| {
             if absolute {
@@ -96,10 +121,9 @@ pub(crate) fn membership(
             patterns.push(ResiduePattern::parse(value)?);
         }
         let matcher = ResidueMatcher::from_patterns(patterns);
-        return Ok(scan(structure, universe, |context| {
-            residue_number(context.residue, column, policy).is_some_and(|number| {
-                matcher.matches_parts(number, residue_insertion(context.residue))
-            })
+        return Ok(scan_residues(structure, universe, |_, residue| {
+            residue_number(residue, column, policy)
+                .is_some_and(|number| matcher.matches_parts(number, residue_insertion(residue)))
         }));
     }
 
@@ -165,6 +189,16 @@ fn text_membership<'a>(
         return AtomSelection::Empty;
     }
     let mut cache = HashMap::<&'a str, bool>::new();
+    if residue_level(column) {
+        return scan_residues(structure, universe, |chain, residue| {
+            let Some(actual) = residue_text(structure, chain, residue, column) else {
+                return false;
+            };
+            *cache
+                .entry(actual)
+                .or_insert_with(|| globs.iter().any(|glob| glob.matches(actual)))
+        });
+    }
     let mut selected = Vec::new();
     visit(structure, universe, |context| {
         let Some(actual) = text_resolved(structure, context, column) else {
@@ -224,6 +258,12 @@ pub(crate) fn membership_symbols(
     if symbols.is_empty() || universe.is_empty() {
         return Ok(AtomSelection::Empty);
     }
+    if symbol_residue_level(column) {
+        return Ok(scan_residues(structure, universe, |chain, residue| {
+            residue_symbol(structure, chain, residue, column)
+                .is_some_and(|value| symbols.contains(&value))
+        }));
+    }
     let mut selected = Vec::new();
     let mut universe = SelectionCursor::new(universe.iter());
     for chunk in structure.data().chunks.iter() {
@@ -271,3 +311,7 @@ pub(crate) fn membership_symbols(
 #[cfg(test)]
 #[path = "predicate_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "predicate_scan_tests.rs"]
+mod scan_tests;

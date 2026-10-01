@@ -45,6 +45,31 @@ impl AtomSelection {
         }
     }
 
+    /// A selection of runs; empty runs are dropped, runs are put in order, and
+    /// runs that touch or overlap are merged.
+    ///
+    /// Residue- and chain-level predicates decide once per residue, so their
+    /// result is a handful of runs rather than one position per atom.
+    #[must_use]
+    pub fn from_runs(runs: impl IntoIterator<Item = Range<u32>>) -> Self {
+        let mut ordered: Vec<Range<u32>> =
+            runs.into_iter().filter(|run| run.start < run.end).collect();
+        // Already ascending in the common case, which the stable sort handles in one pass.
+        ordered.sort_by_key(|run| run.start);
+        let mut merged = SmallVec::<[Range<u32>; 4]>::new();
+        for run in ordered {
+            match merged.last_mut() {
+                Some(last) if run.start <= last.end => last.end = last.end.max(run.end),
+                _ => merged.push(run),
+            }
+        }
+        match merged.len() {
+            0 => Self::Empty,
+            1 => merged.pop().map_or(Self::Empty, Self::Range),
+            _ => Self::Ranges(merged),
+        }
+    }
+
     /// Chooses the cheapest shape for ascending unique positions.
     ///
     /// # Panics

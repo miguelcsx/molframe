@@ -6,7 +6,7 @@ use crate::predicate_pattern::{residue_insertion, residue_number};
 use molframe_core::contract::{AnalysisPolicy, Namespace};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::selection::AtomSelection;
-use molframe_core::structure::{ChainRef, Structure};
+use molframe_core::structure::{ChainRef, ResidueRef, Structure};
 use molframe_core::topology::EntityKind;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -126,17 +126,49 @@ pub(crate) fn atom_selector(
     }))
 }
 
+/// Whether the interned value of `column` is decided by a residue and its chain.
+pub(super) const fn symbol_residue_level(column: Column) -> bool {
+    matches!(
+        column,
+        Column::LabelChain
+            | Column::AuthChain
+            | Column::LabelResidueName
+            | Column::AuthResidueName
+            | Column::Entity
+            | Column::InsertionCode
+    )
+}
+
+/// The interned value of a residue-level `column`; `None` for any other column.
+pub(super) fn residue_symbol(
+    structure: &Structure,
+    chain: ChainRef<'_>,
+    residue: ResidueRef<'_>,
+    column: Column,
+) -> Option<molframe_core::symbol::SymbolId> {
+    match column {
+        Column::LabelChain => chain.label_asym_id(),
+        Column::AuthChain => chain.auth_asym_id(),
+        Column::LabelResidueName => residue.label_comp_id(),
+        Column::AuthResidueName => residue.auth_comp_id(),
+        Column::Entity => chain
+            .entity()
+            .and_then(|entity| structure.data().topology.entities.id(entity)),
+        Column::InsertionCode => structure.data().topology.residues.ins_code(residue.index()),
+        _ => None,
+    }
+}
+
 #[inline]
 pub(super) fn symbol_value(
     structure: &Structure,
     context: AtomContext<'_>,
     column: Column,
 ) -> Option<molframe_core::symbol::SymbolId> {
+    if symbol_residue_level(column) {
+        return residue_symbol(structure, context.chain, context.residue, column);
+    }
     match column {
-        Column::LabelChain => context.chain.label_asym_id(),
-        Column::AuthChain => context.chain.auth_asym_id(),
-        Column::LabelResidueName => context.residue.label_comp_id(),
-        Column::AuthResidueName => context.residue.auth_comp_id(),
         Column::LabelAtomName => context.atom.name_symbol(),
         // Storage keeps an author atom name only where it differs from the
         // label name, so an atom without one is named by its label.
@@ -145,19 +177,10 @@ pub(super) fn symbol_value(
             .auth_name_symbol()
             .or_else(|| context.atom.name_symbol()),
         Column::AlternateLocation => context.atom.alt_id()?.symbol(),
-        Column::Entity => context
-            .chain
-            .entity()
-            .and_then(|entity| structure.data().topology.entities.id(entity)),
         Column::Element => structure
             .data()
             .dictionary
             .get(context.atom.element()?.symbol()),
-        Column::InsertionCode => structure
-            .data()
-            .topology
-            .residues
-            .ins_code(context.residue.index()),
         Column::SegmentId => crate::annotation::symbol(
             structure,
             context.atom.index().get(),

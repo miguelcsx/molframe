@@ -3,7 +3,7 @@
 use super::AtomContext;
 use crate::ast::Column;
 use molframe_core::contract::{AnalysisPolicy, Namespace};
-use molframe_core::structure::Structure;
+use molframe_core::structure::{ChainRef, ResidueRef, Structure};
 
 pub(super) fn numeric(
     structure: &Structure,
@@ -57,16 +57,54 @@ fn radius_set(set: molframe_core::contract::RadiiSet) -> Option<molframe_chem::R
     })
 }
 
+/// Whether the text of `column` is decided by an atom's residue and chain alone.
+///
+/// Such a predicate needs one decision per residue rather than one per atom.
+pub(super) const fn residue_level(column: Column) -> bool {
+    matches!(
+        column,
+        Column::LabelChain
+            | Column::AuthChain
+            | Column::AuthResidueName
+            | Column::Entity
+            | Column::EntityType
+            | Column::InsertionCode
+            | Column::RecordType
+    )
+}
+
+/// The text of a residue-level `column`; `None` for any other column.
+pub(super) fn residue_text<'a>(
+    structure: &'a Structure,
+    chain: ChainRef<'a>,
+    residue: ResidueRef<'a>,
+    column: Column,
+) -> Option<&'a str> {
+    match column {
+        Column::LabelChain => chain.label(),
+        Column::AuthChain => chain.auth_label(),
+        Column::AuthResidueName => residue.auth_name(),
+        Column::Entity => chain
+            .entity()
+            .and_then(|entity| structure.data().topology.entities.id(entity))
+            .and_then(|symbol| structure.resolve(symbol)),
+        Column::EntityType => Some(super::helpers::entity_type(structure, chain)),
+        Column::InsertionCode => residue.ins_code().or(Some("")),
+        Column::RecordType => Some(if residue.is_het() { "HETATM" } else { "ATOM" }),
+        _ => None,
+    }
+}
+
 pub(super) fn text_resolved<'a>(
     structure: &'a Structure,
     context: AtomContext<'a>,
     column: Column,
 ) -> Option<&'a str> {
+    if residue_level(column) {
+        return residue_text(structure, context.chain, context.residue, column);
+    }
     match column {
-        Column::LabelChain => context.chain.label(),
-        Column::AuthChain => context.chain.auth_label(),
         Column::LabelResidueName => context.atom.component_name(),
-        Column::AuthResidueName => context.residue.auth_name(),
         Column::LabelAtomName => context.atom.name(),
         // Storage keeps an author atom name only where it differs from the
         // label name, so an atom without one is named by its label.
@@ -77,22 +115,10 @@ pub(super) fn text_resolved<'a>(
             .and_then(molframe_core::symbol::AltId::symbol)
             .and_then(|symbol| structure.resolve(symbol))
             .or(Some("")),
-        Column::Entity => context
-            .chain
-            .entity()
-            .and_then(|entity| structure.data().topology.entities.id(entity))
-            .and_then(|symbol| structure.resolve(symbol)),
-        Column::EntityType => Some(super::helpers::entity_type(structure, context.chain)),
         Column::Element => context
             .atom
             .element()
             .map(molframe_core::element::Element::symbol),
-        Column::InsertionCode => context.residue.ins_code().or(Some("")),
-        Column::RecordType => Some(if context.residue.is_het() {
-            "HETATM"
-        } else {
-            "ATOM"
-        }),
         Column::SegmentId => crate::annotation::symbol(
             structure,
             context.atom.index().get(),

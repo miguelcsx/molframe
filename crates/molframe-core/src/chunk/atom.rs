@@ -156,6 +156,12 @@ impl AtomChunk {
         with_presence(self.occupancy.get(local), &self.occupancy_validity, local)
     }
 
+    /// Which occupancies were recorded.
+    #[must_use]
+    pub const fn occupancy_validity(&self) -> &ValidityMask {
+        &self.occupancy_validity
+    }
+
     /// Plain backing storage for occupancies, when no decode is required.
     #[must_use]
     pub fn occupancies_plain(&self) -> Option<&[f32]> {
@@ -166,6 +172,12 @@ impl AtomChunk {
     #[must_use]
     pub fn b_factor(&self, local: u32) -> Option<(f32, Presence)> {
         with_presence(self.b_factor.get(local), &self.b_factor_validity, local)
+    }
+
+    /// Which temperature factors were recorded.
+    #[must_use]
+    pub const fn b_factor_validity(&self) -> &ValidityMask {
+        &self.b_factor_validity
     }
 
     /// Plain backing storage for temperature factors, when no decode is required.
