@@ -192,7 +192,11 @@ fn write_generated_metadata(out: &mut impl fmt::Write, structure: &Structure) {
             cell.angles[0],
             cell.angles[1],
             cell.angles[2],
-            data.entry.space_group.as_deref().unwrap_or("P 1"),
+            // CRYST1 names P 1 when the entry records no space group.
+            match data.entry.space_group.as_deref() {
+                Some(symbol) => symbol,
+                None => "P 1",
+            },
         );
     }
 }

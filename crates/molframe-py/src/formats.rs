@@ -25,8 +25,10 @@ fn to_pdb(
 ) -> PyResult<String> {
     let structure = structure.inner.clone();
     let mut options = molframe::formats::pdb::PdbOptions::new().hybrid36(hybrid36);
-    for (from, to) in chain_map.unwrap_or_default() {
-        options = options.chain_map(from, to);
+    if let Some(chain_map) = chain_map {
+        for (from, to) in chain_map {
+            options = options.chain_map(from, to);
+        }
     }
     py.detach(move || molframe::write_pdb(&structure, &options))
         .map_err(|findings| findings_error(&findings))

@@ -126,7 +126,11 @@ fn read(py: Python<'_>, path: PathBuf, format: Option<&str>) -> PyResult<PyTraje
     let mut times = Vec::with_capacity(frames);
     for frame in &data.frames {
         flat.extend(frame.positions.iter().flatten());
-        times.push(frame.time.unwrap_or(f64::NAN));
+        // A frame without a time is reported as NaN rather than invented.
+        times.push(match frame.time {
+            Some(time) => time,
+            None => f64::NAN,
+        });
     }
     let positions = PyArray1::from_vec(py, flat).reshape([frames, atoms, 3])?;
     positions.readwrite().make_nonwriteable();

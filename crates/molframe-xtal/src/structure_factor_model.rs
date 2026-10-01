@@ -49,12 +49,20 @@ pub fn structure_factors(
         })?;
         let displacement = match structure.data().anisotropy.for_atom(index) {
             Some(tensor) => Displacement::Anisotropic(tensor.map(f64::from)),
-            None => Displacement::Isotropic(f64::from(atom.b_factor().unwrap_or(0.0))),
+            // No recorded B means no displacement is modelled.
+            None => Displacement::Isotropic(match atom.b_factor() {
+                Some(b_factor) => f64::from(b_factor),
+                None => 0.0,
+            }),
         };
         sites.push(ScatteringSite {
             element,
             position: transform.to_fractional(position.map(f64::from)),
-            occupancy: f64::from(atom.occupancy().unwrap_or(1.0)),
+            // No recorded occupancy is the PDB convention for a full site.
+            occupancy: match atom.occupancy() {
+                Some(occupancy) => f64::from(occupancy),
+                None => 1.0,
+            },
             displacement,
         });
     }
