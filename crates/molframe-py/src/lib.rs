@@ -19,6 +19,7 @@ mod crystal;
 mod formats;
 mod hierarchy;
 mod native_source;
+mod policy;
 #[cfg(feature = "query")]
 mod query_aliases;
 mod query_cache;
@@ -86,6 +87,7 @@ fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyModel>()?;
     module.add_class::<PyModels>()?;
     module.add_class::<PySelection>()?;
+    module.add_class::<policy::PyAnalysisPolicy>()?;
     module.add_class::<PyQuery>()?;
     module.add(
         "QueryError",

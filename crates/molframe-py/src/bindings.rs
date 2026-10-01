@@ -115,21 +115,18 @@ impl PyStructure {
         &self,
         py: Python<'_>,
         query: &Bound<'_, PyAny>,
-        policy: Option<&Bound<'_, PyAny>>,
+        policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
     ) -> PyResult<PySelection> {
-        if policy.is_some() {
-            return Err(pyo3::exceptions::PyNotImplementedError::new_err(
-                "custom policy objects are not yet accepted by this binding",
-            ));
-        }
+        let policy =
+            policy.map_or_else(molframe::AnalysisPolicy::default, |policy| policy.0.clone());
         if let Ok(query) = query.extract::<PyRef<'_, PyQuery>>() {
-            return select_compiled(py, self, &query.compiled);
+            return crate::policy::select_compiled(py, self, &query.compiled, &policy);
         }
         let source = query.extract::<&str>()?;
         let compiled = molframe::Query::compile(source).map_err(|findings| {
             crate::query_messages::query_error(&molframe::Findings::from(findings), source)
         })?;
-        select_compiled(py, self, &compiled)
+        crate::policy::select_compiled(py, self, &compiled, &policy)
     }
     fn edit(&self) -> PyStructureEditor {
         PyStructureEditor {
@@ -278,7 +275,7 @@ impl PySelection {
 }
 
 impl PySelection {
-    fn from_native(parent: PyStructure, selection: molframe::Selection) -> Self {
+    pub(crate) fn from_native(parent: PyStructure, selection: molframe::Selection) -> Self {
         let indices = selection.atoms().map(|atom| atom.index().get()).collect();
         Self {
             parent,
@@ -314,8 +311,16 @@ impl PyQuery {
         Ok(Self { compiled })
     }
 
-    fn select(&self, py: Python<'_>, structure: &PyStructure) -> PyResult<PySelection> {
-        select_compiled(py, structure, &self.compiled)
+    #[pyo3(signature = (structure, *, policy=None))]
+    fn select(
+        &self,
+        py: Python<'_>,
+        structure: &PyStructure,
+        policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
+    ) -> PyResult<PySelection> {
+        let policy =
+            policy.map_or_else(molframe::AnalysisPolicy::default, |policy| policy.0.clone());
+        crate::policy::select_compiled(py, structure, &self.compiled, &policy)
     }
 
     /// Stable identity of the normalized typed query plan.
@@ -419,27 +424,6 @@ pub(crate) fn read(
     }
     let bytes = source.extract::<PyBackedBytes>()?;
     PyReader::new(bytes, name).read(py)
-}
-
-/// Evaluates a compiled query, raising its warnings and rendering its errors
-/// against the query text.
-fn select_compiled(
-    py: Python<'_>,
-    structure: &PyStructure,
-    query: &molframe::Query,
-) -> PyResult<PySelection> {
-    use molframe::QueryStructure;
-
-    let evaluation = structure
-        .inner
-        .select_query(query, &molframe::AnalysisPolicy::default())
-        .map_err(|findings| crate::query_messages::query_error(&findings, query.source()))?;
-    crate::query_messages::warn(py, &evaluation.warnings, query.source())?;
-    let view = structure.inner.engine().view_of(evaluation.selection);
-    Ok(PySelection::from_native(
-        structure.clone(),
-        molframe::Selection::from(view),
-    ))
 }
 
 #[cfg(feature = "geometry")]

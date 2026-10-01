@@ -3,6 +3,7 @@
 
 from . import _native
 from ._native import (
+    AnalysisPolicy,
     Atom,
     Atoms,
     Chain,
@@ -44,6 +45,7 @@ formats = _native.formats
 
 __all__ = [
     "__version__",
+    "AnalysisPolicy",
     "CompiledWorkflow",
     "Atom",
     "Atoms",

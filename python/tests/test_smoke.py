@@ -29,6 +29,7 @@ def test_import_stays_under_the_budget():
 
 def test_root_is_curated_and_domains_use_final_names():
     expected = {
+        "AnalysisPolicy",
         "Structure",
         "Selection",
         "Query",

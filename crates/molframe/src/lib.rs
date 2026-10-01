@@ -97,10 +97,11 @@ pub use molframe_core::annotation::{
     STEREO_CONFIGURATION_ANNOTATION,
 };
 pub use molframe_core::contract::{
-    AlgorithmId, AltlocPolicy, Analysis, AnalysisParameters, AnalysisPolicy, AssemblyChoice,
-    Assumption, AssumptionSource, Coverage, DictionaryVersion, ImpactEstimate, MissingPolicy,
-    ModelChoice, Namespace, ParameterValue, PolicyField, ProfileId, Provenance, SourceRef, Status,
-    Tolerance,
+    AlgorithmId, AlignmentPolicy, AltlocPolicy, Analysis, AnalysisParameters, AnalysisPolicy,
+    AssemblyChoice, Assumption, AssumptionSource, ContactDefinition, Coverage, DictionaryVersion,
+    EquivalencePolicy, Fingerprint, HydrogenPolicy, ImpactEstimate, MissingPolicy, ModelChoice,
+    Namespace, ParameterValue, PeriodicPolicy, PolicyField, Precision, ProfileId, Provenance,
+    RadiiSet, SourceRef, Status, SymmetryPolicy, Tolerance,
 };
 pub use molframe_core::coords::Aabb;
 pub use molframe_core::diagnostic::{
