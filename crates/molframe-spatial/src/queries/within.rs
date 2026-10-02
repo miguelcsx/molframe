@@ -48,7 +48,7 @@ pub fn within_with_options(
     periodic: Option<&PeriodicBox>,
     context: &ExecutionContext,
 ) -> Result<AtomSelection, SpatialError> {
-    let mut matched = vec![false; positions.len()];
+    let mut matched = Matched::new(positions.len());
     let mut reduction_error = None;
     for_each_pairs_within_unsorted(
         &PairQuery {
@@ -75,21 +75,64 @@ pub fn within_with_options(
     collect_matches(query, target, &matched)
 }
 
+/// One bit per atom: which query atoms some pair has already matched.
+///
+/// Packed words rather than `bool`s, so a 100,000-atom structure needs 12.5 kB
+/// instead of 100 kB; plain words rather than a shared bit vector, so marking a
+/// bit costs no copy-on-write check.
+struct Matched {
+    words: Vec<u64>,
+    len: usize,
+}
+
+impl Matched {
+    fn new(len: usize) -> Self {
+        Self {
+            words: vec![0; len.div_ceil(64)],
+            len,
+        }
+    }
+
+    /// Marks one atom.
+    ///
+    /// # Errors
+    ///
+    /// Returns an out-of-bounds error for an invalid pair endpoint.
+    fn mark(&mut self, atom: u32) -> Result<(), SpatialError> {
+        let index = self.index(atom)?;
+        self.words[index / 64] |= 1 << (index % 64);
+        Ok(())
+    }
+
+    fn get(&self, atom: u32) -> Result<bool, SpatialError> {
+        let index = self.index(atom)?;
+        Ok(self.words[index / 64] & (1 << (index % 64)) != 0)
+    }
+
+    fn index(&self, atom: u32) -> Result<usize, SpatialError> {
+        let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
+        if index >= self.len {
+            return Err(SpatialError::AtomOutOfBounds(atom));
+        }
+        Ok(index)
+    }
+}
+
 /// Marks query endpoints participating in query-target neighbour pairs.
 ///
-/// The dense bit vector removes the `O(M log M)` sort/dedup stage previously
+/// The dense bitmap removes the `O(M log M)` sort/dedup stage previously
 /// required by `within`.
 fn mark_pair_matches(
-    matched: &mut [bool],
+    matched: &mut Matched,
     query: &AtomSelection,
     target: &AtomSelection,
     pair: NeighborPair,
 ) -> Result<(), SpatialError> {
     if query.contains(pair.first) && target.contains(pair.second) {
-        mark_atom(matched, pair.first)?;
+        matched.mark(pair.first)?;
     }
     if query.contains(pair.second) && target.contains(pair.first) {
-        mark_atom(matched, pair.second)?;
+        matched.mark(pair.second)?;
     }
     Ok(())
 }
@@ -100,36 +143,15 @@ fn mark_pair_matches(
 fn collect_matches(
     query: &AtomSelection,
     target: &AtomSelection,
-    matched: &[bool],
+    matched: &Matched,
 ) -> Result<AtomSelection, SpatialError> {
     let mut selected = Vec::new();
 
     for atom in query {
-        let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-        let spatial_match = matched
-            .get(index)
-            .copied()
-            .ok_or(SpatialError::AtomOutOfBounds(atom))?;
-
-        if spatial_match || target.contains(atom) {
+        if matched.get(atom)? || target.contains(atom) {
             selected.push(atom);
         }
     }
 
     Ok(AtomSelection::from_sorted(selected))
-}
-
-/// Marks one atom in a dense match bitmap.
-///
-/// # Errors
-///
-/// Returns an out-of-bounds error for an invalid pair endpoint.
-fn mark_atom(matched: &mut [bool], atom: u32) -> Result<(), SpatialError> {
-    let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-    let Some(slot) = matched.get_mut(index) else {
-        return Err(SpatialError::AtomOutOfBounds(atom));
-    };
-
-    *slot = true;
-    Ok(())
 }

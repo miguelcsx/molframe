@@ -67,6 +67,34 @@ fn chained_sources_are_validated_and_numbered_globally() {
 }
 
 #[test]
+fn a_bounded_chain_numbers_globally_and_refuses_a_tiny_ceiling_without_advancing() {
+    let first = Trajectory::from_frames(vec![frame(0.0)]).expect("fixed-width trajectory");
+    let second =
+        Trajectory::from_frames(vec![frame(1.0), frame(2.0)]).expect("fixed-width trajectory");
+    let mut chain = ChainedReader::new(vec![MemoryReader::new(&first), MemoryReader::new(&second)])
+        .unwrap_or_else(|error| panic!("chain failed: {error}"));
+    let mut timestep = Timestep::default();
+    assert!(chain.read_next_bounded(&mut timestep, 1).is_err());
+    for expected in 0..3 {
+        assert!(
+            chain
+                .read_next_bounded(&mut timestep, 1 << 20)
+                .is_ok_and(|read| read)
+        );
+        assert_eq!(timestep.frame, expected);
+        assert_eq!(
+            timestep.positions[0][0],
+            f32::from(u8::try_from(expected).expect("small"))
+        );
+    }
+    assert!(
+        chain
+            .read_next_bounded(&mut timestep, 1 << 20)
+            .is_ok_and(|read| !read)
+    );
+}
+
+#[test]
 fn chain_refuses_misaligned_atom_counts() {
     let first = Trajectory::from_frames(vec![frame(0.0)]).expect("fixed-width trajectory");
     let second = Trajectory::from_frames(vec![Frame {

@@ -30,6 +30,38 @@ fn within_includes_targets_and_excludes_distant_query_atoms() {
 }
 
 #[test]
+fn within_marks_atoms_across_word_boundaries_and_refuses_a_query_past_the_end() {
+    let positions: Vec<[f32; 3]> = (0_u16..130)
+        .map(|x| [f32::from(x) * 3.0, 0.0, 0.0])
+        .collect();
+    let targets = AtomSelection::from_sorted(vec![0, 64, 128]);
+    let selected = within(
+        &positions,
+        &AtomSelection::All(130),
+        &targets,
+        3.5,
+        SpatialBackend::CellList,
+        None,
+        &context(),
+    )
+    .expect("valid query");
+    assert_eq!(
+        selected.iter().collect::<Vec<_>>(),
+        vec![0, 1, 63, 64, 65, 127, 128, 129]
+    );
+    let beyond = within(
+        &positions,
+        &AtomSelection::from_sorted(vec![5, 130]),
+        &targets,
+        3.5,
+        SpatialBackend::CellList,
+        None,
+        &context(),
+    );
+    assert!(matches!(beyond, Err(SpatialError::AtomOutOfBounds(130))));
+}
+
+#[test]
 fn every_backend_agrees_under_triclinic_periodicity() {
     let positions = [[0.1, 0.2, 0.3], [7.9, 0.2, 0.3], [4.0, 4.0, 4.0]];
     let periodic = PeriodicBox::from_cell(molframe_core::structure::UnitCell {

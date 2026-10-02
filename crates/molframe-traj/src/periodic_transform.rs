@@ -36,7 +36,7 @@ impl FrameTransform for Wrap {
         }
     }
 
-    fn apply(&self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
+    fn apply(&mut self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
         let periodic = periodic(timestep)?;
         match &self.groups {
             None => {
@@ -110,7 +110,7 @@ impl FrameTransform for Unwrap {
         "make_molecules_whole"
     }
 
-    fn apply(&self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
+    fn apply(&mut self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
         let periodic = periodic(timestep)?;
         let atom_count = timestep.positions.len();
         let mut adjacency = vec![Vec::new(); atom_count];

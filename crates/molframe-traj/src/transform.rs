@@ -14,7 +14,7 @@ pub trait FrameTransform: fmt::Debug + Send + Sync {
     ///
     /// Returns a selection or degenerate-geometry error without changing
     /// reader position.
-    fn apply(&self, timestep: &mut Timestep) -> Result<(), TrajectoryError>;
+    fn apply(&mut self, timestep: &mut Timestep) -> Result<(), TrajectoryError>;
 }
 
 /// Translation or rotation represented by a shared geometric kernel.
@@ -42,7 +42,7 @@ impl FrameTransform for RigidTransform {
         "rigid"
     }
 
-    fn apply(&self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
+    fn apply(&mut self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
         self.transform.apply_all(&mut timestep.positions);
         Ok(())
     }
@@ -53,6 +53,8 @@ impl FrameTransform for RigidTransform {
 pub struct Center {
     atoms: Box<[usize]>,
     target: [f64; 3],
+    /// Selected positions of the current frame, reused frame to frame.
+    scratch: Vec<[f32; 3]>,
 }
 
 impl Center {
@@ -62,6 +64,7 @@ impl Center {
         Self {
             atoms: atoms.into(),
             target,
+            scratch: Vec::new(),
         }
     }
 }
@@ -71,9 +74,9 @@ impl FrameTransform for Center {
         "center_geometric"
     }
 
-    fn apply(&self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
-        let selected = selected_positions(&timestep.positions, &self.atoms)?;
-        let Some(centre) = molframe_geom::centroid(&selected) else {
+    fn apply(&mut self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
+        gather_selected(&timestep.positions, &self.atoms, &mut self.scratch)?;
+        let Some(centre) = molframe_geom::centroid(&self.scratch) else {
             return Ok(());
         };
         let offset = [
@@ -91,6 +94,8 @@ impl FrameTransform for Center {
 pub struct Fit {
     atoms: Box<[usize]>,
     reference: Box<[[f32; 3]]>,
+    /// Selected mobile positions of the current frame, reused frame to frame.
+    scratch: Vec<[f32; 3]>,
 }
 
 impl Fit {
@@ -100,6 +105,7 @@ impl Fit {
         Self {
             atoms: atoms.into(),
             reference: reference.into(),
+            scratch: Vec::new(),
         }
     }
 }
@@ -109,31 +115,34 @@ impl FrameTransform for Fit {
         "fit"
     }
 
-    fn apply(&self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
-        let mobile = selected_positions(&timestep.positions, &self.atoms)?;
-        let fit = molframe_geom::superpose(&mobile, &self.reference)
+    fn apply(&mut self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
+        gather_selected(&timestep.positions, &self.atoms, &mut self.scratch)?;
+        let fit = molframe_geom::superpose(&self.scratch, &self.reference)
             .map_err(|_| TrajectoryError::DegenerateFit)?;
         fit.transform.apply_all(&mut timestep.positions);
         Ok(())
     }
 }
 
-fn selected_positions(
+/// Copies the selected positions into `scratch`, reusing its allocation.
+fn gather_selected(
     positions: &[[f32; 3]],
     atoms: &[usize],
-) -> Result<Vec<[f32; 3]>, TrajectoryError> {
-    atoms
-        .iter()
-        .map(|&index| {
+    scratch: &mut Vec<[f32; 3]>,
+) -> Result<(), TrajectoryError> {
+    scratch.clear();
+    for &index in atoms {
+        let position =
             positions
                 .get(index)
                 .copied()
                 .ok_or(TrajectoryError::SelectionOutOfRange {
                     index,
                     atoms: positions.len(),
-                })
-        })
-        .collect()
+                })?;
+        scratch.push(position);
+    }
+    Ok(())
 }
 
 /// Reader decorator applying transforms in declaration order.
@@ -170,6 +179,13 @@ impl<R> PipelineReader<R> {
     pub fn into_inner(self) -> R {
         self.source
     }
+
+    fn apply_all(&mut self, timestep: &mut Timestep) -> Result<(), TrajectoryError> {
+        for transform in &mut self.transforms {
+            transform.apply(timestep)?;
+        }
+        Ok(())
+    }
 }
 
 impl<R: TrajectoryReader> TrajectoryReader for PipelineReader<R> {
@@ -197,9 +213,19 @@ impl<R: TrajectoryReader> TrajectoryReader for PipelineReader<R> {
         if !self.source.read_next(timestep)? {
             return Ok(false);
         }
-        for transform in &self.transforms {
-            transform.apply(timestep)?;
+        self.apply_all(timestep)?;
+        Ok(true)
+    }
+
+    fn read_next_bounded(
+        &mut self,
+        timestep: &mut Timestep,
+        bytes: usize,
+    ) -> Result<bool, TrajectoryError> {
+        if !self.source.read_next_bounded(timestep, bytes)? {
+            return Ok(false);
         }
+        self.apply_all(timestep)?;
         Ok(true)
     }
 
