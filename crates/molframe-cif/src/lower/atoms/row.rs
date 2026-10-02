@@ -182,6 +182,16 @@ pub trait AtomSiteRow {
 
     /// Whether the item was recorded rather than written as a sentinel.
     fn is_recorded(&self, field: Field) -> bool;
+
+    /// The index of this row's text in a per-column string dictionary.
+    ///
+    /// A reader whose text columns are dictionary-encoded returns the index
+    /// when the value is text, so the lowerer can intern each distinct string
+    /// once per column instead of once per row. Equal indices of one field must
+    /// mean equal text. Readers without such a dictionary keep the default.
+    fn dictionary_slot(&self, _field: Field) -> Option<u32> {
+        None
+    }
 }
 
 impl AtomSiteRow for Rows<'_> {

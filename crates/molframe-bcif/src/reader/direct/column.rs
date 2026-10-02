@@ -121,6 +121,14 @@ impl DecodedColumn {
         }
     }
 
+    /// The dictionary slot of a text row, absent for masked rows.
+    fn dictionary_slot(&self, row: usize) -> Option<u32> {
+        if self.mask.as_deref().and_then(|mask| mask.get(row)).copied() > Some(0) {
+            return None;
+        }
+        self.values.dictionary_slot(row)
+    }
+
     fn value(&self, row: usize) -> Option<ValueRef<'_>> {
         match self.mask.as_deref().and_then(|mask| mask.get(row)).copied() {
             Some(1) => return Some(ValueRef::Inapplicable),
@@ -149,7 +157,6 @@ impl BinaryAtomRow<'_> {
             .value(self.row)
     }
 }
-
 impl AtomSiteRow for BinaryAtomRow<'_> {
     fn row(&self) -> usize {
         self.row
@@ -191,6 +198,14 @@ impl AtomSiteRow for BinaryAtomRow<'_> {
             self.value(field),
             Some(ValueRef::Text(_) | ValueRef::Integer(_) | ValueRef::Float(_))
         )
+    }
+
+    fn dictionary_slot(&self, field: Field) -> Option<u32> {
+        self.columns
+            .columns
+            .get(field.position())?
+            .as_ref()?
+            .dictionary_slot(self.row)
     }
 }
 

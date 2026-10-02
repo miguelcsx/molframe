@@ -39,6 +39,14 @@ impl ColumnValues {
         }
     }
 
+    /// The string-dictionary position of a text row.
+    pub(super) fn dictionary_slot(&self, row: usize) -> Option<u32> {
+        match self {
+            Self::Strings(values) => values.slot(row),
+            _ => None,
+        }
+    }
+
     pub(super) fn compact_float(&mut self) {
         if let Self::Floats(values) = self {
             values.compact();
@@ -156,6 +164,13 @@ impl StringValues {
     fn get(&self, row: usize) -> Option<&str> {
         let index = self.indices.get(row)?;
         self.dictionary.get(index).map(AsRef::as_ref)
+    }
+
+    /// The dictionary position of a row's text, if the row names an entry.
+    fn slot(&self, row: usize) -> Option<u32> {
+        let index = self.indices.get(row)?;
+        self.dictionary.get(index)?;
+        u32::try_from(index).ok()
     }
 }
 

@@ -6,6 +6,7 @@ use crate::lower::keys::ResidueKey;
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::index::ResidueIndex;
 use molframe_core::optional::{OptionalI32, OptionalSymbol};
+use molframe_core::symbol::SymbolId;
 use molframe_core::topology::ResidueRecord;
 
 impl AtomBuilder<'_> {
@@ -19,10 +20,17 @@ impl AtomBuilder<'_> {
         rows: &R,
         residue: ResidueIndex,
     ) -> OptionalSymbol {
-        let Some(comp) = rows.identifier(Field::LabelCompId) else {
+        let Some(existing_symbol) = self.data.topology.residues.label_comp_id(residue) else {
             return OptionalSymbol::NONE;
         };
-        let Some(existing_symbol) = self.data.topology.residues.label_comp_id(residue) else {
+        // Interned text is unique, so for a dictionary reader equal symbols
+        // mean equal components without resolving either string.
+        if rows.dictionary_slot(Field::LabelCompId).is_some()
+            && self.symbol_of(rows, Field::LabelCompId) == Some(existing_symbol)
+        {
+            return OptionalSymbol::NONE;
+        }
+        let Some(comp) = rows.identifier(Field::LabelCompId) else {
             return OptionalSymbol::NONE;
         };
         let Some(existing) = self.data.dictionary.resolve(existing_symbol) else {
@@ -49,16 +57,13 @@ impl AtomBuilder<'_> {
         self.current = Some(*key);
         self.names_in_residue.clear();
 
-        let component = rows.identifier(Field::LabelCompId);
-        let comp = self.intern(text_or_empty(component.as_deref()));
-        let auth_comp = match rows.identifier(Field::AuthCompId) {
-            Some(text) => OptionalSymbol::some(self.intern(&text)),
-            None => OptionalSymbol::NONE,
-        };
-        let ins_code = match rows.identifier(Field::InsCode) {
-            Some(text) => OptionalSymbol::some(self.intern(&text)),
-            None => OptionalSymbol::NONE,
-        };
+        let comp = self.symbol_or_empty(rows, Field::LabelCompId);
+        let auth_comp = self
+            .symbol_of(rows, Field::AuthCompId)
+            .map_or(OptionalSymbol::NONE, OptionalSymbol::some);
+        let ins_code = self
+            .symbol_of(rows, Field::InsCode)
+            .map_or(OptionalSymbol::NONE, OptionalSymbol::some);
         let het = rows.text(Field::GroupPdb) == Some("HETATM");
 
         if self
@@ -85,14 +90,12 @@ impl AtomBuilder<'_> {
     }
 
     pub(super) fn key_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R, model: i64) -> ResidueKey {
-        let chain = match rows.identifier(Field::LabelAsymId) {
-            Some(text) => self.intern(&text).get(),
-            None => ResidueKey::ABSENT,
-        };
-        let ins_code = match rows.identifier(Field::InsCode) {
-            Some(text) => self.intern(&text).get(),
-            None => ResidueKey::ABSENT,
-        };
+        let chain = self
+            .symbol_of(rows, Field::LabelAsymId)
+            .map_or(ResidueKey::ABSENT, SymbolId::get);
+        let ins_code = self
+            .symbol_of(rows, Field::InsCode)
+            .map_or(ResidueKey::ABSENT, SymbolId::get);
         ResidueKey {
             model,
             chain,

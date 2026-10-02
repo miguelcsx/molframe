@@ -14,6 +14,9 @@ use molframe_core::optional::OptionalSymbol;
 use molframe_core::symbol::{AltId, SymbolId};
 use num_traits::ToPrimitive;
 
+/// Marks a cache slot that has not been filled; no real symbol takes this value.
+pub(super) const UNSET_SYMBOL: SymbolId = SymbolId::from_raw(u32::MAX);
+
 impl AtomBuilder<'_> {
     pub(super) fn position_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) -> Option<[f32; 3]> {
         let (Some(x), Some(y), Some(z)) = (
@@ -68,15 +71,12 @@ impl AtomBuilder<'_> {
         (when_absent, Presence::Unknown)
     }
 
-    pub(super) fn element_of<R: AtomSiteRow + ?Sized>(
-        &mut self,
-        rows: &R,
-        name: Option<&str>,
-    ) -> Element {
+    pub(super) fn element_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) -> Element {
         if let Some(element) = rows.text(Field::TypeSymbol).and_then(Element::from_symbol) {
             return element;
         }
-        let inferred = match (self.options.missing_element_policy, name) {
+        let name = rows.identifier(Field::LabelAtomId);
+        let inferred = match (self.options.missing_element_policy, name.as_deref()) {
             (MissingElementPolicy::InferFromAtomName, Some(name)) => Element::infer_from_name(name),
             _ => Element::UNKNOWN,
         };
@@ -90,10 +90,8 @@ impl AtomBuilder<'_> {
     }
 
     pub(super) fn auth_name_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) -> OptionalSymbol {
-        rows.identifier(Field::AuthAtomId)
-            .map_or(OptionalSymbol::NONE, |text| {
-                OptionalSymbol::some(self.intern(&text))
-            })
+        self.symbol_of(rows, Field::AuthAtomId)
+            .map_or(OptionalSymbol::NONE, OptionalSymbol::some)
     }
 
     pub(super) fn alt_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) -> Option<AltId> {
@@ -103,6 +101,48 @@ impl AtomBuilder<'_> {
             return AltId::labelled(self.intern(&text));
         }
         Some(AltId::BLANK)
+    }
+
+    /// The symbol for a text field of this row, interning it on first sight.
+    ///
+    /// Dictionary-encoded readers repeat the same few strings across every
+    /// row; the remembered symbol skips the two hash lookups an intern costs.
+    pub(super) fn symbol_of<R: AtomSiteRow + ?Sized>(
+        &mut self,
+        rows: &R,
+        field: Field,
+    ) -> Option<SymbolId> {
+        let slot = rows
+            .dictionary_slot(field)
+            .and_then(|slot| usize::try_from(slot).ok());
+        if let Some(slot) = slot
+            && let Some(symbol) = self.symbol_cache[field.position()].get(slot)
+            && *symbol != UNSET_SYMBOL
+        {
+            return Some(*symbol);
+        }
+        let text = rows.identifier(field)?;
+        let symbol = self.intern(&text);
+        if let Some(slot) = slot {
+            let cache = &mut self.symbol_cache[field.position()];
+            if cache.len() <= slot {
+                cache.resize(slot + 1, UNSET_SYMBOL);
+            }
+            cache[slot] = symbol;
+        }
+        Some(symbol)
+    }
+
+    /// Like [`Self::symbol_of`], with an absent value read as the empty string.
+    pub(super) fn symbol_or_empty<R: AtomSiteRow + ?Sized>(
+        &mut self,
+        rows: &R,
+        field: Field,
+    ) -> SymbolId {
+        match self.symbol_of(rows, field) {
+            Some(symbol) => symbol,
+            None => self.intern(""),
+        }
     }
 
     pub(super) fn intern(&mut self, text: &str) -> SymbolId {

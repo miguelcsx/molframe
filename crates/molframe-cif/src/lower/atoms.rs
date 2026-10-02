@@ -63,6 +63,8 @@ pub struct AtomBuilder<'a> {
     model: i64,
     topology_locked: bool,
     reported_boundary_inference: bool,
+    /// Symbols already interned for a dictionary slot, one table per field.
+    symbol_cache: Vec<Vec<SymbolId>>,
 }
 
 impl<'a> AtomBuilder<'a> {
@@ -97,6 +99,7 @@ impl<'a> AtomBuilder<'a> {
             model: i64::MIN,
             topology_locked: false,
             reported_boundary_inference: false,
+            symbol_cache: vec![Vec::new(); Field::COUNT],
         }
     }
 
@@ -137,13 +140,12 @@ impl<'a> AtomBuilder<'a> {
             self.start_model(model);
         }
 
-        let name_text = rows.identifier(Field::LabelAtomId);
-        let element = self.element_of(rows, name_text.as_deref());
+        let element = self.element_of(rows);
         if self.options.discard_hydrogens && element.is_hydrogen() {
             return;
         }
 
-        let atom_name = self.intern(text_or_empty(name_text.as_deref()));
+        let atom_name = self.symbol_or_empty(rows, Field::LabelAtomId);
         let Some(alt_id) = self.alt_of(rows) else {
             self.findings.push(
                 Diagnostic::new(Code::E1901)
