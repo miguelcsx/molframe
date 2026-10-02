@@ -80,7 +80,12 @@ pub enum LexError {
 #[derive(Clone, Debug)]
 pub struct Lexer<'a> {
     input: &'a str,
-    at: Position,
+    /// Byte offset of the next unread byte.
+    offset: usize,
+    /// One-based line of the next unread byte.
+    line: u64,
+    /// Byte offset at which that line starts, so the column is a subtraction.
+    line_start: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -88,19 +93,30 @@ impl<'a> Lexer<'a> {
     ///
     /// # Errors
     ///
-    /// Returns [`LexError::NotText`] when the bytes are not valid text.
+    /// Returns [`LexError::NotText`] when the bytes are not valid text, or
+    /// [`LexError::PositionOverflow`] when the input is longer than a source
+    /// position can address.
     pub fn new(bytes: &'a [u8]) -> Result<Self, LexError> {
         let input = str::from_utf8(bytes).map_err(|_| LexError::NotText)?;
+        // Offsets are usize inside the lexer and widen to u64 only when a
+        // `Position` is built, so this one check covers every later offset.
+        if u64::try_from(input.len()).is_err() {
+            return Err(LexError::PositionOverflow(Position::START));
+        }
         Ok(Self {
             input,
-            at: Position::START,
+            offset: 0,
+            line: 1,
+            line_start: 0,
         })
     }
 
     /// Where the lexer has reached.
     #[must_use]
-    pub const fn position(&self) -> Position {
-        self.at
+    pub fn position(&self) -> Position {
+        // Both conversions are exact: `new` checked that the input fits a u64.
+        let column = (self.offset - self.line_start) as u64 + 1;
+        Position::new(self.offset as u64, self.line, column)
     }
 
     /// Reads the next token, or `None` at the end of the input.
@@ -109,28 +125,30 @@ impl<'a> Lexer<'a> {
     ///
     /// Returns the reason the input could not be got past.
     pub fn next_token(&mut self) -> Result<Option<Spanned<'a>>, LexError> {
-        self.skip_trivia()?;
-        let start = self.at;
+        self.skip_trivia();
+        let start = self.position();
         let Some(byte) = self.peek() else {
             return Ok(None);
         };
 
         let token = match byte {
-            b'_' => Token::Tag(self.take_bare()?),
+            b'_' => Token::Tag(self.take_bare()),
             b'\'' => Token::Value(self.take_quoted(b'\'')?, Quoting::Single),
             b'"' => Token::Value(self.take_quoted(b'"')?, Quoting::Double),
-            b';' if start.column == 1 => Token::Value(self.take_text()?, Quoting::Text),
-            _ => self.keyword_or_value()?,
+            b';' if self.offset == self.line_start => {
+                Token::Value(self.take_text()?, Quoting::Text)
+            }
+            _ => self.keyword_or_value(),
         };
         Ok(Some(Spanned {
             token,
-            span: ByteSpan::new(start, self.at.byte_offset),
+            span: ByteSpan::new(start, self.offset as u64),
         }))
     }
 
     /// A bare word, which may be a keyword or an ordinary value.
-    fn keyword_or_value(&mut self) -> Result<Token<'a>, LexError> {
-        let word = self.take_bare()?;
+    fn keyword_or_value(&mut self) -> Token<'a> {
+        let word = self.take_bare();
 
         // Nearly every bare word in a coordinate loop is a value, and the three
         // keywords begin with three distinct letters. Deciding on the first
@@ -138,175 +156,102 @@ impl<'a> Lexer<'a> {
         match word.as_bytes().first() {
             Some(b'd' | b'D') => {
                 if let Some(name) = strip_prefix_ignore_case(word, "data_") {
-                    return Ok(Token::Block(name));
+                    return Token::Block(name);
                 }
             }
             Some(b's' | b'S') => {
                 if let Some(name) = strip_prefix_ignore_case(word, "save_") {
-                    return Ok(if name.is_empty() {
+                    return if name.is_empty() {
                         Token::FrameEnd
                     } else {
                         Token::FrameStart(name)
-                    });
+                    };
                 }
             }
             Some(b'l' | b'L') if word.eq_ignore_ascii_case("loop_") => {
-                return Ok(Token::Loop);
+                return Token::Loop;
             }
             _ => {}
         }
-        Ok(Token::Value(word, Quoting::Bare))
+        Token::Value(word, Quoting::Bare)
     }
 
     fn peek(&self) -> Option<u8> {
-        self.remaining().as_bytes().first().copied()
+        self.input.as_bytes().get(self.offset).copied()
     }
 
     fn remaining(&self) -> &'a str {
-        match usize::try_from(self.at.byte_offset) {
-            Ok(offset) => slice_from(self.input, offset),
-            Err(_) => "",
-        }
+        slice_from(self.input, self.offset)
     }
 
-    /// Advances over `count` bytes, keeping the line and column right.
+    /// Moves the cursor over `count` bytes, which may include newlines.
     ///
     /// A long run has its newlines found with a vectorised search; a short one
-    /// walks its bytes. The threshold is not a micro-optimisation but the whole
-    /// point: most advances in an `atom_site` loop are a single separating
-    /// space, and setting up a vectorised search over one byte costs more than
-    /// inspecting it.
-    fn advance(&mut self, count: usize) -> Result<(), LexError> {
+    /// walks its bytes. Most advances in an `atom_site` loop are a single
+    /// separating space, where setting up a vectorised search costs more than
+    /// inspecting the byte.
+    fn advance(&mut self, count: usize) {
         /// Shortest run for which a vectorised newline search pays for itself.
         const BULK_THRESHOLD: usize = 32;
 
-        let text = self.remaining();
-        let skipped = match text.as_bytes().get(..count) {
-            Some(skipped) => skipped,
-            None => text.as_bytes(),
-        };
+        let bytes = self.input.as_bytes();
+        let end = self.offset.saturating_add(count).min(bytes.len());
+        let skipped = bytes.get(self.offset..end).unwrap_or_default();
         if skipped.len() < BULK_THRESHOLD {
-            return self.advance_bytewise(skipped);
+            for (index, byte) in skipped.iter().enumerate() {
+                if *byte == b'\n' {
+                    self.line += 1;
+                    self.line_start = self.offset + index + 1;
+                }
+            }
+        } else {
+            let newlines = memchr_iter(b'\n', skipped).count();
+            if let Some(last) = memrchr(b'\n', skipped) {
+                self.line += newlines as u64;
+                self.line_start = self.offset + last + 1;
+            }
         }
-        self.advance_all(skipped)
+        self.offset = end;
     }
 
-    /// Advances over a short run one byte at a time.
-    fn advance_bytewise(&mut self, skipped: &[u8]) -> Result<(), LexError> {
-        for byte in skipped {
-            self.at = self
-                .at
-                .advance(*byte)
-                .ok_or(LexError::PositionOverflow(self.at))?;
-        }
-        Ok(())
-    }
-
-    /// Advances over exactly `skipped`, updating the position in bulk.
-    fn advance_all(&mut self, skipped: &[u8]) -> Result<(), LexError> {
-        let Ok(length) = u64::try_from(skipped.len()) else {
-            return Err(LexError::PositionOverflow(self.at));
-        };
-        let Some(byte_offset) = self.at.byte_offset.checked_add(length) else {
-            return Err(LexError::PositionOverflow(self.at));
-        };
-
-        let newlines = memchr_iter(b'\n', skipped).count();
-        if newlines == 0 {
-            let Ok(narrow) = u64::try_from(skipped.len()) else {
-                return Err(LexError::PositionOverflow(self.at));
-            };
-            let Some(column) = self.at.column.checked_add(narrow) else {
-                return Err(LexError::PositionOverflow(self.at));
-            };
-            self.at.byte_offset = byte_offset;
-            self.at.column = column;
-            return Ok(());
-        }
-
-        let Ok(newlines) = u64::try_from(newlines) else {
-            return Err(LexError::PositionOverflow(self.at));
-        };
-        let Some(line) = self.at.line.checked_add(newlines) else {
-            return Err(LexError::PositionOverflow(self.at));
-        };
-        let Some(last) = memrchr(b'\n', skipped) else {
-            return Err(LexError::PositionOverflow(self.at));
-        };
-        let Ok(after) = u64::try_from(skipped.len() - last - 1) else {
-            return Err(LexError::PositionOverflow(self.at));
-        };
-        let Some(column) = after.checked_add(1) else {
-            return Err(LexError::PositionOverflow(self.at));
-        };
-
-        self.at.byte_offset = byte_offset;
-        self.at.line = line;
-        self.at.column = column;
-        Ok(())
-    }
-
-    /// Advances a run the caller has already established holds no newline.
-    ///
-    /// Bare values are scanned once to find their end, and that scan proves the
-    /// absence of a newline. Re-deriving it here would walk the same bytes a
-    /// second time, so this is pure arithmetic — which matters because in an
-    /// `atom_site` loop nearly every token takes this path.
-    fn advance_non_newline(&mut self, count: usize) -> Result<(), LexError> {
-        let Ok(narrow) = u64::try_from(count) else {
-            return self.advance(count);
-        };
-        let Some(byte_offset) = self.at.byte_offset.checked_add(narrow) else {
-            return self.advance(count);
-        };
-        let Some(column) = self.at.column.checked_add(narrow) else {
-            return self.advance(count);
-        };
-        self.at.byte_offset = byte_offset;
-        self.at.column = column;
-        Ok(())
+    /// Moves the cursor over a run the caller has already established holds no
+    /// newline. Bare values are scanned once to find their end, and that scan
+    /// proves the absence of a newline, so this is a single addition.
+    fn advance_non_newline(&mut self, count: usize) {
+        self.offset += count;
     }
 
     /// Skips whitespace and comments.
     ///
     /// A comment runs to the end of its line, and a `#` inside a quoted value is
     /// an ordinary character — which is why this only runs between tokens.
-    fn skip_trivia(&mut self) -> Result<(), LexError> {
+    fn skip_trivia(&mut self) {
         loop {
-            let text = self.remaining();
-            let bytes = text.as_bytes();
-            let spaces = match bytes.iter().position(|byte| !byte.is_ascii_whitespace()) {
-                Some(spaces) => spaces,
-                None => bytes.len(),
-            };
-            // Advance over the run already located, rather than counting it
-            // here and letting `advance` walk the same bytes a second time.
-            match bytes.get(..spaces) {
-                Some(run) => self.advance_all(run)?,
-                None => self.advance(spaces)?,
-            }
+            let bytes = self.remaining().as_bytes();
+            let spaces = bytes
+                .iter()
+                .position(|byte| !byte.is_ascii_whitespace())
+                .unwrap_or(bytes.len());
+            self.advance(spaces);
 
             if self.peek() != Some(b'#') {
-                return Ok(());
+                return;
             }
             let rest = self.remaining();
-            let line = match memchr(b'\n', rest.as_bytes()) {
-                Some(line) => line,
-                None => rest.len(),
-            };
-            self.advance(line)?;
+            let line = memchr(b'\n', rest.as_bytes()).unwrap_or(rest.len());
+            self.advance(line);
         }
     }
 
     /// A run of non-whitespace.
-    fn take_bare(&mut self) -> Result<&'a str, LexError> {
+    fn take_bare(&mut self) -> &'a str {
         let text = self.remaining();
         let end = text
             .bytes()
-            .take_while(|byte| !byte.is_ascii_whitespace())
-            .count();
-        self.advance_non_newline(end)?;
-        Ok(slice_to(text, end))
+            .position(|byte| byte.is_ascii_whitespace())
+            .unwrap_or(text.len());
+        self.advance_non_newline(end);
+        slice_to(text, end)
     }
 
     /// A value between quotes.
@@ -314,8 +259,8 @@ impl<'a> Lexer<'a> {
     /// The closing quote is the one followed by whitespace or the end of the
     /// line, so an apostrophe inside a quoted word does not end it early.
     fn take_quoted(&mut self, quote: u8) -> Result<&'a str, LexError> {
-        let opened_at = self.at;
-        self.advance(1)?;
+        let opened_at = self.position();
+        self.advance(1);
         let text = self.remaining();
         let bytes = text.as_bytes();
 
@@ -330,7 +275,7 @@ impl<'a> Lexer<'a> {
                 Some(next) => next.is_ascii_whitespace(),
             };
             if closes {
-                self.advance(candidate + 1)?;
+                self.advance(candidate + 1);
                 return Ok(slice_to(text, candidate));
             }
             if bytes.get(candidate).is_some_and(|byte| *byte == b'\n') {
@@ -346,8 +291,8 @@ impl<'a> Lexer<'a> {
     /// It begins with a semicolon in the first column and ends with the next
     /// one, so a semicolon anywhere else is ordinary text.
     fn take_text(&mut self) -> Result<&'a str, LexError> {
-        let opened_at = self.at;
-        self.advance(1)?;
+        let opened_at = self.position();
+        self.advance(1);
         // The rest of the opening line belongs to the value.
         let text = self.remaining();
         let bytes = text.as_bytes();
@@ -360,7 +305,7 @@ impl<'a> Lexer<'a> {
             let line_start = cursor + offset + 1;
             if bytes.get(line_start) == Some(&b';') {
                 let value = slice_to(text, cursor + offset);
-                self.advance(line_start + 1)?;
+                self.advance(line_start + 1);
                 return Ok(value.trim_start_matches(['\r', '\n']));
             }
             cursor = line_start;

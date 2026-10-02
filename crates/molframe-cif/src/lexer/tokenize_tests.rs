@@ -190,3 +190,34 @@ fn positions_are_exact_for_lf_crlf_and_multibyte_bare_words() {
 fn input_that_is_not_text_is_refused_rather_than_guessed_at() {
     assert!(matches!(Lexer::new(&[0xff, 0xfe]), Err(LexError::NotText)));
 }
+
+/// The position of `offset` found by walking every byte from the start.
+fn walked_position(text: &str, offset: usize) -> Position {
+    let mut at = Position::START;
+    for byte in text.as_bytes().iter().take(offset) {
+        at = at.advance(*byte).expect("test inputs are tiny");
+    }
+    at
+}
+
+proptest::proptest! {
+    #[test]
+    fn lazily_built_positions_match_a_bytewise_walk(
+        pieces in proptest::collection::vec(
+            proptest::sample::select(vec![
+                "data_x", "loop_", "_a.b", "1", "'q q'", "\"d d\"", "# note", " ", "  ",
+                "\n", "\r\n", "\n;text\nmore\n;\n", "\n;one line\n;\n", "é", "α β",
+            ]),
+            0..40,
+        )
+    ) {
+        let text: String = pieces.concat();
+        let Ok(mut lexer) = Lexer::new(text.as_bytes()) else { return Ok(()) };
+        while let Ok(Some(spanned)) = lexer.next_token() {
+            let start = usize::try_from(spanned.span.start.byte_offset).expect("small");
+            proptest::prop_assert_eq!(spanned.span.start, walked_position(&text, start));
+            let end = usize::try_from(spanned.span.end).expect("small");
+            proptest::prop_assert_eq!(lexer.position(), walked_position(&text, end));
+        }
+    }
+}
