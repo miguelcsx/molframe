@@ -127,7 +127,10 @@ fn keep_lowering_category(category: &str) -> bool {
             | "entity_poly_seq"
             | "struct_asym"
             | "struct_conn"
+            | "struct_conf"
+            | "struct_sheet_range"
             | "struct_ref"
             | "struct_ref_seq"
+            | "atom_site_anisotrop"
     )
 }

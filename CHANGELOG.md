@@ -4,6 +4,23 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## Unreleased
+
+### Fixed
+
+- **Deposited secondary structure from mmCIF and BinaryCIF.** The direct
+  readers dropped `struct_conf` and `struct_sheet_range` (and BinaryCIF also
+  `atom_site_anisotrop`) before lowering, so every residue read from those
+  formats had no helix or strand and the fallback assignment drew the whole
+  cartoon. The HELIX and SHEET ranges are now read as the PDB reader already did.
+- **Automatic secondary structure follows Kabsch–Sander.** The amide hydrogen
+  was placed from the donor's own carbonyl with the energy's sign reversed, so
+  almost no hydrogen bond formed and helices were inflated by a distance rule.
+  Helices are now two overlapping n-turns, strands are ladders of consecutive
+  bridges, proline and chain breaks have no amide hydrogen, and the first
+  alternate location is read. Agreement with the deposited annotation is 80%
+  on crambin, 84% on ubiquitin and haemoglobin and 99% on GroEL.
+
 ## 0.4.0
 
 ### Added

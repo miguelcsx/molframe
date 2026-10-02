@@ -90,3 +90,7 @@ fn assign_range(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "secondary_tests.rs"]
+mod tests;
