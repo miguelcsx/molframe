@@ -13,6 +13,10 @@ use molframe_core::{
     parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in},
 };
 use molframe_spatial::{CellGridOptions, CellList, PeriodicBox, SpatialError};
+use occlude_simd::NeighbourTile;
+
+#[path = "stream/occlude_simd.rs"]
+mod occlude_simd;
 
 const BLOCK_ATOMS: usize = 64;
 const NEIGHBOR_TILE: usize = 64;
@@ -181,8 +185,11 @@ impl Sampling<'_> {
         let centre = self.positions[atom].map(f64::from);
         let mut initialized = false;
         let mut hidden = 0_u16;
+        // Periodic sampling measures minimum-image distances and keeps the
+        // scalar test; the open-boundary case uses the lane-parallel tile.
         let mut neighbors = [([0.0; 3], 0.0); NEIGHBOR_TILE];
         let mut neighbors_len = 0;
+        let mut tile = NeighbourTile::<NEIGHBOR_TILE>::new();
         let samples =
             u16::try_from(points.len()).map_err(|_| SpatialError::NumericRangeExceeded)?;
         let atom = u32::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
@@ -205,11 +212,19 @@ impl Sampling<'_> {
                     covered.fill(0);
                     initialized = true;
                 }
-                neighbors[neighbors_len] = (other, other_radius * other_radius);
-                neighbors_len += 1;
-                if neighbors_len == NEIGHBOR_TILE {
-                    hidden += self.occlude(points, covered, &neighbors);
-                    neighbors_len = 0;
+                if self.periodic.is_some() {
+                    neighbors[neighbors_len] = (other, other_radius * other_radius);
+                    neighbors_len += 1;
+                    if neighbors_len == NEIGHBOR_TILE {
+                        hidden += self.occlude(points, covered, &neighbors);
+                        neighbors_len = 0;
+                    }
+                } else {
+                    tile.push(other, other_radius * other_radius);
+                    if tile.is_full() {
+                        hidden += tile.occlude(points, covered);
+                        tile.clear();
+                    }
                 }
             })?;
         let sphere = 4.0 * core::f64::consts::PI;
@@ -218,6 +233,9 @@ impl Sampling<'_> {
         }
         if neighbors_len != 0 {
             hidden += self.occlude(points, covered, &neighbors[..neighbors_len]);
+        }
+        if tile.len() != 0 {
+            hidden += tile.occlude(points, covered);
         }
         Ok(f64::from(samples - hidden) * (sphere / f64::from(samples)) * radius * radius)
     }

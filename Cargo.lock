@@ -2471,6 +2471,7 @@ dependencies = [
  "num-traits",
  "tempfile",
  "thiserror 2.0.21",
+ "wide",
 ]
 
 [[package]]

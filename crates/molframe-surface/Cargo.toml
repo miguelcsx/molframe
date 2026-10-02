@@ -12,6 +12,7 @@ num-traits.workspace = true
 molframe-core.workspace = true
 molframe-spatial.workspace = true
 thiserror.workspace = true
+wide.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

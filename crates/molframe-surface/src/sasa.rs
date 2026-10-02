@@ -18,6 +18,7 @@ use molframe_spatial::SpatialError;
 use crate::neighbourhood::{self, Neighbourhood};
 use crate::numeric::{f64_to_f32, f64_to_u16, f64_to_usize};
 use crate::sampling::fibonacci_sphere;
+use crate::sampling_plan::SasaSampler;
 use std::collections::BTreeMap;
 
 #[path = "sasa/contact.rs"]
@@ -122,17 +123,12 @@ pub fn shrake_rupley(
     points: u16,
     context: &ExecutionContext,
 ) -> Result<Vec<f64>, SasaError> {
-    let Some(geometry) = prepare(positions, radii, probe, points, context)? else {
-        return Ok(Vec::new());
-    };
-
-    let per_point = 4.0 * core::f64::consts::PI / f64::from(points);
-
-    mapped_ranges(positions.len(), context, |range| {
-        range
-            .map(|atom| atom_area(atom, &geometry, per_point))
-            .collect()
-    })
+    let mut areas = Vec::with_capacity(positions.len());
+    SasaSampler::new(radii, probe, points, context)?.visit(positions, None, |_, area| {
+        areas.push(area);
+        Ok(())
+    })?;
+    Ok(areas)
 }
 
 /// Runs `worker` over every block of `0..count` and concatenates the results.
@@ -164,30 +160,6 @@ fn mapped_ranges<T: Send>(
         output.extend(part);
     }
     Ok(output)
-}
-
-/// Computes sampled solvent-accessible area for one atom.
-///
-/// Atoms without neighbours take the exact `4πR²` fast path and therefore do
-/// not scan sampling directions.
-fn atom_area(atom: usize, geometry: &Geometry, per_point: f64) -> f64 {
-    let radius = geometry.hood.expanded[atom];
-
-    if radius <= 0.0 {
-        return 0.0;
-    }
-
-    if geometry.hood.adjacency.row(atom).is_empty() {
-        return 4.0 * core::f64::consts::PI * radius * radius;
-    }
-
-    let mut accessible = 0u32;
-
-    geometry.for_each_exposed(atom, |_| {
-        accessible += 1;
-    });
-
-    f64::from(accessible) * per_point * radius * radius
 }
 
 /// A sampled point on the molecular surface, with its outward normal.
