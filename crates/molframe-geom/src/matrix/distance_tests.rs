@@ -82,4 +82,37 @@ fn parallel_row_blocks_are_bitwise_worker_count_independent() {
         Err(error) => panic!("parallel matrix failed: {error}"),
     };
     assert_eq!(serial.as_slice(), parallel.as_slice());
+    for workers in [2, 4, 8] {
+        let context = ExecutionContext::builder()
+            .worker_budget(workers)
+            .build()
+            .expect("a positive worker budget is valid");
+        let matrix = distance_matrix_with_context(&points, &context).expect("fits the budget");
+        assert_eq!(matrix.as_slice(), serial.as_slice(), "{workers} workers");
+    }
+}
+
+#[test]
+fn a_budget_for_the_matrix_alone_suffices_and_a_smaller_one_is_refused() {
+    let points = (0_u16..300)
+        .map(|index| [f32::from(index), 0.0, 0.0])
+        .collect::<Vec<_>>();
+    let matrix_bytes = 300 * 300 * 8;
+    let budgeted = |bytes| {
+        ExecutionContext::builder()
+            .worker_budget(4)
+            .memory_budget(molframe_core::MemoryBudget::new(bytes).expect("a positive budget"))
+            .scratch_policy(molframe_core::ScratchPolicy::new(0))
+            .build()
+            .expect("a valid context")
+    };
+    // One matrix plus a few row blocks in flight; the old path needed two matrices.
+    let roomy = budgeted(matrix_bytes + matrix_bytes / 2);
+    assert!(distance_matrix_with_context(&points, &roomy).is_ok());
+    assert_eq!(roomy.reserved_bytes(), 0);
+    let tight = budgeted(matrix_bytes - 1);
+    assert_eq!(
+        distance_matrix_with_context(&points, &tight).map(|_| ()),
+        Err(MatrixError::MemoryBudget)
+    );
 }

@@ -6,7 +6,7 @@
 
 use crate::distance;
 use molframe_core::ExecutionContext;
-use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
 use std::fmt;
 use wide::f64x4;
 
@@ -159,8 +159,10 @@ pub fn distance_matrix_with_context(
     let count = size.checked_mul(size).ok_or(MatrixError::SizeOverflow)?;
     let bytes = count
         .checked_mul(std::mem::size_of::<f64>())
-        .and_then(|value| value.checked_mul(2))
         .ok_or(MatrixError::SizeOverflow)?;
+    // The reservation covers the retained matrix only: each row block is
+    // charged separately while it is in flight and appended as it completes,
+    // so the peak is one matrix plus a bounded window rather than two matrices.
     let _reservation = context
         .try_reserve(bytes)
         .map_err(|_| MatrixError::MemoryBudget)?;
@@ -170,28 +172,40 @@ pub fn distance_matrix_with_context(
     if size < PARALLEL_MATRIX_ROWS || context.worker_budget() == 1 {
         return distance_matrix(positions);
     }
-    let blocks = map_blocks_in(BlockPlan::new(size, ROWS_PER_BLOCK), context, |_, rows| {
-        let mut values = vec![0.0; rows.len() * size];
-        for (local, row) in rows.enumerate() {
-            distances_from(
-                positions[row],
-                positions,
-                &mut values[local * size..(local + 1) * size],
-            );
-        }
-        values
-    })
-    .map_err(|_| MatrixError::WorkerPanicked)?;
-    if context.cancellation().is_cancelled() {
-        return Err(MatrixError::Cancelled);
-    }
     let mut values = Vec::new();
     values
         .try_reserve_exact(count)
         .map_err(|_| MatrixError::AllocationFailed)?;
-    for mut block in blocks {
-        values.append(&mut block);
-    }
+    let block_bytes = ROWS_PER_BLOCK
+        .checked_mul(size)
+        .and_then(|cells| cells.checked_mul(std::mem::size_of::<f64>()))
+        .ok_or(MatrixError::SizeOverflow)?;
+    try_for_each_block_in(
+        BlockPlan::new(size, ROWS_PER_BLOCK),
+        context,
+        block_bytes,
+        |_, rows| {
+            let mut block = vec![0.0; rows.len() * size];
+            for (local, row) in rows.enumerate() {
+                distances_from(
+                    positions[row],
+                    positions,
+                    &mut block[local * size..(local + 1) * size],
+                );
+            }
+            Ok::<_, MatrixError>(block)
+        },
+        |block| {
+            values.extend_from_slice(&block);
+            Ok(())
+        },
+    )
+    .map_err(|error| match error {
+        BlockExecutionError::Memory(_) => MatrixError::MemoryBudget,
+        BlockExecutionError::Cancelled => MatrixError::Cancelled,
+        BlockExecutionError::Worker(_) => MatrixError::WorkerPanicked,
+        BlockExecutionError::Operation(error) => error,
+    })?;
     Ok(DistanceMatrix {
         rows: size,
         columns: size,
