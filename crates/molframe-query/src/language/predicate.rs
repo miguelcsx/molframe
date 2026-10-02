@@ -168,6 +168,15 @@ fn element_membership(
     if named.is_empty() && patterns.is_empty() {
         return AtomSelection::Empty;
     }
+    // A named element is exactly what a chunk summary can rule out; a glob
+    // pattern is not, so a pattern forces the full scan.
+    let narrowed;
+    let universe = if patterns.is_empty() {
+        narrowed = universe.intersect(&super::prune::chunks_with_any_element(structure, &named));
+        &narrowed
+    } else {
+        universe
+    };
     scan(structure, universe, |context| {
         context.atom.element().is_some_and(|element| {
             named.contains(&element)
