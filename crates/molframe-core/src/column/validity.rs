@@ -215,13 +215,24 @@ impl ValidityMask {
     }
 
     pub(crate) fn from_bounded_iter<T: IntoIterator<Item = Presence>>(iter: T, len: u32) -> Self {
-        let mut present = BitVec::repeat(false, len);
-        let mut unknown = BitVec::repeat(false, len);
+        // Packing into plain words avoids a copy-on-write check per bit.
+        let word_count = len.div_ceil(u64::BITS) as usize;
+        let mut present = vec![0_u64; word_count];
+        let mut unknown = vec![0_u64; word_count];
         for (position, presence) in (0..len).zip(iter) {
-            present.set(position, presence == Presence::Present);
-            unknown.set(position, presence == Presence::Unknown);
+            let word = (position / u64::BITS) as usize;
+            let bit = 1_u64 << (position % u64::BITS);
+            let target = match presence {
+                Presence::Present => &mut present,
+                Presence::Unknown => &mut unknown,
+                Presence::Inapplicable => continue,
+            };
+            target[word] |= bit;
         }
-        let mut validity = Self::Mixed { present, unknown };
+        let mut validity = Self::Mixed {
+            present: BitVec::from_words(present, len),
+            unknown: BitVec::from_words(unknown, len),
+        };
         validity.compact();
         validity
     }

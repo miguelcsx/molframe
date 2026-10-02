@@ -46,6 +46,19 @@ impl BitVec {
         bits
     }
 
+    /// Wraps already-packed words holding `len` bits.
+    ///
+    /// The caller guarantees `words` holds exactly `len.div_ceil(64)` words
+    /// and that every bit at or past `len` is zero, which is what
+    /// [`Self::count_ones`] and comparison rely on.
+    pub(crate) fn from_words(words: Vec<u64>, len: u32) -> Self {
+        debug_assert_eq!(words.len(), word_count(len));
+        Self {
+            words: Arc::new(words),
+            len,
+        }
+    }
+
     /// Creates a set with room for `len` bits without reallocating.
     #[must_use]
     pub fn with_capacity(len: u32) -> Self {

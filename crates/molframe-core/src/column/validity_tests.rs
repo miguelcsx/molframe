@@ -30,6 +30,25 @@ fn marking_a_position_absent_materialises_the_bit_sets_once() {
 }
 
 #[test]
+fn a_bounded_build_agrees_with_pushing_one_presence_at_a_time() {
+    for len in [0_u32, 1, 63, 64, 65, 130] {
+        let presences: Vec<Presence> = (0..len)
+            .map(|position| match position % 5 {
+                0 | 1 => Presence::Present,
+                2 => Presence::Unknown,
+                _ => Presence::Inapplicable,
+            })
+            .collect();
+        let bounded = ValidityMask::from_bounded_iter(presences.iter().copied(), len);
+        let pushed = ValidityMask::try_from_iter(presences.iter().copied()).expect("fits");
+        assert_eq!(bounded.present_count(), pushed.present_count(), "len {len}");
+        for position in 0..len {
+            assert_eq!(bounded.get(position), pushed.get(position), "len {len}");
+        }
+    }
+}
+
+#[test]
 fn marking_everything_present_again_collapses_the_mask() {
     let mut mask = ValidityMask::all_present(4);
     mask.set(1, Presence::Inapplicable);
