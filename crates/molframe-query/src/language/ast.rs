@@ -43,6 +43,8 @@ pub(crate) enum Column {
     Occupancy,
     Plddt,
     Pae,
+    /// The materialised chain copy an atom belongs to, by instance id.
+    Assembly,
 }
 
 impl Column {
@@ -86,6 +88,7 @@ impl Column {
             "occupancy" => Self::Occupancy,
             "plddt" => Self::Plddt,
             "pae" => Self::Pae,
+            "assembly" => Self::Assembly,
             _ => return None,
         })
     }
@@ -112,6 +115,7 @@ impl Column {
                 | Self::Occupancy
                 | Self::Plddt
                 | Self::Pae
+                | Self::Assembly
         )
     }
 }

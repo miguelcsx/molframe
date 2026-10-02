@@ -14,6 +14,13 @@ fn completion_uses_byte_spans_for_unicode_prefixes() {
 }
 
 #[test]
+fn completion_offers_the_assembly_column() {
+    let aliases = QueryAliases::new();
+    let result = complete("assem", 5, &aliases, None);
+    assert!(result.items.iter().any(|item| item.label == "assembly"));
+}
+
+#[test]
 fn completion_exposes_only_defined_aliases_after_dollar() {
     let mut aliases = QueryAliases::new();
     let query = Query::compile("protein").expect("query compiles");

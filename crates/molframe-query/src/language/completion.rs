@@ -146,6 +146,7 @@ const COLUMNS: &[&str] = &[
     "label_name",
     "auth_name",
     "altloc",
+    "assembly",
     "model",
     "entity",
     "entity_type",

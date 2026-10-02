@@ -49,6 +49,10 @@ required-features = ["full"]
 name = "golden_workflows"
 required-features = ["full"]
 
+[[test]]
+name = "assembly_query"
+required-features = ["full"]
+
 [[bench]]
 name = "facade"
 harness = false

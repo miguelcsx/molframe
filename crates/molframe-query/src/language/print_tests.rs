@@ -35,6 +35,8 @@ const CORPUS: &[&str] = &[
     "chirality R",
     "backbone and nucleicbase or nucleicsugar",
     "altloc A and icode B and segid S1",
+    "assembly 0:3",
+    "same assembly as (index 0)",
 ];
 
 #[test]

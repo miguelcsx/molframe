@@ -311,6 +311,7 @@ pub(crate) const fn column_name(column: Column) -> &'static str {
         Column::Occupancy => "occupancy",
         Column::Plddt => "plddt",
         Column::Pae => "pae",
+        Column::Assembly => "assembly",
     }
 }
 

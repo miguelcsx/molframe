@@ -11,6 +11,7 @@ pub(crate) fn name(column: Column) -> Option<&'static str> {
         Column::Charge => Some(molframe_core::PARTIAL_CHARGE_ANNOTATION),
         Column::Plddt => Some(molframe_core::PLDDT_ANNOTATION),
         Column::Pae => Some(molframe_core::PAE_ANNOTATION),
+        Column::Assembly => Some(molframe_core::INSTANCE_ID_ANNOTATION),
         _ => None,
     }
 }

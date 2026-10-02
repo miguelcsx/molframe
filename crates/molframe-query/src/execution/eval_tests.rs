@@ -407,6 +407,47 @@ fn segment_atom_and_predicted_annotations_execute_from_core_columns() {
 }
 
 #[test]
+fn assembly_selects_materialised_chain_copies_and_refuses_without_them() {
+    let source = structure();
+    let mut data = source.data().clone();
+    let _ = data.annotations.insert(
+        molframe_core::INSTANCE_ID_ANNOTATION,
+        molframe_core::AtomAnnotation::Integer(
+            molframe_core::AnnotationColumn::from_values(vec![0_i64, 0, 1])
+                .expect("small annotation column"),
+        ),
+    );
+    let annotated = Structure::new(data);
+    let policy = AnalysisPolicy::default();
+    let select = |structure: &Structure, source: &str| {
+        Query::compile(source).expect("query compiles").evaluate(
+            structure,
+            &policy,
+            &Groups::new(),
+            None,
+        )
+    };
+    for (text, expected) in [
+        ("assembly 1", vec![2]),
+        ("assembly 0", vec![0, 1]),
+        ("same assembly as index 0", vec![0, 1]),
+    ] {
+        let result = select(&annotated, text).expect("annotation present");
+        assert_eq!(
+            result.selection.iter().collect::<Vec<_>>(),
+            expected,
+            "{text}"
+        );
+    }
+    let refused = select(&source, "assembly 0");
+    assert!(
+        matches!(&refused, Err(findings) if findings.iter().any(|finding| finding.code() == Code::E4003)),
+        "an unmaterialised structure must refuse rather than select nothing: {:?}",
+        refused.map(|result| result.selection.len())
+    );
+}
+
+#[test]
 fn a_universe_reaching_past_the_structure_is_rejected_before_anything_is_selected() {
     let structure = structure();
     let query = Query::compile("all").expect("query compiles");

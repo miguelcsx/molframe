@@ -37,11 +37,13 @@ pub(super) fn numeric(
         )?),
         Column::BFactor => f64::from(context.atom.b_factor()?),
         Column::Occupancy => f64::from(context.atom.occupancy()?),
-        Column::Charge | Column::Plddt | Column::Pae => crate::annotation::number(
-            structure,
-            context.atom.index().get(),
-            crate::annotation::name(column)?,
-        )?,
+        Column::Charge | Column::Plddt | Column::Pae | Column::Assembly => {
+            crate::annotation::number(
+                structure,
+                context.atom.index().get(),
+                crate::annotation::name(column)?,
+            )?
+        }
         _ => return None,
     };
     Some(value)

@@ -66,6 +66,22 @@ plddt < 50 and protein
 
 Exact floating-point equality is rarely a useful scientific criterion. Prefer a range or threshold when a property originated in a calculation.
 
+## Select a copy in a materialised assembly
+
+A materialised biological assembly tags every atom with the 0-based instance
+id of the chain copy it belongs to. `assembly` selects by that id and accepts
+the same numbers and ranges as the other numeric columns:
+
+```text
+assembly 1
+assembly 0:3 and protein
+same assembly as (resname HEM)
+```
+
+On a structure that was not materialised from an assembly there is no instance
+id to read, so `assembly` fails with `MOLFRAME-E4003` (annotation
+`molframe.instance_id`) instead of returning an empty selection.
+
 ## Reuse a compiled query
 
 `Query` validates text once and has a stable fingerprint. It is the right form for a filter used repeatedly across one or more structures.
