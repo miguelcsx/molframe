@@ -54,18 +54,25 @@ pub(super) enum IntegerValues {
 }
 
 impl IntegerValues {
+    /// Narrows once: one pass finds the range, one pass builds the result.
     fn new(values: Vec<i64>) -> Self {
-        let i8_values: Result<Vec<_>, _> = values.iter().copied().map(i8::try_from).collect();
-        if let Ok(compact) = i8_values {
-            return Self::I8(compact);
+        if values.is_empty() {
+            return Self::I8(Vec::new());
         }
-        let i16_values: Result<Vec<_>, _> = values.iter().copied().map(i16::try_from).collect();
-        if let Ok(compact) = i16_values {
-            return Self::I16(compact);
+        let (low, high) = values
+            .iter()
+            .fold((i64::MAX, i64::MIN), |(low, high), &value| {
+                (low.min(value), high.max(value))
+            });
+        // Truncation below is lossless: every value lies within the checked range.
+        if i8::try_from(low).is_ok() && i8::try_from(high).is_ok() {
+            return Self::I8(values.iter().map(|&value| value as i8).collect());
         }
-        let i32_values: Result<Vec<_>, _> = values.iter().copied().map(i32::try_from).collect();
-        if let Ok(compact) = i32_values {
-            return Self::I32(compact);
+        if i16::try_from(low).is_ok() && i16::try_from(high).is_ok() {
+            return Self::I16(values.iter().map(|&value| value as i16).collect());
+        }
+        if i32::try_from(low).is_ok() && i32::try_from(high).is_ok() {
+            return Self::I32(values.iter().map(|&value| value as i32).collect());
         }
         Self::I64(values)
     }
@@ -135,9 +142,10 @@ pub(super) struct StringValues {
 impl StringValues {
     fn new(values: DecodedStringColumn) -> Self {
         let (dictionary, indices) = values.into_parts();
+        let indices = StringIndices::new(indices, dictionary.len());
         Self {
             dictionary,
-            indices: StringIndices::new(indices),
+            indices,
         }
     }
 
@@ -158,14 +166,25 @@ enum StringIndices {
 }
 
 impl StringIndices {
-    fn new(indices: Arc<[u32]>) -> Self {
-        let u8_indices: Result<Vec<_>, _> = indices.iter().copied().map(u8::try_from).collect();
-        if let Ok(compact) = u8_indices {
-            return Self::U8(compact);
+    /// Picks the width from the dictionary size, in one pass. The widest value
+    /// of each narrow width stays out of range for a dictionary that fits, so
+    /// an index past the dictionary clamps to a value `get` still rejects.
+    fn new(indices: Arc<[u32]>, dictionary_len: usize) -> Self {
+        if dictionary_len < usize::from(u8::MAX) {
+            return Self::U8(
+                indices
+                    .iter()
+                    .map(|&index| u8::try_from(index).unwrap_or(u8::MAX))
+                    .collect(),
+            );
         }
-        let u16_indices: Result<Vec<_>, _> = indices.iter().copied().map(u16::try_from).collect();
-        if let Ok(compact) = u16_indices {
-            return Self::U16(compact);
+        if dictionary_len < usize::from(u16::MAX) {
+            return Self::U16(
+                indices
+                    .iter()
+                    .map(|&index| u16::try_from(index).unwrap_or(u16::MAX))
+                    .collect(),
+            );
         }
         Self::U32(indices)
     }

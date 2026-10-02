@@ -32,3 +32,42 @@ fn integer_and_float_columns_narrow_without_changing_row_values() {
     assert!(matches!(&floats, ColumnValues::Floats(FloatValues::F32(_))));
     assert!(matches!(floats.value(1), Some(ValueRef::Float(-2.5))));
 }
+
+#[test]
+fn integers_pick_the_narrowest_width_that_holds_the_range() {
+    let width = |values: Vec<i64>| match IntegerValues::new(values) {
+        IntegerValues::I8(_) => 8,
+        IntegerValues::I16(_) => 16,
+        IntegerValues::I32(_) => 32,
+        IntegerValues::I64(_) => 64,
+    };
+    assert_eq!(width(vec![-128, 127]), 8);
+    assert_eq!(width(vec![0, 128]), 16);
+    assert_eq!(width(vec![-32_769, 0]), 32);
+    assert_eq!(width(vec![0, i64::from(i32::MAX) + 1]), 64);
+    assert_eq!(width(Vec::new()), 8);
+}
+
+#[test]
+fn string_indices_follow_the_dictionary_size_and_reject_stray_indices() {
+    let column = |entries: usize, indices: Vec<u32>| {
+        let dictionary: Vec<Arc<str>> = (0..entries).map(|n| Arc::from(n.to_string())).collect();
+        let strings = DecodedStringColumn::new(dictionary, indices).expect("indices in range");
+        let ColumnValues::Strings(values) = ColumnValues::new(Decoded::Strings(strings)) else {
+            panic!("string values expected")
+        };
+        values
+    };
+    assert!(matches!(
+        column(300, vec![299]).indices,
+        StringIndices::U16(_)
+    ));
+    assert!(matches!(
+        column(70_000, vec![69_999]).indices,
+        StringIndices::U32(_)
+    ));
+    let small = column(10, vec![9, 0]);
+    assert!(matches!(small.indices, StringIndices::U8(_)));
+    assert_eq!(small.get(0), Some("9"));
+    assert_eq!(small.get(1), Some("0"));
+}
