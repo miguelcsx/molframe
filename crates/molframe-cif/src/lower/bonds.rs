@@ -4,10 +4,10 @@ use crate::document::{Category, CifValue, DataBlock};
 use crate::lower::diagnostics::at_source_row;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
+use molframe_core::hashing::{IdentityHashMap, IdentityHashSet};
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, StructureData};
 use molframe_core::symbol::SymbolId;
-use std::collections::HashMap;
 
 /// A connectivity endpoint expressed in structure-local integer identifiers.
 ///
@@ -47,7 +47,7 @@ impl Match {
     }
 }
 
-type AtomMap = HashMap<AtomKey, Match>;
+type AtomMap = IdentityHashMap<AtomKey, Match>;
 
 #[derive(Clone, Copy)]
 struct Endpoint {
@@ -219,8 +219,8 @@ fn endpoint_items(partner: u8, namespace: Namespace) -> Option<EndpointItems> {
 
 fn requested_maps(connections: &[Connection]) -> (AtomMap, AtomMap) {
     let capacity = connections.len().saturating_mul(2);
-    let mut label = HashMap::with_capacity(capacity);
-    let mut auth = HashMap::with_capacity(capacity);
+    let mut label = AtomMap::with_capacity_and_hasher(capacity, Default::default());
+    let mut auth = AtomMap::with_capacity_and_hasher(capacity, Default::default());
     for connection in connections {
         request(&mut label, connection.atom_a.label);
         request(&mut label, connection.atom_b.label);
@@ -236,12 +236,53 @@ fn request(map: &mut AtomMap, key: Option<AtomKey>) {
     }
 }
 
+/// The chains and residues some `struct_conn` endpoint can name.
+///
+/// An endpoint key starts with its chain and residue, so a chain or residue
+/// outside this set cannot match and its atoms need no key at all.
+struct Wanted {
+    chains: IdentityHashSet<SymbolId>,
+    residues: IdentityHashSet<(SymbolId, Option<i32>)>,
+}
+
+impl Wanted {
+    fn of(map: &AtomMap) -> Self {
+        let mut chains = IdentityHashSet::default();
+        let mut residues = IdentityHashSet::default();
+        for key in map.keys() {
+            chains.insert(key.asym);
+            residues.insert((key.asym, key.sequence));
+        }
+        Self { chains, residues }
+    }
+
+    fn residue(&self, chain: Option<SymbolId>, sequence: Option<i32>) -> bool {
+        chain.is_some_and(|chain| {
+            self.chains.contains(&chain) && self.residues.contains(&(chain, sequence))
+        })
+    }
+}
+
 fn match_atoms(data: &StructureData, label: &mut AtomMap, auth: &mut AtomMap) {
+    let wanted_label = Wanted::of(label);
+    let wanted_auth = Wanted::of(auth);
     for chain in data.chains() {
         for residue in chain.residues() {
+            let by_label = wanted_label.residue(
+                chain.label_asym_id(),
+                residue.label_seq_id().or_else(|| residue.auth_seq_id()),
+            );
+            let by_author = wanted_auth.residue(chain.auth_asym_id(), residue.auth_seq_id());
+            if !by_label && !by_author {
+                continue;
+            }
             for atom in residue.atoms() {
-                observe(label, label_key(chain, residue, atom), atom.index());
-                observe(auth, auth_key(chain, residue, atom), atom.index());
+                if by_label {
+                    observe(label, label_key(chain, residue, atom), atom.index());
+                }
+                if by_author {
+                    observe(auth, auth_key(chain, residue, atom), atom.index());
+                }
             }
         }
     }
