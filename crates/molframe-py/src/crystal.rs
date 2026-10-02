@@ -222,5 +222,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyUnitCell>()?;
     module.add_class::<PySpaceGroup>()?;
     module.add_class::<PyReflectionSymmetry>()?;
-    crate::crystal_statistics::register(module)
+    crate::crystal_statistics::register(module)?;
+    crate::crystal_reduction::register(module)
 }

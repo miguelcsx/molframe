@@ -9,6 +9,7 @@ mod assembly;
 mod assembly_spatial;
 mod category_transform;
 mod cell;
+mod cell_reduction;
 mod crystal;
 mod crystal_batch;
 mod crystal_images;
@@ -39,6 +40,7 @@ pub use affine::AffineTransform;
 pub use assembly::{ASSEMBLIES_EXTENSION, AssemblyDef, AssemblySet, Generator, Operator};
 pub use assembly_spatial::AssemblyNeighbor;
 pub use cell::CellTransform;
+pub use cell_reduction::{CellReductionError, ReducedCell, niggli_reduce};
 pub use crystal::{
     CrystalNeighbor, CrystalNeighborBatch, CrystalNeighborOptions, DEFAULT_CRYSTAL_IMAGE_LIMIT,
     collect_crystal_neighbors, crystal_neighbor_batches, visit_crystal_neighbors,

@@ -70,6 +70,26 @@ class ResolutionBins:
     def d_min(self, bin: int) -> float: ...
     def d_max(self, bin: int) -> float: ...
 
+@final
+class ReducedCell:
+    @property
+    def lengths(self) -> tuple[float, float, float]: ...
+    @property
+    def angles(self) -> tuple[float, float, float]: ...
+    @property
+    def change_of_basis(self) -> list[list[int]]: ...
+    @property
+    def iterations(self) -> int: ...
+    @property
+    def converged(self) -> bool: ...
+
+def reduce_cell(
+    lengths: Sequence[float],
+    angles: Sequence[float],
+    *,
+    epsilon: float = 1e-9,
+    iteration_limit: int = 100,
+) -> ReducedCell: ...
 def normalizers(
     cell: UnitCell,
     space_group: SpaceGroup,
