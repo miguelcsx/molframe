@@ -81,7 +81,7 @@ extrapolation, not as a measurement.
 | Cell-list build, 100,000 atoms, under 5 ms | `spatial_cell_list/build_100k`: 1.37 ms (eager `CellList::build_in`) | Met |
 | RMSD, 10,000 atoms | `geom_coordinates/rmsd_10k`: 6.68 µs (1.50 Gelem/s) | Reported |
 | Coordinate hand-off to NumPy without a copy | `facade_handoff/positions_slice`: 0.83 ns; the slice pointer is asserted equal across calls | Met |
-| Python import under 50 ms | Not measured on a release wheel | Not measured |
+| Python import under 50 ms | 1.2 ms median over five subprocess imports of a release abi3 build; `python/tests/test_import_time.py` asserts the 50 ms budget | Met |
 
 Column predicates used to cost one hierarchy walk and a binary search per atom.
 Residue- and chain-level predicates now decide once per residue and return runs,

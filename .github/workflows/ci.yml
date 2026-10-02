@@ -81,7 +81,7 @@ jobs:
         run: uv python install 3.13 && uv sync --group dev --no-install-project
 
       - name: Extension
-        run: uvx maturin develop
+        run: uvx maturin develop --release
 
       - name: Smoke suite
         run: uv run --no-sync pytest python/tests -q
