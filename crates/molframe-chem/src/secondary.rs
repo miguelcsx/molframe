@@ -9,8 +9,8 @@
 
 use crate::grid::{CellGrid, cell_for};
 use molframe_core::SecondaryStructure;
+use molframe_core::hashing::{IdentityHashMap, IdentityHashSet};
 use molframe_core::structure::Structure;
-use std::collections::{HashMap, HashSet};
 
 const CA_CUTOFF: f32 = 9.0;
 /// The Kabsch–Sander bond threshold, in kcal/mol.
@@ -39,7 +39,7 @@ impl Backbone {
 }
 
 /// One carbonyl-to-amide hydrogen bond list, as `(acceptor, donor)` residues.
-type Bonds = HashSet<(usize, usize)>;
+type Bonds = IdentityHashSet<(usize, usize)>;
 
 /// Assigns unknown residues using a grid-bounded DSSP pass.
 ///
@@ -112,7 +112,7 @@ fn hydrogen_bonds(backbones: &[Backbone]) -> (Vec<(usize, usize)>, Bonds) {
     }
     let grid = CellGrid::build(entries);
     let mut pairs = Vec::new();
-    let mut bonds = Bonds::new();
+    let mut bonds = Bonds::default();
     grid.for_each_cell(|own, neighbourhood| {
         for &left in &grid.items()[own] {
             for range in neighbourhood {
@@ -250,7 +250,7 @@ fn classify(bonds: &Bonds, pairs: &[(usize, usize)], states: &mut [SecondaryStru
     }
 
     let before = |residue: usize| residue.checked_sub(1);
-    let mut bridges: HashMap<(usize, usize), Ladder> = HashMap::new();
+    let mut bridges: IdentityHashMap<(usize, usize), Ladder> = IdentityHashMap::default();
     for &(first, second) in pairs {
         let (i, j) = (first, second);
         let parallel = (bond(before(i), Some(j)) && bond(Some(j), Some(i + 1)))
