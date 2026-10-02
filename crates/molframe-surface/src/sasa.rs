@@ -143,7 +143,7 @@ pub fn shrake_rupley(
 /// every neighbour; and atoms arrive in file order, which correlates with
 /// burial. One contiguous range per worker would leave threads idle while one
 /// finishes a buried run.
-fn mapped_ranges<T: Send>(
+pub(crate) fn mapped_ranges<T: Send>(
     count: usize,
     context: &ExecutionContext,
     worker: impl Fn(core::ops::Range<usize>) -> Vec<T> + Sync,

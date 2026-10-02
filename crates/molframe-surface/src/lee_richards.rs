@@ -80,23 +80,16 @@ pub fn lee_richards(
         return Ok(Vec::new());
     };
 
-    let mut areas = Vec::with_capacity(positions.len());
-    // One pair of scratch buffers circulates across every atom; per-atom
-    // allocation would otherwise dominate the surface kernel at scale.
-    let mut neighbours: Vec<SliceNeighbour> = Vec::new();
-    let mut segments: Vec<(f64, f64)> = Vec::new();
-
-    for atom in 0..positions.len() {
-        areas.push(atom_area(
-            atom,
-            &hood,
-            slices,
-            &mut neighbours,
-            &mut segments,
-        ));
-    }
-
-    Ok(areas)
+    // Each block owns one pair of scratch buffers for all of its atoms, so the
+    // per-atom kernel never allocates. Blocks are fixed and merged in order,
+    // so the result is identical at any worker count.
+    crate::accessible_area::mapped_ranges(positions.len(), context, |range| {
+        let mut neighbours: Vec<SliceNeighbour> = Vec::new();
+        let mut segments: Vec<(f64, f64)> = Vec::new();
+        range
+            .map(|atom| atom_area(atom, &hood, slices, &mut neighbours, &mut segments))
+            .collect()
+    })
 }
 
 /// The accessible area of one atom, integrated over its slices.
@@ -209,6 +202,13 @@ fn add_neighbour_coverage(
     let rise = neighbour.centre_z - circle.absolute_height;
 
     if rise.abs() >= neighbour.radius {
+        return false;
+    }
+
+    // A neighbour farther away than the two radii can never reach the circle:
+    // its disk radius is at most its sphere radius. The test costs no root.
+    let farthest = circle.radius + neighbour.radius;
+    if neighbour.separation_squared >= farthest * farthest {
         return false;
     }
 

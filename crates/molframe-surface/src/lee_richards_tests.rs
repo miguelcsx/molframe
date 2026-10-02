@@ -106,3 +106,26 @@ fn zero_slices_is_rejected() {
         .is_err()
     );
 }
+
+#[test]
+fn areas_are_bit_identical_at_one_and_eight_workers() {
+    let structure = molframe_bench::structure(molframe_bench::Sample::Medium);
+    let positions = molframe_bench::coordinates(&structure);
+    let radii = vec![1.7_f32; positions.len()];
+    let run = |workers| {
+        let context = ExecutionContext::builder()
+            .worker_budget(workers)
+            .build()
+            .expect("a positive worker budget is valid");
+        lee_richards(&positions, &radii, 1.4, 40, &context).expect("valid input")
+    };
+    let serial = run(1);
+    let parallel = run(8);
+    assert_eq!(serial.len(), positions.len());
+    assert!(
+        serial
+            .iter()
+            .zip(&parallel)
+            .all(|(left, right)| left.to_bits() == right.to_bits())
+    );
+}
