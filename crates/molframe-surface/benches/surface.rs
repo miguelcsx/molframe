@@ -1,7 +1,7 @@
 //! Criterion coverage for sampled molecular-surface kernels.
 
 use criterion::{Criterion, Throughput, black_box};
-use molframe_bench::{Sample, coordinates, structure};
+use molframe_bench::{Sample, coordinates, structure, structure_with_atoms};
 use molframe_core::ExecutionContext;
 use molframe_surface::{
     AtomDepthOptions, SurfaceGridOptions, atom_depths, buried_surface, cavities,
@@ -170,9 +170,25 @@ fn bench_voxel_stress(c: &mut Criterion) {
     group.finish();
 }
 
+/// Shrake–Rupley at the spec's 100k-atom, 960-point scale.
+fn bench_sasa_100k(c: &mut Criterion) {
+    let context = ExecutionContext::default();
+    let structure = structure_with_atoms(100_000);
+    let positions = coordinates(&structure);
+    let radii = vec![1.7_f32; positions.len()];
+    let mut group = c.benchmark_group("surface_geometry");
+    group.sample_size(10);
+    group.throughput(Throughput::Elements(positions.len() as u64));
+    group.bench_function("shrake_rupley_100k_960", |b| {
+        b.iter(|| black_box(shrake_rupley(&positions, &radii, 1.4, 960, &context)));
+    });
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_sasa(&mut criterion);
+    bench_sasa_100k(&mut criterion);
     bench_voxel_stress(&mut criterion);
     criterion.final_summary();
 }

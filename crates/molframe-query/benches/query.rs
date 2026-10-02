@@ -1,7 +1,7 @@
 //! Criterion coverage for reusable typed and textual selections.
 
 use criterion::{Criterion, black_box};
-use molframe_bench::{Sample, structure};
+use molframe_bench::{Sample, structure, structure_with_atoms};
 use molframe_core::ExecutionContext;
 use molframe_core::contract::AnalysisPolicy;
 use molframe_query::{Groups, Query, col};
@@ -55,8 +55,28 @@ fn bench_queries(c: &mut Criterion) {
     });
 }
 
+/// Element selection over 100k atoms, the case chunk statistics can prune.
+fn bench_prune(c: &mut Criterion) {
+    let structure = structure_with_atoms(100_000);
+    let policy = AnalysisPolicy::default();
+    let groups = Groups::new();
+    let query = match Query::compile("element ZN") {
+        Ok(query) => query,
+        Err(findings) => panic!("query bench fixture failed: {findings:?}"),
+    };
+    if let Err(findings) = query.evaluate(&structure, &policy, &groups, None) {
+        panic!("query benchmark evaluation failed: {findings:?}");
+    }
+    let mut group = c.benchmark_group("query_prune");
+    group.bench_function("element_zn_100k", |b| {
+        b.iter(|| black_box(query.evaluate(&structure, &policy, &groups, None)));
+    });
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_queries(&mut criterion);
+    bench_prune(&mut criterion);
     criterion.final_summary();
 }

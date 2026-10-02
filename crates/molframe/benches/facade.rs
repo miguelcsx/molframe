@@ -4,7 +4,7 @@ use criterion::{Criterion, Throughput, black_box};
 use molframe::{
     Cost, OperationMetadata, ReadOptions, Workflow, WorkflowInputs, read_bytes, write_mmcif,
 };
-use molframe_bench::{Sample, input};
+use molframe_bench::{Sample, input, structure, structure_with_atoms};
 
 fn bench_facade(c: &mut Criterion) {
     let bytes = match Sample::Medium.cif() {
@@ -83,8 +83,35 @@ fn bench_facade(c: &mut Criterion) {
     });
 }
 
+/// Coordinate hand-off must borrow the engine buffer, never copy it.
+fn bench_handoff(c: &mut Criterion) {
+    let structure: molframe::Structure = (*structure_with_atoms(100_000)).clone().into();
+    assert!(std::ptr::eq(
+        structure.coordinates().as_ptr(),
+        structure.coordinates().as_ptr()
+    ));
+    let mut group = c.benchmark_group("facade_handoff");
+    group.bench_function("positions_slice", |b| {
+        b.iter(|| black_box(black_box(&structure).coordinates()));
+    });
+    group.finish();
+}
+
+/// Default perception (bonds, secondary structure) over the largest fixture.
+fn bench_enrich(c: &mut Criterion) {
+    let structure: molframe::Structure = structure(Sample::Large).into();
+    let mut group = c.benchmark_group("facade_enrich");
+    group.throughput(Throughput::Elements(u64::from(structure.atom_count())));
+    group.bench_function("1aon", |b| {
+        b.iter(|| black_box(molframe::perceive(black_box(&structure))));
+    });
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_facade(&mut criterion);
+    bench_handoff(&mut criterion);
+    bench_enrich(&mut criterion);
     criterion.final_summary();
 }

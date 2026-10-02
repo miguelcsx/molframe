@@ -4,9 +4,14 @@
 //! retention), canonical serialization, and PDBML decode.
 
 use criterion::{Criterion, Throughput, black_box};
-use molframe_bench::{Sample, input, structure_from_cif};
-use molframe_cif::{lower, parse, read, read_pdbml, read_with_document, write_canonical};
+use molframe_bench::{Sample, cif_bytes_of_size, cif_bytes_with_atoms, input, structure_from_cif};
+use molframe_cif::{
+    MmcifBatchSource, lower, parse, read, read_pdbml, read_with_document, write_canonical,
+};
 use molframe_core::io::ReadOptions;
+use molframe_core::{
+    Backpressure, BatchDemand, BatchSource, ChunkId, DatasetId, ExecutionContext, LogicalRow,
+};
 
 fn bench_read(c: &mut Criterion) {
     let mut group = c.benchmark_group("cif_read");
@@ -80,6 +85,18 @@ fn bench_lower(c: &mut Criterion) {
             });
         });
     }
+    let synthetic = cif_bytes_with_atoms(100_000);
+    let synthetic_input = input(&synthetic);
+    let document = match parse(&synthetic_input) {
+        Ok((doc, _)) => doc,
+        Err(findings) => panic!("synthetic parse failed: {findings:?}"),
+    };
+    group.throughput(Throughput::Bytes(synthetic.len() as u64));
+    group.bench_function("100k", |b| {
+        b.iter(|| {
+            let _ = black_box(lower(&document, &ReadOptions::new()));
+        });
+    });
     group.finish();
 }
 
@@ -128,6 +145,33 @@ fn bench_pdbml_read(c: &mut Criterion) {
     group.finish();
 }
 
+/// Time from opening a bounded-window source to its first batch of atoms.
+fn bench_first_atom(c: &mut Criterion) {
+    let mut group = c.benchmark_group("cif_first_atom");
+    let bytes = cif_bytes_of_size(5_000_000);
+    let buffer = input(&bytes);
+    let context = ExecutionContext::default();
+    group.bench_function("5mb", |b| {
+        b.iter(|| {
+            let mut source = match MmcifBatchSource::new(
+                buffer.clone(),
+                ReadOptions::new(),
+                DatasetId::new(0),
+                ChunkId::new(0),
+                LogicalRow::new(0),
+                1 << 20,
+                &context,
+            ) {
+                Ok(source) => source,
+                Err(error) => panic!("batch source failed to open: {error}"),
+            };
+            let first = source.next_batch(BatchDemand::new(1, 1 << 20), &context);
+            black_box(matches!(first, Ok(Backpressure::Ready(_))))
+        });
+    });
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_read(&mut criterion);
@@ -136,5 +180,6 @@ fn main() {
     bench_lower(&mut criterion);
     bench_write_canonical(&mut criterion);
     bench_pdbml_read(&mut criterion);
+    bench_first_atom(&mut criterion);
     criterion.final_summary();
 }

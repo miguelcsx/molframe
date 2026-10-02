@@ -1,11 +1,14 @@
 //! Criterion coverage for spatial backends and planner dispatch.
 
 use criterion::{Criterion, Throughput, black_box};
-use molframe_bench::{Sample, coordinates, structure};
+use molframe_bench::{Sample, coordinates, structure, structure_with_atoms};
 use molframe_core::execution::ExecutionContext;
 use molframe_core::selection::AtomSelection;
 use molframe_core::structure::UnitCell;
-use molframe_spatial::{PeriodicBox, SpatialBackend, pairs_within, pairs_within_unsorted, within};
+use molframe_spatial::{
+    CellGridOptions, CellList, PeriodicBox, SpatialBackend, pairs_within, pairs_within_unsorted,
+    within,
+};
 
 fn bench_backends(c: &mut Criterion) {
     let context = ExecutionContext::default();
@@ -250,6 +253,48 @@ fn bench_periodic_search(c: &mut Criterion) {
     group.finish();
 }
 
+/// Eager cell-list construction and a single radius query at 100k atoms.
+fn bench_cell_list(c: &mut Criterion) {
+    let context = ExecutionContext::default();
+    let structure = structure_with_atoms(100_000);
+    let positions = coordinates(&structure);
+    let Ok(atom_count) = u32::try_from(positions.len()) else {
+        panic!("fixture exceeds the u32 atom index")
+    };
+    let targets: Vec<u32> = (0..atom_count).collect();
+    let mut group = c.benchmark_group("spatial_cell_list");
+    group.throughput(Throughput::Elements(u64::from(atom_count)));
+    group.bench_function("build_100k", |b| {
+        b.iter(|| {
+            black_box(CellList::build_in(
+                &positions,
+                &targets,
+                5.0,
+                None,
+                CellGridOptions::default(),
+                &context,
+            ))
+        });
+    });
+    let index = match CellList::build_in(
+        &positions,
+        &targets,
+        5.0,
+        None,
+        CellGridOptions::default(),
+        &context,
+    ) {
+        Ok(index) => index,
+        Err(error) => panic!("cell list failed to build: {error:?}"),
+    };
+    let centre = [atom_count / 2];
+    group.throughput(Throughput::Elements(1));
+    group.bench_function("radius_100k_5A", |b| {
+        b.iter(|| black_box(index.pairs(&centre, 5.0)));
+    });
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_backends(&mut criterion);
@@ -257,5 +302,6 @@ fn main() {
     bench_periodic_search(&mut criterion);
     bench_large_scaling(&mut criterion);
     bench_streaming_reduction(&mut criterion);
+    bench_cell_list(&mut criterion);
     criterion.final_summary();
 }

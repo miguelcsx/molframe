@@ -1,7 +1,7 @@
 //! Criterion coverage for coordinate and matrix geometry kernels.
 
 use criterion::{Criterion, Throughput, black_box};
-use molframe_bench::{Sample, coordinates, perturbed, structure};
+use molframe_bench::{Sample, coordinates, perturbed, structure, structure_with_atoms};
 use molframe_geom::{
     angle, angles_into, asphericity, best_fit_plane, centroid, dihedral, distance, distance_matrix,
     distance_matrix_into, distances_into, inertia_tensor, principal_axes, radius_of_gyration, rmsd,
@@ -125,8 +125,23 @@ fn value_or_nan(value: Option<f64>) -> f64 {
     value
 }
 
+/// RMSD at the spec's 10,000-atom coordinate scale.
+fn bench_rmsd_10k(c: &mut Criterion) {
+    let structure = structure_with_atoms(100_000);
+    let all = coordinates(&structure);
+    let reference = &all[..10_000];
+    let model = perturbed(reference, 0.02);
+    let mut group = c.benchmark_group("geom_coordinates");
+    group.throughput(Throughput::Elements(10_000));
+    group.bench_function("rmsd_10k", |b| {
+        b.iter(|| black_box(rmsd(&model, reference)));
+    });
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_coordinate_kernels(&mut criterion);
+    bench_rmsd_10k(&mut criterion);
     criterion.final_summary();
 }

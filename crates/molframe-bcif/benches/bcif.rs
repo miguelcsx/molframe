@@ -3,10 +3,10 @@
 //! Covers `BinaryCIF` reading, container-level decoding, serialization, and the
 //! integer/float/string column encoders.
 
-use criterion::{Criterion, Throughput, black_box};
+use criterion::{BatchSize, Criterion, Throughput, black_box};
 use molframe_bcif::{
-    BinaryDocument, DataType, EncodedData, Encoding, decode, encode_floats, encode_integers,
-    encode_interval, encode_strings, read, write_structure,
+    BinaryDocument, DataType, EncodedData, Encoding, decode, decode_columns, encode_floats,
+    encode_integers, encode_interval, encode_strings, read, write_structure,
 };
 use molframe_bench::{Sample, input, structure};
 use molframe_core::io::{Limits, ReadOptions};
@@ -117,10 +117,47 @@ fn bench_encoders(c: &mut Criterion) {
     group.finish();
 }
 
+/// Container parse plus column decode, with row feed and lowering excluded.
+fn bench_decode_columns(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bcif_decode_columns");
+    for sample in Sample::MODELS {
+        let buffer = input(sample.bcif());
+        let options = ReadOptions::new();
+        group.throughput(Throughput::Bytes(sample.bcif().len() as u64));
+        group.bench_function(sample.label(), |b| {
+            b.iter(|| black_box(decode_columns(&buffer, &options).is_ok()));
+        });
+    }
+    group.finish();
+}
+
+/// Row feed plus lowering over already-decoded columns.
+fn bench_lower(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bcif_lower");
+    for sample in Sample::MODELS {
+        let buffer = input(sample.bcif());
+        let options = ReadOptions::new();
+        group.throughput(Throughput::Bytes(sample.bcif().len() as u64));
+        group.bench_function(sample.label(), |b| {
+            b.iter_batched(
+                || match decode_columns(&buffer, &options) {
+                    Ok(columns) => columns,
+                    Err(findings) => panic!("column decode failed: {findings:?}"),
+                },
+                |columns| black_box(columns.lower(&options).is_ok()),
+                BatchSize::LargeInput,
+            );
+        });
+    }
+    group.finish();
+}
+
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_read(&mut criterion);
     bench_container_parse(&mut criterion);
+    bench_decode_columns(&mut criterion);
+    bench_lower(&mut criterion);
     bench_column_decode(&mut criterion);
     bench_write(&mut criterion);
     bench_encoders(&mut criterion);

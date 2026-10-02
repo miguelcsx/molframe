@@ -71,12 +71,16 @@ extrapolation, not as a measurement.
 | --- | --- | --- |
 | mmCIF read to a `Structure` above 200 MB/s | 198–211 MiB/s (1CRN, 1UBQ, 4HHB) | Met at the margin; it includes building the structure |
 | BinaryCIF container parse above 1 GB/s | 0.37–4.4 GiB/s (1CRN to 1AON) | Met for the larger inputs |
-| BinaryCIF read to a `Structure` above 1 GB/s | 0.19–0.30 GiB/s of encoded input | Not met |
-| Full facade read (`read_bytes`) of 58,870 atoms | 40 ms for 1AON BinaryCIF, 3.4 ms for 4HHB, including bond and secondary-structure perception; 114 ms before the dense-grid search | Reported; the 20 ms target is for `Document` to `Structure` alone, which is not timed separately |
-| Topological selection, 100,000 atoms, under 1 ms | `chain A` 0.014 ms, `bfactor > 20` 0.31 ms on 58,870 atoms | Met |
-| SASA, 100,000 atoms, 960 points, under 2 s | 94 ms on 58,870 atoms | Met (about 160 ms extrapolated) |
-| Radius query, 100,000 atoms, 5 Å, under 100 µs | Not isolated; a within-5-Å query that includes target selection takes about 1.0 ms on the 4,400-atom 4HHB | Not measured separately |
-| Cell-list build, 100,000 atoms, under 5 ms | The build is lazy, so a construct-only timing reads zero | Not measured |
+| BinaryCIF read to a `Structure` above 1 GB/s | 1AON: 13.96 ms for 2.77 MiB, 199 MiB/s end to end. Split (`bcif_decode_columns` / `bcif_lower`): 2.63 ms decode (1.03 GiB/s), 11.29 ms row feed and lowering (246 MiB/s). Lowering dominates | Not met |
+| `Document` to `Structure` for 100,000 atoms, under 20 ms | `cif_lower/100k`: 69.5 ms on 100,000 tiled 1AON atoms (7.3 MB of mmCIF text) | Not met |
+| Time to first atom, 5 MB mmCIF | `cif_first_atom/5mb`: 12.8 µs (bounded-window batch source, first batch) | Met |
+| Full facade read (`read_bytes`) of 58,870 atoms | 40 ms for 1AON BinaryCIF, 3.4 ms for 4HHB, including bond and secondary-structure perception; 114 ms before the dense-grid search. `facade_enrich/1aon` (perception alone): 31.3 ms | Reported; perception is about 75% of a facade read |
+| Topological selection, 100,000 atoms, under 1 ms | `chain A` 0.014 ms, `bfactor > 20` 0.31 ms on 58,870 atoms; `element ZN` over 100,000 atoms `query_prune/element_zn_100k`: 0.97 ms | Met |
+| SASA, 100,000 atoms, 960 points, under 2 s | `shrake_rupley_100k_960`: 232.5 ms on 100,000 atoms (legacy kernel) | Met |
+| Radius query, 100,000 atoms, 5 Å, under 100 µs | `spatial_cell_list/radius_100k_5A`: 294 ns against a prebuilt index | Met |
+| Cell-list build, 100,000 atoms, under 5 ms | `spatial_cell_list/build_100k`: 1.37 ms (eager `CellList::build_in`) | Met |
+| RMSD, 10,000 atoms | `geom_coordinates/rmsd_10k`: 6.68 µs (1.50 Gelem/s) | Reported |
+| Coordinate hand-off to NumPy without a copy | `facade_handoff/positions_slice`: 0.83 ns; the slice pointer is asserted equal across calls | Met |
 | Python import under 50 ms | Not measured on a release wheel | Not measured |
 
 Column predicates used to cost one hierarchy walk and a binary search per atom.

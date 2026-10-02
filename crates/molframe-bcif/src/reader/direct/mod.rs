@@ -12,4 +12,5 @@ mod projection;
 mod reader;
 mod values;
 
+pub use reader::{DecodedColumns, decode_columns};
 pub(super) use reader::{read, read_with_metadata, read_with_projection};

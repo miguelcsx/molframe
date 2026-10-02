@@ -23,10 +23,62 @@ pub(in crate::reader) fn read_with_metadata(
     options: &ReadOptions,
     keep_category: fn(&str) -> bool,
 ) -> Result<(Document, Structure, Vec<Diagnostic>), Vec<Diagnostic>> {
+    decode_columns_with(input, options, keep_category)?.lower(options)
+}
+
+/// Container parse and column decode, held until lowering.
+///
+/// Splits [`read`] in two so the benches can time the stages separately.
+#[doc(hidden)]
+pub struct DecodedColumns<'a> {
+    projection: projection::Projection<'a>,
+}
+
+impl std::fmt::Debug for DecodedColumns<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DecodedColumns")
+            .finish_non_exhaustive()
+    }
+}
+
+/// Decodes the container and atom columns without lowering them.
+///
+/// # Errors
+///
+/// Returns ordered container or codec diagnostics.
+#[doc(hidden)]
+pub fn decode_columns<'a>(
+    input: &'a InputBuffer,
+    options: &ReadOptions,
+) -> Result<DecodedColumns<'a>, Vec<Diagnostic>> {
+    decode_columns_with(input, options, |_| false)
+}
+
+fn decode_columns_with<'a>(
+    input: &'a InputBuffer,
+    options: &ReadOptions,
+    keep_category: fn(&str) -> bool,
+) -> Result<DecodedColumns<'a>, Vec<Diagnostic>> {
     let binary =
         container::parse(input.as_bytes(), options.limits).map_err(|finding| vec![finding])?;
     let projection = decode(binary, keep_category).map_err(|finding| vec![finding])?;
-    finish_projection(projection, options)
+    Ok(DecodedColumns { projection })
+}
+
+impl DecodedColumns<'_> {
+    /// Lowers the decoded columns into a structure.
+    ///
+    /// # Errors
+    ///
+    /// Returns ordered interpretation diagnostics.
+    #[doc(hidden)]
+    pub fn lower(
+        self,
+        options: &ReadOptions,
+    ) -> Result<(Document, Structure, Vec<Diagnostic>), Vec<Diagnostic>> {
+        finish_projection(self.projection, options)
+    }
 }
 
 pub(in crate::reader) fn read_with_projection<S>(

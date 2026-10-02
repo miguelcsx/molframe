@@ -146,7 +146,16 @@ fn drain(mut source: SyntheticCifSource) -> Vec<u8> {
 }
 
 static ATOM_STRUCTURES: Cache<Structure> = OnceLock::new();
+static ATOM_CIF: Cache<Vec<u8>> = OnceLock::new();
 static SIZED_CIF: Cache<Vec<u8>> = OnceLock::new();
+
+/// Synthetic mmCIF text of at least `atoms` atoms, generated once per size.
+#[must_use]
+pub fn cif_bytes_with_atoms(atoms: u64) -> Arc<Vec<u8>> {
+    cached(&ATOM_CIF, atoms, || {
+        drain(SyntheticCifSource::with_atoms(synthetic_tile(), atoms))
+    })
+}
 
 /// Tiled 1AON structure of at least `atoms` atoms, parsed once per size.
 ///
@@ -156,7 +165,7 @@ static SIZED_CIF: Cache<Vec<u8>> = OnceLock::new();
 #[must_use]
 pub fn structure_with_atoms(atoms: u64) -> Arc<Structure> {
     cached(&ATOM_STRUCTURES, atoms, || {
-        let bytes = drain(SyntheticCifSource::with_atoms(synthetic_tile(), atoms));
+        let bytes = cif_bytes_with_atoms(atoms);
         match molframe_cif::read(&input(&bytes), &ReadOptions::new()) {
             Ok((structure, _)) => structure,
             Err(findings) => panic!("synthetic structure failed: {findings:?}"),
