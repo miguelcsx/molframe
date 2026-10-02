@@ -69,14 +69,14 @@ extrapolation, not as a measurement.
 
 | Target | Measured | Verdict |
 | --- | --- | --- |
-| mmCIF read to a `Structure` above 200 MB/s | 198–211 MiB/s (1CRN, 1UBQ, 4HHB) | Met at the margin; it includes building the structure |
+| mmCIF read to a `Structure` above 200 MB/s (program target 300 MiB/s) | `cif_read`: 231 MiB/s 1CRN, 216 MiB/s 1UBQ, 228 MiB/s 4HHB (3.20 ms), from 198–211 MiB/s | Spec target met; the 300 MiB/s program target is not. Top remaining frame: `Lexer::next_token` (about a third of samples), then the projection sink and number parsing |
 | BinaryCIF container parse above 1 GB/s | 0.37–4.4 GiB/s (1CRN to 1AON) | Met for the larger inputs |
-| BinaryCIF read to a `Structure` above 1 GB/s | 1AON: 13.96 ms for 2.77 MiB, 199 MiB/s end to end. Split (`bcif_decode_columns` / `bcif_lower`): 2.63 ms decode (1.03 GiB/s), 11.29 ms row feed and lowering (246 MiB/s). Lowering dominates | Not met |
-| `Document` to `Structure` for 100,000 atoms, under 20 ms | `cif_lower/100k`: 69.5 ms on 100,000 tiled 1AON atoms (7.3 MB of mmCIF text) | Not met |
+| BinaryCIF read to a `Structure` above 1 GB/s | `bcif_read/1aon`: 7.53 ms for 2.77 MiB, 369 MiB/s end to end (13.96 ms, 199 MiB/s before); 4HHB 462 MiB/s. Split: `bcif_decode_columns/1aon` 2.40 ms, `bcif_lower/1aon` 5.13 ms (11.29 ms before) | Not met. Top remaining frames: per-row symbol lookups (`symbol_of`), `decode_stage`, `ChunkBuilder::push` |
+| `Document` to `Structure` for 100,000 atoms, under 20 ms | `cif_lower/100k`: 58.5 ms on 100,000 tiled 1AON atoms (69.5 ms before) | Not met |
 | Time to first atom, 5 MB mmCIF | `cif_first_atom/5mb`: 12.8 µs (bounded-window batch source, first batch) | Met |
-| Full facade read (`read_bytes`) of 58,870 atoms | 40 ms for 1AON BinaryCIF, 3.4 ms for 4HHB, including bond and secondary-structure perception; 114 ms before the dense-grid search. `facade_enrich/1aon` (perception alone): 31.3 ms | Reported; perception is about 75% of a facade read |
-| Topological selection, 100,000 atoms, under 1 ms | `chain A` 0.014 ms, `bfactor > 20` 0.31 ms on 58,870 atoms; `element ZN` over 100,000 atoms `query_prune/element_zn_100k`: 0.97 ms | Met |
-| SASA, 100,000 atoms, 960 points, under 2 s | `shrake_rupley_100k_960`: 232.5 ms on 100,000 atoms (legacy kernel) | Met |
+| Full facade read (`read_bytes`) of 58,870 atoms | `facade_enrich/1aon` (default perception alone): 10.97 ms, from 31.3 ms; bond perception now runs in parallel cell blocks | Reported |
+| Topological selection, 100,000 atoms, under 1 ms | `chain A` 0.014 ms, `bfactor > 20` 0.31 ms on 58,870 atoms; `query_prune/element_zn_100k`: 105 ns with chunk-statistics pruning (0.97 ms before) | Met |
+| SASA, 100,000 atoms, 960 points, under 2 s | `shrake_rupley_100k_960`: 122 ms on 100,000 atoms (232.5 ms before), one streaming engine with lane-parallel occlusion | Met |
 | Radius query, 100,000 atoms, 5 Å, under 100 µs | `spatial_cell_list/radius_100k_5A`: 294 ns against a prebuilt index | Met |
 | Cell-list build, 100,000 atoms, under 5 ms | `spatial_cell_list/build_100k`: 1.37 ms (eager `CellList::build_in`) | Met |
 | RMSD, 10,000 atoms | `geom_coordinates/rmsd_10k`: 6.68 µs (1.50 Gelem/s) | Reported |
@@ -90,3 +90,16 @@ On 58,870 atoms `chain A` fell from 1.05 ms to 0.014 ms and `bfactor > 20` from
 0.72 ms to 0.31 ms; on 4HHB the typed and textual selection benchmarks fell from
 44 µs and 93 µs to 17 µs. `bfactor > 20` keeps most atoms, so the rest of its
 cost is building the selection rather than comparing values.
+
+### Optimisations tried and reverted
+
+Each was measured before and after on an Apple M5 Pro and reverted because the
+named benchmark did not improve.
+
+| Change | Benchmark | Before | After |
+| --- | --- | --- | --- |
+| Parallel BinaryCIF column decode above 32,768 rows | `bcif_read/1aon` | 7.37 ms | 7.19 ms decode-only gain, `bcif_lower` +10% |
+| Per-column class table in the mmCIF projection sink | `cif_read/4hhb` | 3.12 ms | 3.12 ms |
+| First-byte number prefilter in `CifValueRef::parse` | `cif_read/4hhb` | 3.12 ms | 3.11 ms |
+| Whitespace lookup table in the lexer | `cif_read/4hhb` | 3.12 ms | 3.25 ms |
+| Packed-word bitmap in spatial `within` | `spatial_pairs_within/within` | 491–541 µs | 518–552 µs |

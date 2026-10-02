@@ -12,7 +12,7 @@ use std::process::Command;
 /// Case name and the most allocations the case may perform.
 const CEILINGS: &[(&str, u64)] = &[
     ("mmcif_read_medium", 16_997),
-    ("bcif_read_medium", 24_701),
+    ("bcif_read_medium", 24_602),
     ("selection_medium", 63),
     ("contacts_medium", 65),
     ("sasa_medium", 220),

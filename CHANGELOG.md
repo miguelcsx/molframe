@@ -6,6 +6,26 @@ change the public API.
 
 ## Unreleased
 
+### Changed
+
+- **Read and analysis throughput.** BinaryCIF to `Structure` on 1AON went from
+  13.96 ms to 7.53 ms (369 MiB/s) and mmCIF to `Structure` on 4HHB from 3.55 ms
+  to 3.20 ms (228 MiB/s): rows are fed to one monomorphised lowerer, dictionary
+  strings are interned once per column, `struct_conn` endpoints are resolved
+  only in the residues they name, and the lexer tracks offsets instead of
+  positions. Default perception on 1AON fell from 31.3 ms to 11.0 ms (parallel
+  bond search); `element ZN` over 100,000 atoms from 0.97 ms to 105 ns (chunk
+  pruning); Shrake–Rupley over 100,000 atoms at 960 points from 233 ms to
+  122 ms, bit-identical, through one streaming engine with SIMD occlusion.
+- **Known limit.** BinaryCIF reading remains below the 1 GB/s specification
+  target (369 MiB/s on 1AON); the remaining cost is per-row lowering. The
+  evidence ledger lists the top frames and the attempts that were reverted.
+- `molframe::perceive_in` and `molframe_chem::perceive_bonds_in` take an
+  `ExecutionContext`; `FrameTransform::apply` takes `&mut self`, and
+  `ChainedReader`/`PipelineReader` support bounded reads.
+- A distance matrix under a memory budget now needs one matrix of headroom
+  rather than two.
+
 ### Fixed
 
 - **Deposited secondary structure from mmCIF and BinaryCIF.** The direct
