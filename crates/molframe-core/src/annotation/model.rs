@@ -32,6 +32,8 @@ pub const STEREO_CONFIGURATION_ANNOTATION: &str = "chirality";
 pub const PLDDT_ANNOTATION: &str = "plddt";
 /// Conventional custom column name for per-atom predicted aligned error.
 pub const PAE_ANNOTATION: &str = "pae";
+/// Per-atom stable identifier of the materialised chain copy an atom belongs to.
+pub const INSTANCE_ID_ANNOTATION: &str = "molframe.instance_id";
 
 /// One immutable typed annotation column with three-state validity.
 #[derive(Clone, Debug)]

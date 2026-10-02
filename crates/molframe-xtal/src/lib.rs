@@ -53,7 +53,6 @@ pub use expression::{DEFAULT_INSTANCE_LIMIT, OperExpression};
 pub use grid::{CubeAtom, CubeGrid, GridError, read_cube, read_dx};
 pub use lower::lower_assemblies;
 pub use map_statistics::{MapHistogram, MapStatistics, MapStatisticsError};
-pub use materialize::INSTANCE_ID_ANNOTATION;
 pub use mrc::{
     DEFAULT_MRC_BLOCK_MEMORY_LIMIT_BYTES, DEFAULT_MRC_BRICK_PAYLOAD_BYTES,
     DEFAULT_MRC_BRICK_WORKING_SET_BYTES, DensityMap, DensitySampler, MapBoundary, MapBrickAddress,

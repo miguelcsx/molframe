@@ -1,7 +1,9 @@
 //! Explicit expansion of a lazy biological assembly.
 
 use crate::AssemblyView;
-use molframe_core::annotation::{AnnotationColumn, AtomAnnotation, AtomAnnotations};
+use molframe_core::annotation::{
+    AnnotationColumn, AtomAnnotation, AtomAnnotations, INSTANCE_ID_ANNOTATION,
+};
 use molframe_core::bond::{BondRecord, BondTableBuilder};
 use molframe_core::chunk::{AtomRecord, ChunkBuilder};
 use molframe_core::hashing::{IdentityHashMap, IdentityHashSet};
@@ -16,9 +18,6 @@ use molframe_core::{
 use molframe_geom::Rigid;
 use std::collections::BTreeMap;
 use std::ops::Range;
-
-/// Per-atom annotation holding the generated chain's stable instance identifier.
-pub const INSTANCE_ID_ANNOTATION: &str = "molframe.instance_id";
 
 /// Describes one materialized copy of a source-chain atom span.
 #[derive(Clone, Debug)]

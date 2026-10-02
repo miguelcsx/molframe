@@ -1,6 +1,6 @@
-use super::INSTANCE_ID_ANNOTATION;
 use crate::AssemblyExt;
 use crate::view::tests::{ENTRY, attached};
+use molframe_core::INSTANCE_ID_ANNOTATION;
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::bond::{BondRecord, BondTableBuilder};
 use molframe_core::{AtomIndex, BondOrder, BondProvenance, Structure};
