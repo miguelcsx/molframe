@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::io::{Cursor, Read};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use molframe_core::io::{InputBuffer, Limits, ReadOptions};
 use molframe_core::structure::Structure;
@@ -129,7 +129,12 @@ type Cache<T> = OnceLock<Mutex<HashMap<u64, Arc<T>>>>;
 
 fn cached<T>(cache: &Cache<T>, key: u64, build: impl FnOnce() -> T) -> Arc<T> {
     let mutex = cache.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut entries = mutex.lock().unwrap_or_else(PoisonError::into_inner);
+    // A panic while building a fixture poisons the lock; the map itself is
+    // still consistent, so later callers keep using it.
+    let mut entries = match mutex.lock() {
+        Ok(entries) => entries,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     Arc::clone(entries.entry(key).or_insert_with(|| Arc::new(build())))
 }
 

@@ -196,7 +196,9 @@ impl<'a> Lexer<'a> {
 
         let bytes = self.input.as_bytes();
         let end = self.offset.saturating_add(count).min(bytes.len());
-        let skipped = bytes.get(self.offset..end).unwrap_or_default();
+        let Some(skipped) = bytes.get(self.offset..end) else {
+            return;
+        };
         if skipped.len() < BULK_THRESHOLD {
             for (index, byte) in skipped.iter().enumerate() {
                 if *byte == b'\n' {
@@ -228,17 +230,17 @@ impl<'a> Lexer<'a> {
     fn skip_trivia(&mut self) {
         loop {
             let bytes = self.remaining().as_bytes();
-            let spaces = bytes
-                .iter()
-                .position(|byte| !byte.is_ascii_whitespace())
-                .unwrap_or(bytes.len());
+            let spaces = found_or(
+                bytes.iter().position(|byte| !byte.is_ascii_whitespace()),
+                bytes.len(),
+            );
             self.advance(spaces);
 
             if self.peek() != Some(b'#') {
                 return;
             }
             let rest = self.remaining();
-            let line = memchr(b'\n', rest.as_bytes()).unwrap_or(rest.len());
+            let line = found_or(memchr(b'\n', rest.as_bytes()), rest.len());
             self.advance(line);
         }
     }
@@ -246,10 +248,10 @@ impl<'a> Lexer<'a> {
     /// A run of non-whitespace.
     fn take_bare(&mut self) -> &'a str {
         let text = self.remaining();
-        let end = text
-            .bytes()
-            .position(|byte| byte.is_ascii_whitespace())
-            .unwrap_or(text.len());
+        let end = found_or(
+            text.bytes().position(|byte| byte.is_ascii_whitespace()),
+            text.len(),
+        );
         self.advance_non_newline(end);
         slice_to(text, end)
     }
@@ -327,6 +329,14 @@ fn slice_to(text: &str, end: usize) -> &str {
         return "";
     };
     slice
+}
+
+/// The position a search found, or `len` when it found nothing.
+const fn found_or(found: Option<usize>, len: usize) -> usize {
+    match found {
+        Some(position) => position,
+        None => len,
+    }
 }
 
 /// The bytes from `start` onwards, or nothing when `start` is past the end.

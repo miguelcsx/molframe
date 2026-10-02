@@ -199,23 +199,13 @@ enum StringIndices {
 impl StringIndices {
     /// Picks the width from the dictionary size, in one pass. The widest value
     /// of each narrow width stays out of range for a dictionary that fits, so
-    /// an index past the dictionary clamps to a value `get` still rejects.
+    /// an index past the dictionary saturates to a value `get` still rejects.
     fn new(indices: Arc<[u32]>, dictionary_len: usize) -> Self {
         if dictionary_len < usize::from(u8::MAX) {
-            return Self::U8(
-                indices
-                    .iter()
-                    .map(|&index| u8::try_from(index).unwrap_or(u8::MAX))
-                    .collect(),
-            );
+            return Self::U8(indices.iter().map(|&index| saturate(index)).collect());
         }
         if dictionary_len < usize::from(u16::MAX) {
-            return Self::U16(
-                indices
-                    .iter()
-                    .map(|&index| u16::try_from(index).unwrap_or(u16::MAX))
-                    .collect(),
-            );
+            return Self::U16(indices.iter().map(|&index| saturate(index)).collect());
         }
         Self::U32(indices)
     }
@@ -237,6 +227,14 @@ impl StringIndices {
                 .copied()
                 .and_then(|value| usize::try_from(value).ok()),
         }
+    }
+}
+
+/// `index` in a narrower width, or that width's maximum when it does not fit.
+fn saturate<T: TryFrom<u32> + num_traits::Bounded>(index: u32) -> T {
+    match T::try_from(index) {
+        Ok(narrow) => narrow,
+        Err(_) => T::max_value(),
     }
 }
 

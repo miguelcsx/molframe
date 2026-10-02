@@ -83,8 +83,8 @@ fn a_bounded_chain_numbers_globally_and_refuses_a_tiny_ceiling_without_advancing
         );
         assert_eq!(timestep.frame, expected);
         assert_eq!(
-            timestep.positions[0][0],
-            f32::from(u8::try_from(expected).expect("small"))
+            timestep.positions[0][0].to_bits(),
+            f32::from(u8::try_from(expected).expect("small")).to_bits()
         );
     }
     assert!(

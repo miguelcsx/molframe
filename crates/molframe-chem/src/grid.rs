@@ -194,7 +194,10 @@ impl<T: Copy> CellGrid<T> {
             }
             Layout::Sparse { cells: occupied } => {
                 let end = cells.end.min(occupied.len());
-                for (base, own) in occupied.get(cells.start..end).unwrap_or_default() {
+                let Some(visited) = occupied.get(cells.start.min(end)..end) else {
+                    return;
+                };
+                for (base, own) in visited {
                     neighbourhood.clear();
                     for dx in -1..=1 {
                         for dy in -1..=1 {

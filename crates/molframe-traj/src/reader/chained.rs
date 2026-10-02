@@ -61,7 +61,7 @@ impl<R: TrajectoryReader> TrajectoryReader for ChainedReader<R> {
     }
 
     fn read_next(&mut self, timestep: &mut Timestep) -> Result<bool, TrajectoryError> {
-        self.next_from_sources(timestep, |reader, timestep| reader.read_next(timestep))
+        self.next_from_sources(timestep, TrajectoryReader::read_next)
     }
 
     fn read_next_bounded(
