@@ -330,13 +330,6 @@ impl<'a> AtomBuilder<'a> {
     }
 }
 
-fn text_or_empty(value: Option<&str>) -> &str {
-    let Some(value) = value else {
-        return "";
-    };
-    value
-}
-
 fn identifier_or_zero(value: Option<u32>) -> u32 {
     let Some(value) = value else {
         return 0;

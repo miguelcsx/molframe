@@ -4,7 +4,7 @@ use crate::document::{Category, CifValue, DataBlock};
 use crate::lower::diagnostics::at_source_row;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
-use molframe_core::hashing::{IdentityHashMap, IdentityHashSet};
+use molframe_core::hashing::{IdentityBuildHasher, IdentityHashMap, IdentityHashSet};
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, StructureData};
 use molframe_core::symbol::SymbolId;
@@ -219,8 +219,8 @@ fn endpoint_items(partner: u8, namespace: Namespace) -> Option<EndpointItems> {
 
 fn requested_maps(connections: &[Connection]) -> (AtomMap, AtomMap) {
     let capacity = connections.len().saturating_mul(2);
-    let mut label = AtomMap::with_capacity_and_hasher(capacity, Default::default());
-    let mut auth = AtomMap::with_capacity_and_hasher(capacity, Default::default());
+    let mut label = AtomMap::with_capacity_and_hasher(capacity, IdentityBuildHasher::default());
+    let mut auth = AtomMap::with_capacity_and_hasher(capacity, IdentityBuildHasher::default());
     for connection in connections {
         request(&mut label, connection.atom_a.label);
         request(&mut label, connection.atom_b.label);

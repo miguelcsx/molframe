@@ -72,15 +72,31 @@ impl IntegerValues {
             .fold((i64::MAX, i64::MIN), |(low, high), &value| {
                 (low.min(value), high.max(value))
             });
-        // Truncation below is lossless: every value lies within the checked range.
+        // Every value lies within the checked range, so no `filter_map` below
+        // drops one; it is how the narrowing is spelled without a cast.
         if i8::try_from(low).is_ok() && i8::try_from(high).is_ok() {
-            return Self::I8(values.iter().map(|&value| value as i8).collect());
+            return Self::I8(
+                values
+                    .iter()
+                    .filter_map(|&v| i8::try_from(v).ok())
+                    .collect(),
+            );
         }
         if i16::try_from(low).is_ok() && i16::try_from(high).is_ok() {
-            return Self::I16(values.iter().map(|&value| value as i16).collect());
+            return Self::I16(
+                values
+                    .iter()
+                    .filter_map(|&v| i16::try_from(v).ok())
+                    .collect(),
+            );
         }
         if i32::try_from(low).is_ok() && i32::try_from(high).is_ok() {
-            return Self::I32(values.iter().map(|&value| value as i32).collect());
+            return Self::I32(
+                values
+                    .iter()
+                    .filter_map(|&v| i32::try_from(v).ok())
+                    .collect(),
+            );
         }
         Self::I64(values)
     }

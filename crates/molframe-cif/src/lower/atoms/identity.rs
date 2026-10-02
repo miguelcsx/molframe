@@ -1,6 +1,6 @@
 //! Residue identity: component codes, residue keys and residue opening.
 
-use super::{AtomBuilder, AtomSiteRow, Field, text_or_empty};
+use super::{AtomBuilder, AtomSiteRow, Field};
 use crate::lower::diagnostics::at_source_row;
 use crate::lower::keys::ResidueKey;
 use molframe_core::diagnostic::{Code, Diagnostic};
