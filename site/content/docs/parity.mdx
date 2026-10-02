@@ -1,0 +1,449 @@
+---
+title: Parity ledger
+description: Per-capability promotion status from beta to exercised, with the golden workflow and external reference that justify each promotion.
+---
+
+# Parity ledger
+
+Every row of the capability register starts at `β`: native code, covered by
+tests, with no external differential evidence. A row moves to `✓` only when it
+names a golden workflow (`GW-NNN`) whose test pins values from a named external
+library at a stated version, with a stated tolerance. `crates/molframe/tests/parity_ledger.rs`
+fails when a `✓` row has no GW, or when a named GW has no `gw_NNN_` test.
+
+| Status | Meaning |
+| --- | --- |
+| `✓` | Native, backed by a golden workflow with pinned external evidence |
+| `β` | Native, covered by tests, not yet pinned to an external reference |
+| `–` | Another domain; the argument is in the Evidence column |
+| `·` | The reference libraries do not have this |
+
+## Blocked
+
+These golden workflows cannot be promoted until the missing prerequisite exists.
+
+- **GW-031**: the `complex_info` source is absent.
+- **GW-032**: the ATPTS driver is absent.
+- **GW-044 to GW-047**: the OpenStructure, Graphein and Geomstats pins and their corpora are not selected.
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| `✓` | β |  | — | Not yet promoted |
+| `≈` | β |  | — | Not yet promoted |
+| `β` | β |  | — | Not yet promoted |
+| `–` | β |  | — | Not yet promoted |
+| `·` | β |  | — | Not yet promoted |
+
+## 1. Formats — reading
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| PDBx/mmCIF | β | `molframe-cif` | — | Not yet promoted |
+| mmCIF unknown-category preservation | β | `molframe-cif` | — | Not yet promoted |
+| BinaryCIF | β | `molframe-bcif` | — | Not yet promoted |
+| Legacy PDB | β | `molframe-pdb` | — | Not yet promoted |
+| PDB hybrid-36 | β | `molframe-pdb` | — | Not yet promoted |
+| PDB header records (full set) | β | `molframe-pdb` | — | Not yet promoted |
+| PDBML / XML | β | `molframe-cif` | — | Not yet promoted |
+| ModelCIF | β | `molframe-modelcif` | — | Not yet promoted |
+| PDB-IHM | β | `molframe-modelcif` | — | Not yet promoted |
+| MMTF | β | `molframe-pdb` | — | Not yet promoted |
+| PQR | β | `molframe-pdb` | — | Not yet promoted |
+| PDBQT | β | `molframe-pdb` | — | Not yet promoted |
+| MOL / SDF | β | `molframe-chem` | — | Not yet promoted |
+| MOL2 | β | `molframe-chem` | — | Not yet promoted |
+| Small-molecule CIF | β | `molframe-cif` | — | Not yet promoted |
+| CCD | β | `molframe-chem` | — | Not yet promoted |
+| Monomer restraint library | β | `molframe-xtal` | — | Not yet promoted |
+| gzip / zstd transparent | β | `molframe-core` | — | Not yet promoted |
+| Memory-mapped input | β | `molframe-core` | — | Not yet promoted |
+| Streaming input | β | `molframe-core` | — | Not yet promoted |
+| Diagnostics returned with success | β | `molframe-core` | — | Not yet promoted |
+| Record/category skip filters | β | `molframe-cif` | — | Not yet promoted |
+
+## 2. Formats — writing
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| mmCIF canonical write | β | `molframe-cif` | — | Not yet promoted |
+| mmCIF document-preserving write | β | `molframe-cif` | — | Not yet promoted |
+| BinaryCIF write | β | `molframe-bcif` | — | Not yet promoted |
+| BinaryCIF encoding optimisation | β | `molframe-bcif` | — | Not yet promoted |
+| Legacy PDB write | β | `molframe-pdb` | — | Not yet promoted |
+| **Refuse lossy PDB write** | β | `molframe-pdb` | — | Not yet promoted |
+| Selective write (`Select` protocol) | β | `molframe-core` | — | Not yet promoted |
+| ModelCIF write | β | `molframe-modelcif` | — | Not yet promoted |
+| MMTF write | β | `molframe-pdb` | — | Not yet promoted |
+
+## 3. Trajectory formats
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| XTC | β | `molframe-traj` | — | Not yet promoted |
+| TRR | β | `molframe-traj` | — | Not yet promoted |
+| TNG | β | `molframe-traj` | — | Not yet promoted |
+| DCD (CHARMM/NAMD) | β | `molframe-traj` | — | Not yet promoted |
+| DCD (LAMMPS) | β | `molframe-traj` | — | Not yet promoted |
+| NetCDF / AMBER | β | `molframe-traj` | — | Not yet promoted |
+| AMBER ASCII trj | β | `molframe-traj` | — | Not yet promoted |
+| AMBER inpcrd/restart | β | `molframe-traj` | — | Not yet promoted |
+| GRO | β | `molframe-traj` | — | Not yet promoted |
+| XYZ | β | `molframe-traj` | — | Not yet promoted |
+| Tinker TXYZ / ARC | β | `molframe-traj` | — | Not yet promoted |
+| CHARMM CARD (CRD) | β | `molframe-traj` | — | Not yet promoted |
+| DESRES DMS | β | `molframe-traj` | — | Not yet promoted |
+| TRZ | β | `molframe-traj` | — | Not yet promoted |
+| GROMOS11 TRC | β | `molframe-traj` | — | Not yet promoted |
+| HOOMD GSD | β | `molframe-traj` | — | Not yet promoted |
+| H5MD | β | `molframe-traj` | — | Not yet promoted |
+| NAMD binary | β | `molframe-traj` | — | Not yet promoted |
+| FHI-AIMS | β | `molframe-traj` | — | Not yet promoted |
+| DL_POLY CONFIG/HISTORY | β | `molframe-traj` | — | Not yet promoted |
+| GAMESS | β | `molframe-traj` | — | Not yet promoted |
+| LAMMPS dump | β | `molframe-traj` | — | Not yet promoted |
+| In-memory array source | β | `molframe-traj` | — | Not yet promoted |
+| Multi-file chaining | β | `molframe-traj` | — | Not yet promoted |
+| Random frame access | β | `molframe-traj` | — | Not yet promoted |
+| Frame slicing / index lists | β | `molframe-traj` | — | Not yet promoted |
+| Streaming (IMD) | β | `molframe-traj` | — | Not yet promoted |
+
+## 4. Simulation topology formats
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| CHARMM/XPLOR/NAMD PSF | β | `molframe-traj` | — | Not yet promoted |
+| Gromacs TPR | β | `molframe-traj` | — | Not yet promoted |
+| Gromacs ITP | β | `molframe-traj` | — | Not yet promoted |
+| AMBER prmtop / parm7 | β | `molframe-traj` | — | Not yet promoted |
+| LAMMPS data | β | `molframe-traj` | — | Not yet promoted |
+| HOOMD XML | β | `molframe-traj` | — | Not yet promoted |
+| Minimal (atom count only) | β | `molframe-traj` | — | Not yet promoted |
+
+## 5. Data model
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Hierarchical API | β | `molframe-core` | — | Not yet promoted |
+| Columnar storage | β | `molframe-core` | — | Not yet promoted |
+| **Both, over one store** | β | `molframe-core` | — | Not yet promoted |
+| Zero-copy views | β | `molframe-core` | — | Not yet promoted |
+| Topology / coordinate separation | β | `molframe-core` | — | Not yet promoted |
+| Dense multi-model | β | `molframe-core` | — | Not yet promoted |
+| Ragged ensembles | β | `molframe-core` | — | Not yet promoted |
+| Entity as a first-class table | β | `molframe-core` | — | Not yet promoted |
+| Both identifier namespaces | β | `molframe-core` | — | Not yet promoted |
+| **Namespace as a policy field** | β | `molframe-core` | — | Not yet promoted |
+| Insertion codes | β | `molframe-core` | — | Not yet promoted |
+| Extended (12-char) PDB IDs | β | `molframe-core` | — | Not yet promoted |
+| Altlocs preserved | β | `molframe-core` | — | Not yet promoted |
+| **Altloc resolution as a policy** | β | `molframe-core` | — | Not yet promoted |
+| Conformer-consistent altloc selection | β | `molframe-core` | — | Not yet promoted |
+| Immutable + transactional edit | β | `molframe-core` | — | Not yet promoted |
+| Copy-on-write overlay | β | `molframe-core` | — | Not yet promoted |
+| Coordinate generation tracking | β | `molframe-core` | — | Not yet promoted |
+| Custom per-atom annotations | β | `molframe-core` | — | Not yet promoted |
+| Structure merging | β | `molframe-core` | — | Not yet promoted |
+
+## 6. Selection
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Textual selection language | β | `molframe-query` | — | Not yet promoted |
+| Typed builder | β | `molframe-query` | — | Not yet promoted |
+| Pre-compiled reusable queries | β | `molframe-query` | — | Not yet promoted |
+| Boolean composition | β | `molframe-query` | — | Not yet promoted |
+| `and` tighter than `or` | β | `molframe-query` | — | Not yet promoted; MD gives both precedence 3; divergence documented |
+| Glob name matching | β | `molframe-query` | — | Not yet promoted |
+| Glob resolved at plan time | β | `molframe-query` | — | Not yet promoted |
+| `within` / `around` / `beyond` | β | `molframe-query` | — | Not yet promoted |
+| `sphzone` / `sphlayer` / `isolayer` | β | `molframe-query` | — | Not yet promoted |
+| `cyzone` / `cylayer` | β | `molframe-query` | — | Not yet promoted |
+| `point` | β | `molframe-query` | — | Not yet promoted |
+| `same X as` | β | `molframe-query` | — | Not yet promoted |
+| `byres` | β | `molframe-query` | — | Not yet promoted |
+| `bonded` | β | `molframe-query` | — | Not yet promoted |
+| `global` | β | `molframe-query` | — | Not yet promoted |
+| `group` (external set) | β | `molframe-query` | — | Not yet promoted |
+| `prop` comparisons | β | `molframe-query` | — | Not yet promoted |
+| `resid` with insertion codes | β | `molframe-query` | — | Not yet promoted |
+| Macros (protein, backbone, …) | β | `molframe-query` | — | Not yet promoted |
+| Macros derived from chemistry | β | `molframe-query` | — | Not yet promoted; MD uses hard-coded residue lists |
+| `label_*` / `auth_*` selectors | β | `molframe-query` | — | Not yet promoted; Unique to molframe |
+| `altloc` / `model` / `entity` / `assembly` | β | `molframe-query` | — | Not yet promoted |
+| SMARTS | β | `molframe-query` | — | Not yet promoted; Native parser and CCD-backed structure matcher; RDKit adapter remains phase 4 |
+| Chirality / aromatic / formal charge | β | `molframe-query` | — | Not yet promoted |
+| Updating selections | β | `molframe-query` | — | Not yet promoted |
+| Logical / physical plan separation | β | `molframe-query` | — | Not yet promoted |
+| Chunk pruning by statistics | β | `molframe-query` | — | Not yet promoted |
+| Adaptive result representation | β | `molframe-query` | — | Not yet promoted |
+| Late materialization | β | `molframe-query` | — | Not yet promoted |
+
+## 7. Spatial search
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Cell list | β | `molframe-spatial` | — | Not yet promoted |
+| k-d tree | β | `molframe-spatial` | — | Not yet promoted |
+| Brute force (SIMD) | β | `molframe-spatial` | — | Not yet promoted |
+| Verlet neighbour list | β | `molframe-spatial` | — | Not yet promoted |
+| **Cost-based backend selection** | β | `molframe-spatial` | — | Not yet promoted |
+| Periodic boundaries (orthorhombic) | β | `molframe-spatial` | — | Not yet promoted |
+| Periodic boundaries (triclinic) | β | `molframe-spatial` | — | Not yet promoted |
+| Minimum image convention | β | `molframe-spatial` | — | Not yet promoted |
+| Crystallographic images | β | `molframe-spatial` | — | Not yet promoted |
+| Assembly transforms | β | `molframe-spatial` | — | Not yet promoted |
+| k-nearest neighbours | β | `molframe-spatial` | — | Not yet promoted |
+| Unique pairs / self-exclusion | β | `molframe-spatial` | — | Not yet promoted |
+| Index caching by generation | β | `molframe-spatial` | — | Not yet promoted |
+| Minimum-image lattice shift and flat-torus interpolation | β | `molframe-spatial` | — | Not yet promoted |
+
+## 8. Geometry
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Distances, angles, dihedrals | β | `molframe-geom` | — | Not yet promoted |
+| Distance matrices | β | `molframe-geom` | — | Not yet promoted |
+| Centroid, centre of mass | β | `molframe-geom` | — | Not yet promoted |
+| Rigid transforms | β | `molframe-geom` | — | Not yet promoted |
+| Kabsch superposition | β | `molframe-geom` | — | Not yet promoted |
+| QCP superposition | β | `molframe-geom` | — | Not yet promoted |
+| RMSD | β | `molframe-geom` | — | Not yet promoted |
+| RMSF | β | `molframe-geom` | — | Not yet promoted |
+| Radius of gyration | β | `molframe-geom` | — | Not yet promoted |
+| Inertia tensor / principal axes | β | `molframe-geom` | — | Not yet promoted |
+| Asphericity, shape parameter | β | `molframe-geom` | — | Not yet promoted |
+| Backbone torsions | β | `molframe-geom` | — | Not yet promoted |
+| Side-chain torsions | β | `molframe-geom` | — | Not yet promoted |
+| Nucleic torsions / pucker | β | `molframe-analysis` | — | Not yet promoted |
+| Ramachandran classification | β | `molframe-validate` | — | Not yet promoted |
+| Internal coordinates | β | `molframe-ic` | — | Not yet promoted |
+| Rebuild from internal coordinates | β | `molframe-ic` | — | Not yet promoted |
+| Bond-angle-torsion coordinates | β | `molframe-ic` | — | Not yet promoted |
+| Periodic angles and circular statistics | β | `molframe-geom` | — | Not yet promoted |
+| Weighted torus distance and Fréchet summaries | β | `molframe-geom` | — | Not yet promoted |
+| Validated SO(3) rotations, geodesics and interpolation | β | `molframe-geom` | — | Not yet promoted |
+| Intrinsic SO(3) mean with non-uniqueness reporting | β | `molframe-geom` | — | Not yet promoted |
+| Discrete Cα frames and HELANAL geometry | β | `molframe-geom` | — | Not yet promoted |
+
+## 9. Surfaces and interactions
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| SASA (Shrake–Rupley) | β | `molframe-surface` | — | Not yet promoted |
+| SASA (Lee–Richards) | β | `molframe-surface` | — | Not yet promoted |
+| SES / Connolly surface | β | `molframe-surface` | — | Not yet promoted |
+| Buried surface (two-group SASA) | β | `molframe-surface` | — | Not yet promoted |
+| Buried SES with molecule roles | β | `molframe-surface` | — | Not yet promoted |
+| Surface points with normals | β | `molframe-surface` | — | Not yet promoted |
+| Cavity detection | β | `molframe-surface` | — | Not yet promoted |
+| Residue depth | β | `molframe-surface` | — | Not yet promoted |
+| Half-sphere exposure | β | `molframe-analysis` | — | Not yet promoted |
+| Contacts (distance) | β | `molframe-analysis` | — | Not yet promoted |
+| Contacts (surface-based) | β | `molframe-analysis` | — | Not yet promoted |
+| Contact maps | β | `molframe-analysis` | — | Not yet promoted |
+| Native contacts / Q | β | `molframe-analysis` | — | Not yet promoted |
+| Hydrogen bonds | β | `molframe-analysis` | — | Not yet promoted |
+| Water bridges | β | `molframe-analysis` | — | Not yet promoted |
+| Salt bridges | β | `molframe-analysis` | — | Not yet promoted |
+| π-stacking / cation-π | β | `molframe-analysis` | — | Not yet promoted |
+| Clashes | β | `molframe-validate` | — | Not yet promoted |
+| Interfaces | β | `molframe-analysis` | — | Not yet promoted |
+| Secondary structure (native) | β | `molframe-analysis` | — | Not yet promoted |
+| Secondary structure (DSSP binary) | β | `molframe-analysis` | — | Not yet promoted |
+| Base pairs / stacking | β | `molframe-analysis` | — | Not yet promoted |
+| PEOE charge equalisation (hybridisation-aware) | β | `molframe-chem` | — | Not yet promoted |
+| Indexed oriented surface mesh and quality diagnostics | β | `molframe-surface` | — | Not yet promoted |
+| Edge-geodesic distances and intrinsic patches | β | `molframe-surface` | — | Not yet promoted |
+| Discrete mean/Gaussian/principal surface curvature | β | `molframe-surface` | — | Not yet promoted |
+
+## 10. Chemistry
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| CCD integration | β | `molframe-chem` | — | Not yet promoted |
+| Pluggable component provider | β | `molframe-chem` | — | Not yet promoted |
+| Bond table | β | `molframe-chem` | — | Not yet promoted |
+| **Bond provenance** | β | `molframe-chem` | — | Not yet promoted |
+| Bonds from file records | β | `molframe-chem` | — | Not yet promoted |
+| Bonds from CCD | β | `molframe-chem` | — | Not yet promoted |
+| Bond inference by distance | β | `molframe-chem` | — | Not yet promoted |
+| Element data / radii sets | β | `molframe-chem` | — | Not yet promoted |
+| **Named, versioned radii sets** | β | `molframe-chem` | — | Not yet promoted |
+| Atom equivalence (CCD symmetry) | β | `molframe-chem` | — | Not yet promoted |
+| Valence checking | β | `molframe-validate` | — | Not yet promoted |
+| Stereochemistry | β | `molframe-validate` | — | Not yet promoted |
+| Residue classification from chemistry | β | `molframe-chem` | — | Not yet promoted |
+| Modified-residue parent mapping | β | `molframe-chem` | — | Not yet promoted |
+| Full cheminformatics | – | — | — | Argued exclusion: general cheminformatics (conformers, tautomers, reactions, descriptors) is another domain; no RDKit bridge ships. |
+
+## 11. Assemblies, symmetry, crystallography
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Assembly definitions | β | `molframe-xtal` | — | Not yet promoted |
+| Operator expression parsing | β | `molframe-xtal` | — | Not yet promoted |
+| **Lazy assembly instances** | β | `molframe-xtal` | — | Not yet promoted |
+| Assembly materialisation | β | `molframe-xtal` | — | Not yet promoted |
+| Unit cell | β | `molframe-xtal` | — | Not yet promoted |
+| Space groups (all 230, all settings) | β | `molframe-xtal` | — | Not yet promoted |
+| Symmetry operators stored | β | `molframe-xtal` | — | Not yet promoted |
+| Fractional ↔ Cartesian | β | `molframe-xtal` | — | Not yet promoted |
+| Crystal neighbour search | β | `molframe-xtal` | — | Not yet promoted |
+| NCS operators | β | `molframe-xtal` | — | Not yet promoted |
+| MTZ reflections | β | `molframe-xtal` | — | Not yet promoted |
+| Structure-factor mmCIF | β | `molframe-xtal` | — | Not yet promoted |
+| CCP4/MRC maps | β | `molframe-xtal` | — | Not yet promoted |
+| Map sampling at coordinates | β | `molframe-xtal` | — | Not yet promoted |
+| Real-space correlation | β | `molframe-validate` | — | Not yet promoted |
+| Crystallographic refinement | – | — | — | Argued exclusion: refinement is another domain. |
+
+## 12. Trajectories
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Streaming (memory independent of frames) | β | `molframe-traj` | — | Not yet promoted |
+| Random frame access | β | `molframe-traj` | — | Not yet promoted |
+| Declared random-access capability | β | `molframe-traj` | — | Not yet promoted |
+| On-the-fly transformations | β | `molframe-traj` | — | Not yet promoted |
+| Unwrap / wrap / centre / fit | β | `molframe-traj` | — | Not yet promoted |
+| Reusable neighbour lists | β | `molframe-traj` | — | Not yet promoted |
+| Frame analysis framework | β | `molframe-traj` | — | Not yet promoted |
+| Parallel frame analysis | β | `molframe-traj` | — | Not yet promoted |
+| **Deterministic parallel merge** | β | `molframe-traj` | — | Not yet promoted |
+| Auxiliary data streams | β | `molframe-traj` | — | Not yet promoted |
+| Trajectory writing | β | `molframe-traj` | — | Not yet promoted |
+| Generalized Procrustes mean | β | `molframe-traj` | — | Not yet promoted |
+| Cartesian PCA with explicit fit policy | β | `molframe-traj` | — | Not yet promoted |
+| Dihedral PCA with circular features | β | `molframe-traj` | — | Not yet promoted |
+| Reusable fitted-RMSD and torus distance matrices | β | `molframe-traj` | — | Not yet promoted |
+| Diffusion maps | β | `molframe-traj` | — | Not yet promoted |
+
+## 13. Comparison
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Sequence↔structure mapping | β | `molframe-compare` | — | Not yet promoted |
+| Chain mapping (homomeric search) | β | `molframe-compare` | — | Not yet promoted |
+| Atom mapping with equivalence | β | `molframe-compare` | — | Not yet promoted |
+| Ligand symmetry-aware comparison | β | `molframe-compare` | — | Not yet promoted |
+| RMSD family | β | `molframe-compare` | — | Not yet promoted |
+| GDT-TS / GDT-HA | β | `molframe-compare` | — | Not yet promoted |
+| TM-score | β | `molframe-compare` | — | Not yet promoted |
+| lDDT | β | `molframe-compare` | — | Not yet promoted |
+| DockQ | β | `molframe-compare` | — | Not yet promoted |
+| CAD-score | β | `molframe-compare` | — | Not yet promoted |
+| QS-score | β | `molframe-compare` | — | Not yet promoted |
+| Contact-map similarity | β | `molframe-compare` | — | Not yet promoted |
+| CE structural alignment | β | `molframe-compare` | — | Not yet promoted |
+| **Mapping/alignment/measure/verdict split** | β | `molframe-compare` | — | Not yet promoted |
+
+## 14. Validation
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Bond length / angle deviation | β | `molframe-validate` | — | Not yet promoted |
+| Torsion outliers | β | `molframe-validate` | — | Not yet promoted |
+| Rotamer outliers | β | `molframe-validate` | — | Not yet promoted |
+| Planarity | β | `molframe-validate` | — | Not yet promoted |
+| Chirality | β | `molframe-validate` | — | Not yet promoted |
+| Clashes | β | `molframe-validate` | — | Not yet promoted |
+| Cis-peptide detection | β | `molframe-validate` | — | Not yet promoted |
+| Nucleic acid geometry | β | `molframe-validate` | — | Not yet promoted |
+| Ligand geometry | β | `molframe-validate` | — | Not yet promoted |
+| Occupancy / B-factor checks | β | `molframe-validate` | — | Not yet promoted |
+| Altloc occupancy sums | β | `molframe-validate` | — | Not yet promoted |
+| B-factor distribution / explicit TLS consistency | β | `molframe-validate` | — | Not yet promoted |
+| Explicit non-aromatic plane restraints | β | `molframe-validate` | — | Not yet promoted |
+| CCD missing atoms per residue | β | `molframe-validate` | — | Not yet promoted |
+| Completeness vs canonical sequence | β | `molframe-validate` | — | Not yet promoted |
+| **Per-item detail, not only aggregates** | β | `molframe-validate` | — | Not yet promoted |
+| **Versioned reference distributions** | β | `molframe-validate` | — | Not yet promoted |
+
+## 15. Sequence
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Alphabets / encoded sequences | β | `molframe-seq` | — | Not yet promoted |
+| Global / local / semi-global alignment | β | `molframe-seq` | — | Not yet promoted |
+| Banded alignment | β | `molframe-seq` | — | Not yet promoted |
+| Affine gaps, substitution matrices | β | `molframe-seq` | — | Not yet promoted |
+| Multiple sequence alignment (guide-tree progressive + refinement) | β | `molframe-seq` | — | Not yet promoted |
+| k-mer tables / bucketed tables / spaced seeds / minimizers | β | `molframe-seq` | — | Not yet promoted |
+| Seed-and-extend search | β | `molframe-seq` | — | Not yet promoted |
+| Phylogenetics (NJ, UPGMA, reroot, ladderise, traverse) | β | `molframe-seq` | — | Not yet promoted |
+| Newick I/O | β | `molframe-seq` | — | Not yet promoted |
+| FASTA / FASTQ / Stockholm / Clustal / PHYLIP / A2M / A3M | β | `molframe-seq` | — | Not yet promoted |
+| Observed vs canonical vs reference sequence | β | `molframe-seq` | — | Not yet promoted |
+| Database-scale search | – | `molframe-seq` | — | Argued exclusion: archive-scale search infrastructure is another domain; pairwise and small-set alignment is in scope. |
+
+## 16. Interoperability
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| NumPy coordinate view | β | `molframe-py` | — | Not yet promoted |
+| **Read-only by default** | β | `molframe-py` | — | Not yet promoted |
+| Scoped coordinate mutation | β | `molframe-py` | — | Not yet promoted |
+| Arrow C-stream export | β | `molframe-interop` | — | Not yet promoted |
+| Arrow extension types | β | `molframe-interop` | — | Not yet promoted |
+| Polars / pandas dataframes | β | `molframe-interop` | — | Not yet promoted |
+| DLPack / PyTorch / JAX | β | `molframe-interop` | — | Not yet promoted |
+| Graph export (PyG / DGL) | β | `molframe-interop` | — | Not yet promoted |
+| Dataset abstraction | β | `molframe-interop` | — | Not yet promoted |
+| Leakage-aware splitting | β | `molframe-interop` | — | Not yet promoted |
+| Canonical mmCIF exchange contract | β | `molframe-cif` | — | Not yet promoted |
+| BinaryCIF exchange contract | β | `molframe-bcif` | — | Not yet promoted |
+| Arrow C Stream consumer contract | β | `molframe-interop` | — | Not yet promoted |
+| Owned NumPy input contract | β | `molframe-py` | — | Not yet promoted |
+| Forward-only trajectory stream contract | β | `molframe-traj` | — | Not yet promoted |
+| Caller-owned frame batch contract | β | `molframe-traj` | — | Not yet promoted |
+| Project-external differential harness contract | β | external | — | Not yet promoted |
+| Simulation-topology file exchange | β | `molframe-traj` | — | Not yet promoted |
+| Trajectory-file exchange | β | `molframe-traj` | — | Not yet promoted |
+| Neutral array and table consumer protocol | β | `molframe-interop` | — | Not yet promoted |
+
+## 17. Contracts and research — unique to pdbiox
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| `AnalysisPolicy` | β | `molframe-core` | — | Not yet promoted |
+| Named, versioned default profile | β | `molframe-core` | — | Not yet promoted |
+| `Analysis<T>` enriched results | β | `molframe-core` | — | Not yet promoted |
+| `Status` including `Indeterminate` | β | `molframe-core` | — | Not yet promoted |
+| `Coverage` against CCD-expected composition | β | `molframe-core` | — | Not yet promoted |
+| Full provenance record | β | `molframe-core` | — | Not yet promoted |
+| Provenance serialisation (JSON + mmCIF) | β | `molframe-core` | — | Not yet promoted |
+| Versioned verdict profiles | β | `molframe-fx` | — | Not yet promoted |
+| Policy sensitivity audit | β | `molframe-audit` | — | Not yet promoted |
+| PDB-scale audit study | · | `molframe-audit` | — | Reference-library column is `·`; this is external evidence work, not missing library code. |
+| Declarative motif specification | β | `molframe-fx` | — | Not yet promoted |
+| Chemistry-aware motif mapping | β | `molframe-fx` | — | Not yet promoted |
+| Four-stage evaluation split | β | `molframe-fx` | — | Not yet promoted |
+| Decomposed functional results | β | `molframe-fx` | — | Not yet promoted |
+| MotifBench / AME compatibility profiles | β | `molframe-fx` | — | Not yet promoted |
+| Reproducible-from-provenance re-execution | β | `molframe-core` | — | Not yet promoted |
+
+## 18. Surfaces
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| Rust API | β | `molframe` | — | Not yet promoted |
+| Python API | β | `molframe-py` | — | Not yet promoted |
+| Typed Python stubs | β | `molframe-py` | — | Not yet promoted |
+| **Zero logic in the binding layer** | β | `molframe-py` | — | Not yet promoted |
+| CLI | β | `molframe-cli` | — | Not yet promoted |
+| CLI tabular output formats | β | `molframe-cli` | — | Not yet promoted |
+| Compatibility shims | β | `molframe-py` | — | Not yet promoted |
+
+| Capability | molframe | Crate | GW | Evidence |
+| --- | :--: | --- | --- | --- |
+| 1 | β |  | — | Not yet promoted |
+| 2 | β |  | — | Not yet promoted |
+| 3 | β |  | — | Not yet promoted |
+| 4 | β |  | — | Not yet promoted |
+| 5 | β |  | — | Not yet promoted |
+| 6 | β |  | — | Not yet promoted |
+| 7 | β |  | — | Not yet promoted |
+| 8 | β |  | — | Not yet promoted |
+| `–` | β |  | — | Not yet promoted |
+| **Total** | β |  | — | Not yet promoted |
+
