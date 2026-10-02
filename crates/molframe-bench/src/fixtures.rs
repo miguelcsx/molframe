@@ -1,12 +1,14 @@
 //! Shared fixture loading and format conversion helpers.
 
-use std::io::Cursor;
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::io::{Cursor, Read};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use molframe_core::io::{InputBuffer, Limits, ReadOptions};
 use molframe_core::structure::Structure;
 
 use crate::samples::Sample;
+use crate::synthetic::{Seed, SyntheticCifSource, Tile};
 
 /// Wraps bytes already in hand as an [`InputBuffer`] (no decompression).
 #[must_use]
@@ -121,4 +123,57 @@ pub fn structure_from_cif(sample: Sample) -> Option<Structure> {
             sample.label()
         ),
     }
+}
+
+type Cache<T> = OnceLock<Mutex<HashMap<u64, Arc<T>>>>;
+
+fn cached<T>(cache: &Cache<T>, key: u64, build: impl FnOnce() -> T) -> Arc<T> {
+    let mutex = cache.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut entries = mutex.lock().unwrap_or_else(PoisonError::into_inner);
+    Arc::clone(entries.entry(key).or_insert_with(|| Arc::new(build())))
+}
+
+fn synthetic_tile() -> Tile {
+    Tile::from_structure(&structure(Sample::Large), Seed::new(1))
+}
+
+fn drain(mut source: SyntheticCifSource) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    if let Err(error) = source.read_to_end(&mut bytes) {
+        panic!("synthetic stream failed: {error}");
+    }
+    bytes
+}
+
+static ATOM_STRUCTURES: Cache<Structure> = OnceLock::new();
+static SIZED_CIF: Cache<Vec<u8>> = OnceLock::new();
+
+/// Tiled 1AON structure of at least `atoms` atoms, parsed once per size.
+///
+/// # Panics
+///
+/// Panics if the synthetic stream fails to parse.
+#[must_use]
+pub fn structure_with_atoms(atoms: u64) -> Arc<Structure> {
+    cached(&ATOM_STRUCTURES, atoms, || {
+        let bytes = drain(SyntheticCifSource::with_atoms(synthetic_tile(), atoms));
+        match molframe_cif::read(&input(&bytes), &ReadOptions::new()) {
+            Ok((structure, _)) => structure,
+            Err(findings) => panic!("synthetic structure failed: {findings:?}"),
+        }
+    })
+}
+
+/// Synthetic mmCIF text of roughly `bytes` bytes, generated once per size.
+///
+/// # Panics
+///
+/// Panics if the synthetic stream fails.
+#[must_use]
+pub fn cif_bytes_of_size(bytes: u64) -> Arc<Vec<u8>> {
+    cached(&SIZED_CIF, bytes, || {
+        let tile = synthetic_tile();
+        let copies = SyntheticCifSource::copies_for_bytes(&tile, bytes);
+        drain(SyntheticCifSource::new(tile, copies))
+    })
 }

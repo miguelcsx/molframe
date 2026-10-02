@@ -15,6 +15,23 @@ fn every_sample_parses_from_binary_cif_with_atoms() {
 }
 
 #[test]
+fn tiled_structure_reaches_the_requested_atom_count() {
+    let structure = structure_with_atoms(100_000);
+    assert!(structure.atom_count() >= 100_000);
+    assert!(std::sync::Arc::ptr_eq(
+        &structure,
+        &structure_with_atoms(100_000)
+    ));
+}
+
+#[test]
+fn sized_cif_is_cached_and_not_smaller_than_requested() {
+    let bytes = cif_bytes_of_size(200_000);
+    assert!(bytes.len() >= 200_000);
+    assert!(std::sync::Arc::ptr_eq(&bytes, &cif_bytes_of_size(200_000)));
+}
+
+#[test]
 fn legacy_pdb_and_mmcif_agree_on_atom_count() {
     for sample in Sample::MODELS {
         let reference = structure(sample).atom_count();
