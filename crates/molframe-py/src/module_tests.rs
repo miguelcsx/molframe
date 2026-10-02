@@ -11,7 +11,7 @@ fn curated_module_and_catalog_are_bidirectionally_consistent() {
             Ok(module) => module,
             Err(error) => panic!("test module should be created: {error}"),
         };
-        if let Err(error) = super::native(&module) {
+        if let Err(error) = crate::module::native(&module) {
             panic!("the extension module should register: {error}");
         }
         for capability in super::catalog::CAPABILITIES {
