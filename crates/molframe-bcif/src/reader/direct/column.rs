@@ -3,7 +3,7 @@
 use super::container::{DirectColumn, DirectData};
 use super::values::{ColumnValues, ValueRef};
 use crate::codec::{Decoded, decode_borrowed, decode_f32_borrowed_into};
-use molframe_cif::{AtomSiteRow, AtomSiteRowSink, Field};
+use molframe_cif::{AtomSiteRow, Field, RowFeeder};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use num_traits::ToPrimitive;
 use std::borrow::Cow;
@@ -50,9 +50,9 @@ impl AtomColumns {
         self.row_count
     }
 
-    pub(super) fn feed(&self, sink: &mut dyn AtomSiteRowSink) {
+    pub(super) fn feed(&self, feeder: &mut RowFeeder<'_, '_>) {
         for row in 0..self.row_count {
-            sink.feed(&BinaryAtomRow { columns: self, row });
+            feeder.feed(&BinaryAtomRow { columns: self, row });
         }
     }
 

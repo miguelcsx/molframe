@@ -1,6 +1,6 @@
 //! Borrowed coordinate rows shared by text and binary CIF readers.
 //!
-//! A reader exposes one row for the duration of [`AtomSiteRowSink::feed`]. The
+//! A reader exposes one row for the duration of [`RowFeeder::feed`]. The
 //! lowering stage consumes every value synchronously and never retains the row
 //! or any text borrowed from it. This keeps the seam compatible with both raw
 //! text slices and dictionary-indexed binary columns without allocating a
@@ -182,16 +182,6 @@ pub trait AtomSiteRow {
 
     /// Whether the item was recorded rather than written as a sentinel.
     fn is_recorded(&self, field: Field) -> bool;
-}
-
-/// Synchronous destination for borrowed `atom_site` rows.
-///
-/// Rows must be fed in deposition order. Implementations consume the row and
-/// all returned borrows before this method returns.
-#[doc(hidden)]
-pub trait AtomSiteRowSink {
-    /// Lowers one complete row.
-    fn feed(&mut self, row: &dyn AtomSiteRow);
 }
 
 impl AtomSiteRow for Rows<'_> {

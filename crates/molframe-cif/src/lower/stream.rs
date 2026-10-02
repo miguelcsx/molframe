@@ -1,6 +1,6 @@
 //! Final assembly for coordinate models lowered while CIF text is parsed.
 
-use super::atoms::{AtomBuilder, AtomSiteRow, AtomSiteRowSink};
+use super::atoms::{AtomBuilder, AtomSiteRow};
 use super::entry::{assemble_ragged, finish_model, prepare_model};
 use super::metadata::refresh;
 use super::ragged::RaggedParts;
@@ -85,7 +85,7 @@ impl<'a> StreamModelBuilder<'a> {
         self.current_number = Some(number);
     }
 
-    pub(crate) fn feed(&mut self, row: &dyn AtomSiteRow) {
+    pub(crate) fn feed<R: AtomSiteRow + ?Sized>(&mut self, row: &R) {
         if let Some(builder) = &mut self.current {
             builder.feed(row);
         }

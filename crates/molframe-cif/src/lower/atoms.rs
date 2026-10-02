@@ -8,11 +8,12 @@
 mod chains;
 mod fields;
 mod finish;
+mod identity;
 mod models;
 mod names;
 mod row;
 
-pub use row::{AtomSiteRow, AtomSiteRowSink, Field};
+pub use row::{AtomSiteRow, Field};
 
 use models::AtomSignature;
 use names::ResidueNames;
@@ -29,10 +30,9 @@ use molframe_core::coords::CoordinateBlock;
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use molframe_core::index::{AtomIndex, EntityIndex, ResidueIndex};
 use molframe_core::io::{AmbiguousResidueBoundaryPolicy, ReadOptions};
-use molframe_core::optional::{OptionalI32, OptionalSymbol};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::{CoordinateStore, StructureData};
 use molframe_core::symbol::{AltId, SymbolId};
-use molframe_core::topology::ResidueRecord;
 use num_traits::ToPrimitive;
 
 /// Builds the atoms, residues, chains and models of a structure.
@@ -112,7 +112,7 @@ impl<'a> AtomBuilder<'a> {
         let mut rows = Rows::new(category);
         if category.row_count() > 0 {
             loop {
-                self.row(&rows);
+                self.feed(&rows);
                 if !rows.advance() {
                     break;
                 }
@@ -120,7 +120,8 @@ impl<'a> AtomBuilder<'a> {
         }
         self.finish()
     }
-    fn row(&mut self, rows: &dyn AtomSiteRow) {
+    /// Lowers one row, in deposition order.
+    pub(crate) fn feed<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) {
         // A file that does not number its models has exactly one.
         let model = match rows.integer(Field::ModelNum) {
             Some(model) => model,
@@ -220,7 +221,7 @@ impl<'a> AtomBuilder<'a> {
     /// coordinate row carries both the coordinates and all six components. A
     /// row missing any component is left unattached: completing the tensor
     /// from the values that happened to be written would invent data.
-    fn record_inline_tensor(&mut self, rows: &dyn AtomSiteRow, atom: AtomIndex) {
+    fn record_inline_tensor<R: AtomSiteRow + ?Sized>(&mut self, rows: &R, atom: AtomIndex) {
         let components = [
             Field::AnisoU11,
             Field::AnisoU22,
@@ -247,9 +248,9 @@ impl<'a> AtomBuilder<'a> {
     }
 
     /// Where this atom's residue sits, opening a new one if the row starts one.
-    fn place(
+    fn place<R: AtomSiteRow + ?Sized>(
         &mut self,
-        rows: &dyn AtomSiteRow,
+        rows: &R,
         key: &ResidueKey,
         atom_name: SymbolId,
         alt_id: AltId,
@@ -292,7 +293,7 @@ impl<'a> AtomBuilder<'a> {
         Some(ResidueIndex::new(position))
     }
 
-    fn report_ambiguous_boundary(&mut self, rows: &dyn AtomSiteRow) {
+    fn report_ambiguous_boundary<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) {
         let code = match self.options.ambiguous_residue_boundary_policy {
             AmbiguousResidueBoundaryPolicy::Reject => Code::E3015,
             AmbiguousResidueBoundaryPolicy::InferFromFileOrder => Code::W3011,
@@ -305,81 +306,6 @@ impl<'a> AtomBuilder<'a> {
             Diagnostic::new(code).in_category("atom_site"),
             rows.row(),
         ));
-    }
-
-    /// Reports an alternate location that carries a different component code.
-    ///
-    /// This is a modelled point mutation: one residue with two chemical
-    /// identities. Both are kept; the finding says the file did something worth
-    /// knowing about rather than something wrong.
-    fn alternate_component_of(
-        &mut self,
-        rows: &dyn AtomSiteRow,
-        residue: ResidueIndex,
-    ) -> OptionalSymbol {
-        let Some(comp) = rows.identifier(Field::LabelCompId) else {
-            return OptionalSymbol::NONE;
-        };
-        let Some(existing_symbol) = self.data.topology.residues.label_comp_id(residue) else {
-            return OptionalSymbol::NONE;
-        };
-        let Some(existing) = self.data.dictionary.resolve(existing_symbol) else {
-            return OptionalSymbol::NONE;
-        };
-        if existing == comp.as_ref() {
-            return OptionalSymbol::NONE;
-        }
-        self.findings.push(at_source_row(
-            Diagnostic::new(Code::W3012)
-                .in_category("atom_site")
-                .with_context("component", existing.to_owned())
-                .with_context("alternate component", comp.to_string()),
-            rows.row(),
-        ));
-        OptionalSymbol::some(self.intern(&comp))
-    }
-
-    fn open_residue(&mut self, rows: &dyn AtomSiteRow, key: &ResidueKey) {
-        self.close_residue();
-        if self.chain != Some(key.chain) {
-            self.open_chain(rows, key.chain);
-        }
-        self.current = Some(*key);
-        self.names_in_residue.clear();
-
-        let component = rows.identifier(Field::LabelCompId);
-        let comp = self.intern(text_or_empty(component.as_deref()));
-        let auth_comp = match rows.identifier(Field::AuthCompId) {
-            Some(text) => OptionalSymbol::some(self.intern(&text)),
-            None => OptionalSymbol::NONE,
-        };
-        let ins_code = match rows.identifier(Field::InsCode) {
-            Some(text) => OptionalSymbol::some(self.intern(&text)),
-            None => OptionalSymbol::NONE,
-        };
-        let het = rows.text(Field::GroupPdb) == Some("HETATM");
-
-        if self
-            .data
-            .topology
-            .residues
-            .push(
-                ResidueRecord {
-                    label_comp_id: comp,
-                    auth_comp_id: auth_comp,
-                    label_seq_id: key.label_seq,
-                    auth_seq_id: key.auth_seq,
-                    ins_code,
-                    het,
-                },
-                self.atom_position..self.atom_position,
-            )
-            .is_err()
-        {
-            self.findings.push(Diagnostic::new(Code::E3001));
-            return;
-        }
-        self.residue_position += 1;
     }
 
     fn close_residue(&mut self) {
@@ -400,30 +326,6 @@ impl<'a> AtomBuilder<'a> {
                 .push(Diagnostic::new(Code::E3001).with_context("cause", error.to_string()));
         }
     }
-
-    fn key_of(&mut self, rows: &dyn AtomSiteRow, model: i64) -> ResidueKey {
-        let chain = match rows.identifier(Field::LabelAsymId) {
-            Some(text) => self.intern(&text).get(),
-            None => ResidueKey::ABSENT,
-        };
-        let ins_code = match rows.identifier(Field::InsCode) {
-            Some(text) => self.intern(&text).get(),
-            None => ResidueKey::ABSENT,
-        };
-        ResidueKey {
-            model,
-            chain,
-            label_seq: OptionalI32::from(
-                rows.integer(Field::LabelSeqId)
-                    .and_then(|seq| i32::try_from(seq).ok()),
-            ),
-            auth_seq: OptionalI32::from(
-                rows.integer(Field::AuthSeqId)
-                    .and_then(|seq| i32::try_from(seq).ok()),
-            ),
-            ins_code,
-        }
-    }
 }
 
 fn text_or_empty(value: Option<&str>) -> &str {
@@ -438,10 +340,4 @@ fn identifier_or_zero(value: Option<u32>) -> u32 {
         return 0;
     };
     value
-}
-
-impl AtomSiteRowSink for AtomBuilder<'_> {
-    fn feed(&mut self, row: &dyn AtomSiteRow) {
-        self.row(row);
-    }
 }

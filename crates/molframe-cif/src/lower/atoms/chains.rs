@@ -12,7 +12,7 @@ use molframe_core::symbol::SymbolId;
 use molframe_core::topology::{ChainRecord, EntityKind, PolymerKind};
 
 impl AtomBuilder<'_> {
-    pub(super) fn open_chain(&mut self, rows: &dyn AtomSiteRow, label: u32) {
+    pub(super) fn open_chain<R: AtomSiteRow + ?Sized>(&mut self, rows: &R, label: u32) {
         self.close_chain();
         self.chain = Some(label);
         self.chain_first_residue = self.residue_position;
@@ -60,7 +60,11 @@ impl AtomBuilder<'_> {
     }
 
     /// Resolves a chain's declared entity without guessing from its sequence.
-    fn entity_for(&mut self, rows: &dyn AtomSiteRow, label: SymbolId) -> Option<EntityIndex> {
+    fn entity_for<R: AtomSiteRow + ?Sized>(
+        &mut self,
+        rows: &R,
+        label: SymbolId,
+    ) -> Option<EntityIndex> {
         if let Some(entity_id) = rows.identifier(Field::LabelEntityId) {
             let entity_id = self.intern(&entity_id);
             if let Some(entity) = self.data.topology.entities.find_by_id(entity_id) {

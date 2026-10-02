@@ -10,6 +10,7 @@ mod bonds;
 mod diagnostics;
 mod ensemble;
 mod entry;
+mod feeder;
 mod keys;
 mod metadata;
 mod polymer;
@@ -18,10 +19,11 @@ mod references;
 mod secondary;
 mod stream;
 
-pub use atoms::{AtomSiteRow, AtomSiteRowSink, Field};
+pub use atoms::{AtomSiteRow, Field};
 pub use entry::{
     lower, lower_atom_site_with, lower_ragged_atom_site_with, lower_single_atom_site_with,
 };
+pub use feeder::RowFeeder;
 pub(crate) use stream::{
     StreamFrameParts, StreamModelBuilder, StreamModelParts, StreamedModels, finish_streamed,
     share_model_topology,

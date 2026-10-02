@@ -1,6 +1,6 @@
 //! One-pass lowering of models with independent atom topology.
 
-use super::atoms::{AtomBuilder, AtomSiteRow, AtomSiteRowSink, Field};
+use super::atoms::{AtomBuilder, AtomSiteRow, Field};
 use super::entry::{finish_model, prepare_model};
 use crate::document::DataBlock;
 use molframe_core::diagnostic::Diagnostics;
@@ -81,18 +81,16 @@ impl<'a> RaggedBuilder<'a> {
     }
 }
 
-impl AtomSiteRowSink for RaggedBuilder<'_> {
-    fn feed(&mut self, row: &dyn AtomSiteRow) {
+impl RaggedBuilder<'_> {
+    pub(super) fn feed<R: AtomSiteRow + ?Sized>(&mut self, row: &R) {
         let Some(number) = row.integer(Field::ModelNum) else {
             self.feed_model(row, 1);
             return;
         };
         self.feed_model(row, number);
     }
-}
 
-impl RaggedBuilder<'_> {
-    fn feed_model(&mut self, row: &dyn AtomSiteRow, number: i64) {
+    fn feed_model<R: AtomSiteRow + ?Sized>(&mut self, row: &R, number: i64) {
         if self.current_number != Some(number) {
             self.start_model(number);
         }

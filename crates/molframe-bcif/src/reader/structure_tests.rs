@@ -91,6 +91,33 @@ fn direct_and_lossless_binary_reads_are_semantically_identical() {
 }
 
 #[test]
+fn text_and_binary_cif_of_the_same_entry_lower_to_the_same_structure() {
+    use molframe_bench::{Sample, structure_from_cif};
+
+    for sample in [Sample::Tiny, Sample::Small, Sample::Medium] {
+        let from_text = structure_from_cif(sample).expect("sample ships mmCIF text");
+        let (from_binary, _) = read(
+            &InputBuffer::from_bytes(sample.bcif().to_vec()),
+            &ReadOptions::new(),
+        )
+        .expect("binary sample reads");
+        let difference = structure_difference(
+            &from_text,
+            &from_binary,
+            StructureDifferenceOptions {
+                coordinate_tolerance: 1e-3,
+            },
+        )
+        .expect("a positive tolerance is valid");
+        assert!(
+            difference.is_empty(),
+            "{}: text and binary differ: {difference:?}",
+            sample.label()
+        );
+    }
+}
+
+#[test]
 fn an_unconsumed_atom_annotation_still_selects_ragged_storage() {
     let changed = MULTI_MODEL.replacen(
         "2 C CA GLY A 1 1 1 1 0 2 same",

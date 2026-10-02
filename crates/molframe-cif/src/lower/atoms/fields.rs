@@ -15,7 +15,7 @@ use molframe_core::symbol::{AltId, SymbolId};
 use num_traits::ToPrimitive;
 
 impl AtomBuilder<'_> {
-    pub(super) fn position_of(&mut self, rows: &dyn AtomSiteRow) -> Option<[f32; 3]> {
+    pub(super) fn position_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) -> Option<[f32; 3]> {
         let (Some(x), Some(y), Some(z)) = (
             rows.float(Field::CartnX),
             rows.float(Field::CartnY),
@@ -46,9 +46,9 @@ impl AtomBuilder<'_> {
         Some(position)
     }
 
-    pub(super) fn optional_float(
+    pub(super) fn optional_float<R: AtomSiteRow + ?Sized>(
         &mut self,
-        rows: &dyn AtomSiteRow,
+        rows: &R,
         field: Field,
         when_absent: f32,
     ) -> (f32, Presence) {
@@ -68,7 +68,11 @@ impl AtomBuilder<'_> {
         (when_absent, Presence::Unknown)
     }
 
-    pub(super) fn element_of(&mut self, rows: &dyn AtomSiteRow, name: Option<&str>) -> Element {
+    pub(super) fn element_of<R: AtomSiteRow + ?Sized>(
+        &mut self,
+        rows: &R,
+        name: Option<&str>,
+    ) -> Element {
         if let Some(element) = rows.text(Field::TypeSymbol).and_then(Element::from_symbol) {
             return element;
         }
@@ -85,14 +89,14 @@ impl AtomBuilder<'_> {
         inferred
     }
 
-    pub(super) fn auth_name_of(&mut self, rows: &dyn AtomSiteRow) -> OptionalSymbol {
+    pub(super) fn auth_name_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) -> OptionalSymbol {
         rows.identifier(Field::AuthAtomId)
             .map_or(OptionalSymbol::NONE, |text| {
                 OptionalSymbol::some(self.intern(&text))
             })
     }
 
-    pub(super) fn alt_of(&mut self, rows: &dyn AtomSiteRow) -> Option<AltId> {
+    pub(super) fn alt_of<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) -> Option<AltId> {
         if let Some(text) = rows.identifier(Field::LabelAltId)
             && !text.is_empty()
         {

@@ -175,9 +175,9 @@ impl AtomBuilder<'_> {
         self.model_numbers.push(number);
     }
 
-    pub(super) fn observe_atom(
+    pub(super) fn observe_atom<R: AtomSiteRow + ?Sized>(
         &mut self,
-        rows: &dyn AtomSiteRow,
+        rows: &R,
         signature: AtomSignature,
         record: &AtomRecord,
     ) {
@@ -197,7 +197,7 @@ impl AtomBuilder<'_> {
         self.report_identity_mismatch(rows);
     }
 
-    fn report_identity_mismatch(&mut self, rows: &dyn AtomSiteRow) {
+    fn report_identity_mismatch<R: AtomSiteRow + ?Sized>(&mut self, rows: &R) {
         self.findings.push(at_source_row(
             Diagnostic::new(Code::E3010)
                 .with_message("a later model does not describe the same atom topology")

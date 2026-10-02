@@ -24,7 +24,7 @@ pub use document::{Category, CifValue, Column, DataBlock, Document};
 pub use lower::lower;
 #[doc(hidden)]
 pub use lower::{
-    AtomSiteRow, AtomSiteRowSink, Field, lower_atom_site_with, lower_ragged_atom_site_with,
+    AtomSiteRow, Field, RowFeeder, lower_atom_site_with, lower_ragged_atom_site_with,
     lower_single_atom_site_with,
 };
 #[doc(hidden)]

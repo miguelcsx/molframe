@@ -5,8 +5,9 @@
 //! species — is read when present and reported as absent when not, rather than
 //! being invented.
 
-use super::atoms::{AtomBuilder, AtomSiteRowSink};
+use super::atoms::AtomBuilder;
 use super::ensemble::ragged_model_numbers;
+use super::feeder::RowFeeder;
 use super::ragged::{RaggedBuilder, RaggedParts};
 use crate::document::{CifValue, Document};
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
@@ -115,7 +116,7 @@ pub(super) fn finish_model(
 ///
 /// The caller must feed complete rows in deposition order. Every row and every
 /// string it returns need remain valid only for the duration of one synchronous
-/// [`AtomSiteRowSink::feed`] call. The metadata document must contain the first
+/// [`RowFeeder::feed`] call. The metadata document must contain the first
 /// data block and any categories needed for entry, entity, bond and reference
 /// interpretation; it does not need to retain `atom_site`.
 ///
@@ -131,14 +132,14 @@ pub fn lower_atom_site_with(
     metadata: &Document,
     options: &ReadOptions,
     initial_findings: Vec<Diagnostic>,
-    feed: impl FnOnce(&mut dyn AtomSiteRowSink) -> Result<(), Vec<Diagnostic>>,
+    feed: impl FnOnce(&mut RowFeeder<'_, '_>) -> Result<(), Vec<Diagnostic>>,
 ) -> ReadResult {
     let Some(block) = metadata.first_block() else {
         return Err(vec![Diagnostic::new(Code::E1106)]);
     };
     let (data, findings, asym_entities) = prepare_model(block, options, initial_findings);
     let mut builder = AtomBuilder::new(data, findings, options, asym_entities);
-    if let Err(errors) = feed(&mut builder) {
+    if let Err(errors) = feed(&mut RowFeeder::atom(&mut builder)) {
         let mut findings = builder.abort();
         findings.extend(errors);
         return Err(findings.finish());
@@ -163,7 +164,7 @@ pub fn lower_single_atom_site_with(
     options: &ReadOptions,
     initial_findings: Vec<Diagnostic>,
     atom_capacity: usize,
-    feed: impl FnOnce(&mut dyn AtomSiteRowSink) -> Result<(), Vec<Diagnostic>>,
+    feed: impl FnOnce(&mut RowFeeder<'_, '_>) -> Result<(), Vec<Diagnostic>>,
 ) -> ReadResult {
     let Some(block) = metadata.first_block() else {
         return Err(vec![Diagnostic::new(Code::E1106)]);
@@ -172,7 +173,7 @@ pub fn lower_single_atom_site_with(
     let mut builder =
         AtomBuilder::new(data, findings, options, asym_entities).without_identity_tracking();
     builder.reserve_atoms(atom_capacity);
-    if let Err(errors) = feed(&mut builder) {
+    if let Err(errors) = feed(&mut RowFeeder::atom(&mut builder)) {
         let mut findings = builder.abort();
         findings.extend(errors);
         return Err(findings.finish());
@@ -199,7 +200,7 @@ pub fn lower_ragged_atom_site_with(
     options: &ReadOptions,
     initial_findings: Vec<Diagnostic>,
     model_capacity: usize,
-    feed: impl FnOnce(&mut dyn AtomSiteRowSink) -> Result<(), Vec<Diagnostic>>,
+    feed: impl FnOnce(&mut RowFeeder<'_, '_>) -> Result<(), Vec<Diagnostic>>,
 ) -> ReadResult {
     let Some(block) = metadata.first_block() else {
         return Err(vec![Diagnostic::new(Code::E1106)]);
@@ -207,7 +208,7 @@ pub fn lower_ragged_atom_site_with(
     let mut findings = Diagnostics::with_capacity(initial_findings.len());
     findings.extend(initial_findings);
     let mut builder = RaggedBuilder::new(block, options, findings, model_capacity);
-    if let Err(errors) = feed(&mut builder) {
+    if let Err(errors) = feed(&mut RowFeeder::ragged(&mut builder)) {
         let mut findings = builder.abort();
         findings.extend(errors);
         return Err(findings.finish());
