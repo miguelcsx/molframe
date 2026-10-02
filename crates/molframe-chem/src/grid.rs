@@ -136,9 +136,32 @@ impl<T: Copy> CellGrid<T> {
         matches!(self.layout, Layout::Dense { .. })
     }
 
+    /// The number of cells [`Self::visit_cells`] can be asked to visit.
+    ///
+    /// A dense grid counts every slot of its bounding box, empty ones included;
+    /// a sparse grid counts its occupied cells.
+    pub(crate) fn cell_count(&self) -> usize {
+        match &self.layout {
+            Layout::Dense { dims, .. } => dims[0] * dims[1] * dims[2],
+            Layout::Sparse { cells } => cells.len(),
+        }
+    }
+
     /// Calls `visit` with each occupied cell's items and the items of every
     /// occupied cell around it, itself included, as ranges into [`Self::items`].
-    pub(crate) fn for_each_cell(&self, mut visit: impl FnMut(Range<usize>, &[Range<usize>])) {
+    pub(crate) fn for_each_cell(&self, visit: impl FnMut(Range<usize>, &[Range<usize>])) {
+        self.visit_cells(0..self.cell_count(), visit);
+    }
+
+    /// [`Self::for_each_cell`] restricted to cells `cells` of `0..cell_count()`.
+    ///
+    /// Cells are numbered in the order `for_each_cell` visits them, so visiting
+    /// consecutive ranges in turn reproduces its whole sequence.
+    pub(crate) fn visit_cells(
+        &self,
+        cells: Range<usize>,
+        mut visit: impl FnMut(Range<usize>, &[Range<usize>]),
+    ) {
         let mut neighbourhood = Vec::with_capacity(27);
         match &self.layout {
             Layout::Dense { offsets, dims } => {
@@ -146,31 +169,32 @@ impl<T: Copy> CellGrid<T> {
                     let slot = (x * dims[1] + y) * dims[2] + z;
                     offsets[slot] as usize..offsets[slot + 1] as usize
                 };
-                for x in 0..dims[0] {
-                    for y in 0..dims[1] {
-                        for z in 0..dims[2] {
-                            let own = range_at(x, y, z);
-                            if own.is_empty() {
-                                continue;
-                            }
-                            neighbourhood.clear();
-                            for nx in x.saturating_sub(1)..=(x + 1).min(dims[0] - 1) {
-                                for ny in y.saturating_sub(1)..=(y + 1).min(dims[1] - 1) {
-                                    for nz in z.saturating_sub(1)..=(z + 1).min(dims[2] - 1) {
-                                        let range = range_at(nx, ny, nz);
-                                        if !range.is_empty() {
-                                            neighbourhood.push(range);
-                                        }
-                                    }
+                for cell in cells.start..cells.end.min(self.cell_count()) {
+                    if offsets[cell] == offsets[cell + 1] {
+                        continue;
+                    }
+                    let (x, y, z) = (
+                        cell / (dims[1] * dims[2]),
+                        cell / dims[2] % dims[1],
+                        cell % dims[2],
+                    );
+                    neighbourhood.clear();
+                    for nx in x.saturating_sub(1)..=(x + 1).min(dims[0] - 1) {
+                        for ny in y.saturating_sub(1)..=(y + 1).min(dims[1] - 1) {
+                            for nz in z.saturating_sub(1)..=(z + 1).min(dims[2] - 1) {
+                                let range = range_at(nx, ny, nz);
+                                if !range.is_empty() {
+                                    neighbourhood.push(range);
                                 }
                             }
-                            visit(own, &neighbourhood);
                         }
                     }
+                    visit(range_at(x, y, z), &neighbourhood);
                 }
             }
-            Layout::Sparse { cells } => {
-                for (base, own) in cells {
+            Layout::Sparse { cells: occupied } => {
+                let end = cells.end.min(occupied.len());
+                for (base, own) in occupied.get(cells.start..end).unwrap_or_default() {
                     neighbourhood.clear();
                     for dx in -1..=1 {
                         for dy in -1..=1 {
@@ -180,9 +204,10 @@ impl<T: Copy> CellGrid<T> {
                                     base.0[1].saturating_add(dy),
                                     base.0[2].saturating_add(dz),
                                 ]);
-                                if let Ok(index) = cells.binary_search_by_key(&key, |(key, _)| *key)
+                                if let Ok(index) =
+                                    occupied.binary_search_by_key(&key, |(key, _)| *key)
                                 {
-                                    neighbourhood.push(cells[index].1.clone());
+                                    neighbourhood.push(occupied[index].1.clone());
                                 }
                             }
                         }

@@ -6,6 +6,7 @@
 
 #[cfg(feature = "mmcif")]
 use formats::{cif_write_findings, write_mmcif_to_with_options};
+use molframe_core::ExecutionContext;
 use molframe_core::diagnostic::{Code, Diagnostic, Findings};
 use molframe_core::io::{Format, InputBuffer, OutputOptions, OutputSink, ReadOptions};
 use molframe_core::structure::Structure as CoreStructure;
@@ -283,8 +284,12 @@ pub fn read_buffer(
     name: Option<&str>,
     options: &ReadOptions,
 ) -> Result<(Structure, Vec<Diagnostic>), Findings> {
-    enrich_read(dispatch_read(input, name, options), options)
-        .map(|(structure, diagnostics)| (structure.into(), diagnostics))
+    enrich_read(
+        dispatch_read(input, name, options),
+        options,
+        &ExecutionContext::default(),
+    )
+    .map(|(structure, diagnostics)| (structure.into(), diagnostics))
 }
 
 /// Applies the default chemistry perception pass to a caller-created structure.
@@ -301,9 +306,24 @@ pub fn read_buffer(
 /// perception input.
 #[cfg(all(feature = "chemistry", feature = "spatial"))]
 pub fn perceive(structure: &Structure) -> Result<(Structure, Vec<Diagnostic>), Findings> {
+    perceive_in(structure, &ExecutionContext::default())
+}
+
+/// [`perceive`] on the worker budget of `context`.
+///
+/// # Errors
+///
+/// Returns findings only if the supplied structure cannot be used as a valid
+/// perception input.
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+pub fn perceive_in(
+    structure: &Structure,
+    context: &ExecutionContext,
+) -> Result<(Structure, Vec<Diagnostic>), Findings> {
     enrich_read(
         Ok((structure.engine().clone(), Vec::new())),
         &ReadOptions::new(),
+        context,
     )
     .map(|(structure, diagnostics)| (structure.into(), diagnostics))
 }
@@ -312,12 +332,13 @@ pub fn perceive(structure: &Structure) -> Result<(Structure, Vec<Diagnostic>), F
 fn enrich_read(
     result: Result<(CoreStructure, Vec<Diagnostic>), Findings>,
     options: &ReadOptions,
+    context: &ExecutionContext,
 ) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
     let (structure, mut findings) = result?;
     if options.only_atomic_coords {
         return Ok((structure, findings));
     }
-    let structure = match molframe_chem::perceive_bonds(&structure) {
+    let structure = match molframe_chem::perceive_bonds_in(&structure, context) {
         Ok(structure) => structure,
         Err(finding) => {
             findings.push(finding);
@@ -349,6 +370,7 @@ fn enrich_read(
 fn enrich_read(
     result: Result<(CoreStructure, Vec<Diagnostic>), Findings>,
     _options: &ReadOptions,
+    _context: &ExecutionContext,
 ) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
     result
 }

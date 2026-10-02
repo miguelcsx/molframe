@@ -41,12 +41,10 @@ fn edges(structure: &Structure) -> BTreeMap<Edge, String> {
 /// The bonds a pairwise search over every atom pair would add.
 fn pairwise(structure: &Structure) -> BTreeMap<Edge, String> {
     let mut output = BondTableBuilder::new();
-    let mut existing = HashSet::new();
     for bond in structure.data().bonds.iter() {
-        existing.insert(endpoints(bond.atom_a.get(), bond.atom_b.get()));
         output.push(bond);
     }
-    add_polymer_links(structure, &mut output, &mut existing);
+    add_polymer_links(structure, &mut output);
     let thresholds: Vec<_> = structure
         .data()
         .atoms()
@@ -63,9 +61,7 @@ fn pairwise(structure: &Structure) -> BTreeMap<Edge, String> {
                 continue;
             };
             let distance = squared_distance(positions[first as usize], positions[second as usize]);
-            if candidate_allowed(left, right, &thresholds, distance)
-                && existing.insert(endpoints(first, second))
-            {
+            if candidate_allowed(left, right, &thresholds, distance) {
                 output.push(BondRecord {
                     atom_a: left.index(),
                     atom_b: right.index(),
@@ -187,4 +183,53 @@ fn a_span_too_large_to_tabulate_falls_back_to_the_sparse_grid() {
     let grid = CellGrid::build(entries_of(&positions, &thresholds, 2.77));
     assert!(!grid.is_dense());
     assert_eq!(neighbouring_pairs(&grid), vec![(0, 1)]);
+}
+
+#[test]
+fn chunked_cell_visits_reproduce_the_whole_sequence() {
+    let mut positions: Vec<[f32; 3]> = (0..400)
+        .map(|n| {
+            let n = f32::from(u16::try_from(n).expect("small"));
+            [n.rem_euclid(17.0) * 1.3, n.rem_euclid(11.0) * 1.7, n * 0.05]
+        })
+        .collect();
+    let thresholds = vec![Some(1.75); positions.len()];
+    let dense_entries = entries_of(&positions, &thresholds, 2.77);
+    positions.push([90_000.0, 90_000.0, 90_000.0]);
+    let sparse_entries = entries_of(&positions, &vec![Some(1.75); positions.len()], 2.77);
+    for entries in [dense_entries, sparse_entries] {
+        let grid = CellGrid::build(entries);
+        let mut whole = Vec::new();
+        grid.for_each_cell(|own, neighbourhood| whole.push((own, neighbourhood.to_vec())));
+        for block in [1, 7, 64, grid.cell_count().max(1)] {
+            let mut pieces = Vec::new();
+            let mut start = 0;
+            while start < grid.cell_count() {
+                let end = (start + block).min(grid.cell_count());
+                grid.visit_cells(start..end, |own, neighbourhood| {
+                    pieces.push((own, neighbourhood.to_vec()));
+                });
+                start = end;
+            }
+            assert_eq!(pieces, whole, "block size {block}");
+        }
+    }
+}
+
+#[test]
+fn perception_is_identical_at_every_worker_budget() {
+    let structure = structure(Sample::Large);
+    let mut reference = None;
+    for workers in [1, 2, 4, 16] {
+        let context = ExecutionContext::builder()
+            .worker_budget(workers)
+            .build()
+            .expect("a positive worker budget is valid");
+        let found = perceive_bonds_in(&structure, &context).expect("coordinates are dense");
+        let observed = edges(&found);
+        match &reference {
+            None => reference = Some(observed),
+            Some(first) => assert_eq!(&observed, first, "{workers} workers"),
+        }
+    }
 }

@@ -7,11 +7,13 @@
 
 use crate::grid::{CellGrid, cell_for};
 use crate::standard_bonds::standard_bond_order;
+use molframe_core::ExecutionContext;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::index::AtomIndex;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
 use molframe_core::structure::{AtomRef, Structure};
-use std::collections::HashSet;
+use std::ops::Range;
 
 /// Adds chemically plausible missing bonds to one immutable structure.
 ///
@@ -22,20 +24,37 @@ use std::collections::HashSet;
 ///
 /// Returns a diagnostic when coordinates are not a dense first-model column.
 pub fn perceive_bonds(structure: &Structure) -> Result<Structure, Diagnostic> {
+    perceive_bonds_in(structure, &ExecutionContext::default())
+}
+
+/// [`perceive_bonds`] on the worker budget of `context`.
+///
+/// The result is identical at every worker count: the search is divided into
+/// fixed cell blocks whose bonds are merged in block order.
+///
+/// # Errors
+///
+/// Returns a diagnostic when coordinates are not a dense first-model column,
+/// or when a worker thread panics.
+pub fn perceive_bonds_in(
+    structure: &Structure,
+    context: &ExecutionContext,
+) -> Result<Structure, Diagnostic> {
     if !structure.data().coords.is_dense()
         || structure.positions().len() != structure.atom_count() as usize
     {
         return Err(Diagnostic::new(Code::E6008)
             .with_message("default bond perception requires one dense coordinate column"));
     }
+    // Provenance is decided by insertion order: `BondTableBuilder::finish`
+    // keeps the first record of each endpoint pair, so file bonds pushed first
+    // win over polymer links, which win over inferred grid bonds.
     let mut output = BondTableBuilder::new();
-    let mut existing = HashSet::with_capacity(structure.data().bonds.len().saturating_mul(2));
     for bond in structure.data().bonds.iter() {
-        existing.insert(endpoints(bond.atom_a.get(), bond.atom_b.get()));
         output.push(bond);
     }
 
-    add_polymer_links(structure, &mut output, &mut existing);
+    add_polymer_links(structure, &mut output);
     let thresholds: Vec<_> = structure
         .data()
         .atoms()
@@ -43,7 +62,7 @@ pub fn perceive_bonds(structure: &Structure) -> Result<Structure, Diagnostic> {
         .collect();
     let maximum = thresholds.iter().flatten().copied().fold(0.0_f32, f32::max) * 2.0 / 1.95;
     if maximum > 0.0 && maximum.is_finite() {
-        add_grid_bonds(structure, &thresholds, maximum, &mut output, &mut existing);
+        add_grid_bonds(structure, &thresholds, maximum, &mut output, context)?;
     }
 
     let mut data = structure.data().clone();
@@ -59,13 +78,20 @@ struct GridAtom {
     threshold: f32,
 }
 
+/// Fewer grid atoms than this are searched on one block: a thread is not worth
+/// waking for a structure that small.
+const PARALLEL_GRID_ATOMS: usize = 32_768;
+
+/// Grid cells searched per block of the parallel pass.
+const CELLS_PER_BLOCK: usize = 4096;
+
 fn add_grid_bonds(
     structure: &Structure,
     thresholds: &[Option<f32>],
     cutoff: f32,
     output: &mut BondTableBuilder,
-    existing: &mut HashSet<(u32, u32)>,
-) {
+    context: &ExecutionContext,
+) -> Result<(), Diagnostic> {
     let mut entries = Vec::with_capacity(thresholds.len());
     for (atom, (position, threshold)) in structure.positions().iter().zip(thresholds).enumerate() {
         let (Some(threshold), Some(cell), Ok(atom)) =
@@ -82,48 +108,73 @@ fn add_grid_bonds(
             },
         ));
     }
+    let single_block = entries.len() < PARALLEL_GRID_ATOMS;
     let grid = CellGrid::build(entries);
-    grid.for_each_cell(|own, neighbourhood| {
-        for first in &grid.items()[own] {
-            for range in neighbourhood {
-                for second in &grid.items()[range.clone()] {
-                    if second.atom <= first.atom {
-                        continue;
-                    }
-                    // The distance window rejects nearly every candidate, so it
-                    // runs before anything that has to look an atom up.
-                    let distance_squared = squared_distance(first.position, second.position);
-                    if !in_bonding_window(first.threshold, second.threshold, distance_squared) {
-                        continue;
-                    }
-                    let (Some(left), Some(right)) = (
-                        structure.atom(AtomIndex::new(first.atom)),
-                        structure.atom(AtomIndex::new(second.atom)),
-                    ) else {
-                        continue;
-                    };
-                    if !pair_compatible(left, right)
-                        || !existing.insert(endpoints(first.atom, second.atom))
-                    {
-                        continue;
-                    }
-                    output.push(BondRecord {
-                        atom_a: AtomIndex::new(first.atom),
-                        atom_b: AtomIndex::new(second.atom),
-                        order: intra_residue_order(left, right),
-                        provenance: BondProvenance::InferredDistance,
-                    });
-                }
-            }
-        }
-    });
+    let cells = grid.cell_count();
+    let plan = if single_block {
+        BlockPlan::new(cells, cells.max(1))
+    } else {
+        BlockPlan::new(cells, CELLS_PER_BLOCK)
+    };
+    // Blocks cover fixed cell ranges and are appended in block order, so the
+    // records reach the builder in the order a serial walk would produce.
+    let blocks = map_blocks_in(plan, context, |_, range| {
+        let mut records = Vec::new();
+        grid.visit_cells(range, |own, neighbourhood| {
+            search_cell(structure, &grid, own, neighbourhood, &mut records);
+        });
+        records
+    })
+    .map_err(|_| {
+        Diagnostic::new(Code::E1901).with_message("a worker thread panicked during bond perception")
+    })?;
+    for record in blocks.into_iter().flatten() {
+        output.push(record);
+    }
+    Ok(())
 }
 
-fn add_polymer_links(
+/// Appends the bonds between one cell's atoms and everything in its neighbourhood.
+fn search_cell(
     structure: &Structure,
-    output: &mut BondTableBuilder,
-    existing: &mut HashSet<(u32, u32)>,
+    grid: &CellGrid<GridAtom>,
+    own: Range<usize>,
+    neighbourhood: &[Range<usize>],
+    records: &mut Vec<BondRecord>,
 ) {
+    for first in &grid.items()[own] {
+        for range in neighbourhood {
+            for second in &grid.items()[range.clone()] {
+                if second.atom <= first.atom {
+                    continue;
+                }
+                // The distance window rejects nearly every candidate, so it
+                // runs before anything that has to look an atom up.
+                let distance_squared = squared_distance(first.position, second.position);
+                if !in_bonding_window(first.threshold, second.threshold, distance_squared) {
+                    continue;
+                }
+                let (Some(left), Some(right)) = (
+                    structure.atom(AtomIndex::new(first.atom)),
+                    structure.atom(AtomIndex::new(second.atom)),
+                ) else {
+                    continue;
+                };
+                if !pair_compatible(left, right) {
+                    continue;
+                }
+                records.push(BondRecord {
+                    atom_a: AtomIndex::new(first.atom),
+                    atom_b: AtomIndex::new(second.atom),
+                    order: intra_residue_order(left, right),
+                    provenance: BondProvenance::InferredDistance,
+                });
+            }
+        }
+    }
+}
+
+fn add_polymer_links(structure: &Structure, output: &mut BondTableBuilder) {
     for chain in structure.data().chains() {
         let residues: Vec<_> = chain.residues().collect();
         for pair in residues.windows(2) {
@@ -133,7 +184,7 @@ fn add_polymer_links(
             if let Some((left, right)) = left_residue.atom("C").zip(right_residue.atom("N"))
                 && within(left, right, 1.75)
             {
-                add_link(left, right, output, existing);
+                add_link(left, right, output);
             }
             let left = ["O3'", "O3*", "O3"]
                 .iter()
@@ -141,27 +192,19 @@ fn add_polymer_links(
             if let Some((left, right)) = left.zip(right_residue.atom("P"))
                 && within(left, right, 1.9)
             {
-                add_link(left, right, output, existing);
+                add_link(left, right, output);
             }
         }
     }
 }
 
-fn add_link(
-    left: AtomRef<'_>,
-    right: AtomRef<'_>,
-    output: &mut BondTableBuilder,
-    existing: &mut HashSet<(u32, u32)>,
-) {
-    let key = endpoints(left.index().get(), right.index().get());
-    if existing.insert(key) {
-        output.push(BondRecord {
-            atom_a: left.index(),
-            atom_b: right.index(),
-            order: BondOrder::Polymeric,
-            provenance: BondProvenance::InferredDistance,
-        });
-    }
+fn add_link(left: AtomRef<'_>, right: AtomRef<'_>, output: &mut BondTableBuilder) {
+    output.push(BondRecord {
+        atom_a: left.index(),
+        atom_b: right.index(),
+        order: BondOrder::Polymeric,
+        provenance: BondProvenance::InferredDistance,
+    });
 }
 
 /// Whether a distance lies between the closest plausible contact and the sum of
@@ -214,14 +257,6 @@ fn within(left: AtomRef<'_>, right: AtomRef<'_>, maximum: f32) -> bool {
 
 fn squared_distance(left: [f32; 3], right: [f32; 3]) -> f32 {
     left.iter().zip(right).map(|(a, b)| (a - b) * (a - b)).sum()
-}
-
-fn endpoints(left: u32, right: u32) -> (u32, u32) {
-    if left <= right {
-        (left, right)
-    } else {
-        (right, left)
-    }
 }
 
 fn element_threshold(element: molframe_core::Element) -> Option<f32> {

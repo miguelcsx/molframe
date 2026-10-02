@@ -210,12 +210,12 @@ mod policy_config;
 pub mod prelude;
 mod structure;
 
-#[cfg(all(feature = "chemistry", feature = "spatial"))]
-pub use facade::perceive;
 pub use facade::{
     WriteOptions, read, read_buffer, read_bytes, read_with_diagnostics, read_with_options, write,
     write_with_options,
 };
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+pub use facade::{perceive, perceive_in};
 // The bounded batch reader needs a format crate to read with, so these two
 // names exist under exactly the features that give `StructureBatchReader` a
 // variant.

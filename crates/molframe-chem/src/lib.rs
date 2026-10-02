@@ -29,7 +29,7 @@ pub use annotate::{
     ChemistryProvenance, ChemistryReport, PolymerLinkPolicy, PolymerLinkRule,
     apply_component_chemistry,
 };
-pub use bonds::perceive_bonds;
+pub use bonds::{perceive_bonds, perceive_bonds_in};
 pub use coverage::{ComponentCoverage, component_coverage};
 pub use element::{ElementProperties, RadiusSet, RadiusTable, element_properties, vdw_radius};
 pub use equivalence::{
