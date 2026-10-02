@@ -17,7 +17,7 @@ fn a_facade_read() -> Structure {
 /// One glycine whose backbone bonds and a HELIX record must survive the
 /// automatic fallback assignment of a default facade read.
 const DEFAULT_PERCEPTION: &str = "\
-HELIX    1   1 GLY A   1  GLY A   4  1                                  4\n\
+HELIX    1   1 GLY A    1  GLY A    4  1                                   4\n\
 ATOM      1  N   GLY A   1       0.000   0.000   0.000  1.00 10.00           N\n\
 ATOM      2  CA  GLY A   1       1.450   0.000   0.000  1.00 10.00           C\n\
 ATOM      3  C   GLY A   1       2.900   0.000   0.000  1.00 10.00           C\n\
