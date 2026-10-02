@@ -4,9 +4,9 @@
 //! hydrogen-bond pass is therefore O(R*k) for R residues and bounded local
 //! density, with one dense backbone column and one candidate table.
 
+use crate::grid::{CellGrid, cell_for};
 use molframe_core::SecondaryStructure;
 use molframe_core::structure::Structure;
-use num_traits::ToPrimitive;
 use std::collections::HashSet;
 
 const CA_CUTOFF: f32 = 9.0;
@@ -19,12 +19,6 @@ struct Backbone {
     carbon: Option<[f32; 3]>,
     oxygen: Option<[f32; 3]>,
     nitrogen: Option<[f32; 3]>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Entry {
-    cell: [i32; 3],
-    residue: usize,
 }
 
 /// Assigns unknown residues using a grid-bounded DSSP-like pass.
@@ -61,55 +55,48 @@ pub fn assign_secondary_structure(structure: &Structure) -> Vec<SecondaryStructu
                 .map_or(SecondaryStructure::Unknown, |_| SecondaryStructure::Coil)
         })
         .collect::<Vec<_>>();
-    let mut candidates = Vec::new();
+    let mut entries = Vec::new();
     for (residue, backbone) in backbones.iter().enumerate() {
-        let Some(position) = backbone.ca else {
+        let (Some(position), Ok(residue)) = (backbone.ca, u32::try_from(residue)) else {
             continue;
         };
-        let Some(cell) = cell(position) else {
+        let Some(cell) = cell_for(position, CA_CUTOFF) else {
             continue;
         };
-        candidates.push(Entry { cell, residue });
+        entries.push((cell, residue));
     }
-    candidates.sort_unstable();
+    let grid = CellGrid::build(entries);
     let mut hydrogen_bonds = Vec::new();
-    for left in &candidates {
-        let Some(left_backbone) = backbones.get(left.residue) else {
-            continue;
-        };
-        for dx in -1..=1 {
-            for dy in -1..=1 {
-                for dz in -1..=1 {
-                    let cell = [
-                        left.cell[0].saturating_add(dx),
-                        left.cell[1].saturating_add(dy),
-                        left.cell[2].saturating_add(dz),
-                    ];
-                    let range = candidate_range(&candidates, cell);
-                    for right in &candidates[range] {
-                        if right.residue <= left.residue {
-                            continue;
-                        }
-                        let Some(right_backbone) = backbones.get(right.residue) else {
-                            continue;
-                        };
-                        if left_backbone.chain != right_backbone.chain
-                            || squared_distance(left_backbone.ca, right_backbone.ca)
-                                > CA_CUTOFF * CA_CUTOFF
-                        {
-                            continue;
-                        }
-                        if hbond_energy(left_backbone, right_backbone) < HBOND_CUTOFF {
-                            hydrogen_bonds.push((left.residue, right.residue));
-                        }
-                        if hbond_energy(right_backbone, left_backbone) < HBOND_CUTOFF {
-                            hydrogen_bonds.push((right.residue, left.residue));
-                        }
+    grid.for_each_cell(|own, neighbourhood| {
+        for &left in &grid.items()[own] {
+            let Some(left_backbone) = backbones.get(left as usize) else {
+                continue;
+            };
+            for range in neighbourhood {
+                for &right in &grid.items()[range.clone()] {
+                    if right <= left {
+                        continue;
+                    }
+                    let Some(right_backbone) = backbones.get(right as usize) else {
+                        continue;
+                    };
+                    if left_backbone.chain != right_backbone.chain
+                        || squared_distance(left_backbone.ca, right_backbone.ca)
+                            > CA_CUTOFF * CA_CUTOFF
+                    {
+                        continue;
+                    }
+                    let (left, right) = (left as usize, right as usize);
+                    if hbond_energy(left_backbone, right_backbone) < HBOND_CUTOFF {
+                        hydrogen_bonds.push((left, right));
+                    }
+                    if hbond_energy(right_backbone, left_backbone) < HBOND_CUTOFF {
+                        hydrogen_bonds.push((right, left));
                     }
                 }
             }
         }
-    }
+    });
     classify(&mut states, &hydrogen_bonds);
     if hydrogen_bonds.is_empty() {
         assign_zhang_skolnick(&backbones, &mut states);
@@ -179,12 +166,6 @@ fn assign_zhang_skolnick(backbones: &[Backbone], states: &mut [SecondaryStructur
     }
 }
 
-fn candidate_range(entries: &[Entry], cell: [i32; 3]) -> std::ops::Range<usize> {
-    let start = entries.partition_point(|entry| entry.cell < cell);
-    let end = entries.partition_point(|entry| entry.cell <= cell);
-    start..end
-}
-
 fn hbond_energy(carbonyl: &Backbone, amide: &Backbone) -> f64 {
     let (Some(carbon), Some(oxygen), Some(nitrogen)) =
         (carbonyl.carbon, carbonyl.oxygen, amide.nitrogen)
@@ -207,17 +188,6 @@ fn hbond_energy(carbonyl: &Backbone, amide: &Backbone) -> f64 {
         * (1.0 / f64::from(on) + 1.0 / f64::from(ch) - 1.0 / f64::from(oh) - 1.0 / f64::from(cn))
 }
 
-fn cell(position: [f32; 3]) -> Option<[i32; 3]> {
-    if !position.iter().all(|value| value.is_finite()) {
-        return None;
-    }
-    Some([
-        (position[0] / CA_CUTOFF).floor().to_i32()?,
-        (position[1] / CA_CUTOFF).floor().to_i32()?,
-        (position[2] / CA_CUTOFF).floor().to_i32()?,
-    ])
-}
-
 fn squared_distance(left: Option<[f32; 3]>, right: Option<[f32; 3]>) -> f32 {
     let (Some(left), Some(right)) = (left, right) else {
         return f32::INFINITY;
@@ -228,3 +198,7 @@ fn squared_distance(left: Option<[f32; 3]>, right: Option<[f32; 3]>) -> f32 {
 fn distance(left: [f32; 3], right: [f32; 3]) -> f32 {
     squared_distance(Some(left), Some(right)).sqrt()
 }
+
+#[cfg(test)]
+#[path = "secondary_tests.rs"]
+mod tests;

@@ -105,12 +105,12 @@ fn perception_is_deterministic_and_keeps_file_bonds_first() {
 }
 
 /// Every pair of atoms in neighbouring cells, found through `grid`.
-fn neighbouring_pairs(grid: &CellGrid) -> Vec<Edge> {
+fn neighbouring_pairs(grid: &CellGrid<GridAtom>) -> Vec<Edge> {
     let mut pairs = Vec::new();
     grid.for_each_cell(|own, neighbourhood| {
-        for first in &grid.atoms[own] {
+        for first in &grid.items()[own] {
             for range in neighbourhood {
-                for second in &grid.atoms[range.clone()] {
+                for second in &grid.items()[range.clone()] {
                     if second.atom > first.atom {
                         pairs.push((first.atom, second.atom));
                     }
@@ -120,6 +120,27 @@ fn neighbouring_pairs(grid: &CellGrid) -> Vec<Edge> {
     });
     pairs.sort_unstable();
     pairs
+}
+
+fn entries_of(
+    positions: &[[f32; 3]],
+    thresholds: &[Option<f32>],
+    cutoff: f32,
+) -> Vec<(crate::grid::CellKey, GridAtom)> {
+    let mut entries = Vec::new();
+    for (atom, (position, threshold)) in positions.iter().zip(thresholds).enumerate() {
+        if let (Some(threshold), Some(cell)) = (*threshold, cell_for(*position, cutoff)) {
+            entries.push((
+                cell,
+                GridAtom {
+                    atom: u32::try_from(atom).expect("fits"),
+                    position: *position,
+                    threshold,
+                },
+            ));
+        }
+    }
+    entries
 }
 
 #[test]
@@ -137,20 +158,7 @@ fn the_dense_and_sparse_grids_visit_the_same_neighbouring_pairs() {
     let thresholds: Vec<Option<f32>> = (0..positions.len())
         .map(|index| (index % 11 != 0).then_some(1.75))
         .collect();
-    let cutoff = 2.77;
-    let mut entries = Vec::new();
-    for (atom, (position, threshold)) in positions.iter().zip(&thresholds).enumerate() {
-        if let (Some(threshold), Some(cell)) = (*threshold, cell_for(*position, cutoff)) {
-            entries.push((
-                cell,
-                GridAtom {
-                    atom: u32::try_from(atom).expect("fits"),
-                    position: *position,
-                    threshold,
-                },
-            ));
-        }
-    }
+    let entries = entries_of(&positions, &thresholds, 2.77);
     let dense = CellGrid::dense(&entries).expect("a 60 A box is small");
     let sparse = CellGrid::sparse(entries.clone());
     let from_dense = neighbouring_pairs(&dense);
@@ -176,7 +184,7 @@ fn a_span_too_large_to_tabulate_falls_back_to_the_sparse_grid() {
         [90_000.0, 90_000.0, 90_000.0],
     ];
     let thresholds = [Some(1.75), Some(1.75), Some(1.75)];
-    let grid = CellGrid::build(&positions, &thresholds, 2.77);
-    assert!(matches!(grid.layout, Layout::Sparse { .. }));
+    let grid = CellGrid::build(entries_of(&positions, &thresholds, 2.77));
+    assert!(!grid.is_dense());
     assert_eq!(neighbouring_pairs(&grid), vec![(0, 1)]);
 }

@@ -8,6 +8,7 @@ mod coverage;
 mod element;
 mod element_data;
 mod equivalence;
+mod grid;
 mod ionic;
 mod model;
 mod mol;

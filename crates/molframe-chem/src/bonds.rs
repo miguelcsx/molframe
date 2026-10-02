@@ -5,12 +5,12 @@
 //! visits 27 neighbouring cells, so the cost is O(N*k) for bounded local
 //! density and the output is O(N+B). It retains no per-atom neighbour vectors.
 
+use crate::grid::{CellGrid, cell_for};
 use crate::standard_bonds::standard_bond_order;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::{AtomRef, Structure};
-use num_traits::ToPrimitive;
 use std::collections::HashSet;
 
 /// Adds chemically plausible missing bonds to one immutable structure.
@@ -51,194 +51,12 @@ pub fn perceive_bonds(structure: &Structure) -> Result<Structure, Diagnostic> {
     Ok(Structure::new(data))
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct CellKey([i32; 3]);
-
 /// One atom that can bond, stored where the grid keeps it.
 #[derive(Clone, Copy)]
 struct GridAtom {
     atom: u32,
     position: [f32; 3],
     threshold: f32,
-}
-
-/// The most cells a dense grid may hold; a sparser, larger span is searched
-/// through its occupied cells instead.
-const DENSE_CELL_LIMIT: usize = 1 << 22;
-
-/// Bondable atoms ordered by grid cell.
-///
-/// Positions and thresholds are copied into cell order, so scanning a
-/// neighbouring cell reads one contiguous run instead of jumping through the
-/// structure. An atom without a threshold or a finite position can never bond
-/// and is left out.
-struct CellGrid {
-    atoms: Vec<GridAtom>,
-    layout: Layout,
-}
-
-/// How the cells of a [`CellGrid`] are found.
-enum Layout {
-    /// One slot per cell of the bounding box: a neighbour is an index away.
-    Dense { offsets: Vec<u32>, dims: [usize; 3] },
-    /// Only occupied cells, searched by key, for a span too large to tabulate.
-    Sparse {
-        cells: Vec<(CellKey, std::ops::Range<usize>)>,
-    },
-}
-
-impl CellGrid {
-    fn build(positions: &[[f32; 3]], thresholds: &[Option<f32>], cutoff: f32) -> Self {
-        let mut entries = Vec::with_capacity(positions.len());
-        for (atom, (position, threshold)) in positions.iter().zip(thresholds).enumerate() {
-            let (Some(threshold), Some(cell), Ok(atom)) =
-                (*threshold, cell_for(*position, cutoff), u32::try_from(atom))
-            else {
-                continue;
-            };
-            entries.push((
-                cell,
-                GridAtom {
-                    atom,
-                    position: *position,
-                    threshold,
-                },
-            ));
-        }
-        match Self::dense(&entries) {
-            Some(grid) => grid,
-            None => Self::sparse(entries),
-        }
-    }
-
-    /// Counting-sorts the entries into the cells of their bounding box.
-    ///
-    /// Returns `None` when the box would hold more cells than the limit.
-    fn dense(entries: &[(CellKey, GridAtom)]) -> Option<Self> {
-        let first = entries.first()?.0.0;
-        let (mut low, mut high) = (first, first);
-        for (cell, _) in entries {
-            for axis in 0..3 {
-                low[axis] = low[axis].min(cell.0[axis]);
-                high[axis] = high[axis].max(cell.0[axis]);
-            }
-        }
-        let mut dims = [0_usize; 3];
-        let mut total = 1_usize;
-        for axis in 0..3 {
-            let span = i64::from(high[axis]) - i64::from(low[axis]) + 1;
-            dims[axis] = usize::try_from(span).ok()?;
-            total = total.checked_mul(dims[axis])?;
-        }
-        if total > DENSE_CELL_LIMIT {
-            return None;
-        }
-        let slot = |cell: &CellKey| -> usize {
-            // Every entry lies inside the bounding box, so the offsets from its
-            // corner are never negative; a failed conversion cannot occur.
-            let at =
-                |axis: usize| match usize::try_from(i64::from(cell.0[axis]) - i64::from(low[axis]))
-                {
-                    Ok(offset) => offset,
-                    Err(_) => 0,
-                };
-            (at(0) * dims[1] + at(1)) * dims[2] + at(2)
-        };
-        let mut offsets = vec![0_u32; total + 1];
-        for (cell, _) in entries {
-            offsets[slot(cell) + 1] += 1;
-        }
-        for index in 1..offsets.len() {
-            offsets[index] += offsets[index - 1];
-        }
-        // Filling in entry order keeps each cell's atoms ascending.
-        let mut fill: Vec<u32> = offsets[..total].to_vec();
-        let mut atoms = vec![entries.first()?.1; entries.len()];
-        for (cell, atom) in entries {
-            let target = &mut fill[slot(cell)];
-            atoms[*target as usize] = *atom;
-            *target += 1;
-        }
-        Some(Self {
-            atoms,
-            layout: Layout::Dense { offsets, dims },
-        })
-    }
-
-    fn sparse(mut entries: Vec<(CellKey, GridAtom)>) -> Self {
-        entries.sort_unstable_by_key(|(cell, atom)| (*cell, atom.atom));
-        let mut cells: Vec<(CellKey, std::ops::Range<usize>)> = Vec::new();
-        for (position, (cell, _)) in entries.iter().enumerate() {
-            match cells.last_mut() {
-                Some((last, range)) if last == cell => range.end = position + 1,
-                _ => cells.push((*cell, position..position + 1)),
-            }
-        }
-        Self {
-            atoms: entries.into_iter().map(|(_, atom)| atom).collect(),
-            layout: Layout::Sparse { cells },
-        }
-    }
-
-    /// Calls `visit` with each occupied cell's atoms and the atoms of every
-    /// occupied cell around it, itself included.
-    fn for_each_cell(
-        &self,
-        mut visit: impl FnMut(std::ops::Range<usize>, &[std::ops::Range<usize>]),
-    ) {
-        let mut neighbourhood = Vec::with_capacity(27);
-        match &self.layout {
-            Layout::Dense { offsets, dims } => {
-                let range_at = |x: usize, y: usize, z: usize| {
-                    let slot = (x * dims[1] + y) * dims[2] + z;
-                    offsets[slot] as usize..offsets[slot + 1] as usize
-                };
-                for x in 0..dims[0] {
-                    for y in 0..dims[1] {
-                        for z in 0..dims[2] {
-                            let own = range_at(x, y, z);
-                            if own.is_empty() {
-                                continue;
-                            }
-                            neighbourhood.clear();
-                            for nx in x.saturating_sub(1)..=(x + 1).min(dims[0] - 1) {
-                                for ny in y.saturating_sub(1)..=(y + 1).min(dims[1] - 1) {
-                                    for nz in z.saturating_sub(1)..=(z + 1).min(dims[2] - 1) {
-                                        let range = range_at(nx, ny, nz);
-                                        if !range.is_empty() {
-                                            neighbourhood.push(range);
-                                        }
-                                    }
-                                }
-                            }
-                            visit(own, &neighbourhood);
-                        }
-                    }
-                }
-            }
-            Layout::Sparse { cells } => {
-                for (base, own) in cells {
-                    neighbourhood.clear();
-                    for dx in -1..=1 {
-                        for dy in -1..=1 {
-                            for dz in -1..=1 {
-                                let key = CellKey([
-                                    base.0[0].saturating_add(dx),
-                                    base.0[1].saturating_add(dy),
-                                    base.0[2].saturating_add(dz),
-                                ]);
-                                if let Ok(index) = cells.binary_search_by_key(&key, |(key, _)| *key)
-                                {
-                                    neighbourhood.push(cells[index].1.clone());
-                                }
-                            }
-                        }
-                    }
-                    visit(own.clone(), &neighbourhood);
-                }
-            }
-        }
-    }
 }
 
 fn add_grid_bonds(
@@ -248,11 +66,27 @@ fn add_grid_bonds(
     output: &mut BondTableBuilder,
     existing: &mut HashSet<(u32, u32)>,
 ) {
-    let grid = CellGrid::build(structure.positions(), thresholds, cutoff);
+    let mut entries = Vec::with_capacity(thresholds.len());
+    for (atom, (position, threshold)) in structure.positions().iter().zip(thresholds).enumerate() {
+        let (Some(threshold), Some(cell), Ok(atom)) =
+            (*threshold, cell_for(*position, cutoff), u32::try_from(atom))
+        else {
+            continue;
+        };
+        entries.push((
+            cell,
+            GridAtom {
+                atom,
+                position: *position,
+                threshold,
+            },
+        ));
+    }
+    let grid = CellGrid::build(entries);
     grid.for_each_cell(|own, neighbourhood| {
-        for first in &grid.atoms[own] {
+        for first in &grid.items()[own] {
             for range in neighbourhood {
-                for second in &grid.atoms[range.clone()] {
+                for second in &grid.items()[range.clone()] {
                     if second.atom <= first.atom {
                         continue;
                     }
@@ -283,18 +117,6 @@ fn add_grid_bonds(
             }
         }
     });
-}
-
-fn cell_for(position: [f32; 3], size: f32) -> Option<CellKey> {
-    if position.iter().all(|value| value.is_finite()) && size.is_finite() && size > 0.0 {
-        Some(CellKey([
-            (position[0] / size).floor().to_i32()?,
-            (position[1] / size).floor().to_i32()?,
-            (position[2] / size).floor().to_i32()?,
-        ]))
-    } else {
-        None
-    }
 }
 
 fn add_polymer_links(
