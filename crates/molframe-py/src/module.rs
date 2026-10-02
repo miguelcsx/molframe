@@ -135,7 +135,10 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     trajectory::register(&trajectory)?;
     module.add_submodule(&trajectory)?;
 
-    module.add_submodule(&PyModule::new(py, "motif")?)?;
+    let motif = PyModule::new(py, "motif")?;
+    #[cfg(feature = "motif")]
+    crate::motif::register(&motif)?;
+    module.add_submodule(&motif)?;
     let formats = PyModule::new(py, "formats")?;
     formats::register(&formats)?;
     module.add_submodule(&formats)

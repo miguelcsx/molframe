@@ -1,3 +1,7 @@
-"""Functional geometry operations."""
+"""Declarative functional geometry: motifs, mappings and verdict profiles."""
 from .._native import motif as _native
-__all__: list[str] = []
+ConstraintResult = _native.ConstraintResult
+MotifEvaluation = _native.MotifEvaluation
+MotifReport = _native.MotifReport
+evaluate = _native.evaluate
+__all__ = ["ConstraintResult", "MotifEvaluation", "MotifReport", "evaluate"]

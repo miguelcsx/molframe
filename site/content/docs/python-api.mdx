@@ -50,6 +50,7 @@ See [Selecting atoms](/docs/selections) and [Reading bytes and editing structure
 | `molframe.spatial` | `neighbor_pairs` |
 | `molframe.sequence` | `align`, `Scoring`, `parse_fasta`, `write_fasta`, `kmer_counts` |
 | `molframe.chemistry` | `element`, `vdw_radius`, `vdw_radii`, `annotate` |
+| `molframe.motif` | `evaluate`, `MotifReport`, `MotifEvaluation`, `ConstraintResult` |
 | `molframe.crystal` | `UnitCell`, `SpaceGroup`, `structure_factors`, `ResolutionBins`, `normalizers`, `reduce_cell` |
 | `molframe.trajectory` | `read`, `rmsd`, `Trajectory` |
 | `molframe.formats` | `write`, `to_mmcif`, `to_pdb`, `to_bcif` |
@@ -77,7 +78,7 @@ See [Compiled workflows](/docs/workflows).
 `Float32Array` and `UInt32Array` are typing protocols for coordinate and index arrays. At runtime, MolFrame returns NumPy-compatible values; users normally work with their `.shape` or pass them to NumPy-aware libraries.
 
 <Callout type="info">
-The `motif` namespace is present but exports no callable API yet, and the trajectory readers cover the self-describing formats only; formats that need caller-supplied units or topology (GSD, H5MD, AMBER ASCII) are rejected by name rather than guessed.
+`molframe.motif.evaluate(structure, specification)` runs the declarative functional-geometry evaluation a TOML or JSON specification describes and returns one verdict per defensible mapping, with every constraint measurement kept beside it; pass `components=` for chemistry-aware atom mapping. The trajectory readers cover the self-describing formats only; formats that need caller-supplied units or topology (GSD, H5MD, AMBER ASCII) are rejected by name rather than guessed.
 </Callout>
 
 ## Verification status

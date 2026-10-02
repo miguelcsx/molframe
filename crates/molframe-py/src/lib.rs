@@ -25,6 +25,8 @@ mod formats;
 #[cfg(feature = "analysis")]
 mod governed;
 mod hierarchy;
+#[cfg(feature = "motif")]
+mod motif;
 mod native_source;
 mod policy;
 #[cfg(feature = "query")]
