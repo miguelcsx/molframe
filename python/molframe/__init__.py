@@ -1,16 +1,30 @@
-
 """Curated Python contract for MolFrame."""
 
-from . import _native
+from . import (
+    analysis,
+    chemistry,
+    compare,
+    crystal,
+    formats,
+    geometry,
+    motif,
+    query,
+    sel,
+    sequence,
+    spatial,
+    surface,
+    trajectory,
+    validation,
+)
 from ._native import (
     Analysis,
     AnalysisPolicy,
-    Coverage,
     Atom,
     Atoms,
     Chain,
     Chains,
     CompiledWorkflow,
+    Coverage,
     Model,
     Models,
     Query,
@@ -19,8 +33,9 @@ from ._native import (
     QueryWarning,
     Reader,
     Residue,
-    ResidueSelection,
     Residues,
+    ResidueSelection,
+    SecondaryStructure,
     Selection,
     Structure,
     StructureEditor,
@@ -31,31 +46,15 @@ from ._native import (
     read,
 )
 
-geometry = _native.geometry
-analysis = _native.analysis
-trajectory = _native.trajectory
-sequence = _native.sequence
-crystal = _native.crystal
-validation = _native.validation
-motif = _native.motif
-chemistry = _native.chemistry
-compare = _native.compare
-query = _native.query
-sel = _native.sel
-spatial = _native.spatial
-surface = _native.surface
-formats = _native.formats
-
 __all__ = [
-    "__version__",
     "Analysis",
     "AnalysisPolicy",
-    "Coverage",
-    "CompiledWorkflow",
     "Atom",
     "Atoms",
     "Chain",
     "Chains",
+    "CompiledWorkflow",
+    "Coverage",
     "Model",
     "Models",
     "Query",
@@ -66,12 +65,14 @@ __all__ = [
     "Residue",
     "ResidueSelection",
     "Residues",
+    "SecondaryStructure",
     "Selection",
     "Structure",
-    "Table",
     "StructureEditor",
+    "Table",
     "Workflow",
     "WorkflowNode",
+    "__version__",
     "analysis",
     "chemistry",
     "compare",

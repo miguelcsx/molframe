@@ -1,4 +1,5 @@
 """Molecular surface operations."""
+
 from .._native import surface as _native
 
 cavities = _native.cavities

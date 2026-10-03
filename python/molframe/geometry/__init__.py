@@ -1,4 +1,5 @@
 """Numeric geometry kernels."""
+
 from .._native import geometry as _native
 
 centroid = _native.centroid

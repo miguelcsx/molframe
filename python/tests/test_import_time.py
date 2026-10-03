@@ -8,10 +8,7 @@ import sys
 
 BUDGET_SECONDS = 0.050
 RUNS = 5
-SNIPPET = (
-    "import time;t=time.perf_counter();import molframe;"
-    "print(time.perf_counter()-t)"
-)
+SNIPPET = "import time;t=time.perf_counter();import molframe;print(time.perf_counter()-t)"
 
 
 def _import_seconds() -> float:

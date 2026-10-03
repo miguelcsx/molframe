@@ -3,12 +3,13 @@
 import math
 from pathlib import Path
 
-import numpy
+import numpy as np
 import pytest
 
 import molframe
 
 DATA = Path(__file__).resolve().parents[2] / "crates" / "molframe-py" / "tests" / "data"
+BACKEND_CHOICES = r"backend must be 'auto', 'cell', 'kd_tree', or 'brute_force'"
 
 
 def test_element_properties_are_case_insensitive_and_complete():
@@ -16,7 +17,7 @@ def test_element_properties_are_case_insensitive_and_complete():
     assert (carbon.symbol, carbon.atomic_number, carbon.period) == ("C", 6, 2)
     assert carbon.atomic_weight == pytest.approx(12.011)
     assert molframe.chemistry.element("Fe").group == 8
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='unknown element "Zz"'):
         molframe.chemistry.element("Zz")
 
 
@@ -24,7 +25,9 @@ def test_radius_sets_differ_and_unknown_sets_are_rejected():
     bondi = molframe.chemistry.vdw_radius("C", radii="bondi")
     assert bondi == pytest.approx(1.7)
     assert molframe.chemistry.vdw_radius("C", radii="alvarez") != bondi
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="radii must be 'bondi', 'amber_united', 'charmm' or 'alvarez'"
+    ):
         molframe.chemistry.vdw_radius("C", radii="made_up")
 
 
@@ -34,7 +37,7 @@ def test_per_atom_radii_feed_the_surface_kernels():
     assert radii.shape == (structure.atom_count,)
     areas = molframe.surface.sasa(structure.coordinates, radii)
     assert areas.shape == radii.shape
-    assert numpy.nansum(areas) > 0
+    assert np.nansum(areas) > 0
 
 
 def test_clashes_report_overlapping_pairs_only():
@@ -45,35 +48,36 @@ def test_clashes_report_overlapping_pairs_only():
     assert len(loose) == len(loose.first) == len(loose.second) == len(loose.overlap)
     assert all(a < b for a, b in zip(tight.first, tight.second, strict=True))
     assert all(math.isfinite(value) and value > 0 for value in tight.overlap)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="tolerance must be finite and non-negative"):
         molframe.validation.clashes(structure, tolerance=-1.0)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=BACKEND_CHOICES):
         molframe.validation.clashes(structure, backend="octree")
 
 
 def test_neighbor_pairs_agree_across_backends_and_match_brute_force():
-    rng = numpy.random.default_rng(7)
-    xyz = rng.uniform(0, 12, size=(200, 3)).astype(numpy.float32)
+    rng = np.random.default_rng(7)
+    xyz = rng.uniform(0, 12, size=(200, 3)).astype(np.float32)
     reference = None
     for backend in ("auto", "cell", "kd_tree", "brute_force"):
         first, second, distance = molframe.spatial.neighbor_pairs(xyz, 3.0, backend=backend)
         pairs = list(zip(first.tolist(), second.tolist(), strict=True))
-        assert pairs == sorted(pairs) and all(a < b for a, b in pairs)
+        assert pairs == sorted(pairs)
+        assert all(a < b for a, b in pairs)
         if reference is None:
             reference = pairs
         assert pairs == reference
     delta = xyz[:, None, :] - xyz[None, :, :]
-    full = numpy.sqrt((delta**2).sum(-1))
+    full = np.sqrt((delta**2).sum(-1))
     expected = sorted(
         (int(i), int(j)) for i in range(200) for j in range(i + 1, 200) if full[i, j] <= 3.0
     )
     assert reference == expected
-    assert numpy.all(distance <= 3.0 + 1e-4)
+    assert np.all(distance <= 3.0 + 1e-4)
 
 
 def test_neighbor_pairs_reject_a_bad_cutoff_and_backend():
-    xyz = numpy.zeros((2, 3), dtype=numpy.float32)
-    with pytest.raises(ValueError):
+    xyz = np.zeros((2, 3), dtype=np.float32)
+    with pytest.raises(ValueError, match="cutoff must be finite and non-negative"):
         molframe.spatial.neighbor_pairs(xyz, -1.0)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=BACKEND_CHOICES):
         molframe.spatial.neighbor_pairs(xyz, 1.0, backend="octree")

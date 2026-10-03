@@ -1,4 +1,5 @@
 """Structure writers."""
+
 from .._native import formats as _native
 
 to_bcif = _native.to_bcif

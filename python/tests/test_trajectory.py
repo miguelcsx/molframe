@@ -1,6 +1,6 @@
 """Whole-trajectory reading through the Python contract."""
 
-import numpy
+import numpy as np
 import pytest
 
 import molframe
@@ -36,12 +36,14 @@ def test_a_multi_frame_file_becomes_a_read_only_frame_atom_xyz_array(tmp_path):
 def test_an_unknown_extension_needs_an_explicit_format(tmp_path):
     path = tmp_path / "walk.dat"
     path.write_text(XYZ)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="trajectory format cannot be inferred from the path"):
         molframe.trajectory.read(path)
     assert molframe.trajectory.read(path, format="xyz").n_frames == 3
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="format must be xtc, trr, dcd, tng, gro, xyz, lammps_dump or netcdf"
+    ):
         molframe.trajectory.read(path, format="mdcrd")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="trajectory input could not be read"):
         molframe.trajectory.read(tmp_path / "missing.xyz")
 
 
@@ -49,8 +51,8 @@ def test_frames_feed_the_comparison_kernels(tmp_path):
     path = tmp_path / "walk.xyz"
     path.write_text(XYZ)
     frames = molframe.trajectory.read(path).positions
-    reference = numpy.ascontiguousarray(frames[0])
-    assert molframe.geometry.rmsd(numpy.ascontiguousarray(frames[2]), reference) == pytest.approx(1.0)
+    reference = np.ascontiguousarray(frames[0])
+    assert molframe.geometry.rmsd(np.ascontiguousarray(frames[2]), reference) == pytest.approx(1.0)
 
 
 def _tetrahedra(drifts):
@@ -71,9 +73,10 @@ def test_rmsd_series_measures_shape_change_not_drift(tmp_path):
     assert raw.value[0] == pytest.approx(0.0)
     assert raw.value[2] == pytest.approx(1.0)  # the body drifted by one ångström
     assert fitted.value[2] == pytest.approx(0.0, abs=1e-5)  # but kept its shape
-    assert fitted.status == "complete" and fitted.profile == "molframe-default-1.0"
+    assert fitted.status == "complete"
+    assert fitted.profile == "molframe-default-1.0"
     assert not fitted.value.flags.writeable
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"Geometry\(InvalidParameter\)"):
         molframe.trajectory.rmsd(positions, reference=9)
-    with pytest.raises(ValueError):
-        molframe.trajectory.rmsd(numpy.zeros((2, 3, 2), dtype=numpy.float32))
+    with pytest.raises(ValueError, match="positions must have shape"):
+        molframe.trajectory.rmsd(np.zeros((2, 3, 2), dtype=np.float32))

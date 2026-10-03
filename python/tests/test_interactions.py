@@ -1,6 +1,6 @@
 """Interaction analyses need a component dictionary to know charges and roles."""
 
-import numpy
+import numpy as np
 import pytest
 
 import molframe
@@ -99,7 +99,7 @@ def test_without_a_dictionary_the_chemistry_analyses_say_what_is_missing(annotat
 def test_annotating_keeps_the_atoms_and_their_coordinates(annotated):
     plain, chemical = annotated
     assert chemical.atom_count == plain.atom_count
-    assert numpy.array_equal(chemical.coordinates, plain.coordinates)
+    assert np.array_equal(chemical.coordinates, plain.coordinates)
 
 
 def test_a_salt_bridge_is_found_between_the_charged_atoms(annotated):
@@ -108,12 +108,14 @@ def test_a_salt_bridge_is_found_between_the_charged_atoms(annotated):
     table = result.value
     assert len(table) == 1
     assert (int(table["anion"][0]), int(table["cation"][0])) == (2, 3)
-    assert table["distance"][0] == pytest.approx(numpy.hypot(1.8, 0.1), abs=1e-3)
+    assert table["distance"][0] == pytest.approx(np.hypot(1.8, 0.1), abs=1e-3)
     assert not table["distance"].flags.writeable
     assert set(table.names) == {"anion", "cation", "distance"}
-    assert "anion" in table and "missing" not in table
+    assert "anion" in table
+    assert "missing" not in table
     with pytest.raises(KeyError):
         table["missing"]
     # Outside the cutoff there is nothing to report, and that is a complete answer.
     far = molframe.analysis.salt_bridges(chemical, max_distance=1.0)
-    assert len(far.value) == 0 and far.status == "complete"
+    assert len(far.value) == 0
+    assert far.status == "complete"

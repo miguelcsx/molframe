@@ -1,6 +1,6 @@
 """Direct X-ray structure factors against values computed with Gemmi 0.7.5."""
 
-import numpy
+import numpy as np
 import pytest
 
 import molframe
@@ -16,7 +16,8 @@ ATOM      5  S   CYS A   2       5.250   6.500   7.750  1.00 20.00           S
 END
 """
 
-# gemmi.StructureFactorCalculatorX(cell).calculate_sf_from_model(model, hkl)
+# REFERENCE was produced by gemmi: StructureFactorCalculatorX(cell), then
+# calculate_sf_from_model(model, hkl).
 REFERENCE = {
     (1, 0, 0): 0.0,  # a screw-axis absence
     (2, 0, 0): -1.2190625415629484 + 0j,
@@ -33,27 +34,27 @@ def structure():
 
 
 def test_values_agree_with_the_reference_implementation(structure):
-    hkl = numpy.array(list(REFERENCE), dtype=numpy.int32)
+    hkl = np.array(list(REFERENCE), dtype=np.int32)
     computed = molframe.crystal.structure_factors(structure, hkl)
-    assert computed.dtype == numpy.complex128
-    expected = numpy.array(list(REFERENCE.values()), dtype=numpy.complex128)
+    assert computed.dtype == np.complex128
+    expected = np.array(list(REFERENCE.values()), dtype=np.complex128)
     # Gemmi keeps its scattering coefficients in single precision.
-    assert numpy.allclose(computed, expected, rtol=1e-4, atol=1e-4)
+    assert np.allclose(computed, expected, rtol=1e-4, atol=1e-4)
 
 
 def test_friedel_mates_have_equal_amplitudes_and_opposite_phases(structure):
-    hkl = numpy.array([[3, 2, 1], [-3, -2, -1]], dtype=numpy.int32)
+    hkl = np.array([[3, 2, 1], [-3, -2, -1]], dtype=np.int32)
     plus, minus = molframe.crystal.structure_factors(structure, hkl)
     assert abs(plus) == pytest.approx(abs(minus), rel=1e-12)
     assert plus.conjugate() == pytest.approx(minus, abs=1e-9)
 
 
 def test_inputs_without_a_cell_or_with_a_bad_shape_are_rejected(structure):
-    with pytest.raises(ValueError):
-        molframe.crystal.structure_factors(structure, numpy.zeros((3, 2), dtype=numpy.int32))
+    with pytest.raises(ValueError, match="hkl must have shape"):
+        molframe.crystal.structure_factors(structure, np.zeros((3, 2), dtype=np.int32))
     no_cell = molframe.read(
         b"ATOM      1  N   ALA A   1       1.000   1.000   1.000  1.00 10.00           N\nEND\n",
         name="n.pdb",
     )
-    with pytest.raises(ValueError):
-        molframe.crystal.structure_factors(no_cell, numpy.array([[1, 0, 0]], dtype=numpy.int32))
+    with pytest.raises(ValueError, match="E5004"):
+        molframe.crystal.structure_factors(no_cell, np.array([[1, 0, 0]], dtype=np.int32))

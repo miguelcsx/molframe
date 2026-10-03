@@ -1,14 +1,25 @@
-
-from __future__ import annotations
-
 from collections.abc import Mapping
 from os import PathLike
-from types import ModuleType
-from typing import Generic, Literal, Protocol, TypeVar
+from typing import ClassVar, Generic, Literal, Protocol, TypeVar
 
-from . import sel as sel
+from . import (
+    analysis as analysis,
+    chemistry as chemistry,
+    compare as compare,
+    crystal as crystal,
+    formats as formats,
+    geometry as geometry,
+    motif as motif,
+    query as query,
+    sel as sel,
+    sequence as sequence,
+    spatial as spatial,
+    surface as surface,
+    trajectory as trajectory,
+    validation as validation,
+)
 
-T_co = TypeVar("T_co", covariant=True)
+_T_co = TypeVar("_T_co", covariant=True)
 
 class Float32Array(Protocol):
     @property
@@ -30,9 +41,9 @@ class Coverage:
     @property
     def fraction(self) -> float: ...
 
-class Analysis(Generic[T_co]):
+class Analysis(Generic[_T_co]):
     @property
-    def value(self) -> T_co: ...
+    def value(self) -> _T_co: ...
     @property
     def status(self) -> Literal["complete", "partial", "ambiguous", "indeterminate"]: ...
     @property
@@ -85,6 +96,23 @@ class AnalysisPolicy:
     @property
     def fingerprint(self) -> str: ...
 
+class SecondaryStructure:
+    Unknown: ClassVar[SecondaryStructure]
+    Coil: ClassVar[SecondaryStructure]
+    AlphaHelix: ClassVar[SecondaryStructure]
+    Strand: ClassVar[SecondaryStructure]
+    Turn: ClassVar[SecondaryStructure]
+    ThreeTenHelix: ClassVar[SecondaryStructure]
+    PiHelix: ClassVar[SecondaryStructure]
+    OtherHelix: ClassVar[SecondaryStructure]
+    BetaBridge: ClassVar[SecondaryStructure]
+    Bend: ClassVar[SecondaryStructure]
+    PolyProline: ClassVar[SecondaryStructure]
+    def __int__(self) -> int: ...
+    def is_helix(self) -> bool: ...
+    def is_strand(self) -> bool: ...
+    def is_sheet_like(self) -> bool: ...
+
 class Structure:
     @property
     def atom_count(self) -> int: ...
@@ -104,13 +132,15 @@ class Structure:
     def models(self) -> Models: ...
     @property
     def coordinates(self) -> Float32Array: ...
-    def select(
-        self, query: str | Query, *, policy: AnalysisPolicy | None = ...
-    ) -> Selection: ...
+    def select(self, query: str | Query, *, policy: AnalysisPolicy | None = ...) -> Selection: ...
     def edit(self) -> StructureEditor: ...
     @property
     def bond_count(self) -> int: ...
-    def infer_bonds(self, *, scale: float = ..., lower_bound: float = ..., across_chains: bool = ...) -> Structure: ...
+    @property
+    def secondary_structure(self) -> list[SecondaryStructure]: ...
+    def infer_bonds(
+        self, *, scale: float = ..., lower_bound: float = ..., across_chains: bool = ...
+    ) -> Structure: ...
 
 class Atom:
     @property
@@ -123,6 +153,7 @@ class Atom:
     def component_name(self) -> str | None: ...
     @property
     def residue(self) -> Residue | None: ...
+
 class Atoms:
     def __len__(self) -> int: ...
     def __getitem__(self, index: int) -> Atom: ...
@@ -191,9 +222,7 @@ class Query:
     def source(self) -> str: ...
     @property
     def references(self) -> list[str]: ...
-    def select(
-        self, structure: Structure, *, policy: AnalysisPolicy | None = ...
-    ) -> Selection: ...
+    def select(self, structure: Structure, *, policy: AnalysisPolicy | None = ...) -> Selection: ...
     def __and__(self, other: Query) -> Query: ...
     def __or__(self, other: Query) -> Query: ...
     def __invert__(self) -> Query: ...
@@ -248,27 +277,4 @@ class CompiledWorkflow:
 
 __version__: str
 
-class QueryNamespace:
-    def complete(
-        self,
-        source: str,
-        cursor: int,
-        aliases: QueryAliases | None = ...,
-        structure: Structure | None = ...,
-    ) -> tuple[int, int, list[tuple[str, str]]]: ...
-
 def read(source: str | PathLike[str] | bytes, *, name: str | None = ...) -> Structure: ...
-
-analysis: ModuleType
-chemistry: ModuleType
-compare: ModuleType
-crystal: ModuleType
-formats: ModuleType
-geometry: ModuleType
-motif: ModuleType
-query: QueryNamespace
-sequence: ModuleType
-spatial: ModuleType
-surface: ModuleType
-trajectory: ModuleType
-validation: ModuleType

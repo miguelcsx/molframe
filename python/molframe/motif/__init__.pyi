@@ -43,4 +43,4 @@ def evaluate(
     policy: AnalysisPolicy | None = None,
 ) -> MotifReport: ...
 
-__all__: list[str]
+__all__ = ["ConstraintResult", "MotifEvaluation", "MotifReport", "evaluate"]

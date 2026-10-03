@@ -18,9 +18,13 @@ mod compare;
 #[cfg(feature = "crystal")]
 mod crystal;
 #[cfg(feature = "crystal")]
+mod crystal_links;
+#[cfg(feature = "crystal")]
 mod crystal_reduction;
 #[cfg(feature = "crystal")]
 mod crystal_statistics;
+#[cfg(feature = "analysis")]
+mod electrostatics;
 mod formats;
 #[cfg(feature = "analysis")]
 mod governed;
@@ -33,6 +37,7 @@ mod policy;
 mod query_aliases;
 mod query_cache;
 mod query_messages;
+mod secondary;
 #[cfg(feature = "query")]
 mod selection_expr;
 #[cfg(feature = "sequence")]

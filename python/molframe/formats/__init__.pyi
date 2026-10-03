@@ -1,4 +1,3 @@
-from __future__ import annotations
 from collections.abc import Mapping
 from os import PathLike
 from typing import Literal

@@ -60,23 +60,41 @@ def test_a_policy_is_a_named_value_with_a_stable_fingerprint():
     assert changed.profile is None
     assert changed.altloc == "label:A"
     assert changed.fingerprint != default.fingerprint
-    assert changed.fingerprint == molframe.AnalysisPolicy(identifiers="label", altloc="label:A").fingerprint
+    assert (
+        changed.fingerprint
+        == molframe.AnalysisPolicy(identifiers="label", altloc="label:A").fingerprint
+    )
     assert changed == molframe.AnalysisPolicy(identifiers="label", altloc="label:A")
 
 
 @pytest.mark.parametrize(
-    "keyword",
+    ("keyword", "allowed"),
     [
-        {"identifiers": "both"},
-        {"altloc": "label:"},
-        {"altloc": "newest"},
-        {"missing_atoms": "guess"},
-        {"hydrogens": "all"},
-        {"symmetry": "p1"},
-        {"vdw_radii": "uff"},
-        {"precision": "f16"},
+        ({"identifiers": "both"}, "identifiers must be one of label, auth, explicit"),
+        ({"altloc": "label:"}, "altloc 'label:' needs a label"),
+        (
+            {"altloc": "newest"},
+            (
+                "altloc must be keep_all, conformer_consistent, first, "
+                "highest_occupancy_per_residue, highest_occupancy_per_atom or label:<id>"
+            ),
+        ),
+        (
+            {"missing_atoms": "guess"},
+            "missing_atoms must be one of ignore, report, indeterminate, fail",
+        ),
+        (
+            {"hydrogens": "all"},
+            "hydrogens must be one of explicit_only, include_inferred, exclude",
+        ),
+        (
+            {"symmetry": "p1"},
+            "symmetry must be one of none, crystallographic, biological_assembly",
+        ),
+        ({"vdw_radii": "uff"}, "vdw_radii must be one of bondi, amber_united, charmm, alvarez"),
+        ({"precision": "f16"}, "precision must be one of f32, f64"),
     ],
 )
-def test_unknown_choices_are_rejected_with_the_allowed_names(keyword):
-    with pytest.raises(ValueError):
+def test_unknown_choices_are_rejected_with_the_allowed_names(keyword, allowed):
+    with pytest.raises(ValueError, match=allowed):
         molframe.AnalysisPolicy(**keyword)

@@ -55,7 +55,8 @@ def test_an_altered_policy_is_recorded_and_changes_the_analysed_atoms():
     first = molframe.AnalysisPolicy(altloc="first")
     everything = molframe.analysis.contacts(structure, 5.0, policy=keep_all)
     one_conformer = molframe.analysis.contacts(structure, 5.0, policy=first)
-    assert everything.profile is None and one_conformer.profile is None
+    assert everything.profile is None
+    assert one_conformer.profile is None
     assert json.loads(everything.provenance) != json.loads(one_conformer.provenance)
     assert len(one_conformer.value) < len(everything.value)
 

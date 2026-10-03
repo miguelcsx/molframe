@@ -58,12 +58,12 @@ def test_an_assembly_is_a_list_of_placements_with_their_chains():
 
 def test_unknown_assemblies_and_structures_without_any_are_errors():
     structure = molframe.read(ENTRY, name="entry.cif")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="E6002"):
         molframe.crystal.assembly(structure, "9")
     plain = molframe.read(
         b"ATOM      1  N   ALA A   1       1.000   1.000   1.000  1.00 10.00           N\nEND\n",
         name="p.pdb",
     )
     assert molframe.crystal.assemblies(plain) == []
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="the structure declares no biological assemblies"):
         molframe.crystal.assembly(plain, "1")

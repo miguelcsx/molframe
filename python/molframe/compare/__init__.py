@@ -1,4 +1,5 @@
 """Structure comparison operations."""
+
 from .._native import compare as _native
 
 gdt_ha = _native.gdt_ha

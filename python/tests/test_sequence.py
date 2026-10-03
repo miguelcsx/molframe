@@ -1,5 +1,7 @@
 """Pairwise alignment, FASTA and k-mers through the Python contract."""
 
+import importlib
+
 import pytest
 
 import molframe
@@ -23,9 +25,9 @@ def test_a_local_alignment_trims_flanking_mismatches():
 
 
 def test_unknown_modes_and_positive_gap_costs_are_rejected():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="mode must be 'global', 'local' or 'semi_global'"):
         molframe.sequence.align("A", "A", mode="banded")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="gap_open and gap_extend must be zero or negative"):
         molframe.sequence.Scoring(gap_open=1)
 
 
@@ -44,16 +46,28 @@ def test_fasta_round_trips_and_strips_whitespace():
 def test_kmer_counts_count_repeats_and_reject_zero():
     counts = dict(molframe.sequence.kmer_counts("ACACAC", 2))
     assert counts == {"AC": 3, "CA": 2}
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="k must be positive"):
         molframe.sequence.kmer_counts("ACGT", 0)
 
 
 @pytest.mark.parametrize(
-    "name", ["geometry", "surface", "compare", "sequence", "crystal", "analysis", "sel", "formats", "chemistry", "validation", "spatial", "trajectory"]
+    "name",
+    [
+        "geometry",
+        "surface",
+        "compare",
+        "sequence",
+        "crystal",
+        "analysis",
+        "sel",
+        "formats",
+        "chemistry",
+        "validation",
+        "spatial",
+        "trajectory",
+    ],
 )
 def test_every_domain_subpackage_imports_and_matches_the_root_attribute(name):
-    import importlib
-
     package = importlib.import_module(f"molframe.{name}")
     root = getattr(molframe, name)
     for exported in package.__all__:

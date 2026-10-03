@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Literal, Protocol, final
 
 from .. import Analysis, AnalysisPolicy, Structure

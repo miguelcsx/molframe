@@ -215,6 +215,7 @@ fn assembly(structure: &PyStructure, id: &str) -> PyResult<Vec<PyAssemblyInstanc
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    crate::crystal_links::register(module)?;
     module.add_class::<PyAssemblyInstance>()?;
     module.add_function(wrap_pyfunction!(assemblies, module)?)?;
     module.add_function(wrap_pyfunction!(assembly, module)?)?;

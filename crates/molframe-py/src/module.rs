@@ -25,6 +25,7 @@ pub(super) fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<PyStructure>()?;
     module.add_class::<PyStructureEditor>()?;
+    module.add_class::<crate::secondary::PySecondaryStructure>()?;
     module.add_class::<PyAtom>()?;
     module.add_class::<PyAtoms>()?;
     module.add_class::<PyResidue>()?;
@@ -77,6 +78,8 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     let analysis = PyModule::new(py, "analysis")?;
     #[cfg(feature = "analysis")]
     {
+        crate::electrostatics::register(&analysis)?;
+        analysis.add_function(wrap_pyfunction!(crate::secondary::dssp, &analysis)?)?;
         analysis.add_function(wrap_pyfunction!(atom_contacts, &analysis)?)?;
         analysis.add_function(wrap_pyfunction!(bindings::contacts, &analysis)?)?;
         analysis.add_function(wrap_pyfunction!(governed::hydrogen_bonds, &analysis)?)?;

@@ -1,5 +1,7 @@
 """Crystal and assembly operations."""
+
 from .._native import crystal as _native
+
 UnitCell = _native.UnitCell
 SpaceGroup = _native.SpaceGroup
 ReflectionSymmetry = _native.ReflectionSymmetry
@@ -11,4 +13,20 @@ reduce_cell = _native.reduce_cell
 AssemblyInstance = _native.AssemblyInstance
 assemblies = _native.assemblies
 assembly = _native.assembly
-__all__ = ["UnitCell", "SpaceGroup", "ReflectionSymmetry", "structure_factors", "ResolutionBins", "normalizers", "ReducedCell", "reduce_cell", "AssemblyInstance", "assemblies", "assembly"]
+AssemblyBond = _native.AssemblyBond
+assembly_covalent_links = _native.assembly_covalent_links
+__all__ = [
+    "AssemblyBond",
+    "AssemblyInstance",
+    "ReducedCell",
+    "ReflectionSymmetry",
+    "ResolutionBins",
+    "SpaceGroup",
+    "UnitCell",
+    "assemblies",
+    "assembly",
+    "assembly_covalent_links",
+    "normalizers",
+    "reduce_cell",
+    "structure_factors",
+]

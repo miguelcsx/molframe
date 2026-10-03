@@ -2,9 +2,10 @@
 
 import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
-import numpy
+import numpy as np
 import pytest
 
 import molframe
@@ -53,8 +54,6 @@ def test_root_is_curated_and_domains_use_final_names():
 
 
 def test_version_is_the_installed_distribution_version():
-    from importlib.metadata import version
-
     assert molframe.__version__ == version("molframe")
 
 
@@ -79,9 +78,9 @@ def test_read_selection_and_coordinate_ownership():
     assert residue.atom("missing") is None
     first = structure.coordinates
     second = structure.coordinates
-    assert first.dtype == numpy.float32
+    assert first.dtype == np.float32
     assert not first.flags.writeable
-    assert numpy.shares_memory(first, second)
+    assert np.shares_memory(first, second)
 
     selection = structure.select("name CA")
     compiled_query = molframe.Query("name CA")
@@ -107,6 +106,8 @@ def test_atom_component_name_preserves_native_chemistry_identity():
 
     assert structure.atoms[0].component_name == "GLY"
     assert structure.atoms[1].component_name == "GLY"
+
+
 def test_reader_reuses_owner_backed_input():
     payload = (DATA / "basic.cif").read_bytes()
     reader = molframe.Reader(payload, name="basic.cif")
@@ -115,9 +116,9 @@ def test_reader_reuses_owner_backed_input():
 
 
 def test_non_contiguous_arrays_are_rejected_with_actionable_guidance():
-    coordinates = numpy.zeros((4, 6), dtype=numpy.float32)[:, ::2]
+    coordinates = np.zeros((4, 6), dtype=np.float32)[:, ::2]
     assert not coordinates.flags.c_contiguous
-    with pytest.raises(ValueError, match="numpy.ascontiguousarray"):
+    with pytest.raises(ValueError, match=r"numpy\.ascontiguousarray"):
         molframe.geometry.centroid(coordinates)
 
 
@@ -125,8 +126,8 @@ def test_contact_table_columns_are_aligned_and_owner_backed():
     structure = molframe.read(DATA / "basic.pdb")
     table = molframe.analysis.atom_contacts(structure, 3.0)
     assert len(table.first) == len(table.second) == len(table.distance) == len(table)
-    assert table.first.dtype == numpy.uint32
-    assert table.distance.dtype == numpy.float32
+    assert table.first.dtype == np.uint32
+    assert table.distance.dtype == np.float32
     first = table.first
     assert not first.flags.writeable
     del table
@@ -151,9 +152,9 @@ def test_workflow_compiles_explains_reuses_and_matches_eager():
     workflow.output("score", score)
     compiled = workflow.compile()
 
-    coordinates = numpy.ascontiguousarray(
+    coordinates = np.ascontiguousarray(
         [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-        dtype=numpy.float32,
+        dtype=np.float32,
     )
     with pytest.raises(ValueError, match="copy=True"):
         compiled.run({"mobile": coordinates, "reference": coordinates})
@@ -189,7 +190,8 @@ def test_named_queries_resolve_to_closed_queries():
     aliases.define("first", molframe.Query("index 0"))
     aliases.define("both", molframe.Query("$first or index 1"))
     assert aliases.names == ["both", "first"]
-    assert "first" in aliases and len(aliases) == 2
+    assert "first" in aliases
+    assert len(aliases) == 2
     reference = molframe.Query("$both and not $first")
     assert reference.references == ["both", "first"]
     closed = aliases.resolve(reference)
@@ -205,7 +207,7 @@ def test_named_query_failures_are_value_errors():
         aliases.resolve(molframe.Query("$loop"))
     with pytest.raises(ValueError, match="E4005"):
         aliases.resolve(molframe.Query("$missing"))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="E4001"):
         aliases.define("1bad", molframe.Query("all"))
 
 
@@ -226,7 +228,7 @@ def test_file_reads_infer_bonds_and_leave_their_input_unchanged():
     bonded = structure.infer_bonds()
     assert bonded.bond_count == 1
     assert structure.bond_count == 1
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="E4002"):
         structure.infer_bonds(scale=0.0)
 
 

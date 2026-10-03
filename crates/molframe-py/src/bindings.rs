@@ -153,6 +153,16 @@ impl PyStructure {
     ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
         crate::native_source::capsule(py, &self.inner)
     }
+    /// Per-residue states in topology order, including deposited assignments.
+    #[getter]
+    fn secondary_structure(&self) -> Vec<crate::secondary::PySecondaryStructure> {
+        self.inner
+            .secondary_structure()
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
+    }
     fn _molframe_secondary_structure(&self) -> Vec<u8> {
         self.inner
             .engine()

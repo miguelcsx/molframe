@@ -29,10 +29,23 @@ selector!(lipids, lipids);
 selector!(glycans, glycans);
 selector!(hetero, hetero);
 selector!(hydrogen, hydrogen);
+selector!(polar_hydrogen, polar_hydrogen);
+selector!(nonpolar_hydrogen, nonpolar_hydrogen);
 selector!(heavy, heavy);
 selector!(polymer, polymer);
 selector!(ligands, ligands);
 selector!(aromatic, aromatic);
+selector!(helix, helix);
+selector!(strand, strand);
+selector!(sheet, sheet);
+selector!(alpha_helix, alpha_helix);
+selector!(helix_310, helix_310);
+selector!(pi_helix, pi_helix);
+selector!(polyproline, polyproline);
+selector!(bridge, bridge);
+selector!(turn, turn);
+selector!(bend, bend);
+selector!(coil, coil);
 
 #[pyfunction]
 fn chain(value: &str) -> PyQuery {
@@ -89,10 +102,23 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(glycans);
     add!(hetero);
     add!(hydrogen);
+    add!(polar_hydrogen);
+    add!(nonpolar_hydrogen);
     add!(heavy);
     add!(polymer);
     add!(ligands);
     add!(aromatic);
+    add!(helix);
+    add!(strand);
+    add!(sheet);
+    add!(alpha_helix);
+    add!(helix_310);
+    add!(pi_helix);
+    add!(polyproline);
+    add!(bridge);
+    add!(turn);
+    add!(bend);
+    add!(coil);
     add!(chain);
     add!(residue);
     add!(atom);
@@ -100,3 +126,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(residues_within);
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "selection_expr_tests.rs"]
+mod tests;

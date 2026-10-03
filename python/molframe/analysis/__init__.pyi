@@ -1,4 +1,4 @@
-from __future__ import annotations
+from collections.abc import Sequence
 from typing import Literal, Protocol
 
 from .. import Analysis, AnalysisPolicy, Structure, Table
@@ -18,6 +18,9 @@ class ContactTable:
     def distance(self) -> ArrayColumn: ...
 
 def atom_contacts(value: object, cutoff: float, *, backend: str = ...) -> ContactTable: ...
+def dssp(structure: Structure) -> Table:
+    """Native DSSP states as residue indices and stable SecondaryStructure integer codes."""
+
 def contacts(
     structure: Structure,
     cutoff: float,
@@ -40,3 +43,22 @@ def salt_bridges(
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
 ) -> Analysis[Table]: ...
+
+class GridSpec:
+    def __init__(
+        self, voxel_to_world: Sequence[Sequence[float]], dimensions: Sequence[int]
+    ) -> None: ...
+    @property
+    def voxel_to_world(self) -> list[list[float]]: ...
+    @property
+    def dimensions(self) -> list[int]: ...
+
+class ScalarGrid:
+    @property
+    def spec(self) -> GridSpec: ...
+    @property
+    def values(self) -> list[float]: ...
+
+def contact_potential(
+    structure: Structure, charges: Sequence[float], spec: GridSpec, *, cutoff: float = 12.0
+) -> ScalarGrid: ...

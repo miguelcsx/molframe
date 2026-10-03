@@ -52,6 +52,23 @@ class AssemblyInstance:
     def chains(self) -> list[str]: ...
 
 @final
+class AssemblyBond:
+    @property
+    def first_instance(self) -> int: ...
+    @property
+    def first_atom(self) -> int: ...
+    @property
+    def second_instance(self) -> int: ...
+    @property
+    def second_atom(self) -> int: ...
+    @property
+    def order(self) -> Literal["single"]: ...
+
+def assembly_covalent_links(
+    structure: Structure, id: str, *, model: int = 0
+) -> list[AssemblyBond]: ...
+
+@final
 class ResolutionBins:
     def __new__(
         cls,
@@ -101,4 +118,16 @@ def assemblies(structure: Structure) -> list[str]: ...
 def assembly(structure: Structure, id: str) -> list[AssemblyInstance]: ...
 def structure_factors(structure: Structure, hkl: IntArray) -> ComplexArray: ...
 
-__all__: list[str]
+__all__ = [
+    "AssemblyInstance",
+    "ReducedCell",
+    "ReflectionSymmetry",
+    "ResolutionBins",
+    "SpaceGroup",
+    "UnitCell",
+    "assemblies",
+    "assembly",
+    "normalizers",
+    "reduce_cell",
+    "structure_factors",
+]

@@ -1,5 +1,8 @@
 //! Mechanical adapters for element data and per-atom radii.
 
+mod carbohydrates;
+mod charges;
+mod roles;
 use crate::bindings::{PyStructure, findings_error};
 use molframe::Element;
 use molframe::chemistry::{self as chem, RadiusSet};
@@ -179,6 +182,9 @@ fn annotate(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    carbohydrates::register(module)?;
+    charges::register(module)?;
+    roles::register(module)?;
     module.add_class::<PyElementProperties>()?;
     module.add_function(wrap_pyfunction!(element, module)?)?;
     module.add_function(wrap_pyfunction!(vdw_radius, module)?)?;
