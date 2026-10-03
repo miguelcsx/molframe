@@ -307,3 +307,26 @@ fn the_fast_policy_agrees_with_the_deterministic_one_within_solver_tolerance() {
         );
     }
 }
+
+#[test]
+fn fluctuations_sum_squared_eigenvector_elements_over_their_eigenvalues() {
+    let model = GaussianNetworkModel {
+        sites: vec![0, 1],
+        eigenvalues: vec![2.0, 4.0],
+        modes: vec![vec![0.5, 1.0], vec![2.0, 0.0]],
+        zero_modes: 1,
+    };
+    let values = model.fluctuations();
+    assert!((values[0] - (0.25 / 2.0 + 4.0 / 4.0)).abs() < 1e-12);
+    assert!((values[1] - 0.5).abs() < 1e-12);
+}
+
+#[test]
+fn a_chain_end_fluctuates_more_than_its_middle() {
+    let positions: Vec<[f32; 3]> = (0..7_u8).map(|i| [f32::from(i), 0.0, 0.0]).collect();
+    let sites = AtomSelection::from_sorted((0..7).collect());
+    let model = gaussian_network_model(&positions, &sites, options(6), None).expect("model");
+    let values = model.fluctuations();
+    assert!(values[0] > values[3]);
+    assert!(values[6] > values[3]);
+}

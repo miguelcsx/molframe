@@ -1,5 +1,5 @@
 use super::{Cli, Command, TrajectoryCommand};
-use clap::Parser;
+use clap::{CommandFactory as _, Parser};
 
 #[test]
 fn traj_alias_has_the_same_declarative_command() {
@@ -346,4 +346,11 @@ fn chain_mapping_controls_belong_to_map_chains() {
     assert!(with(&["--min-identity", "0.9"]).is_err());
     assert!(with(&["--gap-open", "-10"]).is_err());
     assert!(with(&["--map-chains", "--gap-open", "-10"]).is_ok());
+}
+
+#[test]
+fn no_command_reuses_a_flag_name_that_another_argument_owns() {
+    // clap checks this only when a command is built, so a collision between a
+    // subcommand's flag and a global one surfaces at run time unless built here.
+    Cli::command().debug_assert();
 }

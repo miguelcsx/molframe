@@ -31,6 +31,7 @@ mod report;
 mod role_profile;
 mod selection_commands;
 mod sequence_commands;
+mod structure_commands;
 mod system;
 mod trajectory;
 mod validation_commands;
@@ -40,11 +41,12 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub(crate) use args::{
-    AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, EnsembleCommand,
-    ExtraMetricArguments, FxCommand, GeometryCommand, InteractionCommand, KmerOperation,
-    MappingArguments, MatrixChoice, ModelArgument, NamespaceArgument, PairwiseMode,
-    SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand, TrajectoryCommand,
-    TreeMethod, ValidateArguments,
+    AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments,
+    ContactMapArguments, EnsembleCommand, ExtraMetricArguments, FxCommand, GeometryCommand,
+    InteractionCommand, KmerOperation, MappingArguments, MatrixChoice, ModelArgument,
+    NamespaceArgument, NativeContactArguments, NormalModeArguments, PairwiseMode, SequenceCommand,
+    SequenceFormat, SurfaceArguments, SystemCommand, TrajectoryCommand, TreeMethod,
+    ValidateArguments,
 };
 pub(crate) use choices::{
     CompletionShell, EmptyLddtChoice, MetricChoice, RadiusChoice, ValidationChoice,
@@ -182,6 +184,21 @@ pub(crate) enum Command {
         between: Option<Vec<String>>,
         #[arg(long)]
         cutoff: f32,
+    },
+    /// List residue pairs in contact at an explicit cutoff.
+    ContactMap {
+        #[command(flatten)]
+        args: ContactMapArguments,
+    },
+    /// Score the fraction of a reference's contacts that a target keeps.
+    NativeContacts {
+        #[command(flatten)]
+        args: NativeContactArguments,
+    },
+    /// Elastic-network normal modes (GNM or ANM) over selected sites.
+    Nma {
+        #[command(flatten)]
+        args: NormalModeArguments,
     },
     /// List neighbours of a declarative atom selection.
     Neighbors {

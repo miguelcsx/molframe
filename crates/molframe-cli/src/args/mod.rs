@@ -2,6 +2,7 @@
 
 mod advanced;
 mod comparison;
+mod contacts;
 mod interactions;
 mod mapping;
 mod policy;
@@ -11,6 +12,9 @@ mod workflows;
 
 pub(crate) use advanced::{AuditArguments, BatchCommand, FxCommand};
 pub(crate) use comparison::{AlignmentChoice, ExtraMetricArguments};
+pub(crate) use contacts::{
+    ContactMapArguments, ModeTable, NativeContactArguments, NetworkModel, NormalModeArguments,
+};
 pub(crate) use interactions::{
     HydrogenBondArguments, InteractionCommand, InteractionInput, PlaneFitArguments,
 };

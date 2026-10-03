@@ -91,6 +91,11 @@ fn execute_data(command: Command, context: Context) -> Exit {
             between,
             cutoff,
         } => crate::analysis_commands::contacts(&input, between.as_deref(), cutoff, context),
+        Command::ContactMap { args } => crate::structure_commands::contact_map(&args, context),
+        Command::NativeContacts { args } => {
+            crate::structure_commands::native_contacts(&args, context)
+        }
+        Command::Nma { args } => crate::structure_commands::normal_modes(&args, context),
         Command::Neighbors {
             input,
             query,

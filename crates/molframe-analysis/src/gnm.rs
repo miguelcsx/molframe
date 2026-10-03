@@ -48,6 +48,29 @@ pub struct GaussianNetworkModel {
     pub zero_modes: usize,
 }
 
+impl GaussianNetworkModel {
+    /// Mean-square fluctuation of every site over the computed modes.
+    ///
+    /// Each non-zero mode contributes its squared eigenvector element divided
+    /// by its eigenvalue, so the slowest modes dominate, as in a temperature
+    /// factor. Only the requested modes enter the sum: with fewer than all of
+    /// them the values are a lower bound, and the unit is the model's own
+    /// (the inverse spring constant). `O(modes x sites)`.
+    #[must_use]
+    pub fn fluctuations(&self) -> Vec<f64> {
+        let mut fluctuations = vec![0.0; self.sites.len()];
+        for (eigenvalue, mode) in self.eigenvalues.iter().zip(&self.modes) {
+            if *eigenvalue <= 0.0 {
+                continue;
+            }
+            for (fluctuation, element) in fluctuations.iter_mut().zip(mode) {
+                *fluctuation += element * element / eigenvalue;
+            }
+        }
+        fluctuations
+    }
+}
+
 /// Why a Gaussian network could not be constructed or solved.
 #[derive(Debug, thiserror::Error)]
 pub enum GnmError {

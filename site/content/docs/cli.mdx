@@ -101,6 +101,21 @@ swapped carboxylate oxygen costs nothing and a missing hydrogen does not
 exhaust the mapping bound. A control for a metric that was not selected is
 refused rather than ignored.
 
+## Contacts and normal modes
+
+| Command | Required parameters | Columns |
+| --- | --- | --- |
+| `contact-map FILE` | `--cutoff`, `--min-separation` | `first_residue`, `second_residue`, `min_distance_angstrom` |
+| `native-contacts REFERENCE TARGET` | `--cutoff`, `--retention` | `native`, `kept`, `fraction` |
+| `nma FILE` | `--network gnm\|anm`, `--sites`, `--contact-distance`, `--mode-count`, `--zero-mode-tolerance`, `--memory-limit`, `--table modes\|fluctuations`; `gnm` also `--reduction` | `mode`, `eigenvalue` or `site`, `fluctuation` |
+
+`native-contacts` needs the two structures to share atom numbering; a contact is
+kept when its target distance is at most `retention` times the cutoff. `nma`
+prints the zero-mode count on standard error; GNM fluctuations are summed over
+the requested modes only, so they are a lower bound unless every mode is asked
+for. `--reduction fast` lets the GNM solver reorder floating-point reductions;
+`deterministic` is bit-identical at any worker count.
+
 ## Use in reproducible workflows
 
 Keep source files, command lines, and any parsing-policy flags in your workflow record. Structural-file ambiguity is part of the scientific input, not merely an I/O detail.
