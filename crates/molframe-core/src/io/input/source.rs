@@ -90,7 +90,7 @@ impl WindowedFile {
     /// # Errors
     ///
     /// Returns `MOLFRAME-E1902` if the window does not fit the shared execution
-    /// budget, or `MOLFRAME-E1901` if the file or buffer cannot be opened.
+    /// budget, or `MOLFRAME-E7101` if the file or buffer cannot be opened.
     pub fn open(
         path: impl AsRef<Path>,
         max_window_bytes: usize,
@@ -167,7 +167,7 @@ impl SourceBytes for WindowedFile {
 }
 
 fn io_failure(message: &'static str, error: &std::io::Error) -> Diagnostic {
-    Diagnostic::new(Code::E1901)
+    Diagnostic::new(Code::E7101)
         .with_message(message)
         .with_context("reason", error.to_string())
 }

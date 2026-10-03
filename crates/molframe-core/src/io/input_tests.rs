@@ -69,9 +69,9 @@ fn standard_limits_do_not_impose_historical_dataset_caps() {
 }
 
 #[test]
-fn opening_a_file_that_is_not_there_reports_a_resource_finding() {
+fn opening_a_file_that_is_not_there_reports_an_input_finding() {
     let error = InputBuffer::open("no/such/entry.cif", Limits::default());
-    assert_eq!(error.err().map(|finding| finding.code()), Some(Code::E1901));
+    assert_eq!(error.err().map(|finding| finding.code()), Some(Code::E7101));
 }
 
 #[test]

@@ -73,7 +73,7 @@ pub(super) fn compressed_file_size(
     let size =
         size.map_err(|error| read_failure("input size could not be read", Some(path), &error))?;
     if size == 0 {
-        return Err(Diagnostic::new(Code::E1901)
+        return Err(Diagnostic::new(Code::E7101)
             .with_message("compressed input size could not be determined")
             .with_context("path", path.display().to_string()));
     }

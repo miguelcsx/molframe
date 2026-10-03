@@ -173,7 +173,7 @@ fn spool(
 }
 
 fn io_error(operation: &'static str, error: &std::io::Error) -> Diagnostic {
-    Diagnostic::new(Code::E1901)
+    Diagnostic::new(Code::E7101)
         .with_message("structural source I/O failed")
         .with_context("operation", operation)
         .with_context("reason", error.to_string())

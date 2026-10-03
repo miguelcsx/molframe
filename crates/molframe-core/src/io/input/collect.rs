@@ -154,7 +154,7 @@ pub(super) fn read_failure(
     path: Option<&Path>,
     error: &std::io::Error,
 ) -> Diagnostic {
-    let finding = Diagnostic::new(Code::E1901).with_message(message);
+    let finding = Diagnostic::new(Code::E7101).with_message(message);
     let finding = match path {
         Some(path) => finding.with_context("path", path.display().to_string()),
         None => finding,

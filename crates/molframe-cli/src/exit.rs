@@ -64,7 +64,7 @@ impl Exit {
         use molframe::Class;
         match code.class() {
             Class::Syntax => match code {
-                Code::E1901 => Self::Resource,
+                Code::E1901 | Code::E1902 | Code::E1903 | Code::E1904 => Self::Resource,
                 Code::E1001 => Self::Input,
                 _ => Self::Parse,
             },

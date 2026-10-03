@@ -203,7 +203,7 @@ impl InputBuffer {
         #[cfg(not(feature = "mmap"))]
         {
             let raw = read_bounded(reader, limits).map_err(|error| {
-                Diagnostic::new(Code::E1901)
+                Diagnostic::new(Code::E7101)
                     .with_message("input stream could not be read")
                     .with_context("reason", error.to_string())
             })?;
