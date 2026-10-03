@@ -156,3 +156,42 @@ fn fixture(text: &str) -> (Structure, crate::SymmetrySet) {
     };
     (structure, symmetry)
 }
+
+#[test]
+fn the_deposited_copys_own_atoms_are_not_symmetry_mates() {
+    let two_atoms = ATOM_AND_CELL.replace(
+        "1 C CA GLY A 1 1 A 1 0 0\n",
+        "1 C CA GLY A 1 1 A 1 0 0\n2 C C GLY A 1 1 A 4 0 0\n",
+    );
+    let (structure, symmetry) = fixture(&two_atoms);
+    let neighbors = match collect_crystal_neighbors(
+        &structure,
+        &symmetry,
+        ModelIndex::new(0),
+        10.1,
+        CrystalNeighborOptions::default(),
+        &ExecutionContext::default(),
+    ) {
+        Ok(neighbors) => neighbors,
+        Err(finding) => panic!("search failed: {finding}"),
+    };
+    let own: Vec<_> = neighbors
+        .iter()
+        .filter(|neighbor| !neighbor.is_symmetry_mate(&symmetry))
+        .collect();
+    assert!(
+        own.iter().all(|neighbor| neighbor.lattice == [0, 0, 0]),
+        "only the identity copy is the molecule itself"
+    );
+    assert!(
+        own.iter()
+            .any(|neighbor| (neighbor.distance_squared - 9.0).abs() < 1e-6),
+        "the two deposited atoms, three angstroms apart, are in the molecule"
+    );
+    assert!(
+        neighbors
+            .iter()
+            .any(|neighbor| neighbor.is_symmetry_mate(&symmetry)),
+        "a lattice translation is a different copy"
+    );
+}

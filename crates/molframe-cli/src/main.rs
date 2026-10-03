@@ -18,6 +18,7 @@ mod chemistry;
 mod choices;
 mod commands;
 mod comparison_commands;
+mod crystal_commands;
 mod diff_commands;
 mod dispatch;
 mod exit;
@@ -43,11 +44,11 @@ use std::process::ExitCode;
 
 pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, ChemCommand,
-    ContactMapArguments, EnsembleCommand, ExtraMetricArguments, FxCommand, GeometryCommand,
-    InteractionCommand, KmerOperation, MappingArguments, MatrixChoice, ModelArgument,
-    NamespaceArgument, NativeContactArguments, NormalModeArguments, PairwiseMode, SequenceCommand,
-    SequenceFormat, SurfaceArguments, SystemCommand, TrajectoryCommand, TreeMethod,
-    ValidateArguments,
+    ContactMapArguments, CrystalCommand, EnsembleCommand, ExtraMetricArguments, FxCommand,
+    GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
+    ModelArgument, MtzTable, NamespaceArgument, NativeContactArguments, NormalModeArguments,
+    PairwiseMode, SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand,
+    TrajectoryCommand, TreeMethod, ValidateArguments,
 };
 pub(crate) use choices::{
     CompletionShell, EmptyLddtChoice, MetricChoice, RadiusChoice, ValidationChoice,
@@ -164,6 +165,11 @@ pub(crate) enum Command {
     Chem {
         #[command(subcommand)]
         command: ChemCommand,
+    },
+    /// Crystallographic data: reflections, density maps and symmetry mates.
+    Crystal {
+        #[command(subcommand)]
+        command: CrystalCommand,
     },
     /// List CIF data blocks and categories with exact counts.
     Categories { input: PathBuf },

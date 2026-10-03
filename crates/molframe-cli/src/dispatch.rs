@@ -72,6 +72,7 @@ pub(crate) fn execute(command: Command, context: Context) -> Exit {
         Command::Trajectory { command } => trajectory(command, context),
         Command::System { command } => system(command, context),
         Command::Interactions { command } => interactions(command, context),
+        Command::Crystal { command } => crate::crystal_commands::execute(command, context),
         Command::Chem { command } => crate::chem_commands::execute(command, context),
         command => execute_data(command, context),
     }

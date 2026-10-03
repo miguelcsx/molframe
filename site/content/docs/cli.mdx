@@ -132,6 +132,23 @@ identifier and rows name atoms). Structure matches are within residues, since
 polymer links are not applied: a peptide-bond pattern needs a structure whose
 residues are already linked.
 
+## Crystallography
+
+| Command | Required parameters | Output |
+| --- | --- | --- |
+| `crystal mtz-info FILE` | `--table summary\|columns` | header properties, or one row per column |
+| `crystal map-stats FILE` | none (`--histogram-bins` with `--histogram-range MIN MAX` adds bins) | count, extrema, mean, population sigma |
+| `crystal map-correlation OBSERVED CALCULATED` | none | Pearson coefficient over identically placed maps |
+| `crystal mates FILE` | `--cutoff`, `--candidate-limit` | atoms of neighbouring symmetry copies |
+
+`crystal mates` needs a space group the catalogue knows (a PDB `CRYST1` record
+or mmCIF symmetry); without one it refuses rather than guessing a lattice. It
+lists only other copies: the deposited copy's own atoms are the molecule, not
+its crystal contacts. `--candidate-limit` bounds the images examined and is
+conservative, so a packed cell needs a large value; exceeding it is an error,
+not a truncated list. Map computation (FFT, density from a model) is out of
+scope.
+
 ## Use in reproducible workflows
 
 Keep source files, command lines, and any parsing-policy flags in your workflow record. Structural-file ambiguity is part of the scientific input, not merely an I/O detail.

@@ -31,6 +31,23 @@ pub struct CrystalNeighbor {
     pub distance_squared: f64,
 }
 
+impl CrystalNeighbor {
+    /// Whether this neighbour lies in a symmetry mate rather than in the
+    /// deposited copy itself.
+    ///
+    /// The search reports every atom within the cutoff, including the
+    /// asymmetric unit's own atoms through the identity operation with no
+    /// lattice translation; those are the molecule, not its crystal contacts.
+    #[must_use]
+    pub fn is_symmetry_mate(&self, symmetry: &SymmetrySet) -> bool {
+        let identity = symmetry
+            .operations()
+            .get(self.operation)
+            .is_some_and(crate::SymmetryOperation::is_identity);
+        !(identity && self.lattice == [0, 0, 0])
+    }
+}
+
 /// One caller-bounded run of crystal neighbours.
 #[derive(Debug)]
 pub struct CrystalNeighborBatch {

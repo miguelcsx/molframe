@@ -4,6 +4,7 @@ mod advanced;
 mod chem;
 mod comparison;
 mod contacts;
+mod crystal;
 mod interactions;
 mod mapping;
 mod policy;
@@ -17,6 +18,7 @@ pub(crate) use comparison::{AlignmentChoice, ExtraMetricArguments};
 pub(crate) use contacts::{
     ContactMapArguments, ModeTable, NativeContactArguments, NetworkModel, NormalModeArguments,
 };
+pub(crate) use crystal::{CrystalCommand, HistogramArguments, MatesArguments, MtzTable};
 pub(crate) use interactions::{
     HydrogenBondArguments, InteractionCommand, InteractionInput, PlaneFitArguments,
 };
