@@ -36,10 +36,7 @@ pub(crate) fn fetch(
         }
     };
     let name = output.file_name().and_then(std::ffi::OsStr::to_str);
-    let options = molframe::ReadOptions::new()
-        .mode(context.mode)
-        .missing_element_policy(context.missing_element_policy)
-        .ambiguous_residue_boundary_policy(context.residue_boundary_policy);
+    let options = context.read_options();
     match molframe::read_bytes(download.bytes.clone(), name, &options) {
         Ok((_, findings)) => context.findings(&findings, &url),
         Err(findings) => {

@@ -4,6 +4,7 @@ use super::keep_lowering_category;
 use crate::document::{CifValueRef, Document};
 use crate::lexer::Quoting;
 use crate::parser::{ColumnId, DocumentSink, ValueSink};
+use molframe_core::io::CategoryFilter;
 use molframe_core::span::ByteSpan;
 use std::collections::HashSet;
 
@@ -39,11 +40,12 @@ pub(super) struct ProjectionSink {
     values_in_row: usize,
     row_model: Option<i64>,
     keep_category: fn(&str) -> bool,
+    categories: CategoryFilter,
     model_column: Option<ColumnId>,
 }
 
 impl ProjectionSink {
-    pub(super) fn new(keep_category: fn(&str) -> bool) -> Self {
+    pub(super) fn new(keep_category: fn(&str) -> bool, categories: CategoryFilter) -> Self {
         Self {
             metadata: DocumentSink::with_filter(|_| true),
             layout: AtomLayout {
@@ -55,6 +57,7 @@ impl ProjectionSink {
             values_in_row: 0,
             row_model: None,
             keep_category,
+            categories,
             model_column: None,
         }
     }
@@ -120,7 +123,9 @@ impl<'input> ValueSink<'input> for ProjectionSink {
         if !self.in_first_block() {
             return;
         }
-        if keep_lowering_category(category) || (self.keep_category)(category) {
+        if (keep_lowering_category(category) && self.categories.keeps_category(category))
+            || (self.keep_category)(category)
+        {
             self.metadata.value(category, item, text, quoting, span);
         }
         if category != "atom_site" {

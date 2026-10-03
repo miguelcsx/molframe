@@ -8,7 +8,7 @@ use crate::exit::Exit;
 use crate::report::{Context, Json, Table, json_array};
 use molframe::formats::pdb::{PdbIdentifierNamespace, PdbOptions};
 use molframe::query::{Evaluation, Groups};
-use molframe::{ChainRef, Findings, Format, Namespace, Query, ReadOptions, Structure};
+use molframe::{ChainRef, Findings, Format, Namespace, Query, Structure};
 use std::fmt::Write as _;
 use std::path::Path;
 
@@ -30,10 +30,7 @@ pub(super) fn select_text(
 
 /// Reads a file, printing whatever was wrong with it.
 pub(super) fn open(path: &Path, context: Context) -> Result<Structure, Exit> {
-    let options = ReadOptions::new()
-        .mode(context.mode)
-        .missing_element_policy(context.missing_element_policy)
-        .ambiguous_residue_boundary_policy(context.residue_boundary_policy);
+    let options = context.read_options();
     let origin = path.display().to_string();
     match molframe::read_with_options(path, &options) {
         Ok((structure, findings)) => {

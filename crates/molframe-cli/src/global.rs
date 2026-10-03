@@ -66,6 +66,20 @@ struct ReadBehavior {
     /// Infer otherwise ambiguous residue boundaries from file order and record it.
     #[arg(long, global = true)]
     infer_residue_boundaries: bool,
+    /// Skip an optional mmCIF/BinaryCIF category or PDB record while reading.
+    /// Names the structure cannot be built without are still read.
+    #[arg(long, global = true, value_name = "NAME")]
+    skip_category: Vec<String>,
+}
+
+impl ReadBehavior {
+    fn category_filter(&self) -> molframe::CategoryFilter {
+        if self.skip_category.is_empty() {
+            molframe::CategoryFilter::All
+        } else {
+            molframe::CategoryFilter::except(self.skip_category.iter().map(String::as_str))
+        }
+    }
 }
 
 #[derive(Args, Debug)]
@@ -177,6 +191,7 @@ impl GlobalOptions {
             } else {
                 molframe::AmbiguousResidueBoundaryPolicy::Reject
             },
+            categories: Box::leak(Box::new(self.read_behavior.category_filter())),
         })
     }
 }

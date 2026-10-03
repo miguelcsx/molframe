@@ -19,23 +19,17 @@ fn info(patterns: &[String], context: Context) -> Exit {
         Err(error) => return batch_error(&error),
     };
     let results = run(&paths, context.execution, |path| {
-        molframe::read_with_options(
-            path,
-            &molframe::ReadOptions::new()
-                .mode(context.mode)
-                .missing_element_policy(context.missing_element_policy)
-                .ambiguous_residue_boundary_policy(context.residue_boundary_policy),
-        )
-        .map(|(structure, _findings)| {
-            vec![
-                path.display().to_string(),
-                structure.model_count().to_string(),
-                structure.chain_count().to_string(),
-                structure.residue_count().to_string(),
-                structure.atom_count().to_string(),
-            ]
-        })
-        .map_err(|findings| findings_message(&findings))
+        molframe::read_with_options(path, &context.read_options())
+            .map(|(structure, _findings)| {
+                vec![
+                    path.display().to_string(),
+                    structure.model_count().to_string(),
+                    structure.chain_count().to_string(),
+                    structure.residue_count().to_string(),
+                    structure.atom_count().to_string(),
+                ]
+            })
+            .map_err(|findings| findings_message(&findings))
     });
     emit_batch(
         &results,
@@ -66,14 +60,8 @@ fn convert(patterns: &[String], format: &str, outdir: &Path, context: Context) -
         if output.exists() {
             return Err(format!("destination exists: {}", output.display()));
         }
-        let (structure, _findings) = molframe::read_with_options(
-            input,
-            &molframe::ReadOptions::new()
-                .mode(context.mode)
-                .missing_element_policy(context.missing_element_policy)
-                .ambiguous_residue_boundary_policy(context.residue_boundary_policy),
-        )
-        .map_err(|findings| findings_message(&findings))?;
+        let (structure, _findings) = molframe::read_with_options(input, &context.read_options())
+            .map_err(|findings| findings_message(&findings))?;
         molframe::write(output, &structure).map_err(|findings| findings_message(&findings))?;
         Ok(vec![
             input.display().to_string(),

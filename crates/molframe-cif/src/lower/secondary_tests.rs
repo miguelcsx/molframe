@@ -1,5 +1,5 @@
 use molframe_core::SecondaryStructure as Ss;
-use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::io::{CategoryFilter, InputBuffer, ReadOptions};
 
 const ATOM_HEAD: &str = "loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
@@ -79,4 +79,28 @@ fn a_three_ten_helix_row_reaches_the_structure() {
     let input = InputBuffer::from_bytes(text.into_bytes());
     let (structure, _) = crate::read(&input, &ReadOptions::new()).expect("fixture reads");
     assert_eq!(structure.data().secondary_structure[2], Ss::ThreeTenHelix);
+}
+
+fn states_under(categories: CategoryFilter) -> Vec<Ss> {
+    let input = InputBuffer::from_bytes(source().into_bytes());
+    let options = ReadOptions::new().categories(categories);
+    let (structure, _) = crate::read(&input, &options).expect("fixture reads");
+    assert_eq!(structure.atom_count(), 8);
+    structure.data().secondary_structure.to_vec()
+}
+
+#[test]
+fn excluding_a_category_drops_only_what_it_carries() {
+    let states = states_under(CategoryFilter::except(["STRUCT_CONF"]));
+    assert_eq!(states[1], Ss::Unknown);
+    assert_eq!(states[5], Ss::Strand);
+}
+
+#[test]
+fn only_keeps_the_named_categories_and_the_required_ones() {
+    let states = states_under(CategoryFilter::only(["struct_conf"]));
+    assert_eq!(states[1], Ss::AlphaHelix);
+    assert_eq!(states[5], Ss::Unknown);
+    let states = states_under(CategoryFilter::only(["atom_site"]));
+    assert!(states.iter().all(|state| *state == Ss::Unknown));
 }

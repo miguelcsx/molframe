@@ -57,6 +57,7 @@ fn json_lines_keeps_one_object_per_line() {
         execution: Box::leak(Box::new(molframe_core::ExecutionContext::default())),
         missing_element_policy: molframe::MissingElementPolicy::PreserveUnknown,
         residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy::Reject,
+        categories: &molframe::CategoryFilter::All,
     };
     assert_eq!(
         context.json_records(&["{\"row\":1}".to_owned(), "{\"row\":2}".to_owned()]),
@@ -90,6 +91,7 @@ fn json_results_embed_policy_and_read_provenance() {
         execution: Box::leak(Box::new(molframe_core::ExecutionContext::default())),
         missing_element_policy: molframe::MissingElementPolicy::InferFromAtomName,
         residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy::InferFromFileOrder,
+        categories: &molframe::CategoryFilter::All,
     };
     let rendered = context.with_embedded_provenance("{\"atoms\":2}");
     assert!(rendered.contains("\"_provenance\""));
@@ -167,5 +169,6 @@ fn test_context(format: OutputKind, output: Option<&'static Path>) -> Context {
         execution: Box::leak(Box::new(molframe_core::ExecutionContext::default())),
         missing_element_policy: molframe::MissingElementPolicy::PreserveUnknown,
         residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy::Reject,
+        categories: &molframe::CategoryFilter::All,
     }
 }

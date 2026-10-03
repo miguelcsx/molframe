@@ -76,9 +76,9 @@ pub use index::{
     ResidueIndex,
 };
 pub use io::{
-    AmbiguousResidueBoundaryPolicy, BatchContinuity, ByteWindow, ContinuityLevel, Format,
-    InputBuffer, InputKind, MissingElementPolicy, ParseMode, ReadOptions, ReadResult, SourceBytes,
-    SpillWindowedFile, StructureAtomRecord, StructureBatch, StructureBatchBuffer,
+    AmbiguousResidueBoundaryPolicy, BatchContinuity, ByteWindow, CategoryFilter, ContinuityLevel,
+    Format, InputBuffer, InputKind, MissingElementPolicy, ParseMode, ReadOptions, ReadResult,
+    SourceBytes, SpillWindowedFile, StructureAtomRecord, StructureBatch, StructureBatchBuffer,
     StructureBatchBuilder, StructureBatchError, StructureBatchPool, WindowedFile,
     WindowedSourceFile, collect_structure, write_output,
 };

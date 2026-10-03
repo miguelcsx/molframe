@@ -62,7 +62,7 @@ fn decode_columns_with<'a>(
 ) -> Result<DecodedColumns<'a>, Vec<Diagnostic>> {
     let binary =
         container::parse(input.as_bytes(), options.limits).map_err(|finding| vec![finding])?;
-    let projection = decode(binary, keep_category).map_err(|finding| vec![finding])?;
+    let projection = decode(binary, options, keep_category).map_err(|finding| vec![finding])?;
     Ok(DecodedColumns { projection })
 }
 
@@ -92,8 +92,8 @@ where
 {
     let binary =
         container::parse(input.as_bytes(), options.limits).map_err(|finding| vec![finding])?;
-    let (projection, projected) =
-        decode_with_projection(binary, keep_category, sink).map_err(|finding| vec![finding])?;
+    let (projection, projected) = decode_with_projection(binary, options, keep_category, sink)
+        .map_err(|finding| vec![finding])?;
     let (metadata, structure, findings) = finish_projection(projection, options)?;
     Ok((metadata, structure, projected, findings))
 }

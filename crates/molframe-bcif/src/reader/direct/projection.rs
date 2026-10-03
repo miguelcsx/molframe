@@ -5,6 +5,7 @@ use super::container::{DirectCategory, DirectColumn, DirectFile, decode_category
 use super::external::{feed_decoded, feed_encoded};
 use molframe_cif::{CifEventSink, CifScalar, DataBlock, Document};
 use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::io::ReadOptions;
 use molframe_core::span::ByteSpan;
 use std::collections::HashSet;
 
@@ -14,19 +15,21 @@ pub(super) struct Projection<'a> {
     pub(super) extra_atom_columns: Vec<DirectColumn<'a>>,
 }
 
-pub(super) fn decode(
-    binary: DirectFile<'_>,
+pub(super) fn decode<'a>(
+    binary: DirectFile<'a>,
+    options: &ReadOptions,
     keep_category: fn(&str) -> bool,
-) -> Result<Projection<'_>, Diagnostic> {
-    let (projection, ()) = decode_with_projection(binary, keep_category, IgnoreSink)?;
+) -> Result<Projection<'a>, Diagnostic> {
+    let (projection, ()) = decode_with_projection(binary, options, keep_category, IgnoreSink)?;
     Ok(projection)
 }
 
-pub(super) fn decode_with_projection<S>(
-    binary: DirectFile<'_>,
+pub(super) fn decode_with_projection<'a, S>(
+    binary: DirectFile<'a>,
+    options: &ReadOptions,
     keep_category: fn(&str) -> bool,
     mut sink: S,
-) -> Result<(Projection<'_>, S::Output), Diagnostic>
+) -> Result<(Projection<'a>, S::Output), Diagnostic>
 where
     S: CifEventSink,
 {
@@ -38,7 +41,8 @@ where
     let mut atom_site = None;
     for encoded in encoded_block.categories {
         let name = encoded.name.trim_start_matches('_');
-        let keep = keep_lowering_category(name) || keep_category(name);
+        let keep = (keep_lowering_category(name) && options.categories.keeps_category(name))
+            || keep_category(name);
         let project = sink.accepts_category(name);
         if name == "atom_site" {
             if atom_site.is_some() {

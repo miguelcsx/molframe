@@ -10,8 +10,9 @@ use crate::diagnostic::{Code, Strictness};
 
 pub use detect::Format;
 pub use options::{
-    AmbiguousResidueBoundaryPolicy, MissingElementPolicy, ParseMode, ReadOptions, ReadResult,
-    Reader, Select, SelectAll,
+    AmbiguousResidueBoundaryPolicy, CategoryFilter, MissingElementPolicy, ParseMode,
+    REQUIRED_CIF_CATEGORIES, REQUIRED_PDB_RECORDS, ReadOptions, ReadResult, Reader, Select,
+    SelectAll,
 };
 
 #[cfg(test)]

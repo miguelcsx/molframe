@@ -80,3 +80,19 @@ fn a_helix_record_reaches_the_structure_with_its_class_and_a_file_source() {
     );
     assert_eq!(sources[8], SecondarySource::None);
 }
+
+#[test]
+fn excluding_helix_records_leaves_the_residues_unassigned() {
+    use molframe_core::io::CategoryFilter;
+    let input = InputBuffer::from_bytes(file_with_helix_classes().into_bytes());
+    let options = ReadOptions::new().categories(CategoryFilter::except(["helix"]));
+    let (structure, _) = crate::read(&input, &options).expect("fixture reads");
+    assert_eq!(structure.atom_count(), 9);
+    assert!(
+        structure
+            .data()
+            .secondary_structure
+            .iter()
+            .all(|state| *state == Ss::Unknown)
+    );
+}

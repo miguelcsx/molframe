@@ -98,10 +98,7 @@ fn read_radii(
         Exit::Consistency
     })?;
     let mut radii = Vec::with_capacity(atoms);
-    let options = molframe::ReadOptions::new()
-        .mode(context.mode)
-        .missing_element_policy(context.missing_element_policy)
-        .ambiguous_residue_boundary_policy(context.residue_boundary_policy);
+    let options = context.read_options();
     let mut source =
         molframe::open_structure_batches(path, &options, context.execution).map_err(|error| {
             eprintln!("topology read failed: {error}");

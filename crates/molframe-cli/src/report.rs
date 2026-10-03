@@ -60,9 +60,29 @@ pub struct Context {
     pub missing_element_policy: molframe::MissingElementPolicy,
     /// Explicit behavior for identifiers that cannot delimit adjacent residues.
     pub residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy,
+    /// Optional categories or records every structural reader skips.
+    pub categories: &'static molframe::CategoryFilter,
 }
 
 impl Context {
+    /// Read options carrying every explicit read behavior of this invocation.
+    #[must_use]
+    pub fn read_options(self) -> molframe::ReadOptions {
+        molframe::ReadOptions::new()
+            .mode(self.mode)
+            .missing_element_policy(self.missing_element_policy)
+            .ambiguous_residue_boundary_policy(self.residue_boundary_policy)
+            .categories(self.categories.clone())
+    }
+
+    /// The categories a read was told to skip, comma-separated.
+    fn skipped_categories(self) -> Option<String> {
+        match self.categories {
+            molframe::CategoryFilter::Except(names) => Some(names.join(",")),
+            _ => None,
+        }
+    }
+
     /// Verifies result destinations before scientific work begins.
     pub fn prepare_outputs(self) -> std::io::Result<()> {
         for path in [self.output, self.provenance].into_iter().flatten() {
@@ -214,6 +234,9 @@ impl Context {
                 }
             },
         );
+        if let Some(skipped) = self.skipped_categories() {
+            record.text("skipped_categories", &skipped);
+        }
         if let Some(path) = self.ccd {
             record.text("ccd", &path.display().to_string());
         }
@@ -255,6 +278,9 @@ impl Context {
                 .to_owned(),
             ),
         ]);
+        if let Some(skipped) = self.skipped_categories() {
+            metadata.insert("molframe.skipped_categories".to_owned(), skipped);
+        }
         if let Some(path) = self.ccd {
             metadata.insert("molframe.ccd".to_owned(), path.display().to_string());
         }

@@ -48,7 +48,7 @@ impl<'options> DirectSink<'options, '_> {
         input_bytes: usize,
     ) -> Self {
         Self {
-            projection: ProjectionSink::new(keep_category),
+            projection: ProjectionSink::new(keep_category, options.categories.clone()),
             options,
             row: AtomRow::new(),
             current_number: None,

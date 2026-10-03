@@ -11,8 +11,9 @@ mod structure_batch_pool;
 
 pub use collect_structure::collect_structure;
 pub use format::{
-    AmbiguousResidueBoundaryPolicy, Format, MissingElementPolicy, ParseMode, ReadOptions,
-    ReadResult, Reader, Select, SelectAll,
+    AmbiguousResidueBoundaryPolicy, CategoryFilter, Format, MissingElementPolicy, ParseMode,
+    REQUIRED_CIF_CATEGORIES, REQUIRED_PDB_RECORDS, ReadOptions, ReadResult, Reader, Select,
+    SelectAll,
 };
 pub use input::{
     ByteWindow, Compression, InputBuffer, InputKind, Limits, SourceBytes, SpillWindowedFile,

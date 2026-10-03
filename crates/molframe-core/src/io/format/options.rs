@@ -51,6 +51,85 @@ pub enum AmbiguousResidueBoundaryPolicy {
     InferFromFileOrder,
 }
 
+/// mmCIF/BinaryCIF categories every structure read needs, whatever the filter.
+pub const REQUIRED_CIF_CATEGORIES: [&str; 5] = [
+    "atom_site",
+    "entity",
+    "entity_poly",
+    "entity_poly_seq",
+    "struct_asym",
+];
+
+/// PDB records every structure read needs, whatever the filter.
+pub const REQUIRED_PDB_RECORDS: [&str; 6] = ["ATOM", "HETATM", "MODEL", "ENDMDL", "TER", "END"];
+
+/// Which optional categories (mmCIF/BinaryCIF) or records (PDB) a read keeps.
+///
+/// Names are compared ASCII case-insensitively. Required names (see
+/// [`REQUIRED_CIF_CATEGORIES`], [`REQUIRED_PDB_RECORDS`]) are kept by
+/// [`CategoryFilter::keeps`] regardless of the filter.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CategoryFilter {
+    /// Keep everything.
+    #[default]
+    All,
+    /// Keep only the named names, plus the required ones.
+    Only(Vec<Box<str>>),
+    /// Keep everything except the named names, unless required.
+    Except(Vec<Box<str>>),
+}
+
+impl CategoryFilter {
+    /// Keeps only `names` (and the required names).
+    #[must_use]
+    pub fn only<I, S>(names: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<Box<str>>,
+    {
+        Self::Only(names.into_iter().map(Into::into).collect())
+    }
+
+    /// Drops `names`, except those that are required.
+    #[must_use]
+    pub fn except<I, S>(names: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<Box<str>>,
+    {
+        Self::Except(names.into_iter().map(Into::into).collect())
+    }
+
+    /// Whether the filter itself admits `name`, ignoring what is required.
+    #[must_use]
+    pub fn admits(&self, name: &str) -> bool {
+        let listed = |names: &[Box<str>]| names.iter().any(|item| item.eq_ignore_ascii_case(name));
+        match self {
+            Self::All => true,
+            Self::Only(names) => listed(names),
+            Self::Except(names) => !listed(names),
+        }
+    }
+
+    /// Whether a CIF category must be read: required, or admitted.
+    #[must_use]
+    pub fn keeps_category(&self, name: &str) -> bool {
+        self.admits(name)
+            || REQUIRED_CIF_CATEGORIES
+                .iter()
+                .any(|required| required.eq_ignore_ascii_case(name))
+    }
+
+    /// Whether a PDB record must be read: required, or admitted.
+    #[must_use]
+    pub fn keeps_record(&self, name: &str) -> bool {
+        self.admits(name)
+            || REQUIRED_PDB_RECORDS
+                .iter()
+                .any(|required| required.eq_ignore_ascii_case(name))
+    }
+}
+
 /// What a read should and should not bother doing.
 #[derive(Clone, Debug, Default)]
 pub struct ReadOptions {
@@ -70,6 +149,8 @@ pub struct ReadOptions {
     pub ambiguous_residue_boundary_policy: AmbiguousResidueBoundaryPolicy,
     /// Ceilings that apply while reading.
     pub limits: Limits,
+    /// Which optional categories or records to read.
+    pub categories: CategoryFilter,
 }
 
 impl ReadOptions {
@@ -128,6 +209,14 @@ impl ReadOptions {
     #[must_use]
     pub const fn discard_hydrogens(mut self, discard: bool) -> Self {
         self.discard_hydrogens = discard;
+        self
+    }
+
+    /// Restricts which optional categories (mmCIF/BinaryCIF) or records (PDB)
+    /// are read. Names the structure cannot be built without are always read.
+    #[must_use]
+    pub fn categories(mut self, categories: CategoryFilter) -> Self {
+        self.categories = categories;
         self
     }
 
@@ -205,3 +294,7 @@ pub trait Select {
 pub struct SelectAll;
 
 impl Select for SelectAll {}
+
+#[cfg(test)]
+#[path = "options_tests.rs"]
+mod tests;

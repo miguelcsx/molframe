@@ -110,6 +110,9 @@ impl<'a> ReadState<'a> {
 
     pub(super) fn line(&mut self, line: &Line<'_>) {
         let record = fixed::record(line.text);
+        if !self.options.categories.keeps_record(record) {
+            return;
+        }
         self.observe_metadata(record, line);
         match record {
             "ATOM" | "HETATM" => self.atom(line),
