@@ -2261,7 +2261,10 @@ dependencies = [
  "molframe",
  "molframe-adapters",
  "molframe-core",
+ "serde",
+ "serde_json",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -2341,7 +2344,6 @@ version = "0.4.0"
 dependencies = [
  "criterion",
  "molframe-bench",
- "molframe-chem",
  "molframe-cif",
  "molframe-core",
  "molframe-geom",
@@ -2525,6 +2527,7 @@ version = "0.4.0"
 dependencies = [
  "criterion",
  "molframe-bench",
+ "molframe-chem",
  "molframe-cif",
  "molframe-core",
  "molframe-geom",

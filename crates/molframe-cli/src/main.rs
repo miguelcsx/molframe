@@ -220,6 +220,9 @@ pub(crate) enum Command {
         input: PathBuf,
         #[command(flatten)]
         chemistry: CcdArguments,
+        /// Caller-authored JSON/TOML polymer roles with `profile_id` and rules.
+        #[arg(long)]
+        role_profile: PathBuf,
         #[arg(long)]
         electrostatic_prefactor: f64,
         #[arg(long)]

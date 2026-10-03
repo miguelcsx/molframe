@@ -126,6 +126,7 @@ fn execute_data(command: Command, context: Context) -> Exit {
         Command::Sse {
             input,
             chemistry,
+            role_profile,
             electrostatic_prefactor,
             hydrogen_bond_energy,
             amide_hydrogen_distance,
@@ -145,6 +146,7 @@ fn execute_data(command: Command, context: Context) -> Exit {
                     crate::analysis_commands::SseOptions {
                         ccd,
                         ccd_version: version,
+                        role_profile: &role_profile,
                         electrostatic_prefactor,
                         hydrogen_bond_energy,
                         amide_hydrogen_distance,

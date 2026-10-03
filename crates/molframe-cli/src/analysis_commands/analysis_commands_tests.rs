@@ -9,6 +9,7 @@ fn every_secondary_structure_state_has_a_distinct_stable_name() {
         (Ss::AlphaHelix, "alpha-helix"),
         (Ss::ThreeTenHelix, "3-10-helix"),
         (Ss::PiHelix, "pi-helix"),
+        (Ss::PolyProline, "polyproline"),
         (Ss::OtherHelix, "other-helix"),
         (Ss::BetaBridge, "beta-bridge"),
         (Ss::Strand, "strand"),

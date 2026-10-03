@@ -150,6 +150,7 @@ pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context
 pub(crate) struct SseOptions<'a> {
     pub(crate) ccd: &'a Path,
     pub(crate) ccd_version: &'a str,
+    pub(crate) role_profile: &'a Path,
     pub(crate) electrostatic_prefactor: f64,
     pub(crate) hydrogen_bond_energy: f64,
     pub(crate) amide_hydrogen_distance: f32,
@@ -162,15 +163,38 @@ pub(crate) struct SseOptions<'a> {
 }
 
 pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Exit {
+    let profile = match super::role_profile::read(options.role_profile) {
+        Ok(profile) => profile,
+        Err(error) => {
+            eprintln!("polymer role profile failed: {error}");
+            return Exit::Policy;
+        }
+    };
     let structure = match open(input, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let structure =
-        match crate::chemistry::annotate(&structure, options.ccd, options.ccd_version, context) {
-            Ok(structure) => structure,
-            Err(exit) => return exit,
-        };
+    let provider = match crate::chemistry::load_ccd(options.ccd, options.ccd_version, context) {
+        Ok(provider) => provider,
+        Err(exit) => return exit,
+    };
+    let roles = match molframe::chemistry::apply_polymer_role_profile(
+        structure.engine(),
+        &provider,
+        &profile,
+    ) {
+        Ok(report) => report,
+        Err(finding) => {
+            context.findings(&[finding], &options.role_profile.display().to_string());
+            return Exit::Policy;
+        }
+    };
+    for component in &roles.unresolved_components {
+        eprintln!(
+            "polymer role profile {}: unresolved CCD component {component}",
+            roles.profile_id
+        );
+    }
     let [turn_minimum, turn_maximum] = options.turn_offsets else {
         eprintln!("--turn-offsets requires exactly two values");
         return Exit::Usage;
@@ -186,7 +210,7 @@ pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Ex
         turn_offsets: *turn_minimum..=*turn_maximum,
         bend_angle_degrees: options.bend_angle_degrees,
     };
-    let records = match molframe::analysis::secondary_structure(structure.engine(), &dssp) {
+    let records = match molframe::analysis::secondary_structure(&roles.structure, &dssp) {
         Ok(records) => records,
         Err(error) => {
             eprintln!("secondary-structure assignment failed: {error}");

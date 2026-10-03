@@ -1,6 +1,7 @@
 //! General analysis command projections.
 
 mod command;
+mod role_profile;
 
 pub(super) use command::{SseOptions, contacts, interfaces, neighbors, sasa, sse};
 
