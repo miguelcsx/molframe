@@ -5,10 +5,10 @@ use molframe::crystal::{
     BinMethod, ReflectionBinningError, ResolutionBinner, amplitude_normalizers,
 };
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 fn failure(error: ReflectionBinningError) -> PyErr {
-    PyValueError::new_err(error.to_string())
+    crate::error::kernel(error)
 }
 
 fn parse_method(name: &str) -> PyResult<BinMethod> {
@@ -17,7 +17,7 @@ fn parse_method(name: &str) -> PyResult<BinMethod> {
         "dstar" => Ok(BinMethod::Dstar),
         "dstar2" => Ok(BinMethod::Dstar2),
         "dstar3" => Ok(BinMethod::Dstar3),
-        _ => Err(PyValueError::new_err(
+        _ => Err(crate::error::value(
             "method must be one of equal_count, dstar, dstar2, dstar3",
         )),
     }
@@ -27,7 +27,7 @@ fn rows(hkl: &Bound<'_, PyArray2<i32>>) -> PyResult<Vec<[i32; 3]>> {
     let hkl = hkl.readonly();
     let shape = hkl.shape();
     if shape.len() != 2 || shape[1] != 3 {
-        return Err(PyValueError::new_err("hkl must have shape (n, 3)"));
+        return Err(crate::error::value("hkl must have shape (n, 3)"));
     }
     Ok(hkl
         .as_array()
@@ -94,9 +94,7 @@ impl PyResolutionBins {
             .0
             .bin_indices(slice)
             .into_iter()
-            .map(|bin| {
-                i64::try_from(bin).map_err(|_| PyValueError::new_err("shell index overflow"))
-            })
+            .map(|bin| i64::try_from(bin).map_err(|_| crate::error::value("shell index overflow")))
             .collect::<PyResult<Vec<_>>>()?;
         Ok(indices.to_pyarray(py))
     }
@@ -105,14 +103,14 @@ impl PyResolutionBins {
     fn d_min(&self, bin: usize) -> PyResult<f64> {
         self.0
             .d_min_of_bin(bin)
-            .ok_or_else(|| PyValueError::new_err("shell index out of range"))
+            .ok_or_else(|| crate::error::value("shell index out of range"))
     }
 
     /// Largest `d` in a shell, in ångström.
     fn d_max(&self, bin: usize) -> PyResult<f64> {
         self.0
             .d_max_of_bin(bin)
-            .ok_or_else(|| PyValueError::new_err("shell index out of range"))
+            .ok_or_else(|| crate::error::value("shell index out of range"))
     }
 }
 

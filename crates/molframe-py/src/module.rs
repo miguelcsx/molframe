@@ -2,8 +2,8 @@
 
 use super::{
     analysis_result, bindings, catalog, chemistry, compare, crystal, formats, governed, hierarchy,
-    policy, query_aliases, query_messages, selection_expr, sequence, spatial, surface, table,
-    trajectory, validation, workflow,
+    policy, query_aliases, selection_expr, sequence, spatial, surface, table, trajectory,
+    validation, workflow,
 };
 use bindings::{PyContactTable, atom_contacts};
 use bindings::{PyQuery, PyReader, PySelection, PyStructure, PyStructureEditor, read};
@@ -40,14 +40,6 @@ pub(super) fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     analysis_result::register(module)?;
     module.add_class::<table::PyTable>()?;
     module.add_class::<PyQuery>()?;
-    module.add(
-        "QueryError",
-        module.py().get_type::<query_messages::QueryError>(),
-    )?;
-    module.add(
-        "QueryWarning",
-        module.py().get_type::<query_messages::QueryWarning>(),
-    )?;
     #[cfg(feature = "query")]
     module.add_class::<query_aliases::PyQueryAliases>()?;
     module.add_class::<PyReader>()?;

@@ -2,7 +2,7 @@
 
 use crate::bindings::PyStructure;
 use numpy::{PyArray1, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 /// Atom pairs whose van der Waals spheres interpenetrate.
 #[derive(Clone, Debug)]
@@ -68,7 +68,7 @@ fn clashes(
     policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
 ) -> PyResult<crate::analysis_result::PyAnalysis> {
     if !tolerance.is_finite() || tolerance < 0.0 {
-        return Err(PyValueError::new_err(
+        return Err(crate::error::value(
             "tolerance must be finite and non-negative",
         ));
     }

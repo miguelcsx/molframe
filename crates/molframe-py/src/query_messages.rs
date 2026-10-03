@@ -8,21 +8,6 @@
 //! fix.
 
 use pyo3::prelude::*;
-use std::ffi::CString;
-
-pyo3::create_exception!(
-    molframe,
-    QueryError,
-    pyo3::exceptions::PyValueError,
-    "A selection query that cannot be compiled or evaluated."
-);
-
-pyo3::create_exception!(
-    molframe,
-    QueryWarning,
-    pyo3::exceptions::PyUserWarning,
-    "A selection query that is valid but probably not what was meant."
-);
 
 /// Every finding, rendered against the query text it was raised for.
 fn render(findings: &[molframe::Diagnostic], source: &str) -> String {
@@ -37,9 +22,14 @@ fn render(findings: &[molframe::Diagnostic], source: &str) -> String {
         .join("\n\n")
 }
 
-/// The error a failed query raises.
+/// The error a failed query raises: a `QueryError` whose text quotes the query
+/// and which carries every finding.
 pub(crate) fn query_error(findings: &molframe::Findings, source: &str) -> PyErr {
-    QueryError::new_err(render(findings.as_slice(), source))
+    crate::error::from_findings_as(
+        "QueryError",
+        findings.as_slice(),
+        &render(findings.as_slice(), source),
+    )
 }
 
 /// Raises each warning of an evaluated query as a `QueryWarning`, which
@@ -49,11 +39,9 @@ pub(crate) fn warn(
     warnings: &[molframe::Diagnostic],
     source: &str,
 ) -> PyResult<()> {
-    let category = py.get_type::<QueryWarning>();
     for warning in warnings {
-        let message = CString::new(render(std::slice::from_ref(warning), source))
-            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        PyErr::warn(py, &category, &message, 2)?;
+        let message = render(std::slice::from_ref(warning), source);
+        crate::error::warn(py, "QueryWarning", &message, warning)?;
     }
     Ok(())
 }

@@ -1,11 +1,11 @@
 //! Mechanical adapters for solvent-accessible area and cavity detection.
 
 use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 fn radii<'a>(array: &'a PyReadonlyArray1<'_, f32>) -> PyResult<&'a [f32]> {
     array.as_slice().map_err(|_| {
-        PyValueError::new_err("radii must be C-contiguous; call numpy.ascontiguousarray")
+        crate::error::value("radii must be C-contiguous; call numpy.ascontiguousarray")
     })
 }
 
@@ -28,7 +28,7 @@ fn sasa<'py>(
     let context = molframe::ExecutionContext::default();
     let areas = py
         .detach(|| molframe::surface::shrake_rupley(positions, radii, probe, points, &context))
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::kernel)?;
     Ok(areas.to_pyarray(py))
 }
 
@@ -51,7 +51,7 @@ fn lee_richards<'py>(
     let context = molframe::ExecutionContext::default();
     let areas = py
         .detach(|| molframe::surface::lee_richards(positions, radii, probe, slices, &context))
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::kernel)?;
     Ok(areas.to_pyarray(py))
 }
 
@@ -73,7 +73,7 @@ fn cavities(
     );
     let found = py
         .detach(|| molframe::surface::cavities(positions, radii, probe, resolution))
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::kernel)?;
     Ok(found
         .into_iter()
         .map(|cavity| (cavity.volume, cavity.representative, cavity.cells))

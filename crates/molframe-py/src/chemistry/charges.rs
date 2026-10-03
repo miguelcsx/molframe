@@ -2,7 +2,7 @@
 
 use crate::bindings::{PyStructure, findings_error};
 use molframe::chemistry as chem;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 use std::path::PathBuf;
 
 #[pyclass(
@@ -58,7 +58,7 @@ fn partial_charges(
     let result = py.detach(move || {
         let calculate = |provider: &dyn chem::ComponentProvider| {
             chem::partial_charges(source.engine(), provider, chem::PeoeOptions::default())
-                .map_err(|error| PyValueError::new_err(error.to_string()))
+                .map_err(crate::error::failure)
         };
         if let Some(path) = components {
             let provider = molframe::read_component_dictionary(&path, version)
@@ -66,8 +66,7 @@ fn partial_charges(
                 .0;
             calculate(&provider)
         } else {
-            let provider = chem::MemoryProvider::new(version, [])
-                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            let provider = chem::MemoryProvider::new(version, []).map_err(crate::error::failure)?;
             calculate(&provider)
         }
     })?;

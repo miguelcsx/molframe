@@ -101,7 +101,7 @@ impl PyContactTable {
     ) -> PyResult<Bound<'py, PyCapsule>> {
         let stream = molframe::interop::ContactArrowTable::new(self.contacts.clone())
             .arrow_stream()
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+            .map_err(|error| crate::error::internal(error.to_string()))?;
         PyCapsule::new_with_value(py, stream.into_ffi(), c"arrow_array_stream")
     }
 }
@@ -140,11 +140,11 @@ pub(crate) fn atom_contacts(
             )
         })
     } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
+        return Err(crate::error::type_error(
             "value must be a Structure or structure-bound Selection",
         ));
     }
-    .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    .map_err(crate::error::kernel)?;
     PyContactTable::from_native(py, rows)
 }
 

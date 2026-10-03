@@ -2,7 +2,7 @@
 
 use crate::bindings::PyStructure;
 use molframe::crystal::AssemblyExt as _;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 #[derive(Clone)]
 #[pyclass(
@@ -35,14 +35,12 @@ fn assembly_covalent_links(
 ) -> PyResult<Vec<PyAssemblyBond>> {
     let source = structure.inner.clone();
     let links = py.detach(move || {
-        let view = source
-            .assembly(&id)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let view = source.assembly(&id).map_err(crate::error::kernel)?;
         view.covalent_links(
             molframe::ModelIndex::new(model),
             &molframe::ExecutionContext::default(),
         )
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(crate::error::kernel)
     })?;
     Ok(links
         .into_iter()

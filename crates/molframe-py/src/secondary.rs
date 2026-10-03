@@ -91,7 +91,7 @@ pub(crate) fn dssp(
                 &molframe::analysis::DsspOptions::default(),
             )
         })
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::failure)?;
     let residues: Vec<_> = rows.residue().iter().map(|index| index.get()).collect();
     let kinds: Vec<_> = rows
         .kind()

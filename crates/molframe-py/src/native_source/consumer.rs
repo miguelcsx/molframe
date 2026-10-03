@@ -49,7 +49,7 @@ impl NativeStructureSource {
         // first field is the ABI version, and the producer retains its storage.
         let version = unsafe { api_ref(api).abi_version };
         if version != ABI_VERSION {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            return Err(crate::error::value(format!(
                 "unsupported MolFrame native source ABI {version}"
             )));
         }
@@ -120,7 +120,7 @@ impl NativeStructureSource {
     ///
     /// Returns a value error for malformed or unsupported queries.
     pub fn select(&self, source: &str) -> PyResult<Vec<u32>> {
-        let failed = || pyo3::exceptions::PyValueError::new_err("MolFrame query evaluation failed");
+        let failed = || crate::error::value("MolFrame query evaluation failed");
         // SAFETY: the callback belongs to the retained producer and the query
         // buffer is valid for the call. A null output asks only for the count.
         let needed = unsafe { self.select_into(source, std::ptr::null_mut(), 0) };
@@ -170,9 +170,8 @@ impl NativeStructureSource {
             let api = api_ref(self.api);
             (api.encode_bcif)(api, std::ptr::null_mut(), 0)
         };
-        let size = usize::try_from(size).map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err("MolFrame BCIF encoding failed")
-        })?;
+        let size = usize::try_from(size)
+            .map_err(|_| crate::error::value("MolFrame BCIF encoding failed"))?;
         let mut bytes = vec![0; size];
         // SAFETY: `bytes` has the exact capacity returned by the first call.
         let written = unsafe {
@@ -180,9 +179,7 @@ impl NativeStructureSource {
             (api.encode_bcif)(api, bytes.as_mut_ptr(), bytes.len())
         };
         if usize::try_from(written).ok() != Some(size) {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "MolFrame BCIF encoding failed",
-            ));
+            return Err(crate::error::value("MolFrame BCIF encoding failed"));
         }
         Ok(bytes)
     }

@@ -5,7 +5,7 @@ use crate::bindings::PyStructure;
 use crate::policy::{PyAnalysisPolicy, policy_of};
 use crate::table::TableBuilder;
 use molframe::analysis::{StructureKernel, analyse_structure};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 use std::fmt::Debug;
 
 /// Runs `kernel` on the first model under `policy` and converts the value.
@@ -21,7 +21,7 @@ pub(crate) fn run<K>(
 ) -> PyResult<PyAnalysis>
 where
     K: StructureKernel,
-    K::Error: Debug,
+    K::Error: Debug + std::fmt::Display,
 {
     let structure = structure.inner.clone();
     let analysis = py
@@ -33,7 +33,7 @@ where
                 &molframe::ExecutionContext::default(),
             )
         })
-        .map_err(|error| PyValueError::new_err(format!("{error:?}")))?;
+        .map_err(crate::error::failure)?;
     let envelope = PyAnalysis::new(&analysis, py.None());
     let value = convert(py, analysis.value)?;
     Ok(envelope.with_value(value))

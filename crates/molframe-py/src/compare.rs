@@ -1,7 +1,7 @@
 //! Mechanical adapters for superposition-based structure comparison scores.
 
 use numpy::{PyArray1, PyArray2, PyArrayMethods};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 type Scorer = fn(&[[f32; 3]], &[[f32; 3]]) -> Result<f64, molframe::compare::CompareError>;
 
@@ -18,7 +18,7 @@ fn score(
         crate::bindings::coordinates(&reference)?,
     );
     py.detach(|| scorer(model, reference))
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(crate::error::kernel)
 }
 
 /// TM-score of `model` fitted onto `reference` (residue-matched coordinates).
@@ -63,14 +63,14 @@ fn weighted_rmsd(
     let reference = reference.readonly();
     let weights = weights.readonly();
     let weights = weights.as_slice().map_err(|_| {
-        PyValueError::new_err("weights must be C-contiguous; call numpy.ascontiguousarray")
+        crate::error::value("weights must be C-contiguous; call numpy.ascontiguousarray")
     })?;
     let (model, reference) = (
         crate::bindings::coordinates(&model)?,
         crate::bindings::coordinates(&reference)?,
     );
     py.detach(|| molframe::compare::weighted_rmsd(model, reference, weights))
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(crate::error::kernel)
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

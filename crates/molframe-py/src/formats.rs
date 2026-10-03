@@ -1,8 +1,8 @@
 //! Mechanical adapters for writing structures to mmCIF, PDB and `BinaryCIF`.
 
 use crate::bindings::{PyStructure, findings_error};
+use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::{exceptions::PyValueError, prelude::*};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -58,13 +58,13 @@ fn format_of(path: &std::path::Path, explicit: Option<&str>) -> PyResult<Format>
             .extension()
             .and_then(|extension| extension.to_str())
             .map(str::to_ascii_lowercase)
-            .ok_or_else(|| PyValueError::new_err("cannot infer a format; pass format="))?,
+            .ok_or_else(|| crate::error::value("cannot infer a format; pass format="))?,
     };
     match name.as_str() {
         "cif" | "mmcif" => Ok(Format::Mmcif),
         "pdb" | "ent" => Ok(Format::Pdb),
         "bcif" => Ok(Format::Bcif),
-        other => Err(PyValueError::new_err(format!(
+        other => Err(crate::error::value(format!(
             "unsupported format {other:?}; expected mmcif, pdb or bcif"
         ))),
     }

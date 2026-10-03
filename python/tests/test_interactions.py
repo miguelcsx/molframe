@@ -92,7 +92,7 @@ def annotated(tmp_path_factory):
 
 def test_without_a_dictionary_the_chemistry_analyses_say_what_is_missing(annotated):
     plain, _ = annotated
-    with pytest.raises(ValueError, match="MissingChemistry"):
+    with pytest.raises(ValueError, match="CCD donor/acceptor annotations"):
         molframe.analysis.hydrogen_bonds(plain)
 
 

@@ -9,12 +9,9 @@ fn position(index: isize, len: usize) -> PyResult<usize> {
         .map_err(|_| pyo3::exceptions::PyOverflowError::new_err("collection is too large"))?;
     let normalized = if index < 0 { len_signed + index } else { index };
     if normalized < 0 || normalized >= len_signed {
-        return Err(pyo3::exceptions::PyIndexError::new_err(
-            "hierarchy index is out of range",
-        ));
+        return Err(crate::error::index("hierarchy index is out of range"));
     }
-    usize::try_from(normalized)
-        .map_err(|_| pyo3::exceptions::PyIndexError::new_err("invalid hierarchy index"))
+    usize::try_from(normalized).map_err(|_| crate::error::index("invalid hierarchy index"))
 }
 
 fn contiguous_range<I>(mut indices: I) -> (u32, usize)
@@ -316,7 +313,7 @@ impl PyChains {
                 .take(self.len)
                 .find(|chain| chain.label() == Some(label) || chain.auth_label() == Some(label))
                 .map(|chain| chain.index().get())
-                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(label.to_owned()))?
+                .ok_or_else(|| crate::error::key(label))?
         } else {
             let ordinal = position(key.extract::<isize>()?, self.len)?;
             let offset = u32::try_from(ordinal)

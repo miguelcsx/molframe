@@ -7,7 +7,7 @@ use crate::bindings::{PyStructure, findings_error};
 use molframe::Element;
 use molframe::chemistry::{self as chem, RadiusSet};
 use numpy::{PyArray1, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 use std::path::PathBuf;
 
 pub(crate) fn radius_set(name: &str) -> PyResult<RadiusSet> {
@@ -16,7 +16,7 @@ pub(crate) fn radius_set(name: &str) -> PyResult<RadiusSet> {
         "amber_united" => Ok(RadiusSet::AmberUnited),
         "charmm" => Ok(RadiusSet::Charmm),
         "alvarez" => Ok(RadiusSet::Alvarez),
-        _ => Err(PyValueError::new_err(
+        _ => Err(crate::error::value(
             "radii must be 'bondi', 'amber_united', 'charmm' or 'alvarez'",
         )),
     }
@@ -87,9 +87,9 @@ impl PyElementProperties {
 #[pyfunction]
 fn element(symbol: &str) -> PyResult<PyElementProperties> {
     let element = Element::from_symbol(symbol)
-        .ok_or_else(|| PyValueError::new_err(format!("unknown element {symbol:?}")))?;
+        .ok_or_else(|| crate::error::value(format!("unknown element {symbol:?}")))?;
     let properties = chem::element_properties(element)
-        .ok_or_else(|| PyValueError::new_err(format!("no data for element {symbol:?}")))?;
+        .ok_or_else(|| crate::error::value(format!("no data for element {symbol:?}")))?;
     Ok(PyElementProperties {
         symbol: element.symbol(),
         atomic_number: element.atomic_number(),
@@ -103,7 +103,7 @@ fn element(symbol: &str) -> PyResult<PyElementProperties> {
 fn vdw_radius(symbol: &str, radii: &str) -> PyResult<Option<f32>> {
     let set = radius_set(radii)?;
     let element = Element::from_symbol(symbol)
-        .ok_or_else(|| PyValueError::new_err(format!("unknown element {symbol:?}")))?;
+        .ok_or_else(|| crate::error::value(format!("unknown element {symbol:?}")))?;
     Ok(chem::vdw_radius(element, set))
 }
 
@@ -153,7 +153,7 @@ fn annotate(
             &provider,
             chem::PolymerLinkPolicy::Disabled,
         )
-        .map_err(|diagnostic| PyValueError::new_err(diagnostic.to_string()))
+        .map_err(crate::error::kernel)
     })?;
     if !report.findings.is_empty() {
         let first: Vec<String> = report

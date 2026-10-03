@@ -7,6 +7,7 @@ from . import (
     chemistry as chemistry,
     compare as compare,
     crystal as crystal,
+    errors as errors,
     formats as formats,
     geometry as geometry,
     motif as motif,
@@ -17,6 +18,28 @@ from . import (
     surface as surface,
     trajectory as trajectory,
     validation as validation,
+)
+from .errors import (
+    Cancelled as Cancelled,
+    ConsistencyError as ConsistencyError,
+    ConversionError as ConversionError,
+    Diagnostic as Diagnostic,
+    GeometryError as GeometryError,
+    InternalError as InternalError,
+    MemoryBudgetError as MemoryBudgetError,
+    MolframeError as MolframeError,
+    MolframeIndexError as MolframeIndexError,
+    MolframeIOError as MolframeIOError,
+    MolframeKeyError as MolframeKeyError,
+    MolframeTypeError as MolframeTypeError,
+    MolframeValueError as MolframeValueError,
+    MolframeWarning as MolframeWarning,
+    ParseError as ParseError,
+    PolicyError as PolicyError,
+    QueryError as QueryError,
+    QueryWarning as QueryWarning,
+    ResourceError as ResourceError,
+    SchemaError as SchemaError,
 )
 
 _T_co = TypeVar("_T_co", covariant=True)
@@ -226,16 +249,6 @@ class Query:
     def __and__(self, other: Query) -> Query: ...
     def __or__(self, other: Query) -> Query: ...
     def __invert__(self) -> Query: ...
-
-class QueryError(ValueError):
-    """A selection query that cannot be compiled or evaluated.
-
-    The message quotes the query, underlines the offending token, and names
-    the details and the remedy.
-    """
-
-class QueryWarning(UserWarning):
-    """A selection query that is valid but probably not what was meant."""
 
 class QueryAliases:
     def __init__(self) -> None: ...

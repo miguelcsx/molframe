@@ -1,6 +1,5 @@
 use super::*;
 use crate::bindings::PyStructure;
-use crate::query_messages::QueryError;
 
 const SOURCE: &str = "data_hydrogen
 loop_
@@ -30,6 +29,7 @@ fn python_hydrogen_selectors_report_unavailable_bonds_as_query_errors() {
     assert_eq!(structure.atom_count(), 1);
     Python::initialize();
     Python::attach(|py| {
+        crate::error::install_package_for_tests(py);
         let structure = Bound::new(py, PyStructure::new(structure)).expect("structure binds");
         let module = PyModule::new(py, "sel").expect("module exists");
         register(&module).expect("selectors register");
@@ -42,7 +42,17 @@ fn python_hydrogen_selectors_report_unavailable_bonds_as_query_errors() {
             let error = query
                 .call_method1("select", (&structure,))
                 .expect_err("unavailable bonds fail through Python");
-            assert!(error.is_instance_of::<QueryError>(py));
+            let query_error = py
+                .import("molframe.errors")
+                .expect("molframe.errors imports")
+                .getattr("QueryError")
+                .expect("QueryError exists");
+            assert!(
+                error
+                    .value(py)
+                    .is_instance(&query_error)
+                    .expect("isinstance works")
+            );
             assert!(error.to_string().contains("MOLFRAME-E4003"));
             assert!(error.to_string().contains("bond topology"));
         }

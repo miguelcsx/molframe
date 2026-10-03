@@ -283,7 +283,7 @@ def test_missing_ring_topology_and_degenerate_geometry_remain_explicit(tmp_path)
 
 def test_dictionary_and_structure_arguments_fail_at_the_public_boundary(tmp_path):
     structure = _synthetic(tmp_path)
-    with pytest.raises(ValueError, match="MOLFRAME-E1901"):
+    with pytest.raises(OSError, match="MOLFRAME-E7101"):
         molframe.chemistry.carbohydrates(structure, tmp_path / "missing.cif")
     with pytest.raises(TypeError):
         molframe.chemistry.carbohydrates("not a structure")

@@ -2,7 +2,7 @@
 
 use crate::bindings::PyStructure;
 use molframe::analysis;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 #[pyclass(
     name = "GridSpec",
@@ -65,7 +65,7 @@ fn contact_potential(
     let spec = spec.inner;
     let field = py
         .detach(move || analysis::contact_potential(source.engine(), &charges, spec, cutoff))
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::failure)?;
     Ok(PyScalarGrid {
         spec: PyGridSpec { inner: field.spec },
         values: field.values,

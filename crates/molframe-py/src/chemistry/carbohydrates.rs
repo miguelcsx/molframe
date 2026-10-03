@@ -2,7 +2,7 @@
 
 use crate::bindings::{PyStructure, findings_error};
 use molframe::chemistry as chem;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 use std::path::PathBuf;
 
 #[derive(Clone, Copy)]
@@ -209,7 +209,7 @@ fn carbohydrates(
                 .map(|provider| provider as &dyn chem::ComponentProvider),
             chem::CarbohydrateOptions { spatial_fallback },
         )
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(crate::error::kernel)
     })?;
     Ok(report.into())
 }

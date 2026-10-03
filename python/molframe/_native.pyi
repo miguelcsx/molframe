@@ -23,8 +23,6 @@ from . import (
     Models as Models,
     Query as Query,
     QueryAliases as QueryAliases,
-    QueryError as QueryError,
-    QueryWarning as QueryWarning,
     Reader as Reader,
     Residue as Residue,
     Residues as Residues,

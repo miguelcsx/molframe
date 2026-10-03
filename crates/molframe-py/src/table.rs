@@ -1,7 +1,7 @@
 //! A read-only columnar result: named `NumPy` columns of equal length.
 
 use numpy::{PyArray1, PyArrayMethods, ToPyArray};
-use pyo3::{exceptions::PyKeyError, prelude::*, types::PyDict};
+use pyo3::{prelude::*, types::PyDict};
 
 /// Named columns of equal length, as read-only arrays.
 #[derive(Debug)]
@@ -74,7 +74,7 @@ impl PyTable {
             .iter()
             .find(|(candidate, _)| *candidate == name)
             .map(|(_, column)| column.clone_ref(py))
-            .ok_or_else(|| PyKeyError::new_err(name.to_owned()))
+            .ok_or_else(|| crate::error::key(name))
     }
 
     fn __contains__(&self, name: &str) -> bool {

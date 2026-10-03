@@ -25,6 +25,7 @@ mod crystal_reduction;
 mod crystal_statistics;
 #[cfg(feature = "analysis")]
 mod electrostatics;
+mod error;
 mod formats;
 #[cfg(feature = "analysis")]
 mod governed;

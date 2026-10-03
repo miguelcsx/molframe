@@ -6,7 +6,7 @@ use molframe::{
     AltlocPolicy, AnalysisPolicy, HydrogenPolicy, MissingPolicy, Namespace, Precision, RadiiSet,
     SymmetryPolicy,
 };
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 /// An immutable set of analysis decisions.
 #[derive(Clone, Debug)]
@@ -19,7 +19,7 @@ fn choose<T: Copy>(name: &str, value: &str, table: &[(&str, T)]) -> PyResult<T> 
         .find_map(|(label, choice)| (*label == value).then_some(*choice))
         .ok_or_else(|| {
             let allowed: Vec<&str> = table.iter().map(|(label, _)| *label).collect();
-            PyValueError::new_err(format!("{name} must be one of {}", allowed.join(", ")))
+            crate::error::value(format!("{name} must be one of {}", allowed.join(", ")))
         })
 }
 
@@ -62,7 +62,7 @@ const PRECISION: &[(&str, Precision)] = &[("f32", Precision::F32), ("f64", Preci
 fn parse_altloc(value: &str) -> PyResult<AltlocPolicy> {
     if let Some(label) = value.strip_prefix("label:") {
         return if label.is_empty() {
-            Err(PyValueError::new_err("altloc 'label:' needs a label"))
+            Err(crate::error::value("altloc 'label:' needs a label"))
         } else {
             Ok(AltlocPolicy::Label(label.into()))
         };
@@ -73,7 +73,7 @@ fn parse_altloc(value: &str) -> PyResult<AltlocPolicy> {
         "first" => Ok(AltlocPolicy::First),
         "highest_occupancy_per_residue" => Ok(AltlocPolicy::HighestOccupancyPerResidue),
         "highest_occupancy_per_atom" => Ok(AltlocPolicy::HighestOccupancyPerAtom),
-        _ => Err(PyValueError::new_err(
+        _ => Err(crate::error::value(
             "altloc must be keep_all, conformer_consistent, first, \
              highest_occupancy_per_residue, highest_occupancy_per_atom or label:<id>",
         )),

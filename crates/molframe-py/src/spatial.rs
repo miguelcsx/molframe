@@ -1,7 +1,7 @@
 //! Mechanical adapters for fixed-radius neighbour search over coordinates.
 
 use numpy::{PyArray1, PyArray2, PyArrayMethods, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 type Pairs<'py> = (
     Bound<'py, PyArray1<u32>>,
@@ -25,7 +25,7 @@ fn neighbor_pairs<'py>(
     let positions = crate::bindings::coordinates(&array)?;
     let everything = molframe::engine::core::AtomSelection::All(
         u32::try_from(positions.len())
-            .map_err(|_| PyValueError::new_err("too many atoms for a 32-bit index"))?,
+            .map_err(|_| crate::error::value("too many atoms for a 32-bit index"))?,
     );
     let pairs = py
         .detach(|| {
@@ -39,7 +39,7 @@ fn neighbor_pairs<'py>(
                 &molframe::ExecutionContext::default(),
             )
         })
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::kernel)?;
     let first: Vec<u32> = pairs.iter().map(|pair| pair.first).collect();
     let second: Vec<u32> = pairs.iter().map(|pair| pair.second).collect();
     let distance: Vec<f32> = pairs

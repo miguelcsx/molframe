@@ -2,7 +2,7 @@
 
 use crate::bindings::{PyStructure, findings_error};
 use molframe::chemistry as chem;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 use std::path::PathBuf;
 
 #[derive(Clone)]
@@ -27,11 +27,11 @@ impl PyPolymerRoleRule {
         component_kind: Option<i64>,
     ) -> PyResult<Self> {
         let role = chem::PolymerAtomRole::from_code(role)
-            .ok_or_else(|| PyValueError::new_err("invalid polymer role bits"))?;
+            .ok_or_else(|| crate::error::value("invalid polymer role bits"))?;
         let component_kind = component_kind
             .map(|code| {
                 chem::ComponentKind::from_code(code)
-                    .ok_or_else(|| PyValueError::new_err("invalid component kind code"))
+                    .ok_or_else(|| crate::error::value("invalid component kind code"))
             })
             .transpose()?;
         Ok(Self {
@@ -99,7 +99,7 @@ fn apply_polymer_role_profile(
         let (provider, _) = molframe::read_component_dictionary(&components, version)
             .map_err(|findings| findings_error(&findings))?;
         chem::apply_polymer_role_profile(source.engine(), &provider, &profile)
-            .map_err(|error| PyValueError::new_err(error.to_string()))
+            .map_err(crate::error::kernel)
     })?;
     Ok(PyPolymerRoleReport {
         structure: PyStructure::new(molframe::Structure::from(report.structure)),

@@ -1,7 +1,7 @@
 //! Mechanical adapters for pairwise alignment, FASTA and k-mer counting.
 
 use molframe::sequence::{self as seq, Alignment, FastaRecord, Scoring};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 /// One optimal pairwise alignment.
 #[derive(Clone, Debug)]
@@ -134,7 +134,7 @@ impl PyScoring {
         gap_extend: i32,
     ) -> PyResult<Self> {
         if gap_open > 0 || gap_extend > 0 {
-            return Err(PyValueError::new_err(
+            return Err(crate::error::value(
                 "gap_open and gap_extend must be zero or negative",
             ));
         }
@@ -183,7 +183,7 @@ fn align(
         "local" => seq::local,
         "semi_global" => seq::semi_global,
         _ => {
-            return Err(PyValueError::new_err(
+            return Err(crate::error::value(
                 "mode must be 'global', 'local' or 'semi_global'",
             ));
         }
@@ -191,7 +191,7 @@ fn align(
     let (left_bytes, right_bytes) = (left.as_bytes().to_vec(), right.as_bytes().to_vec());
     let inner = py
         .detach(|| solve(&left_bytes, &right_bytes, scoring))
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::kernel)?;
     Ok(PyAlignment {
         inner,
         left: left_bytes,
@@ -219,7 +219,7 @@ fn write_fasta(records: Vec<PyFastaRecord>) -> String {
 #[pyfunction]
 fn kmer_counts(sequence: &str, k: usize) -> PyResult<Vec<(String, u32)>> {
     if k == 0 {
-        return Err(PyValueError::new_err("k must be positive"));
+        return Err(crate::error::value("k must be positive"));
     }
     Ok(seq::kmer_counts(sequence.as_bytes(), k)
         .into_iter()

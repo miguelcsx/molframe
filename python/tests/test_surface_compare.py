@@ -68,5 +68,5 @@ def test_weighted_rmsd_follows_the_weights_and_rejects_mismatches():
     assert first == pytest.approx(1.0)
     with pytest.raises(ValueError, match="weights has 1 entries but the coordinates have 2 points"):
         molframe.compare.weighted_rmsd(model, reference, np.array([1.0]))
-    with pytest.raises(ValueError, match="superposition failed: TooFewPoints"):
+    with pytest.raises(ValueError, match="fewer than three positions"):
         molframe.compare.tm_score(model[:1], reference[:1])

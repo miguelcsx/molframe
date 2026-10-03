@@ -76,7 +76,7 @@ def test_rmsd_series_measures_shape_change_not_drift(tmp_path):
     assert fitted.status == "complete"
     assert fitted.profile == "molframe-default-1.0"
     assert not fitted.value.flags.writeable
-    with pytest.raises(ValueError, match=r"Geometry\(InvalidParameter\)"):
+    with pytest.raises(ValueError, match="must be finite and positive"):
         molframe.trajectory.rmsd(positions, reference=9)
     with pytest.raises(ValueError, match="positions must have shape"):
         molframe.trajectory.rmsd(np.zeros((2, 3, 2), dtype=np.float32))

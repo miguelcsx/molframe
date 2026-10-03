@@ -188,27 +188,21 @@ pub(crate) struct PyStructureEditor {
 impl PyStructureEditor {
     fn rename_chain(&mut self, chain: u32, label: &str) -> PyResult<()> {
         let Some(editor) = self.inner.as_mut() else {
-            return Err(pyo3::exceptions::PyRuntimeError::new_err(
-                "editor has already been finished",
-            ));
+            return Err(crate::error::internal("editor has already been finished"));
         };
         editor
             .rename_chain(molframe::ChainIndex::new(chain), label)
-            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))
+            .map_err(crate::error::kernel)
     }
 
     fn finish(&mut self) -> PyResult<PyStructure> {
         let Some(editor) = self.inner.take() else {
-            return Err(pyo3::exceptions::PyRuntimeError::new_err(
-                "editor has already been finished",
-            ));
+            return Err(crate::error::internal("editor has already been finished"));
         };
         editor
             .finish()
             .map(PyStructure::new)
-            .map_err(|diagnostics| {
-                pyo3::exceptions::PyValueError::new_err(format!("{diagnostics:?}"))
-            })
+            .map_err(|diagnostics| crate::error::value(format!("{diagnostics:?}")))
     }
 }
 #[derive(Clone, Debug)]
@@ -259,7 +253,7 @@ impl PySelection {
     fn residues(&self, structure: Option<&PyStructure>) -> PyResult<PyResidueSelection> {
         let structure = structure.map_or(&self.parent, |value| value);
         if self.selection.is_stale_for(&structure.inner) {
-            return Err(pyo3::exceptions::PyValueError::new_err(
+            return Err(crate::error::value(
                 "selection is stale for the supplied structure",
             ));
         }
@@ -441,14 +435,10 @@ pub(crate) fn read(
 pub(crate) fn coordinates<'a>(array: &'a PyReadonlyArray2<'_, f32>) -> PyResult<&'a [[f32; 3]]> {
     let shape = array.shape();
     if shape.len() != 2 || shape[1] != 3 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "coordinates must have shape (n, 3)",
-        ));
+        return Err(crate::error::value("coordinates must have shape (n, 3)"));
     }
     let contiguous = array.as_slice().map_err(|_| {
-        pyo3::exceptions::PyValueError::new_err(
-            "coordinates must be C-contiguous; call numpy.ascontiguousarray",
-        )
+        crate::error::value("coordinates must be C-contiguous; call numpy.ascontiguousarray")
     })?;
     Ok(contiguous.as_chunks::<3>().0)
 }
@@ -469,7 +459,7 @@ pub(crate) fn rmsd(
     let mobile = mobile.readonly();
     let reference = reference.readonly();
     molframe::geometry::rmsd(coordinates(&mobile)?, coordinates(&reference)?)
-        .map_err(|error| pyo3::exceptions::PyValueError::new_err(format!("{error:?}")))
+        .map_err(crate::error::kernel)
 }
 
 #[pyfunction]
@@ -479,12 +469,12 @@ pub(crate) fn distance_matrix<'py>(
     array: &Bound<'_, PyArray2<f32>>,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     let array = array.readonly();
-    let matrix = molframe::geometry::distance_matrix(coordinates(&array)?)
-        .map_err(|error| pyo3::exceptions::PyMemoryError::new_err(error.to_string()))?;
+    let matrix =
+        molframe::geometry::distance_matrix(coordinates(&array)?).map_err(crate::error::kernel)?;
     let rows = matrix.rows();
     matrix.into_values().into_pyarray(py).reshape((rows, rows))
 }
 
 pub(crate) fn findings_error(findings: &molframe::Findings) -> PyErr {
-    pyo3::exceptions::PyValueError::new_err(findings.to_string())
+    crate::error::from_findings(findings.as_slice(), &findings.to_string())
 }

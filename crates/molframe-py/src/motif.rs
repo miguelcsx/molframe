@@ -6,7 +6,7 @@ use molframe::motif::{
     Evaluation, EvaluationReport, MeasurementOptions, VerdictStatus, evaluate_motif,
     read_evaluation_specification,
 };
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 use std::path::PathBuf;
 
 /// One constraint's measurement, with the intrinsic result kept apart from any verdict.
@@ -208,7 +208,7 @@ fn evaluate(
 ) -> PyResult<PyMotifReport> {
     let (mapping_limit, maximum_alternatives) = limits;
     if mapping_limit == 0 || maximum_alternatives == 0 {
-        return Err(PyValueError::new_err(
+        return Err(crate::error::value(
             "limits must be positive: (mapping_limit, maximum_alternatives)",
         ));
     }
@@ -220,8 +220,8 @@ fn evaluate(
         plane_fit: molframe::geometry::EigenOptions::standard(),
     };
     py.detach(move || {
-        let specification = read_evaluation_specification(&specification)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let specification =
+            read_evaluation_specification(&specification).map_err(crate::error::failure)?;
         let provider = components
             .map(|path| {
                 molframe::read_component_dictionary(&path, version)
@@ -241,7 +241,7 @@ fn evaluate(
             measurement,
         )
         .map(|result| report(&result))
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(crate::error::failure)
     })
 }
 

@@ -2,7 +2,7 @@
 
 use molframe::UnitCell;
 use molframe::crystal::{ReducedCell, niggli_reduce};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 /// A cell in its Niggli setting and the change of basis that reaches it.
 #[derive(Clone, Copy, Debug)]
@@ -65,7 +65,7 @@ fn reduce_cell(
 ) -> PyResult<PyReducedCell> {
     niggli_reduce(&UnitCell { lengths, angles }, epsilon, iteration_limit)
         .map(PyReducedCell)
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+        .map_err(crate::error::failure)
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

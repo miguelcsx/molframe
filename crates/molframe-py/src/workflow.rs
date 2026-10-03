@@ -91,7 +91,7 @@ impl PyWorkflow {
                 InputKind::Structure,
             ),
             _ => {
-                return Err(pyo3::exceptions::PyValueError::new_err(
+                return Err(crate::error::value(
                     "kind must be 'coordinates', 'float', or 'structure'",
                 ));
             }
@@ -146,7 +146,7 @@ impl PyWorkflow {
                     molframe::geometry::rmsd(mobile, reference).map_err(|error| {
                         molframe::WorkflowError::Operation {
                             operation: "geometry.rmsd",
-                            message: format!("{error:?}").into(),
+                            message: error.to_string().into(),
                         }
                     })
                 },
@@ -250,7 +250,7 @@ impl PyWorkflow {
                 OutputValue::Contacts(self.inner.output(name, node).map_err(workflow_error)?)
             }
             NodeValue::Coordinates(_) => {
-                return Err(pyo3::exceptions::PyTypeError::new_err(
+                return Err(crate::error::type_error(
                     "raw coordinate inputs are not publishable outputs",
                 ));
             }
@@ -273,7 +273,7 @@ impl PyWorkflow {
         if node.workflow_id == self.id {
             Ok(())
         } else {
-            Err(pyo3::exceptions::PyValueError::new_err(
+            Err(crate::error::value(
                 "workflow node belongs to another Workflow",
             ))
         }
@@ -300,12 +300,12 @@ impl PyCompiledWorkflow {
         let mut inputs = molframe::WorkflowInputs::new();
         for (name, kind) in &self.inputs {
             let Some(value) = values.get_item(name.as_ref())? else {
-                return Err(pyo3::exceptions::PyKeyError::new_err(name.to_string()));
+                return Err(crate::error::key(name));
             };
             match kind {
                 InputKind::Coordinates => {
                     if !copy {
-                        return Err(pyo3::exceptions::PyValueError::new_err(
+                        return Err(crate::error::value(
                             "persistent coordinate inputs require copy=True",
                         ));
                     }
@@ -393,16 +393,16 @@ fn parse_cost(value: &str) -> PyResult<molframe::Cost> {
         "decode" => Ok(molframe::Cost::Decode),
         "copy" => Ok(molframe::Cost::Copy),
         "materialize" => Ok(molframe::Cost::Materialize),
-        _ => Err(pyo3::exceptions::PyValueError::new_err(
+        _ => Err(crate::error::value(
             "cost must be borrow, adopt, decode, copy, or materialize",
         )),
     }
 }
 
 fn node_type(expected: &str) -> PyErr {
-    pyo3::exceptions::PyTypeError::new_err(format!("workflow node must contain {expected}"))
+    crate::error::type_error(format!("workflow node must contain {expected}"))
 }
 
 fn workflow_error(error: impl std::fmt::Display) -> PyErr {
-    pyo3::exceptions::PyValueError::new_err(error.to_string())
+    crate::error::failure(error)
 }

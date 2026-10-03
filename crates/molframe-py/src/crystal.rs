@@ -5,7 +5,7 @@ use molframe::UnitCell;
 use molframe::crystal::{AssemblyExt as _, AssemblyView};
 use molframe::crystal::{CellTransform, ReflectionSymmetry, SymmetrySet, space_group_setting};
 use numpy::{Complex64, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 
 #[derive(Clone, Copy, Debug)]
 #[pyclass(
@@ -22,7 +22,7 @@ impl PyUnitCell {
     fn new(lengths: [f64; 3], angles: [f64; 3]) -> PyResult<Self> {
         CellTransform::new(&UnitCell { lengths, angles })
             .map(Self)
-            .map_err(|error| PyValueError::new_err(error.to_string()))
+            .map_err(crate::error::kernel)
     }
 
     fn reciprocal_vector(&self, hkl: [i32; 3]) -> [f64; 3] {
@@ -53,7 +53,7 @@ impl PySpaceGroup {
     fn new(hall_number: u16) -> PyResult<Self> {
         space_group_setting(hall_number)
             .map(|setting| Self(setting.symmetry_set()))
-            .map_err(|error| PyValueError::new_err(error.to_string()))
+            .map_err(crate::error::kernel)
     }
 
     #[getter]
@@ -70,7 +70,7 @@ impl PySpaceGroup {
         self.0
             .reflection_symmetry(hkl)
             .map(PyReflectionSymmetry)
-            .map_err(|error| PyValueError::new_err(error.to_string()))
+            .map_err(crate::error::kernel)
     }
 }
 
@@ -112,7 +112,7 @@ fn structure_factors<'py>(
     let hkl = hkl.readonly();
     let shape = hkl.shape();
     if shape.len() != 2 || shape[1] != 3 {
-        return Err(PyValueError::new_err("hkl must have shape (n, 3)"));
+        return Err(crate::error::value("hkl must have shape (n, 3)"));
     }
     let rows: Vec<[i32; 3]> = hkl
         .as_array()
@@ -123,7 +123,7 @@ fn structure_factors<'py>(
     let structure = structure.inner.clone();
     let values = py
         .detach(move || molframe::crystal::structure_factors(structure.engine(), &rows))
-        .map_err(|diagnostic| PyValueError::new_err(diagnostic.to_string()))?;
+        .map_err(crate::error::kernel)?;
     let values: Vec<Complex64> = values
         .into_iter()
         .map(|value| Complex64::new(value.re, value.im))
@@ -182,9 +182,8 @@ fn assembly(structure: &PyStructure, id: &str) -> PyResult<Vec<PyAssemblyInstanc
     let engine = structure.inner.engine();
     let set = engine
         .assembly_set()
-        .ok_or_else(|| PyValueError::new_err("the structure declares no biological assemblies"))?;
-    let view = AssemblyView::new(engine, set, id)
-        .map_err(|diagnostic| PyValueError::new_err(diagnostic.to_string()))?;
+        .ok_or_else(|| crate::error::value("the structure declares no biological assemblies"))?;
+    let view = AssemblyView::new(engine, set, id).map_err(crate::error::kernel)?;
     view.groups_by_transform()
         .into_iter()
         .map(|(transform, chains)| {
@@ -203,7 +202,7 @@ fn assembly(structure: &PyStructure, id: &str) -> PyResult<Vec<PyAssemblyInstanc
                         .chain(chain)
                         .and_then(molframe::ChainRef::label)
                         .map(str::to_owned)
-                        .ok_or_else(|| PyValueError::new_err("an assembly chain has no label"))
+                        .ok_or_else(|| crate::error::value("an assembly chain has no label"))
                 })
                 .collect::<PyResult<Vec<_>>>()?;
             Ok(PyAssemblyInstance {

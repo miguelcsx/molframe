@@ -7,7 +7,7 @@ use molframe::trajectory::{
     analyse_rmsd_to_reference_view, read_trajectory_materialized,
 };
 use numpy::{PyArray1, PyArray3, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::prelude::*;
 use std::path::PathBuf;
 
 /// Frames of one trajectory as read-only arrays, in ångström and picoseconds.
@@ -92,7 +92,7 @@ fn parse_format(name: &str) -> PyResult<TrajectoryFormat> {
         "xyz" => Ok(TrajectoryFormat::Xyz),
         "lammps_dump" => Ok(TrajectoryFormat::LammpsDump),
         "netcdf" => Ok(TrajectoryFormat::AmberNetcdf),
-        _ => Err(PyValueError::new_err(
+        _ => Err(crate::error::value(
             "format must be xtc, trr, dcd, tng, gro, xyz, lammps_dump or netcdf",
         )),
     }
@@ -108,14 +108,14 @@ fn read(py: Python<'_>, path: PathBuf, format: Option<&str>) -> PyResult<PyTraje
     };
     let data = py
         .detach(move || read_trajectory_materialized(&path, &options))
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        .map_err(crate::error::failure)?;
     let atoms = data.frames.first().map_or(0, |frame| frame.positions.len());
     if let Some(frame) = data
         .frames
         .iter()
         .find(|frame| frame.positions.len() != atoms)
     {
-        return Err(PyValueError::new_err(format!(
+        return Err(crate::error::value(format!(
             "frame {} has {} atoms, expected {atoms}",
             frame.frame,
             frame.positions.len()
@@ -160,15 +160,15 @@ fn rmsd(
     let array = positions.readonly();
     let shape = array.shape();
     let flat = array.as_slice().map_err(|_| {
-        PyValueError::new_err("positions must be C-contiguous; call numpy.ascontiguousarray")
+        crate::error::value("positions must be C-contiguous; call numpy.ascontiguousarray")
     })?;
     if shape[2] != 3 {
-        return Err(PyValueError::new_err(
+        return Err(crate::error::value(
             "positions must have shape (frames, atoms, 3)",
         ));
     }
     let view = FrameView::new(flat.as_chunks::<3>().0, shape[0], shape[1])
-        .map_err(|error| PyValueError::new_err(format!("{error:?}")))?;
+        .map_err(crate::error::failure)?;
     let alignment = if align {
         FrameAlignment::Rigid
     } else {
@@ -177,7 +177,7 @@ fn rmsd(
     let policy = crate::policy::policy_of(policy);
     let analysis = py
         .detach(|| analyse_rmsd_to_reference_view(view, reference, alignment, &policy))
-        .map_err(|error| PyValueError::new_err(format!("{error:?}")))?;
+        .map_err(crate::error::failure)?;
     let series = analysis.value.to_pyarray(py);
     series.readwrite().make_nonwriteable();
     Ok(PyAnalysis::new(&analysis, series.into_any().unbind()))
