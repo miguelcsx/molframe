@@ -51,7 +51,7 @@ pub use measure::{
 pub use moments::{
     asphericity, asphericity_with_options, centre_of_mass, centroid, gyration_axes,
     gyration_axes_with_options, inertia_tensor, principal_axes, principal_axes_with_options,
-    radius_of_gyration,
+    radius_of_gyration, shape_parameter, shape_parameter_with_options,
 };
 pub use path::path_torsions;
 pub use periodic_angle::{
@@ -67,7 +67,7 @@ pub use rotation::{
     rotation_mean_with_options,
 };
 pub use superpose::{
-    SuperposeError, SuperposeOptions, Superposition, rmsd, rmsd_flat, superpose,
+    SuperposeError, SuperposeOptions, Superposition, rmsd, rmsd_after_fit, rmsd_flat, superpose,
     superpose_with_options,
 };
 pub use transform::Rigid;

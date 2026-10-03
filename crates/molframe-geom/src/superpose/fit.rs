@@ -14,6 +14,7 @@
 //! Cost is one pass over the positions plus a fixed-size decomposition, so it
 //! is linear in the number of atoms.
 
+use super::qcp;
 use crate::eigen;
 use crate::numeric::exact_count;
 use crate::transform::Rigid;
@@ -188,6 +189,82 @@ pub fn superpose_with_options(
     reference: &[[f32; 3]],
     options: SuperposeOptions,
 ) -> Result<Superposition, SuperposeError> {
+    let (statistics, count) = prepared_statistics(mobile, reference, options)?;
+    let key = key_matrix(&statistics.covariance);
+    let initial = initial_correlation(&statistics);
+    check_eigen_options(options.eigen)?;
+    // QCP first; a repeated top eigenvalue (or no convergence) falls back to
+    // the general eigensolver, which `options.eigen` controls.
+    let (maximum_correlation, quaternion) =
+        if let Some(pair) = qcp::dominant_eigenpair(&key, initial) {
+            pair
+        } else {
+            let decomposition =
+                eigen::symmetric_with_options(key, options.eigen).map_err(SuperposeError::Eigen)?;
+            (decomposition.values[0], decomposition.dominant())
+        };
+
+    let Some(rotation) = rotation_from(quaternion) else {
+        return Err(SuperposeError::Degenerate);
+    };
+
+    // Rotate about the mobile centre, then move that centre onto the reference's.
+    let transform = Rigid::new(
+        rotation,
+        translation(
+            rotation,
+            statistics.mobile_centre,
+            statistics.reference_centre,
+        ),
+    );
+    let rmsd = optimal_rmsd(&statistics, maximum_correlation, count);
+
+    Ok(Superposition { transform, rmsd })
+}
+
+/// Rejects invalid eigensolver controls even when QCP never needs the solver.
+fn check_eigen_options(options: eigen::EigenOptions) -> Result<(), SuperposeError> {
+    options
+        .validate()
+        .map(|_| ())
+        .map_err(SuperposeError::Eigen)
+}
+
+/// The minimum RMSD after optimal rigid superposition, without the rotation.
+///
+/// Only the dominant eigenvalue of the key matrix is needed, so no quaternion
+/// or transform is built. Validation matches [`superpose`], and the value
+/// equals `superpose(..).rmsd`.
+///
+/// Runs in one `O(n)` pass plus a fixed-size solve and allocates no heap
+/// memory.
+///
+/// # Errors
+///
+/// Returns why no single best transform exists.
+pub fn rmsd_after_fit(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, SuperposeError> {
+    let options = SuperposeOptions::standard();
+    let (statistics, count) = prepared_statistics(mobile, reference, options)?;
+    let key = key_matrix(&statistics.covariance);
+
+    let maximum_correlation =
+        if let Some(value) = qcp::max_eigenvalue(&key, initial_correlation(&statistics)) {
+            value
+        } else {
+            eigen::symmetric_with_options(key, options.eigen)
+                .map_err(SuperposeError::Eigen)?
+                .values[0]
+        };
+
+    Ok(optimal_rmsd(&statistics, maximum_correlation, count))
+}
+
+/// Validates the inputs and accumulates the fit statistics.
+fn prepared_statistics(
+    mobile: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    options: SuperposeOptions,
+) -> Result<(FitStatistics, f64), SuperposeError> {
     let options = options.validate()?;
     if mobile.len() != reference.len() {
         return Err(SuperposeError::LengthMismatch);
@@ -210,28 +287,15 @@ pub fn superpose_with_options(
         return Err(SuperposeError::Degenerate);
     }
 
-    let decomposition =
-        eigen::symmetric_with_options(key_matrix(&statistics.covariance), options.eigen)
-            .map_err(SuperposeError::Eigen)?;
-    let maximum_correlation = decomposition.values[0];
-    let quaternion = decomposition.dominant();
+    Ok((statistics, count))
+}
 
-    let Some(rotation) = rotation_from(quaternion) else {
-        return Err(SuperposeError::Degenerate);
-    };
-
-    // Rotate about the mobile centre, then move that centre onto the reference's.
-    let transform = Rigid::new(
-        rotation,
-        translation(
-            rotation,
-            statistics.mobile_centre,
-            statistics.reference_centre,
-        ),
-    );
-    let rmsd = optimal_rmsd(&statistics, maximum_correlation, count);
-
-    Ok(Superposition { transform, rmsd })
+/// An upper bound on the dominant eigenvalue: half the summed squared norms.
+fn initial_correlation(statistics: &FitStatistics) -> f64 {
+    f64::midpoint(
+        trace(&statistics.mobile_scatter),
+        trace(&statistics.reference_scatter),
+    )
 }
 
 /// Returns whether a centred scatter tensor has rank below two.

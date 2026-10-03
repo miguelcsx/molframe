@@ -161,3 +161,110 @@ fn caller_selected_fit_controls_are_validated_and_enforced() {
         Err(SuperposeError::Eigen(eigen::EigenError::InvalidOptions))
     );
 }
+
+fn cloud(seed: &mut u64, points: usize) -> Vec<[f32; 3]> {
+    let mut next = || {
+        *seed ^= *seed << 13;
+        *seed ^= *seed >> 7;
+        *seed ^= *seed << 17;
+        // Top 24 bits give an exact f32 in [0, 1).
+        let bits = u32::try_from(*seed >> 40).unwrap_or(0);
+        #[allow(clippy::cast_possible_truncation)]
+        let value = (f64::from(bits) / 16_777_216.0 * 20.0 - 10.0) as f32;
+        value
+    };
+    (0..points).map(|_| [next(), next(), next()]).collect()
+}
+
+#[test]
+fn qcp_agrees_with_the_jacobi_path_on_random_clouds() {
+    let mut seed = 0x9E37_79B9_7F4A_7C15_u64;
+    for _ in 0..100 {
+        let mobile = cloud(&mut seed, 24);
+        let reference = cloud(&mut seed, 24);
+        let options = SuperposeOptions::standard();
+        let Ok((statistics, count)) = prepared_statistics(&mobile, &reference, options) else {
+            panic!("expected statistics")
+        };
+        let key = key_matrix(&statistics.covariance);
+        let Some((lambda, quaternion)) =
+            qcp::dominant_eigenpair(&key, initial_correlation(&statistics))
+        else {
+            panic!("qcp should converge on a generic cloud")
+        };
+        let Ok(jacobi) = eigen::symmetric_with_options(key, options.eigen) else {
+            panic!("jacobi should converge")
+        };
+
+        let qcp_rmsd = optimal_rmsd(&statistics, lambda, count);
+        let jacobi_rmsd = optimal_rmsd(&statistics, jacobi.values[0], count);
+        assert!(
+            (qcp_rmsd - jacobi_rmsd).abs() < 1e-9,
+            "{qcp_rmsd} vs {jacobi_rmsd}"
+        );
+
+        let (Some(a), Some(b)) = (rotation_from(quaternion), rotation_from(jacobi.dominant()))
+        else {
+            panic!("expected rotations")
+        };
+        for row in 0..3 {
+            for column in 0..3 {
+                assert!((a[row][column] - b[row][column]).abs() < 1e-9);
+            }
+        }
+    }
+}
+
+#[test]
+fn rmsd_after_fit_equals_the_fitted_rmsd() {
+    let mut seed = 0x1234_5678_9ABC_DEF1_u64;
+    for _ in 0..20 {
+        let mobile = cloud(&mut seed, 30);
+        let reference = cloud(&mut seed, 30);
+        let (Ok(fit), Ok(value)) = (
+            superpose(&mobile, &reference),
+            rmsd_after_fit(&mobile, &reference),
+        ) else {
+            panic!("expected fits")
+        };
+        assert!((fit.rmsd - value).abs() < 1e-9);
+    }
+    assert_eq!(
+        rmsd_after_fit(&TRIANGLE[..2], &TRIANGLE[..2]),
+        Err(SuperposeError::TooFewPoints)
+    );
+}
+
+#[test]
+fn a_mirrored_regular_tetrahedron_falls_back_and_still_gives_a_proper_rotation() {
+    // Its covariance with its mirror image makes the top eigenvalue triple.
+    let tetrahedron: [[f32; 3]; 4] = [
+        [1.0, 1.0, 1.0],
+        [1.0, -1.0, -1.0],
+        [-1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0],
+    ];
+    let mirrored: Vec<[f32; 3]> = tetrahedron.iter().map(|p| [p[0], p[1], -p[2]]).collect();
+
+    let options = SuperposeOptions::standard();
+    let Ok((statistics, _)) = prepared_statistics(&mirrored, &tetrahedron, options) else {
+        panic!("expected statistics")
+    };
+    let key = key_matrix(&statistics.covariance);
+    assert!(
+        qcp::dominant_eigenpair(&key, initial_correlation(&statistics)).is_none(),
+        "a repeated top eigenvalue must be left to the fallback"
+    );
+
+    let Ok(fit) = superpose(&mirrored, &tetrahedron) else {
+        panic!("expected a fit")
+    };
+    assert!((fit.transform.determinant() - 1.0).abs() < 1e-9);
+    assert!(fit.rmsd > 0.1);
+    let Ok(value) = rmsd_after_fit(&mirrored, &tetrahedron) else {
+        panic!("expected an rmsd")
+    };
+    // Newton converges only linearly on a repeated root, so the λ-only path
+    // is less exact here than the fallback.
+    assert!((fit.rmsd - value).abs() < 1e-5);
+}

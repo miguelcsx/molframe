@@ -40,7 +40,7 @@ impl EigenOptions {
         }
     }
 
-    fn validate(self) -> Result<Self, EigenError> {
+    pub(crate) fn validate(self) -> Result<Self, EigenError> {
         if self.relative_tolerance.is_finite()
             && self.relative_tolerance > 0.0
             && self.relative_tolerance < 1.0

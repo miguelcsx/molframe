@@ -28,11 +28,8 @@ pub fn rmsd_stream<R: TrajectoryReader + ?Sized>(
         let value = match alignment {
             FrameAlignment::None => molframe_geom::rmsd(&frame.positions, reference)
                 .map_err(|_| TrajectoryError::DegenerateFit)?,
-            FrameAlignment::Rigid => {
-                molframe_geom::superpose(&frame.positions, reference)
-                    .map_err(|_| TrajectoryError::DegenerateFit)?
-                    .rmsd
-            }
+            FrameAlignment::Rigid => molframe_geom::rmsd_after_fit(&frame.positions, reference)
+                .map_err(|_| TrajectoryError::DegenerateFit)?,
         };
         emit(frame.frame, frame.time, value)
     })

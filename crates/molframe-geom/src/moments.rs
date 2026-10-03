@@ -268,6 +268,54 @@ pub fn asphericity_with_options(
     Ok(Some(((a - f64::midpoint(b, c)) / trace).clamp(0.0, 1.0)))
 }
 
+/// The signed shape parameter of the gyration tensor.
+///
+/// With gyration eigenvalues `a, b, c` and mean `m`,
+/// `S = 27 (a - m)(b - m)(c - m) / (a + b + c)^3`. A prolate (rod-like)
+/// set approaches `2`, an oblate (disc-like) set is negative (`-1/4` for a
+/// ring) and a spherically symmetric set is zero. The value is not clamped.
+///
+/// Returns `None` for fewer than two positions and `Some(0.0)` when the trace
+/// is not positive (coincident points).
+///
+/// Runs in `O(n)` time plus a fixed-cost three-by-three decomposition.
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the gyration tensor cannot be decomposed
+/// with the named standard profile.
+pub fn shape_parameter(positions: &[[f32; 3]]) -> Result<Option<f64>, eigen::EigenError> {
+    shape_parameter_with_options(positions, eigen::EigenOptions::standard())
+}
+
+/// Computes the shape parameter with explicit eigensolver convergence controls.
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the gyration tensor cannot be decomposed.
+pub fn shape_parameter_with_options(
+    positions: &[[f32; 3]],
+    options: eigen::EigenOptions,
+) -> Result<Option<f64>, eigen::EigenError> {
+    if positions.len() < 2 {
+        return Ok(None);
+    }
+    let Some(decomposition) = gyration_axes_with_options(positions, options)? else {
+        return Ok(None);
+    };
+    let [a, b, c] = decomposition.values;
+    let trace = a + b + c;
+
+    if trace <= 0.0 {
+        return Ok(Some(0.0));
+    }
+
+    let mean = trace / 3.0;
+    Ok(Some(
+        27.0 * (a - mean) * (b - mean) * (c - mean) / (trace * trace * trace),
+    ))
+}
+
 /// The gyration tensor's eigen-decomposition, largest extent first.
 ///
 /// Runs in `O(n)` time using two passes, followed by a fixed-cost decomposition,

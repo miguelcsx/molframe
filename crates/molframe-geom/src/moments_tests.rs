@@ -119,6 +119,50 @@ fn a_line_is_maximally_aspherical_and_a_symmetric_cloud_is_not() {
 }
 
 #[test]
+fn shape_parameter_is_positive_for_rods_negative_for_discs_and_zero_for_cubes() {
+    let rod: Vec<[f32; 3]> = (-10_i16..=10)
+        .map(|coordinate| [f32::from(coordinate), 0.0, 0.0])
+        .collect();
+    let Ok(Some(prolate)) = shape_parameter(&rod) else {
+        panic!("expected a value")
+    };
+    assert!(prolate > 1.9, "a rod should approach two, got {prolate}");
+
+    let disc: Vec<[f32; 3]> = (0..36_u8)
+        .map(|step| {
+            let angle = f32::from(step) * std::f32::consts::TAU / 36.0;
+            [angle.cos(), angle.sin(), 0.0]
+        })
+        .collect();
+    let Ok(Some(oblate)) = shape_parameter(&disc) else {
+        panic!("expected a value")
+    };
+    assert!(oblate < -0.2, "a ring should be oblate, got {oblate}");
+
+    let cube = [
+        [-1.0, -1.0, -1.0],
+        [1.0, -1.0, -1.0],
+        [-1.0, 1.0, -1.0],
+        [1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0],
+        [1.0, -1.0, 1.0],
+        [-1.0, 1.0, 1.0],
+        [1.0, 1.0, 1.0],
+    ];
+    let Ok(Some(round)) = shape_parameter(&cube) else {
+        panic!("expected a value")
+    };
+    assert!(round.abs() < 1e-9, "a cube should be zero, got {round}");
+}
+
+#[test]
+fn shape_parameter_needs_two_points_and_treats_coincident_points_as_zero() {
+    assert_eq!(shape_parameter(&[]), Ok(None));
+    assert_eq!(shape_parameter(&[[1.0, 2.0, 3.0]]), Ok(None));
+    assert_eq!(shape_parameter(&[[1.0, 2.0, 3.0]; 3]), Ok(Some(0.0)));
+}
+
+#[test]
 fn principal_axes_come_back_ordered_by_their_moments() {
     let points = [
         [-3.0, 0.0, 0.0],
