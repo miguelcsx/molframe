@@ -3,6 +3,8 @@
 use crate::numeric::i32_to_usize;
 use molframe_core::structure::UnitCell;
 const HEADER_BYTES: usize = 1024;
+#[path = "mrc_affine.rs"]
+mod affine;
 #[path = "mrc_block.rs"]
 mod block;
 #[path = "mrc_brick.rs"]
