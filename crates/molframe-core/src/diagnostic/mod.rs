@@ -11,6 +11,7 @@
 //! regression test meaningful.
 
 mod code;
+mod convert;
 mod finding;
 mod findings;
 mod registry;

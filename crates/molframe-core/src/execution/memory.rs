@@ -249,3 +249,17 @@ impl Drop for BatchGuard {
 #[cfg(test)]
 #[path = "memory_tests.rs"]
 mod tests;
+
+crate::diagnostic_from!(
+    MemoryBudgetError,
+    |_error| crate::Code::E7001,
+    |diagnostic, error| match error {
+        MemoryBudgetError::Zero => diagnostic.with_context("budget", "zero"),
+        MemoryBudgetError::Exhausted {
+            requested,
+            available,
+        } => diagnostic
+            .with_context("requested_bytes", requested.to_string())
+            .with_context("available_bytes", available.to_string()),
+    }
+);

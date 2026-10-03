@@ -97,6 +97,9 @@ registry! {
     E2005 = Error 2005, Strict,
         "parent-child relationship violated",
         "add the missing parent row, or correct the child's reference";
+    E2101 = Error 2101, Invalidating,
+        "sequence, alphabet, tree or substitution data is invalid",
+        "check the residue symbols against the alphabet, the tree text against its grammar and the scoring profile against its alphabet";
     E3001 = Error 3001, Invalidating,
         "column length disagrees with the chunk length",
         "report this as a molframe bug; a structure cannot be built this way from valid input";
@@ -199,6 +202,21 @@ registry! {
     E5005 = Error 5005, Invalidating,
         "cutoff exceeds half the minimum box dimension under the minimum image convention",
         "reduce the cutoff, or use a periodic mode that considers more than the nearest image";
+    E5101 = Error 5101, Invalidating,
+        "numeric parameter is not finite or lies outside its valid range",
+        "supply a finite value inside the documented range; no default is substituted for an invalid one";
+    E5102 = Error 5102, Invalidating,
+        "paired inputs do not correspond in length or shape",
+        "give both inputs one entry per matched item, in the same order";
+    E5103 = Error 5103, Invalidating,
+        "too few points or items for the computation",
+        "supply enough input for the operation, for instance three non-collinear points to superpose";
+    E5104 = Error 5104, Invalidating,
+        "the configuration is degenerate or the numerical method did not converge",
+        "choose input that is not degenerate, or relax the explicit tolerance or sweep limit";
+    E5105 = Error 5105, Invalidating,
+        "no valid correspondence or alignment could be established",
+        "check that the inputs share enough matching content, or lower the explicit identity threshold";
     E6001 = Error 6001, Invalidating,
         "unqualified identifier while the policy requires explicit namespaces",
         "qualify the selector, for instance auth_chain rather than chain";
@@ -253,6 +271,21 @@ registry! {
     E6018 = Error 6018, Invalidating,
         "space-group setting is unknown or the bundled catalogue is invalid",
         "supply a valid Hall symbol or International Tables number, or reinstall molframe";
+    E6101 = Error 6101, Invalidating,
+        "workflow graph is invalid",
+        "check that every node's inputs exist, have the right types and form no cycle";
+    E6102 = Error 6102, Invalidating,
+        "execution context configuration is inconsistent",
+        "give at least one worker, and a scratch or temporary-storage size that fits the memory budget";
+    E6103 = Error 6103, Invalidating,
+        "the requested operation is unsupported for this input or policy",
+        "choose a supported input form, a source that offers the capability, or a policy this operation can represent";
+    E7001 = Error 7001, Invalidating,
+        "operation exceeds the execution memory budget",
+        "raise the memory budget deliberately, narrow the selection, or process the input in smaller pieces";
+    E7101 = Error 7101, Invalidating,
+        "input could not be read",
+        "check the path, permissions and that the file is complete and in the expected format";
     E7901 = Error 7901, Invalidating,
         "output could not be written",
         "check the destination, permissions and available storage, then retry";

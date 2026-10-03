@@ -271,3 +271,5 @@ impl std::error::Error for ContextError {}
 #[cfg(test)]
 #[path = "context_tests.rs"]
 mod tests;
+
+crate::diagnostic_from!(ContextError, |_error| crate::Code::E6102);
