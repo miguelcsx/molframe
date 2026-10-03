@@ -116,6 +116,22 @@ the requested modes only, so they are a lower bound unless every mode is asked
 for. `--reduction fast` lets the GNM solver reorder floating-point reductions;
 `deterministic` is bit-identical at any worker count.
 
+## Chemistry
+
+| Command | Required parameters | Columns |
+| --- | --- | --- |
+| `chem peoe FILE` | CCD, `--passes`, `--initial-damping`, `--damping-factor`, `--minimum-difference`, `--profile` | `atom`, `charge` |
+| `chem smarts TARGET --pattern SMARTS` | CCD | `match`, `query_atom`, `atom` |
+
+`chem peoe` prints one elementary-charge value per atom in file order and, on
+standard error, whether it came from the file or from PEOE under the named
+dictionary release. A residue whose atom names the dictionary does not define
+is an error, never a zero charge. `chem smarts` searches the annotated
+structure, or with `--component` a dictionary component (TARGET is then its
+identifier and rows name atoms). Structure matches are within residues, since
+polymer links are not applied: a peptide-bond pattern needs a structure whose
+residues are already linked.
+
 ## Use in reproducible workflows
 
 Keep source files, command lines, and any parsing-policy flags in your workflow record. Structural-file ambiguity is part of the scientific input, not merely an I/O detail.

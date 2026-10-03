@@ -13,6 +13,7 @@ mod analysis_commands;
 mod args;
 mod audit_commands;
 mod batch_commands;
+mod chem_commands;
 mod chemistry;
 mod choices;
 mod commands;
@@ -41,7 +42,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub(crate) use args::{
-    AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments,
+    AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, ChemCommand,
     ContactMapArguments, EnsembleCommand, ExtraMetricArguments, FxCommand, GeometryCommand,
     InteractionCommand, KmerOperation, MappingArguments, MatrixChoice, ModelArgument,
     NamespaceArgument, NativeContactArguments, NormalModeArguments, PairwiseMode, SequenceCommand,
@@ -158,6 +159,11 @@ pub(crate) enum Command {
     Interactions {
         #[command(subcommand)]
         command: InteractionCommand,
+    },
+    /// Small-molecule chemistry: partial charges and SMARTS queries.
+    Chem {
+        #[command(subcommand)]
+        command: ChemCommand,
     },
     /// List CIF data blocks and categories with exact counts.
     Categories { input: PathBuf },

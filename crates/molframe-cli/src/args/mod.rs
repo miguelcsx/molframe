@@ -1,6 +1,7 @@
 //! Declarative command-line argument groups.
 
 mod advanced;
+mod chem;
 mod comparison;
 mod contacts;
 mod interactions;
@@ -11,6 +12,7 @@ mod validate;
 mod workflows;
 
 pub(crate) use advanced::{AuditArguments, BatchCommand, FxCommand};
+pub(crate) use chem::{ChemCommand, PeoeArguments, SmartsArguments};
 pub(crate) use comparison::{AlignmentChoice, ExtraMetricArguments};
 pub(crate) use contacts::{
     ContactMapArguments, ModeTable, NativeContactArguments, NetworkModel, NormalModeArguments,
