@@ -39,9 +39,9 @@ use std::process::ExitCode;
 
 pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, EnsembleCommand,
-    FxCommand, GeometryCommand, KmerOperation, MatrixChoice, ModelArgument, NamespaceArgument,
-    PairwiseMode, SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand,
-    TrajectoryCommand, TreeMethod,
+    FxCommand, GeometryCommand, KmerOperation, MappingArguments, MatrixChoice, ModelArgument,
+    NamespaceArgument, PairwiseMode, SequenceCommand, SequenceFormat, SurfaceArguments,
+    SystemCommand, TrajectoryCommand, TreeMethod,
 };
 pub(crate) use choices::{
     CompletionShell, EmptyLddtChoice, MetricChoice, RadiusChoice, ValidationChoice,
@@ -296,6 +296,8 @@ pub(crate) enum Command {
         /// Interface RMSD scale in Angstrom used by `DockQ`.
         #[arg(long)]
         interface_scale: Option<f64>,
+        #[command(flatten)]
+        mapping: MappingArguments,
     },
     /// Report semantic structural and metadata differences.
     Diff {

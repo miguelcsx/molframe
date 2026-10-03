@@ -41,6 +41,8 @@ mod analysis;
 mod analysis_impl;
 #[cfg(feature = "compare")]
 mod compare;
+#[cfg(feature = "compare")]
+mod compare_impl;
 #[cfg(feature = "validation")]
 mod validation;
 

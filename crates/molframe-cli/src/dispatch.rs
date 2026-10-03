@@ -197,23 +197,37 @@ fn execute_comparison(command: Command, context: Context) -> Exit {
             contact_distance,
             ligand_scale,
             interface_scale,
-        } => crate::comparison_commands::compare(
-            &model,
-            &reference,
-            crate::comparison_commands::ComparisonOptions {
-                metrics: &metrics,
-                lddt_radius,
-                lddt_minimum_distance,
-                lddt_tolerances: &lddt_tolerances,
-                lddt_empty: lddt_empty.map(Into::into),
-                receptor: receptor.as_deref(),
-                ligand: ligand.as_deref(),
-                contact_distance,
-                ligand_scale,
-                interface_scale,
-            },
-            context,
-        ),
+            mapping,
+        } => {
+            let run = |mapped: Option<crate::comparison_commands::MappedScoring<'_>>,
+                       context: Context| {
+                crate::comparison_commands::compare(
+                    &model,
+                    &reference,
+                    crate::comparison_commands::ComparisonOptions {
+                        metrics: &metrics,
+                        lddt_radius,
+                        lddt_minimum_distance,
+                        lddt_tolerances: &lddt_tolerances,
+                        lddt_empty: lddt_empty.map(Into::into),
+                        receptor: receptor.as_deref(),
+                        ligand: ligand.as_deref(),
+                        contact_distance,
+                        ligand_scale,
+                        interface_scale,
+                        mapped,
+                    },
+                    context,
+                )
+            };
+            mapped_comparison(&mapping, context, run)
+        }
+        command => execute_alignment(command, context),
+    }
+}
+
+fn execute_alignment(command: Command, context: Context) -> Exit {
+    match command {
         Command::Diff {
             left,
             right,
@@ -279,6 +293,61 @@ fn execute_comparison(command: Command, context: Context) -> Exit {
         ),
         command => execute_utilities(command, context),
     }
+}
+
+/// Runs a comparison, resolving the chain-mapping controls when requested.
+fn mapped_comparison(
+    mapping: &crate::MappingArguments,
+    context: Context,
+    run: impl FnOnce(Option<crate::comparison_commands::MappedScoring<'_>>, Context) -> Exit,
+) -> Exit {
+    if !mapping.map_chains {
+        return run(None, context);
+    }
+    let (
+        Some(min_identity),
+        Some(match_score),
+        Some(mismatch_score),
+        Some(gap_open),
+        Some(gap_extend),
+        Some(automorphism_limit),
+    ) = (
+        mapping.min_identity,
+        mapping.match_score,
+        mapping.mismatch_score,
+        mapping.gap_open,
+        mapping.gap_extend,
+        mapping.automorphism_limit,
+    )
+    else {
+        eprintln!(
+            "--map-chains requires --min-identity, --match-score, --mismatch-score, \
+             --gap-open, --gap-extend and --automorphism-limit"
+        );
+        return Exit::Usage;
+    };
+    crate::chemistry::with_ccd(
+        mapping.chemistry.ccd.as_deref(),
+        mapping.chemistry.ccd_version.as_deref(),
+        context,
+        |ccd, version, context| {
+            run(
+                Some(crate::comparison_commands::MappedScoring {
+                    ccd,
+                    ccd_version: version,
+                    min_identity,
+                    scoring: molframe::sequence::Scoring {
+                        match_score,
+                        mismatch_score,
+                        gap_open,
+                        gap_extend,
+                    },
+                    automorphism_limit,
+                }),
+                context,
+            )
+        },
+    )
 }
 
 fn execute_utilities(command: Command, context: Context) -> Exit {

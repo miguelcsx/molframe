@@ -3,7 +3,7 @@
 mod command;
 mod render;
 
-pub(super) use command::{ComparisonOptions, compare, map_chains, rmsd, superpose};
+pub(super) use command::{ComparisonOptions, MappedScoring, compare, map_chains, rmsd, superpose};
 
 #[cfg(test)]
 #[path = "comparison_commands_tests.rs"]

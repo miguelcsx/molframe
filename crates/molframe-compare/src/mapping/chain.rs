@@ -49,7 +49,7 @@ pub fn chain_sequences(
     Ok(chains)
 }
 
-fn chain_identifier(
+pub(super) fn chain_identifier(
     chain: molframe_core::structure::ChainRef<'_>,
     namespace: Namespace,
 ) -> Result<Option<&str>, Diagnostic> {

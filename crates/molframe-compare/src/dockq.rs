@@ -98,7 +98,6 @@ pub fn dockq_in_namespace(
     namespace: Namespace,
     options: DockQOptions,
 ) -> Result<DockQ, CompareError> {
-    let options = options.validate()?;
     if model.atom_count() != native.atom_count() {
         return Err(CompareError::LengthMismatch {
             model: model.atom_count() as usize,
@@ -107,13 +106,35 @@ pub fn dockq_in_namespace(
     }
     let receptor_atoms = chain_atoms(native, receptor, namespace)?;
     let ligand_atoms = chain_atoms(native, ligand, namespace)?;
-    let model_positions = model.positions();
-    let native_positions = native.positions();
-
-    let native_contacts = contacts(
-        native_positions,
+    dockq_on_positions(
+        model.positions(),
+        native.positions(),
         &receptor_atoms,
         &ligand_atoms,
+        options,
+    )
+}
+
+/// Scores model coordinates against native ones, row for row.
+///
+/// `receptor` and `ligand` index rows of both coordinate sets; the native
+/// rows define the interface contacts.
+///
+/// # Errors
+///
+/// Returns the errors of [`dockq`] for invalid options or too few atoms.
+pub(crate) fn dockq_on_positions(
+    model_positions: &[[f32; 3]],
+    native_positions: &[[f32; 3]],
+    receptor_atoms: &[usize],
+    ligand_atoms: &[usize],
+    options: DockQOptions,
+) -> Result<DockQ, CompareError> {
+    let options = options.validate()?;
+    let native_contacts = contacts(
+        native_positions,
+        receptor_atoms,
+        ligand_atoms,
         options.contact_distance,
     );
     let fnat = fraction_kept(model_positions, &native_contacts, options.contact_distance);
@@ -121,8 +142,8 @@ pub fn dockq_in_namespace(
     let ligand_rmsd = ligand_rmsd(
         model_positions,
         native_positions,
-        &receptor_atoms,
-        &ligand_atoms,
+        receptor_atoms,
+        ligand_atoms,
     )?;
     let interface_rmsd = interface_rmsd(model_positions, native_positions, &native_contacts)?;
 

@@ -1,11 +1,13 @@
 //! Declarative command-line argument groups.
 
 mod advanced;
+mod mapping;
 mod policy;
 mod sequence;
 mod workflows;
 
 pub(crate) use advanced::{AuditArguments, BatchCommand, FxCommand};
+pub(crate) use mapping::MappingArguments;
 pub(crate) use policy::{AltlocArgument, AssemblyArgument, ModelArgument, NamespaceArgument};
 pub(crate) use sequence::{
     KmerOperation, MatrixChoice, PairwiseMode, SequenceCommand, SequenceFormat, TreeMethod,

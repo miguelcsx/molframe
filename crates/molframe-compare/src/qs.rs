@@ -95,22 +95,41 @@ pub fn qs_score_in_namespace(
             reference: native.atom_count() as usize,
         });
     }
-    if !options.contact_distance.is_finite() || options.contact_distance <= 0.0 {
-        return Err(CompareError::InvalidDistanceCutoff);
-    }
     let first = chain_atoms(native, first_chain, namespace)?;
     let second = chain_atoms(native, second_chain, namespace)?;
-
-    let native_contacts: BTreeSet<(usize, usize)> = contacts(
+    qs_on_positions(
+        model.positions(),
         native.positions(),
         &first,
         &second,
-        options.contact_distance,
+        options,
     )
-    .into_iter()
-    .collect();
+}
+
+/// Scores contact overlap between two coordinate sets, row for row.
+///
+/// `first` and `second` index rows of both sets.
+///
+/// # Errors
+///
+/// Returns an error for an invalid contact distance, or for an empty domain
+/// when [`EmptyQsPolicy::Error`] is selected.
+pub(crate) fn qs_on_positions(
+    model: &[[f32; 3]],
+    native: &[[f32; 3]],
+    first: &[usize],
+    second: &[usize],
+    options: QsOptions,
+) -> Result<f64, CompareError> {
+    if !options.contact_distance.is_finite() || options.contact_distance <= 0.0 {
+        return Err(CompareError::InvalidDistanceCutoff);
+    }
+    let native_contacts: BTreeSet<(usize, usize)> =
+        contacts(native, first, second, options.contact_distance)
+            .into_iter()
+            .collect();
     let model_contacts: BTreeSet<(usize, usize)> =
-        contacts(model.positions(), &first, &second, options.contact_distance)
+        contacts(model, first, second, options.contact_distance)
             .into_iter()
             .collect();
 

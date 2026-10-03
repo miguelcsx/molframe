@@ -312,3 +312,13 @@ fn global_policy_overrides_are_typed_and_strict() {
         .is_err()
     );
 }
+
+#[test]
+fn chain_mapping_controls_belong_to_map_chains() {
+    let base = ["molframe", "compare", "model.cif", "native.cif"];
+    let with = |extra: &[&'static str]| Cli::try_parse_from(base.iter().chain(extra));
+    assert!(with(&["--map-chains", "--min-identity", "0.9"]).is_ok());
+    assert!(with(&["--min-identity", "0.9"]).is_err());
+    assert!(with(&["--gap-open", "-10"]).is_err());
+    assert!(with(&["--map-chains", "--gap-open", "-10"]).is_ok());
+}

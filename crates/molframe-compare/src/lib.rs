@@ -30,6 +30,7 @@ mod governed_parameters;
 mod interface;
 #[path = "lddt.rs"]
 mod local_distance;
+mod mapped;
 mod numeric;
 #[path = "governed/mod.rs"]
 mod policy_execution;
@@ -51,12 +52,16 @@ pub use contact_area_difference::{
 };
 pub use contact_overlap::{ContactSimilarity, contact_map_similarity};
 pub use correspondence::{
-    ChainAlternative, ChainAssignment, ChainMapping, ChainSequence, ResidueMatch, assign_chains,
-    chain_sequences, map_chains, map_sequence_to_structure,
+    AtomCorrespondence, AtomMappingAlternative, ChainAlternative, ChainAssignment, ChainMapping,
+    ChainSequence, ResidueMatch, ResiduePair, assign_chains, chain_sequences, map_atoms,
+    map_chains, map_residues, map_sequence_to_structure,
 };
 pub use docking_quality::{DockQ, DockQOptions, dockq, dockq_in_namespace};
 pub use failure::CompareError;
 pub use local_distance::{EmptyLddtPolicy, LddtOptions, lddt, lddt_with_options};
+pub use mapped::{
+    MappedCompareError, MappedComparison, MappingOptions, mapped_dockq, mapped_qs_score,
+};
 pub use policy_execution::{
     GovernedCompareError, governed_assign_chains, governed_cad_contact_areas, governed_cad_score,
     governed_ce_align, governed_ce_alignments, governed_comparison_workflow,
