@@ -71,6 +71,7 @@ fn render_canonical(
     write_cell(out, structure);
     write_entities(out, structure);
     super::references::write(out, structure);
+    super::secondary::write(out, structure);
     write_atoms(out, projection)?;
     super::bonds::write(out, structure, options)?;
     write_anisotropy(out, structure);

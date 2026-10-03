@@ -54,6 +54,7 @@ pub fn canonical_projection<'a>(
     projection.atom_site_row_count()?;
     projection.visit_atom_rows(|_| {})?;
     super::bonds::preflight(structure, options)?;
+    super::secondary::preflight(structure)?;
     Ok(projection)
 }
 

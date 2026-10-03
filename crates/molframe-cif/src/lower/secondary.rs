@@ -79,10 +79,12 @@ pub(super) fn conf_state(
         "HELX_RH_AL_P" => SecondaryStructure::AlphaHelix,
         "HELX_RH_3T_P" => SecondaryStructure::ThreeTenHelix,
         "HELX_RH_PI_P" => SecondaryStructure::PiHelix,
+        "HELX_LH_PP_P" => SecondaryStructure::PolyProline,
         "HELX_P" => match class {
             None | Some(1) => SecondaryStructure::AlphaHelix,
             Some(3) => SecondaryStructure::PiHelix,
             Some(5) => SecondaryStructure::ThreeTenHelix,
+            Some(10) => SecondaryStructure::PolyProline,
             Some(_) => SecondaryStructure::OtherHelix,
         },
         _ => SecondaryStructure::OtherHelix,
@@ -110,22 +112,33 @@ fn assign_range(
     else {
         return;
     };
-    if begin_chain != end_chain || begin_sequence > end_sequence {
+    if begin_chain != end_chain {
         return;
     }
     for chain in data.chains() {
-        if chain.label() != Some(begin_chain) && chain.auth_label() != Some(begin_chain) {
+        // Label endpoints never match author identifiers from another namespace.
+        if chain.label() != Some(begin_chain) {
             continue;
         }
+        let mut first = None;
+        let mut last = None;
+        let mut ambiguous = false;
         for residue in chain.residues() {
-            let Some(sequence) = residue.label_seq_id().or_else(|| residue.auth_seq_id()) else {
-                continue;
-            };
-            if (begin_sequence..=end_sequence).contains(&sequence)
-                && let Some(slot) = states.get_mut(residue.index().as_usize())
-            {
-                *slot = kind;
+            if residue.label_seq_id() == Some(begin_sequence) {
+                ambiguous |= first.replace(residue.index().as_usize()).is_some();
             }
+            if residue.label_seq_id() == Some(end_sequence) {
+                ambiguous |= last.replace(residue.index().as_usize()).is_some();
+            }
+        }
+        let (Some(first), Some(last)) = (first, last) else {
+            continue;
+        };
+        if !ambiguous
+            && first <= last
+            && let Some(range) = states.get_mut(first..=last)
+        {
+            range.fill(kind);
         }
     }
 }

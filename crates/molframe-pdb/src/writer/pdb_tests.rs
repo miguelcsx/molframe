@@ -1,5 +1,6 @@
 use super::*;
 use crate::read;
+use molframe_core::diagnostic::Code;
 use molframe_core::index::AtomIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use proptest::prelude::*;

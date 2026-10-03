@@ -7,6 +7,7 @@ mod polymer;
 mod preserving;
 mod projection;
 mod references;
+mod secondary;
 mod value;
 
 pub use canonical::*;

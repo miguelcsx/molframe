@@ -10,9 +10,10 @@
 //! that opens cleanly in any viewer and describes a different molecule, which is
 //! the failure this library exists to prevent.
 
+use super::capacity::{RequiredAtomFields, check_capacity, required_text, required_value};
 use crate::hybrid36;
 use crate::{PDB_HEADERS_EXTENSION, PdbHeaders};
-use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::diagnostic::Diagnostic;
 use molframe_core::io::{Select, SelectAll};
 use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
 use std::collections::HashMap;
@@ -22,11 +23,6 @@ use std::fmt;
 mod identity;
 pub use identity::PdbIdentifierNamespace;
 pub(crate) use identity::{atom_name, chain_name, component_name, residue_sequence};
-
-/// Bounds whose rounding would overflow an eight-column, three-decimal field.
-/// The negative side loses one digit to the sign, so the limits are asymmetric.
-const MIN_COORDINATE: f64 = -999.999_5;
-const MAX_COORDINATE: f64 = 9_999.999_5;
 
 /// How to write, and what to do about a structure that does not fit.
 #[derive(Clone, Debug)]
@@ -85,6 +81,10 @@ impl PdbOptions {
         self.namespace
     }
 
+    pub(crate) const fn uses_hybrid36(&self) -> bool {
+        self.hybrid36
+    }
+
     /// The label a chain is written under.
     pub(crate) fn label_for<'a>(&'a self, label: &'a str) -> &'a str {
         match self.chain_map.get(label) {
@@ -125,7 +125,8 @@ pub(super) fn render_selected(
     options: &PdbOptions,
     select: &impl Select,
 ) -> Result<(), Vec<Diagnostic>> {
-    let refusals = check_capacity(structure, options, select, RequiredAtomFields::Pdb);
+    let mut refusals = check_capacity(structure, options, select, RequiredAtomFields::Pdb);
+    refusals.extend(super::secondary::preflight(structure, options, select));
     if !refusals.is_empty() {
         return Err(refusals);
     }
@@ -134,11 +135,20 @@ pub(super) fn render_selected(
 
     if let Some(headers) = data.extensions.get::<PdbHeaders>(PDB_HEADERS_EXTENSION) {
         for record in headers.records() {
+            if matches!(record.name(), "HELIX" | "SHEET")
+                && structure
+                    .secondary_structure()
+                    .iter()
+                    .any(|state| state.is_helix() || state.is_strand())
+            {
+                continue;
+            }
             let _ = writeln!(out, "{}", record.line());
         }
     } else {
         write_generated_metadata(out, structure);
     }
+    super::secondary::write(out, structure, options, select);
 
     let mut serial = 1i64;
     for chain in data.chains() {
@@ -335,160 +345,6 @@ pub(crate) fn insertion_code(residue: ResidueRef<'_>) -> &str {
         return " ";
     };
     code
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum RequiredAtomFields {
-    Pdb,
-    Pqr,
-    Pdbqt,
-}
-
-/// Everything about the structure that the format cannot hold.
-pub(crate) fn check_capacity(
-    structure: &Structure,
-    options: &PdbOptions,
-    select: &impl Select,
-    required: RequiredAtomFields,
-) -> Vec<Diagnostic> {
-    let data = structure.data();
-    let mut refusals = Vec::new();
-
-    for chain in data.chains() {
-        if !select.accept_chain(chain.index()) {
-            continue;
-        }
-        let original = chain_label(&chain, options.namespace);
-        let written = options.label_for(original);
-        if written.chars().count() > 1 {
-            refusals.push(
-                Diagnostic::new(Code::E4102)
-                    .with_context("chain", original.to_string())
-                    .with_context("written as", written.to_string()),
-            );
-        }
-        for residue in chain.residues() {
-            if !select.accept_residue(residue.index()) {
-                continue;
-            }
-            check_residue(&residue, options, select, required, &mut refusals);
-        }
-    }
-
-    let atoms = i64::from(structure.atom_count());
-    if !options.hybrid36 && hybrid36::needs_hybrid36(atoms, 5) {
-        refusals.push(
-            Diagnostic::new(Code::E4101)
-                .with_context("atoms", atoms.to_string())
-                .with_context("field holds", "99999"),
-        );
-    }
-    refusals
-}
-
-fn check_residue(
-    residue: &ResidueRef<'_>,
-    options: &PdbOptions,
-    select: &impl Select,
-    required: RequiredAtomFields,
-    refusals: &mut Vec<Diagnostic>,
-) {
-    if let Some(seq) = residue_sequence(*residue, options.namespace)
-        && !options.hybrid36
-        && hybrid36::needs_hybrid36(i64::from(seq), 4)
-    {
-        refusals.push(
-            Diagnostic::new(Code::E4103)
-                .with_context("residue", seq.to_string())
-                .with_context("field holds", "9999"),
-        );
-    }
-    for atom in residue.atoms() {
-        if !select.accept_atom(atom.index()) {
-            continue;
-        }
-        check_required_atom_fields(atom, *residue, options, required, refusals);
-        let Some(position) = atom.position() else {
-            continue;
-        };
-        if position.iter().any(|value| {
-            let value = f64::from(*value);
-            !value.is_finite() || !(MIN_COORDINATE..MAX_COORDINATE).contains(&value)
-        }) {
-            refusals.push(
-                Diagnostic::new(Code::E4104)
-                    .with_context("atom", atom.index().to_string())
-                    .with_context("position", format!("{position:?}")),
-            );
-        }
-    }
-}
-
-fn check_required_atom_fields(
-    atom: AtomRef<'_>,
-    residue: ResidueRef<'_>,
-    options: &PdbOptions,
-    required: RequiredAtomFields,
-    refusals: &mut Vec<Diagnostic>,
-) {
-    let common = [
-        (atom.position().is_some(), "coordinates"),
-        (
-            atom_name(atom, options.namespace).is_some(),
-            "atom identifier",
-        ),
-        (
-            component_name(atom, residue, options.namespace).is_some(),
-            "component identifier",
-        ),
-        (
-            residue_sequence(residue, options.namespace).is_some(),
-            "residue sequence identifier",
-        ),
-    ];
-    for (present, field) in common {
-        if !present {
-            refusals.push(missing_field(field, atom, options));
-        }
-    }
-    if matches!(
-        required,
-        RequiredAtomFields::Pdb | RequiredAtomFields::Pdbqt
-    ) {
-        for (present, field) in [
-            (atom.occupancy().is_some(), "occupancy"),
-            (atom.b_factor().is_some(), "B factor"),
-        ] {
-            if !present {
-                refusals.push(missing_field(field, atom, options));
-            }
-        }
-    }
-}
-
-fn required_text<'a>(
-    value: Option<&'a str>,
-    field: &'static str,
-    atom: AtomRef<'_>,
-    options: &PdbOptions,
-) -> Result<&'a str, Diagnostic> {
-    value.ok_or_else(|| missing_field(field, atom, options))
-}
-
-fn required_value<T>(
-    value: Option<T>,
-    field: &'static str,
-    atom: AtomRef<'_>,
-    options: &PdbOptions,
-) -> Result<T, Diagnostic> {
-    value.ok_or_else(|| missing_field(field, atom, options))
-}
-
-fn missing_field(field: &'static str, atom: AtomRef<'_>, options: &PdbOptions) -> Diagnostic {
-    Diagnostic::new(Code::E4105)
-        .with_context("required field", field)
-        .with_context("atom", atom.index().to_string())
-        .with_context("namespace", options.namespace.as_str())
 }
 
 #[cfg(test)]

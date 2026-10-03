@@ -65,7 +65,9 @@ pub use provider::{CifProvider, ComponentProvider, MemoryProvider, read_ccd};
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };
-pub use secondary::assign_secondary_structure;
+pub use secondary::{
+    DsspBackbone, DsspOptions, InvalidDsspOptions, assign_secondary_structure, dssp_from_backbones,
+};
 pub use side_chain::{SideChainDefinition, SideChainRoles, side_chain_definition};
 pub use smarts::{SmartsDataError, SmartsError, SmartsMatch, SmartsPattern};
 pub use standard_bonds::{

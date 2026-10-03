@@ -22,8 +22,8 @@ pub fn parse_mol2_record(text: &str) -> Result<Mol2Record, Mol2Error> {
         return Err(Mol2Error::Malformed);
     }
     let counts: Vec<_> = molecule_lines[1].split_whitespace().collect();
-    let atom_count = number(counts.first().copied())?;
-    let bond_count = number(counts.get(1).copied())?;
+    let atom_count: usize = number(counts.first().copied())?;
+    let bond_count: usize = number(counts.get(1).copied())?;
     let additional_counts = counts[2..]
         .iter()
         .map(|value| number(Some(value)))

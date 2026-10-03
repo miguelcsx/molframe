@@ -113,6 +113,20 @@ pub enum CifWriteError {
     ConnectionIdsNotEnabled,
     /// Connectivity has no explicitly declared dictionary connection type.
     MissingConnectionTypeId,
+    /// A secondary range endpoint lacks a required label identifier.
+    MissingSecondaryField {
+        /// Zero-based residue position.
+        residue: u32,
+        /// Missing dictionary item.
+        field: &'static str,
+    },
+    /// Secondary label identities are not unique in the projected topology.
+    AmbiguousSecondaryIdentity {
+        /// Zero-based residue position.
+        residue: u32,
+    },
+    /// Global secondary categories cannot encode independent model annotations.
+    ModelSpecificSecondary,
 }
 
 impl Display for CifWriteError {
@@ -153,6 +167,19 @@ impl Display for CifWriteError {
             } => write!(
                 formatter,
                 "bond {bond} endpoint {endpoint} has no required `{field}`"
+            ),
+            Self::MissingSecondaryField { residue, field } => {
+                write!(
+                    formatter,
+                    "secondary residue {residue} has no required `{field}`"
+                )
+            }
+            Self::AmbiguousSecondaryIdentity { residue } => write!(
+                formatter,
+                "secondary residue {residue} has an ambiguous label identity"
+            ),
+            Self::ModelSpecificSecondary => formatter.write_str(
+                "canonical secondary categories cannot encode independent model annotations",
             ),
             Self::ConnectionIdsNotEnabled => formatter.write_str(
                 "canonical connectivity requires explicit generated connection identifiers",

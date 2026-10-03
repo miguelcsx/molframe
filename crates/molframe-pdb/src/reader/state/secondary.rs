@@ -1,38 +1,34 @@
-//! Legacy PDB HELIX and SHEET records lowered to residue state.
+//! Legacy PDB ranges resolve deposited endpoint identities in chain order.
+//! Each record scans residues linearly with constant scratch space.
 
-use crate::fixed;
 use crate::header::PdbHeaders;
-use molframe_core::structure::StructureData;
+use crate::{fixed, hybrid36};
+use molframe_core::structure::{ResidueRef, StructureData};
 use molframe_core::{SecondarySource, SecondaryStructure};
 
-/// Lowers HELIX and SHEET records; every residue they name gets source
-/// [`SecondarySource::File`].
+/// Lowers HELIX and SHEET records; every residue they name gets file provenance.
 pub(super) fn read(
     data: &StructureData,
     headers: &PdbHeaders,
 ) -> (Vec<SecondaryStructure>, Vec<SecondarySource>) {
     let mut states = vec![SecondaryStructure::Unknown; data.topology.residues.len()];
-    for record in headers.named("HELIX") {
-        assign(
-            data,
-            &mut states,
-            helix_class(fixed::integer(record.line(), 39, 40)),
-            fixed::text(record.line(), 20, 20),
-            fixed::integer(record.line(), 22, 25).and_then(|value| i32::try_from(value).ok()),
-            fixed::text(record.line(), 32, 32),
-            fixed::integer(record.line(), 34, 37).and_then(|value| i32::try_from(value).ok()),
-        );
-    }
-    for record in headers.named("SHEET") {
-        assign(
-            data,
-            &mut states,
-            SecondaryStructure::Strand,
-            fixed::text(record.line(), 22, 22),
-            fixed::integer(record.line(), 23, 26).and_then(|value| i32::try_from(value).ok()),
-            fixed::text(record.line(), 33, 33),
-            fixed::integer(record.line(), 34, 37).and_then(|value| i32::try_from(value).ok()),
-        );
+    for (name, columns) in [
+        ("HELIX", [20, 22, 25, 26, 32, 34, 37, 38]),
+        ("SHEET", [22, 23, 26, 27, 33, 34, 37, 38]),
+    ] {
+        for record in headers.named(name) {
+            let line = record.line();
+            let kind = if name == "SHEET" {
+                SecondaryStructure::Strand
+            } else {
+                helix_class(fixed::integer(line, 39, 40))
+            };
+            let begin = Endpoint::parse(line, &columns[..4]);
+            let end = Endpoint::parse(line, &columns[4..]);
+            if let (Some(begin), Some(end)) = (begin, end) {
+                assign(data, &mut states, kind, begin, end);
+            }
+        }
     }
     let sources = states
         .iter()
@@ -44,14 +40,43 @@ pub(super) fn read(
     (states, sources)
 }
 
-/// The helix a HELIX record's class (columns 39–40) names: 1 is right-handed
-/// α, 3 is π and 5 is 3₁₀; any other class, or none, is an unnamed helix.
+/// Classes 1, 3, 5 and 10 name alpha, pi, three-ten and polyproline helices.
 pub(super) fn helix_class(class: Option<i64>) -> SecondaryStructure {
     match class {
         Some(1) => SecondaryStructure::AlphaHelix,
         Some(3) => SecondaryStructure::PiHelix,
         Some(5) => SecondaryStructure::ThreeTenHelix,
+        Some(10) => SecondaryStructure::PolyProline,
         _ => SecondaryStructure::OtherHelix,
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Endpoint<'a> {
+    chain: &'a str,
+    sequence: i32,
+    insertion: &'a str,
+}
+
+impl<'a> Endpoint<'a> {
+    fn parse(line: &'a str, columns: &[usize]) -> Option<Self> {
+        Some(Self {
+            chain: fixed::text(line, columns[0], columns[0]),
+            sequence: i32::try_from(hybrid36::decode(
+                fixed::raw(line, columns[1], columns[2]),
+                4,
+            )?)
+            .ok()?,
+            insertion: fixed::text(line, columns[3], columns[3]),
+        })
+    }
+
+    fn matches(&self, residue: ResidueRef<'_>) -> bool {
+        let insertion = match residue.ins_code() {
+            Some(code) => code,
+            None => "",
+        };
+        residue.auth_seq_id() == Some(self.sequence) && insertion == self.insertion
     }
 }
 
@@ -59,30 +84,35 @@ fn assign(
     data: &StructureData,
     states: &mut [SecondaryStructure],
     kind: SecondaryStructure,
-    begin_chain: &str,
-    begin_sequence: Option<i32>,
-    end_chain: &str,
-    end_sequence: Option<i32>,
+    begin: Endpoint<'_>,
+    end: Endpoint<'_>,
 ) {
-    let (Some(begin_sequence), Some(end_sequence)) = (begin_sequence, end_sequence) else {
-        return;
-    };
-    if begin_chain.is_empty() || begin_chain != end_chain || begin_sequence > end_sequence {
+    if begin.chain != end.chain {
         return;
     }
     for chain in data.chains() {
-        if chain.label() != Some(begin_chain) && chain.auth_label() != Some(begin_chain) {
+        if chain.auth_label() != Some(begin.chain) {
             continue;
         }
+        let mut first = None;
+        let mut last = None;
+        let mut ambiguous = false;
         for residue in chain.residues() {
-            let Some(sequence) = residue.auth_seq_id().or_else(|| residue.label_seq_id()) else {
-                continue;
-            };
-            if (begin_sequence..=end_sequence).contains(&sequence)
-                && let Some(slot) = states.get_mut(residue.index().as_usize())
-            {
-                *slot = kind;
+            if begin.matches(residue) {
+                ambiguous |= first.replace(residue.index().as_usize()).is_some();
             }
+            if end.matches(residue) {
+                ambiguous |= last.replace(residue.index().as_usize()).is_some();
+            }
+        }
+        let (Some(first), Some(last)) = (first, last) else {
+            continue;
+        };
+        if !ambiguous
+            && first <= last
+            && let Some(range) = states.get_mut(first..=last)
+        {
+            range.fill(kind);
         }
     }
 }

@@ -13,7 +13,7 @@ pub enum PdbIdentifierNamespace {
 }
 
 impl PdbIdentifierNamespace {
-    pub(super) const fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Label => "label",
             Self::Auth => "auth",

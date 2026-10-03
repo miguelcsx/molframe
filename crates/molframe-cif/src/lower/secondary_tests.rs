@@ -68,7 +68,11 @@ fn helix_types_and_classes_name_the_helix() {
     assert_eq!(conf_state(Some("HELX_P"), Some(3)), Some(Ss::PiHelix));
     assert_eq!(conf_state(Some("HELX_P"), Some(5)), Some(Ss::ThreeTenHelix));
     assert_eq!(conf_state(Some("HELX_P"), Some(7)), Some(Ss::OtherHelix));
-    assert_eq!(conf_state(Some("HELX_LH_PP_P"), None), Some(Ss::OtherHelix));
+    assert_eq!(
+        conf_state(Some("HELX_LH_PP_P"), None),
+        Some(Ss::PolyProline)
+    );
+    assert_eq!(conf_state(Some("HELX_P"), Some(10)), Some(Ss::PolyProline));
     assert_eq!(conf_state(Some("TURN_P"), None), Some(Ss::Turn));
     assert_eq!(conf_state(Some("STRN"), None), None);
 }

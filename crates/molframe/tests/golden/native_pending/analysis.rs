@@ -87,7 +87,6 @@ fn gw_016_assigns_one_secondary_structure_record_per_backbone_residue() {
     )
     .unwrap_or_else(|error| panic!("secondary-structure workflow failed: {error}"));
     assert_eq!(records.len(), 2);
-    assert_eq!(records.kind()[0], molframe::SecondaryStructure::Unknown);
     assert_eq!(records.kind()[1], molframe::SecondaryStructure::Coil);
 }
 

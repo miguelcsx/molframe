@@ -9,6 +9,12 @@ use molframe_core::structure::UnitCell;
 impl ReadState<'_> {
     pub(super) fn observe_metadata(&mut self, record: &str, line: &Line<'_>) {
         if is_metadata_record(record) {
+            // The dense residue column belongs to the first model only.
+            if matches!(record, "HELIX" | "SHEET")
+                && (self.topology_locked || matches!(self.model_read, super::ModelRead::Ignoring))
+            {
+                return;
+            }
             self.headers.push(record, line.text);
         }
     }

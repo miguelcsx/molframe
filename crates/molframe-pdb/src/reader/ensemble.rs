@@ -16,15 +16,25 @@ use molframe_core::structure::{CoordinateStore, Structure, StructureData};
 /// Non-coordinate records replayed into every independent model.
 pub(super) struct CommonRecords<'a> {
     lines: Vec<Line<'a>>,
+    inside_model: bool,
 }
 
 impl<'a> CommonRecords<'a> {
     pub(super) const fn new() -> Self {
-        Self { lines: Vec::new() }
+        Self {
+            lines: Vec::new(),
+            inside_model: false,
+        }
     }
 
     pub(super) fn observe(&mut self, line: &Line<'a>) {
         let record = fixed::record(line.text);
+        match record {
+            "MODEL" => self.inside_model = true,
+            "ENDMDL" => self.inside_model = false,
+            "HELIX" | "SHEET" if self.inside_model => return,
+            _ => {}
+        }
         if is_metadata_record(record) || record == "CONECT" {
             self.lines.push(*line);
         }
@@ -78,7 +88,7 @@ pub(super) fn read_ragged(
                     state.line(&line);
                 }
             }
-            "TER" => {
+            "TER" | "HELIX" | "SHEET" => {
                 if let Some(state) = current.as_mut() {
                     state.line(&line);
                 }

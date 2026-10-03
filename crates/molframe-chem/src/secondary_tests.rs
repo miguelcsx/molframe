@@ -1,164 +1,310 @@
+use super::classify::classify;
+use super::geometry::{amide_hydrogen, bends, bond_energy};
 use super::*;
+use DsspBackbone as Backbone;
 use molframe_bench::{Sample, structure};
+use num_traits::ToPrimitive;
 
-/// The three-state class DSSP agreement is reported in: H (any helix), E
-/// (strand or bridge) or coil; `None` for a residue nothing assigned.
-fn three_state(state: SecondaryStructure) -> Option<char> {
-    match state {
-        SecondaryStructure::Unknown => None,
-        state if state.is_helix() => Some('H'),
-        SecondaryStructure::Strand | SecondaryStructure::BetaBridge => Some('E'),
-        _ => Some('-'),
-    }
+fn continuous_backbones(count: usize) -> Vec<Backbone> {
+    (0..count)
+        .map(|i| {
+            let x = i.to_f32().expect("small test index");
+            Backbone {
+                ca: Some([x, 0.0, 0.0]),
+                carbon: Some([x, 0.0, 0.0]),
+                nitrogen: Some([x, 0.0, 0.0]),
+                oxygen: Some([x, 1.0, 0.0]),
+                ..Backbone::default()
+            }
+        })
+        .collect()
 }
-
-/// How many of the residues DSSP evaluated carry the same three-state class
-/// as the deposited annotation, and how many it evaluated.
-fn agreement(sample: Sample) -> (usize, usize) {
-    let structure = structure(sample);
-    let assigned = assign_secondary_structure(&structure);
-    let declared = structure.data().secondary_structure.to_vec();
-    let mut compared = 0;
-    let mut agreed = 0;
-    for (declared, assigned) in declared.iter().zip(&assigned) {
-        // A deposited annotation is silent about coil, so what it leaves
-        // unlabelled on a residue DSSP evaluated is coil.
-        let Some(assigned) = three_state(assigned.state) else {
-            continue;
-        };
-        let declared = three_state(*declared).unwrap_or('-');
-        compared += 1;
-        agreed += usize::from(declared == assigned);
-    }
-    (agreed, compared)
-}
-
-#[test]
-fn non_polymer_residues_are_left_unknown_with_no_source() {
-    let structure = structure(Sample::Small);
-    let assigned = assign_secondary_structure(&structure);
-    let unknown = assigned
-        .iter()
-        .filter(|assignment| assignment.state == SecondaryStructure::Unknown)
-        .count();
-    // Ubiquitin's 76 residues are polymer; the remainder are waters.
-    assert_eq!(assigned.len() - unknown, 76);
-    assert!(assigned.iter().all(|assignment| {
-        (assignment.state == SecondaryStructure::Unknown)
-            == (assignment.source == SecondarySource::None)
-    }));
-    assert!(
-        assigned
-            .iter()
-            .filter(|assignment| assignment.state != SecondaryStructure::Unknown)
-            .all(|assignment| assignment.source == SecondarySource::Dssp)
+fn classified(count: usize, bonds: &[(usize, usize)], pairs: &[(usize, usize)]) -> Vec<Ss> {
+    let mut states = vec![Ss::Coil; count];
+    classify(
+        &continuous_backbones(count),
+        &bonds.iter().copied().collect(),
+        pairs,
+        &mut states,
+        &DsspOptions::default(),
     );
-}
-
-#[test]
-fn dssp_agrees_with_the_deposited_annotation_on_most_residues() {
-    for (sample, minimum) in [
-        (Sample::Tiny, 0.75),
-        (Sample::Small, 0.80),
-        (Sample::Medium, 0.80),
-        (Sample::Large, 0.95),
-    ] {
-        let (agreed, compared) = agreement(sample);
-        assert!(compared > 0);
-        let fraction = f64::from(u32::try_from(agreed).unwrap_or(u32::MAX))
-            / f64::from(u32::try_from(compared).unwrap_or(u32::MAX));
-        assert!(
-            fraction >= minimum,
-            "{agreed} of {compared} residues agree, below {minimum}"
-        );
-    }
-}
-
-/// Crambin's deposited HELIX 7–19 and 23–30 and SHEET 1–4 and 32–35 are the
-/// ranges the binary reader must hand over, not leave for DSSP to rediscover.
-#[test]
-fn the_binary_reader_keeps_the_deposited_helix_and_sheet_ranges() {
-    let declared = structure(Sample::Tiny).data().secondary_structure.to_vec();
-    assert_eq!(declared.iter().filter(|s| s.is_helix()).count(), 13 + 8);
-    assert_eq!(
-        declared
-            .iter()
-            .filter(|s| **s == SecondaryStructure::Strand)
-            .count(),
-        4 + 4
-    );
-}
-
-/// Classifies `residues` coil residues from hand-written hydrogen bonds.
-fn classified(
-    residues: usize,
-    bonds: &[(usize, usize)],
-    pairs: &[(usize, usize)],
-) -> Vec<SecondaryStructure> {
-    let backbones = vec![Backbone::default(); residues];
-    let bonds: Bonds = bonds.iter().copied().collect();
-    let mut states = vec![SecondaryStructure::Coil; residues];
-    classify(&backbones, &bonds, pairs, &mut states);
     states
 }
 
 #[test]
-fn two_consecutive_three_turns_make_a_three_ten_helix() {
-    let states = classified(8, &[(1, 4), (2, 5)], &[]);
-    assert_eq!(states[2..=4], [SecondaryStructure::ThreeTenHelix; 3]);
-    assert_eq!(states[1], SecondaryStructure::Coil);
-    assert_eq!(states[5], SecondaryStructure::Coil);
-}
-
-#[test]
-fn two_consecutive_five_turns_make_a_pi_helix() {
-    let states = classified(10, &[(1, 6), (2, 7)], &[]);
+fn non_polymer_residues_are_left_unknown_with_no_source() {
+    let assigned = assign_secondary_structure(&structure(Sample::Small));
+    assert_eq!(
+        assigned.iter().filter(|a| a.state != Ss::Unknown).count(),
+        76
+    );
     assert!(
-        states[2..=6]
+        assigned
             .iter()
-            .all(|state| *state == SecondaryStructure::PiHelix)
+            .all(|a| (a.state == Ss::Unknown) == (a.source == SecondarySource::None))
+    );
+}
+#[test]
+fn the_binary_reader_keeps_deposited_helix_and_sheet_ranges() {
+    let declared = structure(Sample::Tiny).data().secondary_structure.to_vec();
+    assert_eq!(declared.iter().filter(|s| s.is_helix()).count(), 21);
+    assert_eq!(declared.iter().filter(|s| **s == Ss::Strand).count(), 8);
+}
+#[test]
+fn consecutive_turns_make_alpha_three_ten_and_pi_helices() {
+    for (size, kind) in [
+        (3, Ss::ThreeTenHelix),
+        (4, Ss::AlphaHelix),
+        (5, Ss::PiHelix),
+    ] {
+        let states = classified(10, &[(1, 1 + size), (2, 2 + size)], &[]);
+        assert!(states[2..2 + size].iter().all(|s| *s == kind));
+    }
+    assert_eq!(
+        classified(8, &[(1, 5)], &[])[2],
+        Ss::Turn,
+        "one turn is not a helix"
+    );
+}
+#[test]
+fn an_occupied_position_rejects_the_entire_three_ten_stretch() {
+    let states = classified(12, &[(1, 4), (2, 5), (4, 9), (9, 4)], &[(4, 9)]);
+    assert_eq!(states[2], Ss::Turn);
+    assert_eq!(states[3], Ss::Turn);
+    assert_eq!(states[4], Ss::BetaBridge);
+}
+#[test]
+fn pi_helices_can_replace_alpha_but_not_a_sheet() {
+    let states = classified(12, &[(1, 5), (2, 6), (1, 6), (2, 7)], &[]);
+    assert!(states[2..7].iter().all(|s| *s == Ss::PiHelix));
+}
+#[test]
+fn cross_chain_ladders_and_beta_bulges_fill_their_whole_spans() {
+    let mut backbones = continuous_backbones(20);
+    for b in &mut backbones[10..] {
+        b.chain = 1;
+    }
+    let bonds = [(2, 17), (17, 2), (3, 16), (16, 3), (5, 14), (14, 5)];
+    let mut states = vec![Ss::Coil; 20];
+    classify(
+        &backbones,
+        &bonds.into_iter().collect(),
+        &[(2, 17), (3, 16), (5, 14)],
+        &mut states,
+        &DsspOptions::default(),
+    );
+    assert!(states[2..=5].iter().all(|s| *s == Ss::Strand));
+    assert!(states[14..=17].iter().all(|s| *s == Ss::Strand));
+    assert_eq!(states[4], Ss::Strand, "bulge interior has no direct bridge");
+}
+#[test]
+fn peptide_breaks_and_chain_boundaries_block_local_patterns() {
+    let mut backbones = continuous_backbones(10);
+    backbones[3].chain = 1;
+    let mut states = vec![Ss::Coil; 10];
+    classify(
+        &backbones,
+        &[(1, 5), (2, 6)].into_iter().collect(),
+        &[],
+        &mut states,
+        &DsspOptions::default(),
+    );
+    assert!(states.iter().all(|s| *s == Ss::Coil));
+    backbones[3].chain = 0;
+    backbones[3].nitrogen = Some([100.0, 0.0, 0.0]);
+    classify(
+        &backbones,
+        &[(1, 5), (2, 6)].into_iter().collect(),
+        &[],
+        &mut states,
+        &DsspOptions::default(),
+    );
+    assert!(states.iter().all(|s| *s == Ss::Coil));
+}
+#[test]
+fn proline_cannot_donate_and_oxygen_is_required_for_evaluation() {
+    let mut backbones = continuous_backbones(3);
+    backbones[1].proline = true;
+    assert_eq!(amide_hydrogen(&backbones, 1, 1.0), None);
+    assert!(bond_energy(&backbones, 0, 1, &DsspOptions::default()).abs() < f64::EPSILON);
+    backbones[2].oxygen = None;
+    assert!(!backbones[2].is_evaluable());
+    assert_eq!(
+        dssp_from_backbones(&backbones, &DsspOptions::default()).expect("valid options")[2],
+        Ss::Unknown
     );
 }
 
 #[test]
-fn a_single_bridge_outside_a_ladder_is_a_beta_bridge() {
-    let states = classified(12, &[(2, 9), (9, 2)], &[(2, 9)]);
-    assert_eq!(states[2], SecondaryStructure::BetaBridge);
-    assert_eq!(states[9], SecondaryStructure::BetaBridge);
-    assert_eq!(states[3], SecondaryStructure::Coil);
-}
-
-#[test]
-fn a_sharp_ca_angle_is_a_bend_and_a_straight_one_is_not() {
-    let trace = |positions: [[f32; 3]; 5]| {
-        positions
-            .map(|position| Backbone {
-                ca: Some(position),
-                carbon: Some(position),
-                nitrogen: Some(position),
-                ..Backbone::default()
-            })
-            .to_vec()
+fn native_options_reject_invalid_numbers_and_ca_fallback_can_name_strands() {
+    let invalid = DsspOptions {
+        hydrogen_bond_energy: f64::NAN,
+        ..DsspOptions::default()
     };
-    let bent = trace([
+    assert_eq!(dssp_from_backbones(&[], &invalid), Err(InvalidDsspOptions));
+    let mut backbones = continuous_backbones(4);
+    for (i, b) in backbones.iter_mut().enumerate() {
+        b.ca = Some([i.to_f32().expect("small index") * 3.5, 0.0, 0.0]);
+        b.carbon = None;
+        b.nitrogen = None;
+        b.oxygen = None;
+    }
+    let mut states = vec![Ss::Coil; 4];
+    assign_ca_trace(&backbones, &mut states);
+    assert_eq!(states, [Ss::Strand; 4]);
+    backbones[2].ca = Some([100.0, 0.0, 0.0]);
+    states.fill(Ss::Coil);
+    assign_ca_trace(&backbones, &mut states);
+    assert_eq!(states, [Ss::Coil; 4]);
+}
+#[test]
+fn a_sharp_ca_direction_is_a_bend() {
+    let positions = [
         [0.0, 0.0, 0.0],
         [1.0, 0.0, 0.0],
         [2.0, 0.0, 0.0],
         [2.2, 1.0, 0.0],
         [2.4, 2.0, 0.0],
-    ]);
-    assert!(bends(&bent, 2));
-    assert!(!bends(&bent, 1), "residue 1 has no Cα two before it");
-    let straight = trace([
-        [0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [2.0, 0.0, 0.0],
-        [3.0, 0.0, 0.0],
-        [4.0, 0.0, 0.0],
-    ]);
-    assert!(!bends(&straight, 2));
+    ];
+    let backbones = positions.map(|p| Backbone {
+        ca: Some(p),
+        carbon: Some(p),
+        nitrogen: Some(p),
+        oxygen: Some(p),
+        ..Backbone::default()
+    });
+    assert!(bends(&backbones, 2, 70.0));
+    assert!(!bends(&backbones, 2, 85.0));
+}
 
-    let mut states = vec![SecondaryStructure::Coil; 5];
-    classify(&bent, &Bonds::default(), &[], &mut states);
-    assert_eq!(states[2], SecondaryStructure::Bend);
+// 7QPD author B residues 2–6, RCSB CC0 coordinates. mkdssp 4.5 assigns P
+// to residues 3–5, including ARG and THR: the rule is not proline-specific.
+fn pp_backbones() -> Vec<Backbone> {
+    [
+        (
+            [194.468, 175.337, 185.460],
+            [195.493, 174.908, 184.509],
+            [195.445, 175.804, 183.271],
+            [194.784, 175.518, 182.271],
+        ),
+        (
+            [196.169, 176.915, 183.356],
+            [196.234, 177.844, 182.237],
+            [197.106, 177.276, 181.124],
+            [198.131, 176.641, 181.383],
+        ),
+        (
+            [196.689, 177.501, 179.882],
+            [197.414, 176.984, 178.735],
+            [198.644, 177.841, 178.446],
+            [198.632, 179.053, 178.672],
+        ),
+        (
+            [199.719, 177.235, 177.946],
+            [200.875, 178.032, 177.526],
+            [200.549, 178.856, 176.294],
+            [199.734, 178.460, 175.458],
+        ),
+        (
+            [201.195, 180.011, 176.185],
+            [201.002, 180.916, 175.057],
+            [202.335, 181.057, 174.333],
+            [203.148, 181.921, 174.671],
+        ),
+    ]
+    .map(|(n, ca, c, o)| Backbone {
+        nitrogen: Some(n),
+        ca: Some(ca),
+        carbon: Some(c),
+        oxygen: Some(o),
+        ..Backbone::default()
+    })
+    .to_vec()
+}
+#[test]
+fn pp_requires_three_consecutive_phi_psi_windows_and_preserves_turns_and_bends() {
+    let b = pp_backbones();
+    let mut states = vec![Ss::Coil; 5];
+    classify(
+        &b,
+        &Bonds::default(),
+        &[],
+        &mut states,
+        &DsspOptions::default(),
+    );
+    assert_eq!(states[1..4], [Ss::PolyProline; 3]);
+    let mut states = vec![Ss::Coil; 5];
+    states[1] = Ss::Turn;
+    states[2] = Ss::Bend;
+    classify(
+        &b,
+        &Bonds::default(),
+        &[],
+        &mut states,
+        &DsspOptions::default(),
+    );
+    assert_eq!(states[1..4], [Ss::Turn, Ss::Bend, Ss::PolyProline]);
+    let mut states = vec![Ss::Coil; 4];
+    classify(
+        &b[..4],
+        &Bonds::default(),
+        &[],
+        &mut states,
+        &DsspOptions::default(),
+    );
+    assert!(!states.contains(&Ss::PolyProline));
+    let mut broken = b;
+    broken[2].chain = 1;
+    let mut states = vec![Ss::Coil; 5];
+    classify(
+        &broken,
+        &Bonds::default(),
+        &[],
+        &mut states,
+        &DsspOptions::default(),
+    );
+    assert!(!states.contains(&Ss::PolyProline));
+}
+
+#[test]
+fn every_1aon_exact_state_and_author_identity_matches_mkdssp_4_5() {
+    let source = structure(Sample::Large);
+    let assignments = assign_secondary_structure(&source);
+    let mut rows = Vec::new();
+    for chain in source.data().chains() {
+        for residue in chain.residues() {
+            let kind = assignments[residue.index().as_usize()].state;
+            let code = match kind {
+                Ss::Unknown => continue,
+                Ss::AlphaHelix => 'H',
+                Ss::ThreeTenHelix => 'G',
+                Ss::PiHelix => 'I',
+                Ss::PolyProline => 'P',
+                Ss::Strand => 'E',
+                Ss::BetaBridge => 'B',
+                Ss::Turn => 'T',
+                Ss::Bend => 'S',
+                Ss::Coil => 'C',
+                Ss::OtherHelix => panic!("not a native state"),
+            };
+            rows.push((
+                chain.auth_label().expect("author chain"),
+                residue.auth_seq_id().expect("author residue"),
+                residue.ins_code().unwrap_or(""),
+                code,
+            ));
+        }
+    }
+    rows.sort_unstable();
+    assert_eq!(rows.len(), 8015);
+    let mut digest = 14_695_981_039_346_656_037_u64;
+    for (chain, seq, ins, code) in rows {
+        for byte in format!("{chain}|{seq}|{ins}|{code}\n").bytes() {
+            digest = (digest ^ u64::from(byte)).wrapping_mul(1_099_511_628_211);
+        }
+    }
+    assert_eq!(
+        digest, 0xb127_15e8_a8e2_14fd,
+        "mkdssp 4.5.0 exact-state and identity digest"
+    );
 }
