@@ -6,7 +6,68 @@ change the public API.
 
 ## Unreleased
 
+### Added
+
+- Secondary query macros, typed Rust/Python selectors, the public Python
+  SecondaryStructure vocabulary and native DSSP table expose all modern states.
+  Canonical CIF/PDB secondary records round-trip PPII class 10, named helices,
+  other helices and strands without collapsing unknown classes into alpha.
+  PDB ranges resolve insertion-aware negative/hybrid-36 endpoint identities in
+  chain order and isolate model-local annotations. Canonical secondary output
+  refuses ambiguous or unrepresentable endpoint identities before streaming;
+  CIF label ranges never match author aliases.
+- Structure-aligned partial charges prefer complete finite file columns or use
+  versioned CCD PEOE chemistry with explicit linkage and hydrogen projection.
+  Source provenance is retained; unresolved chemistry fails explicitly.
+- Affine screened contact-potential grids in kT/e at 298 K, with dielectric 4r,
+  sub-ångström softening, finite 12 Å cutoff and shared spatial/worker execution.
+- MRC descriptor/density voxel-to-world affine matrices share the triclinic
+  sampling and origin conventions of the existing Cartesian sampler.
+- Assembly covalent links use the canonical bond-perception predicate and
+  stable chain-instance IDs; metal coordination and same-instance pairs are
+  excluded. Rust and Python expose the resulting links.
+
+- Carbohydrate chemistry: curated MIT-attributed Mol* SNFG metadata, topology-only
+  five/six-member saccharide rings, finite ring geometry, and provenance-preserving
+  glycosidic/protein attachments. Optional vacant-site inference is bounded to
+  2 Å and refuses competing sites; Rust and Python use the chemistry namespace.
+  Bundled 1HZH/CCD fixtures check every sugar and all 16 deposited branch links;
+  the two root NAG–ASN contacts exceed 2 Å and are correctly left unlinked.
+
+- Hydrogen query predicates `polar_hydrogen` and `nonpolar_hydrogen`, with
+  Rust typed builders, Python `sel` constructors and completion. Polarity
+  follows full bond topology even in hydrogen-only views: any N/O/S neighbour
+  is polar; all other hydrogen, including unbonded H, is nonpolar. Unavailable
+  connectivity reports `E4003` instead of classifying by guesswork.
+
+- **Comparison across renamed chains.** `mapped_dockq` and `mapped_qs_score`
+  (and `CompareExt` methods) match chains by sequence, residues by alignment and
+  atoms by name, with CCD-equivalent atoms permuted to the nearest fit over the
+  atoms both residues contain. Chains of equal sequence identity, such as the
+  halves of a homodimer, are resolved by scoring every assignment of the
+  requested pair. The CLI runs it as `compare --map-chains` with every control
+  explicit. On the haemoglobin alpha/beta chains of 4HHB, renaming the chains
+  leaves DockQ bit-identical.
+- **Reads.** Category filters (`ReadOptions.categories`, CLI `--skip-category`);
+  SDF, MOL2 and core CIF as one-residue structures, with SDF output; typed PDB
+  headers and `REMARK 350` assemblies; the ten-state secondary-structure
+  vocabulary with its source; an `assembly N` selector.
+- **Superposition.** Shape parameters and a quaternion characteristic-polynomial
+  (QCP) superposition with a Jacobi fallback. Its benchmark is not yet recorded.
+- `sse` requires a caller-authored polymer role profile; the CLI never guesses
+  backbone atom names.
+- The Python surface is gated by ruff (all rules), pyright (strict) and
+  `pyright --verifytypes`.
+
 ### Changed
+
+- Automatic enrichment and explicit secondary-structure analysis share one native
+  DSSP 4 classifier, including cross-chain sheets, beta-bulge spans, peptide-break
+  guards, donor top-two energies and stretch-level helix precedence. Genuine
+  `PolyProline` appends stable code 10 without changing `OtherHelix` or
+  `BetaBridge`. PPII uses three consecutive phi/psi windows and preserves turns
+  and bends. Exact-state comparison with mkdssp 4.5.0 matched all 8015 1AON and
+  1544 7QPD reference residues; native operation requires no external executable.
 
 - **Read and analysis throughput.** BinaryCIF to `Structure` on 1AON went from
   13.96 ms to 7.53 ms (369 MiB/s) and mmCIF to `Structure` on 4HHB from 3.55 ms
@@ -27,6 +88,12 @@ change the public API.
   rather than two.
 
 ### Fixed
+
+- Atom-selection materialization compacts secondary states and their source
+  provenance with the residue hierarchy, so deleting earlier residues cannot
+  change a retained helix class. Unavailable columns remain unavailable, empty
+  selections discard all residue rows, and dense models retain one shared
+  compacted hierarchy rather than duplicating its residues per frame.
 
 - **Deposited secondary structure from mmCIF and BinaryCIF.** The direct
   readers dropped `struct_conf` and `struct_sheet_range` (and BinaryCIF also

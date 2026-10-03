@@ -42,24 +42,16 @@ Chemistry-dependent workflows use the native component-chemistry pipeline. Its r
 The public Python facade exposes chemistry operations through `molframe.chemistry` when the chemistry feature is enabled. The adapter's direct network boundary is separate: an already-known URL requires an authoritative SHA-256 digest and explicit size/timeout controls, while identifier acquisition is unavailable until an authoritative provider manifest exists.
 ## Secondary structure
 
-MolFrame provides two distinct secondary-structure paths. The native analysis kernel is **DSSP-like**, not a claim of exact DSSP compatibility: it applies the documented Kabsch–Sander-style hydrogen-bond energy and pattern rules to explicit polymer atom-role annotations. It returns one typed assignment per residue in the DSSP vocabulary: `AlphaHelix`, `ThreeTenHelix`, `PiHelix`, `BetaBridge` (an isolated bridge), `Strand` (a ladder), `Turn`, `Bend` and `Coil`, with the DSSP precedence when patterns overlap. Residues missing a required role are reported as `Unknown`. Missing chemistry annotations are an explicit prerequisite error, never inferred from atom names.
+Automatic enrichment and explicit role-backed analysis now share one native DSSP 4 kernel. It returns `AlphaHelix`, `ThreeTenHelix`, `PiHelix`, `PolyProline`, `BetaBridge`, `Strand`, `Turn`, `Bend` and `Coil`; missing heavy backbone atoms, including carbonyl oxygen, yield `Unknown`. `OtherHelix` remains a distinct deposited-file state. Explicit analysis requires semantic polymer-role annotations and rejects ambiguous roles, rather than guessing names.
+
+The classifier searches hydrogen bonds across chains within a model, retains each donor’s two strongest acceptors, rounds energies to 0.001 kcal/mol, and applies continuous peptide-span guards to local patterns. Beta ladders span supported bulges. Alpha helices require two consecutive four-turns; an occupied position rejects an entire three-ten stretch, and an accepted pi stretch may replace alpha. Polyproline-II requires at least three consecutive phi/psi windows centred at −75°/145° with inclusive ±29° limits, irrespective of residue name, and is assigned only to otherwise unassigned coil: it never overwrites turns or bends. This modern definition follows [DSSP 4](https://doi.org/10.1002/pro.70208).
 
 The native kernel is available from Rust:
 
 ~~~rust
 use molframe_analysis::{secondary_structure, DsspOptions};
 
-let options = DsspOptions {
-    electrostatic_prefactor: 332.0 * 0.42 * 0.20,
-    hydrogen_bond_energy: -0.5,
-    amide_hydrogen_distance: 1.0,
-    minimum_sequence_separation: 2,
-    helix_offset: 4,
-    three_ten_offset: 3,
-    pi_offset: 5,
-    turn_offsets: 3..=5,
-    bend_angle_degrees: 70.0,
-};
+let options = DsspOptions::default();
 let table = secondary_structure(structure.engine(), &options)?;
 for (residue, kind) in table.placements() {
     println!("{residue:?}: {kind:?}");
@@ -72,7 +64,7 @@ Every read also carries a per-residue state and its source on the structure
 unnamed helix), and the automatic assignment with source `Dssp`, or `CaOnly`
 for a Cα trace. Where both exist the file wins.
 
-For comparison with the reference DSSP program, the explicit `run_dssp` adapter executes a caller-selected DSSP 4 executable and parses its annotated mmCIF output into typed segments. It does not locate or download an executable, and it reports process, exit-status, and parse failures separately. Keep the executable version, input coordinates, options, and output provenance with any result. Do not label native assignments as “exact DSSP” without validation against a reference corpus.
+Native assignment needs no external executable. The optional explicit `run_dssp` adapter remains available for caller-selected DSSP 4 execution and typed mmCIF segment parsing; it never locates or downloads an executable.
 
 ## Choosing a method
 
@@ -86,6 +78,8 @@ For comparison with the reference DSSP program, the explicit `run_dssp` adapter 
 For larger contact analyses, prefer passing a narrow selection to avoid doing work on atoms that cannot affect the answer.
 ## Implementation and verification status
 
-Chemistry application, provenance-bearing atom roles and bonds, native hydrogen-bond, salt-bridge, pi, cation-pi, and water analyses, and the DSSP-like secondary-structure boundary belong to the native MolFrame analysis surface. File-declared secondary structure takes precedence where covered; uncovered residues use the native DSSP-like method only when chemistry prerequisites are available. “DSSP-like” is intentional: no exact-DSSP claim is made without reference validation.
+The native secondary-structure classifier was compared directly, without deposited-file precedence or alphabet collapse, with **mkdssp 4.5.0** on the RCSB 1AON and 7QPD mmCIF files: **8015/8015** and **1544/1544** reference residues matched in exact H/G/I/P/E/B/T/S/blank state (100% each). Identity joins used author chain, residue number and insertion code, and checked component identity; no reference proteins were excluded. Native assignments for the 14 nonprotein 1AON residues and ten nonprotein 7QPD residues were `Unknown`. This is evidence for these fixtures, not universal byte-exact compatibility.
 
-This page records the implementation contract, not a completed scientific validation run. The required workspace checks, large-fixture performance measurement, declared-SSE precedence cases, missing-role diagnostics, all interaction classes, validation coloring, and Python/browser round trips were not run for this documentation-only change. Do not interpret the examples as an observed Python success.
+Input SHA-256: 1AON `6b202f340ffb9a1924d5315ce9e837e02cee1dbd745df675be76f6d4e1b8e66f`; 7QPD `6cd4e30194caf887b75198e04e7e9afcce1445ec28aa331f6b38c8d323627104`. Reference command: `mkdssp --output-format=dssp INPUT OUTPUT` with default minimum PPII stretch 3. Reference output SHA-256: 1AON `1f42dc9ca3b299eb7e624b293e37689023d08de975234f9bb22a6362ccebf483`; 7QPD `16159bcb0f175e1a67c21fea8a04428f212222fb01866ae606861be2c52c4faf`. The permanent native 1AON regression pins all 8015 author identities and exact states; tests also cover PPII geometry, stretch precedence, interchain bridges, bulge interiors and peptide breaks. The scientific rules were independently implemented; upstream DSSP source was consulted to establish reference conventions, not copied or adapted.
+
+Other interaction analyses, performance and Python/browser round trips require their own evidence; the secondary-structure comparison does not validate those surfaces.

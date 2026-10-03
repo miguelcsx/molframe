@@ -176,40 +176,72 @@ whole list without either.
 
 Every implemented capability sits at `β` (native + tested) rather than `✓`,
 because a `✓` needs a row-specific golden workflow and differential evidence
-against an external corpus that is not in this checkout.
+against an external corpus that is not in this checkout. The per-row register
+is `site/content/docs/parity.mdx`; the measurements are in
+`site/content/docs/evidence-ledger.mdx`.
 
-Recently landed native, deterministic capabilities (all `β`, all with unit and
-property tests): RMSF (`molframe-geom`); solvent-accessible surface and buried
-surface (`molframe-surface`); contacts, contact maps, native contacts/Q, hydrogen
-bonds, salt bridges, chain interfaces (`molframe-analysis`); clashes, cis-peptide
-detection, occupancy/B-factor checks (`molframe-validate`); pairwise alignment
-(`molframe-seq`); lDDT, TM-score, GDT-TS/HA (`molframe-compare`).
+### Implemented (all `β`, each with unit and property tests)
 
-Outstanding deterministic work, roughly in dependency order: the rest of each of
-those crates (Lee–Richards/SES/cavities; secondary structure, π-stacking, water
-bridges; bond/angle deviation, planarity, chirality, rotamer/valence/stereo,
-completeness; MSA, phylogenetics, k-mers, sequence formats, substitution
-matrices; chain/atom mapping, DockQ/CAD/QS, CE alignment); the `molframe-query`
-assembly/instance selector; and the format breadth (trajectories, density maps,
-remaining structural formats). PEOE charges are **not** outstanding: they are
-implemented in `molframe-chem/src/peoe/` (Gasteiger–Marsili via
-`component_peoe_charges`, benchmarked).
+- **Geometry and comparison.** RMSF, shape parameters, Kabsch/quaternion and QCP
+  superposition (`molframe-geom`); lDDT, TM-score, GDT-TS/HA, DockQ, QS, CAD, CE,
+  contact similarity, ligand/interface/pocket RMSD, and chain, residue and atom
+  mapping with mapped DockQ/QS (`molframe-compare`). Chains of equal sequence
+  identity are resolved by scoring every assignment of the requested pair.
+- **Surface and spatial.** Shrake–Rupley, Lee–Richards, buried surface, solvent-
+  excluded surface and cavities (`molframe-surface`); cell list, k-d tree,
+  neighbour planner and periodic boundaries (`molframe-spatial`).
+- **Interactions.** Contacts, contact maps, native contacts (Q), hydrogen bonds,
+  salt bridges, pi-stacking, cation-pi, water bridges, chain interfaces, GNM/ANM,
+  screened contact potentials, and a native DSSP 4 classifier
+  (`molframe-analysis`, `molframe-chem`).
+- **Validation.** Clashes, cis-peptides, occupancy and B-factor checks, bond and
+  angle deviation, planarity, chirality, valence, rotamers, Ramachandran, ligand
+  and nucleic-acid geometry, TLS consistency, completeness and real-space
+  checks (`molframe-validate`); the references they take are explicit inputs.
+- **Sequence.** Pairwise and multiple alignment, trees, k-mers, sequence formats
+  and substitution matrices (`molframe-seq`).
+- **Chemistry.** Element tables, CCD providers, bond perception, atom
+  equivalence, carbohydrates, PEOE and structure-aligned partial charges,
+  SMARTS, and MOL/SDF, MOL2 and core CIF as structures (`molframe-chem`).
+- **Formats.** mmCIF, BinaryCIF, ModelCIF and PDB with category filters,
+  anisotropic ADPs, typed PDB headers and BIOMT assemblies; trajectory formats
+  (`molframe-traj`); MRC, MTZ and structure-factor tables (`molframe-xtal`).
+- **Query.** The selection DSL, including `entity`, `chirality`, `assembly`,
+  secondary-structure and hydrogen-polarity selectors (`molframe-query`).
+- **Program steps landed.** R1 to R9 and R7's QCP code; the read path and
+  perception performance series (M0, M1 partial, M2 partial).
 
-The `altloc`, `entity`, `entity_type` and `chirality` selectors are **not**
-outstanding: they are fully evaluated with tests. `Column::AlternateLocation`,
-`Column::Entity` and `Column::EntityType` have arms in
-`predicate_values.rs`/`predicate_helpers.rs` and lower through `plan.rs`;
-`Expr::Chirality` evaluates in `eval.rs:262`; `SameKey::Entity` expands in
-`expand.rs`. A true gap remains: there is no assembly/instance selector at all —
-neither `Column::Assembly` nor `SameKey::Assembly` exists — even though
-`molframe-xtal` already exposes `AssemblyView::neighbors` (per-instance pairs)
-and `collect_crystal_neighbors` (symmetry mates). Anisotropic ADPs are also
-absent: no `_atom_site.aniso_U*` column, PDB `ANISOU` record, or anisotropic
-field exists in `molframe-cif`, `molframe-pdb`, or `molframe-core`'s atom storage.
+### Outstanding
 
-Track B (`molframe-audit`, `molframe-fx`) and `molframe-adapters` have landed
-natively alongside the rest and are held to the same bar; what they still lack is
-the row-specific golden workflow a `✓` would need.
+- **R11** reference-input parsers (`read_reference_library`, rotamer profiles,
+  plane restraints, TLS groups) and **R12** CLI parity for the remaining
+  analysis, chemistry, crystal, validation and comparison commands.
+- **M2.12** incremental block consumption at the remaining `map_blocks_in` sites.
+- **M1** read-path throughput: the targets (BinaryCIF 1AON at 1 GB/s of input, mmCIF
+  at 300 MiB/s) are **not met**; the achieved figures and the limiting frames are
+  in the evidence ledger.
+- **R7** QCP benchmark medians are not yet recorded.
+- **M4** the Python surface beyond what already ships (exception hierarchy,
+  `ExecutionContext`, interop, I/O breadth, structure depth, the remaining
+  namespaces).
+- **M5** independent reference validation and parity promotion.
+
+### Deferred, by decision
+
+Crystallographic map computation (FFT, density from a model, anomalous, neutron,
+electron and ion scattering tables, bulk solvent, scaling, twinning, merging)
+and GPU backends are out of scope for this program.
+
+### Not implemented by design
+
+CIP R/S and E/Z labels, valence under-coordination, and multifurcating trees.
+Each would need a convention the library refuses to pick silently.
+
+### Blocked
+
+GW-031 (the `complex_info` source is absent), GW-032 (the ATPTS driver is
+absent) and GW-044 to GW-047 (the OpenStructure, Graphein and Geomstats pins and
+corpora are not selected) stay `β` until their prerequisite exists.
 
 **Where the golden and benchmark registers live.** They are the crates, not a
 directory of manifests: the workflows are `crates/molframe/tests/golden_workflows.rs`
