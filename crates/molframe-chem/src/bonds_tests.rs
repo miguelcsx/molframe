@@ -233,3 +233,93 @@ fn perception_is_identical_at_every_worker_budget() {
         }
     }
 }
+
+fn atom_pair(elements: [&str; 2], alternates: [&str; 2], distance: f32) -> Structure {
+    let source = format!(
+        "data_pair\nloop_\n_atom_site.id\n_atom_site.type_symbol\n\
+         _atom_site.label_atom_id\n_atom_site.label_comp_id\n\
+         _atom_site.label_asym_id\n_atom_site.label_seq_id\n\
+         _atom_site.label_alt_id\n_atom_site.Cartn_x\n\
+         _atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+         1 {} QL LIG A 1 {} 0 0 0\n2 {} QR LIG A 1 {} {distance} 0 0\n",
+        elements[0], alternates[0], elements[1], alternates[1],
+    );
+    let input = molframe_core::InputBuffer::from_bytes(source.into_bytes());
+    molframe_cif::read(&input, &molframe_core::ReadOptions::new())
+        .expect("a two-atom fixture parses")
+        .0
+}
+
+#[test]
+fn the_public_covalent_window_is_inclusive_and_rejects_nonfinite_distances() {
+    let source = atom_pair(["C", "C"], [".", "."], 1.0);
+    let left = source.atom(AtomIndex::new(0)).expect("left atom");
+    let right = source.atom(AtomIndex::new(1)).expect("right atom");
+    let minimum = 0.16_f32;
+    let maximum_distance = 3.50_f32 / 1.95;
+    let maximum = maximum_distance * maximum_distance;
+    for distance in [minimum, minimum.next_up(), maximum.next_down(), maximum] {
+        assert!(covalent_pair(left, right, distance), "{distance}");
+        assert!(covalent_pair(right, left, distance), "symmetric {distance}");
+    }
+    for distance in [
+        minimum.next_down(),
+        maximum.next_up(),
+        -1.0,
+        f32::NAN,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+    ] {
+        assert!(!covalent_pair(left, right, distance), "{distance}");
+    }
+}
+
+#[test]
+fn perception_and_public_covalent_eligibility_share_chemical_boundaries() {
+    let cases = [
+        (["C", "O"], [".", "."], 1.2, true, true),
+        (["C", "C"], [".", "."], 0.399, false, false),
+        (["C", "C"], [".", "."], 0.4, true, true),
+        (["C", "C"], [".", "."], 1.79, true, true),
+        (["C", "C"], [".", "."], 1.80, false, false),
+        (["H", "H"], [".", "."], 0.7, false, false),
+        (["H", "C"], [".", "."], 1.0, true, true),
+        (["C", "O"], ["A", "B"], 1.2, false, false),
+        (["C", "O"], ["A", "A"], 1.2, true, true),
+        (["C", "O"], [".", "B"], 1.2, true, true),
+        (["B", "C"], [".", "."], 1.2, false, false),
+        (["?", "C"], [".", "."], 1.2, false, false),
+        (["Fe", "N"], [".", "."], 2.0, false, true),
+        (["Fe", "N"], ["A", "B"], 2.0, false, false),
+        (["Fe", "N"], [".", "."], 2.3, false, false),
+    ];
+    for (elements, alternates, distance, covalent, perceived) in cases {
+        let source = atom_pair(elements, alternates, distance);
+        let left = source.atom(AtomIndex::new(0)).expect("left atom");
+        let right = source.atom(AtomIndex::new(1)).expect("right atom");
+        let label = format!("{elements:?} {alternates:?} {distance}");
+        assert_eq!(
+            covalent_pair(left, right, distance * distance),
+            covalent,
+            "{label}"
+        );
+        assert_eq!(
+            covalent_pair(right, left, distance * distance),
+            covalent,
+            "{label}"
+        );
+        let found = perceive_bonds(&source).expect("dense coordinates");
+        let bonds: Vec<_> = found.data().bonds.iter().collect();
+        assert_eq!(bonds.len(), usize::from(perceived), "{label}");
+        if perceived {
+            assert_eq!(bonds[0].atom_a, left.index(), "{label}");
+            assert_eq!(bonds[0].atom_b, right.index(), "{label}");
+            assert_eq!(bonds[0].order, BondOrder::Single, "{label}");
+            assert_eq!(
+                bonds[0].provenance,
+                BondProvenance::InferredDistance,
+                "{label}"
+            );
+        }
+    }
+}

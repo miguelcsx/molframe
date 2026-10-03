@@ -38,7 +38,7 @@ mod view;
 
 pub use affine::AffineTransform;
 pub use assembly::{ASSEMBLIES_EXTENSION, AssemblyDef, AssemblySet, Generator, Operator};
-pub use assembly_spatial::AssemblyNeighbor;
+pub use assembly_spatial::{AssemblyBond, AssemblyNeighbor};
 pub use cell::CellTransform;
 pub use cell_reduction::{CellReductionError, ReducedCell, niggli_reduce};
 pub use crystal::{

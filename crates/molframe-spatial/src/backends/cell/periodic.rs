@@ -172,6 +172,27 @@ impl PeriodicGrid {
     where
         F: FnMut(u32, u32, f32),
     {
+        self.for_each_neighbor(
+            positions,
+            position,
+            cutoff_squared,
+            periodic,
+            &mut |target, squared| {
+                if atom != target {
+                    emit(atom, target, squared);
+                }
+            },
+        )
+    }
+
+    pub(super) fn for_each_neighbor(
+        &self,
+        positions: &[[f32; 3]],
+        position: [f32; 3],
+        cutoff_squared: f32,
+        periodic: &PeriodicBox,
+        emit: &mut impl FnMut(u32, f32),
+    ) -> Result<(), SpatialError> {
         let centre = cell(periodic, position, self.dims)?;
         let mut visited = [usize::MAX; NEIGHBOUR_OFFSETS.len()];
         let mut visited_count = 0usize;
@@ -188,9 +209,6 @@ impl PeriodicGrid {
                 .members(candidate)
                 .ok_or(SpatialError::NumericRangeExceeded)?;
             for &target in members {
-                if atom == target {
-                    continue;
-                }
                 let index =
                     usize::try_from(target).map_err(|_| SpatialError::NumericRangeExceeded)?;
                 let Some(target_position) = positions.get(index).copied() else {
@@ -198,7 +216,7 @@ impl PeriodicGrid {
                 };
                 let squared = distance_squared(position, target_position, Some(periodic));
                 if squared <= cutoff_squared {
-                    emit(atom, target, squared);
+                    emit(target, squared);
                 }
             }
         }

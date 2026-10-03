@@ -188,6 +188,47 @@ impl<'a> CellList<'a> {
             None => Ok(()),
         }
     }
+
+    /// Visits indexed atoms within `cutoff` of an arbitrary Cartesian point.
+    ///
+    /// Emits target indices and squared distances in ångström² without
+    /// allocation. Unlike atom queries, a coincident target is included.
+    /// Periodic indices use the same minimum-image metric as pair queries.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a nonfinite point or a cutoff exceeding the index.
+    pub fn for_each_neighbor(
+        &self,
+        position: [f32; 3],
+        cutoff: f32,
+        mut emit: impl FnMut(u32, f32),
+    ) -> Result<(), SpatialError> {
+        validate_query_cutoff(cutoff, self.cutoff)?;
+        if !finite(position) {
+            return Err(SpatialError::NumericRangeExceeded);
+        }
+        match &self.grid {
+            Some(CellGrid::Cartesian(grid)) => visit::grid_for_each_neighbor(
+                self.positions,
+                grid,
+                position,
+                cutoff * cutoff,
+                &mut emit,
+            ),
+            Some(CellGrid::Periodic(grid)) => {
+                let periodic = self.periodic.as_ref().ok_or(SpatialError::InvalidCell)?;
+                grid.for_each_neighbor(
+                    self.positions,
+                    position,
+                    cutoff * cutoff,
+                    periodic,
+                    &mut emit,
+                )
+            }
+            None => Ok(()),
+        }
+    }
 }
 
 /// Builds the contiguous grid representation for finite target coordinates.

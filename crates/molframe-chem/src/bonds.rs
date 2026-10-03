@@ -60,7 +60,8 @@ pub fn perceive_bonds_in(
         .atoms()
         .map(|atom| atom.element().and_then(element_threshold))
         .collect();
-    let maximum = thresholds.iter().flatten().copied().fold(0.0_f32, f32::max) * 2.0 / 1.95;
+    let largest = thresholds.iter().flatten().copied().fold(0.0_f32, f32::max);
+    let maximum = maximum_bonding_distance(largest, largest);
     if maximum > 0.0 && maximum.is_finite() {
         add_grid_bonds(structure, &thresholds, maximum, &mut output, context)?;
     }
@@ -68,6 +69,30 @@ pub fn perceive_bonds_in(
     let mut data = structure.data().clone();
     data.bonds = output.finish();
     Ok(Structure::new(data))
+}
+
+/// Whether two atoms at a squared distance in ångström² form a plausible
+/// covalent pair under the default bond-perception distance window.
+///
+/// Alternate conformers and H–H pairs are excluded. Metal coordination is not
+/// covalent connectivity and is excluded even though default perception can
+/// retain coordination edges. This is a geometric perception, not bond-order
+/// assignment or a substitute for deposited connectivity.
+#[must_use]
+pub fn covalent_pair(left: AtomRef<'_>, right: AtomRef<'_>, distance_squared: f32) -> bool {
+    let (Some(left_element), Some(right_element)) = (left.element(), right.element()) else {
+        return false;
+    };
+    if is_metal(left_element.symbol()) || is_metal(right_element.symbol()) {
+        return false;
+    }
+    let (Some(first), Some(second)) = (
+        element_threshold(left_element),
+        element_threshold(right_element),
+    ) else {
+        return false;
+    };
+    in_bonding_window(first, second, distance_squared) && pair_compatible(left, right)
 }
 
 /// One atom that can bond, stored where the grid keeps it.
@@ -148,8 +173,8 @@ fn search_cell(
                 if second.atom <= first.atom {
                     continue;
                 }
-                // The distance window rejects nearly every candidate, so it
-                // runs before anything that has to look an atom up.
+                // Resolve thresholds once per atom and reject distant pairs
+                // before materialising handles. covalent_pair shares this window.
                 let distance_squared = squared_distance(first.position, second.position);
                 if !in_bonding_window(first.threshold, second.threshold, distance_squared) {
                     continue;
@@ -160,6 +185,8 @@ fn search_cell(
                 ) else {
                     continue;
                 };
+                // Perception retains coordination; only covalent_pair excludes
+                // metals. Both share conformer and H–H eligibility.
                 if !pair_compatible(left, right) {
                     continue;
                 }
@@ -210,8 +237,12 @@ fn add_link(left: AtomRef<'_>, right: AtomRef<'_>, output: &mut BondTableBuilder
 /// Whether a distance lies between the closest plausible contact and the sum of
 /// the two elements' bonding thresholds.
 fn in_bonding_window(left_threshold: f32, right_threshold: f32, distance_squared: f32) -> bool {
-    let maximum = (left_threshold + right_threshold) / 1.95;
+    let maximum = maximum_bonding_distance(left_threshold, right_threshold);
     distance_squared >= 0.16 && distance_squared <= maximum * maximum
+}
+
+fn maximum_bonding_distance(left_threshold: f32, right_threshold: f32) -> f32 {
+    (left_threshold + right_threshold) / 1.95
 }
 
 /// Whether two atoms may bond at all: two hydrogens never do, and two atoms in

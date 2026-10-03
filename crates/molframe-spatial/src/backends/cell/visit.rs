@@ -41,14 +41,7 @@ fn append_grid_pairs<const UPPER: bool>(
     cutoff_squared: f32,
     emit: &mut impl FnMut(u32, u32, f32),
 ) -> Result<(), SpatialError> {
-    let centre = cell_of(grid, position)?;
-
-    for delta in NEIGHBOUR_OFFSETS {
-        let Some(cell) = neighbour_cell(grid.dims, centre, delta) else {
-            continue;
-        };
-
-        let members = members_of_cell(grid, cell).ok_or(SpatialError::NumericRangeExceeded)?;
+    visit_members(grid, position, |members| {
         super::super::brute_simd::append_pairs::<UPPER>(
             positions,
             atom,
@@ -57,6 +50,38 @@ fn append_grid_pairs<const UPPER: bool>(
             cutoff_squared,
             emit,
         );
+    })
+}
+
+pub(super) fn grid_for_each_neighbor(
+    positions: &[[f32; 3]],
+    grid: &Grid,
+    position: [f32; 3],
+    cutoff_squared: f32,
+    emit: &mut impl FnMut(u32, f32),
+) -> Result<(), SpatialError> {
+    visit_members(grid, position, |members| {
+        for &target in members {
+            let squared =
+                crate::brute::distance_squared(position, positions[target as usize], None);
+            if squared <= cutoff_squared {
+                emit(target, squared);
+            }
+        }
+    })
+}
+
+fn visit_members(
+    grid: &Grid,
+    position: [f32; 3],
+    mut visit: impl FnMut(&[u32]),
+) -> Result<(), SpatialError> {
+    let centre = cell_of(grid, position)?;
+    for delta in NEIGHBOUR_OFFSETS {
+        let Some(cell) = neighbour_cell(grid.dims, centre, delta) else {
+            continue;
+        };
+        visit(members_of_cell(grid, cell).ok_or(SpatialError::NumericRangeExceeded)?);
     }
     Ok(())
 }

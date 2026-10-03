@@ -53,3 +53,45 @@ fn query_coordinates_below_target_bounds_clamp_to_the_first_cell() {
     };
     assert_eq!(pairs.len(), 2);
 }
+
+#[test]
+fn arbitrary_points_include_coincident_targets_and_obey_the_radius() {
+    let positions = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.01, 0.0, 0.0]];
+    let list = CellList::build(&positions, &[0, 1, 2], 1.0, None).unwrap();
+    let mut neighbors = Vec::new();
+    list.for_each_neighbor([0.0; 3], 1.0, |atom, squared| {
+        neighbors.push((atom, squared));
+    })
+    .unwrap();
+    neighbors.sort_by_key(|(atom, _)| *atom);
+    assert_eq!(neighbors, [(0, 0.0), (1, 1.0)]);
+    neighbors.clear();
+    list.for_each_neighbor([-0.5, 0.0, 0.0], 1.0, |atom, squared| {
+        neighbors.push((atom, squared));
+    })
+    .unwrap();
+    assert_eq!(neighbors, [(0, 0.25)]);
+    assert_eq!(
+        list.for_each_neighbor([f32::NAN; 3], 1.0, |_, _| {}),
+        Err(SpatialError::NumericRangeExceeded)
+    );
+}
+
+#[test]
+fn arbitrary_periodic_points_include_wrapped_targets_once() {
+    let positions = [[0.1, 0.0, 0.0], [5.0, 0.0, 0.0]];
+    let periodic = PeriodicBox::from_cell(molframe_core::structure::UnitCell {
+        lengths: [10.0; 3],
+        angles: [90.0; 3],
+    })
+    .unwrap();
+    let list = CellList::build(&positions, &[0, 1], 1.0, Some(periodic)).unwrap();
+    let mut neighbors = Vec::new();
+    list.for_each_neighbor([9.9, 0.0, 0.0], 1.0, |atom, squared| {
+        neighbors.push((atom, squared));
+    })
+    .unwrap();
+    assert_eq!(neighbors.len(), 1);
+    assert_eq!(neighbors[0].0, 0);
+    assert!((neighbors[0].1 - 0.04).abs() < 1.0e-5);
+}

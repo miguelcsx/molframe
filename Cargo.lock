@@ -2341,6 +2341,7 @@ version = "0.4.0"
 dependencies = [
  "criterion",
  "molframe-bench",
+ "molframe-chem",
  "molframe-cif",
  "molframe-core",
  "molframe-geom",
