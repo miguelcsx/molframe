@@ -208,14 +208,19 @@ is `site/content/docs/parity.mdx`; the measurements are in
   (`molframe-traj`); MRC, MTZ and structure-factor tables (`molframe-xtal`).
 - **Query.** The selection DSL, including `entity`, `chirality`, `assembly`,
   secondary-structure and hydrogen-polarity selectors (`molframe-query`).
-- **Program steps landed.** R1 to R9 and R7's QCP code; the read path and
+- **Reference inputs and the command line.** JSON/TOML readers for reference
+  libraries, rotamer profiles, plane restraints and TLS groups (R11); the CLI
+  covers interactions, validation, comparison, contact maps, normal modes,
+  charges, SMARTS, crystallographic files and trajectory RMSF (R12), every
+  threshold an explicit flag.
+- **Program steps landed.** R1 to R12 and R7's QCP code; the read path and
   perception performance series (M0, M1 partial, M2 partial).
 
 ### Outstanding
 
-- **R11** reference-input parsers (`read_reference_library`, rotamer profiles,
-  plane restraints, TLS groups) and **R12** CLI parity for the remaining
-  analysis, chemistry, crystal, validation and comparison commands.
+- **R12 gaps.** `validate --checks nucleic` has no end-to-end test because no
+  nucleotide structure and dictionary are bundled; real-space map correlation
+  is `crystal map-correlation`, not a `validate` check.
 - **M2.12** incremental block consumption at the remaining `map_blocks_in` sites.
 - **M1** read-path throughput: the targets (BinaryCIF 1AON at 1 GB/s of input, mmCIF
   at 300 MiB/s) are **not met**; the achieved figures and the limiting frames are

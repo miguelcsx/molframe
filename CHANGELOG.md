@@ -54,6 +54,19 @@ change the public API.
   vocabulary with its source; an `assembly N` selector.
 - **Superposition.** Shape parameters and a quaternion characteristic-polynomial
   (QCP) superposition with a Jacobi fallback. Its benchmark is not yet recorded.
+- **Reference inputs.** `read_reference_library`, `read_rotamer_profile`,
+  `read_plane_restraints` and `read_tls_groups` load the data the validation
+  kernels refuse to carry, from JSON or TOML with strict schemas and typed
+  errors; a selection that matches nothing is refused.
+- **Command line.** `interactions`, `contact-map`, `native-contacts`, `nma`,
+  `chem peoe|smarts`, `crystal mtz-info|map-stats|map-correlation|mates` and
+  `trajectory rmsf` are new; `validate` gains valence, ligand, chirality,
+  cis-peptide, nucleic, Ramachandran, rotamer, plane-restraint and TLS checks,
+  and `compare` gains QS, CAD, CE, contact similarity and interface, pocket and
+  ligand RMSD. Every scientific parameter is a required flag.
+- `named_ligand_rmsd` compares ligands by atom name over the observed fragment
+  with chemical symmetry; `GaussianNetworkModel::fluctuations` and
+  `CrystalNeighbor::is_symmetry_mate` are new.
 - `sse` requires a caller-authored polymer role profile; the CLI never guesses
   backbone atom names.
 - The Python surface is gated by ruff (all rules), pyright (strict) and
