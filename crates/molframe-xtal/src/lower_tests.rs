@@ -100,3 +100,45 @@ fn parsed(text: &str) -> molframe_cif::Document {
         Err(findings) => panic!("fixture parse failed: {findings:?}"),
     }
 }
+
+#[test]
+fn definitions_from_another_source_are_checked_against_their_operators() {
+    use crate::{AssemblyDef, AssemblySet, Generator, OperExpression, Operator};
+    use molframe_geom::Rigid;
+
+    let operator = |id: &str| Operator {
+        id: id.into(),
+        transform: Rigid::new(
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            [0.0; 3],
+        ),
+    };
+    let assembly = |expression: &str| AssemblyDef {
+        id: "1".into(),
+        details: None,
+        method: None,
+        oligomeric: None,
+        generators: vec![Generator {
+            oper_expression: OperExpression::parse(expression).expect("expression parses"),
+            asym_ids: Box::new(["A".into()]),
+        }],
+    };
+    let set = AssemblySet::from_definitions(
+        [assembly("1.1.1,1.1.2")],
+        [operator("1.1.1"), operator("1.1.2")],
+    )
+    .expect("every named operator exists");
+    assert_eq!(set.len(), 1);
+    assert!(set.operator("1.1.2").is_some());
+
+    let missing = AssemblySet::from_definitions([assembly("1.1.1,9")], [operator("1.1.1")]);
+    assert_eq!(
+        missing.err().map(|finding| finding.code()),
+        Some(Code::E6013)
+    );
+    let repeated = AssemblySet::from_definitions([], [operator("1"), operator("1")]);
+    assert_eq!(
+        repeated.err().map(|finding| finding.code()),
+        Some(Code::E6012)
+    );
+}

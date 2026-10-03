@@ -138,5 +138,6 @@ pub(crate) fn is_metadata_record(name: &str) -> bool {
             | "MTRIX1"
             | "MTRIX2"
             | "MTRIX3"
+            | "MASTER"
     )
 }

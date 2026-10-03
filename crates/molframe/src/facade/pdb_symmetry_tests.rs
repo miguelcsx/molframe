@@ -56,3 +56,31 @@ fn the_space_group_survives_a_pdb_round_trip() {
     let again = read(&text);
     assert_eq!(again.metadata().space_group.as_deref(), Some("P 21 21 21"));
 }
+
+#[cfg(feature = "crystal")]
+#[test]
+fn remark_350_becomes_an_assembly_the_materialiser_can_expand() {
+    use crate::crystal::AssemblyExt;
+
+    let text = "\
+REMARK 350 BIOMOLECULE: 1                                             \n\
+REMARK 350 APPLY THE FOLLOWING TO CHAINS: A                           \n\
+REMARK 350   BIOMT1   1  1.000000  0.000000  0.000000        0.00000  \n\
+REMARK 350   BIOMT2   1  0.000000  1.000000  0.000000        0.00000  \n\
+REMARK 350   BIOMT3   1  0.000000  0.000000  1.000000        0.00000  \n\
+REMARK 350   BIOMT1   2 -1.000000  0.000000  0.000000       10.00000  \n\
+REMARK 350   BIOMT2   2  0.000000 -1.000000  0.000000        0.00000  \n\
+REMARK 350   BIOMT3   2  0.000000  0.000000  1.000000        0.00000  \n\
+ATOM      1  N   GLY A   1       1.000   2.000   3.000  1.00 10.00           N\n\
+END\n";
+    let structure = read(text);
+    let materialised = structure
+        .assembly("1")
+        .expect("the biomolecule is an assembly")
+        .materialize()
+        .expect("it materialises");
+    let materialised: crate::Structure = materialised.into();
+    assert_eq!(materialised.atom_count(), 2);
+    let positions: Vec<[f32; 3]> = materialised.coordinates().to_vec();
+    assert_eq!(positions, [[1.0, 2.0, 3.0], [9.0, -2.0, 3.0]]);
+}

@@ -18,7 +18,10 @@ mod reader;
 mod writer;
 
 pub use batch::PdbBatchSource;
-pub use header::{PDB_HEADERS_EXTENSION, PdbHeaderRecord, PdbHeaders, PdbHeadersExt};
+pub use header::{
+    Biomolecule, Biomt, BiomtGroup, Link, MissingResidue, PDB_HEADERS_EXTENSION, PdbHeaderRecord,
+    PdbHeaders, PdbHeadersExt, ResidueId, SeqRes, SsBond,
+};
 pub use mmtf::{
     MMTF_METADATA_EXTENSION, MmtfEntityMetadata, MmtfGroupMetadata, MmtfMetadata,
     MmtfOptionalField, read_mmtf, write_mmtf, write_mmtf_to,

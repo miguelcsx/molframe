@@ -48,6 +48,13 @@ impl ReadState<'_> {
             self.data.chunks = chunks.into();
             self.frames.push(coords);
         }
+        if let Some(resolution) = self
+            .headers
+            .resolution()
+            .and_then(|value| num_traits::ToPrimitive::to_f32(&value))
+        {
+            self.data.entry.resolution = Some(resolution);
+        }
         if !self.headers.is_empty() {
             self.data
                 .extensions

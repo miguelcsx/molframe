@@ -143,7 +143,7 @@ fn operator_transform(
     }
 }
 
-fn valid_rotation(transform: &Rigid) -> bool {
+pub(crate) fn valid_rotation(transform: &Rigid) -> bool {
     if !transform.translation.iter().all(|value| value.is_finite()) {
         return false;
     }

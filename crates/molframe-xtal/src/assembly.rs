@@ -1,6 +1,7 @@
 //! Normalised biological-assembly definitions.
 
 use crate::OperExpression;
+use molframe_core::{Code, Diagnostic};
 use molframe_geom::Rigid;
 use std::collections::BTreeMap;
 
@@ -14,6 +15,21 @@ pub struct Operator {
     pub id: Box<str>,
     /// Rotation followed by translation in Cartesian coordinates.
     pub transform: Rigid,
+}
+
+impl Operator {
+    /// An operator from a row-major rotation and a translation, both Cartesian.
+    #[must_use]
+    pub fn from_matrix(
+        id: impl Into<Box<str>>,
+        rotation: [[f64; 3]; 3],
+        translation: [f64; 3],
+    ) -> Self {
+        Self {
+            id: id.into(),
+            transform: Rigid::new(rotation, translation),
+        }
+    }
 }
 
 /// One rule applying an operator expression to label-asym identifiers.
@@ -56,6 +72,48 @@ impl AssemblySet {
             assemblies,
             operators,
         }
+    }
+
+    /// Builds a set from definitions and the operators they name, for sources
+    /// other than mmCIF (such as a legacy PDB `REMARK 350`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Code::E6012`] for a repeated assembly or operator identifier,
+    /// and [`Code::E6013`] for a generator naming an operator that was not
+    /// supplied.
+    pub fn from_definitions(
+        assemblies: impl IntoIterator<Item = AssemblyDef>,
+        operators: impl IntoIterator<Item = Operator>,
+    ) -> Result<Self, Diagnostic> {
+        let mut set = Self::default();
+        for operator in operators {
+            let id = operator.id.clone();
+            if !crate::lower::valid_rotation(&operator.transform)
+                || set.operators.insert(id.clone(), operator).is_some()
+            {
+                return Err(Diagnostic::new(Code::E6012).with_context("operator", id));
+            }
+        }
+        for assembly in assemblies {
+            let id = assembly.id.clone();
+            let named = assembly
+                .generators
+                .iter()
+                .flat_map(|generator| generator.oper_expression.factors())
+                .flat_map(|factor| factor.iter());
+            for operator in named {
+                if !set.operators.contains_key(operator) {
+                    return Err(Diagnostic::new(Code::E6013)
+                        .with_context("assembly", id)
+                        .with_context("operator", operator.to_string()));
+                }
+            }
+            if set.assemblies.insert(id.clone(), assembly).is_some() {
+                return Err(Diagnostic::new(Code::E6012).with_context("assembly", id));
+            }
+        }
+        Ok(set)
     }
 
     /// One assembly by its source identifier.
