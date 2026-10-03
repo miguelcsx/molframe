@@ -4,7 +4,9 @@ use super::{CellGrid, CellList, Grid, NEIGHBOUR_OFFSETS};
 use crate::brute::{canonicalise, distance_squared};
 use crate::{NeighborPair, SpatialError};
 use molframe_core::ExecutionContext;
-use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use molframe_core::parallel::{
+    BlockExecutionError, BlockPlan, map_blocks_in, try_for_each_block_in,
+};
 
 /// Finds each unordered pair from one selection once.
 ///
@@ -163,6 +165,8 @@ pub(crate) fn pairs_same_selection_parallel(
     /// Cells per block. Occupancy varies widely between a dense protein core
     /// and a solvent shell, so blocks are much smaller than one worker's share.
     const BLOCK_CELLS: usize = 64;
+    /// Pairs an atom is charged for when sizing a block of the collecting pass.
+    const EXPECTED_PAIRS_PER_ATOM: usize = 64;
     /// Below this size, dispatch and per-block vectors cost more than the
     /// available cell parallelism on the calibrated Apple M4 workload.
     const MIN_PARALLEL_ATOMS: usize = 2_048;
@@ -182,16 +186,38 @@ pub(crate) fn pairs_same_selection_parallel(
     let positions = list.positions;
 
     let plan = BlockPlan::new(cells.len(), BLOCK_CELLS);
-    let produced = map_blocks_in(plan, context, |_, range| match cells.get(range) {
-        Some(chunk) => collect_cells(positions, grid, chunk, cutoff_squared),
-        None => Ok(Vec::new()),
-    })
-    .map_err(|_| SpatialError::WorkerPanicked)?;
-
+    // Each block is charged for the pairs its atoms are expected to own, a
+    // plan and not a limit: pair counts depend on density, and an honest bound
+    // would need the counting pass the search itself is.
+    let atoms_per_block = query
+        .len()
+        .div_ceil(cells.len().max(1))
+        .saturating_mul(BLOCK_CELLS);
+    let bytes_per_block = atoms_per_block
+        .saturating_mul(EXPECTED_PAIRS_PER_ATOM)
+        .saturating_mul(size_of::<NeighborPair>());
     let mut found = Vec::new();
-    for part in produced {
-        found.extend(part?);
-    }
+    // Blocks are appended as they complete, in block order, so the peak is the
+    // result plus a bounded window of blocks rather than the result twice.
+    try_for_each_block_in(
+        plan,
+        context,
+        bytes_per_block,
+        |_, range| match cells.get(range) {
+            Some(chunk) => collect_cells(positions, grid, chunk, cutoff_squared),
+            None => Ok(Vec::new()),
+        },
+        |mut block| {
+            found.append(&mut block);
+            Ok(())
+        },
+    )
+    .map_err(|error| match error {
+        BlockExecutionError::Memory(error) => SpatialError::Memory(error),
+        BlockExecutionError::Cancelled => SpatialError::Cancelled,
+        BlockExecutionError::Worker(_) => SpatialError::WorkerPanicked,
+        BlockExecutionError::Operation(error) => error,
+    })?;
 
     if sort_result {
         canonicalise(&mut found);
