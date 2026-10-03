@@ -77,6 +77,30 @@ library, rotamer profile, plane restraints and TLS groups are documented with
 the analysis kernels. A check that cannot assess some of its targets prints the
 coverage (`assessed N of M`) on standard error rather than passing silently.
 
+## Comparison
+
+`molframe compare MODEL REFERENCE --metrics a,b` prints one `metric`, `value`
+row per score. The model and the reference share atom numbering for every
+metric but `ce`, which aligns guide atoms in sequence order, and `--map-chains`,
+which maps chains by sequence before `dockq` or `qs`.
+
+| Metric | Required parameters |
+| --- | --- |
+| `lddt`, `tm-score`, `gdt-ts`, `gdt-ha` | lDDT: `--lddt-radius`, `--lddt-minimum-distance`, `--lddt-tolerances`, `--lddt-empty` |
+| `dockq` | `--receptor`, `--ligand`, `--contact-distance`, `--ligand-scale`, `--interface-scale` |
+| `qs` | `--receptor`, `--ligand` (the chain pair), `--contact-distance` |
+| `contact-similarity` | `--contact-distance`, `--min-separation` |
+| `cad` | `--cad-probe`, `--cad-density`, `--radii` |
+| `ce` | `--guide`, `--ce-window`, `--ce-max-gap`, `--ce-max-paths`, `--ce-fragment-threshold`, `--ce-path-threshold`, `--ce-memory-limit` (`--ce-significance` adds the z-score) |
+| `interface-rmsd`, `pocket-rmsd` | `--region`, `--alignment fit\|none` |
+| `ligand-rmsd` | CCD, `--ligand-selection`, `--ligand-component`, `--ligand-automorphism-limit`; `--align-on` fits the model first |
+
+`ligand-rmsd` compares the atoms both structures have and takes the best of the
+chemically equivalent atom mappings of that fragment, so a ring flip or a
+swapped carboxylate oxygen costs nothing and a missing hydrogen does not
+exhaust the mapping bound. A control for a metric that was not selected is
+refused rather than ignored.
+
 ## Use in reproducible workflows
 
 Keep source files, command lines, and any parsing-policy flags in your workflow record. Structural-file ambiguity is part of the scientific input, not merely an I/O detail.

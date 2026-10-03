@@ -173,6 +173,7 @@ fn execute_comparison(command: Command, context: Context) -> Exit {
             ligand_scale,
             interface_scale,
             mapping,
+            extra,
         } => {
             let run = |mapped: Option<crate::comparison_commands::MappedScoring<'_>>,
                        context: Context| {
@@ -191,6 +192,11 @@ fn execute_comparison(command: Command, context: Context) -> Exit {
                         ligand_scale,
                         interface_scale,
                         mapped,
+                        extra: &extra,
+                        chemistry: (
+                            mapping.chemistry.ccd.as_deref(),
+                            mapping.chemistry.ccd_version.as_deref(),
+                        ),
                     },
                     context,
                 )

@@ -41,9 +41,10 @@ use std::process::ExitCode;
 
 pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, EnsembleCommand,
-    FxCommand, GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
-    ModelArgument, NamespaceArgument, PairwiseMode, SequenceCommand, SequenceFormat,
-    SurfaceArguments, SystemCommand, TrajectoryCommand, TreeMethod, ValidateArguments,
+    ExtraMetricArguments, FxCommand, GeometryCommand, InteractionCommand, KmerOperation,
+    MappingArguments, MatrixChoice, ModelArgument, NamespaceArgument, PairwiseMode,
+    SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand, TrajectoryCommand,
+    TreeMethod, ValidateArguments,
 };
 pub(crate) use choices::{
     CompletionShell, EmptyLddtChoice, MetricChoice, RadiusChoice, ValidationChoice,
@@ -275,6 +276,8 @@ pub(crate) enum Command {
         interface_scale: Option<f64>,
         #[command(flatten)]
         mapping: MappingArguments,
+        #[command(flatten)]
+        extra: ExtraMetricArguments,
     },
     /// Report semantic structural and metadata differences.
     Diff {

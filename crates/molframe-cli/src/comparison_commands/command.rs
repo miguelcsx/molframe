@@ -218,6 +218,8 @@ pub(crate) struct ComparisonOptions<'a> {
     pub(crate) ligand_scale: Option<f64>,
     pub(crate) interface_scale: Option<f64>,
     pub(crate) mapped: Option<MappedScoring<'a>>,
+    pub(crate) extra: &'a crate::ExtraMetricArguments,
+    pub(crate) chemistry: (Option<&'a Path>, Option<&'a str>),
 }
 
 /// How to put chains and atoms in correspondence before scoring.
@@ -236,18 +238,8 @@ pub(crate) fn compare(
     options: ComparisonOptions<'_>,
     context: Context,
 ) -> Exit {
-    let includes_dockq = options
-        .metrics
-        .iter()
-        .any(|metric| matches!(metric, MetricChoice::DockQ));
-    let has_dockq_controls = options.receptor.is_some()
-        || options.ligand.is_some()
-        || options.contact_distance.is_some()
-        || options.ligand_scale.is_some()
-        || options.interface_scale.is_some();
-    if has_dockq_controls && !includes_dockq {
-        eprintln!("DockQ controls require `--metrics dockq`");
-        return Exit::Usage;
+    if let Err(exit) = check_controls_have_metrics(&options) {
+        return exit;
     }
     let model = match open(model, context) {
         Ok(structure) => structure,
@@ -274,6 +266,36 @@ pub(crate) fn compare(
     }
     emit_metrics(context, &rows);
     Exit::Success
+}
+
+/// A control for a metric that was not selected is refused, not ignored.
+fn check_controls_have_metrics(options: &ComparisonOptions<'_>) -> Result<(), Exit> {
+    let has =
+        |wanted: &[MetricChoice]| options.metrics.iter().any(|metric| wanted.contains(metric));
+    let chain_pair = has(&[MetricChoice::DockQ, MetricChoice::Qs]);
+    let cutoff = chain_pair || has(&[MetricChoice::ContactSimilarity]);
+    let refused = [
+        (
+            (options.ligand_scale.is_some() || options.interface_scale.is_some())
+                && !has(&[MetricChoice::DockQ]),
+            "DockQ scales require `--metrics dockq`",
+        ),
+        (
+            (options.receptor.is_some() || options.ligand.is_some()) && !chain_pair,
+            "--receptor and --ligand require `--metrics dockq` or `qs`",
+        ),
+        (
+            options.contact_distance.is_some() && !cutoff,
+            "--contact-distance requires `dockq`, `qs` or `contact-similarity`",
+        ),
+    ];
+    for (violated, message) in refused {
+        if violated {
+            eprintln!("{message}");
+            return Err(Exit::Usage);
+        }
+    }
+    Ok(())
 }
 
 fn measure(
@@ -319,7 +341,21 @@ fn measure(
         MetricChoice::GdtHa => {
             molframe::compare::gdt_ha(model.coordinates(), reference.coordinates())
         }
-        MetricChoice::DockQ => return measure_dockq(model, reference, options, context),
+        MetricChoice::DockQ => {
+            return super::docking::measure_dockq(model, reference, options, context);
+        }
+        MetricChoice::Qs => return super::overlap::qs(model, reference, options, context),
+        MetricChoice::ContactSimilarity => {
+            return super::overlap::contact_similarity(model, reference, options, context);
+        }
+        MetricChoice::Cad => return super::overlap::cad(model, reference, options, context),
+        MetricChoice::Ce => return super::ce::measure(model, reference, options, context),
+        MetricChoice::InterfaceRmsd | MetricChoice::PocketRmsd => {
+            return super::regions::region_rmsd(metric, model, reference, options, context);
+        }
+        MetricChoice::LigandRmsd => {
+            return super::regions::ligand_rmsd(model, reference, options, context);
+        }
     };
     result
         .map(|value| vec![(metric_name(metric), value)])
@@ -327,93 +363,6 @@ fn measure(
             eprintln!("comparison failed: {error}");
             Exit::Consistency
         })
-}
-
-fn measure_dockq(
-    model: &molframe::Structure,
-    reference: &molframe::Structure,
-    options: &ComparisonOptions<'_>,
-    context: Context,
-) -> Result<Vec<(&'static str, f64)>, Exit> {
-    let Some(receptor) = options.receptor else {
-        eprintln!("--receptor is required when dock-q is selected");
-        return Err(Exit::Usage);
-    };
-    let Some(ligand) = options.ligand else {
-        eprintln!("--ligand is required when dock-q is selected");
-        return Err(Exit::Usage);
-    };
-    let (Some(contact_distance), Some(ligand_scale), Some(interface_scale)) = (
-        options.contact_distance,
-        options.ligand_scale,
-        options.interface_scale,
-    ) else {
-        eprintln!(
-            "--contact-distance, --ligand-scale and --interface-scale are required when dock-q is selected"
-        );
-        return Err(Exit::Usage);
-    };
-    let dockq_options = molframe::compare::DockQOptions {
-        contact_distance,
-        ligand_scale,
-        interface_scale,
-    };
-    let scored = match options.mapped {
-        None => molframe::compare::dockq(
-            model.engine(),
-            reference.engine(),
-            receptor,
-            ligand,
-            dockq_options,
-        )
-        .map_err(|error| error.to_string()),
-        Some(mapped) => mapped_dockq(
-            model,
-            reference,
-            (receptor, ligand),
-            mapped,
-            dockq_options,
-            context,
-        ),
-    };
-    scored
-        .map(|result| {
-            vec![
-                ("dockq", result.score),
-                ("dockq_fnat", result.fnat),
-                ("dockq_ligand_rmsd", result.ligand_rmsd),
-                ("dockq_interface_rmsd", result.interface_rmsd),
-            ]
-        })
-        .map_err(|error| {
-            eprintln!("DockQ failed: {error}");
-            Exit::Consistency
-        })
-}
-
-/// `DockQ` after matching chains, residues and atoms by sequence and name.
-fn mapped_dockq(
-    model: &molframe::Structure,
-    reference: &molframe::Structure,
-    (receptor, ligand): (&str, &str),
-    mapped: MappedScoring<'_>,
-    options: molframe::compare::DockQOptions,
-    context: Context,
-) -> Result<molframe::compare::DockQ, String> {
-    use molframe::CompareExt;
-    let provider = crate::chemistry::load_ccd(mapped.ccd, mapped.ccd_version, context)
-        .map_err(|_| "the Chemical Component Dictionary could not be loaded".to_owned())?;
-    let mapping = molframe::compare::MappingOptions {
-        provider: &provider,
-        namespace: context.policy.identifiers,
-        scoring: mapped.scoring,
-        min_identity: mapped.min_identity,
-        automorphism_limit: mapped.automorphism_limit,
-    };
-    model
-        .mapped_dockq(reference, receptor, ligand, &mapping, options)
-        .map(|(score, _)| score)
-        .map_err(|error| error.to_string())
 }
 
 pub(crate) fn map_chains(
@@ -487,5 +436,12 @@ pub(super) const fn metric_name(metric: MetricChoice) -> &'static str {
         MetricChoice::GdtTs => "gdt_ts",
         MetricChoice::GdtHa => "gdt_ha",
         MetricChoice::DockQ => "dockq",
+        MetricChoice::Qs => "qs",
+        MetricChoice::Cad => "cad",
+        MetricChoice::Ce => "ce_rmsd",
+        MetricChoice::ContactSimilarity => "contact_similarity",
+        MetricChoice::LigandRmsd => "ligand_rmsd",
+        MetricChoice::InterfaceRmsd => "interface_rmsd",
+        MetricChoice::PocketRmsd => "pocket_rmsd",
     }
 }

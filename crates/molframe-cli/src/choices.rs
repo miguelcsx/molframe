@@ -21,7 +21,7 @@ impl From<RadiusChoice> for molframe::chemistry::RadiusSet {
     }
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub(crate) enum MetricChoice {
     Lddt,
     TmScore,
@@ -29,6 +29,13 @@ pub(crate) enum MetricChoice {
     GdtHa,
     #[value(name = "dockq")]
     DockQ,
+    Qs,
+    Cad,
+    Ce,
+    ContactSimilarity,
+    LigandRmsd,
+    InterfaceRmsd,
+    PocketRmsd,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
