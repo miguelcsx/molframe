@@ -49,6 +49,14 @@ impl fmt::Display for MatrixError {
 
 impl std::error::Error for MatrixError {}
 
+molframe_core::diagnostic_from!(MatrixError, |error| match error {
+    MatrixError::SizeOverflow | MatrixError::AllocationFailed => molframe_core::Code::E1903,
+    MatrixError::OutputLength => molframe_core::Code::E5102,
+    MatrixError::MemoryBudget => molframe_core::Code::E7001,
+    MatrixError::Cancelled => molframe_core::Code::E1904,
+    MatrixError::WorkerPanicked => molframe_core::Code::E9001,
+});
+
 /// A dense row-major matrix of distances in ångström.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DistanceMatrix {

@@ -20,6 +20,7 @@ pub mod a3m;
 pub mod align;
 pub mod alphabet;
 pub mod clustal;
+mod diagnostics;
 pub mod fasta;
 pub mod fastq;
 pub mod format;

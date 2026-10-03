@@ -66,6 +66,25 @@ pub enum EigenError {
     InputTooLarge,
 }
 
+impl std::fmt::Display for EigenError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::InvalidOptions => "the tolerance or sweep ceiling was invalid",
+            Self::NonFiniteMatrix => "a matrix entry was NaN or infinite",
+            Self::DidNotConverge => "the requested convergence was not reached",
+            Self::InputTooLarge => "the input is too large to count exactly",
+        })
+    }
+}
+
+impl std::error::Error for EigenError {}
+
+molframe_core::diagnostic_from!(EigenError, |error| match error {
+    EigenError::InvalidOptions | EigenError::NonFiniteMatrix => molframe_core::Code::E5101,
+    EigenError::DidNotConverge => molframe_core::Code::E5104,
+    EigenError::InputTooLarge => molframe_core::Code::E1903,
+});
+
 /// The eigenvalues and eigenvectors of a symmetric matrix.
 ///
 /// Eigenvalues are sorted descending, and column `i` of [`Decomposition::vectors`]

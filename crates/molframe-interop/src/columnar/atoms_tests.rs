@@ -235,3 +235,10 @@ fn chunked_structure() -> Structure {
     data.coords = CoordinateStore::Single(coordinates);
     Structure::new(data)
 }
+
+#[test]
+fn a_table_file_failure_is_the_output_code() {
+    use molframe_core::{Code, Diagnostic};
+    let error = crate::columnar::table_file::TableFileError::Io(std::io::Error::other("disk full"));
+    assert_eq!(Diagnostic::from(error).code(), Code::E7901);
+}

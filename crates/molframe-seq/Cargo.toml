@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Sequence alignment and comparison for molframe"
 
 [dependencies]
+molframe-core.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

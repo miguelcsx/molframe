@@ -22,6 +22,8 @@ pub enum TableFileError {
     Parquet(#[from] parquet::errors::ParquetError),
 }
 
+molframe_core::diagnostic_from!(TableFileError, |_error| molframe_core::Code::E7901);
+
 pub(crate) fn schema_with_metadata(
     table: &AtomTable,
     metadata: BTreeMap<String, String>,

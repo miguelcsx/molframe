@@ -46,6 +46,18 @@ pub enum ReflectionBinningError {
     IndexOverflow,
 }
 
+molframe_core::diagnostic_from!(ReflectionBinningError, |error| match error {
+    ReflectionBinningError::NoBins | ReflectionBinningError::InvalidSpacing => {
+        molframe_core::Code::E5101
+    }
+    ReflectionBinningError::NoReflections => molframe_core::Code::E5103,
+    ReflectionBinningError::LengthMismatch => molframe_core::Code::E5102,
+    ReflectionBinningError::NoOperations => molframe_core::Code::E6015,
+    ReflectionBinningError::TooLarge | ReflectionBinningError::IndexOverflow => {
+        molframe_core::Code::E1903
+    }
+});
+
 /// Shell boundaries over `1/d²`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolutionBinner {

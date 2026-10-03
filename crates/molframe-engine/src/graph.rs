@@ -435,3 +435,20 @@ pub enum WorkflowError {
 
 /// Result type used by workflow kernels.
 pub type WorkflowResult<T> = Result<T, WorkflowError>;
+
+molframe_core::diagnostic_from!(WorkflowBuildError, |_error| molframe_core::Code::E6101);
+
+molframe_core::diagnostic_from!(WorkflowError, |error| match error {
+    WorkflowError::NoOutputs
+    | WorkflowError::MissingDependency { .. }
+    | WorkflowError::TypeMismatch { .. }
+    | WorkflowError::Cycle
+    | WorkflowError::MissingInput(_)
+    | WorkflowError::InputType { .. }
+    | WorkflowError::ResultType { .. }
+    | WorkflowError::MissingResult(_) => molframe_core::Code::E6101,
+    WorkflowError::Cancelled => molframe_core::Code::E1904,
+    WorkflowError::MemoryRefused { .. } => molframe_core::Code::E7001,
+    WorkflowError::Operation { .. } => molframe_core::Code::E5101,
+    WorkflowError::InternalTypeMismatch { .. } => molframe_core::Code::E9001,
+});

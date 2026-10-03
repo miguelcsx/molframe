@@ -260,3 +260,18 @@ fn shells_and_normalizers_agree_with_the_gemmi_reference() {
         }
     }
 }
+
+#[test]
+fn every_binning_failure_has_a_registered_diagnostic_code() {
+    use molframe_core::{Code, Diagnostic};
+    for (error, code) in [
+        (ReflectionBinningError::NoBins, Code::E5101),
+        (ReflectionBinningError::NoReflections, Code::E5103),
+        (ReflectionBinningError::LengthMismatch, Code::E5102),
+        (ReflectionBinningError::TooLarge, Code::E1903),
+    ] {
+        let diagnostic = Diagnostic::from(error);
+        assert_eq!(diagnostic.code(), code);
+        assert!(diagnostic.code().is_registered());
+    }
+}

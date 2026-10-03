@@ -16,6 +16,7 @@ mod cavity_geometry;
 mod collect;
 mod components;
 pub mod depth;
+mod diagnostics;
 pub mod geodesic;
 mod grid_options;
 mod io;

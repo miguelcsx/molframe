@@ -128,6 +128,18 @@ impl SpatialError {
     }
 }
 
+impl From<SpatialError> for Diagnostic {
+    fn from(error: SpatialError) -> Self {
+        error.into_diagnostic().with_message(error.to_string())
+    }
+}
+
+impl From<&SpatialError> for Diagnostic {
+    fn from(error: &SpatialError) -> Self {
+        Self::from(*error)
+    }
+}
+
 impl fmt::Display for SpatialError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

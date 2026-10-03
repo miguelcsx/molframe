@@ -316,6 +316,26 @@ pub enum NewickError {
     EmptyName(usize),
 }
 
+impl std::fmt::Display for NewickError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unexpected(position) => {
+                write!(formatter, "unexpected character at byte {position}")
+            }
+            Self::UnexpectedEnd => formatter.write_str("the string ended in the middle of a tree"),
+            Self::BadLength(position) => {
+                write!(
+                    formatter,
+                    "branch length is not a number at byte {position}"
+                )
+            }
+            Self::EmptyName(position) => write!(formatter, "leaf has no name at byte {position}"),
+        }
+    }
+}
+
+impl std::error::Error for NewickError {}
+
 impl Tree {
     /// Parses a Newick string into a strictly binary tree.
     ///

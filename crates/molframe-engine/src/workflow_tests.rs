@@ -226,3 +226,25 @@ fn cancellation_and_memory_admission_happen_before_kernels() {
         Err(WorkflowError::Cancelled)
     ));
 }
+
+#[test]
+fn workflow_failures_have_registered_diagnostic_codes() {
+    use molframe_core::{Code, Diagnostic};
+    assert_eq!(Diagnostic::from(WorkflowError::Cycle).code(), Code::E6101);
+    assert_eq!(
+        Diagnostic::from(WorkflowError::Cancelled).code(),
+        Code::E1904
+    );
+    assert_eq!(
+        Diagnostic::from(WorkflowError::MemoryRefused {
+            estimated: 10,
+            budget: 5
+        })
+        .code(),
+        Code::E7001
+    );
+    assert_eq!(
+        Diagnostic::from(crate::graph::WorkflowBuildError::EmptyName).code(),
+        Code::E6101
+    );
+}

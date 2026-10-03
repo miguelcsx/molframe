@@ -78,6 +78,35 @@ pub enum SuperposeError {
     TooManyPoints,
 }
 
+impl std::fmt::Display for SuperposeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LengthMismatch => {
+                formatter.write_str("the two sets do not have the same number of positions")
+            }
+            Self::TooFewPoints => {
+                formatter.write_str("fewer than three positions do not fix a rotation")
+            }
+            Self::Degenerate => formatter.write_str("the positions are collinear"),
+            Self::InvalidOptions => formatter.write_str("a numerical tolerance was invalid"),
+            Self::Eigen(error) => write!(formatter, "the quaternion eigensolver failed: {error}"),
+            Self::TooManyPoints => {
+                formatter.write_str("the point count cannot be represented exactly")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SuperposeError {}
+
+molframe_core::diagnostic_from!(SuperposeError, |error| match error {
+    SuperposeError::LengthMismatch => molframe_core::Code::E5102,
+    SuperposeError::TooFewPoints => molframe_core::Code::E5001,
+    SuperposeError::Degenerate | SuperposeError::Eigen(_) => molframe_core::Code::E5104,
+    SuperposeError::InvalidOptions => molframe_core::Code::E5101,
+    SuperposeError::TooManyPoints => molframe_core::Code::E1903,
+});
+
 /// The deviation between two sets already in correspondence.
 ///
 /// No fitting happens: this measures the sets where they are. Use

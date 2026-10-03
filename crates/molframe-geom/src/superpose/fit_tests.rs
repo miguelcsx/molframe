@@ -268,3 +268,20 @@ fn a_mirrored_regular_tetrahedron_falls_back_and_still_gives_a_proper_rotation()
     // is less exact here than the fallback.
     assert!((fit.rmsd - value).abs() < 1e-5);
 }
+
+#[test]
+fn every_superposition_failure_has_a_stable_diagnostic_code() {
+    use molframe_core::{Code, Diagnostic};
+    for (error, code) in [
+        (SuperposeError::LengthMismatch, Code::E5102),
+        (SuperposeError::TooFewPoints, Code::E5001),
+        (SuperposeError::Degenerate, Code::E5104),
+        (SuperposeError::InvalidOptions, Code::E5101),
+        (SuperposeError::TooManyPoints, Code::E1903),
+    ] {
+        let diagnostic = Diagnostic::from(error);
+        assert_eq!(diagnostic.code(), code, "{error:?}");
+        assert!(diagnostic.code().is_registered());
+        assert!(!error.to_string().is_empty());
+    }
+}
