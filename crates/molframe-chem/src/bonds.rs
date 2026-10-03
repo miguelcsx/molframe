@@ -11,7 +11,7 @@ use molframe_core::ExecutionContext;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::index::AtomIndex;
-use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
 use molframe_core::structure::{AtomRef, Structure};
 use std::ops::Range;
 
@@ -107,6 +107,9 @@ struct GridAtom {
 /// waking for a structure that small.
 const PARALLEL_GRID_ATOMS: usize = 32_768;
 
+/// Bonds an atom is charged for when sizing a block; a plan, not a limit.
+const EXPECTED_BONDS_PER_ATOM: usize = 8;
+
 /// Grid cells searched per block of the parallel pass.
 const CELLS_PER_BLOCK: usize = 4096;
 
@@ -142,20 +145,50 @@ fn add_grid_bonds(
         BlockPlan::new(cells, CELLS_PER_BLOCK)
     };
     // Blocks cover fixed cell ranges and are appended in block order, so the
-    // records reach the builder in the order a serial walk would produce.
-    let blocks = map_blocks_in(plan, context, |_, range| {
-        let mut records = Vec::new();
-        grid.visit_cells(range, |own, neighbourhood| {
-            search_cell(structure, &grid, own, neighbourhood, &mut records);
-        });
-        records
-    })
-    .map_err(|_| {
-        Diagnostic::new(Code::E1901).with_message("a worker thread panicked during bond perception")
+    // records reach the builder in the order a serial walk would produce. Each
+    // block is charged for the bonds its atoms are expected to hold.
+    let block_cells = if single_block {
+        cells.max(1)
+    } else {
+        CELLS_PER_BLOCK
+    };
+    let atoms_per_block = grid
+        .items()
+        .len()
+        .div_ceil(cells.max(1))
+        .saturating_mul(block_cells.min(cells.max(1)));
+    let bytes_per_block = atoms_per_block
+        .saturating_mul(EXPECTED_BONDS_PER_ATOM)
+        .saturating_mul(size_of::<BondRecord>());
+    try_for_each_block_in(
+        plan,
+        context,
+        bytes_per_block,
+        |_, range| {
+            let mut records = Vec::new();
+            grid.visit_cells(range, |own, neighbourhood| {
+                search_cell(structure, &grid, own, neighbourhood, &mut records);
+            });
+            Ok::<_, Diagnostic>(records)
+        },
+        |records| {
+            for record in records {
+                output.push(record);
+            }
+            Ok(())
+        },
+    )
+    .map_err(|error| match error {
+        BlockExecutionError::Memory(error) => {
+            Diagnostic::new(Code::E1902).with_context("reason", error.to_string())
+        }
+        BlockExecutionError::Cancelled => {
+            Diagnostic::new(Code::E1901).with_message("bond perception was cancelled")
+        }
+        BlockExecutionError::Worker(_) => Diagnostic::new(Code::E1901)
+            .with_message("a worker thread panicked during bond perception"),
+        BlockExecutionError::Operation(error) => error,
     })?;
-    for record in blocks.into_iter().flatten() {
-        output.push(record);
-    }
     Ok(())
 }
 

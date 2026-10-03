@@ -323,3 +323,15 @@ fn perception_and_public_covalent_eligibility_share_chemical_boundaries() {
         }
     }
 }
+
+#[test]
+fn a_budget_below_one_block_is_refused_not_overcommitted() {
+    let structure = structure(Sample::Large);
+    let tiny = ExecutionContext::builder()
+        .worker_budget(4)
+        .memory_budget(molframe_core::MemoryBudget::new(1024).expect("a positive budget"))
+        .scratch_policy(molframe_core::ScratchPolicy::new(0))
+        .build()
+        .expect("a valid context");
+    assert!(perceive_bonds_in(&structure, &tiny).is_err());
+}
