@@ -51,6 +51,32 @@ molframe interactions hbonds model.pdb --ccd CCD.cif --ccd-version 2026-10-03 \
 Hydrogen bonds need explicit hydrogens; a structure without them reports no
 bond rather than guessing a direction.
 
+## Validation
+
+`molframe validate FILE --checks a,b,c` runs the named checks and prints one
+`check`, `item`, `value` row per finding; it exits non-zero when any check
+reports one. Beyond the basic checks (`core`, `quality`, `geometry`, `clashes`,
+`completeness`, `altloc`, `ccd-completeness`, `bfactor`) the structural and
+reference checks are:
+
+| Check | Required parameters |
+| --- | --- |
+| `valence` | none (needs a bond table: read connectivity or pass `--ccd`) |
+| `ligand` | `--ligand-bond-tolerance` |
+| `chirality` | CCD, `--chirality-minimum-volume` |
+| `cis-peptide` | CCD, `--role-profile`, `--cis-threshold-degrees` |
+| `nucleic` | CCD, `--role-profile`, `--base-plane-deviation`, `--glycosidic-range MIN MAX`, `--phosphodiester-range MIN MAX`, `--plane-relative-tolerance`, `--plane-maximum-sweeps` |
+| `ramachandran` | CCD, `--role-profile`, `--reference-library`, one `--basin REGION=DISTRIBUTION` per basin, `--ramachandran-minimum-probability` |
+| `rotamer` | CCD, `--rotamer-profile`, `--reference-library`, `--rotamer-minimum-probability` |
+| `plane-restraints` | `--plane-restraints`, `--planarity-tolerance`, `--plane-relative-tolerance`, `--plane-maximum-sweeps` |
+| `tls` | `--tls-groups`, `--tls-max-deviation`, `--tls-symmetry-tolerance` |
+
+Backbone and nucleotide checks find atoms through a polymer role profile you
+write (see `sse`), never by atom name. The file formats of the reference
+library, rotamer profile, plane restraints and TLS groups are documented with
+the analysis kernels. A check that cannot assess some of its targets prints the
+coverage (`assessed N of M`) on standard error rather than passing silently.
+
 ## Use in reproducible workflows
 
 Keep source files, command lines, and any parsing-policy flags in your workflow record. Structural-file ambiguity is part of the scientific input, not merely an I/O detail.

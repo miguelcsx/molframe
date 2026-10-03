@@ -1,97 +1,14 @@
-//! Detailed projections over native validation kernels.
+//! The checks that need only explicit thresholds and, for some, a dictionary.
 
-use crate::ValidationChoice;
-use crate::commands::open;
+use super::{Row, ValidationOptions};
 use crate::exit::Exit;
-use crate::report::{Context, Json, Table};
-use molframe::chemistry::RadiusSet;
+use crate::report::Context;
 use molframe::spatial::SpatialBackend;
 use std::path::Path;
 
-#[derive(Clone, Copy)]
-pub(crate) struct ValidationOptions<'a> {
-    pub checks: &'a [ValidationChoice],
-    pub ccd: Option<&'a Path>,
-    pub ccd_version: Option<&'a str>,
-    pub bond_tolerance: Option<f32>,
-    pub planarity_tolerance: Option<f64>,
-    pub plane_relative_tolerance: Option<f64>,
-    pub plane_maximum_sweeps: Option<usize>,
-    pub clash_tolerance: Option<f32>,
-    pub radii: Option<RadiusSet>,
-    pub altloc_expected_sum: Option<f64>,
-    pub altloc_tolerance: Option<f64>,
-    pub b_factor_z_score: Option<f64>,
-}
-
-pub(crate) fn validate(input: &Path, options: ValidationOptions<'_>, context: Context) -> Exit {
-    validate_with(input, options, context)
-}
-
-fn validate_with(input: &Path, options: ValidationOptions<'_>, context: Context) -> Exit {
-    let mut context = context;
-    let mut structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    if options.checks.contains(&ValidationChoice::Geometry) {
-        let source = match crate::chemistry::resolve_ccd(options.ccd, options.ccd_version, context)
-        {
-            Ok(source) => source,
-            Err(exit) => return exit,
-        };
-        context = source.context;
-        structure =
-            match crate::chemistry::annotate(&structure, source.path, source.version, context) {
-                Ok(structure) => structure,
-                Err(exit) => return exit,
-            };
-    }
-    let mut rows = Vec::new();
-    for check in options.checks {
-        let mut findings = match check {
-            ValidationChoice::Core => core_rows(&structure, context, input),
-            ValidationChoice::Quality => quality_rows(&structure),
-            ValidationChoice::Geometry => match geometry_rows(&structure, &options) {
-                Ok(rows) => rows,
-                Err(exit) => return exit,
-            },
-            ValidationChoice::Clashes => {
-                match clash_rows(&structure, &options, context.execution) {
-                    Ok(rows) => rows,
-                    Err(exit) => return exit,
-                }
-            }
-            ValidationChoice::Completeness => match completeness_rows(&structure, context) {
-                Ok(rows) => rows,
-                Err(exit) => return exit,
-            },
-            ValidationChoice::Altloc => match altloc_rows(&structure, &options, context) {
-                Ok(rows) => rows,
-                Err(exit) => return exit,
-            },
-            ValidationChoice::CcdCompleteness => match ccd_rows(&structure, &options, context) {
-                Ok(rows) => rows,
-                Err(exit) => return exit,
-            },
-            ValidationChoice::Bfactor => match b_factor_rows(&structure, &options) {
-                Ok(rows) => rows,
-                Err(exit) => return exit,
-            },
-        };
-        rows.append(&mut findings);
-    }
-    emit(&rows, context);
-    if rows.is_empty() {
-        Exit::Success
-    } else {
-        Exit::Consistency
-    }
-}
-
-fn b_factor_rows(
+pub(super) fn b_factor_rows(
     structure: &molframe::Structure,
-    options: &ValidationOptions<'_>,
+    options: ValidationOptions<'_>,
 ) -> Result<Vec<Row>, Exit> {
     let Some(threshold) = options.b_factor_z_score else {
         eprintln!("B-factor validation requires --b-factor-z-score");
@@ -117,9 +34,9 @@ fn b_factor_rows(
         .collect())
 }
 
-fn altloc_rows(
+pub(super) fn altloc_rows(
     structure: &molframe::Structure,
-    options: &ValidationOptions<'_>,
+    options: ValidationOptions<'_>,
     context: Context,
 ) -> Result<Vec<Row>, Exit> {
     let (Some(expected_sum), Some(tolerance)) =
@@ -155,12 +72,16 @@ fn altloc_rows(
         .collect())
 }
 
-fn ccd_rows(
+pub(super) fn ccd_rows(
     structure: &molframe::Structure,
-    options: &ValidationOptions<'_>,
+    options: ValidationOptions<'_>,
     context: Context,
 ) -> Result<Vec<Row>, Exit> {
-    let source = crate::chemistry::resolve_ccd(options.ccd, options.ccd_version, context)?;
+    let source = crate::chemistry::resolve_ccd(
+        options.chemistry.ccd.as_deref(),
+        options.chemistry.ccd_version.as_deref(),
+        context,
+    )?;
     let provider = crate::chemistry::load_ccd(source.path, source.version, source.context)?;
     let report = molframe::validation::ccd_missing_atoms(
         structure.engine(),
@@ -189,7 +110,11 @@ fn ccd_rows(
         .collect())
 }
 
-fn core_rows(structure: &molframe::Structure, context: Context, input: &Path) -> Vec<Row> {
+pub(super) fn core_rows(
+    structure: &molframe::Structure,
+    context: Context,
+    input: &Path,
+) -> Vec<Row> {
     let findings = molframe_core::structure::validate(structure.engine().data());
     context.findings(&findings, &input.display().to_string());
     findings
@@ -198,7 +123,7 @@ fn core_rows(structure: &molframe::Structure, context: Context, input: &Path) ->
         .collect()
 }
 
-fn quality_rows(structure: &molframe::Structure) -> Vec<Row> {
+pub(super) fn quality_rows(structure: &molframe::Structure) -> Vec<Row> {
     molframe::validation::quality_flags(structure.engine())
         .into_iter()
         .map(|flag| {
@@ -211,9 +136,9 @@ fn quality_rows(structure: &molframe::Structure) -> Vec<Row> {
         .collect()
 }
 
-fn geometry_rows(
+pub(super) fn geometry_rows(
     structure: &molframe::Structure,
-    options: &ValidationOptions<'_>,
+    options: ValidationOptions<'_>,
 ) -> Result<Vec<Row>, Exit> {
     let (
         Some(bond_tolerance),
@@ -268,12 +193,17 @@ fn geometry_rows(
     Ok(rows)
 }
 
-fn clash_rows(
+pub(super) fn clash_rows(
     structure: &molframe::Structure,
-    options: &ValidationOptions<'_>,
+    options: ValidationOptions<'_>,
     execution: &molframe_core::ExecutionContext,
 ) -> Result<Vec<Row>, Exit> {
-    let (Some(tolerance), Some(radii)) = (options.clash_tolerance, options.radii) else {
+    let (Some(tolerance), Some(radii)) = (
+        options.clash_tolerance,
+        options
+            .radii
+            .map(Into::<molframe::chemistry::RadiusSet>::into),
+    ) else {
         eprintln!("clash validation requires --clash-tolerance and --radii");
         return Err(Exit::Usage);
     };
@@ -301,7 +231,10 @@ fn clash_rows(
     }
 }
 
-fn completeness_rows(structure: &molframe::Structure, context: Context) -> Result<Vec<Row>, Exit> {
+pub(super) fn completeness_rows(
+    structure: &molframe::Structure,
+    context: Context,
+) -> Result<Vec<Row>, Exit> {
     let report =
         match molframe::validation::completeness(structure.engine(), context.policy.identifiers) {
             Ok(report) => report,
@@ -321,45 +254,4 @@ fn completeness_rows(structure: &molframe::Structure, context: Context) -> Resul
             )
         })
         .collect())
-}
-
-#[derive(Debug)]
-struct Row {
-    check: String,
-    item: String,
-    value: String,
-}
-
-impl Row {
-    fn new(check: impl Into<String>, item: impl Into<String>, value: impl Into<String>) -> Self {
-        Self {
-            check: check.into(),
-            item: item.into(),
-            value: value.into(),
-        }
-    }
-}
-
-fn emit(rows: &[Row], context: Context) {
-    if context.is_json() {
-        let records: Vec<String> = rows
-            .iter()
-            .map(|row| {
-                let mut object = Json::new();
-                object
-                    .text("check", &row.check)
-                    .text("item", &row.item)
-                    .text("value", &row.value);
-                object.finish()
-            })
-            .collect();
-        context.result(&context.json_records(&records));
-    } else {
-        let delimiter = context.table_delimiter();
-        let mut table = Table::new(delimiter, &["check", "item", "value"]);
-        for row in rows {
-            table.row([row.check.as_str(), row.item.as_str(), row.value.as_str()]);
-        }
-        context.result(&table.finish());
-    }
 }

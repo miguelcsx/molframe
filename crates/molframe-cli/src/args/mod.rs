@@ -5,6 +5,7 @@ mod interactions;
 mod mapping;
 mod policy;
 mod sequence;
+mod validate;
 mod workflows;
 
 pub(crate) use advanced::{AuditArguments, BatchCommand, FxCommand};
@@ -16,6 +17,7 @@ pub(crate) use policy::{AltlocArgument, AssemblyArgument, ModelArgument, Namespa
 pub(crate) use sequence::{
     KmerOperation, MatrixChoice, PairwiseMode, SequenceCommand, SequenceFormat, TreeMethod,
 };
+pub(crate) use validate::ValidateArguments;
 
 pub(crate) use workflows::{
     CcdArguments, EnsembleCommand, GeometryCommand, SurfaceArguments, SystemCommand,

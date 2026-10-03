@@ -56,37 +56,7 @@ pub(crate) fn execute(command: Command, context: Context) -> Exit {
                 context,
             )
         }
-        Command::Validate {
-            input,
-            checks,
-            chemistry,
-            bond_tolerance,
-            planarity_tolerance,
-            plane_relative_tolerance,
-            plane_maximum_sweeps,
-            clash_tolerance,
-            radii,
-            altloc_expected_sum,
-            altloc_tolerance,
-            b_factor_z_score,
-        } => crate::validation_commands::validate(
-            &input,
-            crate::validation_commands::ValidationOptions {
-                checks: &checks,
-                ccd: chemistry.ccd.as_deref(),
-                ccd_version: chemistry.ccd_version.as_deref(),
-                bond_tolerance,
-                planarity_tolerance,
-                plane_relative_tolerance,
-                plane_maximum_sweeps,
-                clash_tolerance,
-                radii: radii.map(Into::into),
-                altloc_expected_sum,
-                altloc_tolerance,
-                b_factor_z_score,
-            },
-            context,
-        ),
+        Command::Validate { args } => crate::validation_commands::validate(&args, context),
         Command::Measure { input } => crate::commands::measure(&input, context),
         Command::Rmsd {
             mobile,

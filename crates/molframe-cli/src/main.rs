@@ -28,6 +28,7 @@ mod intrinsic_commands;
 mod man_commands;
 mod network_commands;
 mod report;
+mod role_profile;
 mod selection_commands;
 mod sequence_commands;
 mod system;
@@ -42,7 +43,7 @@ pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, EnsembleCommand,
     FxCommand, GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
     ModelArgument, NamespaceArgument, PairwiseMode, SequenceCommand, SequenceFormat,
-    SurfaceArguments, SystemCommand, TrajectoryCommand, TreeMethod,
+    SurfaceArguments, SystemCommand, TrajectoryCommand, TreeMethod, ValidateArguments,
 };
 pub(crate) use choices::{
     CompletionShell, EmptyLddtChoice, MetricChoice, RadiusChoice, ValidationChoice,
@@ -96,41 +97,8 @@ pub(crate) enum Command {
     },
     /// Check a structure against the invariants it must satisfy.
     Validate {
-        /// The file to read.
-        input: PathBuf,
-        /// Checks to run; multiple names may be comma-separated.
-        #[arg(long, value_enum, value_delimiter = ',', default_value = "core")]
-        checks: Vec<ValidationChoice>,
-        /// CCD required by chemistry-aware geometry checks.
         #[command(flatten)]
-        chemistry: CcdArguments,
-        /// Maximum bond-length departure in Angstrom.
-        #[arg(long)]
-        bond_tolerance: Option<f32>,
-        /// Maximum aromatic-plane RMS departure in Angstrom.
-        #[arg(long)]
-        planarity_tolerance: Option<f64>,
-        /// Relative convergence tolerance for aromatic plane fitting.
-        #[arg(long)]
-        plane_relative_tolerance: Option<f64>,
-        /// Hard ceiling on cyclic-Jacobi sweeps for aromatic plane fitting.
-        #[arg(long)]
-        plane_maximum_sweeps: Option<usize>,
-        /// Tolerated van der Waals overlap in Angstrom.
-        #[arg(long)]
-        clash_tolerance: Option<f32>,
-        /// Published radius set for clash validation.
-        #[arg(long, value_enum)]
-        radii: Option<RadiusChoice>,
-        /// Expected occupancy sum for each alternate-site atom group.
-        #[arg(long)]
-        altloc_expected_sum: Option<f64>,
-        /// Accepted absolute departure from the expected alternate occupancy sum.
-        #[arg(long)]
-        altloc_tolerance: Option<f64>,
-        /// Absolute z-score threshold for B-factor outlier reporting.
-        #[arg(long)]
-        b_factor_z_score: Option<f64>,
+        args: ValidateArguments,
     },
     /// Measure a structure: extent, radius of gyration, centre.
     Measure {

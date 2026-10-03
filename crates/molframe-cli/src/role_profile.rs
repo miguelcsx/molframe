@@ -39,7 +39,7 @@ fn component_kind<'de, D: Deserializer<'de>>(
         .transpose()
 }
 
-pub(super) fn read(path: &Path) -> Result<PolymerRoleProfile, Box<dyn std::error::Error>> {
+pub(crate) fn read(path: &Path) -> Result<PolymerRoleProfile, Box<dyn std::error::Error>> {
     let text = std::fs::read_to_string(path)?;
     let document: Document = match path.extension().and_then(std::ffi::OsStr::to_str) {
         Some(extension) if extension.eq_ignore_ascii_case("json") => serde_json::from_str(&text)?,
@@ -59,6 +59,43 @@ pub(super) fn read(path: &Path) -> Result<PolymerRoleProfile, Box<dyn std::error
             })
             .collect(),
     })
+}
+
+/// Reads the caller's role profile, reporting a failure as a policy error.
+pub(crate) fn load(profile: &Path) -> Result<PolymerRoleProfile, crate::exit::Exit> {
+    read(profile).map_err(|error| {
+        eprintln!("polymer role profile failed: {error}");
+        crate::exit::Exit::Policy
+    })
+}
+
+/// Applies a role profile and returns the role-annotated structure.
+///
+/// Backbone and nucleotide checks name atoms by role, never by atom name, so
+/// the profile is the caller's explicit statement of which atom plays which
+/// part under the given dictionary.
+pub(crate) fn apply(
+    structure: &molframe::Structure,
+    profile: &PolymerRoleProfile,
+    source: &Path,
+    provider: &impl molframe::chemistry::ComponentProvider,
+    context: crate::report::Context,
+) -> Result<molframe_core::Structure, crate::exit::Exit> {
+    match molframe::chemistry::apply_polymer_role_profile(structure.engine(), provider, profile) {
+        Ok(report) => {
+            for component in &report.unresolved_components {
+                eprintln!(
+                    "polymer role profile {}: unresolved CCD component {component}",
+                    report.profile_id
+                );
+            }
+            Ok(report.structure)
+        }
+        Err(finding) => {
+            context.findings(&[finding], &source.display().to_string());
+            Err(crate::exit::Exit::Policy)
+        }
+    }
 }
 
 #[cfg(test)]

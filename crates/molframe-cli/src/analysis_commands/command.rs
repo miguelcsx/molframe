@@ -163,7 +163,7 @@ pub(crate) struct SseOptions<'a> {
 }
 
 pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Exit {
-    let profile = match super::role_profile::read(options.role_profile) {
+    let profile = match crate::role_profile::read(options.role_profile) {
         Ok(profile) => profile,
         Err(error) => {
             eprintln!("polymer role profile failed: {error}");

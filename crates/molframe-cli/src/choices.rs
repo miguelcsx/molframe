@@ -65,4 +65,13 @@ pub(crate) enum ValidationChoice {
     Altloc,
     CcdCompleteness,
     Bfactor,
+    Valence,
+    Ligand,
+    Chirality,
+    CisPeptide,
+    Nucleic,
+    Ramachandran,
+    Rotamer,
+    PlaneRestraints,
+    Tls,
 }
