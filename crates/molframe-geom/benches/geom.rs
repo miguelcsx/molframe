@@ -5,7 +5,7 @@ use molframe_bench::{Sample, coordinates, perturbed, structure, structure_with_a
 use molframe_geom::{
     angle, angles_into, asphericity, best_fit_plane, centroid, dihedral, distance, distance_matrix,
     distance_matrix_into, distances_into, inertia_tensor, principal_axes, radius_of_gyration, rmsd,
-    rmsf, superpose, torsions_into,
+    rmsd_after_fit, rmsf, superpose, torsions_into,
 };
 
 fn bench_coordinate_kernels(c: &mut Criterion) {
@@ -135,6 +135,13 @@ fn bench_rmsd_10k(c: &mut Criterion) {
     group.throughput(Throughput::Elements(10_000));
     group.bench_function("rmsd_10k", |b| {
         b.iter(|| black_box(rmsd(&model, reference)));
+    });
+    // Same minimum deviation two ways: with the rotation built, and without.
+    group.bench_function("superpose_10k", |b| {
+        b.iter(|| black_box(superpose(&model, reference)));
+    });
+    group.bench_function("rmsd_after_fit_10k", |b| {
+        b.iter(|| black_box(rmsd_after_fit(&model, reference)));
     });
     group.finish();
 }

@@ -53,7 +53,9 @@ change the public API.
   headers and `REMARK 350` assemblies; the ten-state secondary-structure
   vocabulary with its source; an `assembly N` selector.
 - **Superposition.** Shape parameters and a quaternion characteristic-polynomial
-  (QCP) superposition with a Jacobi fallback. Its benchmark is not yet recorded.
+  (QCP) superposition with a Jacobi fallback. It is performance-neutral
+  against the Jacobi fit (the O(n) covariance pass dominates; 38.0 µs against
+  37.9 µs for 10,000 atoms), kept for its rotation-free deviation and fallback.
 - **Reference inputs.** `read_reference_library`, `read_rotamer_profile`,
   `read_plane_restraints` and `read_tls_groups` load the data the validation
   kernels refuse to carry, from JSON or TOML with strict schemas and typed
@@ -64,6 +66,10 @@ change the public API.
   cis-peptide, nucleic, Ramachandran, rotamer, plane-restraint and TLS checks,
   and `compare` gains QS, CAD, CE, contact similarity and interface, pocket and
   ligand RMSD. Every scientific parameter is a required flag.
+- Accessible-area, cell-list pair, bond-perception and contact-potential
+  blocks stream into their results, so the peak is the result plus a bounded
+  window rather than the result twice; each is tested at 1, 2, 4 and 8 workers
+  and under a budget that refuses what cannot fit.
 - `named_ligand_rmsd` compares ligands by atom name over the observed fragment
   with chemical symmetry; `GaussianNetworkModel::fluctuations` and
   `CrystalNeighbor::is_symmetry_mate` are new.

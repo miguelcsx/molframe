@@ -213,19 +213,18 @@ is `site/content/docs/parity.mdx`; the measurements are in
   covers interactions, validation, comparison, contact maps, normal modes,
   charges, SMARTS, crystallographic files and trajectory RMSF (R12), every
   threshold an explicit flag.
-- **Program steps landed.** R1 to R12 and R7's QCP code; the read path and
-  perception performance series (M0, M1 partial, M2 partial).
+- **Program steps landed.** R1 to R12 with QCP benchmarked (performance-neutral, kept for its
+  behaviour); M2.12 where a per-block output exists to stream; the read path and
+  perception performance series (M0, M1 partial, M2).
 
 ### Outstanding
 
 - **R12 gaps.** `validate --checks nucleic` has no end-to-end test because no
   nucleotide structure and dictionary are bundled; real-space map correlation
   is `crystal map-correlation`, not a `validate` check.
-- **M2.12** incremental block consumption at the remaining `map_blocks_in` sites.
 - **M1** read-path throughput: the targets (BinaryCIF 1AON at 1 GB/s of input, mmCIF
   at 300 MiB/s) are **not met**; the achieved figures and the limiting frames are
   in the evidence ledger.
-- **R7** QCP benchmark medians are not yet recorded.
 - **M4** the Python surface beyond what already ships (exception hierarchy,
   `ExecutionContext`, interop, I/O breadth, structure depth, the remaining
   namespaces).

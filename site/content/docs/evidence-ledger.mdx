@@ -91,6 +91,34 @@ On 58,870 atoms `chain A` fell from 1.05 ms to 0.014 ms and `bfactor > 20` from
 44 µs and 93 µs to 17 µs. `bfactor > 20` keeps most atoms, so the rest of its
 cost is building the selection rather than comparing values.
 
+### Superposition and streamed block results
+
+Same machine and method. QCP (`3cd4e9c`) was measured against the revision
+before it (`3cd4e9c^`) and against its own rotation-free form on the 10,000-atom
+fixture; the block-streaming changes were measured against the revision before
+each.
+
+| Change | Benchmark | Before | After |
+| --- | --- | --- | --- |
+| QCP superposition | `geom_coordinates/superpose` (small sample) | 18.515 µs | 18.245 µs |
+| QCP superposition | `geom_coordinates/rmsd`, `rmsd_10k` | 3.206 µs, 6.698 µs | 3.198 µs, 6.717 µs |
+| QCP, rotation built vs not | `superpose_10k` vs `rmsd_after_fit_10k` | — | 38.0 µs vs 37.9 µs |
+| Stream accessible-area blocks | `surface_geometry/lee_richards`, `surface_extended/surface_points` | 31.79 ms, 377.6 µs | 31.56 ms, 365.6 µs |
+| Stream cell-list pair blocks | `spatial_pairs_within/CellList`, `spatial_scaling/cell_list/1aon` | 625.5 µs, 8.999 ms | 590.9 µs, 8.745 ms |
+| Stream bond-perception blocks | `facade_enrich/1aon` | 13.58 ms | 13.51–13.61 ms |
+| Stream contact-potential blocks | `analysis_potential/contact_potential_64_cubed` | 9.4 ms | 7.9–11.9 ms (noise) |
+
+QCP is performance-neutral: both fits are dominated by the single O(n)
+covariance pass, so the 4×4 eigenproblem it replaces is not on the critical
+path at these sizes. It is kept for its specified behaviour (a rotation-free
+minimum deviation for streams, a Jacobi fallback on repeated roots), not as a
+speed-up. The streaming changes are memory-bound: the peak is the result plus
+a bounded block window rather than the result twice, and the bond and
+contact-potential paths are equal within noise. The accumulator reductions in
+`molframe-spatial` and the frame-block merge in `molframe-traj` keep
+`map_blocks_in`: their contracts hand the caller one partial per block to merge
+in one step, so there is no per-block output to stream without changing them.
+
 ### Optimisations tried and reverted
 
 Each was measured before and after on an Apple M5 Pro and reverted because the
