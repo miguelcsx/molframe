@@ -122,6 +122,16 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p molframe --doc --features full
 
+# The Python surface: three contracts, one job each. `ruff` owns style and cannot
+# see a PyO3 signature; `pyright` reads every `.py` re-export through
+# `python/molframe/_native.pyi`; `pyright --verifytypes` fails on a name the
+# extension registers but no stub advertises.
+uv run ruff format --check .
+uv run ruff check
+uv run pytest python/tests -q
+uv run pyright
+uv run pyright --verifytypes molframe
+
 # The facade compiles with any single feature and with none. This is what keeps
 # a gate on a module, a re-export or an enum variant matching the features that
 # actually make the item exist (RULES §9).

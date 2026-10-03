@@ -203,6 +203,16 @@ the exhaustive match is the guard. `Format` is the exception — it comes from c
 and crosses a version boundary between crates, which is what `#[non_exhaustive]`
 is for.
 
+**A namespace is one object.** `molframe.geometry` is one module, and the only
+way to name it is the one the root imports. A `geometry = _native.geometry`
+assignment beside a `molframe/geometry/` package hands the same attribute to two
+owners: a bare `import molframe` sees the extension's module, and the first
+explicit `import molframe.geometry` rebinds the attribute to the package. The
+name then means different things depending on which import an unrelated module
+happened to run first, which is not a contract anyone can rely on. So the root
+imports the subpackages, and each `molframe/<sub>/__init__.py` re-exports its
+native namespace faithfully — the same names, none invented, none renamed.
+
 **A feature gate mirrors the item it guards.** An `any`/`all` gate on a module,
 a re-export or a variant lists exactly the features that make the item exist —
 not the shortest expression the feature graph currently allows. `bcif` implying
@@ -229,6 +239,36 @@ cargo clippy --workspace --all-targets -- -D warnings     # must be zero warning
 cargo test --workspace
 cargo test -p molframe --doc --features full
 ```
+
+The Python surface carries two more contracts, and they are separate because
+they fail in opposite directions. `pyright` is the correctness check: it reads
+every `.py` re-export, and a name the extension registers but the shim forgets —
+or a shim naming something that does not exist — is an error. It does that
+through `python/molframe/_native.pyi`, a stub that re-exports the public stubs
+rather than restating them; one definition, so `ruff check` reads the same
+surface `pyright` reads. `pyright --verifytypes molframe` is the completeness
+check: every name the extension registers must be advertised by a stub, or the
+published package promises a `molframe` that does not exist. `ruff check` is the
+style check: it runs with `select = ["ALL"]`, so a `noqa` or an unexplained
+per-file ignore is itself a review question. None of the three substitutes for
+another, and none can see inside the extension — `ruff` has no PyO3 signature to
+read, so the `.pyi` files are where the contract is written down.
+
+`[tool.pyright] include` reaches the package only, so `python/tests` is outside
+the type checker and its assertions are the tests' own business.
+
+```bash
+uv run ruff format --check .
+uv run ruff check
+uv run pytest python/tests -q
+uv run pyright
+uv run pyright --verifytypes molframe
+```
+
+Formatting is scoped away from Markdown on purpose: `ruff format` also formats
+Python inside fenced code blocks, and the README aligns trailing comments in a
+column the formatter would collapse. Documentation layout is not part of this
+contract.
 
 The facade must also compile with **every single feature and with none**, which
 is what keeps §9's gates honest:

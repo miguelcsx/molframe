@@ -40,11 +40,87 @@ Issues = "https://github.com/miguelcsx/molframe/issues"
 Documentation = "https://miguelcsx.github.io/molframe/"
 
 [dependency-groups]
-dev = ["pyright>=1.1.405", "pytest>=8"]
+dev = ["pyright>=1.1.405", "pytest>=8", "ruff>=0.16"]
 
+# Typing and linting are separate contracts with separate jobs.
+# `pyright` in strict mode owns types, including `pyright --verifytypes
+# molframe`, which fails on a name the extension registers but no stub
+# advertises. `ruff` owns style and cannot see a PyO3 signature, so nothing it
+# reports about the extension is type information.
 [tool.pyright]
 include = ["python/molframe"]
 typeCheckingMode = "strict"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Markdown is excluded on purpose: `ruff format` also formats the Python inside
+# fenced code blocks, and the README uses aligned trailing comments in a column
+# that the formatter would collapse. Documentation layout is not this
+# repository's lint contract.
+extend-exclude = ["*.md", ".venv", "target", "site", "node_modules", "tmp-review"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+# Each rule is off because its premise does not hold here, not because it is
+# inconvenient. `COM812` asks for a trailing comma the formatter's own line
+# breaks disagree with. `CPY001` asks for a copyright header this repository
+# does not put in source. `D203` and `D213` are mutually exclusive with the
+# `D211`/`D212` pair the formatter's blank-line rules follow.
+# `TID252` asks subpackages to stop reaching the parent package; a MolFrame
+# subpackage is *defined* as the re-export of its native submodule, and
+# `from .._native import sel as _native` is what makes the pairing
+# `molframe/sel/` with `_native.sel` legible in one line.
+ignore = ["COM812", "CPY001", "D203", "D213", "TID252"]
+# Release tooling is formatted but not linted: it drives `twine` and `git` as
+# subprocesses and reports its own failure modes through the CLI, so the
+# `TRY`/`EM`/`S` families would rewrite working error handling into something
+# less useful to whoever reads the failure.
+exclude = [".github/scripts/*.py"]
+
+[tool.ruff.lint.per-file-ignores]
+# A stub is the API's own documentation, so its docstrings stay.
+"python/molframe/**/*.pyi" = ["A001", "A002", "PYI021"]
+# `Analysis.value` is read-only, so `Analysis[T]` is covariant: an
+# `Analysis[Dog]` *is* an `Analysis[Animal]`. PEP 695 type parameters have no
+# variance annotation, so rewriting it as `class Analysis[T]` would silently
+# turn that covariance into invariance. `Generic` and a covariant `TypeVar` are
+# the only spelling that carries the information.
+"python/molframe/__init__.pyi" = ["UP046"]
+# `molframe.sel.all` is the selection keyword, not the builtin.
+"python/molframe/sel/__init__.py" = ["A001"]
+# The test names are the specification: `test_a_reduced_cell_is_returned...`
+# documents what is asserted, so a docstring or an extracted constant would say
+# the same thing twice, less precisely. `INP001` because `python/tests` is not
+# a package and making it one would change pytest's import mode.
+# `ANN` because `[tool.pyright] include` does not reach `python/tests`;
+# demanding annotations nothing reads would enforce a discipline with no
+# verifier behind it. That exclusion lapses the day the tests join that
+# `include`, which needs a stub for the `_native` extension first.
+"python/tests/*.py" = [
+    "ANN001",
+    "ANN201",
+    "ANN202",
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "INP001",
+    "PLR2004",
+    # An import-time budget cannot be measured in the process that already paid
+    # the import, so these two tests spawn a fresh interpreter. The executable is
+    # `sys.executable` and the program is a module-level literal: there is no
+    # untrusted input for `S603` to guard against.
+    "S101",
+    "S603",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["molframe"]
+# `from . import geometry as geometry` is a re-export, and re-exports belong in
+# the one statement that names them. Without this isort splits each aliased name
+# into its own import and a stub stops reading as the list it is.
+combine-as-imports = true
 
 [tool.maturin]
 manifest-path = "crates/molframe-py/Cargo.toml"

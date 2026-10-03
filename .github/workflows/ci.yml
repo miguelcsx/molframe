@@ -83,8 +83,17 @@ jobs:
       - name: Extension
         run: uvx maturin develop --release
 
+      - name: Formatting
+        run: uv run --no-sync ruff format --check .
+
+      - name: Lint
+        run: uv run --no-sync ruff check
+
       - name: Smoke suite
         run: uv run --no-sync pytest python/tests -q
+
+      - name: Type check
+        run: uv run --no-sync pyright
 
       - name: Public typing surface
         run: uv run --no-sync pyright --verifytypes molframe

@@ -47,6 +47,8 @@
               python
               pkgs.uv
               pkgs.maturin
+              pkgs.pyright
+              pkgs.ruff
 
               # Repository / native build utilities
               pkgs.git
