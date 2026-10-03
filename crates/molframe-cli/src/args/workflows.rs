@@ -74,6 +74,14 @@ pub(crate) enum TrajectoryCommand {
         #[arg(long, value_enum)]
         radii: RadiusChoice,
     },
+    /// Per-atom root-mean-square fluctuation about the mean position.
+    ///
+    /// Frames are used as stored: none is fitted, so superpose the trajectory
+    /// first when overall motion should not count as fluctuation.
+    Rmsf {
+        /// XTC, DCD or TRR trajectory.
+        input: PathBuf,
+    },
     /// Measure every frame against one reference frame.
     Rmsd {
         input: PathBuf,

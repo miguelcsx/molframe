@@ -149,6 +149,16 @@ conservative, so a packed cell needs a large value; exceeding it is an error,
 not a truncated list. Map computation (FFT, density from a model) is out of
 scope.
 
+## Trajectories
+
+`molframe trajectory rmsf FILE` streams an XTC, DCD or TRR trajectory and prints
+each atom's root-mean-square fluctuation about its mean position
+(`atom`, `rmsf_angstrom`) in one pass with memory independent of the frame
+count. Frames are used as stored: none is fitted, so superpose the trajectory
+first when overall motion should not count as fluctuation. The other
+trajectory commands are `info`, `convert`, `extract`, `contacts`, `sasa` and
+`rmsd`.
+
 ## Use in reproducible workflows
 
 Keep source files, command lines, and any parsing-policy flags in your workflow record. Structural-file ambiguity is part of the scientific input, not merely an I/O detail.

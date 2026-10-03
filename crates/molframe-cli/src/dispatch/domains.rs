@@ -165,6 +165,7 @@ pub(super) fn trajectory(command: TrajectoryCommand, context: Context) -> Exit {
         TrajectoryCommand::Contacts { input, cutoff } => {
             crate::trajectory::contacts(&input, cutoff, context)
         }
+        TrajectoryCommand::Rmsf { input } => crate::trajectory::rmsf(&input, context),
         TrajectoryCommand::Sasa {
             input,
             topology,

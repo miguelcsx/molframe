@@ -2,12 +2,14 @@
 
 mod command;
 mod contacts;
+mod rmsf;
 mod streaming;
 mod summary;
 mod surface;
 
 pub(super) use command::{convert, extract, info, rmsd};
 pub(super) use contacts::contacts;
+pub(super) use rmsf::rmsf;
 pub(super) use surface::sasa;
 
 #[cfg(test)]
