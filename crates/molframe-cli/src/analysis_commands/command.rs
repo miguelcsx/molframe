@@ -2,7 +2,7 @@
 
 use crate::commands::open;
 use crate::exit::Exit;
-use crate::report::{Context, RowWriter};
+use crate::report::{Context, RowWriter, emit_rows, finish_rows, output_error};
 use molframe::chemistry::RadiusSet;
 use molframe::spatial::SpatialBackend;
 use std::path::Path;
@@ -306,40 +306,6 @@ pub(crate) fn sasa(
         indices.into_iter().zip(areas),
         |(atom, area)| vec![atom.to_string(), area.to_string()],
     )
-}
-
-fn emit_rows<T>(
-    context: Context,
-    header: &[&str],
-    rows: impl IntoIterator<Item = T>,
-    render: impl Fn(T) -> Vec<String>,
-) -> Exit {
-    let mut output = match RowWriter::new(context, header) {
-        Ok(output) => output,
-        Err(error) => return output_error(&error),
-    };
-    for item in rows {
-        let row = render(item);
-        if let Err(error) = output.row(row.iter().map(String::as_str)) {
-            return output_error(&error);
-        }
-    }
-    finish_rows(output, None)
-}
-
-fn finish_rows(output: RowWriter, error: Option<&std::io::Error>) -> Exit {
-    if let Some(error) = error {
-        return output_error(error);
-    }
-    match output.finish() {
-        Ok(()) => Exit::Success,
-        Err(error) => output_error(&error),
-    }
-}
-
-fn output_error(error: &std::io::Error) -> Exit {
-    eprintln!("could not write result: {error}");
-    Exit::Consistency
 }
 
 pub(super) const fn sse_name(kind: molframe::SecondaryStructure) -> &'static str {

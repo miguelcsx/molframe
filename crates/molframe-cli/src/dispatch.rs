@@ -6,7 +6,9 @@ use crate::{CcdCommand, Command};
 use clap::CommandFactory as _;
 
 mod domains;
+mod interactions;
 use domains::{ensemble, geometry, profile, surface, system, trajectory};
+use interactions::interactions;
 
 pub(crate) fn execute(command: Command, context: Context) -> Exit {
     if context.is_table_file()
@@ -99,6 +101,7 @@ pub(crate) fn execute(command: Command, context: Context) -> Exit {
         Command::Ensemble { command } => ensemble(command, context),
         Command::Trajectory { command } => trajectory(command, context),
         Command::System { command } => system(command, context),
+        Command::Interactions { command } => interactions(command, context),
         command => execute_data(command, context),
     }
 }

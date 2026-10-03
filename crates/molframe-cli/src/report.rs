@@ -10,8 +10,10 @@ use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::Path;
 
+mod emit;
 mod rows;
 
+pub(crate) use emit::{emit_rows, finish_rows, output_error};
 pub use rows::RowWriter;
 
 /// Machine or human result representation.

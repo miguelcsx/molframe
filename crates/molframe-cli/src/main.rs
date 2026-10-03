@@ -23,6 +23,7 @@ mod exit;
 mod fx_commands;
 mod global;
 mod inspect;
+mod interaction_commands;
 mod intrinsic_commands;
 mod man_commands;
 mod network_commands;
@@ -39,9 +40,9 @@ use std::process::ExitCode;
 
 pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, EnsembleCommand,
-    FxCommand, GeometryCommand, KmerOperation, MappingArguments, MatrixChoice, ModelArgument,
-    NamespaceArgument, PairwiseMode, SequenceCommand, SequenceFormat, SurfaceArguments,
-    SystemCommand, TrajectoryCommand, TreeMethod,
+    FxCommand, GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
+    ModelArgument, NamespaceArgument, PairwiseMode, SequenceCommand, SequenceFormat,
+    SurfaceArguments, SystemCommand, TrajectoryCommand, TreeMethod,
 };
 pub(crate) use choices::{
     CompletionShell, EmptyLddtChoice, MetricChoice, RadiusChoice, ValidationChoice,
@@ -181,6 +182,11 @@ pub(crate) enum Command {
     System {
         #[command(subcommand)]
         command: SystemCommand,
+    },
+    /// Non-covalent interaction analyses over CCD-annotated chemistry.
+    Interactions {
+        #[command(subcommand)]
+        command: InteractionCommand,
     },
     /// List CIF data blocks and categories with exact counts.
     Categories { input: PathBuf },
