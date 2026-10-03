@@ -28,6 +28,29 @@ fn variant_names_and_autodock_markers_select_their_formats() {
 }
 
 #[test]
+fn small_molecule_files_are_recognised_by_content() {
+    assert!(Format::Sdf.recognises(b"x\n  prog\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n"));
+    assert!(Format::Sdf.recognises(b"x\n\n\n 1 0 0 0 0 0 0 0 0 0 0 V3000\n"));
+    assert!(Format::Sdf.recognises(b"anything\n$$$$\n"));
+    assert!(!Format::Sdf.recognises(b"data_1ABC\n"));
+    assert!(Format::Mol2.recognises(b"# c\n@<TRIPOS>MOLECULE\nname\n"));
+    let core = b"data_x\nloop_\n_atom_site_label\n_atom_site_fract_x\n";
+    assert!(Format::SmallCif.recognises(core));
+    assert!(!Format::SmallCif.recognises(b"data_x\n_atom_site.Cartn_x 1\n"));
+    assert!(!Format::SmallCif.recognises(b"data_x\n_atom_site.fract_x 1\n_atom_site.Cartn_x 1\n"));
+    let detected = Format::detect(
+        Format::Auto,
+        &buffer("data_x\n_atom_site_fract_x 1\n"),
+        None,
+    );
+    assert_eq!(detected.ok(), Some(Format::SmallCif));
+    assert_eq!(Format::from_name("ligand.sdf.gz"), Some(Format::Sdf));
+    assert_eq!(Format::from_name("ligand.mol"), Some(Format::Sdf));
+    assert_eq!(Format::from_name("ligand.mol2"), Some(Format::Mol2));
+    assert_eq!(Format::from_name("entry.cif"), Some(Format::Mmcif));
+}
+
+#[test]
 fn content_decides_before_the_file_name_does() {
     let mislabelled = buffer("data_1ABC\n_entry.id 1ABC\n");
     let detected = Format::detect(Format::Auto, &mislabelled, Some("entry.pdb"));

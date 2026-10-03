@@ -25,3 +25,13 @@ fn rejects_unresolved_bond_endpoint() {
     let invalid = RECORD.replace("7 10 20 ar", "7 10 99 ar");
     assert!(parse_mol2_record(&invalid).is_err());
 }
+
+#[test]
+fn comment_lines_before_the_first_section_are_ignored() {
+    let commented = format!("### Created by a tool\n###\n\n{RECORD}");
+    assert_eq!(
+        parse_mol2_record(&commented).expect("comments are skipped"),
+        parse_mol2_record(RECORD).expect("plain record parses")
+    );
+    assert!(parse_mol2_record(&format!("stray text\n{RECORD}")).is_err());
+}

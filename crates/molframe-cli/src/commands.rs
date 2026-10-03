@@ -256,6 +256,7 @@ pub fn convert(
             | Format::Pdb
             | Format::Pqr
             | Format::Pdbqt
+            | Format::Sdf
     ) {
         return Exit::Usage;
     }

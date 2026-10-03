@@ -78,7 +78,7 @@ fn sections(text: &str) -> Result<Vec<Mol2Section>, Mol2Error> {
             });
         } else if let Some(section) = result.last_mut() {
             section.lines.push(line.into());
-        } else if !line.trim().is_empty() {
+        } else if !line.trim().is_empty() && !line.trim_start().starts_with('#') {
             return Err(Mol2Error::Malformed);
         }
     }

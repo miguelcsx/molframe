@@ -13,6 +13,7 @@ mod ionic;
 mod model;
 mod mol;
 mod mol2;
+mod molecule_structure;
 mod numeric;
 mod peoe;
 mod provider;
@@ -46,6 +47,10 @@ pub use mol::{
 pub use mol2::{
     Mol2AtomMetadata, Mol2BondMetadata, Mol2Error, Mol2Record, Mol2Section, parse_mol2_record,
     write_mol2,
+};
+pub use molecule_structure::{
+    mol_record_to_structure, mol2_record_to_structure, molecule_to_structure,
+    small_cif_to_structure, structure_to_molecule,
 };
 pub use peoe::{
     PeoeAtom, PeoeAtomType, PeoeBond, PeoeError, PeoeOptions, PeoeParameterProfile,

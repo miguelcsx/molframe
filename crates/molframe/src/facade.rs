@@ -30,10 +30,13 @@ pub use formats::{write_bcif, write_bcif_with_options};
 
 #[cfg(feature = "mmcif")]
 mod cif_family;
+mod dispatch;
 #[cfg(feature = "mmcif")]
 mod extensions;
 #[cfg(feature = "pdb")]
 mod pdb_symmetry;
+#[cfg(feature = "chemistry")]
+mod small_molecule;
 // The enum holds one variant per format crate, so with none of them linked it
 // would be an empty type whose `next_batch` match has no arms to reach. The
 // module is gated by the same four features that gate its variants, rather
@@ -54,10 +57,9 @@ mod structure_batches;
 ))]
 pub use structure_batches::{StructureBatchReader, open_structure_batches};
 
-#[cfg(feature = "bcif")]
-use cif_family::read_bcif_buffer;
 #[cfg(feature = "mmcif")]
-use cif_family::read_mmcif_buffer;
+use dispatch::unsupported;
+use dispatch::{dispatch_read, unsupported_writer};
 
 /// Reads a structure, discarding what was wrong with the file.
 ///
@@ -237,7 +239,14 @@ fn write_stream<W: Write>(
     options: &WriteOptions,
 ) -> Result<(), Findings> {
     #[cfg(not(any(feature = "mmcif", feature = "bcif", feature = "pdb")))]
-    let _ = (output, structure, options);
+    let _ = options;
+    #[cfg(not(any(
+        feature = "mmcif",
+        feature = "bcif",
+        feature = "pdb",
+        feature = "chemistry"
+    )))]
+    let _ = (output, structure);
     match format {
         #[cfg(feature = "mmcif")]
         Format::Mmcif => write_mmcif_to_with_options(structure, options.cif(), output)
@@ -263,6 +272,8 @@ fn write_stream<W: Write>(
         #[cfg(feature = "pdb")]
         Format::Pdbqt => molframe_pdb::write_pdbqt_to(structure.engine(), options.pdb(), output)
             .map_err(Findings::from),
+        #[cfg(feature = "chemistry")]
+        Format::Sdf => small_molecule::write_sdf_to(structure.engine(), output),
         other => Err(unsupported_writer(other).into()),
     }
 }
@@ -406,85 +417,12 @@ fn enrich_read(
     result
 }
 
-fn dispatch_read(
-    input: &InputBuffer,
-    name: Option<&str>,
-    options: &ReadOptions,
-) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
-    let format = Format::detect(options.format, input, name).map_err(Findings::from)?;
-    match format {
-        #[cfg(feature = "mmcif")]
-        Format::Mmcif => read_mmcif_buffer(input, options),
-        #[cfg(feature = "mmcif")]
-        Format::Pdbml => read_pdbml_buffer(input, options),
-        #[cfg(feature = "bcif")]
-        Format::BinaryCif => read_bcif_buffer(input, options),
-        #[cfg(feature = "pdb")]
-        Format::Pdb => molframe_pdb::read(input, options)
-            .map(|(structure, findings)| pdb_symmetry::attach_pdb_symmetry(structure, findings))
-            .map_err(Findings::from),
-        #[cfg(feature = "pdb")]
-        Format::Mmtf => molframe_pdb::read_mmtf(input, options).map_err(Findings::from),
-        #[cfg(feature = "pdb")]
-        Format::Pqr => molframe_pdb::read_pqr(input, options).map_err(Findings::from),
-        #[cfg(feature = "pdb")]
-        Format::Pdbqt => molframe_pdb::read_pdbqt(input, options).map_err(Findings::from),
-        other => Err(unsupported(other).into()),
-    }
-}
-
-#[cfg(feature = "mmcif")]
-fn read_pdbml_buffer(
-    input: &InputBuffer,
-    options: &ReadOptions,
-) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
-    // `PdbmlReadError` renders its `Pdbml` variant by delegating to the inner
-    // error, so the catch-all arm below produces the same finding the variant
-    // arm would have.
-    match molframe_cif::read_pdbml(input.as_bytes(), options) {
-        Ok((document, structure, findings)) => {
-            extensions::attach_materialized_cif_metadata(&document, structure, findings, options)
-                .map_err(Findings::from)
-        }
-        Err(molframe_cif::PdbmlReadError::Findings(findings)) => Err(findings.into()),
-        Err(error) => Err(Findings::from(
-            Diagnostic::new(Code::E1102)
-                .with_message("PDBML/XML could not be decoded")
-                .with_context("decoder", error.to_string()),
-        )),
-    }
-}
-
-/// The finding raised for a format this build cannot read.
-fn unsupported(format: Format) -> Diagnostic {
-    Diagnostic::new(Code::E1001)
-        .with_message("this build does not include a reader for the detected format")
-        .with_context("format", format.name())
-        .with_context("crate", crate_for(format))
-}
-
-fn unsupported_writer(format: Format) -> Diagnostic {
-    Diagnostic::new(Code::E1001)
-        .with_message("this format has no bounded incremental writer")
-        .with_context("format", format.name())
-        .with_context("crate", crate_for(format))
-}
-
-fn crate_for(format: Format) -> &'static str {
-    match format {
-        Format::Mmcif | Format::Pdbml => "molframe-cif",
-        Format::BinaryCif => "molframe-bcif",
-        Format::Pdb | Format::Pqr | Format::Pdbqt | Format::Mmtf => "molframe-pdb",
-        // `Format` is non-exhaustive across crate versions. An unknown variant
-        // is unsupported by this compiled facade rather than assigned a guessed
-        // owner.
-        _ => "unlinked-format",
-    }
-}
-
 #[cfg(all(test, feature = "pdb"))]
 #[path = "facade/pdb_symmetry_tests.rs"]
 mod pdb_symmetry_tests;
+#[cfg(all(test, feature = "chemistry", feature = "mmcif", feature = "pdb"))]
+#[path = "facade/small_molecule_tests.rs"]
+mod small_molecule_tests;
 #[cfg(test)]
 #[path = "facade/facade_tests.rs"]
 mod tests;

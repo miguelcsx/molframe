@@ -27,11 +27,17 @@ pub enum Format {
     Pqr,
     /// `AutoDock`'s PDB-shaped coordinates carrying charge and atom type.
     Pdbqt,
+    /// MDL structure-data file: one or more `CTfile` records.
+    Sdf,
+    /// Tripos MOL2 molecule records.
+    Mol2,
+    /// Core-CIF small-molecule crystal data with fractional coordinates.
+    SmallCif,
 }
 
 impl Format {
     /// The formats a caller may name, excluding automatic detection.
-    pub const NAMED: [Self; 7] = [
+    pub const NAMED: [Self; 10] = [
         Self::Mmcif,
         Self::Pdbml,
         Self::BinaryCif,
@@ -39,6 +45,9 @@ impl Format {
         Self::Pdbqt,
         Self::Pqr,
         Self::Pdb,
+        Self::Sdf,
+        Self::Mol2,
+        Self::SmallCif,
     ];
 
     /// The format's short name.
@@ -53,6 +62,9 @@ impl Format {
             Self::Pdb => "pdb",
             Self::Pqr => "pqr",
             Self::Pdbqt => "pdbqt",
+            Self::Sdf => "sdf",
+            Self::Mol2 => "mol2",
+            Self::SmallCif => "smallcif",
         }
     }
 
@@ -60,7 +72,7 @@ impl Format {
     #[must_use]
     pub const fn extensions(self) -> &'static [&'static str] {
         match self {
-            Self::Auto => &[],
+            Self::Auto | Self::SmallCif => &[],
             Self::Mmcif => &["cif", "mmcif"],
             Self::Pdbml => &["xml", "pdbml"],
             Self::BinaryCif => &["bcif"],
@@ -68,6 +80,8 @@ impl Format {
             Self::Pdb => &["pdb", "ent"],
             Self::Pqr => &["pqr"],
             Self::Pdbqt => &["pdbqt"],
+            Self::Sdf => &["sdf", "mol"],
+            Self::Mol2 => &["mol2"],
         }
     }
 
@@ -90,6 +104,12 @@ impl Format {
             Some(Self::Pqr)
         } else if name.eq_ignore_ascii_case("pdbqt") {
             Some(Self::Pdbqt)
+        } else if name.eq_ignore_ascii_case("sdf") || name.eq_ignore_ascii_case("mol") {
+            Some(Self::Sdf)
+        } else if name.eq_ignore_ascii_case("mol2") {
+            Some(Self::Mol2)
+        } else if name.eq_ignore_ascii_case("smallcif") {
+            Some(Self::SmallCif)
         } else {
             None
         }
@@ -106,6 +126,9 @@ impl Format {
             Self::Mmtf => recognises_messagepack_map(bytes, b"mmtfVersion"),
             Self::Pdbqt => recognises_pdbqt(bytes),
             Self::Pdb => recognises_pdb(bytes),
+            Self::Sdf => recognises_sdf(bytes),
+            Self::Mol2 => recognises_mol2(bytes),
+            Self::SmallCif => recognises_small_cif(bytes),
         }
     }
 
@@ -127,11 +150,14 @@ impl Format {
 
         let bytes = input.as_bytes();
         for format in [
+            Self::SmallCif,
             Self::Mmcif,
             Self::Pdbml,
             Self::BinaryCif,
             Self::Mmtf,
             Self::Pdbqt,
+            Self::Sdf,
+            Self::Mol2,
         ] {
             if format.recognises(bytes) {
                 return Ok(format);
@@ -232,6 +258,35 @@ fn recognises_pdbqt_line(line: &[u8]) -> bool {
     let atom_type = line.get(77..).and_then(|field| str::from_utf8(field).ok());
     charge.is_some_and(|field| field.trim().parse::<f64>().is_ok())
         && atom_type.is_some_and(|field| !field.trim().is_empty())
+}
+
+fn recognises_sdf(bytes: &[u8]) -> bool {
+    let mut lines = first_lines(bytes, 64);
+    if lines.any(|line| line == b"$$$$") {
+        return true;
+    }
+    first_lines(bytes, 4)
+        .nth(3)
+        .is_some_and(|line| line.ends_with(b"V2000") || line.ends_with(b"V3000"))
+}
+
+fn recognises_mol2(bytes: &[u8]) -> bool {
+    first_lines(bytes, 64).any(|line| line.starts_with(b"@<TRIPOS>MOLECULE"))
+}
+
+/// A core-CIF block: fractional atom sites and no Cartesian ones.
+fn recognises_small_cif(bytes: &[u8]) -> bool {
+    let mut data_block = false;
+    let mut fractional = false;
+    for line in first_lines(bytes, 256) {
+        data_block |= line.starts_with(b"data_");
+        fractional |=
+            line.starts_with(b"_atom_site_fract_x") || line.starts_with(b"_atom_site.fract_x");
+        if line.starts_with(b"_atom_site.Cartn_x") {
+            return false;
+        }
+    }
+    data_block && fractional
 }
 
 fn first_lines(bytes: &[u8], count: usize) -> impl Iterator<Item = &[u8]> {
