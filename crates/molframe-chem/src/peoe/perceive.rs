@@ -8,6 +8,13 @@ use std::collections::BTreeMap;
 pub(super) fn component_inputs(
     component: &Component,
 ) -> Result<(Vec<PeoeAtom>, Vec<PeoeBond>), PeoeError> {
+    component_inputs_retained(component, None)
+}
+
+pub(super) fn component_inputs_retained(
+    component: &Component,
+    retained: Option<&[bool]>,
+) -> Result<(Vec<PeoeAtom>, Vec<PeoeBond>), PeoeError> {
     let mut names = BTreeMap::new();
     for (index, atom) in component.atoms.iter().enumerate() {
         if names.insert(atom.name.as_ref(), index).is_some() {
@@ -16,6 +23,29 @@ pub(super) fn component_inputs(
             });
         }
     }
+    let keep = |index: usize| retained.is_none_or(|mask| mask[index]);
+    let indices = retained.map(|mask| {
+        let mut count = 0;
+        mask.iter()
+            .map(|keep| {
+                if *keep {
+                    let index = count;
+                    count += 1;
+                    Some(index)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    });
+    let count = retained.map_or(component.atoms.len(), |mask| {
+        mask.iter().filter(|keep| **keep).count()
+    });
+    let output_index = |index| {
+        indices
+            .as_ref()
+            .map_or(Some(index), |indices| indices[index])
+    };
     let mut adjacency = vec![Vec::new(); component.atoms.len()];
     let mut bonds = Vec::with_capacity(component.bonds.len());
     for bond in component.bonds.iter() {
@@ -24,16 +54,24 @@ pub(super) fn component_inputs(
         if atom_a == atom_b {
             return Err(PeoeError::SelfBond { atom: atom_a });
         }
+        let (Some(first), Some(second)) = (output_index(atom_a), output_index(atom_b)) else {
+            continue;
+        };
         adjacency[atom_a].push((atom_b, bond.order));
         adjacency[atom_b].push((atom_a, bond.order));
-        bonds.push(PeoeBond { atom_a, atom_b });
-    }
-    let mut atoms = Vec::with_capacity(component.atoms.len());
-    for (index, atom) in component.atoms.iter().enumerate() {
-        atoms.push(PeoeAtom {
-            atom_type: perceive(index, component, &adjacency)?,
-            formal_charge: f64::from(atom.charge),
+        bonds.push(PeoeBond {
+            atom_a: first,
+            atom_b: second,
         });
+    }
+    let mut atoms = Vec::with_capacity(count);
+    for (index, atom) in component.atoms.iter().enumerate() {
+        if keep(index) {
+            atoms.push(PeoeAtom {
+                atom_type: perceive(index, component, &adjacency)?,
+                formal_charge: f64::from(atom.charge),
+            });
+        }
     }
     Ok((atoms, bonds))
 }

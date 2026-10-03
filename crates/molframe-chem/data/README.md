@@ -37,13 +37,12 @@ ASN supplies native acceptor topology for conservative attachment inference;
 no glycan–protein attachment is declared by 1HZH `struct_conn`.
 These wwPDB data are CC0-1.0 (https://www.wwpdb.org/about/usage-policies).
 
-## Standard amino-acid dictionary fixture
+## Peptide charge fixture
 
 `CCD-amino-acids.cif` concatenates unmodified wwPDB CCD records for the twenty
-standard amino acids, retrieved from the RCSB ligand endpoint
-(https://files.rcsb.org/ligands/download/{ID}.cif) on 2026-10-03. SHA-256:
+standard amino acids, retrieved from the same RCSB ligand endpoint on
+2026-10-03. SHA-256:
 `7cc6f3143945986ad1f0e8913f8e5980f966e14ec44a6bfed166986b9bc6db0f`.
-The data are CC0-1.0 (https://www.wwpdb.org/about/usage-policies). It is a
-protein-only dictionary: structures with heme, waters or other hetero residues
-need those components supplied too, and the comparison and mapping code refuses
-a residue the dictionary does not define rather than guessing.
+The data are CC0-1.0. Charge validation uses the committed 4HHB protein atoms
+with an explicit dictionary; heme, waters and unparameterised metal chemistry
+are excluded from this protein-only fixture, not silently assigned zero.

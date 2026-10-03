@@ -6,9 +6,11 @@
 mod calculate;
 mod parameters;
 mod perceive;
+mod structure;
 mod types;
 
 pub use calculate::{component_peoe_charges, peoe_charges};
+pub use structure::{ChargeSource, PartialChargeError, PartialCharges, partial_charges};
 pub use types::{PeoeAtom, PeoeAtomType, PeoeBond, PeoeError, PeoeOptions, PeoeParameterProfile};
 
 #[cfg(test)]

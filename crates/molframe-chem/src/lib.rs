@@ -58,8 +58,8 @@ pub use molecule_structure::{
     small_cif_to_structure, structure_to_molecule,
 };
 pub use peoe::{
-    PeoeAtom, PeoeAtomType, PeoeBond, PeoeError, PeoeOptions, PeoeParameterProfile,
-    component_peoe_charges, peoe_charges,
+    ChargeSource, PartialChargeError, PartialCharges, PeoeAtom, PeoeAtomType, PeoeBond, PeoeError,
+    PeoeOptions, PeoeParameterProfile, component_peoe_charges, partial_charges, peoe_charges,
 };
 pub use provider::{CifProvider, ComponentProvider, MemoryProvider, read_ccd};
 pub use roles::{

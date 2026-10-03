@@ -30,6 +30,7 @@ mod channel_profile;
 mod chemistry;
 #[path = "gnm.rs"]
 mod elastic_network;
+mod electrostatics;
 #[path = "dssp_binary.rs"]
 mod external_secondary_structure;
 #[path = "fragment.rs"]
@@ -92,6 +93,10 @@ pub use chain_boundary::{chain_interface, chain_interface_with_spatial};
 pub use chain_statistics::{PolymerError, PolymerStatistics, polymer_statistics};
 pub use channel_profile::{PoreError, PoreProfileOptions, PoreSample, pore_profile};
 pub use elastic_network::{GaussianNetworkModel, GnmError, GnmOptions, gaussian_network_model};
+pub use electrostatics::{
+    CONTACT_POTENTIAL_CUTOFF, GridSpec, PotentialError, ScalarGrid, contact_potential,
+    contact_potential_in,
+};
 pub use external_secondary_structure::{DsspBinaryError, DsspSegment, parse_dssp_output, run_dssp};
 pub use fragment_mapping::{FragmentMappingError, FragmentMatch, FragmentReference, map_fragments};
 pub use half_sphere::{HalfSphereExposure, HseError, half_sphere_exposure};

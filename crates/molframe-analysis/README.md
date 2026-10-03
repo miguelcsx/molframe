@@ -31,3 +31,19 @@ Neighbor-based algorithms use the shared spatial layer rather than independent a
 Network models share a common contact graph, while GNM and ANM apply different operators over that graph.
 
 The governed layer connects raw kernels to MolFrame's policy, coverage, and provenance contracts.
+
+## Screened contact potential
+
+`contact_potential` evaluates caller-supplied atom-aligned charges on an affine
+`GridSpec` (row-major matrix acting on column vectors; x-fastest storage).
+Charges are in elementary-charge units and coordinates in ångström. Output is
+in kT/e at 298 K. The distance-dependent dielectric is 4r; distances below
+1 Å are clamped to 1 Å. The default finite cutoff is 12 Å, inclusive. This is
+a local screened Coulomb contact field, **not Poisson–Boltzmann**.
+
+The cell list borrows coordinates and prunes candidates; exact scientific
+distances and cutoff decisions use f64. Fixed voxel blocks run on the shared
+`ExecutionContext` worker pool with worker-count-independent output.
+`MrcMapDescriptor::voxel_to_world()` can supply the same affine without
+assuming an orthogonal unit cell. Python exposes `analysis.GridSpec`,
+`analysis.ScalarGrid` and `analysis.contact_potential`.
