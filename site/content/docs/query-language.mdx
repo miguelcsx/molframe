@@ -20,6 +20,52 @@ The built-in chemistry terms are the quickest way to state common molecular sets
 | `backbone` / `sidechain` | Protein backbone or side-chain atoms. |
 | `nucleic` | Nucleic-acid atoms. |
 | `heavy` / `hydrogen` | Non-hydrogen or hydrogen atoms. |
+| `polar_hydrogen` | Hydrogen bonded to N, O or S. |
+| `nonpolar_hydrogen` | All other hydrogen, including unbonded H. |
+| `helix` | All helices, including PPII and deposited other helices. |
+| `strand` / `sheet` | Beta ladders only / ladders plus isolated bridges. |
+| `alpha_helix` / `helix_310` / `pi_helix` / `polyproline` | One exact helix state. |
+| `bridge` / `turn` / `bend` / `coil` | One exact state; coil excludes unassigned residues. |
+
+Hydrogen polarity uses the full recorded bond topology even when a preceding
+filter selects only hydrogen. A hydrogen with any N/O/S neighbour is polar;
+hydrogen bound only to carbon, phosphorus, halogens or other elements is
+nonpolar. These are complementary display-selection classes, not a
+hydrogen-bond donor/acceptor analysis. No bonds are inferred by the query:
+unavailable connectivity raises `MOLFRAME-E4003`, whereas a known-empty graph
+makes all explicit hydrogen nonpolar.
+
+Text, compiled queries and typed expressions share this classification:
+
+```python
+polar = structure.select("polar_hydrogen")
+nonpolar = molframe.Query("nonpolar_hydrogen").select(structure)
+display_atoms = structure.select(~molframe.sel.nonpolar_hydrogen())
+```
+
+Secondary selectors read the authoritative per-residue column without recomputing
+analysis. Rust `col` and Python `molframe.sel` expose the same no-argument
+names. Python `Structure.secondary_structure` returns typed
+`SecondaryStructure` values: stable codes 0–9 are unchanged and
+`PolyProline` appends code 10. `molframe.analysis.dssp(structure)`
+computes a native DSSP table with `residue` and `kind` code columns.
+
+Canonical CIF and PDB writers project helix classes 1, 3, 5 and 10 and sheet
+ranges from that column. Other deposited helices remain `OtherHelix`,
+not alpha helices. Canonical output uses class 2 for that unspecified class;
+document-preserving CIF output retains the original deposited class number.
+CIF also writes turns. Coil, bend and isolated bridge states have no faithful
+legacy HELIX/SHEET encoding and are not relabelled as helices or strands.
+PDB output regenerates secondary ranges after chain remapping and selection.
+PDB endpoints include the deposited insertion code and decimal or hybrid-36
+residue number, including negative numbers and blank chains. Both endpoints
+must resolve uniquely inside one chain; ranges follow deposited residue order,
+never a numeric approximation. Model-local PDB annotations stay with their
+model; a dense shared topology uses the first model's local annotations.
+Canonical writers refuse ambiguous projected residue identities before emitting
+bytes. CIF secondary endpoints use label identities only, not author aliases.
+Independent ragged-model secondary annotations require writing a model snapshot:
+global secondary categories cannot encode their model-specific identity.
 
 Columns constrain structural identifiers. A column can accept one or more values:
 

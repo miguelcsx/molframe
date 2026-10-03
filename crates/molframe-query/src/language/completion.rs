@@ -185,6 +185,19 @@ const MACROS: &[&str] = &[
     "polymer",
     "ligand",
     "aromatic",
+    "polar_hydrogen",
+    "nonpolar_hydrogen",
+    "helix",
+    "strand",
+    "sheet",
+    "alpha_helix",
+    "helix_310",
+    "pi_helix",
+    "polyproline",
+    "bridge",
+    "turn",
+    "bend",
+    "coil",
 ];
 
 /// Columns whose operands are identifiers a structure can lend, mapped to the

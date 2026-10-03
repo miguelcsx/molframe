@@ -24,6 +24,8 @@ pub enum SecondaryStructure {
     Turn,
     /// A bend: Cα direction changes by more than 70° (DSSP `S`).
     Bend,
+    /// A left-handed polyproline-II helix (DSSP 4 `P`); not sequence restricted.
+    PolyProline,
 }
 
 impl SecondaryStructure {
@@ -32,8 +34,23 @@ impl SecondaryStructure {
     pub const fn is_helix(self) -> bool {
         matches!(
             self,
-            Self::AlphaHelix | Self::ThreeTenHelix | Self::PiHelix | Self::OtherHelix
+            Self::AlphaHelix
+                | Self::ThreeTenHelix
+                | Self::PiHelix
+                | Self::OtherHelix
+                | Self::PolyProline
         )
+    }
+    /// Whether the residue belongs to a beta ladder rather than an isolated bridge.
+    #[must_use]
+    pub const fn is_strand(self) -> bool {
+        matches!(self, Self::Strand)
+    }
+
+    /// Whether the residue is a beta ladder or an isolated beta bridge.
+    #[must_use]
+    pub const fn is_sheet_like(self) -> bool {
+        matches!(self, Self::Strand | Self::BetaBridge)
     }
 
     /// The stable one-byte code exchanged with consumers such as the Python
@@ -52,6 +69,7 @@ impl SecondaryStructure {
             Self::OtherHelix => 7,
             Self::BetaBridge => 8,
             Self::Bend => 9,
+            Self::PolyProline => 10,
         }
     }
 }

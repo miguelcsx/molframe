@@ -1,10 +1,13 @@
-//! Chemistry-aware shorthands over explicit structure annotations.
+//! Chemistry-aware shorthands over explicit structure annotations and topology.
+//! Hydrogen polarity scans the universe and its hydrogen incident edges, with
+//! O(N + E) time and storage on the first use of the shared CSR bond adjacency.
 
 use crate::ast::Macro;
 use crate::predicate::{AtomContext, scan};
 use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::element::Element;
 use molframe_core::selection::AtomSelection;
-use molframe_core::structure::Structure;
+use molframe_core::structure::{AtomRef, Structure};
 use std::collections::BTreeSet;
 
 pub(crate) fn macro_selection(
@@ -13,6 +16,29 @@ pub(crate) fn macro_selection(
     macro_name: Macro,
     _warnings: &mut Vec<Diagnostic>,
 ) -> Result<AtomSelection, Diagnostic> {
+    if matches!(macro_name, Macro::PolarHydrogen | Macro::NonpolarHydrogen) {
+        if !structure.data().bonds.is_available() {
+            return Err(Diagnostic::new(Code::E4003).with_context("required", "bond topology"));
+        }
+        let adjacency = structure.data().bonds.adjacency(structure.atom_count());
+        return Ok(scan(structure, universe, |context| {
+            if !context.atom.element().is_some_and(Element::is_hydrogen) {
+                return false;
+            }
+            // The universe limits output, not connectivity: a conjunction can
+            // exclude the heavy parent before this macro is evaluated.
+            let polar = adjacency
+                .neighbours(context.atom.index())
+                .iter()
+                .any(|&neighbour| {
+                    matches!(
+                        structure.atom(neighbour).and_then(AtomRef::element),
+                        Some(Element::NITROGEN | Element::OXYGEN | Element::SULFUR)
+                    )
+                });
+            polar == (macro_name == Macro::PolarHydrogen)
+        }));
+    }
     if macro_name == Macro::Aromatic {
         if structure
             .annotations()
@@ -115,6 +141,14 @@ pub(crate) fn chirality_selection(
 }
 
 fn macro_matches(structure: &Structure, context: AtomContext<'_>, macro_name: Macro) -> bool {
+    use molframe_core::SecondaryStructure as Ss;
+    let secondary = match structure
+        .secondary_structure()
+        .get(context.residue.index().as_usize())
+    {
+        Some(state) => *state,
+        None => Ss::Unknown,
+    };
     let component_kind = crate::annotation::component_kind(structure, context.atom.index().get());
     let polymer_role = crate::annotation::polymer_atom_role(structure, context.atom.index().get());
     let entity_kind = context
@@ -181,6 +215,25 @@ fn macro_matches(structure: &Structure, context: AtomContext<'_>, macro_name: Ma
             component_kind == Some(molframe_chem::ComponentKind::NonPolymer)
                 || entity_kind == Some(molframe_core::EntityKind::NonPolymer)
         }
-        Macro::Aromatic => false,
+        Macro::Helix => secondary.is_helix(),
+        Macro::Strand => secondary.is_strand(),
+        Macro::Sheet => secondary.is_sheet_like(),
+        Macro::AlphaHelix => secondary == Ss::AlphaHelix,
+        Macro::Helix310 => secondary == Ss::ThreeTenHelix,
+        Macro::PiHelix => secondary == Ss::PiHelix,
+        Macro::Polyproline => secondary == Ss::PolyProline,
+        Macro::Bridge => secondary == Ss::BetaBridge,
+        Macro::Turn => secondary == Ss::Turn,
+        Macro::Bend => secondary == Ss::Bend,
+        Macro::Coil => secondary == Ss::Coil,
+        Macro::Aromatic | Macro::PolarHydrogen | Macro::NonpolarHydrogen => false,
     }
 }
+
+#[cfg(test)]
+#[path = "macros_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "secondary_tests.rs"]
+mod secondary_tests;

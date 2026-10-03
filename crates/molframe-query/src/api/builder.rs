@@ -185,10 +185,70 @@ pub mod col {
     molecular_selector!(glycans, Saccharide, "saccharide", "Saccharide atoms.");
     molecular_selector!(hetero, Hetero, "hetero", "Heterogeneous atoms.");
     molecular_selector!(hydrogen, Hydrogen, "hydrogen", "Hydrogen atoms.");
+    molecular_selector!(
+        polar_hydrogen,
+        PolarHydrogen,
+        "polar_hydrogen",
+        "Hydrogen atoms bonded to N, O or S in the full topology. Requires available bonds.
+
+```
+use molframe_query::{Query, col};
+let query = Query::from_builder(col::polar_hydrogen());
+assert_eq!(query.source(), \"polar_hydrogen\");
+```"
+    );
+    molecular_selector!(
+        nonpolar_hydrogen,
+        NonpolarHydrogen,
+        "nonpolar_hydrogen",
+        "Hydrogen atoms not bonded to N, O or S, including unbonded H. Requires available bonds.
+
+```
+use molframe_query::{Query, col};
+let query = Query::from_builder(col::nonpolar_hydrogen());
+assert_eq!(query.source(), \"nonpolar_hydrogen\");
+```"
+    );
     molecular_selector!(heavy, Heavy, "heavy", "Non-hydrogen atoms.");
     molecular_selector!(polymer, Polymer, "polymer", "Polymer atoms.");
     molecular_selector!(ligands, Ligand, "ligand", "Non-polymer ligand atoms.");
     molecular_selector!(aromatic, Aromatic, "aromatic", "Aromatic atoms.");
+    molecular_selector!(
+        helix,
+        Helix,
+        "helix",
+        "All helices, including polyproline-II and deposited other helices."
+    );
+    molecular_selector!(strand, Strand, "strand", "Beta-ladder residues only.");
+    molecular_selector!(sheet, Sheet, "sheet", "Beta strands and isolated bridges.");
+    molecular_selector!(
+        alpha_helix,
+        AlphaHelix,
+        "alpha_helix",
+        "Alpha-helix residues."
+    );
+    molecular_selector!(
+        helix_310,
+        Helix310,
+        "helix_310",
+        "Three-ten helix residues."
+    );
+    molecular_selector!(pi_helix, PiHelix, "pi_helix", "Pi-helix residues.");
+    molecular_selector!(
+        polyproline,
+        Polyproline,
+        "polyproline",
+        "Polyproline-II helix residues."
+    );
+    molecular_selector!(bridge, Bridge, "bridge", "Isolated beta-bridge residues.");
+    molecular_selector!(turn, Turn, "turn", "Hydrogen-bonded turn residues.");
+    molecular_selector!(bend, Bend, "bend", "Bend residues.");
+    molecular_selector!(
+        coil,
+        Coil,
+        "coil",
+        "Assigned coil residues, excluding unknown."
+    );
 
     /// Atom name column.
     #[must_use]

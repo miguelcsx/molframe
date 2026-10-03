@@ -109,6 +109,7 @@ Every MolGFX target is a MolFrame query, used unchanged:
 | Residue numbers | `resid 87`, `resid 1:10`, `resid 1-10 20 30` |
 | Atoms by name | `name CA`, `name N CA C O`, `name C*` |
 | Elements | `element Fe`, `element C N` |
+| Hydrogen display classes | `polar_hydrogen`, `nonpolar_hydrogen` |
 | A numeric condition | `bfactor > 50`, `occupancy < 1`, `50 < bfactor` |
 | Both / either / not | `protein and chain A`, `water or ligand`, `not water` |
 | Near something | `within 5 of resname HEM` |
@@ -122,6 +123,13 @@ Everything else -- the full keyword and column tables, ranges, wildcards,
 distance forms, `byres` and `same ... as`, named queries, errors and warnings,
 and keywords that need extra data -- is in the
 [query language reference](https://miguelcsx.github.io/molframe/docs/query-language/).
+
+Hydrogen polarity reads the full bond topology: any N/O/S neighbour makes an
+explicit hydrogen polar, even after a hydrogen-only filter. All other hydrogen
+is nonpolar, including unbonded H. A known-empty graph is valid; unavailable
+connectivity raises `MOLFRAME-E4003` rather than guessing from coordinates.
+Use `molframe.sel.polar_hydrogen()` / `nonpolar_hydrogen()` in Python or
+`molframe::query::col::polar_hydrogen()` / `nonpolar_hydrogen()` in Rust.
 
 ## How it works
 

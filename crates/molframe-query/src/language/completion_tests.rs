@@ -112,3 +112,22 @@ fn completion_at_fresh_token_offers_registry_not_values() {
     );
     assert!(fresh.items.iter().any(|item| item.label == "protein"));
 }
+
+#[test]
+fn completion_offers_both_hydrogen_polarity_macros() {
+    let aliases = QueryAliases::new();
+    for (prefix, label) in [
+        ("polar_", "polar_hydrogen"),
+        ("nonpolar_", "nonpolar_hydrogen"),
+    ] {
+        let result = complete(prefix, prefix.len(), &aliases, None);
+        assert!(
+            result
+                .items
+                .iter()
+                .any(|item| item.label == label && item.kind == CompletionKind::Macro)
+        );
+        assert_eq!(result.replacement_start, 0);
+        assert_eq!(result.replacement_end, prefix.len());
+    }
+}

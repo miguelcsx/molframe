@@ -269,6 +269,19 @@ pub(crate) const fn macro_name(value: Macro) -> &'static str {
         Macro::Polymer => "polymer",
         Macro::Ligand => "ligand",
         Macro::Aromatic => "aromatic",
+        Macro::PolarHydrogen => "polar_hydrogen",
+        Macro::NonpolarHydrogen => "nonpolar_hydrogen",
+        Macro::Helix => "helix",
+        Macro::Strand => "strand",
+        Macro::Sheet => "sheet",
+        Macro::AlphaHelix => "alpha_helix",
+        Macro::Helix310 => "helix_310",
+        Macro::PiHelix => "pi_helix",
+        Macro::Polyproline => "polyproline",
+        Macro::Bridge => "bridge",
+        Macro::Turn => "turn",
+        Macro::Bend => "bend",
+        Macro::Coil => "coil",
     }
 }
 
