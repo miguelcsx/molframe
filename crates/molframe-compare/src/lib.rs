@@ -41,7 +41,8 @@ pub mod superposed;
 pub mod workflow;
 
 pub use atom_equivalence::{
-    EquivalentAtomMapping, LigandRmsd, equivalent_atom_mappings, ligand_symmetry_rmsd,
+    EquivalentAtomMapping, LigandRmsd, component_fragment, equivalent_atom_mappings,
+    ligand_symmetry_rmsd, named_ligand_rmsd,
 };
 pub use combinatorial_extension::{
     CeAlignment, CeError, CeOptions, CeSignificanceProfile, ce_align, ce_alignments,

@@ -9,9 +9,9 @@
 //! share a frame.
 
 use super::residue::ResiduePair;
-use crate::equivalent_atom_mappings;
 use crate::mapped::MappedCompareError;
 use crate::workflow::{PointMapping, PointMatch};
+use crate::{component_fragment, equivalent_atom_mappings};
 use molframe_chem::{Component, ComponentProvider};
 use molframe_core::contract::Status;
 use molframe_core::index::AtomIndex;
@@ -166,7 +166,9 @@ fn equivalent_pairs(
 ) -> Result<(AtomPairs, bool, Vec<AtomPairs>), MappedCompareError> {
     let sources = atoms_by_name(first);
     let targets = atoms_by_name(second);
-    let component = &observed_fragment(component, &sources, &targets);
+    let component = &component_fragment(component, |name| {
+        sources.contains_key(name) && targets.contains_key(name)
+    });
     let cost = |mapping: &[u32]| -> f64 {
         let mut total = 0.0;
         for (index, atom) in component.atoms.iter().enumerate() {
@@ -222,41 +224,6 @@ fn equivalent_pairs(
         Vec::new()
     };
     Ok((pairs, swapped, alternatives))
-}
-
-/// The part of a component that both residues actually contain.
-///
-/// Equivalences are those of the fragment that is observed: a structure
-/// without hydrogens has no use for the permutations of a methyl group's
-/// hydrogens, and counting them would exhaust the automorphism bound on
-/// ordinary side chains. Bonds survive only between retained atoms, so an
-/// atom whose distinguishing neighbour is missing is not wrongly merged with
-/// another branch.
-fn observed_fragment(
-    component: &Component,
-    sources: &BTreeMap<&str, AtomIndex>,
-    targets: &BTreeMap<&str, AtomIndex>,
-) -> Component {
-    let present = |name: &str| sources.contains_key(name) && targets.contains_key(name);
-    let atoms: Vec<_> = component
-        .atoms
-        .iter()
-        .filter(|atom| present(&atom.name))
-        .cloned()
-        .collect();
-    let bonds: Vec<_> = component
-        .bonds
-        .iter()
-        .filter(|bond| present(&bond.atom_a) && present(&bond.atom_b))
-        .cloned()
-        .collect();
-    Component {
-        atoms: atoms.into(),
-        bonds: bonds.into(),
-        ideal_coordinates: None,
-        model_coordinates: None,
-        ..component.clone()
-    }
 }
 
 fn pairs_for_mapping(

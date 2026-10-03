@@ -54,6 +54,9 @@ pub fn ligand_symmetry_rmsd(
     limit: usize,
 ) -> Result<LigandRmsd, CompareError> {
     let atoms = component.atoms.len();
+    if atoms == 0 {
+        return Err(CompareError::EmptyComponent);
+    }
     if reference.len() != atoms || model.len() != atoms {
         return Err(CompareError::LengthMismatch {
             model: model.len(),
@@ -90,6 +93,74 @@ pub fn ligand_symmetry_rmsd(
         }
     }
     best.ok_or(CompareError::EmptyComponent)
+}
+
+/// The part of a component whose atoms satisfy `present`.
+///
+/// Equivalences are those of the fragment that is observed: a structure
+/// without hydrogens has no use for the permutations of a methyl group's
+/// hydrogens, and counting them would exhaust the automorphism bound on
+/// ordinary side chains. Bonds survive only between retained atoms, so an
+/// atom whose distinguishing neighbour is missing is not wrongly merged with
+/// another branch. Ideal coordinates are dropped because they index the full
+/// atom list.
+#[must_use]
+pub fn component_fragment(component: &Component, present: impl Fn(&str) -> bool) -> Component {
+    let atoms: Vec<_> = component
+        .atoms
+        .iter()
+        .filter(|atom| present(&atom.name))
+        .cloned()
+        .collect();
+    let bonds: Vec<_> = component
+        .bonds
+        .iter()
+        .filter(|bond| present(&bond.atom_a) && present(&bond.atom_b))
+        .cloned()
+        .collect();
+    Component {
+        atoms: atoms.into(),
+        bonds: bonds.into(),
+        ideal_coordinates: None,
+        model_coordinates: None,
+        ..component.clone()
+    }
+}
+
+/// Symmetry-aware ligand RMSD between atoms identified by name.
+///
+/// Only the atoms named in both coordinate sets and defined by `component`
+/// take part, so a model that lacks hydrogens, or a ligand with missing atoms,
+/// is compared over what both have and automorphisms are those of that
+/// fragment. Coordinates must already share a frame. The returned mapping
+/// indexes the fragment's atoms in component order.
+///
+/// # Errors
+///
+/// Returns [`CompareError::EmptyComponent`] when no atom is shared and an
+/// explicit bound error when the fragment has more automorphisms than `limit`.
+pub fn named_ligand_rmsd(
+    reference: &[(&str, [f32; 3])],
+    model: &[(&str, [f32; 3])],
+    component: &Component,
+    limit: usize,
+) -> Result<LigandRmsd, CompareError> {
+    let first = |atoms: &[(&str, [f32; 3])], name: &str| {
+        atoms
+            .iter()
+            .find(|(candidate, _)| *candidate == name)
+            .map(|(_, position)| *position)
+    };
+    let shared = |name: &str| first(reference, name).is_some() && first(model, name).is_some();
+    let fragment = component_fragment(component, shared);
+    let gather = |atoms: &[(&str, [f32; 3])]| -> Vec<[f32; 3]> {
+        fragment
+            .atoms
+            .iter()
+            .filter_map(|atom| first(atoms, &atom.name))
+            .collect()
+    };
+    ligand_symmetry_rmsd(&gather(reference), &gather(model), &fragment, limit)
 }
 
 #[cfg(test)]
