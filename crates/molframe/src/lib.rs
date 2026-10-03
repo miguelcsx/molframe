@@ -108,7 +108,10 @@ pub use molframe_core::diagnostic::{
     Strictness,
 };
 pub use molframe_core::element::Element;
-pub use molframe_core::execution::{ExecutionContext, MemoryBudgetError};
+pub use molframe_core::execution::{
+    CancellationToken, ContextError, ExecutionContext, MemoryBudget, MemoryBudgetError,
+    ScratchPolicy, TempStoragePolicy,
+};
 pub use molframe_core::index::{
     AnisotropyIndex, AtomIndex, BondIndex, ChainIndex, EntityIndex, InstanceId, ModelIndex,
     ResidueIndex,
