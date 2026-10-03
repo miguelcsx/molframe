@@ -108,7 +108,7 @@ pub enum CeError {
     #[error("CE found no compatible aligned fragment path")]
     NoAlignment,
     /// Shared rigid superposition failed.
-    #[error("CE superposition failed: {0:?}")]
+    #[error("CE superposition failed: {0}")]
     Superpose(SuperposeError),
 }
 

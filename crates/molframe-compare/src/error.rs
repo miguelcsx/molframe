@@ -27,7 +27,7 @@ pub enum CompareError {
         weights: usize,
     },
     /// The superposition a score depends on could not be found.
-    #[error("superposition failed: {0:?}")]
+    #[error("superposition failed: {0}")]
     Superpose(SuperposeError),
     /// Exact chemical mapping exceeded its explicit enumeration bound.
     #[error("atom mapping exceeded the limit of {limit} alternatives")]

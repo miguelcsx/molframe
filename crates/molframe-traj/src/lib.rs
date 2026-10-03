@@ -14,6 +14,7 @@ pub mod centroid_clustering;
 pub mod cluster_algorithms;
 #[path = "governed/mod.rs"]
 pub mod contract_workflows;
+mod diagnostics;
 #[path = "pca.rs"]
 pub mod dimensionality;
 #[path = "msd.rs"]

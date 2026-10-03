@@ -22,6 +22,7 @@ mod contact_area_difference;
 mod contact_overlap;
 #[path = "mapping/mod.rs"]
 mod correspondence;
+mod diagnostics;
 #[path = "dockq.rs"]
 mod docking_quality;
 #[path = "error.rs"]
