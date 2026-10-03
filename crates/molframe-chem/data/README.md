@@ -14,6 +14,29 @@ the Rust API:
 Missing source values remain `None`; one convention is never substituted for
 another. Mendeleev's MIT license is retained in `LICENSE.mendeleev`.
 
+## Carbohydrate reference metadata and fixtures
+
+`src/carbohydrates/snfg.rs` adapts all 79 Mol* `Monosaccharides` metadata records
+and its `CommonSaccharideNames` CCD aliases, pinned to Mol* commit
+`e58afe3353b9d6346b78ec5ad9f36fe0e4cd8789`, file
+`src/mol-model/structure/structure/carbohydrates/constants.ts` (SHA-256
+`90f0f7de929026248920f50a08c1e68827a23c59bce4a17f56467237beca941e`).
+Copyright 2018–2026 Mol* contributors; MIT permission notice: `LICENSE.molstar`.
+Shapes/colours follow https://www.ncbi.nlm.nih.gov/glycans/snfg.html.
+CHARMM/GLYCAM aliases are excluded: their namespaces collide with CCD codes
+(for example 4GL and UEA). Unknown sugars use Mol* neutral flat hexagons.
+
+The complete deposited 1HZH CIF is stored losslessly as `1HZH.cif.gz` from
+https://files.rcsb.org/download/1HZH.cif, DOI 10.2210/pdb1HZH/pdb. Decompressed
+SHA-256: `5793921cc7dcc2317e1892edcbf32b2a8e11a7bef81d2eb25d94c6165f0b01ab`;
+gzip SHA-256: `933296767ba9eb5b2ff2b930c9501af301ec6ec116f7d4c704a1f7a9355dc196`.
+`CCD-saccharides.cif` concatenates unmodified NAG/MAN/BMA/FUC/GAL/ASN CCD files
+from https://files.rcsb.org/ligands/download/{ID}.cif, acquired 2026-10-02;
+SHA-256: `ff87cfab53b91d47ee64e3782df4f8d06b91c1278ac5e16c01ec99c9214e5fc4`.
+ASN supplies native acceptor topology for conservative attachment inference;
+no glycan–protein attachment is declared by 1HZH `struct_conn`.
+These wwPDB data are CC0-1.0 (https://www.wwpdb.org/about/usage-policies).
+
 ## Standard amino-acid dictionary fixture
 
 `CCD-amino-acids.cif` concatenates unmodified wwPDB CCD records for the twenty

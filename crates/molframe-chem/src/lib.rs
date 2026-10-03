@@ -4,6 +4,7 @@
 
 mod annotate;
 mod bonds;
+mod carbohydrates;
 mod coverage;
 mod element;
 mod element_data;
@@ -31,6 +32,10 @@ pub use annotate::{
     apply_component_chemistry,
 };
 pub use bonds::{covalent_pair, perceive_bonds, perceive_bonds_in};
+pub use carbohydrates::{
+    CarbohydrateLink, CarbohydrateOptions, CarbohydrateReport, Monosaccharide, RingGeometry,
+    SnfgShape, SnfgSymbol, carbohydrates, snfg_symbol,
+};
 pub use coverage::{ComponentCoverage, component_coverage};
 pub use element::{ElementProperties, RadiusSet, RadiusTable, element_properties, vdw_radius};
 pub use equivalence::{
