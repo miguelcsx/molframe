@@ -83,7 +83,7 @@ pub fn lee_richards(
     // Each block owns one pair of scratch buffers for all of its atoms, so the
     // per-atom kernel never allocates. Blocks are fixed and merged in order,
     // so the result is identical at any worker count.
-    crate::accessible_area::mapped_ranges(positions.len(), context, |range| {
+    crate::accessible_area::mapped_ranges(positions.len(), size_of::<f64>(), context, |range| {
         let mut neighbours: Vec<SliceNeighbour> = Vec::new();
         let mut segments: Vec<(f64, f64)> = Vec::new();
         range

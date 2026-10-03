@@ -198,3 +198,46 @@ impl ToBitsVec for Vec<f64> {
         self.iter().map(|value| value.to_bits()).collect()
     }
 }
+
+fn budgeted(workers: usize, bytes: usize) -> ExecutionContext {
+    ExecutionContext::builder()
+        .worker_budget(workers)
+        .memory_budget(molframe_core::MemoryBudget::new(bytes).expect("a positive budget"))
+        .scratch_policy(molframe_core::ScratchPolicy::new(0))
+        .build()
+        .expect("a valid context")
+}
+
+#[test]
+fn surface_points_stream_through_a_bounded_window_and_match_at_every_worker_count() {
+    let (positions, radii) = packed_grid();
+    let Ok(serial) = surface_points(&positions, &radii, 1.4, 64, &context()) else {
+        panic!("serial run is valid");
+    };
+    assert!(!serial.is_empty());
+    for workers in [1, 2, 4, 8] {
+        // Room for the result and a few blocks in flight, not for every block at once.
+        let roomy = budgeted(workers, 64 * 1024 * 1024);
+        let Ok(points) = surface_points(&positions, &radii, 1.4, 64, &roomy) else {
+            panic!("a roomy budget suffices at {workers} workers");
+        };
+        assert_eq!(points, serial, "{workers} workers");
+        assert_eq!(
+            roomy.reserved_bytes(),
+            0,
+            "{workers} workers release their reservation"
+        );
+    }
+}
+
+#[test]
+fn a_budget_below_one_block_is_refused_instead_of_overcommitted() {
+    let (positions, radii) = packed_grid();
+    let tiny = budgeted(4, 1024);
+    assert!(matches!(
+        surface_points(&positions, &radii, 1.4, 64, &tiny),
+        Err(SasaError::Spatial(molframe_spatial::SpatialError::Memory(
+            _
+        )))
+    ));
+}

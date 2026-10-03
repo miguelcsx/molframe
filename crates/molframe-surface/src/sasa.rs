@@ -12,7 +12,7 @@
 //! regardless of the order neighbours arrive in.
 
 use molframe_core::ExecutionContext;
-use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
 use molframe_spatial::SpatialError;
 
 use crate::neighbourhood::{self, Neighbourhood};
@@ -145,20 +145,39 @@ pub fn shrake_rupley(
 /// finishes a buried run.
 pub(crate) fn mapped_ranges<T: Send>(
     count: usize,
+    bytes_per_item: usize,
     context: &ExecutionContext,
     worker: impl Fn(core::ops::Range<usize>) -> Vec<T> + Sync,
 ) -> Result<Vec<T>, SasaError> {
     /// Atoms per block. Small enough to even out the spread in per-atom cost.
     const BLOCK_ATOMS: usize = 512;
 
-    let plan = BlockPlan::new(count, BLOCK_ATOMS);
-    let produced = map_blocks_in(plan, context, |_, range| worker(range))
-        .map_err(|_| SasaError::WorkerPanicked)?;
-
+    let bytes_per_block =
+        BLOCK_ATOMS
+            .checked_mul(bytes_per_item)
+            .ok_or(SasaError::WorkspaceTooLarge {
+                bytes: usize::MAX,
+                limit: context.memory_budget().bytes(),
+            })?;
     let mut output = Vec::with_capacity(count);
-    for part in produced {
-        output.extend(part);
-    }
+    // Blocks are appended as they complete, in block order, so the peak is the
+    // result plus a bounded window of blocks rather than the result twice.
+    try_for_each_block_in(
+        BlockPlan::new(count, BLOCK_ATOMS),
+        context,
+        bytes_per_block,
+        |_, range| Ok::<_, SasaError>(worker(range)),
+        |mut block| {
+            output.append(&mut block);
+            Ok(())
+        },
+    )
+    .map_err(|error| match error {
+        BlockExecutionError::Memory(error) => SasaError::from(SpatialError::Memory(error)),
+        BlockExecutionError::Cancelled => SasaError::from(SpatialError::Cancelled),
+        BlockExecutionError::Worker(_) => SasaError::WorkerPanicked,
+        BlockExecutionError::Operation(error) => error,
+    })?;
     Ok(output)
 }
 
@@ -195,13 +214,18 @@ pub fn surface_points(
         return Ok(Vec::new());
     };
 
-    mapped_ranges(positions.len(), context, |range| {
-        let mut points = Vec::new();
-        for atom in range {
-            append_fixed_surface_points(&geometry, atom, &mut points);
-        }
-        points
-    })
+    mapped_ranges(
+        positions.len(),
+        usize::from(samples) * size_of::<SurfacePoint>(),
+        context,
+        |range| {
+            let mut points = Vec::new();
+            for atom in range {
+                append_fixed_surface_points(&geometry, atom, &mut points);
+            }
+            points
+        },
+    )
 }
 
 /// Appends all fixed-sampling exposed points for one atom.
