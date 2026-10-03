@@ -125,10 +125,16 @@ pub fn weighted_rmsd(
     reference: &[[f32; 3]],
     weights: &[f64],
 ) -> Result<f64, CompareError> {
-    if model.len() != reference.len() || model.len() != weights.len() {
+    if model.len() != reference.len() {
         return Err(CompareError::LengthMismatch {
             model: model.len(),
             reference: reference.len(),
+        });
+    }
+    if model.len() != weights.len() {
+        return Err(CompareError::WeightLengthMismatch {
+            points: model.len(),
+            weights: weights.len(),
         });
     }
     let mut weighted_squared = 0.0;

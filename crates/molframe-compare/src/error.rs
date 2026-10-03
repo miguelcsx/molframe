@@ -15,6 +15,17 @@ pub enum CompareError {
         /// Number of points in the reference.
         reference: usize,
     },
+    /// The weights do not cover the points, so no point can be weighted.
+    /// Distinct from [`CompareError::LengthMismatch`] because reporting
+    /// coordinate lengths here would name two equal counts and say nothing
+    /// about the input that was actually wrong.
+    #[error("weights has {weights} entries but the coordinates have {points} points")]
+    WeightLengthMismatch {
+        /// Number of points the weights must cover.
+        points: usize,
+        /// Number of weights supplied.
+        weights: usize,
+    },
     /// The superposition a score depends on could not be found.
     #[error("superposition failed: {0:?}")]
     Superpose(SuperposeError),

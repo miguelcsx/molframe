@@ -84,3 +84,28 @@ fn weighted_rmsd_uses_only_explicit_nonnegative_weights() {
         Err(CompareError::InvalidScoreInput)
     ));
 }
+
+#[test]
+fn weighted_rmsd_reports_a_short_weight_vector_as_a_weight_problem() {
+    let reference = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
+    let model = [[1.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
+    assert!(matches!(
+        weighted_rmsd(&model, &reference, &[1.0]),
+        Err(CompareError::WeightLengthMismatch {
+            points: 2,
+            weights: 1
+        })
+    ));
+}
+
+#[test]
+fn weighted_rmsd_reports_unequal_coordinates_as_a_point_problem() {
+    let model = [[1.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
+    assert!(matches!(
+        weighted_rmsd(&model, &[[0.0, 0.0, 0.0]], &[1.0, 1.0]),
+        Err(CompareError::LengthMismatch {
+            model: 2,
+            reference: 1
+        })
+    ));
+}
