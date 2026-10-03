@@ -1,5 +1,6 @@
 //! Strict JSON and TOML loading for complete analysis policies.
 
+use crate::document::{DocumentError, read_document};
 use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,
     EquivalencePolicy, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace, PeriodicPolicy,
@@ -31,6 +32,17 @@ pub enum PolicyConfigError {
         /// Rejected value.
         value: String,
     },
+}
+
+impl From<DocumentError> for PolicyConfigError {
+    fn from(error: DocumentError) -> Self {
+        match error {
+            DocumentError::Io(error) => Self::Io(error),
+            DocumentError::Json(error) => Self::Json(error),
+            DocumentError::Toml(error) => Self::Toml(error),
+            DocumentError::UnsupportedFormat => Self::UnsupportedFormat,
+        }
+    }
 }
 
 /// Strict top-level configuration shared by library-backed applications.
@@ -120,17 +132,7 @@ pub fn read_policy(path: impl AsRef<Path>) -> Result<AnalysisPolicy, PolicyConfi
 pub fn read_configuration(
     path: impl AsRef<Path>,
 ) -> Result<ApplicationConfiguration, PolicyConfigError> {
-    let path = path.as_ref();
-    let text = std::fs::read_to_string(path)?;
-    let document: ApplicationConfiguration = match path
-        .extension()
-        .and_then(std::ffi::OsStr::to_str)
-    {
-        Some(extension) if extension.eq_ignore_ascii_case("json") => serde_json::from_str(&text)?,
-        Some(extension) if extension.eq_ignore_ascii_case("toml") => toml::from_str(&text)?,
-        _ => return Err(PolicyConfigError::UnsupportedFormat),
-    };
-    Ok(document)
+    Ok(read_document(path.as_ref())?)
 }
 
 impl PolicyOverrides {

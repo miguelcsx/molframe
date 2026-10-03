@@ -204,11 +204,14 @@ pub mod engine {
     pub mod core;
 }
 
+mod document;
 mod extensions;
 mod facade;
 mod policy_config;
 pub mod prelude;
 mod structure;
+#[cfg(feature = "validation")]
+mod validation_inputs;
 
 pub use facade::{
     WriteOptions, read, read_buffer, read_bytes, read_with_diagnostics, read_with_options, write,
@@ -244,6 +247,11 @@ pub use extensions::AnalysisExt;
 pub use extensions::CompareExt;
 #[cfg(feature = "validation")]
 pub use extensions::ValidationExt;
+#[cfg(feature = "validation")]
+pub use validation_inputs::{
+    ValidationInputError, read_plane_restraints, read_reference_library, read_rotamer_profile,
+    read_tls_groups,
+};
 
 #[cfg(feature = "geometry")]
 pub use facade::transform;

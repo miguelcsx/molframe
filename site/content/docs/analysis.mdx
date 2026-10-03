@@ -66,6 +66,76 @@ for a Cα trace. Where both exist the file wins.
 
 Native assignment needs no external executable. The optional explicit `run_dssp` adapter remains available for caller-selected DSSP 4 execution and typed mmCIF segment parsing; it never locates or downloads an executable.
 
+## Validation reference inputs
+
+The validation kernels carry no built-in scientific reference. A reference
+distribution, a rotamer profile, a set of plane restraints or a set of TLS
+groups is data the caller supplies, and `molframe` reads it from JSON or TOML
+(chosen by the file suffix, case-insensitively) with strict schemas: an unknown
+key is an error. Failures are `ValidationInputError`, which names the field.
+
+| Reader | Returns | Needs |
+| --- | --- | --- |
+| `read_reference_library(path)` | `ReferenceLibrary` | the file |
+| `read_rotamer_profile(path)` | `RotamerProfile` | the file |
+| `read_plane_restraints(path, structure, policy)` | `Vec<PlaneRestraint>` | a structure and the policy that reads its identifiers |
+| `read_tls_groups(path, structure, policy)` | `Vec<TlsGroup>` | a structure and the policy that reads its identifiers |
+
+Keys equal the parameters of the constructors they feed.
+
+~~~toml
+# Reference library: a scalar histogram and a two-dimensional grid.
+[library]
+id = "bond-deviation"
+version = "2026-10"
+
+[[distribution]]                  # histogram: edges, one weight per interval
+name = "c-n"
+edges = [-0.1, 0.0, 0.1]
+weights = [1.0, 3.0]
+
+[[distribution]]                  # grid: weights are row-major, x outermost
+name = "rama"
+x_edges = [-180.0, 0.0, 180.0]
+y_edges = [-180.0, 0.0, 180.0]
+weights = [1.0, 2.0, 3.0, 4.0]
+~~~
+
+~~~toml
+# Rotamer profile: one component-local torsion per definition.
+[profile]
+id = "chi-wells"
+version = "2026-10"
+
+[[definition]]
+component_id = "SER"
+chi_index = 1                     # one-based
+atoms = ["N", "CA", "CB", "OG"]   # CCD atom names defining the dihedral
+distribution = "ser-chi1"         # a histogram in the paired library
+~~~
+
+~~~toml
+# Plane restraints: unique ids, selections in the query language.
+[[plane]]
+id = "peptide-1"
+selection = "resid 1:2 and name CA C O N"
+
+# TLS groups: tensors are three rows of three numbers.
+[[group]]
+id = "A-1"
+selection = "chain A"
+origin = [0.0, 0.0, 0.0]
+t = [[0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]]
+l = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+s = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+~~~
+
+A selection that matches no atom is refused: a restraint that silently covers
+nothing would pass every structure. The `policy` argument decides which
+identifier namespace `chain A` reads. The readers check shape, finiteness and
+uniqueness; whether a TLS tensor is admissible, or a torsion path exists in the
+dictionary, is decided by the validation kernel that consumes it.
+
 ## Choosing a method
 
 | Goal | API |
