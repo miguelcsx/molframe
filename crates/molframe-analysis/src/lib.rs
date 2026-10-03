@@ -131,7 +131,7 @@ pub use reference_contacts::{NativeContacts, NativeError, native_contact_fractio
 pub use residue_contacts::{ContactMap, ResidueContact, ResidueContactTable, residue_contact_map};
 pub use salt_bridge::{SaltBridge, SaltBridgeTable, salt_bridges};
 pub use secondary_structure_assignment::{
-    DsspError, DsspOptions, SseKind, SseRecord, SseTable, secondary_structure,
+    DsspError, DsspOptions, SseRecord, SseTable, secondary_structure,
 };
 pub use spatial_density::{
     CartesianAxis, DensityError, DensityGrid, DensityGridSpec, LinearDensityBin,

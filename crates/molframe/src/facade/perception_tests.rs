@@ -42,18 +42,48 @@ fn default_read_adds_distance_bonds_with_inferred_provenance() {
 
 #[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
 #[test]
-fn default_read_fills_only_the_secondary_structure_the_file_left_unknown() {
+fn file_secondary_structure_survives_automatic_assignment() {
+    let structure = a_facade_read();
     assert_eq!(
-        a_facade_read().engine().secondary_structure(),
-        &[molframe_core::SecondaryStructure::Helix; 4]
+        structure.engine().secondary_structure(),
+        &[molframe_core::SecondaryStructure::AlphaHelix; 4]
+    );
+    assert_eq!(
+        structure.secondary_source(),
+        &[molframe_core::SecondarySource::File; 4]
     );
 }
 
-#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "mmcif"))]
 #[test]
-fn file_secondary_structure_survives_automatic_fallback_assignment() {
-    assert_eq!(
-        a_facade_read().engine().secondary_structure(),
-        &[molframe_core::SecondaryStructure::Helix; 4]
-    );
+fn analysis_fills_only_the_residues_the_file_left_unassigned() {
+    use molframe_core::{SecondarySource, SecondaryStructure};
+
+    let Some(text) = molframe_bench::Sample::Tiny.cif() else {
+        panic!("crambin ships as mmCIF")
+    };
+    let Ok((structure, _)) = read_bytes(text.to_vec(), Some("1crn.cif"), &ReadOptions::new())
+    else {
+        panic!("crambin reads")
+    };
+    let states = structure.secondary_structure();
+    let sources = structure.secondary_source();
+    assert_eq!(states.len(), sources.len());
+    let from_file = sources
+        .iter()
+        .filter(|source| **source == SecondarySource::File)
+        .count();
+    // HELIX 7–19 and 23–30, SHEET 1–4 and 32–35.
+    assert_eq!(from_file, 13 + 8 + 4 + 4);
+    for (state, source) in states.iter().zip(sources) {
+        match source {
+            SecondarySource::File => {
+                assert!(state.is_helix() || *state == SecondaryStructure::Strand);
+            }
+            SecondarySource::Dssp => assert_ne!(*state, SecondaryStructure::Unknown),
+            SecondarySource::None => assert_eq!(*state, SecondaryStructure::Unknown),
+            SecondarySource::CaOnly => panic!("crambin has full backbones"),
+        }
+    }
+    assert!(sources.contains(&SecondarySource::Dssp));
 }

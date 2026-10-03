@@ -42,7 +42,7 @@ Chemistry-dependent workflows use the native component-chemistry pipeline. Its r
 The public Python facade exposes chemistry operations through `molframe.chemistry` when the chemistry feature is enabled. The adapter's direct network boundary is separate: an already-known URL requires an authoritative SHA-256 digest and explicit size/timeout controls, while identifier acquisition is unavailable until an authoritative provider manifest exists.
 ## Secondary structure
 
-MolFrame provides two distinct secondary-structure paths. The native analysis kernel is **DSSP-like**, not a claim of exact DSSP compatibility: it applies the documented Kabsch–Sander-style hydrogen-bond energy and pattern rules to explicit polymer atom-role annotations. It returns one typed assignment per residue. Residues missing a required role are reported as `Unknown`; an evaluable residue that matches no pattern is `Coil`. Missing chemistry annotations are an explicit prerequisite error, never inferred from atom names.
+MolFrame provides two distinct secondary-structure paths. The native analysis kernel is **DSSP-like**, not a claim of exact DSSP compatibility: it applies the documented Kabsch–Sander-style hydrogen-bond energy and pattern rules to explicit polymer atom-role annotations. It returns one typed assignment per residue in the DSSP vocabulary: `AlphaHelix`, `ThreeTenHelix`, `PiHelix`, `BetaBridge` (an isolated bridge), `Strand` (a ladder), `Turn`, `Bend` and `Coil`, with the DSSP precedence when patterns overlap. Residues missing a required role are reported as `Unknown`. Missing chemistry annotations are an explicit prerequisite error, never inferred from atom names.
 
 The native kernel is available from Rust:
 
@@ -55,13 +55,22 @@ let options = DsspOptions {
     amide_hydrogen_distance: 1.0,
     minimum_sequence_separation: 2,
     helix_offset: 4,
-    turn_offsets: 3..=4,
+    three_ten_offset: 3,
+    pi_offset: 5,
+    turn_offsets: 3..=5,
+    bend_angle_degrees: 70.0,
 };
 let table = secondary_structure(structure.engine(), &options)?;
 for (residue, kind) in table.placements() {
     println!("{residue:?}: {kind:?}");
 }
 ~~~
+
+Every read also carries a per-residue state and its source on the structure
+(`secondary_structure()` and `secondary_source()`): the file's HELIX/SHEET or
+`struct_conf` ranges with source `File` (the helix class picks α, 3₁₀, π or an
+unnamed helix), and the automatic assignment with source `Dssp`, or `CaOnly`
+for a Cα trace. Where both exist the file wins.
 
 For comparison with the reference DSSP program, the explicit `run_dssp` adapter executes a caller-selected DSSP 4 executable and parses its annotated mmCIF output into typed segments. It does not locate or download an executable, and it reports process, exit-status, and parse failures separately. Keep the executable version, input coordinates, options, and output provenance with any result. Do not label native assignments as “exact DSSP” without validation against a reference corpus.
 

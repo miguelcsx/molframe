@@ -162,7 +162,10 @@ fn bench_gw_016(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                     amide_hydrogen_distance: 1.0,
                     minimum_sequence_separation: 2,
                     helix_offset: 4,
+                    three_ten_offset: 3,
+                    pi_offset: 5,
                     turn_offsets: 3..=5,
+                    bend_angle_degrees: 70.0,
                 },
             )
             .required("GW-016 failed");

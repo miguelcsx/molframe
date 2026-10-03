@@ -83,6 +83,13 @@ impl Structure {
         self.0.secondary_structure()
     }
 
+    /// Where each residue's secondary-structure state came from, aligned to
+    /// [`Self::secondary_structure`].
+    #[must_use]
+    pub fn secondary_source(&self) -> &[molframe_core::SecondarySource] {
+        self.0.secondary_source()
+    }
+
     /// Per-atom annotation columns.
     #[must_use]
     pub fn annotations(&self) -> &molframe_core::annotation::AtomAnnotations {

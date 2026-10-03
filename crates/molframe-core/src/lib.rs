@@ -90,7 +90,7 @@ pub use provider::{
     LocalRow, LogicalRow, PayloadKind, PropertyChunk, PropertyChunkProvider, PropertyKind,
     PropertyValue, ProviderError, StructureChunk, StructureChunkProvider, TARGET_CHUNK_BONDS,
 };
-pub use secondary::SecondaryStructure;
+pub use secondary::{SecondaryAssignment, SecondarySource, SecondaryStructure};
 pub use selection::AtomSelection;
 pub use span::{ByteSpan, Position};
 pub use structure::{

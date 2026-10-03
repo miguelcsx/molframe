@@ -11,11 +11,15 @@
 //! quadratic in a chain's length.
 
 use molframe_chem::PolymerAtomRole;
+use molframe_core::SecondaryStructure;
 use molframe_core::index::ResidueIndex;
 use molframe_core::structure::{ResidueRef, Structure};
 use num_traits::ToPrimitive;
 use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
+
+#[path = "dssp/classify.rs"]
+mod classify;
 
 const CA_GRID_CUTOFF: f32 = 9.0;
 
@@ -30,10 +34,16 @@ pub struct DsspOptions {
     pub amide_hydrogen_distance: f32,
     /// Minimum residue-index separation for hydrogen-bond candidates.
     pub minimum_sequence_separation: usize,
-    /// Donor/acceptor offset identifying the configured helix class.
+    /// Donor/acceptor offset of the bond that brackets an α-helix.
     pub helix_offset: usize,
+    /// Offset of two consecutive turns that make a 3₁₀ helix; 3 in DSSP.
+    pub three_ten_offset: usize,
+    /// Offset of two consecutive turns that make a π helix; 5 in DSSP.
+    pub pi_offset: usize,
     /// Inclusive donor/acceptor offsets identifying turns.
     pub turn_offsets: RangeInclusive<usize>,
+    /// Change of Cα direction, in degrees, above which a residue bends; 70 in DSSP.
+    pub bend_angle_degrees: f32,
 }
 
 /// Why a secondary-structure assignment could not be evaluated.
@@ -55,36 +65,13 @@ pub enum DsspError {
     },
 }
 
-/// A residue's assigned secondary-structure state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SseKind {
-    /// The residue could not be evaluated from the available backbone data.
-    Unknown,
-    /// An α-helix residue.
-    AlphaHelix,
-    /// A β-strand (bridge) residue.
-    Strand,
-    /// A hydrogen-bonded turn.
-    Turn,
-    /// None of the above.
-    Coil,
-}
-
-impl SseKind {
-    /// Whether this value represents an evaluated assignment rather than a missing backbone result.
-    #[must_use]
-    pub const fn is_evaluated(self) -> bool {
-        !matches!(self, Self::Unknown)
-    }
-}
-
 /// One residue and its secondary-structure state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SseRecord {
     /// The residue described.
     pub residue: ResidueIndex,
     /// Its assigned state.
-    pub kind: SseKind,
+    pub kind: SecondaryStructure,
 }
 
 define_soa_table! {
@@ -93,14 +80,14 @@ define_soa_table! {
         /// Residue indices.
         residue: ResidueIndex,
         /// Assigned secondary-structure states.
-        kind: SseKind,
+        kind: SecondaryStructure,
     }
 }
 
 impl SseTable {
     /// Returns the computed DSSP rows as typed placement input.
     /// This reuses the existing result and performs no coordinate or frame work.
-    pub fn placements(&self) -> impl Iterator<Item = (ResidueIndex, SseKind)> + '_ {
+    pub fn placements(&self) -> impl Iterator<Item = (ResidueIndex, SecondaryStructure)> + '_ {
         self.residue()
             .iter()
             .copied()
@@ -118,9 +105,9 @@ impl SseTable {
 ///
 /// Residues are processed independently within each chain and the returned
 /// rows preserve chain/residue traversal order. A residue whose required
-/// backbone roles are not all present is reported as [`SseKind::Unknown`]. An
-/// evaluable residue that matches no helix, strand, or turn is reported as
-/// [`SseKind::Coil`].
+/// backbone roles are not all present is reported as
+/// [`SecondaryStructure::Unknown`]. An evaluable residue that matches no
+/// pattern is reported as [`SecondaryStructure::Coil`].
 ///
 /// The hydrogen-bond search takes `O(n²)` time for a chain containing `n`
 /// residues. The caller must provide options with finite, meaningful numeric
@@ -151,7 +138,11 @@ pub fn secondary_structure(
             .iter()
             .map(Backbone::is_evaluable)
             .collect::<Vec<_>>();
-        let kinds = classify(&bonds, &evaluable, options);
+        let alpha_carbons = backbones
+            .iter()
+            .map(|backbone| backbone.ca)
+            .collect::<Vec<_>>();
+        let kinds = classify::classify(&bonds, &evaluable, &alpha_carbons, options);
         for (residue, kind) in residues.iter().zip(kinds) {
             records.push(SseRecord {
                 residue: residue.index(),
@@ -164,15 +155,20 @@ pub fn secondary_structure(
 }
 
 fn validate_options(options: &DsspOptions) -> Result<(), DsspError> {
+    let separation = options.minimum_sequence_separation;
     let valid = options.electrostatic_prefactor.is_finite()
         && options.electrostatic_prefactor > 0.0
         && options.hydrogen_bond_energy.is_finite()
         && options.amide_hydrogen_distance.is_finite()
         && options.amide_hydrogen_distance > 0.0
-        && options.minimum_sequence_separation > 0
-        && options.helix_offset > options.minimum_sequence_separation
+        && separation > 0
+        && options.helix_offset > separation
+        && options.three_ten_offset > separation
+        && options.pi_offset > separation
         && !options.turn_offsets.is_empty()
-        && *options.turn_offsets.start() > options.minimum_sequence_separation;
+        && *options.turn_offsets.start() > separation
+        && options.bend_angle_degrees.is_finite()
+        && (0.0..=180.0).contains(&options.bend_angle_degrees);
     valid.then_some(()).ok_or(DsspError::InvalidOptions)
 }
 
@@ -390,70 +386,6 @@ fn hbond_energy(carbonyl: &Backbone, amide: &Backbone, prefactor: f64) -> f64 {
         return f64::INFINITY;
     }
     prefactor * (1.0 / on + 1.0 / ch - 1.0 / oh - 1.0 / cn)
-}
-
-/// Assigns a state to each residue from the hydrogen-bond pattern.
-fn classify(
-    bonds: &BTreeSet<(usize, usize)>,
-    evaluable: &[bool],
-    options: &DsspOptions,
-) -> Vec<SseKind> {
-    let count = evaluable.len();
-    let has = |i: usize, j: usize| bonds.contains(&(i, j));
-    let mut kinds = evaluable
-        .iter()
-        .map(|value| {
-            if *value {
-                SseKind::Coil
-            } else {
-                SseKind::Unknown
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // α-helix: residues bracketed by an i→i+4 backbone hydrogen bond.
-    for &(i, j) in bonds {
-        if j > i && j - i == options.helix_offset {
-            for kind in &mut kinds[(i + 1)..j] {
-                *kind = SseKind::AlphaHelix;
-            }
-        }
-    }
-
-    // β-bridges: reciprocal or offset bonds between residues over two apart.
-    // Iterate the sparse bond set rather than the full residue Cartesian product.
-    for &(i, j) in bonds {
-        if i.abs_diff(j) <= 2 {
-            continue;
-        }
-        let antiparallel = (has(i, j) && has(j, i))
-            || (i >= 1 && j + 1 < count && has(i - 1, j + 1) && has(j - 1, i + 1));
-        let parallel = (i >= 1 && has(i - 1, j) && has(j, i + 1))
-            || (j >= 1 && has(j - 1, i) && has(i, j + 1));
-        if antiparallel || parallel {
-            mark_strand(&mut kinds, i);
-            mark_strand(&mut kinds, j);
-        }
-    }
-
-    // Turns: residues bracketed by a shorter 3-, 4- or 5-bond, if still coil.
-    for &(i, j) in bonds {
-        if j > i && options.turn_offsets.contains(&(j - i)) {
-            for kind in &mut kinds[(i + 1)..j] {
-                if *kind == SseKind::Coil {
-                    *kind = SseKind::Turn;
-                }
-            }
-        }
-    }
-    kinds
-}
-
-/// Marks a residue as a strand unless it is already a helix.
-fn mark_strand(kinds: &mut [SseKind], residue: usize) {
-    if kinds[residue] != SseKind::AlphaHelix && kinds[residue] != SseKind::Unknown {
-        kinds[residue] = SseKind::Strand;
-    }
 }
 
 fn role_position(

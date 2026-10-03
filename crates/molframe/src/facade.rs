@@ -352,18 +352,49 @@ fn enrich_read(
             structure
         }
     };
-    let inferred = molframe_chem::assign_secondary_structure(&structure);
-    let mut secondary = structure.data().secondary_structure.as_ref().clone();
-    for (target, inferred) in secondary.iter_mut().zip(inferred) {
-        if *target == molframe_core::SecondaryStructure::Unknown
-            && inferred != molframe_core::SecondaryStructure::Unknown
-        {
-            *target = inferred;
-        }
-    }
+    let (states, sources) = merge_secondary(
+        structure.data(),
+        molframe_chem::assign_secondary_structure(&structure),
+    );
     let mut data = structure.data().clone();
-    data.secondary_structure = secondary.into();
+    data.secondary_structure = states.into();
+    data.secondary_source = sources.into();
     Ok((CoreStructure::new(data), findings))
+}
+
+/// Keeps, per residue, whichever assignment has the higher source rank, so a
+/// deposited state always survives and analysis fills only what the file left
+/// unassigned.
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+fn merge_secondary(
+    data: &molframe_core::StructureData,
+    inferred: Vec<molframe_core::SecondaryAssignment>,
+) -> (
+    Vec<molframe_core::SecondaryStructure>,
+    Vec<molframe_core::SecondarySource>,
+) {
+    inferred
+        .into_iter()
+        .enumerate()
+        .map(|(residue, inferred)| {
+            let current = match (
+                data.secondary_structure.get(residue),
+                data.secondary_source.get(residue),
+            ) {
+                (Some(state), Some(source)) => molframe_core::SecondaryAssignment {
+                    state: *state,
+                    source: *source,
+                },
+                _ => molframe_core::SecondaryAssignment::default(),
+            };
+            let kept = if inferred.source.rank() > current.source.rank() {
+                inferred
+            } else {
+                current
+            };
+            (kept.state, kept.source)
+        })
+        .unzip()
 }
 
 #[cfg(not(all(feature = "chemistry", feature = "spatial")))]

@@ -88,7 +88,6 @@
 
 #![forbid(unsafe_code)]
 
-pub use molframe_core::SecondaryStructure;
 pub use molframe_core::annotation::{
     AROMATIC_ATOM_ANNOTATION, ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn,
     AtomAnnotation, AtomAnnotations, COMPONENT_KIND_ANNOTATION, FORMAL_CHARGE_ANNOTATION,
@@ -134,6 +133,7 @@ pub use molframe_core::{
     AnisotropicDisplacement, AnisotropyTable, AnisotropyTableBuilder, BondAdjacency, BondOrder,
     BondProvenance, BondRecord, BondTable, BondTableBuilder,
 };
+pub use molframe_core::{SecondaryAssignment, SecondarySource, SecondaryStructure};
 pub use molframe_engine::{
     CompiledWorkflow, Cost, Explanation, Input, Node, OperationMetadata, Output, PhysicalNode,
     Workflow, WorkflowBuildError, WorkflowError, WorkflowInputs, WorkflowResults,

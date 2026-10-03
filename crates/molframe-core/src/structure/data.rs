@@ -14,7 +14,7 @@ use crate::annotation::AtomAnnotations;
 use crate::chunk::AtomChunk;
 use crate::coords::{CoordinateBlock, CoordinateGeneration};
 use crate::index::ModelIndex;
-use crate::secondary::SecondaryStructure;
+use crate::secondary::{SecondarySource, SecondaryStructure};
 use crate::symbol::{Interner, SymbolId};
 use crate::topology::Topology;
 use std::fmt;
@@ -161,6 +161,9 @@ pub struct StructureData {
     pub anisotropy: crate::anisotropy::AnisotropyTable,
     /// File or analysis secondary-structure state aligned to residue rows.
     pub secondary_structure: Arc<Vec<SecondaryStructure>>,
+    /// Where each secondary-structure state came from; the same length as
+    /// `secondary_structure`.
+    pub secondary_source: Arc<Vec<SecondarySource>>,
     /// Structure-local typed columns aligned exactly to atom rows.
     pub annotations: AtomAnnotations,
     /// Cold, typed domain metadata attached to this snapshot.
@@ -206,6 +209,7 @@ impl StructureData {
             bonds: crate::bond::BondTable::default(),
             anisotropy: crate::anisotropy::AnisotropyTable::default(),
             secondary_structure: Arc::new(Vec::new()),
+            secondary_source: Arc::new(Vec::new()),
             annotations: AtomAnnotations::default(),
             extensions: ExtensionStore::new(),
             coords: CoordinateStore::Single(CoordinateBlock::new()),
@@ -368,6 +372,13 @@ impl Structure {
     #[must_use]
     pub fn secondary_structure(&self) -> &[SecondaryStructure] {
         &self.0.secondary_structure
+    }
+
+    /// Where each residue's secondary-structure state came from, aligned to
+    /// [`Self::secondary_structure`].
+    #[must_use]
+    pub fn secondary_source(&self) -> &[SecondarySource] {
+        &self.0.secondary_source
     }
 
     /// Cold, typed domain metadata attached to this snapshot.

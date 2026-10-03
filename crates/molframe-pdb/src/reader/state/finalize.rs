@@ -36,7 +36,9 @@ impl ReadState<'_> {
 
         self.finish_bonds();
         self.finish_anisou();
-        self.data.secondary_structure = secondary::read(&self.data, &self.headers).into();
+        let (states, sources) = secondary::read(&self.data, &self.headers);
+        self.data.secondary_structure = states.into();
+        self.data.secondary_source = sources.into();
         self.finish_variant_annotations();
         if self.topology_locked {
             self.finish_dense_frames();

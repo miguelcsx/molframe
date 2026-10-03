@@ -158,13 +158,14 @@ impl PyStructure {
             .engine()
             .secondary_structure()
             .iter()
-            .map(|value| match value {
-                molframe::SecondaryStructure::Unknown => 0,
-                molframe::SecondaryStructure::Coil => 1,
-                molframe::SecondaryStructure::Helix => 2,
-                molframe::SecondaryStructure::Strand => 3,
-                molframe::SecondaryStructure::Turn => 4,
-            })
+            .map(|state| state.code())
+            .collect()
+    }
+    fn _molframe_secondary_source(&self) -> Vec<u8> {
+        self.inner
+            .secondary_source()
+            .iter()
+            .map(|source| source.code())
             .collect()
     }
 }

@@ -8,9 +8,9 @@
 //! and bounded local density.
 
 use crate::grid::{CellGrid, cell_for};
-use molframe_core::SecondaryStructure;
 use molframe_core::hashing::{IdentityHashMap, IdentityHashSet};
 use molframe_core::structure::Structure;
+use molframe_core::{SecondaryAssignment, SecondarySource, SecondaryStructure};
 
 const CA_CUTOFF: f32 = 9.0;
 /// The Kabsch–Sander bond threshold, in kcal/mol.
@@ -21,6 +21,8 @@ const PEPTIDE_BOND_LIMIT: f32 = 2.5;
 const NH_LENGTH: f32 = 1.0;
 /// 0.084 · 332: the partial charges of the two dipoles times the unit factor.
 const ELECTROSTATIC_FACTOR: f64 = 27.888;
+/// DSSP's bend threshold on the change of Cα direction, in degrees.
+const BEND_KAPPA_DEGREES: f64 = 70.0;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct Backbone {
@@ -41,12 +43,14 @@ impl Backbone {
 /// One carbonyl-to-amide hydrogen bond list, as `(acceptor, donor)` residues.
 type Bonds = IdentityHashSet<(usize, usize)>;
 
-/// Assigns unknown residues using a grid-bounded DSSP pass.
+/// Assigns every residue with a grid-bounded DSSP pass.
 ///
 /// File records are intentionally not consulted here; the caller merges this
-/// fallback only into rows that remain unknown after parsing.
+/// assignment with the file's by [`SecondarySource::rank`]. Residues with full
+/// backbones get [`SecondarySource::Dssp`]; a Cα-only trace falls back to the
+/// Zhang–Skolnick helix rule with [`SecondarySource::CaOnly`].
 #[must_use]
-pub fn assign_secondary_structure(structure: &Structure) -> Vec<SecondaryStructure> {
+pub fn assign_secondary_structure(structure: &Structure) -> Vec<SecondaryAssignment> {
     let mut backbones = vec![Backbone::default(); structure.residue_count()];
     for chain in structure.data().chains() {
         for residue in chain.residues() {
@@ -83,9 +87,10 @@ pub fn assign_secondary_structure(structure: &Structure) -> Vec<SecondaryStructu
             }
         })
         .collect::<Vec<_>>();
-    if backbones.iter().any(Backbone::is_evaluable) {
+    let source = if backbones.iter().any(Backbone::is_evaluable) {
         let (pairs, bonds) = hydrogen_bonds(&backbones);
-        classify(&bonds, &pairs, &mut states);
+        classify(&backbones, &bonds, &pairs, &mut states);
+        SecondarySource::Dssp
     } else {
         for (backbone, state) in backbones.iter().zip(&mut states) {
             if backbone.ca.is_some() {
@@ -93,8 +98,18 @@ pub fn assign_secondary_structure(structure: &Structure) -> Vec<SecondaryStructu
             }
         }
         assign_zhang_skolnick(&backbones, &mut states);
-    }
+        SecondarySource::CaOnly
+    };
     states
+        .into_iter()
+        .map(|state| SecondaryAssignment {
+            state,
+            source: match state {
+                SecondaryStructure::Unknown => SecondarySource::None,
+                _ => source,
+            },
+        })
+        .collect()
 }
 
 /// Every hydrogen bond between residues of one chain, and the residue pairs
@@ -214,45 +229,96 @@ enum Ladder {
     Antiparallel,
 }
 
-fn classify(bonds: &Bonds, pairs: &[(usize, usize)], states: &mut [SecondaryStructure]) {
-    let bond = |acceptor: Option<usize>, donor: Option<usize>| matches!((acceptor, donor), (Some(acceptor), Some(donor)) if bonds.contains(&(acceptor, donor)));
-    let turn = |residue: usize, size: usize| bonds.contains(&(residue, residue + size));
+/// Per-residue flags for each pattern a residue can belong to.
+struct Patterns {
+    helix: Vec<bool>,
+    three_ten: Vec<bool>,
+    pi: Vec<bool>,
+    turn: Vec<bool>,
+    bridge: Vec<bool>,
+    strand: Vec<bool>,
+}
 
-    let mut helix = vec![false; states.len()];
-    let mut turn_residue = vec![false; states.len()];
-    let mut three_ten = vec![false; states.len()];
-    let mut pi = vec![false; states.len()];
-    for residue in 0..states.len() {
+fn classify(
+    backbones: &[Backbone],
+    bonds: &Bonds,
+    pairs: &[(usize, usize)],
+    states: &mut [SecondaryStructure],
+) {
+    let mut patterns = Patterns {
+        helix: vec![false; states.len()],
+        three_ten: vec![false; states.len()],
+        pi: vec![false; states.len()],
+        turn: vec![false; states.len()],
+        bridge: vec![false; states.len()],
+        strand: vec![false; states.len()],
+    };
+    mark_turns_and_helices(bonds, &mut patterns);
+    mark_bridges_and_ladders(bonds, pairs, &mut patterns);
+    for (residue, state) in states.iter_mut().enumerate() {
+        if *state == SecondaryStructure::Unknown {
+            continue;
+        }
+        // DSSP's precedence: α-helix, isolated bridge, ladder strand, 3₁₀
+        // helix, π-helix, turn, bend.
+        *state = if patterns.helix[residue] {
+            SecondaryStructure::AlphaHelix
+        } else if patterns.bridge[residue] && !patterns.strand[residue] {
+            SecondaryStructure::BetaBridge
+        } else if patterns.strand[residue] {
+            SecondaryStructure::Strand
+        } else if patterns.three_ten[residue] {
+            SecondaryStructure::ThreeTenHelix
+        } else if patterns.pi[residue] {
+            SecondaryStructure::PiHelix
+        } else if patterns.turn[residue] {
+            SecondaryStructure::Turn
+        } else if bends(backbones, residue) {
+            SecondaryStructure::Bend
+        } else {
+            *state
+        };
+    }
+}
+
+fn set(flags: &mut [bool], residues: impl IntoIterator<Item = usize>) {
+    for residue in residues {
+        if let Some(flag) = flags.get_mut(residue) {
+            *flag = true;
+        }
+    }
+}
+
+/// Marks n-turns and the minimal helices two consecutive n-turns make.
+fn mark_turns_and_helices(bonds: &Bonds, patterns: &mut Patterns) {
+    let turn = |residue: usize, size: usize| bonds.contains(&(residue, residue + size));
+    for residue in 0..patterns.turn.len() {
         for size in 3..=5 {
             if !turn(residue, size) {
                 continue;
             }
-            for inside in residue + 1..residue + size {
-                if let Some(flag) = turn_residue.get_mut(inside) {
-                    *flag = true;
-                }
-            }
+            set(&mut patterns.turn, residue + 1..residue + size);
             // A minimal helix is two turns in a row; it covers the residues
             // between the first turn's carbonyl and the second turn's amide.
             if residue >= 1 && turn(residue - 1, size) {
                 let target = match size {
-                    3 => &mut three_ten,
-                    4 => &mut helix,
-                    _ => &mut pi,
+                    3 => &mut patterns.three_ten,
+                    4 => &mut patterns.helix,
+                    _ => &mut patterns.pi,
                 };
-                for inside in residue..residue + size {
-                    if let Some(flag) = target.get_mut(inside) {
-                        *flag = true;
-                    }
-                }
+                set(target, residue..residue + size);
             }
         }
     }
+}
 
+/// Marks every bridged residue, and the residues of ladders: two bridges of
+/// one kind in register.
+fn mark_bridges_and_ladders(bonds: &Bonds, pairs: &[(usize, usize)], patterns: &mut Patterns) {
+    let bond = |acceptor: Option<usize>, donor: Option<usize>| matches!((acceptor, donor), (Some(acceptor), Some(donor)) if bonds.contains(&(acceptor, donor)));
     let before = |residue: usize| residue.checked_sub(1);
     let mut bridges: IdentityHashMap<(usize, usize), Ladder> = IdentityHashMap::default();
-    for &(first, second) in pairs {
-        let (i, j) = (first, second);
+    for &(i, j) in pairs {
         let parallel = (bond(before(i), Some(j)) && bond(Some(j), Some(i + 1)))
             || (bond(before(j), Some(i)) && bond(Some(i), Some(j + 1)));
         let antiparallel = (bond(Some(i), Some(j)) && bond(Some(j), Some(i)))
@@ -263,8 +329,8 @@ fn classify(bonds: &Bonds, pairs: &[(usize, usize)], states: &mut [SecondaryStru
             bridges.insert((i, j), Ladder::Antiparallel);
         }
     }
-    let mut strand = vec![false; states.len()];
     for (&(i, j), &ladder) in &bridges {
+        set(&mut patterns.bridge, [i, j]);
         let next = match ladder {
             Ladder::Parallel => (i + 1, j + 1),
             Ladder::Antiparallel if j > 0 => (i + 1, j - 1),
@@ -272,27 +338,7 @@ fn classify(bonds: &Bonds, pairs: &[(usize, usize)], states: &mut [SecondaryStru
         };
         let key = (next.0.min(next.1), next.0.max(next.1));
         if bridges.get(&key) == Some(&ladder) {
-            for residue in [i, j, next.0, next.1] {
-                if let Some(flag) = strand.get_mut(residue) {
-                    *flag = true;
-                }
-            }
-        }
-    }
-
-    for (residue, state) in states.iter_mut().enumerate() {
-        if *state == SecondaryStructure::Unknown {
-            continue;
-        }
-        // DSSP's precedence: α-helix, strand, 3-10 helix, π-helix, turn.
-        if helix[residue] {
-            *state = SecondaryStructure::Helix;
-        } else if strand[residue] {
-            *state = SecondaryStructure::Strand;
-        } else if three_ten[residue] || pi[residue] {
-            *state = SecondaryStructure::Helix;
-        } else if turn_residue[residue] {
-            *state = SecondaryStructure::Turn;
+            set(&mut patterns.strand, [i, j, next.0, next.1]);
         }
     }
 }
@@ -314,10 +360,41 @@ fn assign_zhang_skolnick(backbones: &[Backbone], states: &mut [SecondaryStructur
             && let Some(state) = states.get_mut(index..=index + 3)
         {
             for value in state {
-                *value = SecondaryStructure::Helix;
+                *value = SecondaryStructure::AlphaHelix;
             }
         }
     }
+}
+
+/// Whether the chain bends at `residue`: the Cα(i−2)→Cα(i) and Cα(i)→Cα(i+2)
+/// directions differ by more than 70°, which is a Cα(i−2)–Cα(i)–Cα(i+2) angle
+/// below 110°. All five residues must be linked without a break.
+fn bends(backbones: &[Backbone], residue: usize) -> bool {
+    let (Some(first), Some(last)) = (residue.checked_sub(2), residue.checked_add(2)) else {
+        return false;
+    };
+    let Some(window) = backbones.get(first..=last) else {
+        return false;
+    };
+    if !window.windows(2).all(|pair| linked(&pair[0], &pair[1])) {
+        return false;
+    }
+    let (Some(before), Some(centre), Some(after)) = (window[0].ca, window[2].ca, window[4].ca)
+    else {
+        return false;
+    };
+    let incoming: [f64; 3] = core::array::from_fn(|axis| f64::from(centre[axis] - before[axis]));
+    let outgoing: [f64; 3] = core::array::from_fn(|axis| f64::from(after[axis] - centre[axis]));
+    let dot: f64 = (0..3).map(|axis| incoming[axis] * outgoing[axis]).sum();
+    let norms = (0..3)
+        .map(|axis| incoming[axis] * incoming[axis])
+        .sum::<f64>()
+        .sqrt()
+        * (0..3)
+            .map(|axis| outgoing[axis] * outgoing[axis])
+            .sum::<f64>()
+            .sqrt();
+    norms > 0.0 && dot < norms * BEND_KAPPA_DEGREES.to_radians().cos()
 }
 
 fn squared_distance(left: Option<[f32; 3]>, right: Option<[f32; 3]>) -> f32 {

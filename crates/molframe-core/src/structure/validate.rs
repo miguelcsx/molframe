@@ -31,6 +31,7 @@ pub fn validate(data: &StructureData) -> Vec<Diagnostic> {
     check_bonds(data, atoms, &mut findings);
     check_anisotropy(data, atoms, &mut findings);
     check_annotations(data, &mut findings);
+    check_secondary_sources(data, &mut findings);
     check_coordinate_counts(data, atoms, &mut findings);
     check_coordinates(data, &mut findings);
     check_occupancies(data, &mut findings);
@@ -70,6 +71,20 @@ fn check_annotations(data: &StructureData, findings: &mut Diagnostics) {
                 .with_context("annotation", name)
                 .with_context("column rows", column.len().to_string())
                 .with_context("atoms", atoms.to_string()),
+        );
+    }
+}
+
+/// Verifies that every secondary-structure state carries its source.
+fn check_secondary_sources(data: &StructureData, findings: &mut Diagnostics) {
+    let states = data.secondary_structure.len();
+    let sources = data.secondary_source.len();
+    if states != sources {
+        findings.push(
+            Diagnostic::new(Code::E3011)
+                .with_context("annotation", "secondary structure source")
+                .with_context("column rows", sources.to_string())
+                .with_context("states", states.to_string()),
         );
     }
 }

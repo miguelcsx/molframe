@@ -131,7 +131,10 @@ fn execute_data(command: Command, context: Context) -> Exit {
             amide_hydrogen_distance,
             minimum_sequence_separation,
             helix_offset,
+            three_ten_offset,
+            pi_offset,
             turn_offsets,
+            bend_angle_degrees,
         } => crate::chemistry::with_ccd(
             chemistry.ccd.as_deref(),
             chemistry.ccd_version.as_deref(),
@@ -147,7 +150,10 @@ fn execute_data(command: Command, context: Context) -> Exit {
                         amide_hydrogen_distance,
                         minimum_sequence_separation,
                         helix_offset,
+                        three_ten_offset,
+                        pi_offset,
                         turn_offsets: &turn_offsets,
+                        bend_angle_degrees,
                     },
                     context,
                 )

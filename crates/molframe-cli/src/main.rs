@@ -230,8 +230,14 @@ pub(crate) enum Command {
         minimum_sequence_separation: usize,
         #[arg(long)]
         helix_offset: usize,
+        #[arg(long)]
+        three_ten_offset: usize,
+        #[arg(long)]
+        pi_offset: usize,
         #[arg(long, num_args = 2, value_names = ["MIN", "MAX"])]
         turn_offsets: Vec<usize>,
+        #[arg(long)]
+        bend_angle_degrees: f32,
     },
     /// Report backbone torsions with explicit missing values.
     Torsions {

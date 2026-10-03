@@ -155,7 +155,10 @@ pub(crate) struct SseOptions<'a> {
     pub(crate) amide_hydrogen_distance: f32,
     pub(crate) minimum_sequence_separation: usize,
     pub(crate) helix_offset: usize,
+    pub(crate) three_ten_offset: usize,
+    pub(crate) pi_offset: usize,
     pub(crate) turn_offsets: &'a [usize],
+    pub(crate) bend_angle_degrees: f32,
 }
 
 pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Exit {
@@ -178,7 +181,10 @@ pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Ex
         amide_hydrogen_distance: options.amide_hydrogen_distance,
         minimum_sequence_separation: options.minimum_sequence_separation,
         helix_offset: options.helix_offset,
+        three_ten_offset: options.three_ten_offset,
+        pi_offset: options.pi_offset,
         turn_offsets: *turn_minimum..=*turn_maximum,
+        bend_angle_degrees: options.bend_angle_degrees,
     };
     let records = match molframe::analysis::secondary_structure(structure.engine(), &dssp) {
         Ok(records) => records,
@@ -312,12 +318,18 @@ fn output_error(error: &std::io::Error) -> Exit {
     Exit::Consistency
 }
 
-pub(super) fn sse_name(kind: molframe::analysis::SseKind) -> &'static str {
+pub(super) const fn sse_name(kind: molframe::SecondaryStructure) -> &'static str {
+    use molframe::SecondaryStructure as Ss;
     match kind {
-        molframe::analysis::SseKind::Unknown => "unknown",
-        molframe::analysis::SseKind::AlphaHelix => "alpha-helix",
-        molframe::analysis::SseKind::Strand => "strand",
-        molframe::analysis::SseKind::Turn => "turn",
-        molframe::analysis::SseKind::Coil => "coil",
+        Ss::Unknown => "unknown",
+        Ss::Coil => "coil",
+        Ss::AlphaHelix => "alpha-helix",
+        Ss::ThreeTenHelix => "3-10-helix",
+        Ss::PiHelix => "pi-helix",
+        Ss::OtherHelix => "other-helix",
+        Ss::BetaBridge => "beta-bridge",
+        Ss::Strand => "strand",
+        Ss::Turn => "turn",
+        Ss::Bend => "bend",
     }
 }

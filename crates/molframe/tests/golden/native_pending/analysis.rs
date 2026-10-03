@@ -79,13 +79,16 @@ fn gw_016_assigns_one_secondary_structure_record_per_backbone_residue() {
             amide_hydrogen_distance: 1.0,
             minimum_sequence_separation: 2,
             helix_offset: 4,
+            three_ten_offset: 3,
+            pi_offset: 5,
             turn_offsets: 3..=5,
+            bend_angle_degrees: 70.0,
         },
     )
     .unwrap_or_else(|error| panic!("secondary-structure workflow failed: {error}"));
     assert_eq!(records.len(), 2);
-    assert_eq!(records.kind()[0], molframe::analysis::SseKind::Unknown);
-    assert_eq!(records.kind()[1], molframe::analysis::SseKind::Coil);
+    assert_eq!(records.kind()[0], molframe::SecondaryStructure::Unknown);
+    assert_eq!(records.kind()[1], molframe::SecondaryStructure::Coil);
 }
 
 #[test]

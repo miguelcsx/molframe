@@ -2,16 +2,21 @@
 
 use crate::fixed;
 use crate::header::PdbHeaders;
-use molframe_core::SecondaryStructure;
 use molframe_core::structure::StructureData;
+use molframe_core::{SecondarySource, SecondaryStructure};
 
-pub(super) fn read(data: &StructureData, headers: &PdbHeaders) -> Vec<SecondaryStructure> {
+/// Lowers HELIX and SHEET records; every residue they name gets source
+/// [`SecondarySource::File`].
+pub(super) fn read(
+    data: &StructureData,
+    headers: &PdbHeaders,
+) -> (Vec<SecondaryStructure>, Vec<SecondarySource>) {
     let mut states = vec![SecondaryStructure::Unknown; data.topology.residues.len()];
     for record in headers.named("HELIX") {
         assign(
             data,
             &mut states,
-            SecondaryStructure::Helix,
+            helix_class(fixed::integer(record.line(), 39, 40)),
             fixed::text(record.line(), 20, 20),
             fixed::integer(record.line(), 22, 25).and_then(|value| i32::try_from(value).ok()),
             fixed::text(record.line(), 32, 32),
@@ -29,7 +34,25 @@ pub(super) fn read(data: &StructureData, headers: &PdbHeaders) -> Vec<SecondaryS
             fixed::integer(record.line(), 34, 37).and_then(|value| i32::try_from(value).ok()),
         );
     }
-    states
+    let sources = states
+        .iter()
+        .map(|state| match state {
+            SecondaryStructure::Unknown => SecondarySource::None,
+            _ => SecondarySource::File,
+        })
+        .collect();
+    (states, sources)
+}
+
+/// The helix a HELIX record's class (columns 39–40) names: 1 is right-handed
+/// α, 3 is π and 5 is 3₁₀; any other class, or none, is an unnamed helix.
+pub(super) fn helix_class(class: Option<i64>) -> SecondaryStructure {
+    match class {
+        Some(1) => SecondaryStructure::AlphaHelix,
+        Some(3) => SecondaryStructure::PiHelix,
+        Some(5) => SecondaryStructure::ThreeTenHelix,
+        _ => SecondaryStructure::OtherHelix,
+    }
 }
 
 fn assign(
@@ -63,3 +86,7 @@ fn assign(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "secondary_tests.rs"]
+mod tests;
