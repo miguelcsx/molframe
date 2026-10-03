@@ -2,7 +2,7 @@
 
 use crate::numeric::{f64_to_f32, usize_to_f64};
 use molframe_core::ExecutionContext;
-use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
 use molframe_core::structure::Structure;
 use molframe_spatial::CellList;
 
@@ -46,6 +46,9 @@ pub enum PotentialError {
     #[error("a contact potential worker panicked")]
     WorkerPanicked,
 }
+
+/// Voxels per block: small enough to balance uneven local densities.
+const VOXELS_PER_BLOCK: usize = 4096;
 
 // Exact elementary charge and Boltzmann constant; CODATA vacuum permittivity.
 const THERMAL_COULOMB: f64 = 1.602_176_634e-19 * 1.602_176_634e-19
@@ -132,34 +135,55 @@ pub fn contact_potential_in(
     let index = CellList::build(positions, &targets, search_radius, None)
         .map_err(PotentialError::Spatial)?;
     let cutoff_squared = f64::from(cutoff).powi(2);
-    let blocks = map_blocks_in(BlockPlan::new(count, 4096), context, |_, range| {
-        range
-            .map(|voxel| {
-                let point = spec.point(voxel);
-                let query = point.map(f64_to_f32);
-                let mut potential = 0.0;
-                index
-                    .for_each_neighbor(query, search_radius, |atom, _| {
-                        let atom = atom as usize;
-                        let squared: f64 = point
-                            .iter()
-                            .zip(positions[atom])
-                            .map(|(left, right)| (left - f64::from(right)).powi(2))
-                            .sum();
-                        if squared <= cutoff_squared {
-                            potential += charges[atom] * THERMAL_COULOMB / (4.0 * squared.max(1.0));
-                        }
-                    })
-                    .map_err(PotentialError::Spatial)?;
-                Ok(potential)
-            })
-            .collect::<Result<Vec<_>, PotentialError>>()
-    })
-    .map_err(|_| PotentialError::WorkerPanicked)?;
-    let mut values = Vec::with_capacity(count);
-    for block in blocks {
-        values.extend(block?);
-    }
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| PotentialError::GridTooLarge)?;
+    // Voxel blocks are appended as they complete, in block order, so the peak
+    // is the grid plus a bounded window of blocks rather than the grid twice.
+    try_for_each_block_in(
+        BlockPlan::new(count, VOXELS_PER_BLOCK),
+        context,
+        VOXELS_PER_BLOCK * size_of::<f64>(),
+        |_, range| {
+            range
+                .map(|voxel| {
+                    let point = spec.point(voxel);
+                    let query = point.map(f64_to_f32);
+                    let mut potential = 0.0;
+                    index
+                        .for_each_neighbor(query, search_radius, |atom, _| {
+                            let atom = atom as usize;
+                            let squared: f64 = point
+                                .iter()
+                                .zip(positions[atom])
+                                .map(|(left, right)| (left - f64::from(right)).powi(2))
+                                .sum();
+                            if squared <= cutoff_squared {
+                                potential +=
+                                    charges[atom] * THERMAL_COULOMB / (4.0 * squared.max(1.0));
+                            }
+                        })
+                        .map_err(PotentialError::Spatial)?;
+                    Ok(potential)
+                })
+                .collect::<Result<Vec<f64>, PotentialError>>()
+        },
+        |block| {
+            values.extend_from_slice(&block);
+            Ok(())
+        },
+    )
+    .map_err(|error| match error {
+        BlockExecutionError::Memory(error) => {
+            PotentialError::Spatial(molframe_spatial::SpatialError::Memory(error))
+        }
+        BlockExecutionError::Cancelled => {
+            PotentialError::Spatial(molframe_spatial::SpatialError::Cancelled)
+        }
+        BlockExecutionError::Worker(_) => PotentialError::WorkerPanicked,
+        BlockExecutionError::Operation(error) => error,
+    })?;
     Ok(ScalarGrid { spec, values })
 }
 

@@ -109,7 +109,7 @@ fn fixed_voxel_blocks_have_identical_values_at_every_worker_budget() {
             .unwrap(),
     )
     .unwrap();
-    for workers in [2, 4] {
+    for workers in [2, 4, 8] {
         let parallel = contact_potential_in(
             &structure,
             &[1.0],
@@ -136,4 +136,51 @@ fn affine_points_near_the_cutoff_are_not_lost_to_f32_candidate_rounding() {
     .unwrap();
     assert!(field.values[0] > 0.0);
     assert_eq!(field.values[1].to_bits(), 0.0_f64.to_bits());
+}
+
+fn budgeted(workers: usize, bytes: usize) -> ExecutionContext {
+    ExecutionContext::builder()
+        .worker_budget(workers)
+        .memory_budget(molframe_core::MemoryBudget::new(bytes).expect("a positive budget"))
+        .scratch_policy(molframe_core::ScratchPolicy::new(0))
+        .build()
+        .expect("a valid context")
+}
+
+#[test]
+fn a_bounded_budget_streams_the_grid_and_matches_the_unbounded_run() {
+    let structure = structure();
+    let grid = spec(-20.0, 0.001, 40_000);
+    let reference = contact_potential_in(
+        &structure,
+        &[1.0],
+        grid,
+        12.0,
+        &budgeted(1, 256 * 1024 * 1024),
+    )
+    .expect("serial run");
+    for workers in [2, 4, 8] {
+        let context = budgeted(workers, 8 * 1024 * 1024);
+        let streamed = contact_potential_in(&structure, &[1.0], grid, 12.0, &context)
+            .expect("a modest budget suffices for a streamed grid");
+        assert_eq!(streamed, reference, "{workers} workers");
+        assert_eq!(context.reserved_bytes(), 0);
+    }
+}
+
+#[test]
+fn a_budget_below_one_block_is_refused() {
+    let tiny = budgeted(4, 1024);
+    assert!(matches!(
+        contact_potential_in(
+            &structure(),
+            &[1.0],
+            spec(-20.0, 0.001, 40_000),
+            12.0,
+            &tiny
+        ),
+        Err(PotentialError::Spatial(
+            molframe_spatial::SpatialError::Memory(_)
+        ))
+    ));
 }
