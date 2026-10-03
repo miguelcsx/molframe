@@ -6,6 +6,43 @@ use molframe_core::bond::{BondRecord, BondTableBuilder};
 use molframe_core::{AtomIndex, BondOrder, BondProvenance, Structure};
 
 #[test]
+fn repeated_assembly_chains_preserve_exact_secondary_states_and_sources() {
+    use molframe_core::{SecondarySource, SecondaryStructure as Ss};
+    let raw = attached(&ENTRY.replace("'(T)(R)'", "'(T,T)(R)'"));
+    let mut data = raw.data().clone();
+    data.secondary_structure = vec![Ss::PolyProline, Ss::BetaBridge].into();
+    data.secondary_source = vec![SecondarySource::File, SecondarySource::Dssp].into();
+    let source = Structure::new(data);
+    let expanded = source
+        .assembly("1")
+        .expect("assembly")
+        .materialize()
+        .expect("expand");
+    assert_eq!(
+        expanded.secondary_structure(),
+        &[
+            Ss::PolyProline,
+            Ss::BetaBridge,
+            Ss::PolyProline,
+            Ss::BetaBridge
+        ]
+    );
+    assert_eq!(
+        expanded.secondary_source(),
+        &[
+            SecondarySource::File,
+            SecondarySource::Dssp,
+            SecondarySource::File,
+            SecondarySource::Dssp
+        ]
+    );
+    assert_eq!(
+        source.secondary_structure(),
+        &[Ss::PolyProline, Ss::BetaBridge]
+    );
+}
+
+#[test]
 fn materialization_copies_instances_and_preserves_their_identity() {
     let structure = with_bond_and_annotation(&attached(ENTRY));
     let view = match structure.assembly("1") {

@@ -213,3 +213,53 @@ fn single(finding: Diagnostic) -> Vec<Diagnostic> {
     vec![finding]
 }
 
+fn expanded_residue_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
+    view.instances.iter().try_fold(0usize, |total, instance| {
+        let residues = view
+            .source()
+            .data()
+            .topology
+            .chains
+            .residues(instance.source_chain)
+            .ok_or_else(invariant)?;
+        total
+            .checked_add(residues.len())
+            .ok_or_else(|| capacity("residues"))
+    })
+}
+
+fn secondary_storage<T>(count: usize, present: bool) -> Result<Vec<T>, Diagnostic> {
+    let mut values = Vec::new();
+    if present {
+        values
+            .try_reserve_exact(count)
+            .map_err(|_| capacity("secondary rows"))?;
+    }
+    Ok(values)
+}
+
+impl Materializer<'_> {
+    fn append_secondary(
+        &mut self,
+        source: &Structure,
+        residue: ResidueIndex,
+    ) -> Result<(), Diagnostic> {
+        if !source.secondary_structure().is_empty() {
+            self.secondary_states.push(
+                *source
+                    .secondary_structure()
+                    .get(residue.as_usize())
+                    .ok_or_else(invariant)?,
+            );
+        }
+        if !source.secondary_source().is_empty() {
+            self.secondary_sources.push(
+                *source
+                    .secondary_source()
+                    .get(residue.as_usize())
+                    .ok_or_else(invariant)?,
+            );
+        }
+        Ok(())
+    }
+}

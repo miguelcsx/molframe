@@ -37,9 +37,12 @@ impl Structure {
 
     /// Copies a selected atom set into a compact, independent structure.
     ///
-    /// Empty residues, chains and unreferenced entities are removed. Domain
-    /// extensions are deliberately discarded because their topology-aligned
-    /// contents cannot remain valid after materialisation.
+    /// Empty residues, chains and unreferenced entities are removed. Secondary
+    /// states and their provenance follow the retained residue rows; unavailable
+    /// columns stay unavailable. Dense frames share the compacted hierarchy.
+    /// Bonds retain their order and provenance when both endpoints survive.
+    /// Domain extensions are discarded because their topology-aligned contents
+    /// cannot remain valid after materialisation.
     ///
     /// # Errors
     ///

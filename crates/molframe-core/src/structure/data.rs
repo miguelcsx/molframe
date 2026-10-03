@@ -160,9 +160,10 @@ pub struct StructureData {
     /// Anisotropic displacement ellipsoids as a sparse per-atom table.
     pub anisotropy: crate::anisotropy::AnisotropyTable,
     /// File or analysis secondary-structure state aligned to residue rows.
+    /// Empty when unavailable; otherwise one state for every residue.
     pub secondary_structure: Arc<Vec<SecondaryStructure>>,
     /// Where each secondary-structure state came from; the same length as
-    /// `secondary_structure`.
+    /// `secondary_structure`, including when both columns are unavailable.
     pub secondary_source: Arc<Vec<SecondarySource>>,
     /// Structure-local typed columns aligned exactly to atom rows.
     pub annotations: AtomAnnotations,

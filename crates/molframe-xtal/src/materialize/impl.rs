@@ -29,6 +29,8 @@ struct Materializer<'a> {
     copies: Vec<CopySpan>,
     source_atoms: Vec<u32>,
     instance_ids: Vec<i64>,
+    secondary_states: Vec<molframe_core::SecondaryStructure>,
+    secondary_sources: Vec<molframe_core::SecondarySource>,
     used_labels: IdentityHashSet<SymbolId>,
     label_counts: IdentityHashMap<SymbolId, u32>,
 }
@@ -50,6 +52,11 @@ impl<'a> Materializer<'a> {
     fn new(view: &'a AssemblyView) -> Result<Self, Diagnostic> {
         let source = view.source().data();
         let total_atoms = expanded_atom_count(view)?;
+        let total_residues = expanded_residue_count(view)?;
+        let secondary_states =
+            secondary_storage(total_residues, !source.secondary_structure.is_empty())?;
+        let secondary_sources =
+            secondary_storage(total_residues, !source.secondary_source.is_empty())?;
 
         let mut data = StructureData::empty();
         data.entry = source.entry.clone();
@@ -89,6 +96,8 @@ impl<'a> Materializer<'a> {
             copies,
             source_atoms,
             instance_ids,
+            secondary_states,
+            secondary_sources,
             used_labels,
             label_counts,
         })
@@ -115,6 +124,8 @@ impl<'a> Materializer<'a> {
         self.data.generation = CoordinateGeneration::INITIAL;
 
         self.add_models().map_err(single)?;
+        self.data.secondary_structure = self.secondary_states.into();
+        self.data.secondary_source = self.secondary_sources.into();
 
         let findings = molframe_core::structure::validate(&self.data);
 
@@ -290,6 +301,7 @@ impl<'a> Materializer<'a> {
             .residues
             .push(record, output_start..*append.output_atom)
             .map_err(|error| capacity("residues").with_context("cause", error.to_string()))?;
+        self.append_secondary(append.source, source_residue)?;
 
         Ok(())
     }
@@ -472,4 +484,3 @@ impl<'a> Materializer<'a> {
         Ok(())
     }
 }
-

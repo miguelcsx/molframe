@@ -1,4 +1,7 @@
-//! Hierarchy compaction after atom selection materialisation.
+//! Hierarchy and residue-column compaction after atom selection materialisation.
+//!
+//! One pass over atoms and hierarchy rows uses O(atoms + residues + entities)
+//! temporary storage. Dense frames retain one shared hierarchy and residue axis.
 
 use super::StructureData;
 use crate::chunk::ChunkBuilder;
@@ -43,7 +46,49 @@ pub(super) fn compact_hierarchy(data: &mut StructureData) -> Result<(), Diagnost
         &mut residue_remap,
     )?;
     data.chunks = rebuild_chunks(data, &residue_remap)?;
+    compact_secondary(data, &residue_remap, topology.residues.len())?;
     data.topology = topology;
+    Ok(())
+}
+
+fn compact_secondary(
+    data: &mut StructureData,
+    residue_remap: &[u32],
+    retained: usize,
+) -> Result<(), Diagnostic> {
+    let states = data.secondary_structure.len();
+    let sources = data.secondary_source.len();
+    if states != sources || (states != 0 && states != residue_remap.len()) {
+        return Err(Diagnostic::new(Code::E3011)
+            .with_context("annotation", "secondary structure")
+            .with_context("states", states.to_string())
+            .with_context("sources", sources.to_string())
+            .with_context("residues", residue_remap.len().to_string()));
+    }
+    if states == 0 || retained == residue_remap.len() {
+        return Ok(());
+    }
+    let mut selected_states = Vec::with_capacity(retained);
+    let mut selected_sources = Vec::with_capacity(retained);
+    for ((state, source), mapped) in data
+        .secondary_structure
+        .iter()
+        .zip(data.secondary_source.iter())
+        .zip(residue_remap)
+    {
+        if *mapped == u32::MAX {
+            continue;
+        }
+        // Hierarchy compaction preserves residue order; both columns must follow
+        // that same axis rather than retaining an obsolete source position.
+        if *mapped != u32_of(selected_states.len())? {
+            return Err(invalid_hierarchy());
+        }
+        selected_states.push(*state);
+        selected_sources.push(*source);
+    }
+    data.secondary_structure = selected_states.into();
+    data.secondary_source = selected_sources.into();
     Ok(())
 }
 
@@ -97,10 +142,23 @@ fn copy_models_and_children(
     entity_remap: &[u32],
     residue_remap: &mut [u32],
 ) -> Result<(), Diagnostic> {
+    let shared = matches!(&data.coords, super::CoordinateStore::Dense { .. });
+    let mut copied_range: Option<(std::ops::Range<u32>, std::ops::Range<u32>)> = None;
     for model in data.topology.models.iter() {
-        let first_chain = u32_of(topology.chains.len())?;
         let chains = required(data.topology.models.chains(model), "model chains")?;
-        for chain_position in chains {
+        let model_number = required(data.topology.models.model_num(model), "model number")?;
+        if let Some((source_range, target_range)) = &copied_range {
+            if chains != *source_range {
+                return Err(invalid_hierarchy().with_context("field", "dense model chains"));
+            }
+            topology
+                .models
+                .push(model_number, target_range.clone())
+                .map_err(|_| invalid_hierarchy())?;
+            continue;
+        }
+        let first_chain = u32_of(topology.chains.len())?;
+        for chain_position in chains.clone() {
             let old_chain = ChainIndex::new(chain_position);
             if selected_chains.get(old_chain.as_usize()) != Some(&true) {
                 continue;
@@ -114,10 +172,13 @@ fn copy_models_and_children(
                 residue_remap,
             )?;
         }
-        let model_number = required(data.topology.models.model_num(model), "model number")?;
+        let target_range = first_chain..u32_of(topology.chains.len())?;
+        if shared {
+            copied_range = Some((chains, target_range.clone()));
+        }
         topology
             .models
-            .push(model_number, first_chain..u32_of(topology.chains.len())?)
+            .push(model_number, target_range)
             .map_err(|_| invalid_hierarchy())?;
     }
     Ok(())
@@ -255,3 +316,7 @@ fn required<T>(value: Option<T>, field: &'static str) -> Result<T, Diagnostic> {
 fn invalid_hierarchy() -> Diagnostic {
     Diagnostic::new(Code::E3001)
 }
+
+#[cfg(test)]
+#[path = "materialize_tests.rs"]
+mod tests;
