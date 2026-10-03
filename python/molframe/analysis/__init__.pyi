@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from .. import Analysis, AnalysisPolicy, Structure, Table
+from .. import Analysis, AnalysisPolicy, ExecutionContext, Structure, Table
 
 class ArrayColumn(Protocol):
     @property
@@ -17,7 +17,13 @@ class ContactTable:
     @property
     def distance(self) -> ArrayColumn: ...
 
-def atom_contacts(value: object, cutoff: float, *, backend: str = ...) -> ContactTable: ...
+def atom_contacts(
+    value: object,
+    cutoff: float,
+    *,
+    backend: str = ...,
+    context: ExecutionContext | None = None,
+) -> ContactTable: ...
 def dssp(structure: Structure) -> Table:
     """Native DSSP states as residue indices and stable SecondaryStructure integer codes."""
 
@@ -27,6 +33,7 @@ def contacts(
     *,
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
 ) -> Analysis[ContactTable]: ...
 def hydrogen_bonds(
     structure: Structure,
@@ -35,6 +42,7 @@ def hydrogen_bonds(
     min_angle: float = 120.0,
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
 ) -> Analysis[Table]: ...
 def salt_bridges(
     structure: Structure,
@@ -42,6 +50,7 @@ def salt_bridges(
     max_distance: float = 4.0,
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
 ) -> Analysis[Table]: ...
 
 class GridSpec:

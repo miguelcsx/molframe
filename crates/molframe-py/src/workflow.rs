@@ -290,12 +290,13 @@ pub(crate) struct PyCompiledWorkflow {
 
 #[pymethods]
 impl PyCompiledWorkflow {
-    #[pyo3(signature = (values, *, copy=false))]
+    #[pyo3(signature = (values, *, copy=false, context=None))]
     fn run<'py>(
         &self,
         py: Python<'py>,
         values: &Bound<'py, PyDict>,
         copy: bool,
+        context: Option<&crate::execution::PyExecutionContext>,
     ) -> PyResult<Bound<'py, PyDict>> {
         let mut inputs = molframe::WorkflowInputs::new();
         for (name, kind) in &self.inputs {
@@ -319,12 +320,9 @@ impl PyCompiledWorkflow {
                 }
             }
         }
-        let results = py
-            .detach(|| {
-                self.inner
-                    .run(&inputs, &molframe::ExecutionContext::default())
-            })
-            .map_err(workflow_error)?;
+        let results =
+            crate::execution::run(py, context, |context| self.inner.run(&inputs, context))?
+                .map_err(workflow_error)?;
         let output = PyDict::new(py);
         for handle in &self.outputs {
             match handle {

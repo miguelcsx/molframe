@@ -142,9 +142,16 @@ impl PyStructure {
 
     /// A copy with bonds inferred from covalent radii and distances.
     #[cfg(feature = "analysis")]
-    #[pyo3(signature = (*, scale=molframe::DEFAULT_BOND_RADIUS_SCALE, lower_bound=molframe::DEFAULT_MINIMUM_BOND_DISTANCE, across_chains=true))]
-    fn infer_bonds(&self, scale: f32, lower_bound: f32, across_chains: bool) -> PyResult<Self> {
-        bonds::infer(self, scale, lower_bound, across_chains)
+    #[pyo3(signature = (*, scale=molframe::DEFAULT_BOND_RADIUS_SCALE, lower_bound=molframe::DEFAULT_MINIMUM_BOND_DISTANCE, across_chains=true, context=None))]
+    fn infer_bonds(
+        &self,
+        py: Python<'_>,
+        scale: f32,
+        lower_bound: f32,
+        across_chains: bool,
+        context: Option<&crate::execution::PyExecutionContext>,
+    ) -> PyResult<Self> {
+        bonds::infer(py, self, scale, lower_bound, across_chains, context)
     }
 
     fn _molframe_source_v2<'py>(

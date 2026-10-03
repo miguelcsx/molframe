@@ -107,28 +107,24 @@ impl PyContactTable {
 }
 
 #[pyfunction]
-#[pyo3(signature = (value, cutoff, *, backend="auto"))]
+#[pyo3(signature = (value, cutoff, *, backend="auto", context=None))]
 pub(crate) fn atom_contacts(
     py: Python<'_>,
     value: &Bound<'_, PyAny>,
     cutoff: f32,
     backend: &str,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<PyContactTable> {
     let backend = crate::backend::parse(backend)?;
     let rows = if let Ok(structure) = value.extract::<PyRef<'_, PyStructure>>() {
         let structure = structure.inner.clone();
-        py.detach(move || {
-            molframe::analysis::atom_contacts(
-                structure.engine(),
-                cutoff,
-                backend,
-                &molframe::ExecutionContext::default(),
-            )
-        })
+        crate::execution::run(py, context, move |context| {
+            molframe::analysis::atom_contacts(structure.engine(), cutoff, backend, context)
+        })?
     } else if let Ok(selection) = value.extract::<PyRef<'_, PySelection>>() {
         let structure = selection.parent.inner.clone();
         let indices = selection.indices.clone();
-        py.detach(move || {
+        crate::execution::run(py, context, move |context| {
             let selected = molframe::engine::core::AtomSelection::from_sorted(indices);
             molframe::analysis::atom_contacts_between(
                 structure.engine(),
@@ -136,9 +132,9 @@ pub(crate) fn atom_contacts(
                 &selected,
                 cutoff,
                 backend,
-                &molframe::ExecutionContext::default(),
+                context,
             )
-        })
+        })?
     } else {
         return Err(crate::error::type_error(
             "value must be a Structure or structure-bound Selection",
@@ -150,13 +146,14 @@ pub(crate) fn atom_contacts(
 
 /// Atom contacts under an explicit policy, with status, coverage and provenance.
 #[pyfunction]
-#[pyo3(signature = (structure, cutoff, *, backend="auto", policy=None))]
+#[pyo3(signature = (structure, cutoff, *, backend="auto", policy=None, context=None))]
 pub(crate) fn contacts(
     py: Python<'_>,
     structure: &PyStructure,
     cutoff: f32,
     backend: &str,
     policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<crate::analysis_result::PyAnalysis> {
     let backend = crate::backend::parse(backend)?;
     let kernel = molframe::analysis::contacts_kernel(cutoff, backend);
@@ -171,5 +168,6 @@ pub(crate) fn contacts(
                 .into_any()
                 .unbind())
         },
+        context,
     )
 }

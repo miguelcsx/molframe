@@ -24,6 +24,7 @@ pub(super) fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     // version of the wheel: maturin takes the package version from it.
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add_class::<PyStructure>()?;
+    module.add_class::<crate::execution::PyExecutionContext>()?;
     module.add_class::<PyStructureEditor>()?;
     module.add_class::<crate::secondary::PySecondaryStructure>()?;
     module.add_class::<PyAtom>()?;

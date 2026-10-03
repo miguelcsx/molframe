@@ -58,7 +58,7 @@ impl PyClashTable {
 /// Steric clashes under an explicit policy: pairs overlapping by more than
 /// `tolerance` ångström, with status, coverage and provenance.
 #[pyfunction]
-#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", backend="auto", policy=None))]
+#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", backend="auto", policy=None, context=None))]
 fn clashes(
     py: Python<'_>,
     structure: &PyStructure,
@@ -66,6 +66,7 @@ fn clashes(
     radii: &str,
     backend: &str,
     policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<crate::analysis_result::PyAnalysis> {
     if !tolerance.is_finite() || tolerance < 0.0 {
         return Err(crate::error::value(
@@ -81,6 +82,7 @@ fn clashes(
         &crate::policy::policy_of(policy),
         &kernel,
         |py, table| Ok(Py::new(py, PyClashTable { table })?.into_any()),
+        context,
     )
 }
 

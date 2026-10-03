@@ -213,6 +213,18 @@ happened to run first, which is not a contract anyone can rely on. So the root
 imports the subpackages, and each `molframe/<sub>/__init__.py` re-exports its
 native namespace faithfully — the same names, none invented, none renamed.
 
+**Heavy Python operations take one `context=`.** There is one notion of resource
+governance, the Rust `ExecutionContext`, and Python's `molframe.ExecutionContext`
+is its description (workers, memory budget, scratch, temporary storage and a
+cancellation switch), not a second concept. Every binding that does real work
+takes `context=None`, and runs its kernel through `execution::run`, which holds
+no GIL while the kernel runs and is what makes the call interruptible: the thread
+Python delivers signals to only waits and polls every 50 ms, a Ctrl-C or a
+`cancel()` cancels the operation's own token, the kernel stops at its next check
+and a signal comes back as `KeyboardInterrupt`. A kernel that takes no context
+cannot be cancelled, so it does not get a `context=` that would promise it.
+Binding code never builds an `ExecutionContext` of its own.
+
 **A feature gate mirrors the item it guards.** An `any`/`all` gate on a module,
 a re-export or a variant lists exactly the features that make the item exist —
 not the shortest expression the feature graph currently allows. `bcif` implying

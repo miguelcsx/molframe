@@ -11,13 +11,14 @@ fn radii<'a>(array: &'a PyReadonlyArray1<'_, f32>) -> PyResult<&'a [f32]> {
 
 /// Per-atom solvent-accessible area in square ångström (Shrake–Rupley).
 #[pyfunction]
-#[pyo3(signature = (coordinates, radii, *, probe=1.4, points=960))]
+#[pyo3(signature = (coordinates, radii, *, probe=1.4, points=960, context=None))]
 fn sasa<'py>(
     py: Python<'py>,
     coordinates: &Bound<'py, PyArray2<f32>>,
     radii: &Bound<'py, PyArray1<f32>>,
     probe: f32,
     points: u16,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let positions = coordinates.readonly();
     let radii = radii.readonly();
@@ -25,22 +26,23 @@ fn sasa<'py>(
         crate::bindings::coordinates(&positions)?,
         self::radii(&radii)?,
     );
-    let context = molframe::ExecutionContext::default();
-    let areas = py
-        .detach(|| molframe::surface::shrake_rupley(positions, radii, probe, points, &context))
-        .map_err(crate::error::kernel)?;
+    let areas = crate::execution::run(py, context, |context| {
+        molframe::surface::shrake_rupley(positions, radii, probe, points, context)
+    })?
+    .map_err(crate::error::kernel)?;
     Ok(areas.to_pyarray(py))
 }
 
 /// Per-atom solvent-accessible area in square ångström (Lee–Richards slices).
 #[pyfunction]
-#[pyo3(signature = (coordinates, radii, *, probe=1.4, slices=20))]
+#[pyo3(signature = (coordinates, radii, *, probe=1.4, slices=20, context=None))]
 fn lee_richards<'py>(
     py: Python<'py>,
     coordinates: &Bound<'py, PyArray2<f32>>,
     radii: &Bound<'py, PyArray1<f32>>,
     probe: f32,
     slices: u16,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let positions = coordinates.readonly();
     let radii = radii.readonly();
@@ -48,10 +50,10 @@ fn lee_richards<'py>(
         crate::bindings::coordinates(&positions)?,
         self::radii(&radii)?,
     );
-    let context = molframe::ExecutionContext::default();
-    let areas = py
-        .detach(|| molframe::surface::lee_richards(positions, radii, probe, slices, &context))
-        .map_err(crate::error::kernel)?;
+    let areas = crate::execution::run(py, context, |context| {
+        molframe::surface::lee_richards(positions, radii, probe, slices, context)
+    })?
+    .map_err(crate::error::kernel)?;
     Ok(areas.to_pyarray(py))
 }
 

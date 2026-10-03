@@ -26,22 +26,20 @@ struct PyAssemblyBond {
 
 /// Geometrically perceived covalent links between distinct assembly instances.
 #[pyfunction]
-#[pyo3(signature = (structure, id, *, model=0))]
+#[pyo3(signature = (structure, id, *, model=0, context=None))]
 fn assembly_covalent_links(
     py: Python<'_>,
     structure: &PyStructure,
     id: String,
     model: u32,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Vec<PyAssemblyBond>> {
     let source = structure.inner.clone();
-    let links = py.detach(move || {
+    let links = crate::execution::run(py, context, move |context| {
         let view = source.assembly(&id).map_err(crate::error::kernel)?;
-        view.covalent_links(
-            molframe::ModelIndex::new(model),
-            &molframe::ExecutionContext::default(),
-        )
-        .map_err(crate::error::kernel)
-    })?;
+        view.covalent_links(molframe::ModelIndex::new(model), context)
+            .map_err(crate::error::kernel)
+    })??;
     Ok(links
         .into_iter()
         .map(|bond| PyAssemblyBond {

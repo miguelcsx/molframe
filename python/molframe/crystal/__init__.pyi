@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Literal, Protocol, Self, final
 
-from .. import Structure
+from .. import ExecutionContext, Structure
 
 class IntArray(Protocol):
     @property
@@ -65,7 +65,7 @@ class AssemblyBond:
     def order(self) -> Literal["single"]: ...
 
 def assembly_covalent_links(
-    structure: Structure, id: str, *, model: int = 0
+    structure: Structure, id: str, *, model: int = 0, context: ExecutionContext | None = None
 ) -> list[AssemblyBond]: ...
 
 @final

@@ -19,6 +19,7 @@ from . import (
     Chains as Chains,
     CompiledWorkflow as CompiledWorkflow,
     Coverage as Coverage,
+    ExecutionContext as ExecutionContext,
     Model as Model,
     Models as Models,
     Query as Query,

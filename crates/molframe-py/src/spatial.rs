@@ -13,12 +13,13 @@ type Pairs<'py> = (
 ///
 /// Returns `(first, second, distance)` arrays with `first < second`.
 #[pyfunction]
-#[pyo3(signature = (coordinates, cutoff, *, backend="auto"))]
+#[pyo3(signature = (coordinates, cutoff, *, backend="auto", context=None))]
 fn neighbor_pairs<'py>(
     py: Python<'py>,
     coordinates: &Bound<'py, PyArray2<f32>>,
     cutoff: f32,
     backend: &str,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Pairs<'py>> {
     let backend = crate::backend::parse(backend)?;
     let array = coordinates.readonly();
@@ -27,19 +28,18 @@ fn neighbor_pairs<'py>(
         u32::try_from(positions.len())
             .map_err(|_| crate::error::value("too many atoms for a 32-bit index"))?,
     );
-    let pairs = py
-        .detach(|| {
-            molframe::spatial::pairs_within(
-                positions,
-                &everything,
-                &everything,
-                cutoff,
-                backend,
-                None,
-                &molframe::ExecutionContext::default(),
-            )
-        })
-        .map_err(crate::error::kernel)?;
+    let pairs = crate::execution::run(py, context, |context| {
+        molframe::spatial::pairs_within(
+            positions,
+            &everything,
+            &everything,
+            cutoff,
+            backend,
+            None,
+            context,
+        )
+    })?
+    .map_err(crate::error::kernel)?;
     let first: Vec<u32> = pairs.iter().map(|pair| pair.first).collect();
     let second: Vec<u32> = pairs.iter().map(|pair| pair.second).collect();
     let distance: Vec<f32> = pairs

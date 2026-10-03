@@ -162,7 +162,12 @@ class Structure:
     @property
     def secondary_structure(self) -> list[SecondaryStructure]: ...
     def infer_bonds(
-        self, *, scale: float = ..., lower_bound: float = ..., across_chains: bool = ...
+        self,
+        *,
+        scale: float = ...,
+        lower_bound: float = ...,
+        across_chains: bool = ...,
+        context: ExecutionContext | None = None,
     ) -> Structure: ...
 
 class Atom:
@@ -250,6 +255,38 @@ class Query:
     def __or__(self, other: Query) -> Query: ...
     def __invert__(self) -> Query: ...
 
+class ExecutionContext:
+    """Limits and a cancellation switch for the operations run under them.
+
+    Omitted limits keep the library's bounded defaults. A context describes
+    limits and can govern many calls at once; ``cancel()`` stops whichever are
+    running, and they raise :class:`Cancelled`. Ctrl-C reaches any operation that
+    takes ``context=`` as cancellation and surfaces as ``KeyboardInterrupt``.
+    """
+
+    def __init__(
+        self,
+        *,
+        workers: int | None = None,
+        memory_budget: int | None = None,
+        scratch_bytes: int = 0,
+        temp_directory: str | PathLike[str] | None = None,
+        temp_bytes: int = 0,
+    ) -> None: ...
+    def cancel(self) -> None: ...
+    @property
+    def is_cancelled(self) -> bool: ...
+    @property
+    def workers(self) -> int | None: ...
+    @property
+    def memory_budget(self) -> int | None: ...
+    @property
+    def scratch_bytes(self) -> int: ...
+    @property
+    def temp_directory(self) -> str | None: ...
+    @property
+    def temp_bytes(self) -> int: ...
+
 class QueryAliases:
     def __init__(self) -> None: ...
     def define(self, name: str, query: Query) -> Query | None: ...
@@ -285,7 +322,13 @@ class Workflow:
     def compile(self) -> CompiledWorkflow: ...
 
 class CompiledWorkflow:
-    def run(self, values: Mapping[str, object], *, copy: bool = ...) -> dict[str, object]: ...
+    def run(
+        self,
+        values: Mapping[str, object],
+        *,
+        copy: bool = ...,
+        context: ExecutionContext | None = None,
+    ) -> dict[str, object]: ...
     def explain(self) -> dict[str, object]: ...
 
 __version__: str

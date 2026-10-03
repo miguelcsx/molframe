@@ -1,6 +1,6 @@
 from typing import Literal, Protocol, final
 
-from .. import Analysis, AnalysisPolicy, Structure
+from .. import Analysis, AnalysisPolicy, ExecutionContext, Structure
 
 class UInt32Array(Protocol):
     @property
@@ -27,4 +27,5 @@ def clashes(
     radii: Literal["bondi", "amber_united", "charmm", "alvarez"] = "bondi",
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
 ) -> Analysis[ClashTable]: ...

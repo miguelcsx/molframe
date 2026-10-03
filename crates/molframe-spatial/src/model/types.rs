@@ -101,7 +101,7 @@ impl SpatialError {
     pub fn into_diagnostic(self) -> Diagnostic {
         match self {
             Self::Memory(error) => {
-                Diagnostic::new(Code::E1901).with_context("execution_memory", error.to_string())
+                Diagnostic::new(Code::E7001).with_context("execution_memory", error.to_string())
             }
             Self::Cancelled => {
                 Diagnostic::new(Code::E1904).with_context("spatial_operation", "cancelled")
