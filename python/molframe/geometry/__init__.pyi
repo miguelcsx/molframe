@@ -1,5 +1,7 @@
 from typing import Protocol
 
+from .. import Structure, Table
+
 class Coordinates(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...
@@ -60,3 +62,6 @@ def rmsd_after_fit(mobile: Coordinates, reference: Coordinates) -> float: ...
 def superpose(mobile: Coordinates, reference: Coordinates) -> Superposition: ...
 def rmsf(positions: Coordinates) -> Vector:
     """Per-atom fluctuation about the mean over ``(frames, atoms, 3)`` positions, in Å."""
+
+def backbone_torsions(structure: Structure) -> Table:
+    """Return phi, psi and omega in degrees for every protein residue (``NaN`` where undefined)."""

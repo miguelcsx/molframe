@@ -219,4 +219,16 @@ pub(super) const ROWS: &[Capability] = &[
         execution_needs: "cpu",
         cost: molframe::Cost::Materialize,
     },
+    Capability {
+        name: "backbone_torsions",
+        domain: "geometry",
+        feature: "geometry",
+        inputs: "structure",
+        result: "Table",
+        policy: false,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu",
+        cost: molframe::Cost::Materialize,
+    },
 ];

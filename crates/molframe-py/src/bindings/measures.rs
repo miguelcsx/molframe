@@ -344,7 +344,42 @@ pub(crate) fn rmsf<'py>(
     Ok(values.into_pyarray(py))
 }
 
+/// The backbone torsions φ, ψ and ω of every protein residue, in degrees.
+///
+/// Continuity follows the structure's explicit bonds, so a residue at a chain
+/// break or terminus has `NaN` where a torsion does not exist. Requires polymer
+/// atom-role annotations (see `chemistry.apply_polymer_role_profile`), because
+/// which atom is the alpha carbon is not guessed from names. The table has the
+/// columns `residue`, `phi`, `psi` and `omega`.
+#[pyfunction]
+pub(crate) fn backbone_torsions(
+    py: Python<'_>,
+    structure: &crate::bindings::PyStructure,
+) -> PyResult<crate::table::PyTable> {
+    let source = structure.inner.clone();
+    let records = py
+        .detach(|| molframe::structure_backbone_torsions(source.engine()))
+        .map_err(|findings| crate::bindings::findings_error(&findings))?;
+    let angle = |pick: fn(&geom::BackboneTorsions) -> Option<f64>| -> Vec<f64> {
+        records
+            .iter()
+            .map(|record| match pick(&record.torsions) {
+                Some(radians) => geom::degrees(radians),
+                None => f64::NAN,
+            })
+            .collect()
+    };
+    let residue: Vec<u32> = records.iter().map(|record| record.residue.get()).collect();
+    Ok(crate::table::TableBuilder::new(py, records.len())
+        .indices("residue", &residue)
+        .double("phi", &angle(|torsions| torsions.phi))
+        .double("psi", &angle(|torsions| torsions.psi))
+        .double("omega", &angle(|torsions| torsions.omega))
+        .finish())
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(backbone_torsions, module)?)?;
     module.add_class::<PySuperposition>()?;
     module.add_function(wrap_pyfunction!(distances, module)?)?;
     module.add_function(wrap_pyfunction!(angles, module)?)?;

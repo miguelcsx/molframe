@@ -1,11 +1,14 @@
 """Geometry kernels, each checked against an independent NumPy formulation."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 import molframe
 from molframe import geometry
 
+BENCH = Path(__file__).resolve().parents[2] / "crates" / "molframe-bench" / "data"
 rng = np.random.default_rng(20261003)
 
 
@@ -146,3 +149,32 @@ def test_rmsf_equals_the_per_atom_standard_deviation_about_the_mean():
     with pytest.raises(molframe.MolframeError) as raised:
         geometry.rmsf(np.empty((0, 4, 3), np.float32))
     assert raised.value.code == "MOLFRAME-E5103"
+
+
+def test_backbone_torsions_equal_the_dihedrals_of_the_named_atoms(with_roles):
+    ubiquitin = molframe.read(BENCH / "1ubq.cif")
+    table = geometry.backbone_torsions(with_roles(ubiquitin))
+    assert table.names == ["residue", "phi", "psi", "omega"]
+
+    def point(index, name):
+        found = ubiquitin.residues[index].atom(name)
+        return None if found is None else np.array([found.coordinate], dtype=np.float32)
+
+    checked = 0
+    for row, residue in enumerate(table["residue"]):
+        i = int(residue)
+        if 0 < i < ubiquitin.residue_count - 1:
+            parts = [point(i - 1, "C"), point(i, "N"), point(i, "CA"), point(i, "C")]
+            if all(part is not None for part in parts):
+                assert table["phi"][row] == pytest.approx(
+                    float(geometry.dihedrals(*parts)[0]), abs=1e-3
+                )
+                psi = [point(i, "N"), point(i, "CA"), point(i, "C"), point(i + 1, "N")]
+                if all(part is not None for part in psi):
+                    assert table["psi"][row] == pytest.approx(
+                        float(geometry.dihedrals(*psi)[0]), abs=1e-3
+                    )
+                checked += 1
+    assert checked > 60
+    assert np.isnan(table["phi"][0])
+    assert np.isnan(table["psi"][-1])

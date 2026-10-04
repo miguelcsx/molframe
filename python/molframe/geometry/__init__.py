@@ -16,6 +16,7 @@ principal_axes = _native.principal_axes
 gyration_axes = _native.gyration_axes
 asphericity = _native.asphericity
 shape_parameter = _native.shape_parameter
+backbone_torsions = _native.backbone_torsions
 best_fit_plane = _native.best_fit_plane
 plane_deviation = _native.plane_deviation
 rmsd_after_fit = _native.rmsd_after_fit
@@ -26,6 +27,7 @@ __all__ = [
     "Superposition",
     "angles",
     "asphericity",
+    "backbone_torsions",
     "best_fit_plane",
     "centre_of_mass",
     "centroid",
