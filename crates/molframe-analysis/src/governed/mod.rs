@@ -1,6 +1,7 @@
 //! Governed adapters from structure kernels to deterministic frame execution.
 
 mod common;
+mod definition;
 mod descriptor;
 mod dynamics;
 mod error;
@@ -14,6 +15,7 @@ mod standalone;
 mod structure;
 mod system;
 
+pub use definition::{DefinitionError, SurfaceSampling, definition_contacts_kernel};
 pub use descriptor::AnalysisDescriptor;
 pub use dynamics::{governed_dielectric_from_dipoles, governed_water_dynamics};
 pub use error::GovernedAnalysisError;

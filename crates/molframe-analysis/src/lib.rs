@@ -122,12 +122,13 @@ pub use pair_distribution::{
 };
 pub use paired_bases::{BasePair, BasePairError, BasePairOptions, base_pairs};
 pub use policy_execution::{
-    AnalysisDescriptor, FrameKernelResult, FrameRecord, GovernedAnalysisError, GovernedNativeError,
-    GovernedStructureAnalysis, MappedClosureStructureKernel, PhysicalKernelError,
-    StandaloneAnalysisError, StructureKernel, analyse_structure, analyse_trajectory,
-    base_pairs_kernel, cation_pi_kernel, centre_of_mass_radial_distribution_kernel,
-    chain_interface_kernel, contact_map_kernel, contacts_kernel, coordination_numbers_kernel,
-    density_map_kernel, gnm_kernel, governed_dielectric_from_dipoles, governed_fragment_mapping,
+    AnalysisDescriptor, DefinitionError, FrameKernelResult, FrameRecord, GovernedAnalysisError,
+    GovernedNativeError, GovernedStructureAnalysis, MappedClosureStructureKernel,
+    PhysicalKernelError, StandaloneAnalysisError, StructureKernel, SurfaceSampling,
+    analyse_structure, analyse_trajectory, base_pairs_kernel, cation_pi_kernel,
+    centre_of_mass_radial_distribution_kernel, chain_interface_kernel, contact_map_kernel,
+    contacts_kernel, coordination_numbers_kernel, definition_contacts_kernel, density_map_kernel,
+    gnm_kernel, governed_dielectric_from_dipoles, governed_fragment_mapping,
     governed_helical_parameters, governed_helical_steps, governed_polymer_statistics,
     governed_sugar_pucker, governed_water_dynamics, half_sphere_exposure_kernel,
     hydrogen_bonds_kernel, leaflets_kernel, linear_density_kernel, mapped_structure_kernel,

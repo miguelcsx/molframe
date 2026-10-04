@@ -6,7 +6,8 @@
 //! resource limit; the message carries which.
 
 use crate::policy_execution::{
-    GovernedAnalysisError, GovernedNativeError, PhysicalKernelError, StandaloneAnalysisError,
+    DefinitionError, GovernedAnalysisError, GovernedNativeError, PhysicalKernelError,
+    StandaloneAnalysisError,
 };
 use crate::{
     AnmError, BasePairError, CationPiError, DensityError, DsspBinaryError, DsspError,
@@ -116,6 +117,12 @@ diagnostic_from!(FragmentMappingError, |error| match error {
     FragmentMappingError::Superpose(inner) => Diagnostic::from(inner).code(),
 });
 
+diagnostic_from!(DefinitionError, |error| match error {
+    DefinitionError::Spatial(inner) => Diagnostic::from(inner).code(),
+    DefinitionError::Surface(inner) => Diagnostic::from(inner).code(),
+    DefinitionError::UnknownRadiusSet(_) => Code::E6103,
+    DefinitionError::UnknownRadius { .. } => Code::E5103,
+});
 diagnostic_from!(DensityError, |error| match error {
     DensityError::LengthMismatch { .. } => Code::E5102,
     DensityError::InvalidBins | DensityError::InvalidGrid | DensityError::NonFiniteInput => {
