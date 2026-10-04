@@ -193,11 +193,18 @@ impl Format {
         if is_compression_suffix(candidate) {
             candidate = suffixes.next()?;
         }
+        Self::from_extension(candidate)
+    }
+
+    /// The format a bare extension names (`pdb`, `cif`, `bcif`, ...), compared
+    /// without regard to case.
+    #[must_use]
+    pub fn from_extension(extension: &str) -> Option<Self> {
         Self::NAMED.into_iter().find(|format| {
             format
                 .extensions()
                 .iter()
-                .any(|extension| candidate.eq_ignore_ascii_case(extension))
+                .any(|known| extension.eq_ignore_ascii_case(known))
         })
     }
 }

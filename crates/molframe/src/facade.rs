@@ -155,6 +155,24 @@ pub fn write_with_options(
             Diagnostic::new(Code::E1001).with_context("name", path.display().to_string()),
         ));
     };
+    write_as(path, structure, format, options)
+}
+
+/// As [`write_with_options`], in the stated format instead of the one the
+/// destination's name selects. A `.gz` or `.zst` suffix still applies its
+/// compression.
+///
+/// # Errors
+///
+/// Returns the same diagnostics as [`write_with_options`]; a format that has no
+/// linked writer is refused.
+pub fn write_as(
+    path: impl AsRef<Path>,
+    structure: &Structure,
+    format: Format,
+    options: &WriteOptions,
+) -> Result<(), Findings> {
+    let path = path.as_ref();
     let mut output = OutputSink::create(path, options.output).map_err(Findings::from)?;
     write_stream(&mut output, structure, format, options)?;
     output.finish().map_err(Findings::from)
@@ -426,3 +444,6 @@ mod small_molecule_tests;
 #[cfg(test)]
 #[path = "facade/facade_tests.rs"]
 mod tests;
+#[cfg(all(test, feature = "pdb"))]
+#[path = "facade/write_as_tests.rs"]
+mod write_as_tests;

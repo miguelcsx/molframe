@@ -99,8 +99,8 @@ pub use molframe_core::contract::{
     AlgorithmId, AlignmentPolicy, AltlocPolicy, Analysis, AnalysisParameters, AnalysisPolicy,
     AssemblyChoice, Assumption, AssumptionSource, ContactDefinition, Coverage, DictionaryVersion,
     EquivalencePolicy, Fingerprint, HydrogenPolicy, ImpactEstimate, MissingPolicy, ModelChoice,
-    Namespace, ParameterValue, PeriodicPolicy, PolicyField, Precision, ProfileId, Provenance,
-    RadiiSet, SourceRef, Status, SymmetryPolicy, Tolerance,
+    Namespace, ParameterValue, PeriodicPolicy, PolicyField, PolicyParseError, Precision, ProfileId,
+    Provenance, RadiiSet, SourceRef, Status, SymmetryPolicy, Tolerance,
 };
 pub use molframe_core::coords::Aabb;
 pub use molframe_core::diagnostic::{
@@ -218,7 +218,7 @@ mod validation_inputs;
 
 pub use facade::{
     WriteOptions, read, read_buffer, read_bytes, read_with_diagnostics, read_with_options, write,
-    write_with_options,
+    write_as, write_with_options,
 };
 #[cfg(all(feature = "chemistry", feature = "spatial"))]
 pub use facade::{perceive, perceive_in};
