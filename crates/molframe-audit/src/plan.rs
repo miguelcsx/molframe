@@ -1,16 +1,17 @@
-use crate::PolicyValue;
+use crate::{PlanError, PolicyValue, UncertaintyClass};
 use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,
     EquivalencePolicy, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace, PeriodicPolicy,
     PolicyField, PolicyParseError, Precision, RadiiSet, SymmetryPolicy, Tolerance,
 };
-use std::fmt;
 
 /// One named policy field and the defensible values it may take.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PolicyDimension {
     field: PolicyField,
     values: Vec<PolicyValue>,
+    rationale: Box<str>,
+    evidence: Box<str>,
 }
 
 macro_rules! dimension_constructor {
@@ -20,6 +21,8 @@ macro_rules! dimension_constructor {
             Self {
                 field: PolicyField::$field,
                 values: values.into_iter().map(PolicyValue::$variant).collect(),
+                rationale: Box::default(),
+                evidence: Box::default(),
             }
         }
     };
@@ -89,7 +92,28 @@ impl PolicyDimension {
                 ));
             }
         };
-        Ok(Self { field, values })
+        Ok(Self {
+            field,
+            values,
+            rationale: Box::default(),
+            evidence: Box::default(),
+        })
+    }
+
+    /// Records why these alternatives are the defensible ones, and what supports that.
+    ///
+    /// A sweep over alternatives nobody can defend measures nothing about the
+    /// analysis. The rationale and the evidence travel with the plan, so a reader of
+    /// a result can see what was claimed to be reasonable and on what ground.
+    #[must_use]
+    pub fn justified(
+        mut self,
+        rationale: impl Into<Box<str>>,
+        evidence: impl Into<Box<str>>,
+    ) -> Self {
+        self.rationale = rationale.into();
+        self.evidence = evidence.into();
+        self
     }
 
     /// The policy field varied by this dimension.
@@ -116,6 +140,7 @@ impl PolicyDimension {
 pub struct PolicySpace {
     baseline: AnalysisPolicy,
     dimensions: Vec<PolicyDimension>,
+    exclusions: Vec<(PolicyValue, PolicyValue)>,
     max_runs: usize,
 }
 
@@ -126,6 +151,7 @@ impl PolicySpace {
         Self {
             baseline,
             dimensions: Vec::new(),
+            exclusions: Vec::new(),
             max_runs: 4_096,
         }
     }
@@ -134,6 +160,17 @@ impl PolicySpace {
     #[must_use]
     pub fn vary(mut self, dimension: PolicyDimension) -> Self {
         self.dimensions.push(dimension);
+        self
+    }
+
+    /// Declares that a universe holding `when` cannot also hold `then_not`.
+    ///
+    /// Some pairs of decisions are not both defensible, whatever the policy
+    /// consistency check says: a rule that discards altlocs makes an occupancy sum
+    /// meaningless. Such a pair is removed from a constrained plan and refuses a strict one.
+    #[must_use]
+    pub fn forbid(mut self, when: PolicyValue, then_not: PolicyValue) -> Self {
+        self.exclusions.push((when, then_not));
         self
     }
 
@@ -163,11 +200,85 @@ impl PolicySpace {
 
     /// Validates and deterministically expands the Cartesian policy space.
     ///
+    /// The plan is the whole product, so every main effect and interaction is
+    /// defined. A combination that cannot be run, or that the space forbids, is
+    /// refused rather than dropped: dropping it would leave a plan that is not the
+    /// product and that the additive split cannot describe. Use
+    /// [`Self::plan_constrained`] to drop such combinations deliberately.
+    ///
     /// # Errors
     ///
-    /// Returns the validation errors from [`Self::cost`] or
-    /// [`PlanError::LimitExceeded`] when the configured bound is too small.
+    /// Returns the validation errors from [`Self::cost`], [`PlanError::LimitExceeded`]
+    /// when the configured bound is too small, and [`PlanError::Conflict`] for a
+    /// combination that contradicts itself or is forbidden.
     pub fn plan(self) -> Result<AuditPlan, PlanError> {
+        let (policies, coordinates) = self.expand()?;
+        if let Some(run) = policies.iter().position(|policy| !self.allowed(policy)) {
+            return Err(PlanError::Conflict { run });
+        }
+        Ok(self.finish(policies, coordinates, 0))
+    }
+
+    /// Expands the space and keeps only the combinations that can be run and are not forbidden.
+    ///
+    /// The plan is then not the whole product: the additive main-effect and interaction
+    /// shares do not apply, and the Shapley shares, which do not need a product, carry the
+    /// attribution. The number of combinations dropped is recorded.
+    ///
+    /// # Errors
+    ///
+    /// Returns the validation errors from [`Self::cost`], [`PlanError::LimitExceeded`] when
+    /// the bound is too small, and [`PlanError::NoUniverse`] when nothing survives.
+    pub fn plan_constrained(self) -> Result<AuditPlan, PlanError> {
+        let (policies, coordinates) = self.expand()?;
+        let total = policies.len();
+        let (policies, coordinates): (Vec<_>, Vec<_>) = policies
+            .into_iter()
+            .zip(coordinates)
+            .filter(|(policy, _)| self.allowed(policy))
+            .unzip();
+        if policies.is_empty() {
+            return Err(PlanError::NoUniverse);
+        }
+        let skipped = total - policies.len();
+        Ok(self.finish(policies, coordinates, skipped))
+    }
+
+    fn allowed(&self, policy: &AnalysisPolicy) -> bool {
+        policy.check_consistency().is_ok()
+            && !self
+                .exclusions
+                .iter()
+                .any(|(when, then_not)| holds(policy, when) && holds(policy, then_not))
+    }
+
+    fn finish(
+        self,
+        policies: Vec<AnalysisPolicy>,
+        coordinates: Vec<Vec<usize>>,
+        skipped: usize,
+    ) -> AuditPlan {
+        let levels_total: usize = self.dimensions.iter().map(PolicyDimension::len).product();
+        AuditPlan {
+            fields: self.dimensions.iter().map(PolicyDimension::field).collect(),
+            balanced: policies.len() == levels_total,
+            skipped,
+            decisions: self
+                .dimensions
+                .iter()
+                .map(|dimension| Decision {
+                    field: dimension.field,
+                    class: UncertaintyClass::of(dimension.field),
+                    rationale: dimension.rationale.clone(),
+                    evidence: dimension.evidence.clone(),
+                })
+                .collect(),
+            policies,
+            coordinates,
+        }
+    }
+
+    fn expand(&self) -> Result<(Vec<AnalysisPolicy>, Vec<Vec<usize>>), PlanError> {
         let cost = self.cost()?;
         if cost > self.max_runs {
             return Err(PlanError::LimitExceeded {
@@ -175,24 +286,16 @@ impl PolicySpace {
                 limit: self.max_runs,
             });
         }
-        let mut policies = vec![self.baseline];
+        let mut policies = vec![self.baseline.clone()];
         let mut coordinates = vec![Vec::new()];
         for dimension in &self.dimensions {
-            let next_policy_count = policies
-                .len()
-                .checked_mul(dimension.len())
-                .ok_or(PlanError::CostOverflow)?;
-            let next_coordinate_count = coordinates
-                .len()
-                .checked_mul(dimension.len())
-                .ok_or(PlanError::CostOverflow)?;
-            let mut next_policies = Vec::with_capacity(next_policy_count);
-            let mut next_coordinates = Vec::with_capacity(next_coordinate_count);
+            let mut next_policies = Vec::with_capacity(policies.len() * dimension.len());
+            let mut next_coordinates = Vec::with_capacity(coordinates.len() * dimension.len());
             for (policy, coordinate) in policies.iter().zip(&coordinates) {
                 for (choice, value) in dimension.values.iter().enumerate() {
                     let mut varied = policy.clone();
                     apply(&mut varied, value);
-                    let mut point = coordinate.clone();
+                    let mut point: Vec<usize> = coordinate.clone();
                     point.push(choice);
                     next_policies.push(varied);
                     next_coordinates.push(point);
@@ -201,18 +304,7 @@ impl PolicySpace {
             policies = next_policies;
             coordinates = next_coordinates;
         }
-        // A point that describes no runnable system would fail after the runs before
-        // it had been paid for, and dropping it would unbalance the factorial design.
-        for (run, policy) in policies.iter().enumerate() {
-            if policy.check_consistency().is_err() {
-                return Err(PlanError::Conflict { run });
-            }
-        }
-        Ok(AuditPlan {
-            fields: self.dimensions.iter().map(PolicyDimension::field).collect(),
-            policies,
-            coordinates,
-        })
+        Ok((policies, coordinates))
     }
 }
 
@@ -229,6 +321,13 @@ fn tolerance(word: &str) -> Result<Tolerance, PolicyParseError> {
         (Some(relative), Some(absolute)) => Ok(Tolerance { relative, absolute }),
         _ => Err(refuse()),
     }
+}
+
+/// Whether the policy holds `value` for the field it names.
+fn holds(policy: &AnalysisPolicy, value: &PolicyValue) -> bool {
+    let mut probe = policy.clone();
+    apply(&mut probe, value);
+    probe == *policy
 }
 
 fn validate_dimensions(dimensions: &[PolicyDimension]) -> Result<(), PlanError> {
@@ -270,6 +369,22 @@ pub struct AuditPlan {
     pub(crate) fields: Vec<PolicyField>,
     pub(crate) policies: Vec<AnalysisPolicy>,
     pub(crate) coordinates: Vec<Vec<usize>>,
+    pub(crate) balanced: bool,
+    pub(crate) skipped: usize,
+    pub(crate) decisions: Vec<Decision>,
+}
+
+/// A varied decision as the plan records it: its class, and why it is defensible to vary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Decision {
+    /// The decision.
+    pub field: PolicyField,
+    /// The kind of uncertainty it carries.
+    pub class: UncertaintyClass,
+    /// Why the alternatives are the defensible ones.
+    pub rationale: Box<str>,
+    /// What supports that.
+    pub evidence: Box<str>,
 }
 
 impl AuditPlan {
@@ -277,6 +392,26 @@ impl AuditPlan {
     #[must_use]
     pub fn cost(&self) -> usize {
         self.policies.len()
+    }
+
+    /// Whether the plan is the whole product of the alternatives.
+    ///
+    /// Only then do the main-effect and interaction shares of a decomposition add up.
+    #[must_use]
+    pub const fn balanced(&self) -> bool {
+        self.balanced
+    }
+
+    /// How many combinations a constrained plan dropped.
+    #[must_use]
+    pub const fn skipped(&self) -> usize {
+        self.skipped
+    }
+
+    /// The varied decisions with their class and justification.
+    #[must_use]
+    pub fn decisions(&self) -> &[Decision] {
+        &self.decisions
     }
 
     /// Fields varied by the plan, in declaration order.
@@ -313,67 +448,6 @@ impl AuditPlan {
         &self.coordinates
     }
 }
-
-/// Why a policy space could not be planned.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum PlanError {
-    /// A named dimension has no alternatives.
-    EmptyDimension(PolicyField),
-    /// A field was declared more than once.
-    DuplicateDimension(PolicyField),
-    /// The Cartesian product overflowed the platform's index size.
-    CostOverflow,
-    /// A run of the space combines decisions that contradict each other.
-    ///
-    /// Restrict the dimensions so every combination is a system that can run;
-    /// the policy at that index says which pair. `AnalysisPolicy::check_consistency`
-    /// names it.
-    Conflict {
-        /// Zero-based run whose policy is contradictory.
-        run: usize,
-    },
-    /// A varied field is one the analysis never applied, so varying it measures nothing.
-    NotRead(PolicyField),
-    /// The requested space exceeds the caller's bound.
-    LimitExceeded {
-        /// Exact requested number of runs.
-        cost: usize,
-        /// Configured upper bound.
-        limit: usize,
-    },
-}
-
-impl fmt::Display for PlanError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::EmptyDimension(field) => {
-                write!(formatter, "{} has no alternatives", field.name())
-            }
-            Self::DuplicateDimension(field) => {
-                write!(formatter, "{} is varied twice", field.name())
-            }
-            Self::CostOverflow => formatter.write_str("policy-space cost overflowed usize"),
-            Self::Conflict { run } => write!(
-                formatter,
-                "run {run} combines decisions that contradict each other"
-            ),
-            Self::NotRead(field) => write!(
-                formatter,
-                "the analysis never reads {}, so varying it would report stability it has not earned",
-                field.name()
-            ),
-            Self::LimitExceeded { cost, limit } => {
-                write!(
-                    formatter,
-                    "policy space needs {cost} runs, exceeding limit {limit}"
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for PlanError {}
 
 #[cfg(test)]
 #[path = "plan_tests.rs"]

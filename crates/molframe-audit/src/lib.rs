@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 mod batch;
+mod class;
 mod design;
 mod diagnostics;
 mod engine;
@@ -23,11 +24,13 @@ mod metric;
 mod numeric;
 mod outcomes;
 mod plan;
+mod plan_error;
 mod report;
 mod value;
 
 pub use batch::{BatchAudit, BatchDimension, audit_batch};
-pub use design::{Decomposition, Interaction, MainEffect, decompose};
+pub use class::UncertaintyClass;
+pub use design::{Attribution, Decomposition, Interaction, MainEffect, decompose};
 pub use engine::audit;
 pub use metric::{
     CategoricalFlip, Graph, GraphDifference, GraphPart, OutcomeMetric, RankingDistance,
@@ -36,6 +39,7 @@ pub use metric::{
 pub use outcomes::{
     AnalysisAudit, AuditError, AuditedRun, OutcomeAudit, audit_analyses, audit_outcomes,
 };
-pub use plan::{AuditPlan, PlanError, PolicyDimension, PolicySpace};
+pub use plan::{AuditPlan, Decision, PolicyDimension, PolicySpace};
+pub use plan_error::PlanError;
 pub use report::{AuditReport, AuditRun, DimensionSensitivity, SensitiveItem};
 pub use value::PolicyValue;

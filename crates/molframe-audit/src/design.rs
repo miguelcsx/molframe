@@ -20,6 +20,7 @@
 //! with another has a small main share and a large interaction share, which is
 //! precisely the pattern a one-decision-at-a-time sweep cannot show.
 
+use crate::class::UncertaintyClass;
 use crate::numeric::usize_to_f64;
 use molframe_core::contract::PolicyField;
 
@@ -47,6 +48,16 @@ pub struct Interaction {
     pub share: f64,
 }
 
+/// What a decision, or a class of decisions, explains once its overlaps with the
+/// others are shared out fairly.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Attribution<K> {
+    /// The decision or class.
+    pub key: K,
+    /// Its Shapley share of the total variation. The shares sum to one.
+    pub share: f64,
+}
+
 /// The decomposition of the variation among the runs of a plan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Decomposition {
@@ -64,7 +75,19 @@ pub struct Decomposition {
     /// What neither the main effects nor the pairs explain: combinations of
     /// three or more decisions.
     pub higher_order: f64,
+    /// Whether every combination of the varied decisions was run. Only then do the
+    /// main-effect and interaction shares add up; the Shapley shares do not need it.
+    pub balanced: bool,
+    /// Each decision's Shapley share of the total variation, which is defined and sums
+    /// to one however the runs are constrained. Empty when there are too many decisions
+    /// to enumerate their coalitions, or no variation to share.
+    pub shapley: Vec<Attribution<PolicyField>>,
+    /// The same attribution with the four classes of uncertainty as the players.
+    pub by_class: Vec<Attribution<UncertaintyClass>>,
 }
+
+/// The most decisions whose coalitions are enumerated for the Shapley shares.
+const SHAPLEY_MAX_DECISIONS: usize = 14;
 
 /// Sums of squared distances within the groups of one grouping of the runs.
 struct Groups {
@@ -148,6 +171,8 @@ fn pair_groups(levels: &[usize], coordinates: &[Vec<usize>]) -> Vec<((usize, usi
 
 /// The sums every share is made from, gathered in one pass over the pairs of runs.
 struct Sums {
+    /// The distance of every pair of runs, `first < second`, in row-major order.
+    distances: Vec<f64>,
     total: f64,
     distance: f64,
     maximum: f64,
@@ -165,6 +190,7 @@ fn accumulate(
 ) -> Sums {
     let axes = levels.len();
     let mut sums = Sums {
+        distances: Vec::with_capacity(coordinates.len() * coordinates.len().saturating_sub(1) / 2),
         total: 0.0,
         distance: 0.0,
         maximum: 0.0,
@@ -175,6 +201,7 @@ fn accumulate(
     for first in 0..coordinates.len() {
         for second in (first + 1)..coordinates.len() {
             let metric = distance(first, second);
+            sums.distances.push(metric);
             let square = metric * metric;
             sums.total += square;
             sums.distance += metric;
@@ -258,6 +285,12 @@ pub fn decompose(
     let explained: f64 = main_effects.iter().map(|effect| effect.share).sum::<f64>()
         + interactions.iter().map(|effect| effect.share).sum::<f64>();
     let pair_count = usize_to_f64(runs * runs.saturating_sub(1) / 2);
+    let balanced = is_balanced(&levels, runs);
+    let (shapley, by_class) = if total_variation > 0.0 && fields.len() <= SHAPLEY_MAX_DECISIONS {
+        shapley_shares(fields, coordinates, &sums.distances, total_variation)
+    } else {
+        (Vec::new(), Vec::new())
+    };
     Decomposition {
         total_variation,
         mean_distance: if pair_count == 0.0 {
@@ -273,7 +306,150 @@ pub fn decompose(
         } else {
             0.0
         },
+        balanced,
+        shapley,
+        by_class,
     }
+}
+
+/// Whether the runs are the whole product of the levels.
+fn is_balanced(levels: &[usize], runs: usize) -> bool {
+    levels
+        .iter()
+        .try_fold(1_usize, |product, &count| product.checked_mul(count))
+        == Some(runs)
+}
+
+/// Shapley shares of the total variation, for each decision and for each class.
+///
+/// For a set `S` of decisions, `c(S)` is the fraction of the total variation removed by
+/// holding the levels of `S` fixed: runs that agree on `S` are one group, and `c(S)` is one
+/// minus the within-group sum of squares over the total. `c` is the closed Sobol index of
+/// `S`, defined for any set of runs, so the attribution needs no balanced design. A
+/// decision's Shapley share averages its marginal gain `c(S + i) - c(S)` over every order in
+/// which the decisions could be fixed, and the shares sum to `c(all) = 1`.
+fn shapley_shares(
+    fields: &[PolicyField],
+    coordinates: &[Vec<usize>],
+    distances: &[f64],
+    total_variation: f64,
+) -> (
+    Vec<Attribution<PolicyField>>,
+    Vec<Attribution<UncertaintyClass>>,
+) {
+    let axes = fields.len();
+    let runs = coordinates.len();
+    let subsets = 1_usize << axes;
+    // Size of the group each run falls in, for every set of decisions held fixed.
+    let mut group_size = vec![vec![0_usize; runs]; subsets];
+    for (mask, sizes) in group_size.iter_mut().enumerate() {
+        let mut counts: std::collections::HashMap<Vec<usize>, usize> =
+            std::collections::HashMap::new();
+        let keys: Vec<Vec<usize>> = coordinates
+            .iter()
+            .map(|point| {
+                (0..axes)
+                    .filter(|axis| (mask >> axis) & 1 == 1)
+                    .map(|axis| point[axis])
+                    .collect()
+            })
+            .collect();
+        for key in &keys {
+            *counts.entry(key.clone()).or_insert(0) += 1;
+        }
+        for (run, key) in keys.iter().enumerate() {
+            sizes[run] = match counts.get(key) {
+                Some(&count) => count,
+                None => 1,
+            };
+        }
+    }
+    // Within-group sum of squares for every set: each pair of runs counts in every set
+    // whose levels the two runs share, weighted by the size of their group.
+    let mut within = vec![0.0_f64; subsets];
+    let mut offset = 0;
+    for first in 0..runs {
+        for second in (first + 1)..runs {
+            let metric = distances[offset];
+            offset += 1;
+            let square = metric * metric;
+            let same = (0..axes)
+                .filter(|&axis| coordinates[first][axis] == coordinates[second][axis])
+                .fold(0_usize, |mask, axis| mask | (1 << axis));
+            // Every subset of `same`, the empty set included.
+            let mut subset = same;
+            loop {
+                within[subset] += square / usize_to_f64(group_size[subset][first]);
+                if subset == 0 {
+                    break;
+                }
+                subset = (subset - 1) & same;
+            }
+        }
+    }
+    let total = total_variation;
+    let closed: Vec<f64> = within
+        .iter()
+        .map(|sum| ((total - sum) / total).clamp(0.0, 1.0))
+        .collect();
+    let by_field = coalition_shares(axes, |mask| closed[mask])
+        .into_iter()
+        .zip(fields)
+        .map(|(share, &key)| Attribution { key, share })
+        .collect();
+    let classes: Vec<UncertaintyClass> = UncertaintyClass::ALL
+        .into_iter()
+        .filter(|class| {
+            fields
+                .iter()
+                .any(|&field| UncertaintyClass::of(field) == *class)
+        })
+        .collect();
+    let mask_of = |chosen: usize| {
+        fields
+            .iter()
+            .enumerate()
+            .filter(|(_, field)| {
+                classes.iter().enumerate().any(|(index, class)| {
+                    (chosen >> index) & 1 == 1 && UncertaintyClass::of(**field) == *class
+                })
+            })
+            .fold(0_usize, |mask, (axis, _)| mask | (1 << axis))
+    };
+    let by_class = coalition_shares(classes.len(), |chosen| closed[mask_of(chosen)])
+        .into_iter()
+        .zip(&classes)
+        .map(|(share, &key)| Attribution { key, share })
+        .collect();
+    (by_field, by_class)
+}
+
+/// The Shapley value of each of `players` for a coalition value function.
+fn coalition_shares(players: usize, value: impl Fn(usize) -> f64) -> Vec<f64> {
+    let factorial: Vec<f64> = (0..=players)
+        .scan(1.0_f64, |running, count| {
+            if count > 0 {
+                *running *= usize_to_f64(count);
+            }
+            Some(*running)
+        })
+        .collect();
+    (0..players)
+        .map(|player| {
+            let mut share = 0.0;
+            for coalition in 0..(1_usize << players) {
+                if (coalition >> player) & 1 == 1 {
+                    continue;
+                }
+                let size = (0..players)
+                    .filter(|bit| (coalition >> bit) & 1 == 1)
+                    .count();
+                let weight = factorial[size] * factorial[players - size - 1] / factorial[players];
+                share += weight * (value(coalition | (1 << player)) - value(coalition));
+            }
+            share
+        })
+        .collect()
 }
 
 #[cfg(test)]

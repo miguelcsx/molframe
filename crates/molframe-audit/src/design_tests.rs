@@ -92,3 +92,86 @@ fn three_way_structure_is_reported_as_higher_order() {
     );
     assert!(close(result.higher_order, 1.0));
 }
+
+fn share_of(result: &Decomposition, field: PolicyField) -> f64 {
+    result
+        .shapley
+        .iter()
+        .find(|attribution| attribution.key == field)
+        .map_or(f64::NAN, |attribution| attribution.share)
+}
+
+#[test]
+fn for_additive_decisions_the_shapley_share_is_the_main_effect() {
+    let result = scalar([0.0, 1.0, 10.0, 11.0]);
+    assert!(result.balanced);
+    assert!(close(share_of(&result, PolicyField::Altloc), 100.0 / 101.0));
+    assert!(close(
+        share_of(&result, PolicyField::Hydrogens),
+        1.0 / 101.0
+    ));
+}
+
+#[test]
+fn a_pure_interaction_is_shared_equally_between_the_decisions_that_make_it() {
+    let result = scalar([0.0, 0.0, 0.0, 10.0]);
+    assert!(close(share_of(&result, PolicyField::Altloc), 0.5));
+    assert!(close(share_of(&result, PolicyField::Hydrogens), 0.5));
+    let total: f64 = result
+        .shapley
+        .iter()
+        .map(|attribution| attribution.share)
+        .sum();
+    assert!(close(total, 1.0));
+}
+
+#[test]
+fn shapley_shares_exist_and_sum_to_one_when_a_combination_is_forbidden() {
+    // The (1, 1) cell is missing: the design is not the whole product, so the additive
+    // main-effect and interaction shares do not apply, and the Shapley shares still do.
+    let fields = vec![PolicyField::Altloc, PolicyField::Hydrogens];
+    let coordinates = vec![vec![0, 0], vec![0, 1], vec![1, 0]];
+    let outcomes = [0.0_f64, 4.0, 1.0];
+    let result = decompose(&fields, &coordinates, |first, second| {
+        (outcomes[first] - outcomes[second]).abs()
+    });
+    assert!(!result.balanced);
+    let total: f64 = result
+        .shapley
+        .iter()
+        .map(|attribution| attribution.share)
+        .sum();
+    assert!(close(total, 1.0));
+    assert!(share_of(&result, PolicyField::Hydrogens) > share_of(&result, PolicyField::Altloc));
+}
+
+#[test]
+fn shares_are_also_given_per_class_of_uncertainty() {
+    let fields = vec![
+        PolicyField::Model,
+        PolicyField::Hydrogens,
+        PolicyField::Precision,
+    ];
+    let coordinates: Vec<Vec<usize>> = (0..8)
+        .map(|run| vec![(run >> 2) & 1, (run >> 1) & 1, run & 1])
+        .collect();
+    // Only the hydrogens decision changes the answer.
+    let outcome = |run: usize| -> f64 { if (run >> 1) & 1 == 1 { 5.0 } else { 0.0 } };
+    let result = decompose(&fields, &coordinates, |first, second| {
+        (outcome(first) - outcome(second)).abs()
+    });
+    let class = |wanted: UncertaintyClass| {
+        result
+            .by_class
+            .iter()
+            .find(|attribution| attribution.key == wanted)
+            .map_or(f64::NAN, |attribution| attribution.share)
+    };
+    assert!(close(class(UncertaintyClass::Interpretive), 1.0));
+    assert!(close(class(UncertaintyClass::Structural), 0.0));
+    assert!(close(class(UncertaintyClass::Numerical), 0.0));
+    assert_eq!(
+        UncertaintyClass::of(PolicyField::VdwRadii),
+        UncertaintyClass::Algorithmic
+    );
+}
