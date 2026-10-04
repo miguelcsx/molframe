@@ -16,8 +16,14 @@ PolymerRoleRule = _native.PolymerRoleRule
 PolymerRoleReport = _native.PolymerRoleReport
 apply_polymer_role_profile = _native.apply_polymer_role_profile
 polymer_atom_roles = _native.polymer_atom_roles
+Molecule = _native.Molecule
 annotate = _native.annotate
 element = _native.element
+molecule = _native.molecule
+read_mol = _native.read_mol
+read_sdf = _native.read_sdf
+smarts = _native.smarts
+write_sdf = _native.write_sdf
 vdw_radii = _native.vdw_radii
 vdw_radius = _native.vdw_radius
 
@@ -25,6 +31,7 @@ __all__ = [
     "CarbohydrateLink",
     "CarbohydrateReport",
     "ElementProperties",
+    "Molecule",
     "Monosaccharide",
     "PartialCharges",
     "PolymerRoleReport",
@@ -35,9 +42,14 @@ __all__ = [
     "apply_polymer_role_profile",
     "carbohydrates",
     "element",
+    "molecule",
     "partial_charges",
     "polymer_atom_roles",
+    "read_mol",
+    "read_sdf",
+    "smarts",
     "snfg_symbol",
     "vdw_radii",
     "vdw_radius",
+    "write_sdf",
 ]

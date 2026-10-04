@@ -2,6 +2,7 @@
 
 mod carbohydrates;
 mod charges;
+mod molecules;
 mod roles;
 use crate::bindings::{PyStructure, findings_error};
 use molframe::Element;
@@ -169,6 +170,7 @@ fn annotate(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     carbohydrates::register(module)?;
     charges::register(module)?;
+    molecules::register(module)?;
     roles::register(module)?;
     module.add_class::<PyElementProperties>()?;
     module.add_function(wrap_pyfunction!(element, module)?)?;

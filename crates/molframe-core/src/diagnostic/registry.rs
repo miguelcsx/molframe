@@ -61,6 +61,9 @@ registry! {
     E1203 = Error 1203, Invalidating,
         "atom serial exceeds format capacity and is not hybrid-36",
         "re-encode the serial in hybrid-36, or use a format without a five-column serial field";
+    E1301 = Error 1301, Invalidating,
+        "substructure pattern is not valid SMARTS",
+        "correct the pattern at the reported position; only the primitives the pattern model represents are accepted";
     E1401 = Error 1401, Breaking,
         "declared length disagrees with the encoded payload",
         "the file is truncated or corrupt; fetch it again";

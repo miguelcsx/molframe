@@ -38,6 +38,9 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- Python `molframe.chemistry`: `Molecule` (an MDL record: graph, header and data fields),
+  `read_sdf`, `read_mol`, `write_sdf`, `molecule(structure)` and `smarts(structure, pattern)`.
+  MOL, MOL2, SMARTS and automorphism errors gain diagnostic codes (`E1301` is new).
 - Python `molframe.surface`: surface points with normals, the solvent-excluded surface as
   a `Mesh` (components, curvatures, edge distances, patches, OBJ), buried surface between
   two molecules, and atom depths. Rust: `IndexedSurfaceMesh::area`, `MoleculeRole::from_str`,

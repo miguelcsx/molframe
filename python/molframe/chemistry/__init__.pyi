@@ -1,3 +1,4 @@
+from collections.abc import Mapping, Sequence
 from os import PathLike
 from typing import Literal, Protocol, final
 
@@ -6,6 +7,10 @@ from .. import Structure
 type _RadiusSet = Literal["bondi", "amber_united", "charmm", "alvarez"]
 
 class Float32Array(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
+class UInt32Array(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...
 
@@ -186,3 +191,69 @@ def carbohydrates(
 ) -> CarbohydrateReport: ...
 def polymer_atom_roles() -> dict[str, int]:
     """Polymer atom roles by name, as the integer codes a role rule combines with ``|``."""
+
+@final
+class Molecule:
+    """One MOL block or SDF record: a molecular graph, its header and its data fields."""
+
+    def __init__(
+        self,
+        elements: Sequence[str],
+        coordinates: Float32Array,
+        bonds: UInt32Array | None = None,
+        *,
+        name: str = "",
+        formal_charges: Sequence[int] | None = None,
+        properties: Mapping[str, str] | None = None,
+    ) -> None:
+        """Build a molecule from element symbols, coordinates and ``(first, second, order)`` bonds.
+
+        ``order`` is the MDL order: 1, 2, 3, or 4 for aromatic. ``formal_charges`` is one
+        integer per atom (0 for none); ``properties`` become SDF data fields.
+        """
+    @property
+    def name(self) -> str: ...
+    @property
+    def program(self) -> str: ...
+    @property
+    def comment(self) -> str: ...
+    @property
+    def version(self) -> Literal["v2000", "v3000"]: ...
+    @property
+    def atom_count(self) -> int: ...
+    @property
+    def bond_count(self) -> int: ...
+    @property
+    def elements(self) -> list[str]: ...
+    @property
+    def coordinates(self) -> Float32Array: ...
+    @property
+    def bonds(self) -> UInt32Array:
+        """``(first, second, order)`` rows, zero-based; order 4 is aromatic."""
+    @property
+    def formal_charges(self) -> list[int]: ...
+    @property
+    def properties(self) -> dict[str, str]: ...
+    def to_structure(self) -> Structure:
+        """Return the molecule as a structure with its bonds; hydrogens and charges are kept."""
+    def to_mol(self) -> str: ...
+    def to_sdf(self) -> str: ...
+
+def read_sdf(source: str | bytes | PathLike[str]) -> list[Molecule]:
+    """Return every record of an SDF file, with its data fields."""
+
+def read_mol(source: str | bytes | PathLike[str]) -> Molecule:
+    """Return one MOL block."""
+
+def write_sdf(molecules: Sequence[Molecule]) -> str:
+    """Return SDF text for the molecules, each followed by its data fields."""
+
+def molecule(structure: Structure, *, name: str = "") -> Molecule:
+    """Return the graph of a structure: elements, positions and bonds."""
+
+def smarts(structure: Structure, pattern: str) -> list[list[int]]:
+    """Return every mapping of a SMARTS pattern onto the structure, as atom indices.
+
+    The structure needs the data the pattern's primitives use (a bond graph; aromaticity,
+    formal charges or stereochemistry where the pattern asks), and a missing one is refused.
+    """

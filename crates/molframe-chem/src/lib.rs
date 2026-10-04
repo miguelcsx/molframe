@@ -6,6 +6,7 @@ mod annotate;
 mod bonds;
 mod carbohydrates;
 mod coverage;
+mod diagnostics;
 mod element;
 mod element_data;
 mod equivalence;
