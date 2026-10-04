@@ -284,6 +284,7 @@ const HOLDS_THE_GIL: &[(&str, &str)] = &[
     ("bindings/geometry.rs", "centroid"),
     ("bindings/geometry.rs", "rmsd"),
     ("chemistry.rs", "element"),
+    ("chemistry/roles.rs", "polymer_atom_roles"),
     ("chemistry.rs", "vdw_radius"),
     ("chemistry/carbohydrates.rs", "snfg_symbol"),
     ("crystal.rs", "assemblies"),

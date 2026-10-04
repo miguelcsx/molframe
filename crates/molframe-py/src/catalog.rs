@@ -2,8 +2,19 @@
 
 use pyo3::prelude::*;
 
-mod data;
-mod structural;
+mod analysis;
+mod chemistry;
+mod compare;
+mod crystal;
+mod formats;
+mod geometry;
+mod interop;
+mod motif;
+mod sequence;
+mod spatial;
+mod surface;
+mod trajectory;
+mod validation;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Capability {
@@ -20,7 +31,21 @@ pub(crate) struct Capability {
 }
 
 /// Every catalogued operation, grouped by what it operates on.
-const GROUPS: [&[Capability]; 2] = [structural::STRUCTURAL, data::DATA];
+const GROUPS: [&[Capability]; 13] = [
+    analysis::ROWS,
+    chemistry::ROWS,
+    compare::ROWS,
+    crystal::ROWS,
+    formats::ROWS,
+    geometry::ROWS,
+    interop::ROWS,
+    motif::ROWS,
+    sequence::ROWS,
+    spatial::ROWS,
+    surface::ROWS,
+    trajectory::ROWS,
+    validation::ROWS,
+];
 
 /// Every catalogued operation.
 pub(crate) fn capabilities() -> impl Iterator<Item = &'static Capability> {

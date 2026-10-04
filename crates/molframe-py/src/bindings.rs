@@ -11,6 +11,8 @@ mod analysis;
 #[cfg(feature = "geometry")]
 mod geometry;
 #[cfg(feature = "geometry")]
+pub(crate) mod measures;
+#[cfg(feature = "geometry")]
 pub(crate) use geometry::{centroid, coordinates, distance_matrix, rmsd};
 #[cfg(feature = "analysis")]
 mod bonds;
