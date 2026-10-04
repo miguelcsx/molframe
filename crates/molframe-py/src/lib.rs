@@ -33,7 +33,11 @@ mod crystal;
 #[cfg(feature = "crystal")]
 mod crystal_links;
 #[cfg(feature = "crystal")]
+mod crystal_maps;
+#[cfg(feature = "crystal")]
 mod crystal_reduction;
+#[cfg(feature = "crystal")]
+mod crystal_reflections;
 #[cfg(feature = "crystal")]
 mod crystal_statistics;
 mod editing;

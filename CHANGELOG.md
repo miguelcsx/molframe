@@ -23,6 +23,9 @@ change the public API.
 
 ### Fixed
 
+- Sampling a density map at a Cartesian position that is exactly a grid point could report no
+  value, because the cell transform put the coordinate a few ulps below the first grid point.
+
 - `group_coordinate_variance` centred a group's samples on the group's grand mean, so a
   group of atoms at different places reported its extent in space as fluctuation; it is
   now the mean of each atom's variance about its own mean position.
@@ -44,6 +47,11 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- Python `molframe.crystal`: space groups by Hermann-Mauguin name, Hall symbol or type with
+  their symmetry operations, the space group a structure carries, density maps (MRC read
+  and write, statistics, histograms, interpolation) and reflection tables (MTZ read and
+  write). Symmetry operations print as CIF triplets that parse back to the same operation,
+  and map, MRC and reflection errors gain diagnostic codes.
 - Python `molframe.compare`: combinatorial-extension alignment (`ce_align`), contact areas
   and the CAD score, contact-map overlap, and sequence-based chain assignment and residue
   mapping.

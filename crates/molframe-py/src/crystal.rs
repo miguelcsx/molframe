@@ -3,7 +3,10 @@
 use crate::bindings::PyStructure;
 use molframe::UnitCell;
 use molframe::crystal::{AssemblyExt as _, AssemblyView};
-use molframe::crystal::{CellTransform, ReflectionSymmetry, SymmetrySet, space_group_setting};
+use molframe::crystal::{
+    CellTransform, ReflectionSymmetry, SymmetryExt as _, SymmetryOperation, SymmetrySet,
+    space_group_by_hall, space_group_by_hermann_mauguin, space_group_setting, space_group_settings,
+};
 use numpy::{Complex64, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 
@@ -17,6 +20,11 @@ use pyo3::prelude::*;
 pub(crate) struct PyUnitCell(pub(crate) CellTransform, UnitCell);
 
 impl PyUnitCell {
+    /// The cell parameters.
+    pub(crate) const fn parameters(&self) -> UnitCell {
+        self.1
+    }
+
     /// The cell a structure carries, as its conversion and its parameters.
     pub(crate) fn from_cell(cell: &UnitCell) -> PyResult<Self> {
         CellTransform::new(cell)
@@ -96,6 +104,77 @@ impl PySpaceGroup {
             .map_err(crate::error::kernel)
     }
 
+    /// The group a Hermann–Mauguin symbol names, short or full; case, spaces and screw-axis
+    /// underscores do not matter, so a `CRYST1` spelling (`P 21 21 21`) resolves. A symbol of
+    /// several settings gives the standard one.
+    #[staticmethod]
+    fn from_hermann_mauguin(symbol: &str) -> PyResult<Self> {
+        space_group_by_hermann_mauguin(symbol)
+            .map(|setting| Self(setting.symmetry_set()))
+            .map_err(crate::error::kernel)
+    }
+
+    /// The setting a Hall symbol names.
+    #[staticmethod]
+    fn from_hall(symbol: &str) -> PyResult<Self> {
+        space_group_by_hall(symbol)
+            .map(|setting| Self(setting.symmetry_set()))
+            .map_err(crate::error::kernel)
+    }
+
+    /// Every Hall setting of one International Tables type (`1..=230`).
+    #[staticmethod]
+    fn settings(international_number: u16) -> PyResult<Vec<Self>> {
+        space_group_settings(international_number)
+            .map(|found| {
+                found
+                    .iter()
+                    .map(|setting| Self(setting.symmetry_set()))
+                    .collect()
+            })
+            .map_err(crate::error::kernel)
+    }
+
+    /// The International Tables number, `1..=230`.
+    #[getter]
+    fn international_number(&self) -> Option<u16> {
+        self.0.international_number
+    }
+
+    /// The Hermann–Mauguin symbol.
+    #[getter]
+    fn hermann_mauguin(&self) -> Option<&str> {
+        self.0.hermann_mauguin.as_deref()
+    }
+
+    /// The unique-axis, origin or cell choice that distinguishes settings of one type.
+    #[getter]
+    fn choice(&self) -> Option<&str> {
+        self.0.choice.as_deref()
+    }
+
+    /// The symmetry operations, each acting on fractional coordinates.
+    #[getter]
+    fn operations(&self) -> Vec<PySymmetryOperation> {
+        self.0
+            .operations()
+            .iter()
+            .cloned()
+            .map(PySymmetryOperation)
+            .collect()
+    }
+
+    fn __len__(&self) -> usize {
+        self.0.operations().len()
+    }
+
+    fn __repr__(&self) -> String {
+        match (&self.0.hermann_mauguin, self.0.international_number) {
+            (Some(symbol), Some(number)) => format!("SpaceGroup({symbol}, number={number})"),
+            _ => "SpaceGroup()".to_owned(),
+        }
+    }
+
     #[getter]
     fn hall_symbol(&self) -> Option<&str> {
         self.0.hall.as_deref()
@@ -112,6 +191,69 @@ impl PySpaceGroup {
             .map(PyReflectionSymmetry)
             .map_err(crate::error::kernel)
     }
+}
+
+/// Three rows of three integers.
+type RotationRows = ((i32, i32, i32), (i32, i32, i32), (i32, i32, i32));
+
+/// One symmetry operation on fractional coordinates: `x' = W x + w`.
+#[derive(Clone, Debug)]
+#[pyclass(
+    name = "SymmetryOperation",
+    frozen,
+    skip_from_py_object,
+    module = "molframe.crystal"
+)]
+pub(crate) struct PySymmetryOperation(SymmetryOperation);
+
+#[pymethods]
+impl PySymmetryOperation {
+    /// The operation as written in the tables, such as `1/2-x,1/2+y,-z`.
+    #[getter]
+    fn expression(&self) -> String {
+        self.0.to_string()
+    }
+
+    /// The integer rotation matrix `W`, row by row.
+    #[getter]
+    fn rotation(&self) -> RotationRows {
+        let [a, b, c] = self.0.rotation;
+        ((a[0], a[1], a[2]), (b[0], b[1], b[2]), (c[0], c[1], c[2]))
+    }
+
+    /// The exact fractional translation `w`.
+    #[getter]
+    fn translation(&self) -> (f64, f64, f64) {
+        let [x, y, z] = self.0.translation.map(molframe::crystal::Rational::as_f64);
+        (x, y, z)
+    }
+
+    /// Whether this is the identity.
+    #[getter]
+    fn is_identity(&self) -> bool {
+        self.0.is_identity()
+    }
+
+    /// Where the operation takes a fractional coordinate.
+    fn apply(&self, fractional: [f64; 3]) -> [f64; 3] {
+        self.0.apply_fractional(fractional)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("SymmetryOperation({})", self.0)
+    }
+}
+
+/// The space group a structure carries, or `None` when it has none.
+#[pyfunction]
+fn space_group(py: Python<'_>, structure: &PyStructure) -> Option<PySpaceGroup> {
+    let source = structure.inner.clone();
+    py.detach(move || {
+        source
+            .engine()
+            .symmetry_set()
+            .map(|set| PySpaceGroup(set.clone()))
+    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -264,12 +406,16 @@ fn placements(structure: &molframe::Structure, id: &str) -> PyResult<Vec<PyAssem
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     crate::crystal_links::register(module)?;
+    crate::crystal_maps::register(module)?;
+    crate::crystal_reflections::register(module)?;
     module.add_class::<PyAssemblyInstance>()?;
     module.add_function(wrap_pyfunction!(assemblies, module)?)?;
     module.add_function(wrap_pyfunction!(assembly, module)?)?;
     module.add_function(wrap_pyfunction!(structure_factors, module)?)?;
     module.add_class::<PyUnitCell>()?;
     module.add_class::<PySpaceGroup>()?;
+    module.add_class::<PySymmetryOperation>()?;
+    module.add_function(wrap_pyfunction!(space_group, module)?)?;
     module.add_class::<PyReflectionSymmetry>()?;
     crate::crystal_statistics::register(module)?;
     crate::crystal_reduction::register(module)
