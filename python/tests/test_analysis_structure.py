@@ -21,23 +21,6 @@ def residue_atoms(structure):
     ]
 
 
-def with_roles(structure):
-    roles = molframe.chemistry.polymer_atom_roles()
-    rules = [
-        molframe.chemistry.PolymerRoleRule(name, roles[role], component_kind=1)
-        for name, role in (
-            ("N", "protein_nitrogen"),
-            ("CA", "protein_alpha_carbon"),
-            ("C", "protein_carbonyl_carbon"),
-            ("O", "protein_carbonyl_oxygen"),
-            ("CB", "protein_beta_carbon"),
-        )
-    ]
-    return molframe.chemistry.apply_polymer_role_profile(
-        structure, CCD, rules, profile_id="backbone", version="wwPDB-2026-10-03"
-    ).structure
-
-
 @pytest.fixture(scope="module")
 def crambin():
     return molframe.read(BENCH / "1crn.cif")
@@ -119,7 +102,7 @@ def test_native_contacts_equal_a_brute_force_pair_count(crambin):
     assert 0 < kept < native
 
 
-def test_half_sphere_exposure_counts_alpha_carbons_within_the_radius(crambin):
+def test_half_sphere_exposure_counts_alpha_carbons_within_the_radius(crambin, with_roles):
     annotated = with_roles(crambin)
     radius = 13.0
     result = analysis.half_sphere_exposure(annotated, radius=radius)

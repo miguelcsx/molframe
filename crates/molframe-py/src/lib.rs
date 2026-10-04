@@ -63,6 +63,8 @@ mod table;
 mod trajectory;
 #[cfg(feature = "validation")]
 mod validation;
+#[cfg(feature = "validation")]
+mod validation_checks;
 #[cfg(feature = "analysis")]
 mod workflow;
 

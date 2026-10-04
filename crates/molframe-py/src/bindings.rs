@@ -341,6 +341,10 @@ impl PySelection {
 }
 
 impl PySelection {
+    pub(crate) fn atom_indices(&self) -> &[u32] {
+        &self.indices
+    }
+
     pub(crate) const fn native(&self) -> &molframe::Selection {
         &self.selection
     }
