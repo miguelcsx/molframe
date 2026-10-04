@@ -7,6 +7,7 @@ mod output;
 mod structure_batch;
 mod structure_batch_buffer;
 mod structure_batch_builder;
+mod structure_batch_diagnostics;
 mod structure_batch_pool;
 
 pub use collect_structure::collect_structure;

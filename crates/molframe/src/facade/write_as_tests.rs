@@ -36,3 +36,22 @@ fn a_bare_extension_names_its_format_without_regard_to_case() {
     assert_eq!(Format::from_extension("bcif"), Some(Format::BinaryCif));
     assert_eq!(Format::from_extension("nope"), None);
 }
+
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+#[test]
+fn a_cancelled_context_stops_perception_instead_of_skipping_it() {
+    let structure = Structure::from(molframe_bench::structure(molframe_bench::Sample::Medium));
+    let token = molframe_core::CancellationToken::new();
+    token.cancel();
+    let context = match ExecutionContext::builder().cancellation(token).build() {
+        Ok(context) => context,
+        Err(error) => panic!("context should build: {error}"),
+    };
+    match perceive_in(&structure, &context) {
+        Ok(_) => panic!("a cancelled perception must not return a structure"),
+        Err(findings) => assert_eq!(
+            findings.first().map(molframe_core::Diagnostic::code),
+            Some(molframe_core::Code::E1904)
+        ),
+    }
+}

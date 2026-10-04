@@ -367,6 +367,11 @@ fn enrich_read(
     }
     let structure = match molframe_chem::perceive_bonds_in(&structure, context) {
         Ok(structure) => structure,
+        // A cancellation or an exhausted budget is the caller's own limit
+        // taking effect, not a defect of the file: the read stops.
+        Err(finding) if matches!(finding.code(), Code::E1902 | Code::E1904 | Code::E7001) => {
+            return Err(Findings::from(finding));
+        }
         Err(finding) => {
             findings.push(finding);
             structure

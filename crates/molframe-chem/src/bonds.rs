@@ -183,7 +183,7 @@ fn add_grid_bonds(
             Diagnostic::new(Code::E1902).with_context("reason", error.to_string())
         }
         BlockExecutionError::Cancelled => {
-            Diagnostic::new(Code::E1901).with_message("bond perception was cancelled")
+            Diagnostic::new(Code::E1904).with_message("bond perception was cancelled")
         }
         BlockExecutionError::Worker(_) => Diagnostic::new(Code::E1901)
             .with_message("a worker thread panicked during bond perception"),
