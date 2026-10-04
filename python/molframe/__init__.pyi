@@ -257,12 +257,17 @@ class ExecutionContext:
         scratch_bytes: int = 0,
         temp_directory: str | PathLike[str] | None = None,
         temp_bytes: int = 0,
+        image_limit: int | None = None,
     ) -> None: ...
     def cancel(self) -> None: ...
     @property
     def is_cancelled(self) -> bool: ...
     @property
     def workers(self) -> int | None: ...
+    @property
+    def image_limit(self) -> int | None:
+        """The most candidate symmetry images a crystal search may examine, or ``None``."""
+
     @property
     def memory_budget(self) -> int | None: ...
     @property

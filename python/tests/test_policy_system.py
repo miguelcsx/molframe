@@ -105,3 +105,14 @@ def test_a_result_says_which_input_atom_each_analysed_atom_is(crambin):
     assert np.array_equal(origin[:atoms], np.arange(atoms))
     assert origin.max() < atoms
     assert not crystal.atom_origin.flags.writeable  # type: ignore[union-attr]
+
+
+def test_the_ceiling_on_candidate_crystal_images_belongs_to_the_context(crambin):
+    crystal = molframe.AnalysisPolicy(assembly="crystal:4.0")
+    tight = molframe.ExecutionContext(image_limit=10)
+    assert tight.image_limit == 10
+    with pytest.raises(molframe.PolicyError) as refused:
+        analysis.contacts(crambin, 3.5, policy=crystal, context=tight)
+    assert refused.value.code == "MOLFRAME-E6017"
+    generous = molframe.ExecutionContext(image_limit=50_000_000)
+    assert len(analysis.contacts(crambin, 3.5, policy=crystal, context=generous).value) > 0

@@ -36,6 +36,7 @@ pub struct PyExecutionContext {
     scratch_bytes: usize,
     temp_directory: Option<PathBuf>,
     temp_bytes: u64,
+    image_limit: Option<usize>,
     token: CancellationToken,
 }
 
@@ -43,13 +44,15 @@ pub struct PyExecutionContext {
 impl PyExecutionContext {
     /// Creates a context; omitted limits keep the library's bounded defaults.
     #[new]
-    #[pyo3(signature = (*, workers=None, memory_budget=None, scratch_bytes=0, temp_directory=None, temp_bytes=0))]
+    #[pyo3(signature = (*, workers=None, memory_budget=None, scratch_bytes=0, temp_directory=None, temp_bytes=0, image_limit=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         workers: Option<usize>,
         memory_budget: Option<usize>,
         scratch_bytes: usize,
         temp_directory: Option<PathBuf>,
         temp_bytes: u64,
+        image_limit: Option<usize>,
     ) -> PyResult<Self> {
         let context = Self {
             workers,
@@ -57,6 +60,7 @@ impl PyExecutionContext {
             scratch_bytes,
             temp_directory,
             temp_bytes,
+            image_limit,
             token: CancellationToken::new(),
         };
         // Refused here, at the construction the caller wrote, not at the first
@@ -86,6 +90,12 @@ impl PyExecutionContext {
     #[getter]
     fn memory_budget(&self) -> Option<usize> {
         self.memory_budget
+    }
+
+    /// The most candidate symmetry images a crystal search may examine, or `None` for the default.
+    #[getter]
+    const fn image_limit(&self) -> Option<usize> {
+        self.image_limit
     }
 
     /// Bytes of reusable scratch the operations may retain.
@@ -131,6 +141,9 @@ impl PyExecutionContext {
             .cancellation(token.clone());
         if let Some(workers) = self.workers {
             builder = builder.worker_budget(workers);
+        }
+        if let Some(images) = self.image_limit {
+            builder = builder.image_search_limit(images);
         }
         if let Some(bytes) = self.memory_budget {
             builder =

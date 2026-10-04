@@ -402,3 +402,27 @@ fn the_result_says_which_input_atom_each_analysed_atom_is() {
         Some(vec![0, 1])
     );
 }
+
+#[test]
+fn the_ceiling_on_candidate_images_is_the_contexts_and_exceeding_it_is_an_error() {
+    let structure = crambin();
+    let crystal = policy(
+        AssemblyChoice::Crystal { radius: 4.0 },
+        SymmetryPolicy::Crystallographic,
+    );
+    let kernel = contacts_kernel(3.5, SpatialBackend::BruteForce);
+    let Ok(tight) = ExecutionContext::builder().image_search_limit(10).build() else {
+        panic!("a valid context");
+    };
+    let Err(refused) = analyse_structure(&structure, &crystal, &kernel, &tight) else {
+        panic!("ten candidate images cannot cover crambin's neighbourhood");
+    };
+    assert!(matches!(&refused, GovernedAnalysisError::System(f) if f[0].code() == Code::E6017));
+    let Ok(generous) = ExecutionContext::builder()
+        .image_search_limit(50_000_000)
+        .build()
+    else {
+        panic!("a valid context");
+    };
+    assert!(analyse_structure(&structure, &crystal, &kernel, &generous).is_ok());
+}

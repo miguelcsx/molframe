@@ -163,6 +163,8 @@ pub fn crystal_contact_view(
     radius: f32,
     context: &ExecutionContext,
 ) -> Result<AssemblyView, Diagnostic> {
+    // The search's own ceiling on candidate images is a resource limit, so it comes from
+    // the execution context like every other.
     let symmetry = structure
         .symmetry_set()
         .filter(|set| !set.operations().is_empty())
@@ -179,7 +181,10 @@ pub fn crystal_contact_view(
         symmetry,
         ModelIndex::new(0),
         f64::from(radius),
-        CrystalNeighborOptions::default(),
+        CrystalNeighborOptions {
+            candidate_limit: context.image_search_limit(),
+            ..CrystalNeighborOptions::default()
+        },
         context,
     )?;
     let ranges = chain_atom_ranges(structure);

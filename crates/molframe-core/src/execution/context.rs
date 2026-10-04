@@ -11,6 +11,9 @@ use crate::parallel::SharedPool;
 use std::fmt;
 use std::sync::Arc;
 
+/// The default ceiling on candidate symmetry images one crystal search may examine.
+pub const DEFAULT_IMAGE_SEARCH_LIMIT: usize = 10_000_000;
+
 /// Shared controls passed through every stage of an out-of-core operation.
 #[derive(Clone, Debug)]
 pub struct ExecutionContext {
@@ -21,6 +24,7 @@ pub struct ExecutionContext {
     disk: Option<Arc<DiskAccount>>,
     executor: Arc<SharedPool>,
     worker_budget: usize,
+    image_search_limit: usize,
     pub(crate) admission: Arc<Admission>,
 }
 
@@ -29,6 +33,17 @@ impl ExecutionContext {
     #[must_use]
     pub fn builder() -> ExecutionContextBuilder {
         ExecutionContextBuilder::default()
+    }
+
+    /// The most candidate symmetry images a crystal search may examine.
+    ///
+    /// A crystal environment is found by trying every symmetry operation and lattice
+    /// translation that could bring a copy within reach, so the work grows with the unit's
+    /// extent as well as its atom count. Exceeding the limit is an error, never a silent
+    /// truncation; raise it deliberately after reviewing the cost.
+    #[must_use]
+    pub const fn image_search_limit(&self) -> usize {
+        self.image_search_limit
     }
 
     /// Returns this context's execution-memory ceiling.
@@ -148,6 +163,7 @@ pub struct ExecutionContextBuilder {
     scratch: ScratchPolicy,
     temp_storage: TempStoragePolicy,
     worker_budget: Option<usize>,
+    image_search_limit: Option<usize>,
 }
 
 impl ExecutionContextBuilder {
@@ -183,6 +199,13 @@ impl ExecutionContextBuilder {
     #[must_use]
     pub const fn worker_budget(mut self, workers: usize) -> Self {
         self.worker_budget = Some(workers);
+        self
+    }
+
+    /// Replaces the default ceiling on candidate symmetry images a crystal search may examine.
+    #[must_use]
+    pub const fn image_search_limit(mut self, images: usize) -> Self {
+        self.image_search_limit = Some(images);
         self
     }
 
@@ -230,6 +253,10 @@ impl ExecutionContextBuilder {
             disk,
             executor,
             worker_budget,
+            image_search_limit: match self.image_search_limit {
+                Some(limit) => limit,
+                None => DEFAULT_IMAGE_SEARCH_LIMIT,
+            },
             admission: Arc::new(Admission::new(worker_budget.saturating_mul(2))),
         }
     }

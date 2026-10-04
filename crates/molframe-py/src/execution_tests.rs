@@ -21,7 +21,7 @@ fn cancelling_the_context_stops_an_operation_that_checks_its_token() {
     Python::attach(|py| {
         let context = Bound::new(
             py,
-            PyExecutionContext::new(Some(2), None, 0, None, 0).expect("valid limits"),
+            PyExecutionContext::new(Some(2), None, 0, None, 0, None).expect("valid limits"),
         )
         .expect("binds");
         let handle = context.clone().unbind();
@@ -46,15 +46,15 @@ fn cancelling_the_context_stops_an_operation_that_checks_its_token() {
 #[test]
 fn limits_the_kernel_cannot_honour_are_refused_when_the_context_is_made() {
     Python::initialize();
-    assert!(PyExecutionContext::new(Some(0), None, 0, None, 0).is_err());
-    assert!(PyExecutionContext::new(None, Some(0), 0, None, 0).is_err());
-    assert!(PyExecutionContext::new(None, Some(10), 1_000, None, 0).is_err());
+    assert!(PyExecutionContext::new(Some(0), None, 0, None, 0, None).is_err());
+    assert!(PyExecutionContext::new(None, Some(0), 0, None, 0, None).is_err());
+    assert!(PyExecutionContext::new(None, Some(10), 1_000, None, 0, None).is_err());
 }
 
 #[test]
 fn the_built_context_carries_the_limits_it_was_given() {
     Python::initialize();
-    let context = PyExecutionContext::new(Some(3), Some(1 << 20), 0, None, 0).expect("valid");
+    let context = PyExecutionContext::new(Some(3), Some(1 << 20), 0, None, 0, None).expect("valid");
     let built = context.build(&CancellationToken::new()).expect("builds");
     assert_eq!(built.worker_budget(), 3);
     assert_eq!(built.memory_budget().bytes(), 1 << 20);
