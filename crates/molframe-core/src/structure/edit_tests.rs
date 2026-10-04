@@ -102,3 +102,18 @@ fn budgeted_edit_refuses_before_detaching_coordinates() {
     assert!(original.edit_coordinates(&context).is_err());
     assert_eq!(context.reserved_bytes(), 0);
 }
+
+#[test]
+fn a_detached_snapshot_is_not_changed_by_later_writes_to_the_editor() {
+    let original = crate::structure::fixture::sample();
+    let context = ExecutionContext::default();
+    let mut editor = original.edit_coordinates(&context).expect("copy fits");
+    let published = editor.snapshot_detached(&context).expect("valid snapshot");
+    let before = published.positions().to_vec();
+    for position in editor.positions_mut(ModelIndex::new(0)).expect("model") {
+        position[0] += 5.0;
+    }
+    assert_eq!(published.positions(), before.as_slice());
+    let shared = editor.snapshot().expect("valid snapshot");
+    assert_ne!(shared.positions(), before.as_slice());
+}

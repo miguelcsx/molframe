@@ -81,11 +81,12 @@ impl CoordinateEditor {
         finish(data)
     }
 
-    /// Builds a validated snapshot while retaining the editor's private buffer.
+    /// Builds a validated snapshot that shares the editor's coordinate buffer.
     ///
-    /// This is useful at an FFI boundary where a foreign array may outlive its
-    /// editing scope. The published structure receives its own coordinate
-    /// buffer, so a retained foreign view cannot mutate it afterwards.
+    /// Nothing is copied, so the snapshot and the editor see the same
+    /// coordinates: use it only when the editor is not written to afterwards.
+    /// A caller that keeps a writable view of the buffer must use
+    /// [`Self::snapshot_detached`].
     ///
     /// # Errors
     ///
@@ -93,6 +94,31 @@ impl CoordinateEditor {
     pub fn snapshot(&self) -> Result<Structure, Vec<crate::diagnostic::Diagnostic>> {
         let mut data: StructureData = self.base.data().clone();
         data.coords = self.coords.clone();
+        finish(data)
+    }
+}
+
+impl CoordinateEditor {
+    /// Builds a validated snapshot with a coordinate buffer of its own.
+    ///
+    /// The copy is charged to `context`'s memory budget before anything is
+    /// allocated. Writing to the editor, or to a foreign view of its buffer,
+    /// afterwards cannot change the published structure.
+    ///
+    /// # Errors
+    ///
+    /// Returns a memory diagnostic when the copy does not fit the budget, or
+    /// every violated structural invariant.
+    pub fn snapshot_detached(
+        &self,
+        context: &ExecutionContext,
+    ) -> Result<Structure, Vec<crate::diagnostic::Diagnostic>> {
+        let mut coords = self.coords.clone();
+        coords
+            .make_unique_in(context)
+            .map_err(|error| vec![crate::diagnostic::Diagnostic::from(error)])?;
+        let mut data: StructureData = self.base.data().clone();
+        data.coords = coords;
         finish(data)
     }
 }

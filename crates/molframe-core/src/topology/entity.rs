@@ -35,6 +35,18 @@ pub enum EntityKind {
     Unknown,
 }
 
+crate::contract::closed_vocabulary!(
+    EntityKind,
+    "entity_kind",
+    [
+        (EntityKind::Polymer, "polymer"),
+        (EntityKind::NonPolymer, "non-polymer"),
+        (EntityKind::Water, "water"),
+        (EntityKind::Branched, "branched"),
+        (EntityKind::Unknown, "unknown"),
+    ]
+);
+
 /// The entity table.
 ///
 /// Canonical sequences share one pool rather than owning a collection each, so

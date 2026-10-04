@@ -34,6 +34,20 @@ pub enum PolymerKind {
     Other,
 }
 
+crate::contract::closed_vocabulary!(
+    PolymerKind,
+    "polymer_kind",
+    [
+        (PolymerKind::None, "none"),
+        (PolymerKind::Protein, "protein"),
+        (PolymerKind::Dna, "dna"),
+        (PolymerKind::Rna, "rna"),
+        (PolymerKind::NucleicHybrid, "nucleic-hybrid"),
+        (PolymerKind::Saccharide, "saccharide"),
+        (PolymerKind::Other, "other"),
+    ]
+);
+
 impl PolymerKind {
     /// Returns true for any polymer.
     #[must_use]

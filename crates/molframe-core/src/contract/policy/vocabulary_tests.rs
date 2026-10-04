@@ -105,3 +105,16 @@ fn a_refused_word_is_a_registered_diagnostic_with_its_field() {
     assert!(diagnostic.code().is_registered());
     assert_eq!(diagnostic.field(), Some("precision"));
 }
+
+#[test]
+fn polymer_kinds_use_the_shared_vocabulary() {
+    use crate::topology::PolymerKind;
+    for name in PolymerKind::NAMES {
+        assert_eq!(
+            name.parse::<PolymerKind>().map(|kind| kind.name()),
+            Ok(*name)
+        );
+    }
+    assert_eq!("nucleic_hybrid".parse(), Ok(PolymerKind::NucleicHybrid));
+    assert!("lipid".parse::<PolymerKind>().is_err());
+}
