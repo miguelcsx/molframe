@@ -28,6 +28,7 @@ mod chain_statistics;
 #[path = "pore.rs"]
 mod channel_profile;
 mod chemistry;
+mod diagnostics;
 #[path = "gnm.rs"]
 mod elastic_network;
 mod electrostatics;
@@ -92,6 +93,7 @@ pub use cation_aromatic::{CationPi, CationPiError, CationPiOptions, CationPiTabl
 pub use chain_boundary::{chain_interface, chain_interface_with_spatial};
 pub use chain_statistics::{PolymerError, PolymerStatistics, polymer_statistics};
 pub use channel_profile::{PoreError, PoreProfileOptions, PoreSample, pore_profile};
+pub use diagnostics::{governed_diagnostic, physical_diagnostic, standalone_diagnostic};
 pub use elastic_network::{GaussianNetworkModel, GnmError, GnmOptions, gaussian_network_model};
 pub use electrostatics::{
     CONTACT_POTENTIAL_CUTOFF, GridSpec, PotentialError, ScalarGrid, contact_potential,
