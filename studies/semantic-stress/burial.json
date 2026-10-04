@@ -1,0 +1,2144 @@
+{
+ "plan": {
+  "universes": 7,
+  "skipped": 1,
+  "balanced": false,
+  "decisions": [
+   {
+    "field": "hydrogens",
+    "uncertainty": "interpretive",
+    "rationale": "prepared protein files carry added hydrogens; deposited entries do not",
+    "evidence": "PDBbind v2020 protein files are about half hydrogen"
+   },
+   {
+    "field": "vdw_radii",
+    "uncertainty": "algorithmic",
+    "rationale": "four radius sets ship with the library; none is claimed to be correct",
+    "evidence": "molframe-chem radius tables"
+   }
+  ]
+ },
+ "buried_below": 1.0,
+ "mostly": 0.5,
+ "summary": {
+  "complexes_in_corpus": 60,
+  "refused_by_molframe": 1,
+  "complexes": 59,
+  "universes_per_complex": 7,
+  "conclusion_flips": 0.1016949152542373,
+  "buried_fraction_range_median": 0.09134615384615385,
+  "buried_fraction_range_max": 0.3181818181818181,
+  "mean_shapley_exposed_area": {
+   "hydrogens": 0.2818946619411485,
+   "vdw_radii": 0.6842070329741057
+  },
+  "mean_shapley_buried_fraction": {
+   "hydrogens": 0.5244312140592416,
+   "vdw_radii": 0.35692471814414817
+  }
+ },
+ "entries": [
+  {
+   "id": "1bgq",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 42,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.64,
+   "buried_fraction_max": 0.7380952380952381,
+   "buried_fraction_range": 0.09809523809523812,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.0025528248374675415,
+    "vdw_radii": 0.048960286301323194
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.35136659322211644,
+    "vdw_radii": 0.6486334067778836
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.007785727636377802,
+    "vdw_radii": 0.9922142723636223
+   },
+   "balanced": false
+  },
+  {
+   "id": "1c1u",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 34,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7647058823529411,
+   "buried_fraction_max": 0.8181818181818182,
+   "buried_fraction_range": 0.05347593582887711,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.03639450793030502,
+    "vdw_radii": 0.16090742657010967
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.129462856227986,
+    "vdw_radii": 0.8705371437720137
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.016829408406076028,
+    "vdw_radii": 0.983170591593924
+   },
+   "balanced": false
+  },
+  {
+   "id": "1c5q",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 20,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1
+   ],
+   "buried_fraction_min": 0.75,
+   "buried_fraction_max": 0.85,
+   "buried_fraction_range": 0.09999999999999998,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.03161680696511839,
+    "vdw_radii": 0.18249149864894218
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6993645286484049,
+    "vdw_radii": 0.3006354713515951
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.03789013563945094,
+    "vdw_radii": 0.962109864360549
+   },
+   "balanced": false
+  },
+  {
+   "id": "1c5s",
+   "refused": "MOLFRAME-E3009",
+   "message": "occupancy outside the zero-to-one range"
+  },
+  {
+   "id": "1gjc",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 40,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.56,
+   "buried_fraction_max": 0.8,
+   "buried_fraction_range": 0.24,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.014843777722073919,
+    "vdw_radii": 0.13925294278565006
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.5601958017286996,
+    "vdw_radii": 0.4398041982712999
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.008171244615882662,
+    "vdw_radii": 0.9918287553841174
+   },
+   "balanced": false
+  },
+  {
+   "id": "1km3",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 33,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6190476190476191,
+   "buried_fraction_max": 0.7878787878787878,
+   "buried_fraction_range": 0.16883116883116878,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.03654383980031488,
+    "vdw_radii": 0.08144850992636488
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6786127291416825,
+    "vdw_radii": 0.32138727085831753
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.08146113899971115,
+    "vdw_radii": 0.9185388610002889
+   },
+   "balanced": false
+  },
+  {
+   "id": "1nfy",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 49,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.5666666666666667,
+   "buried_fraction_max": 0.7551020408163265,
+   "buried_fraction_range": 0.18843537414965983,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.0058139089854297105,
+    "vdw_radii": 0.04106778470010172
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6843469366881457,
+    "vdw_radii": 0.3156530633118543
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.02739098063157581,
+    "vdw_radii": 0.972609019368424
+   },
+   "balanced": false
+  },
+  {
+   "id": "1pph",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 58,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6333333333333333,
+   "buried_fraction_max": 0.7758620689655172,
+   "buried_fraction_range": 0.14252873563218393,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.009132586592404124,
+    "vdw_radii": 0.0325746641145963
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6013167871280305,
+    "vdw_radii": 0.39868321287196945
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.047425109756950884,
+    "vdw_radii": 0.9525748902430491
+   },
+   "balanced": false
+  },
+  {
+   "id": "1qyg",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 41,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7142857142857143,
+   "buried_fraction_max": 0.9024390243902439,
+   "buried_fraction_range": 0.18815331010452963,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.11591896626423587,
+    "vdw_radii": 0.13462347709126365
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8353043637697103,
+    "vdw_radii": 0.1646956362302897
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.25452174236376734,
+    "vdw_radii": 0.7454782576362327
+   },
+   "balanced": false
+  },
+  {
+   "id": "1ssq",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 15,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7142857142857143,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.2857142857142857,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.06550599889779934,
+    "vdw_radii": 0.3656364028022019
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.3190994451557832,
+    "vdw_radii": 0.6809005548442169
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.025591120543471093,
+    "vdw_radii": 0.9744088794565288
+   },
+   "balanced": false
+  },
+  {
+   "id": "1uto",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 21,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7777777777777778,
+   "buried_fraction_max": 0.9047619047619048,
+   "buried_fraction_range": 0.12698412698412698,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.06117109228483322,
+    "vdw_radii": 0.06690234116467145
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.7341549295774648,
+    "vdw_radii": 0.26584507042253525
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.28908153054076274,
+    "vdw_radii": 0.7109184694592372
+   },
+   "balanced": false
+  },
+  {
+   "id": "1v2s",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 17,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7777777777777778,
+   "buried_fraction_max": 0.8823529411764706,
+   "buried_fraction_range": 0.10457516339869277,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.10950084859805616,
+    "vdw_radii": 0.1323167667697203
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.9374999999999998,
+    "vdw_radii": 0.06249999999999995
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.22957104377952803,
+    "vdw_radii": 0.7704289562204716
+   },
+   "balanced": false
+  },
+  {
+   "id": "1w3k",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 43,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9047619047619048,
+   "buried_fraction_max": 0.9534883720930233,
+   "buried_fraction_range": 0.04872646733111852,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.02040562292717426,
+    "vdw_radii": 0.1209305615871536
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8609623498864003,
+    "vdw_radii": 0.1390376501135997
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.018062190480025025,
+    "vdw_radii": 0.9819378095199749
+   },
+   "balanced": false
+  },
+  {
+   "id": "1yei",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 38,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.782608695652174,
+   "buried_fraction_max": 0.868421052631579,
+   "buried_fraction_range": 0.08581235697940504,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.11179915653082277,
+    "vdw_radii": 0.07648290055802111
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.9375,
+    "vdw_radii": 0.062499999999999924
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.5195068122307921,
+    "vdw_radii": 0.4804931877692079
+   },
+   "balanced": false
+  },
+  {
+   "id": "2drc",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 55,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.48484848484848486,
+   "buried_fraction_max": 0.6545454545454545,
+   "buried_fraction_range": 0.16969696969696968,
+   "mostly_buried_in": 6,
+   "conclusion_flips": true,
+   "agreement_of_verdict": 0.8571428571428571,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.04975388173288267,
+    "vdw_radii": 0.022804605704474765
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8446618037135278,
+    "vdw_radii": 0.15533819628647222
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.711776417057178,
+    "vdw_radii": 0.288223582942822
+   },
+   "balanced": false
+  },
+  {
+   "id": "2e9u",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 41,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9583333333333334,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.04166666666666663,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.18089715524662595,
+    "vdw_radii": 0.5441796542916455
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.16403816199376878,
+    "vdw_radii": 0.8359618380062313
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.040925836489364015,
+    "vdw_radii": 0.9590741635106357
+   },
+   "balanced": false
+  },
+  {
+   "id": "2p15",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 61,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9375,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0625,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 1.0,
+    "vdw_radii": 0.33338839573242235
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.5673076923076923,
+    "vdw_radii": 0.4326923076923076
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.759128779195163,
+    "vdw_radii": 0.2408712208048368
+   },
+   "balanced": false
+  },
+  {
+   "id": "2q64",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 86,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.8,
+   "buried_fraction_max": 0.9186046511627907,
+   "buried_fraction_range": 0.11860465116279062,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.09784388964483075,
+    "vdw_radii": 0.1962209175400386
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8665959117175117,
+    "vdw_radii": 0.13340408828248823
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.09240257820686032,
+    "vdw_radii": 0.9075974217931397
+   },
+   "balanced": false
+  },
+  {
+   "id": "2qpq",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 21,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7692307692307693,
+   "buried_fraction_max": 0.9523809523809523,
+   "buried_fraction_range": 0.18315018315018305,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.4665285473481193,
+    "vdw_radii": 0.23682421791114233
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.7946596347514608,
+    "vdw_radii": 0.20534036524853916
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.6543938610932363,
+    "vdw_radii": 0.3456061389067636
+   },
+   "balanced": false
+  },
+  {
+   "id": "2ra6",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 19,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9473684210526315,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.052631578947368474,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.32760692581890566,
+    "vdw_radii": 0.525489358180753
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6166666666666667,
+    "vdw_radii": 0.38333333333333336
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.17772226539587893,
+    "vdw_radii": 0.822277734604121
+   },
+   "balanced": false
+  },
+  {
+   "id": "2w5g",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 47,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.45161290322580644,
+   "buried_fraction_max": 0.5957446808510638,
+   "buried_fraction_range": 0.14413177762525736,
+   "mostly_buried_in": 4,
+   "conclusion_flips": true,
+   "agreement_of_verdict": 0.5714285714285714,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.039481681850473786,
+    "vdw_radii": 0.027048841836629544
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.829539210912465,
+    "vdw_radii": 0.17046078908753504
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.5559045010874673,
+    "vdw_radii": 0.4440954989125326
+   },
+   "balanced": false
+  },
+  {
+   "id": "2y7z",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 60,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6666666666666666,
+   "buried_fraction_max": 0.7666666666666667,
+   "buried_fraction_range": 0.10000000000000009,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.06424849470383887,
+    "vdw_radii": 0.033991793327504204
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.541225390359809,
+    "vdw_radii": 0.45877460964019107
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.5529859367894743,
+    "vdw_radii": 0.44701406321052567
+   },
+   "balanced": false
+  },
+  {
+   "id": "3arw",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 45,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7307692307692307,
+   "buried_fraction_max": 0.8666666666666667,
+   "buried_fraction_range": 0.13589743589743597,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.021102834121228417,
+    "vdw_radii": 0.13302148371617564
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.21582051961823953,
+    "vdw_radii": 0.7841794803817604
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.020544880420281353,
+    "vdw_radii": 0.9794551195797185
+   },
+   "balanced": false
+  },
+  {
+   "id": "3bgc",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 77,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.975609756097561,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.024390243902439046,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.19556990611448666,
+    "vdw_radii": 0.49055844908334856
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.288008681656916,
+    "vdw_radii": 0.7119913183430839
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.06209230903105661,
+    "vdw_radii": 0.9379076909689432
+   },
+   "balanced": false
+  },
+  {
+   "id": "3cd5",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 76,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.5,
+   "buried_fraction_max": 0.8157894736842105,
+   "buried_fraction_range": 0.3157894736842105,
+   "mostly_buried_in": 6,
+   "conclusion_flips": true,
+   "agreement_of_verdict": 0.8571428571428571,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.0323321169610268,
+    "vdw_radii": 0.07755259093377
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6735294117647058,
+    "vdw_radii": 0.326470588235294
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.08580387308511633,
+    "vdw_radii": 0.9141961269148837
+   },
+   "balanced": false
+  },
+  {
+   "id": "3fh7",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 52,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 1.0,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.6666666666666666,
+    "vdw_radii": 0.4849834592288109
+   },
+   "shapley_buried_fraction": {},
+   "shapley_exposed_area": {
+    "hydrogens": 0.5191917249658441,
+    "vdw_radii": 0.4808082750341558
+   },
+   "balanced": false
+  },
+  {
+   "id": "3ga5",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 35,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 1.0,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.6666666666666666,
+    "vdw_radii": 0.5007584280136376
+   },
+   "shapley_buried_fraction": {},
+   "shapley_exposed_area": {
+    "hydrogens": 0.47808655708148107,
+    "vdw_radii": 0.5219134429185186
+   },
+   "balanced": false
+  },
+  {
+   "id": "3hs4",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 19,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7692307692307693,
+   "buried_fraction_max": 0.8461538461538461,
+   "buried_fraction_range": 0.07692307692307687,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.027272336734878517,
+    "vdw_radii": 0.19901201481119082
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.04342296511627889,
+    "vdw_radii": 0.9565770348837209
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.006820753789271733,
+    "vdw_radii": 0.9931792462107283
+   },
+   "balanced": false
+  },
+  {
+   "id": "3mdz",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 26,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.5625,
+   "buried_fraction_max": 0.6538461538461539,
+   "buried_fraction_range": 0.09134615384615385,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.03276171413913045,
+    "vdw_radii": 0.03402035331751088
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.25993410543130974,
+    "vdw_radii": 0.74006589456869
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.3224594156702296,
+    "vdw_radii": 0.6775405843297704
+   },
+   "balanced": false
+  },
+  {
+   "id": "3n7o",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 43,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7209302325581395,
+   "buried_fraction_max": 0.75,
+   "buried_fraction_range": 0.029069767441860517,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.07359920588299534,
+    "vdw_radii": 0.05880614965625486
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.5708333333333333,
+    "vdw_radii": 0.42916666666666664
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.4487785970373852,
+    "vdw_radii": 0.5512214029626148
+   },
+   "balanced": false
+  },
+  {
+   "id": "3q6z",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 59,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6944444444444444,
+   "buried_fraction_max": 0.7796610169491526,
+   "buried_fraction_range": 0.08521657250470815,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.036587875876591645,
+    "vdw_radii": 0.025874793889385954
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.20693102468333868,
+    "vdw_radii": 0.7930689753166611
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.5035871744102325,
+    "vdw_radii": 0.4964128255897675
+   },
+   "balanced": false
+  },
+  {
+   "id": "3r4p",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 53,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.8529411764705882,
+   "buried_fraction_max": 0.9245283018867925,
+   "buried_fraction_range": 0.07158712541620427,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.034169876261222525,
+    "vdw_radii": 0.058747526271870285
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.05726023657028653,
+    "vdw_radii": 0.9427397634297132
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.1302420432138858,
+    "vdw_radii": 0.8697579567861139
+   },
+   "balanced": false
+  },
+  {
+   "id": "3s8o",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 69,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6216216216216216,
+   "buried_fraction_max": 0.7536231884057971,
+   "buried_fraction_range": 0.13200156678417552,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.06683959677024431,
+    "vdw_radii": 0.03213003547983748
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8567376705494885,
+    "vdw_radii": 0.14326232945051104
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.5962056276529717,
+    "vdw_radii": 0.403794372347028
+   },
+   "balanced": false
+  },
+  {
+   "id": "3shc",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 51,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7777777777777778,
+   "buried_fraction_max": 0.8627450980392157,
+   "buried_fraction_range": 0.08496732026143794,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.14103911131567007,
+    "vdw_radii": 0.15429832933770926
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8361842105263153,
+    "vdw_radii": 0.1638157894736847
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.28193785629676427,
+    "vdw_radii": 0.7180621437032357
+   },
+   "balanced": false
+  },
+  {
+   "id": "3zk6",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 71,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.4788732394366197,
+   "buried_fraction_max": 0.5365853658536586,
+   "buried_fraction_range": 0.05771212641703888,
+   "mostly_buried_in": 5,
+   "conclusion_flips": true,
+   "agreement_of_verdict": 0.7142857142857143,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.0637899512141219,
+    "vdw_radii": 0.017437458933396408
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6289287485219521,
+    "vdw_radii": 0.37107125147804787
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.8057988417629902,
+    "vdw_radii": 0.19420115823700979
+   },
+   "balanced": false
+  },
+  {
+   "id": "4avs",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 22,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.36363636363636365,
+   "buried_fraction_max": 0.6818181818181818,
+   "buried_fraction_range": 0.3181818181818181,
+   "mostly_buried_in": 3,
+   "conclusion_flips": true,
+   "agreement_of_verdict": 0.42857142857142855,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.06352607639394693,
+    "vdw_radii": 0.022584591317611088
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8341708542713568,
+    "vdw_radii": 0.16582914572864316
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.7806111400681226,
+    "vdw_radii": 0.21938885993187723
+   },
+   "balanced": false
+  },
+  {
+   "id": "4h3j",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 52,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.8125,
+   "buried_fraction_max": 0.9807692307692307,
+   "buried_fraction_range": 0.16826923076923073,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.1900407980491301,
+    "vdw_radii": 0.25670369121213654
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.480073656845754,
+    "vdw_radii": 0.519926343154246
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.20047998604056128,
+    "vdw_radii": 0.7995200139594387
+   },
+   "balanced": false
+  },
+  {
+   "id": "4iuo",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 25,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 1.0,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.0,
+    "vdw_radii": 0.0
+   },
+   "shapley_buried_fraction": {},
+   "shapley_exposed_area": {},
+   "balanced": false
+  },
+  {
+   "id": "4k77",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 34,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9444444444444444,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.05555555555555558,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.8420133564967108,
+    "vdw_radii": 0.6498121292596787
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.5729166666666665,
+    "vdw_radii": 0.42708333333333315
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.41214493776124284,
+    "vdw_radii": 0.5878550622387572
+   },
+   "balanced": false
+  },
+  {
+   "id": "4keq",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 19,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.8333333333333334,
+   "buried_fraction_max": 0.9473684210526315,
+   "buried_fraction_range": 0.11403508771929816,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.040581922162469176,
+    "vdw_radii": 0.4053031122591672
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.39048459563543025,
+    "vdw_radii": 0.6095154043645697
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.008147905939006068,
+    "vdw_radii": 0.991852094060994
+   },
+   "balanced": false
+  },
+  {
+   "id": "4mdn",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 64,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.775,
+   "buried_fraction_max": 0.859375,
+   "buried_fraction_range": 0.08437499999999998,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.010421863246045054,
+    "vdw_radii": 0.0662918341899345
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.7881235827664397,
+    "vdw_radii": 0.21187641723356038
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.019008326406209294,
+    "vdw_radii": 0.9809916735937906
+   },
+   "balanced": false
+  },
+  {
+   "id": "4oag",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 42,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 1.0,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.09873794304360528,
+    "vdw_radii": 0.7661396534538666
+   },
+   "shapley_buried_fraction": {},
+   "shapley_exposed_area": {
+    "hydrogens": 0.017864220747819286,
+    "vdw_radii": 0.9821357792521805
+   },
+   "balanced": false
+  },
+  {
+   "id": "4ovg",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 36,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.2857142857142857,
+   "buried_fraction_max": 0.5277777777777778,
+   "buried_fraction_range": 0.2420634920634921,
+   "mostly_buried_in": 1,
+   "conclusion_flips": true,
+   "agreement_of_verdict": 0.8571428571428571,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.023827444912515747,
+    "vdw_radii": 0.018235848884060567
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.7017091075934848,
+    "vdw_radii": 0.2982908924065152
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.43757792438321785,
+    "vdw_radii": 0.5624220756167821
+   },
+   "balanced": false
+  },
+  {
+   "id": "4u6w",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 34,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9230769230769231,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.07692307692307687,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.2966285235720442,
+    "vdw_radii": 0.5164534267381831
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.12396216624209815,
+    "vdw_radii": 0.8760378337579017
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.13090513647357996,
+    "vdw_radii": 0.86909486352642
+   },
+   "balanced": false
+  },
+  {
+   "id": "4xtz",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 65,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9210526315789473,
+   "buried_fraction_max": 0.9384615384615385,
+   "buried_fraction_range": 0.017408906882591113,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.10591559359184315,
+    "vdw_radii": 0.09884650516168342
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.9375,
+    "vdw_radii": 0.06249999999999997
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.3320450753025518,
+    "vdw_radii": 0.667954924697448
+   },
+   "balanced": false
+  },
+  {
+   "id": "4z1k",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 40,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6666666666666666,
+   "buried_fraction_max": 0.725,
+   "buried_fraction_range": 0.05833333333333335,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.043629731154038474,
+    "vdw_radii": 0.02928084569649211
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.7137784090909084,
+    "vdw_radii": 0.28622159090909144
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.4854279581896488,
+    "vdw_radii": 0.5145720418103511
+   },
+   "balanced": false
+  },
+  {
+   "id": "5c28",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 22,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.75,
+   "buried_fraction_max": 0.8636363636363636,
+   "buried_fraction_range": 0.11363636363636365,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.15065850754139123,
+    "vdw_radii": 0.15811484351480665
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.7027439024390244,
+    "vdw_radii": 0.2972560975609756
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.3027276489055797,
+    "vdw_radii": 0.6972723510944203
+   },
+   "balanced": false
+  },
+  {
+   "id": "5kr1",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 73,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.8947368421052632,
+   "buried_fraction_max": 0.9863013698630136,
+   "buried_fraction_range": 0.09156452775775048,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.02646261251439998,
+    "vdw_radii": 0.32284997493094353
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.3046142400658261,
+    "vdw_radii": 0.6953857599341735
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.009266438103008898,
+    "vdw_radii": 0.990733561896991
+   },
+   "balanced": false
+  },
+  {
+   "id": "5n2z",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 63,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6206896551724138,
+   "buried_fraction_max": 0.7142857142857143,
+   "buried_fraction_range": 0.09359605911330049,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.07807800722354978,
+    "vdw_radii": 0.03381047467465936
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.8118693976143991,
+    "vdw_radii": 0.18813060238560086
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.6512986173125035,
+    "vdw_radii": 0.3487013826874964
+   },
+   "balanced": false
+  },
+  {
+   "id": "5nk7",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 57,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7719298245614035,
+   "buried_fraction_max": 0.7878787878787878,
+   "buried_fraction_range": 0.01594896331738438,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.07520549963397333,
+    "vdw_radii": 0.027131764552944238
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.9375,
+    "vdw_radii": 0.062499999999999924
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.7056032035346886,
+    "vdw_radii": 0.2943967964653112
+   },
+   "balanced": false
+  },
+  {
+   "id": "5ttw",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 100,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.5333333333333333,
+   "buried_fraction_max": 0.67,
+   "buried_fraction_range": 0.13666666666666671,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.061954390730574425,
+    "vdw_radii": 0.01637345555087794
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.9587979918521874,
+    "vdw_radii": 0.041202008147812566
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.8215072830922481,
+    "vdw_radii": 0.17849271690775198
+   },
+   "balanced": false
+  },
+  {
+   "id": "5yj8",
+   "strata": [
+    "resolution-mid"
+   ],
+   "ligand_atoms": 28,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.5714285714285714,
+   "buried_fraction_max": 0.7142857142857143,
+   "buried_fraction_range": 0.1428571428571429,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.11102845707903919,
+    "vdw_radii": 0.027184336826836623
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.9142512077294687,
+    "vdw_radii": 0.08574879227053135
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.8898721571621833,
+    "vdw_radii": 0.1101278428378167
+   },
+   "balanced": false
+  },
+  {
+   "id": "5ymx",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 42,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.9285714285714286,
+   "buried_fraction_max": 0.9523809523809523,
+   "buried_fraction_range": 0.023809523809523725,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.06686092095696872,
+    "vdw_radii": 0.20985361239747793
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.4027777777777778,
+    "vdw_radii": 0.5972222222222223
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.07070405587449712,
+    "vdw_radii": 0.9292959441255029
+   },
+   "balanced": false
+  },
+  {
+   "id": "5zyl",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 61,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 1.0,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.23507638949408305,
+    "vdw_radii": 0.8405225752562856
+   },
+   "shapley_buried_fraction": {},
+   "shapley_exposed_area": {
+    "hydrogens": 0.0467355301799224,
+    "vdw_radii": 0.9532644698200774
+   },
+   "balanced": false
+  },
+  {
+   "id": "6d1h",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 26,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.75,
+   "buried_fraction_max": 0.9230769230769231,
+   "buried_fraction_range": 0.17307692307692313,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.03184900775146276,
+    "vdw_radii": 0.17763897968082076
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.4563612772392934,
+    "vdw_radii": 0.5436387227607067
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.013281866052764442,
+    "vdw_radii": 0.9867181339472355
+   },
+   "balanced": false
+  },
+  {
+   "id": "6d9x",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 23,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7391304347826086,
+   "buried_fraction_max": 0.7857142857142857,
+   "buried_fraction_range": 0.04658385093167705,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.035241872310296456,
+    "vdw_radii": 0.08618277974120463
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.6511460230722519,
+    "vdw_radii": 0.3488539769277479
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.07126481479692878,
+    "vdw_radii": 0.9287351852030712
+   },
+   "balanced": false
+  },
+  {
+   "id": "6hke",
+   "strata": [
+    "control"
+   ],
+   "ligand_atoms": 15,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 1.0,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.0,
+    "vdw_radii": 0.0
+   },
+   "shapley_buried_fraction": {},
+   "shapley_exposed_area": {},
+   "balanced": false
+  },
+  {
+   "id": "6i62",
+   "strata": [
+    "multi-chain"
+   ],
+   "ligand_atoms": 30,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 1.0,
+   "buried_fraction_max": 1.0,
+   "buried_fraction_range": 0.0,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.15249370080399294,
+    "vdw_radii": 0.7727037630862289
+   },
+   "shapley_buried_fraction": {},
+   "shapley_exposed_area": {
+    "hydrogens": 0.03992512459028946,
+    "vdw_radii": 0.9600748754097104
+   },
+   "balanced": false
+  },
+  {
+   "id": "6i8y",
+   "strata": [
+    "resolution-high"
+   ],
+   "ligand_atoms": 52,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.6923076923076923,
+   "buried_fraction_max": 0.75,
+   "buried_fraction_range": 0.05769230769230771,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.11477028299367004,
+    "vdw_radii": 0.04828671875004797
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.1457629504504514,
+    "vdw_radii": 0.8542370495495486
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.711117797199132,
+    "vdw_radii": 0.2888822028008679
+   },
+   "balanced": false
+  },
+  {
+   "id": "6nmb",
+   "strata": [
+    "insertion-codes"
+   ],
+   "ligand_atoms": 27,
+   "universes": 7,
+   "ligand_atoms_without_area_by_universe": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "buried_fraction_min": 0.7272727272727273,
+   "buried_fraction_max": 0.8888888888888888,
+   "buried_fraction_range": 0.16161616161616155,
+   "mostly_buried_in": 7,
+   "conclusion_flips": false,
+   "agreement_of_verdict": 1.0,
+   "exposed_area_relative_change": {
+    "hydrogens": 0.03421323251730701,
+    "vdw_radii": 0.07303749955678435
+   },
+   "shapley_buried_fraction": {
+    "hydrogens": 0.9214251207729471,
+    "vdw_radii": 0.07857487922705292
+   },
+   "shapley_exposed_area": {
+    "hydrogens": 0.10418989105555104,
+    "vdw_radii": 0.895810108944449
+   },
+   "balanced": false
+  }
+ ]
+}

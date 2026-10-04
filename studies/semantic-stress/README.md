@@ -17,6 +17,7 @@ Everything below is read from the JSON files beside it. Nothing is recalled.
 | `tool_semantics.py` | `tool_semantics.json` | The same structural condition read by MolFrame, Biopython, Biotite and Gemmi. |
 | `mdanalysis_semantics.py` | `mdanalysis_semantics.json` | The same, for MDAnalysis, which reads PDB but not mmCIF. |
 | `pockets.py` | `pockets.json` | Ligand pockets of 60 complexes under 24 universes of three decisions. |
+| `burial.py` | `burial.json` | How buried the ligands of the same 60 complexes are under radii and hydrogens, with a forbidden pair. |
 | `crystal.py` | `crystal.json` | Interface residues of three crystals with and without the crystal around them. |
 
 Library versions are recorded in the outputs: Biopython 1.88, Biotite 1.7.1,
@@ -114,6 +115,41 @@ A plain distance cutoff and a van der Waals contact are different definitions. T
 result is that a "pocket" from a cutoff is rarely one a radius-based definition
 reproduces exactly, even though it is usually near one.
 
+## How buried a ligand is (`burial.json`)
+
+A ligand atom is *buried* when its solvent-accessible area in the complex is under
+1 Å², and a ligand is *mostly buried* when more than half of its atoms are. The threshold
+and the fraction are parameters of the question, fixed here by me and not varied; a
+different pair would give different numbers. The decisions varied are the radii the
+atoms are given (`vdw_radii`: bondi, charmm, alvarez, amber_united) and whether the
+file's hydrogens occlude (`hydrogens`: explicit_only, exclude).
+
+United-atom radii already contain their hydrogens, so `amber_united` with modelled
+hydrogens counts them twice. That pair is forbidden in the space with that reason, which
+makes the plan 7 universes of the 8, not the whole product, and the attribution below is
+Shapley's rather than the additive split's.
+
+Atoms whose element has no radius in a set (a zinc or calcium ion under Bondi) have no
+area and do not occlude; the analysis is *partial* under the default `missing_atoms`
+rule and says which atoms. 59 of 60 complexes ran (1C5S is the same occupancy refusal as
+above). One complex has a ligand atom without a radius in some universes.
+
+| Quantity (59 complexes, 7 universes each) | Value |
+|---|---|
+| Fraction of ligand atoms buried, mean over complexes of the midpoint of its range | 0.80 |
+| Range of that fraction across universes, median (max) | 0.09 (0.32) |
+| Complexes where "mostly buried" is true in some universes and false in others | **6 of 59 (10 %)**: 2DRC, 2W5G, 3CD5, 3ZK6, 4AVS, 4OVG |
+| Ligand exposed area, relative change from one decision, median: hydrogens / radii | 6 % / 10 % |
+| Shapley share of the exposed-area variation: radii / hydrogens | 0.68 / 0.28 |
+| Shapley share of the buried-fraction variation: hydrogens / radii | 0.52 / 0.36 |
+
+For most ligands the verdict "mostly buried" does not depend on these choices, because
+most ligands are far from the line. The six that flip are near it, and for them the
+sentence "the ligand is buried" is a statement about the radius table as much as about the
+complex. Which table is closer to the truth is not something this audit can say. The
+attribution depends on what is asked: the area as a number moves mainly with the radii,
+while the count of buried atoms against a threshold moves more with the hydrogens.
+
 ## Interface residues of crystals (`crystal.json`)
 
 An interface residue is an amino-acid residue of the deposited unit with an atom that
@@ -205,9 +241,10 @@ The study was run while the audit layer was being finished, and each of these wa
 - The universes are chosen, not sampled; their plausibility is not weighted.
 - `Fragility` is not related to model quality, resolution or B-factor here. That needs
   more entries than 60 complexes of a prepared set.
-- Interfaces, hydrogen bonds, salt bridges, SASA, contact maps and structural comparison
-  have each been verified separately against independent calculations in the test
-  suite. They have not yet been swept at scale in this study.
+- Hydrogen bonds, salt bridges, contact maps and structural comparison have each been
+  verified separately against independent calculations in the test suite but have not been
+  swept at scale here. Protein-ligand hydrogen bonds need a chemical dictionary for each
+  ligand, which this corpus does not ship.
 
 ## Reproducing
 
