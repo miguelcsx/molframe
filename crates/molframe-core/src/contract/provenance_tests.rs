@@ -68,3 +68,20 @@ fn algorithm_parameters_are_sorted_and_fingerprinted() {
     let changed = first.with_parameter("time", ParameterValue::Integer(3));
     assert_ne!(changed.fingerprint(), second.fingerprint());
 }
+
+#[test]
+fn the_policy_fields_an_analysis_read_are_recorded_sorted_and_read_back() {
+    let policy = AnalysisPolicy::default();
+    let record = Provenance::new(&policy).with_policy_reads(&[
+        PolicyField::Hydrogens,
+        PolicyField::Altloc,
+        PolicyField::Hydrogens,
+    ]);
+    assert_eq!(
+        record.policy_reads(),
+        Some(vec![PolicyField::Altloc, PolicyField::Hydrogens])
+    );
+    assert_eq!(Provenance::new(&policy).policy_reads(), None);
+    // What was read changes the record, so it changes the fingerprint.
+    assert_ne!(Provenance::new(&policy).fingerprint(), record.fingerprint());
+}

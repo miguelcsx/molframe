@@ -8,7 +8,7 @@
 //! run a week apart must fingerprint identically, or the fingerprint identifies
 //! the run rather than the result.
 
-use super::policy::{AnalysisPolicy, Fingerprint, ProfileId};
+use super::policy::{AnalysisPolicy, Fingerprint, PolicyField, ProfileId};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -134,6 +134,9 @@ impl ParameterValue {
     }
 }
 
+/// The reserved parameter that names the policy fields an analysis applied.
+const POLICY_READS: &str = "policy_reads";
+
 /// Sorted algorithm parameters that participate in provenance fingerprints.
 pub type AnalysisParameters = BTreeMap<Box<str>, ParameterValue>;
 
@@ -194,6 +197,34 @@ impl Provenance {
             schema_version: None,
             component_version: None,
             timestamp: None,
+        }
+    }
+
+    /// Records which policy fields the analysis actually applied.
+    ///
+    /// A field the policy sets but the analysis never reads cannot change its
+    /// result, so varying it measures nothing. Recording what was read is what
+    /// lets an audit tell "stable under this decision" from "never saw this
+    /// decision".
+    #[must_use]
+    pub fn with_policy_reads(self, fields: &[PolicyField]) -> Self {
+        let mut names: Vec<&str> = fields.iter().map(|field| field.name()).collect();
+        names.sort_unstable();
+        names.dedup();
+        self.with_parameter(POLICY_READS, ParameterValue::Text(names.join(",").into()))
+    }
+
+    /// The policy fields the analysis applied, when it recorded them.
+    #[must_use]
+    pub fn policy_reads(&self) -> Option<Vec<PolicyField>> {
+        match self.parameters.get(POLICY_READS)? {
+            ParameterValue::Text(names) => Some(
+                names
+                    .split(',')
+                    .filter_map(PolicyField::from_name)
+                    .collect(),
+            ),
+            _ => None,
         }
     }
 

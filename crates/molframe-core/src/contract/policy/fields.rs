@@ -327,6 +327,12 @@ impl PolicyField {
         Self::FloatTolerance,
     ];
 
+    /// The field a written name refers to.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|field| field.name() == name)
+    }
+
     /// The field's name, as it appears in a written policy.
     #[must_use]
     pub const fn name(self) -> &'static str {

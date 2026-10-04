@@ -1,5 +1,6 @@
 //! What an analysis was told to assume.
 
+mod consistency;
 mod fields;
 mod fingerprint;
 mod profile;
