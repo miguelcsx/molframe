@@ -37,7 +37,9 @@ pub use carbohydrates::{
     SnfgShape, SnfgSymbol, carbohydrates, snfg_symbol,
 };
 pub use coverage::{ComponentCoverage, component_coverage};
-pub use element::{ElementProperties, RadiusSet, RadiusTable, element_properties, vdw_radius};
+pub use element::{
+    ElementProperties, RadiusSet, RadiusTable, atom_radii, element_properties, vdw_radius,
+};
 pub use equivalence::{
     AutomorphismLimit, EquivalenceCache, EquivalenceClasses, automorphisms, equivalence_classes,
 };

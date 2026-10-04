@@ -166,6 +166,21 @@ pub fn element_properties(element: Element) -> Option<ElementProperties> {
     })
 }
 
+/// The radius of every atom of `structure`, indexed by atom, from exactly the
+/// requested set; `NaN` marks an atom whose element is unknown or has no
+/// value in the set.
+#[must_use]
+pub fn atom_radii(structure: &molframe_core::structure::Structure, set: RadiusSet) -> Vec<f32> {
+    let mut radii = vec![f32::NAN; structure.atom_count() as usize];
+    for atom in structure.data().atoms() {
+        let radius = atom.element().and_then(|element| vdw_radius(element, set));
+        if let (Some(radius), Some(slot)) = (radius, radii.get_mut(atom.index().as_usize())) {
+            *slot = radius;
+        }
+    }
+    radii
+}
+
 /// Returns a van der Waals radius in ångström from exactly the requested set.
 #[must_use]
 pub fn vdw_radius(element: Element, set: RadiusSet) -> Option<f32> {

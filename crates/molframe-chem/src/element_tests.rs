@@ -24,3 +24,25 @@ fn every_radius_set_round_trips_through_its_name() {
     let refused = "uff".parse::<RadiusSet>().expect_err("not a radius set");
     assert_eq!(refused.field, "radii");
 }
+
+#[test]
+fn per_atom_radii_follow_the_requested_set_and_mark_unknown_elements() {
+    const WATER_MOL: &str = "water\n  test\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n\
+        0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n\
+        0.7570    0.5860    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n\
+       -0.7570    0.5860    0.0000 Xx  0  0  0  0  0  0  0  0  0  0  0  0\n\
+      1  2  1  0\n  1  3  1  0\nM  END\n";
+    let record = crate::parse_mol_record(WATER_MOL).expect("the record parses");
+    let structure = crate::mol_record_to_structure(&record).expect("the record lowers");
+    let radii = atom_radii(&structure, RadiusSet::Bondi);
+    assert_eq!(radii.len(), 3);
+    assert_eq!(
+        Some(radii[0]),
+        vdw_radius(Element::OXYGEN, RadiusSet::Bondi)
+    );
+    assert_eq!(
+        Some(radii[1]),
+        vdw_radius(Element::HYDROGEN, RadiusSet::Bondi)
+    );
+    assert!(radii[2].is_nan(), "an unknown element has no radius");
+}
