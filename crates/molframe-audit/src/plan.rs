@@ -155,6 +155,13 @@ impl PolicySpace {
             policies = next_policies;
             coordinates = next_coordinates;
         }
+        // A point that describes no runnable system would fail after the runs before
+        // it had been paid for, and dropping it would unbalance the factorial design.
+        for (run, policy) in policies.iter().enumerate() {
+            if policy.check_consistency().is_err() {
+                return Err(PlanError::Conflict { run });
+            }
+        }
         Ok(AuditPlan {
             fields: self.dimensions.iter().map(PolicyDimension::field).collect(),
             policies,
@@ -223,6 +230,22 @@ impl AuditPlan {
         &self.policies
     }
 
+    /// Refuses a plan that varies a field the analysis does not apply.
+    ///
+    /// `read` is what the analysis recorded as applied. A decision the analysis
+    /// never sees cannot move its answer, so a sweep over it would come back
+    /// perfectly stable and mean nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PlanError::NotRead`] for the first varied field not in `read`.
+    pub fn require_read(&self, read: &[PolicyField]) -> Result<(), PlanError> {
+        match self.fields.iter().find(|field| !read.contains(field)) {
+            Some(field) => Err(PlanError::NotRead(*field)),
+            None => Ok(()),
+        }
+    }
+
     /// Cartesian coordinates identifying the selected alternative in each field.
     #[must_use]
     pub fn coordinates(&self) -> &[Vec<usize>] {
@@ -240,6 +263,17 @@ pub enum PlanError {
     DuplicateDimension(PolicyField),
     /// The Cartesian product overflowed the platform's index size.
     CostOverflow,
+    /// A run of the space combines decisions that contradict each other.
+    ///
+    /// Restrict the dimensions so every combination is a system that can run;
+    /// the policy at that index says which pair. `AnalysisPolicy::check_consistency`
+    /// names it.
+    Conflict {
+        /// Zero-based run whose policy is contradictory.
+        run: usize,
+    },
+    /// A varied field is one the analysis never applied, so varying it measures nothing.
+    NotRead(PolicyField),
     /// The requested space exceeds the caller's bound.
     LimitExceeded {
         /// Exact requested number of runs.
@@ -259,6 +293,15 @@ impl fmt::Display for PlanError {
                 write!(formatter, "{} is varied twice", field.name())
             }
             Self::CostOverflow => formatter.write_str("policy-space cost overflowed usize"),
+            Self::Conflict { run } => write!(
+                formatter,
+                "run {run} combines decisions that contradict each other"
+            ),
+            Self::NotRead(field) => write!(
+                formatter,
+                "the analysis never reads {}, so varying it would report stability it has not earned",
+                field.name()
+            ),
             Self::LimitExceeded { cost, limit } => {
                 write!(
                     formatter,

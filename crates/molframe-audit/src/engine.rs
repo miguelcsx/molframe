@@ -1,3 +1,5 @@
+use crate::design::decompose;
+use crate::metric::jaccard_distance;
 use crate::{AuditPlan, AuditReport, AuditRun, DimensionSensitivity, SensitiveItem};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -57,17 +59,33 @@ where
             })
         })
         .collect();
+    let decomposition = decompose(&plan.fields, &plan.coordinates, |first, second| {
+        jaccard_distance(&sets[first], &sets[second])
+    });
     let dimensions = plan
         .fields
         .iter()
         .enumerate()
-        .map(|(axis, &field)| dimension_report(field, axis, &plan.coordinates, &sets))
+        .zip(&decomposition.main_effects)
+        .map(|((axis, &field), effect)| {
+            dimension_report(
+                field,
+                axis,
+                &plan.coordinates,
+                &sets,
+                effect.mean_change,
+                effect.share,
+            )
+        })
         .collect();
     Ok(AuditReport {
         runs,
         stability,
         sensitive_items,
         dimensions,
+        interactions: decomposition.interactions,
+        higher_order: decomposition.higher_order,
+        total_variation: decomposition.total_variation,
     })
 }
 
@@ -86,28 +104,22 @@ fn dimension_report<I: Ord + Clone>(
     axis: usize,
     coordinates: &[Vec<usize>],
     sets: &[BTreeSet<I>],
+    mean_change: f64,
+    main_effect_share: f64,
 ) -> DimensionSensitivity<I> {
     let mut changed = BTreeSet::new();
-    let mut total_loss = 0.0;
-    let mut comparisons = 0usize;
     for first in 0..sets.len() {
         for second in (first + 1)..sets.len() {
-            if !differ_only_on(axis, &coordinates[first], &coordinates[second]) {
-                continue;
+            if differ_only_on(axis, &coordinates[first], &coordinates[second]) {
+                changed.extend(sets[first].symmetric_difference(&sets[second]).cloned());
             }
-            changed.extend(sets[first].symmetric_difference(&sets[second]).cloned());
-            total_loss += jaccard_loss(&sets[first], &sets[second]);
-            comparisons += 1;
         }
     }
     DimensionSensitivity {
         field,
         sensitive_items: changed.into_iter().collect(),
-        mean_change: if comparisons == 0 {
-            0.0
-        } else {
-            total_loss / usize_to_f64(comparisons)
-        },
+        mean_change,
+        main_effect_share,
     }
 }
 
@@ -118,15 +130,6 @@ fn differ_only_on(axis: usize, first: &[usize], second: &[usize]) -> bool {
             .zip(second)
             .enumerate()
             .all(|(index, (left, right))| index == axis || left == right)
-}
-
-fn jaccard_loss<I: Ord>(first: &BTreeSet<I>, second: &BTreeSet<I>) -> f64 {
-    let union = first.union(second).count();
-    if union == 0 {
-        0.0
-    } else {
-        1.0 - usize_to_f64(first.intersection(second).count()) / usize_to_f64(union)
-    }
 }
 
 #[cfg(test)]

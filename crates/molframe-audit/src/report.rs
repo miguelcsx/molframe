@@ -1,3 +1,4 @@
+use crate::design::Interaction;
 use molframe_core::contract::{AnalysisPolicy, PolicyField};
 
 /// One completed analysis at one policy point.
@@ -25,8 +26,10 @@ pub struct DimensionSensitivity<I> {
     pub field: PolicyField,
     /// Items whose presence changes when this field changes while others stay fixed.
     pub sensitive_items: Vec<I>,
-    /// Mean Jaccard loss across pairs differing only in this field.
+    /// Mean Jaccard distance across pairs differing only in this field.
     pub mean_change: f64,
+    /// Fraction of the total variation among runs that this field explains alone.
+    pub main_effect_share: f64,
 }
 
 /// Full result of a bounded policy audit.
@@ -40,4 +43,10 @@ pub struct AuditReport<R, I> {
     pub sensitive_items: Vec<SensitiveItem<I>>,
     /// Per-field sensitivity, in plan declaration order.
     pub dimensions: Vec<DimensionSensitivity<I>>,
+    /// What each pair of fields explains beyond the sum of their separate effects.
+    pub interactions: Vec<Interaction>,
+    /// The share left to combinations of three or more fields.
+    pub higher_order: f64,
+    /// Total variation among runs, in squared Jaccard distance.
+    pub total_variation: f64,
 }
