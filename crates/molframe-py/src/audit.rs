@@ -8,11 +8,12 @@
 
 use crate::analysis_result::PyAnalysis;
 use crate::audit_metric::{MetricKind, Projected};
+use crate::audit_result::{PyAuditResult, PyDecision};
 use crate::policy::PyAnalysisPolicy;
 use molframe::AnalysisPolicy;
 use molframe::PolicyField;
 use molframe::audit::{
-    AuditPlan, AuditedRun, Decomposition, PlanError, PolicyDimension, PolicySpace, audit_analyses,
+    AuditPlan, AuditedRun, PlanError, PolicyDimension, PolicySpace, PolicyValue, audit_analyses,
 };
 use pyo3::prelude::*;
 
@@ -59,17 +60,36 @@ fn plan_error(error: &PlanError) -> PyErr {
 )]
 pub(crate) struct PyPolicySpace {
     baseline: AnalysisPolicy,
-    dimensions: Vec<(PolicyField, Vec<String>)>,
+    dimensions: Vec<Dimension>,
+    exclusions: Vec<((PolicyField, String), (PolicyField, String))>,
     max_runs: usize,
+}
+
+/// One varied decision as written: its alternatives, and why they are defensible.
+#[derive(Clone, Debug)]
+struct Dimension {
+    field: PolicyField,
+    words: Vec<String>,
+    rationale: String,
+    evidence: String,
 }
 
 impl PyPolicySpace {
     fn native(&self) -> PyResult<PolicySpace> {
         let mut space = PolicySpace::new(self.baseline.clone()).with_max_runs(self.max_runs);
-        for (field, words) in &self.dimensions {
-            let words: Vec<&str> = words.iter().map(String::as_str).collect();
-            space =
-                space.vary(PolicyDimension::named(*field, &words).map_err(crate::error::kernel)?);
+        for dimension in &self.dimensions {
+            let words: Vec<&str> = dimension.words.iter().map(String::as_str).collect();
+            space = space.vary(
+                PolicyDimension::named(dimension.field, &words)
+                    .map_err(crate::error::kernel)?
+                    .justified(dimension.rationale.as_str(), dimension.evidence.as_str()),
+            );
+        }
+        for ((when_field, when), (then_field, then)) in &self.exclusions {
+            space = space.forbid(
+                PolicyValue::named(*when_field, when).map_err(crate::error::kernel)?,
+                PolicyValue::named(*then_field, then).map_err(crate::error::kernel)?,
+            );
         }
         Ok(space)
     }
@@ -83,17 +103,48 @@ impl PyPolicySpace {
         Self {
             baseline: crate::policy::policy_of(baseline),
             dimensions: Vec::new(),
+            exclusions: Vec::new(),
             max_runs,
         }
     }
 
     /// A space that also varies `field` over `values`, written as in a policy.
-    fn vary(&self, field: &str, values: Vec<String>) -> PyResult<Self> {
+    ///
+    /// `rationale` says why those alternatives are the defensible ones and `evidence`
+    /// what supports that; both travel with the plan and the result.
+    #[pyo3(signature = (field, values, *, rationale="", evidence=""))]
+    fn vary(
+        &self,
+        field: &str,
+        values: Vec<String>,
+        rationale: &str,
+        evidence: &str,
+    ) -> PyResult<Self> {
         let field = field_of(field)?;
         let words: Vec<&str> = values.iter().map(String::as_str).collect();
         PolicyDimension::named(field, &words).map_err(crate::error::kernel)?;
         let mut next = self.clone();
-        next.dimensions.push((field, values));
+        next.dimensions.push(Dimension {
+            field,
+            words: values,
+            rationale: rationale.to_owned(),
+            evidence: evidence.to_owned(),
+        });
+        Ok(next)
+    }
+
+    /// A space in which a universe holding `when` cannot also hold `then_not`.
+    ///
+    /// Each is a `(decision, value)` pair written as in a policy. A strict plan refuses a
+    /// space with such a pair; a constrained plan drops the universes that hold it.
+    fn forbid(&self, when: (String, String), then_not: (String, String)) -> PyResult<Self> {
+        let when_field = field_of(&when.0)?;
+        let then_field = field_of(&then_not.0)?;
+        PolicyValue::named(when_field, &when.1).map_err(crate::error::kernel)?;
+        PolicyValue::named(then_field, &then_not.1).map_err(crate::error::kernel)?;
+        let mut next = self.clone();
+        next.exclusions
+            .push(((when_field, when.1), (then_field, then_not.1)));
         Ok(next)
     }
 
@@ -103,9 +154,21 @@ impl PyPolicySpace {
         self.native()?.cost().map_err(|error| plan_error(&error))
     }
 
-    /// Expands the space into runs, refusing contradictory combinations.
-    fn plan(&self) -> PyResult<PyAuditPlan> {
-        let plan = self.native()?.plan().map_err(|error| plan_error(&error))?;
+    /// Expands the space into runs.
+    ///
+    /// The plan is the whole product of the alternatives, so a combination that cannot run
+    /// or that the space forbids is refused. With `constrained=True` such combinations are
+    /// dropped and counted instead, and the plan is no longer the whole product: the effect
+    /// and interaction shares do not apply, and the Shapley shares carry the attribution.
+    #[pyo3(signature = (*, constrained=false))]
+    fn plan(&self, constrained: bool) -> PyResult<PyAuditPlan> {
+        let space = self.native()?;
+        let plan = if constrained {
+            space.plan_constrained()
+        } else {
+            space.plan()
+        }
+        .map_err(|error| plan_error(&error))?;
         Ok(PyAuditPlan(plan))
     }
 
@@ -113,7 +176,7 @@ impl PyPolicySpace {
         let fields: Vec<&str> = self
             .dimensions
             .iter()
-            .map(|(field, _)| field.name())
+            .map(|dimension| dimension.field.name())
             .collect();
         format!("PolicySpace(varies=[{}])", fields.join(", "))
     }
@@ -155,188 +218,35 @@ impl PyAuditPlan {
         self.0.coordinates().to_vec()
     }
 
-    fn __len__(&self) -> usize {
-        self.0.cost()
-    }
-}
-
-/// What one decision explains of the variation among runs.
-#[derive(Clone, Debug)]
-#[pyclass(
-    name = "Effect",
-    frozen,
-    skip_from_py_object,
-    module = "molframe.audit"
-)]
-pub(crate) struct PyEffect {
-    #[pyo3(get)]
-    field: &'static str,
-    #[pyo3(get)]
-    mean_change: f64,
-    #[pyo3(get)]
-    comparisons: usize,
-    #[pyo3(get)]
-    share: f64,
-}
-
-/// What two decisions explain together beyond their separate effects.
-#[derive(Clone, Debug)]
-#[pyclass(
-    name = "Interaction",
-    frozen,
-    skip_from_py_object,
-    module = "molframe.audit"
-)]
-pub(crate) struct PyInteraction {
-    #[pyo3(get)]
-    first: &'static str,
-    #[pyo3(get)]
-    second: &'static str,
-    #[pyo3(get)]
-    share: f64,
-}
-
-/// A completed audit.
-#[pyclass(
-    name = "AuditResult",
-    frozen,
-    skip_from_py_object,
-    module = "molframe.audit"
-)]
-pub(crate) struct PyAuditResult {
-    runs: Vec<Py<PyAny>>,
-    policies: Vec<AnalysisPolicy>,
-    metric: &'static str,
-    read: Vec<&'static str>,
-    indeterminate: Vec<usize>,
-    indeterminate_fraction: f64,
-    decomposition: Option<Decomposition>,
-    agreement: Option<f64>,
-}
-
-#[pymethods]
-impl PyAuditResult {
-    /// The analysis of every run, in the plan's order.
+    /// Whether the plan is the whole product of the alternatives.
     #[getter]
-    fn runs(&self, py: Python<'_>) -> Vec<Py<PyAny>> {
-        self.runs.iter().map(|run| run.clone_ref(py)).collect()
+    fn balanced(&self) -> bool {
+        self.0.balanced()
     }
 
-    /// The policy of every run.
+    /// How many combinations a constrained plan dropped.
     #[getter]
-    fn policies(&self) -> Vec<PyAnalysisPolicy> {
-        self.policies
+    fn skipped(&self) -> usize {
+        self.0.skipped()
+    }
+
+    /// The varied decisions with their class of uncertainty and justification.
+    #[getter]
+    fn decisions(&self) -> Vec<PyDecision> {
+        self.0
+            .decisions()
             .iter()
-            .cloned()
-            .map(PyAnalysisPolicy)
+            .map(|decision| PyDecision {
+                field: decision.field.name(),
+                uncertainty: decision.class.name(),
+                rationale: decision.rationale.to_string(),
+                evidence: decision.evidence.to_string(),
+            })
             .collect()
     }
 
-    /// The distance the numbers are in.
-    #[getter]
-    const fn metric(&self) -> &'static str {
-        self.metric
-    }
-
-    /// The decisions the analysis applied, as it recorded them.
-    #[getter]
-    fn read(&self) -> Vec<&'static str> {
-        self.read.clone()
-    }
-
-    /// The runs that had no defensible answer.
-    #[getter]
-    fn indeterminate(&self) -> Vec<usize> {
-        self.indeterminate.clone()
-    }
-
-    /// The fraction of defensible universes in which there is no answer.
-    #[getter]
-    const fn indeterminate_fraction(&self) -> f64 {
-        self.indeterminate_fraction
-    }
-
-    /// The fraction of runs whose answer equals the first run's, or `None` when
-    /// some run has no answer.
-    #[getter]
-    const fn agreement_with_first(&self) -> Option<f64> {
-        self.agreement
-    }
-
-    /// What each decision explains alone; `None` while any run has no answer.
-    #[getter]
-    fn effects(&self) -> Option<Vec<PyEffect>> {
-        let decomposition = self.decomposition.as_ref()?;
-        Some(
-            decomposition
-                .main_effects
-                .iter()
-                .map(|effect| PyEffect {
-                    field: effect.field.name(),
-                    mean_change: effect.mean_change,
-                    comparisons: effect.comparisons,
-                    share: effect.share,
-                })
-                .collect(),
-        )
-    }
-
-    /// What each pair of decisions explains beyond their separate effects.
-    #[getter]
-    fn interactions(&self) -> Option<Vec<PyInteraction>> {
-        let decomposition = self.decomposition.as_ref()?;
-        Some(
-            decomposition
-                .interactions
-                .iter()
-                .map(|interaction| PyInteraction {
-                    first: interaction.first.name(),
-                    second: interaction.second.name(),
-                    share: interaction.share,
-                })
-                .collect(),
-        )
-    }
-
-    /// The share left to combinations of three or more decisions.
-    #[getter]
-    fn higher_order(&self) -> Option<f64> {
-        self.decomposition
-            .as_ref()
-            .map(|decomposition| decomposition.higher_order)
-    }
-
-    /// Total variation among runs, in squared metric units.
-    #[getter]
-    fn total_variation(&self) -> Option<f64> {
-        self.decomposition
-            .as_ref()
-            .map(|decomposition| decomposition.total_variation)
-    }
-
-    /// Mean distance over every pair of runs.
-    #[getter]
-    fn mean_distance(&self) -> Option<f64> {
-        self.decomposition
-            .as_ref()
-            .map(|decomposition| decomposition.mean_distance)
-    }
-
-    /// Largest distance between any two runs.
-    #[getter]
-    fn max_distance(&self) -> Option<f64> {
-        self.decomposition
-            .as_ref()
-            .map(|decomposition| decomposition.max_distance)
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "AuditResult(runs={}, metric={}, indeterminate={})",
-            self.runs.len(),
-            self.metric,
-            self.indeterminate.len()
-        )
+    fn __len__(&self) -> usize {
+        self.0.cost()
     }
 }
 
@@ -406,8 +316,10 @@ fn run(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyPolicySpace>()?;
     module.add_class::<PyAuditPlan>()?;
-    module.add_class::<PyEffect>()?;
-    module.add_class::<PyInteraction>()?;
+    module.add_class::<crate::audit_result::PyEffect>()?;
+    module.add_class::<crate::audit_result::PyInteraction>()?;
+    module.add_class::<crate::audit_result::PyAttribution>()?;
+    module.add_class::<PyDecision>()?;
     module.add_class::<PyAuditResult>()?;
     module.add_function(wrap_pyfunction!(run, module)?)
 }

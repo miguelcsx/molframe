@@ -11,6 +11,8 @@ mod analysis_result;
 mod audit;
 #[cfg(feature = "audit")]
 mod audit_metric;
+#[cfg(feature = "audit")]
+mod audit_result;
 #[cfg(any(feature = "analysis", feature = "validation", feature = "spatial"))]
 mod backend;
 mod batches;

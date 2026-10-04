@@ -178,3 +178,65 @@ def test_the_contact_definition_and_the_radii_are_decisions_an_audit_can_vary():
     narrow, wide = (pair_set(run.value) for run in result.runs[:2])
     assert narrow < wide
     assert result.agreement_with_first is not None
+
+
+def test_shapley_shares_of_the_dimer_audit_are_the_ones_worked_out_by_hand(dimer):
+    # Outcomes in plan order: 1, 3, 0, 0.  Holding a decision fixed removes 4/6 of the
+    # variation for hydrogens, 1/6 for the assembly and all of it for both; averaging each
+    # decision's marginal gain over the two orders gives 3/4 and 1/4.
+    space = (
+        audit.PolicySpace()
+        .vary(
+            "hydrogens",
+            ["explicit_only", "exclude"],
+            rationale="structures differ in whether hydrogens were modelled",
+            evidence="PDBbind protein files carry added hydrogens",
+        )
+        .vary("assembly", ["asymmetric_unit", "biological:1"])
+    )
+    plan = space.plan()
+    assert plan.balanced
+    assert plan.skipped == 0
+    hydrogens, assembly = plan.decisions
+    assert hydrogens.uncertainty == "interpretive"
+    assert "modelled" in hydrogens.rationale
+    assert "PDBbind" in hydrogens.evidence
+    assert assembly.rationale == ""
+    result = audit.run(plan, contact_count(dimer, 2.0), metric="absolute", project=len)
+    shares = {share.name: share.share for share in result.shapley or []}
+    assert shares["hydrogens"] == pytest.approx(0.75)
+    assert shares["assembly"] == pytest.approx(0.25)
+    assert sum(shares.values()) == pytest.approx(1.0)
+    (interpretive,) = result.by_class or []
+    assert (interpretive.name, interpretive.share) == ("interpretive", pytest.approx(1.0))
+    assert result.balanced is True
+
+
+def test_a_constrained_plan_attributes_by_shapley_when_the_product_is_not_whole(dimer):
+    space = (
+        audit.PolicySpace()
+        .vary("assembly", ["asymmetric_unit", "biological:1"])
+        .vary("symmetry", ["none", "crystallographic"])
+    )
+    plan = space.plan(constrained=True)
+    assert (plan.cost, plan.skipped, plan.balanced) == (2, 2, False)
+    result = audit.run(plan, contact_count(dimer, 2.0), metric="absolute", project=len)
+    assert result.balanced is False
+    assert sum(share.share for share in result.shapley or []) == pytest.approx(1.0)
+    assert result.indeterminate == []
+
+
+def test_a_forbidden_pair_is_dropped_from_a_constrained_plan_and_refuses_a_strict_one():
+    space = (
+        audit.PolicySpace()
+        .vary("hydrogens", ["explicit_only", "exclude"])
+        .vary("assembly", ["asymmetric_unit", "biological:1"])
+        .forbid(("hydrogens", "exclude"), ("assembly", "biological:1"))
+    )
+    with pytest.raises(molframe.PolicyError) as strict:
+        space.plan()
+    assert strict.value.code == "MOLFRAME-E6004"
+    plan = space.plan(constrained=True)
+    assert (plan.cost, plan.skipped) == (3, 1)
+    with pytest.raises(molframe.MolframeError):
+        space.forbid(("hydrogens", "nonsense"), ("assembly", "biological:1"))
