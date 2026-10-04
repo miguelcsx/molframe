@@ -46,3 +46,10 @@ fn the_score_trait_agrees_with_the_inherent_lookup() {
     let m = blosum62();
     assert_eq!(Score::score(&m, b'H', b'Y'), m.get(b'H', b'Y'));
 }
+
+#[test]
+fn the_compiled_blosum62_names_itself_instead_of_claiming_to_be_custom() {
+    let matrix = blosum62();
+    assert_eq!(matrix.identity().name(), "BLOSUM62");
+    assert_eq!(matrix.get(b'W', b'W'), 11);
+}

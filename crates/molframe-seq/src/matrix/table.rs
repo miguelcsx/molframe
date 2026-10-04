@@ -174,7 +174,9 @@ pub fn blosum62() -> SubstitutionMatrix {
         [ 0,-1,-1,-1,-2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2, 0, 0,-2,-1,-1,-1,-1,-1,-4],
         [-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4, 1],
     ];
-    SubstitutionMatrix::new(scores)
+    let mut matrix = SubstitutionMatrix::new(scores);
+    matrix.identity = MatrixIdentity::builtin_blosum62();
+    matrix
 }
 
 #[cfg(test)]

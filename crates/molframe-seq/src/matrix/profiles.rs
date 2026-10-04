@@ -17,6 +17,17 @@ pub struct MatrixIdentity {
 }
 
 impl MatrixIdentity {
+    /// The identity of the BLOSUM62 table compiled into the library.
+    pub(super) fn builtin_blosum62() -> Self {
+        Self {
+            name: "BLOSUM62".into(),
+            version: "built-in".into(),
+            source: "table compiled into molframe; Henikoff and Henikoff, PNAS 89:10915 (1992)"
+                .into(),
+            retrieved: "not-applicable".into(),
+        }
+    }
+
     pub(super) fn custom() -> Self {
         Self {
             name: "custom".into(),
