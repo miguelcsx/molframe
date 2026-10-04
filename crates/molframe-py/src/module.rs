@@ -1,10 +1,30 @@
 //! The native module and the namespaces it registers.
 
+#[cfg(feature = "chemistry")]
+use super::chemistry;
+#[cfg(feature = "compare")]
+use super::compare;
+#[cfg(feature = "crystal")]
+use super::crystal;
+#[cfg(feature = "sequence")]
+use super::sequence;
+#[cfg(feature = "spatial")]
+use super::spatial;
+#[cfg(feature = "surface")]
+use super::surface;
+#[cfg(feature = "trajectory")]
+use super::trajectory;
+#[cfg(feature = "validation")]
+use super::validation;
 use super::{
-    analysis_result, batches, bindings, catalog, chemistry, compare, crystal, editing, formats,
-    governed, hierarchy, interop, policy, query_aliases, reading, selection_expr, sequence,
-    spatial, surface, table, trajectory, validation, workflow,
+    analysis_result, batches, bindings, catalog, editing, formats, hierarchy, interop, policy,
+    reading, table,
 };
+#[cfg(feature = "analysis")]
+use super::{governed, workflow};
+#[cfg(feature = "query")]
+use super::{query_aliases, selection_expr};
+#[cfg(feature = "analysis")]
 use bindings::{PyContactTable, atom_contacts};
 use bindings::{PyQuery, PySelection, PyStructure};
 #[cfg(feature = "geometry")]
