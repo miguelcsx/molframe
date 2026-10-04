@@ -5,6 +5,7 @@ use molframe_core::ExecutionContext;
 use molframe_core::contract::{
     AnalysisPolicy, AssemblyChoice, Coverage, MissingPolicy, ParameterValue, Quality, Status,
 };
+use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_traj::{Frame, Trajectory};
@@ -42,7 +43,7 @@ fn x_sum_kernel() -> impl crate::policy_execution::StructureKernel<Output = f64,
 }
 
 #[test]
-fn unmaterialized_assembly_policy_is_rejected() {
+fn an_assembly_the_structure_does_not_define_is_refused() {
     let policy = AnalysisPolicy {
         assembly: AssemblyChoice::Biological("1".into()),
         ..AnalysisPolicy::default()
@@ -53,12 +54,10 @@ fn unmaterialized_assembly_policy_is_rejected() {
         &x_sum_kernel(),
         &ExecutionContext::default(),
     );
-    assert!(matches!(
-        result,
-        Err(super::GovernedAnalysisError::UnsupportedPolicyValue(
-            "assembly"
-        ))
-    ));
+    let Err(super::GovernedAnalysisError::System(findings)) = result else {
+        panic!("a missing assembly must be refused, not replaced by the asymmetric unit");
+    };
+    assert_eq!(findings.first().map(Diagnostic::code), Some(Code::E6002));
 }
 
 #[test]
