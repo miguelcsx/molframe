@@ -362,3 +362,47 @@ def test_a_certificate_ties_the_audit_to_the_bytes_that_were_read():
     later = {node["@id"]: node for node in json.loads(again.certificate)["@graph"]}
     flagged = {item["name"]: item["value"] for item in later["#findings"]["variableMeasured"]}
     assert flagged["inputs_without_sha256"] == 1
+
+
+def test_governed_sasa_equals_the_surface_routine_run_on_the_policys_radii():
+    crambin = molframe.read(BENCH / "1crn.cif")
+    xyz = np.asarray(crambin.coordinates, dtype=np.float32)
+    areas = {}
+    for radii in ("bondi", "charmm", "alvarez"):
+        policy = molframe.AnalysisPolicy(vdw_radii=radii)
+        result = analysis.sasa(crambin, policy=policy)
+        assert result.estimand is not None
+        assert "vdw_radii" in (result.policy_reads or [])
+        table = np.asarray(molframe.chemistry.vdw_radii(crambin, radii=radii), dtype=np.float32)
+        expected = np.asarray(molframe.surface.sasa(xyz, table), dtype=np.float64)
+        assert np.allclose(result.value, expected), radii
+        areas[radii] = float(np.sum(result.value))
+    # The radii are a decision with a consequence: the total moves by whole percents.
+    assert len({round(total) for total in areas.values()}) == 3
+
+
+def test_the_radius_set_and_the_system_are_decisions_an_sasa_audit_can_vary():
+    crambin = molframe.read(BENCH / "1crn.cif")
+    space = (
+        audit.PolicySpace()
+        .vary("vdw_radii", ["bondi", "charmm"])
+        .vary("assembly", ["asymmetric_unit", "crystal:4.0"])
+    )
+    atoms = crambin.atom_count
+
+    def exposed_total(analysed) -> float:
+        # The unit's own atoms come first; the copies that bury them are not part of the answer.
+        return float(np.sum(analysed.value[:atoms]))
+
+    result = audit.run(
+        space.plan(),
+        lambda policy: analysis.sasa(crambin, policy=policy),
+        metric="relative",
+        project=exposed_total,
+    )
+    effects = {effect.field: effect.mean_change for effect in result.effects or []}
+    assert effects["assembly"] > 0.0
+    assert effects["vdw_radii"] > 0.0
+    # Neighbours in the crystal can only cover surface, never expose more of it.
+    unit, crystal = (exposed_total(run) for run in result.runs[:2])
+    assert crystal == pytest.approx(unit) or crystal < unit

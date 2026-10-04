@@ -38,6 +38,9 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- `analysis.sasa` (Rust `sasa_kernel`): per-atom solvent-accessible surface area under
+  the policy's `vdw_radii`, `hydrogens` and `assembly`, so each is a decision an audit
+  can vary.
 - `ReadOptions::digest_input` (Python `ReadOptions(digest_input=True)`) records the
   SHA-256 of the bytes parsed in the structure's metadata (`input_sha256`,
   `input_name`), and governed analyses carry it in their provenance, so an audit

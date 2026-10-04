@@ -372,11 +372,44 @@ pub(crate) fn contacts_by_definition(
     )
 }
 
+/// Per-atom solvent-accessible surface area under the policy's radii.
+///
+/// Shrake–Rupley with `points` samples per atom and a solvent sphere of radius `probe`.
+/// The radii are the policy's `vdw_radii`, the hydrogens that count are the policy's
+/// `hydrogens`, and under `crystal:<radius>` the area is that of the atom among its
+/// symmetry mates. The value is an array with one area (square ångström) per analysed
+/// atom; use `atom_origin` to tie it to the input.
+#[pyfunction]
+#[pyo3(signature = (structure, *, probe=1.4, points=960, policy=None, context=None))]
+pub(crate) fn sasa(
+    py: Python<'_>,
+    structure: &PyStructure,
+    probe: f32,
+    points: u16,
+    policy: Option<PyRef<'_, PyAnalysisPolicy>>,
+    context: Option<&PyExecutionContext>,
+) -> PyResult<PyAnalysis> {
+    let kernel = molframe::analysis::sasa_kernel(probe, points);
+    run(
+        py,
+        structure,
+        &policy_of(policy),
+        &kernel,
+        |py, areas| {
+            let array = areas.to_pyarray(py);
+            array.readwrite().make_nonwriteable();
+            Ok(array.into_any().unbind())
+        },
+        context,
+    )
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyDensityGrid>()?;
     module.add_function(wrap_pyfunction!(linear_density, module)?)?;
     module.add_function(wrap_pyfunction!(density_map, module)?)?;
     module.add_function(wrap_pyfunction!(pore_profile, module)?)?;
     module.add_function(wrap_pyfunction!(surface_contacts, module)?)?;
-    module.add_function(wrap_pyfunction!(contacts_by_definition, module)?)
+    module.add_function(wrap_pyfunction!(contacts_by_definition, module)?)?;
+    module.add_function(wrap_pyfunction!(sasa, module)?)
 }

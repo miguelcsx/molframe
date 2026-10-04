@@ -15,6 +15,7 @@ mod requirements;
 mod source;
 mod standalone;
 mod structure;
+mod surface_area;
 mod system;
 
 pub use definition::{DefinitionError, SurfaceSampling, definition_contacts_kernel};
@@ -47,6 +48,7 @@ pub use structure::{
     chain_interface_kernel, gnm_kernel, half_sphere_exposure_kernel, nucleic_torsions_kernel,
     secondary_structure_kernel,
 };
+pub use surface_area::sasa_kernel;
 
 #[cfg(test)]
 #[path = "adapters_tests.rs"]

@@ -281,3 +281,18 @@ def contacts_by_definition(
     their radii plus the tolerance; ``surface:<probe>`` when their expanded surfaces touch and
     both keep an exposed patch (the ``surface_*`` keywords say how that test samples).
     """
+
+def sasa(
+    structure: Structure,
+    *,
+    probe: float = 1.4,
+    points: int = 960,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Float64Array]:
+    """Return the solvent-accessible surface area of every analysed atom, in square angstroms.
+
+    Shrake-Rupley with ``points`` samples per atom. The radii are the policy's ``vdw_radii``,
+    the hydrogens that count are its ``hydrogens``, and under ``crystal:<radius>`` the area is
+    that of the atom among its symmetry mates. Use ``atom_origin`` to tie it to the input.
+    """

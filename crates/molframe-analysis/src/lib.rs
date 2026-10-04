@@ -133,7 +133,7 @@ pub use policy_execution::{
     governed_sugar_pucker, governed_water_dynamics, half_sphere_exposure_kernel,
     hydrogen_bonds_kernel, leaflets_kernel, linear_density_kernel, mapped_structure_kernel,
     native_contact_fraction_kernel, nucleic_torsions_kernel, pi_stacking_kernel,
-    pore_profile_kernel, radial_distribution_kernel, salt_bridges_kernel,
+    pore_profile_kernel, radial_distribution_kernel, salt_bridges_kernel, sasa_kernel,
     secondary_structure_kernel, structure_kernel, surface_contacts_kernel, water_bridges_kernel,
 };
 pub use reference_contacts::{NativeContacts, NativeError, native_contact_fraction};

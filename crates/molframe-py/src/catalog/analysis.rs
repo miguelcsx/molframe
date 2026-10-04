@@ -256,6 +256,18 @@ pub(super) const ROWS: &[Capability] = &[
         cost: molframe::Cost::Materialize,
     },
     Capability {
+        name: "sasa",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure,probe,points",
+        result: "Analysis<ndarray>",
+        policy: true,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,memory",
+        cost: molframe::Cost::Materialize,
+    },
+    Capability {
         name: "contacts_by_definition",
         domain: "analysis",
         feature: "analysis",

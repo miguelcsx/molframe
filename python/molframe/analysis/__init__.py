@@ -28,6 +28,7 @@ density_map = _native.density_map
 pore_profile = _native.pore_profile
 surface_contacts = _native.surface_contacts
 contacts_by_definition = _native.contacts_by_definition
+sasa = _native.sasa
 
 __all__ = [
     "ContactTable",
@@ -54,6 +55,7 @@ __all__ = [
     "pore_profile",
     "radial_distribution",
     "salt_bridges",
+    "sasa",
     "surface_contacts",
     "water_bridges",
 ]
