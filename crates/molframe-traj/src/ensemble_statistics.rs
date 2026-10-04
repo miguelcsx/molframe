@@ -174,39 +174,40 @@ fn validate_frames<S: FrameSource + ?Sized>(frames: &S) -> Result<usize, Ensembl
     Ok(atom_count)
 }
 
+/// The mean over the group's atoms of each atom's population variance about its own mean
+/// position.
+///
+/// Each atom is centred on its own mean, so the result measures how much the atoms move,
+/// not how far apart they sit: a rigid group of atoms at different places has none.
 fn group_variance<S: FrameSource + ?Sized>(
     frames: &S,
     group: &[usize],
 ) -> Result<GroupVariance, EnsembleStatisticsError> {
-    let observations = frames
-        .frame_count()
-        .checked_mul(group.len())
-        .and_then(f64_from_usize)
-        .ok_or(EnsembleStatisticsError::InvalidFrames)?;
-    let mut sums = [0.0; 3];
-    for frame_index in 0..frames.frame_count() {
-        let frame = frames
-            .frame(frame_index)
-            .ok_or(EnsembleStatisticsError::InvalidFrames)?;
-        for &atom in group {
+    let frame_count =
+        f64_from_usize(frames.frame_count()).ok_or(EnsembleStatisticsError::InvalidFrames)?;
+    let atoms = f64_from_usize(group.len()).ok_or(EnsembleStatisticsError::InvalidFrames)?;
+    let mut variance_by_axis = [0.0; 3];
+    for &atom in group {
+        let mut sums = [0.0; 3];
+        for frame_index in 0..frames.frame_count() {
+            let frame = frames
+                .frame(frame_index)
+                .ok_or(EnsembleStatisticsError::InvalidFrames)?;
             for axis in 0..3 {
                 sums[axis] += f64::from(frame[atom][axis]);
             }
         }
-    }
-    let means = sums.map(|sum| sum / observations);
-    let mut variance_by_axis = [0.0; 3];
-    for frame_index in 0..frames.frame_count() {
-        let frame = frames
-            .frame(frame_index)
-            .ok_or(EnsembleStatisticsError::InvalidFrames)?;
-        for &atom in group {
+        let means = sums.map(|sum| sum / frame_count);
+        for frame_index in 0..frames.frame_count() {
+            let frame = frames
+                .frame(frame_index)
+                .ok_or(EnsembleStatisticsError::InvalidFrames)?;
             for axis in 0..3 {
                 variance_by_axis[axis] += (f64::from(frame[atom][axis]) - means[axis]).powi(2);
             }
         }
     }
-    variance_by_axis = variance_by_axis.map(|sum| sum / observations);
+    variance_by_axis = variance_by_axis.map(|sum| sum / (frame_count * atoms));
     Ok(GroupVariance {
         atoms: group.to_vec(),
         rms_fluctuation: variance_by_axis.into_iter().sum::<f64>().sqrt(),

@@ -53,3 +53,31 @@ fn assert_vector_close(actual: [f64; 3], expected: [f64; 3]) {
         .zip(expected)
         .for_each(|(actual, expected)| assert!((actual - expected).abs() < 1.0e-12));
 }
+
+#[test]
+fn a_rigid_group_of_separated_atoms_has_no_fluctuation() {
+    // Two atoms ten angstrom apart that never move: the group is extended, not fluctuating.
+    let frames = vec![
+        vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+        vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+        vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+    ];
+    let Ok(groups) = group_coordinate_variance(&frames, &[vec![0, 1]]) else {
+        panic!("a valid group");
+    };
+    assert_vector_close(groups[0].variance_by_axis, [0.0; 3]);
+    assert!(groups[0].rms_fluctuation.abs() < 1e-12);
+}
+
+#[test]
+fn a_group_averages_the_variance_of_each_atom_about_its_own_mean() {
+    // The first atom moves between x = 0 and 2 (variance 1); the second does not move.
+    let frames = vec![
+        vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+        vec![[2.0, 0.0, 0.0], [10.0, 0.0, 0.0]],
+    ];
+    let Ok(groups) = group_coordinate_variance(&frames, &[vec![0, 1]]) else {
+        panic!("a valid group");
+    };
+    assert_vector_close(groups[0].variance_by_axis, [0.5, 0.0, 0.0]);
+}
