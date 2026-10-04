@@ -74,6 +74,7 @@ fn weighted_rmsd(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    crate::compare_alignment::register(module)?;
     crate::compare_structures::register(module)?;
     module.add_function(wrap_pyfunction!(tm_score, module)?)?;
     module.add_function(wrap_pyfunction!(gdt_ts, module)?)?;

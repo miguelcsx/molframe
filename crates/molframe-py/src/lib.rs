@@ -23,6 +23,10 @@ mod chemistry;
 #[cfg(feature = "compare")]
 mod compare;
 #[cfg(feature = "compare")]
+mod compare_alignment;
+#[cfg(feature = "compare")]
+mod compare_mapping;
+#[cfg(feature = "compare")]
 mod compare_structures;
 #[cfg(feature = "crystal")]
 mod crystal;

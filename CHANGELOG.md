@@ -44,6 +44,9 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- Python `molframe.compare`: combinatorial-extension alignment (`ce_align`), contact areas
+  and the CAD score, contact-map overlap, and sequence-based chain assignment and residue
+  mapping.
 - Python `molframe.trajectory`: pairwise fitted RMSD, Cartesian PCA, the Procrustes mean
   structure, diffusion maps, k-means, agglomerative and DBSCAN clustering, medoids, mean
   squared displacement, group variance, block convergence, harmonic and population
