@@ -29,7 +29,7 @@ fn python_hydrogen_selectors_report_unavailable_bonds_as_query_errors() {
     assert_eq!(structure.atom_count(), 1);
     Python::initialize();
     Python::attach(|py| {
-        crate::error::install_package_for_tests(py);
+        crate::error::tests::install_package_for_tests(py);
         let structure = Bound::new(py, PyStructure::new(structure)).expect("structure binds");
         let module = PyModule::new(py, "sel").expect("module exists");
         register(&module).expect("selectors register");

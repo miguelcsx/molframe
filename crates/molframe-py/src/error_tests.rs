@@ -77,3 +77,24 @@ fn a_bad_value_is_also_a_value_error_and_a_missing_key_a_key_error() {
         assert!(type_error("no").is_instance_of::<pyo3::exceptions::PyTypeError>(py));
     });
 }
+
+/// Makes `molframe.errors` importable in a test process that embeds Python.
+///
+/// The extension module is not importable there, so the package is stood in by
+/// an empty module whose search path is the source tree; `molframe.errors` is
+/// pure Python and needs nothing else.
+pub(crate) fn install_package_for_tests(py: Python<'_>) {
+    let source = format!(
+        "import sys, types\n\
+         package = types.ModuleType('molframe')\n\
+         package.__path__ = [{:?}]\n\
+         sys.modules.setdefault('molframe', package)\n",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../python/molframe")
+    );
+    let Ok(code) = std::ffi::CString::new(source) else {
+        panic!("the stand-in source has no interior nul")
+    };
+    if let Err(error) = py.run(&code, None, None) {
+        panic!("the package stand-in failed to install: {error}")
+    }
+}

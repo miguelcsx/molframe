@@ -144,10 +144,12 @@ pub(crate) fn from_findings(findings: &[Diagnostic], message: &str) -> PyErr {
 /// As [`from_findings`], raised as the named class instead of the one the
 /// first finding's code selects.
 pub(crate) fn from_findings_as(name: &str, findings: &[Diagnostic], message: &str) -> PyErr {
-    Python::attach(|py| {
-        build(py, name, message, findings.first(), findings)
-            .unwrap_or_else(|error| broken(&error, message))
-    })
+    Python::attach(
+        |py| match build(py, name, message, findings.first(), findings) {
+            Ok(error) => error,
+            Err(error) => broken(&error, message),
+        },
+    )
 }
 
 /// The exception for any kernel error that names a diagnostic.
@@ -159,8 +161,9 @@ where
 }
 
 fn plain(name: &str, message: &str) -> PyErr {
-    Python::attach(|py| {
-        build(py, name, message, None, &[]).unwrap_or_else(|error| broken(&error, message))
+    Python::attach(|py| match build(py, name, message, None, &[]) {
+        Ok(error) => error,
+        Err(error) => broken(&error, message),
     })
 }
 
@@ -219,25 +222,6 @@ pub(crate) fn warn(
     Ok(())
 }
 
-/// Makes `molframe.errors` importable in a test process that embeds Python.
-///
-/// The extension module is not importable there, so the package is stood in by
-/// an empty module whose search path is the source tree; `molframe.errors` is
-/// pure Python and needs nothing else.
-#[cfg(test)]
-pub(crate) fn install_package_for_tests(py: Python<'_>) {
-    let source = format!(
-        "import sys, types\n\
-         package = types.ModuleType('molframe')\n\
-         package.__path__ = [{:?}]\n\
-         sys.modules.setdefault('molframe', package)\n",
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../python/molframe")
-    );
-    let code = std::ffi::CString::new(source).expect("no interior nul");
-    py.run(&code, None, None)
-        .expect("the package stand-in installs");
-}
-
 #[cfg(test)]
 #[path = "error_tests.rs"]
-mod tests;
+pub(crate) mod tests;
