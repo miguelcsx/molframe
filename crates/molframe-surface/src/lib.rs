@@ -41,8 +41,8 @@ pub use accessible_area::{
     shrake_rupley, surface_points, surface_points_at_density, surface_points_excluding_pairs,
 };
 pub use burial::{
-    BuriedSurface, BuriedSurfaceError, MoleculeRole, buried_solvent_excluded_surface,
-    buried_solvent_excluded_surface_with_options, buried_surface,
+    BuriedSurface, BuriedSurfaceError, MoleculeRole, MoleculeRoleError,
+    buried_solvent_excluded_surface, buried_solvent_excluded_surface_with_options, buried_surface,
 };
 pub use cavity::{Cavity, cavities, cavities_with_options};
 pub use collect::collect_shrake_rupley;

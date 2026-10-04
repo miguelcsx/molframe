@@ -87,6 +87,22 @@ impl IndexedSurfaceMesh {
         }
     }
 
+    /// The total area of the faces whose three vertices exist.
+    ///
+    /// A face that names a vertex the mesh does not have has no area and is counted by
+    /// the report as degenerate, so a mesh that passes `is_manifold` is summed in full.
+    #[must_use]
+    pub fn area(&self) -> f64 {
+        self.faces
+            .iter()
+            .filter_map(|face| {
+                let [a, b, c] = face.0.map(|index| self.vertices.get(index as usize));
+                let cross = triangle_cross(*a?, *b?, *c?);
+                Some(0.5 * cross.iter().map(|value| value * value).sum::<f64>().sqrt())
+            })
+            .sum()
+    }
+
     /// Sorted unique neighbours of one vertex.
     #[must_use]
     pub fn neighbours(&self, vertex: u32) -> Vec<u32> {

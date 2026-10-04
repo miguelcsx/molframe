@@ -68,6 +68,8 @@ mod spatial;
 mod structure_data;
 #[cfg(feature = "surface")]
 mod surface;
+#[cfg(feature = "surface")]
+mod surface_mesh;
 mod table;
 #[cfg(feature = "trajectory")]
 mod trajectory;

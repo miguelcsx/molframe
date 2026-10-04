@@ -101,3 +101,14 @@ fn ses_roles_are_atom_aligned() {
     let result = buried_solvent_excluded_surface(&[[0.0, 0.0, 0.0]], &[1.5], &[], 0.5, 0.3);
     assert!(result.is_err());
 }
+
+#[test]
+fn a_role_is_read_from_its_word_and_nothing_else() {
+    assert_eq!("first".parse::<MoleculeRole>(), Ok(MoleculeRole::First));
+    assert_eq!("second".parse::<MoleculeRole>(), Ok(MoleculeRole::Second));
+    assert_eq!(
+        "excluded".parse::<MoleculeRole>(),
+        Ok(MoleculeRole::Excluded)
+    );
+    assert!("both".parse::<MoleculeRole>().is_err());
+}

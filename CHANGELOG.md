@@ -38,6 +38,10 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- Python `molframe.surface`: surface points with normals, the solvent-excluded surface as
+  a `Mesh` (components, curvatures, edge distances, patches, OBJ), buried surface between
+  two molecules, and atom depths. Rust: `IndexedSurfaceMesh::area`, `MoleculeRole::from_str`,
+  and diagnostic codes for the mesh, burial and depth errors.
 - `analysis.sasa` (Rust `sasa_kernel`): per-atom solvent-accessible surface area under
   the policy's `vdw_radii`, `hydrogens` and `assembly`, so each is a decision an audit
   can vary.

@@ -27,6 +27,24 @@ pub enum MoleculeRole {
     Excluded,
 }
 
+/// A molecule role word that is not `first`, `second` or `excluded`.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{0:?} is not a molecule role; the roles are first, second and excluded")]
+pub struct MoleculeRoleError(pub Box<str>);
+
+impl std::str::FromStr for MoleculeRole {
+    type Err = MoleculeRoleError;
+
+    fn from_str(word: &str) -> Result<Self, Self::Err> {
+        match word {
+            "first" => Ok(Self::First),
+            "second" => Ok(Self::Second),
+            "excluded" => Ok(Self::Excluded),
+            other => Err(MoleculeRoleError(other.into())),
+        }
+    }
+}
+
 /// Why a role-partitioned buried surface could not be computed.
 #[derive(Debug, thiserror::Error)]
 pub enum BuriedSurfaceError {
