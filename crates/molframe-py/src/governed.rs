@@ -23,12 +23,18 @@ pub(crate) fn run<K>(
 where
     K: StructureKernel,
     K::Error: Debug + std::fmt::Display,
+    K::Error: 'static,
+    for<'a> molframe::Diagnostic: From<&'a K::Error>,
 {
     let structure = structure.inner.clone();
     let analysis = crate::execution::run(py, context, |context| {
         analyse_structure(structure.engine(), policy, kernel, context)
     })?
-    .map_err(crate::error::failure)?;
+    .map_err(|error| {
+        crate::error::from_diagnostic(&molframe::analysis::governed_diagnostic(&error, |inner| {
+            molframe::Diagnostic::from(inner)
+        }))
+    })?;
     let envelope = PyAnalysis::new(&analysis, py.None());
     let value = convert(py, analysis.value)?;
     Ok(envelope.with_value(value))

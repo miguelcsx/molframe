@@ -198,5 +198,29 @@ def test_cation_pi_and_water_bridges_return_their_documented_columns(crambin):
 
 
 def test_nucleic_torsions_refuse_a_structure_without_roles(crambin):
-    with pytest.raises(molframe.MolframeError, match="atom-role"):
+    with pytest.raises(molframe.PolicyError, match="atom-role") as raised:
         analysis.nucleic_torsions(crambin)
+    assert raised.value.code == "MOLFRAME-E6103"
+
+
+def test_analysis_failures_carry_the_code_of_their_kind(crambin):
+    with pytest.raises(molframe.MolframeError) as invalid:
+        analysis.contact_map(crambin, cutoff=-1.0, min_separation=0)
+    assert invalid.value.code is not None
+    annotated = molframe.chemistry.annotate(crambin, CCD, version="wwPDB-2026-10-03")
+    with pytest.raises(molframe.MolframeError) as options:
+        analysis.pi_stacking(
+            annotated,
+            max_centre_distance=-1.0,
+            max_parallel_angle=30.0,
+            min_perpendicular_angle=60.0,
+        )
+    assert options.value.code == "MOLFRAME-E5101"
+    with pytest.raises(molframe.MolframeError) as budget:
+        analysis.contact_map(
+            crambin,
+            cutoff=4.5,
+            min_separation=0,
+            context=molframe.ExecutionContext(memory_budget=64),
+        )
+    assert budget.value.code in {"MOLFRAME-E7001", "MOLFRAME-E1902"}
