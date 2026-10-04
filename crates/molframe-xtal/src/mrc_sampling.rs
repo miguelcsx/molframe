@@ -72,6 +72,7 @@ impl DensityMap {
         if coordinate.iter().any(|value| !value.is_finite()) {
             return None;
         }
+        let coordinate = coordinate.map(snap_to_grid_point);
         let base = coordinate.map(f64::floor);
         let fraction = [
             coordinate[0] - base[0],
@@ -110,6 +111,7 @@ impl DensityMap {
         if coordinate.iter().any(|value| !value.is_finite()) {
             return None;
         }
+        let coordinate = coordinate.map(snap_to_grid_point);
         let base = coordinate.map(f64::floor);
         let weights = [
             cubic_weights(coordinate[0] - base[0]),
@@ -139,6 +141,23 @@ impl DensityMap {
             }
         }
         Some(f64_to_f32(result))
+    }
+}
+
+/// How close to a grid point, in grid units, a coordinate is taken to be on it.
+const GRID_SNAP: f64 = 1e-9;
+
+/// A coordinate within [`GRID_SNAP`] of a grid point, moved onto it.
+///
+/// A Cartesian position that is exactly a grid point can come out of the cell
+/// transform a few ulps off it, and just below the first point that is "outside"
+/// the stored grid, so a boundary value would be reported missing.
+fn snap_to_grid_point(value: f64) -> f64 {
+    let nearest = value.round();
+    if (value - nearest).abs() < GRID_SNAP {
+        nearest
+    } else {
+        value
     }
 }
 

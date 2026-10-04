@@ -93,3 +93,33 @@ fn external_ccpem_permuted_fixture_when_configured() {
     assert!((first - 0.042_834_47).abs() < 1.0e-7);
     assert!((second - 0.026_947_163).abs() < 1.0e-7);
 }
+
+#[test]
+fn a_position_that_is_a_grid_point_is_not_reported_missing_for_rounding() {
+    // A cell with a non-orthogonal angle puts rounding error into the Cartesian-to-grid transform.
+    let mut map = example();
+    map.cell = UnitCell {
+        lengths: [3.1, 4.7, 5.3],
+        angles: [90.0, 100.0, 90.0],
+    };
+    let transform = crate::CellTransform::new(&map.cell).expect("a valid cell");
+    for (z, fz) in [0.0, 0.5].into_iter().enumerate() {
+        for (y, fy) in [0.0, 0.5].into_iter().enumerate() {
+            for (x, fx) in [0.0, 0.5].into_iter().enumerate() {
+                let position = transform.to_cartesian([fx, fy, fz]);
+                let expected = map.values[x + 2 * y + 4 * z];
+                for cubic in [false, true] {
+                    let sampled = if cubic {
+                        map.sample_cartesian_cubic(position, MapBoundary::Missing)
+                    } else {
+                        map.sample_cartesian(position, MapBoundary::Missing)
+                    };
+                    let Some(value) = sampled else {
+                        panic!("grid point ({x}, {y}, {z}) was reported missing");
+                    };
+                    assert!((value - expected).abs() < 1e-5, "({x}, {y}, {z}): {value}");
+                }
+            }
+        }
+    }
+}
