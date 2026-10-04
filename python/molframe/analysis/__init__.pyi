@@ -262,3 +262,22 @@ def surface_contacts(
     context: ExecutionContext | None = None,
 ) -> Analysis[Table]:
     """Close atom pairs whose atoms are both exposed: ``first``, ``second``, ``distance``."""
+
+def contacts_by_definition(
+    structure: Structure,
+    *,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    surface_tolerance: float = 0.2,
+    surface_density: float = 4.0,
+    surface_minimum_area: float = 0.25,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Return contacts under the policy's ``contact_def`` and ``vdw_radii``.
+
+    Columns: ``first``, ``second``, ``distance``.
+
+    ``distance:<tolerance>`` puts two atoms in contact when they are no further apart than
+    their radii plus the tolerance; ``surface:<probe>`` when their expanded surfaces touch and
+    both keep an exposed patch (the ``surface_*`` keywords say how that test samples).
+    """

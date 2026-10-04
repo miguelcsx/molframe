@@ -27,6 +27,7 @@ linear_density = _native.linear_density
 density_map = _native.density_map
 pore_profile = _native.pore_profile
 surface_contacts = _native.surface_contacts
+contacts_by_definition = _native.contacts_by_definition
 
 __all__ = [
     "ContactTable",
@@ -39,6 +40,7 @@ __all__ = [
     "contact_map",
     "contact_potential",
     "contacts",
+    "contacts_by_definition",
     "coordination_numbers",
     "density_map",
     "dssp",

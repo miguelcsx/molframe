@@ -315,10 +315,68 @@ pub(crate) fn surface_contacts(
     )
 }
 
+/// Atom contacts under the policy's `contact_def` and `vdw_radii`.
+///
+/// With `distance:<tolerance>` two atoms are in contact when their distance is at
+/// most the sum of their radii plus the tolerance; an atom whose element has no
+/// radius in the set is missing coverage. With `surface:<probe>` they are in contact
+/// when their expanded surfaces touch and both keep an exposed patch; the three
+/// `surface_*` keywords are how that test samples the surface and apply only to it.
+/// Columns: `first`, `second`, `distance`.
+#[pyfunction]
+#[pyo3(signature = (
+    structure,
+    *,
+    backend="auto",
+    surface_tolerance=0.2,
+    surface_density=4.0,
+    surface_minimum_area=0.25,
+    policy=None,
+    context=None,
+))]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn contacts_by_definition(
+    py: Python<'_>,
+    structure: &PyStructure,
+    backend: &str,
+    surface_tolerance: f32,
+    surface_density: f32,
+    surface_minimum_area: f32,
+    policy: Option<PyRef<'_, PyAnalysisPolicy>>,
+    context: Option<&PyExecutionContext>,
+) -> PyResult<PyAnalysis> {
+    let kernel = molframe::analysis::definition_contacts_kernel(
+        crate::backend::parse(backend)?,
+        molframe::analysis::SurfaceSampling {
+            tolerance: surface_tolerance,
+            density: surface_density,
+            minimum_area: surface_minimum_area,
+        },
+    );
+    run(
+        py,
+        structure,
+        &policy_of(policy),
+        &kernel,
+        |py, table| {
+            let first: Vec<u32> = table.first().iter().map(|atom| atom.get()).collect();
+            let second: Vec<u32> = table.second().iter().map(|atom| atom.get()).collect();
+            let table = TableBuilder::new(py, table.len())
+                .indices("first", &first)
+                .indices("second", &second)
+                .single("distance", table.distances())
+                .finish();
+            Ok(Py::new(py, table)?.into_any())
+        },
+        context,
+    )
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyDensityGrid>()?;
     module.add_function(wrap_pyfunction!(linear_density, module)?)?;
     module.add_function(wrap_pyfunction!(density_map, module)?)?;
     module.add_function(wrap_pyfunction!(pore_profile, module)?)?;
-    module.add_function(wrap_pyfunction!(surface_contacts, module)?)
+    module.add_function(wrap_pyfunction!(surface_contacts, module)?)?;
+    module.add_function(wrap_pyfunction!(contacts_by_definition, module)?)
 }

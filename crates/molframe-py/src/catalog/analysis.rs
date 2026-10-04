@@ -255,4 +255,16 @@ pub(super) const ROWS: &[Capability] = &[
         execution_needs: "cpu,spatial,memory",
         cost: molframe::Cost::Materialize,
     },
+    Capability {
+        name: "contacts_by_definition",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure,backend,surface_tolerance,surface_density,surface_minimum_area",
+        result: "Analysis<Table>",
+        policy: true,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,spatial,memory",
+        cost: molframe::Cost::Materialize,
+    },
 ];

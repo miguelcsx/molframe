@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 import molframe
@@ -130,3 +131,50 @@ def test_crambin_in_its_crystal_is_a_different_system_from_crambin_alone():
     assert crystal > unit
     assert (result.effects or [])[0].mean_change == pytest.approx(crystal - unit)
     assert result.policies[1].assembly == "crystal:4"
+
+
+def pair_set(table: object) -> set[tuple[int, int]]:
+    first, second = table["first"].tolist(), table["second"].tolist()  # type: ignore[attr-defined]
+    return set(zip(first, second, strict=True))
+
+
+def test_contacts_by_definition_equal_a_numpy_distance_test_against_the_named_radii():
+    crambin = molframe.read(BENCH / "1crn.cif")
+    xyz = np.asarray(crambin.coordinates, dtype=np.float64)
+    for radii, tolerance in (("bondi", 0.5), ("charmm", 0.0), ("alvarez", 0.3)):
+        policy = molframe.AnalysisPolicy(vdw_radii=radii, contact_def=f"distance:{tolerance}")
+        found = pair_set(analysis.contacts_by_definition(crambin, policy=policy).value)
+        r = np.asarray(molframe.chemistry.vdw_radii(crambin, radii=radii), dtype=np.float64)
+        gap = np.linalg.norm(xyz[:, None, :] - xyz[None, :, :], axis=2)
+        reach = r[:, None] + r[None, :] + tolerance
+        upper = np.triu(gap <= reach, k=1)
+        expected = {(int(i), int(j)) for i, j in zip(*np.nonzero(upper), strict=True)}
+        assert found == expected, (radii, tolerance)
+
+
+def test_the_contact_definition_and_the_radii_are_decisions_an_audit_can_vary():
+    crambin = molframe.read(BENCH / "1crn.cif")
+    space = (
+        audit.PolicySpace()
+        .vary("contact_def", ["distance:0.0", "distance:0.5"])
+        .vary("vdw_radii", ["bondi", "charmm"])
+    )
+
+    def analyse(policy: molframe.AnalysisPolicy):
+        return analysis.contacts_by_definition(crambin, policy=policy)
+
+    result = audit.run(
+        space.plan(),
+        analyse,
+        metric="set",
+        project=lambda table: sorted(pair_set(table)),
+    )
+    assert {"contact_def", "vdw_radii"} <= set(result.read)
+    effects = {effect.field: effect for effect in result.effects or []}
+    # Both decisions change which atoms count as touching, so neither is inert.
+    assert effects["contact_def"].mean_change > 0.0
+    assert effects["vdw_radii"].mean_change > 0.0
+    # Widening the tolerance only ever adds contacts: the narrower set is contained.
+    narrow, wide = (pair_set(run.value) for run in result.runs[:2])
+    assert narrow < wide
+    assert result.agreement_with_first is not None
