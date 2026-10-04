@@ -142,7 +142,8 @@ fn bench_gw_026(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
                         &context,
                     )
                     .required("GW-026 failed")
-                    .value
+                    .into_result()
+                    .required("GW-026 indeterminate")
                 })
                 .collect();
             black_box(outputs);

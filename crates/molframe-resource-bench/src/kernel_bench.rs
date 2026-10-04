@@ -31,7 +31,7 @@ pub(super) fn run_trajectory_contacts() -> Result<ResourceRecord, String> {
                 .map_err(|error| format!("execution context failed: {error}"))?,
         )
         .map_err(|error| format!("trajectory analysis failed: {error}"))?;
-        black_box(analysis.value);
+        black_box(analysis.value());
         Ok(64)
     })
 }

@@ -7,7 +7,7 @@ use crate::{
 };
 use molframe_analysis::{AnalysisDescriptor, FrameKernelResult, StructureKernel, structure_kernel};
 use molframe_chem::{ComponentProvider, PolymerRoleProfile};
-use molframe_core::contract::{AltlocPolicy, AnalysisPolicy, Coverage, ParameterValue, Status};
+use molframe_core::contract::{AltlocPolicy, AnalysisPolicy, Coverage, ParameterValue, Quality};
 use molframe_core::{Code, Diagnostic, ExecutionContext, Structure};
 
 fn float(value: f64) -> ParameterValue {
@@ -82,9 +82,9 @@ fn chirality_result(
     let mut result = FrameKernelResult::governed(
         value,
         if missing == 0 {
-            Status::Complete
+            Quality::Complete
         } else {
-            Status::Partial
+            Quality::Partial
         },
         Coverage {
             intended,
@@ -117,9 +117,9 @@ fn ramachandran_result(
     Ok(FrameKernelResult::governed(
         value,
         if missing == 0 {
-            Status::Complete
+            Quality::Complete
         } else {
-            Status::Partial
+            Quality::Partial
         },
         Coverage {
             intended,
@@ -139,9 +139,9 @@ fn rotamer_result(value: RotamerReport) -> Result<FrameKernelResult<RotamerRepor
     let mut result = FrameKernelResult::governed(
         value,
         if missing == 0 {
-            Status::Complete
+            Quality::Complete
         } else {
-            Status::Partial
+            Quality::Partial
         },
         Coverage {
             intended,
@@ -167,9 +167,9 @@ fn reference_geometry_result(
     let mut result = FrameKernelResult::governed(
         value,
         if missing == 0 {
-            Status::Complete
+            Quality::Complete
         } else {
-            Status::Partial
+            Quality::Partial
         },
         Coverage {
             intended,

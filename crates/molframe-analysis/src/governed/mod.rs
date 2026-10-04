@@ -16,7 +16,7 @@ mod structure;
 pub use descriptor::AnalysisDescriptor;
 pub use dynamics::{governed_dielectric_from_dipoles, governed_water_dynamics};
 pub use error::GovernedAnalysisError;
-pub use execute::{GovernedStructureAnalysis, analyse_structure, analyse_trajectory};
+pub use execute::{FrameRecord, GovernedStructureAnalysis, analyse_structure, analyse_trajectory};
 pub use helical::{governed_helical_parameters, governed_helical_steps};
 pub use interactions::{
     base_pairs_kernel, cation_pi_kernel, contact_map_kernel, contacts_kernel,

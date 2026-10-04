@@ -2,7 +2,7 @@
 
 use super::AnalysisDescriptor;
 use molframe_core::ExecutionContext;
-use molframe_core::contract::{AnalysisPolicy, Assumption, Coverage, Status};
+use molframe_core::contract::{AnalysisPolicy, Assumption, Coverage, Quality};
 use molframe_core::diagnostic::Diagnostic;
 use molframe_core::structure::Structure;
 use std::marker::PhantomData;
@@ -12,8 +12,9 @@ use std::marker::PhantomData;
 pub struct FrameKernelResult<T> {
     /// Kernel value for this frame.
     pub value: T,
-    /// Whether the value is defensible under the supplied inputs.
-    pub status: Status,
+    /// How complete the value is. A kernel always has a value; declining to
+    /// answer is the executor's decision under the policy, not the kernel's.
+    pub quality: Quality,
     /// Intended, used, missing and ambiguous inputs.
     pub coverage: Coverage,
     /// Deterministically ordered findings from the kernel.
@@ -28,7 +29,7 @@ impl<T> FrameKernelResult<T> {
     pub fn complete(value: T, intended: u32) -> Self {
         Self {
             value,
-            status: Status::Complete,
+            quality: Quality::Complete,
             coverage: Coverage::complete(intended),
             warnings: Vec::new(),
             assumptions: Vec::new(),
@@ -37,10 +38,10 @@ impl<T> FrameKernelResult<T> {
 
     /// Builds a result with explicit completeness metadata.
     #[must_use]
-    pub fn governed(value: T, status: Status, coverage: Coverage) -> Self {
+    pub fn governed(value: T, quality: Quality, coverage: Coverage) -> Self {
         Self {
             value,
-            status,
+            quality,
             coverage,
             warnings: Vec::new(),
             assumptions: Vec::new(),

@@ -113,6 +113,15 @@ class PolicyError(MolframeValueError):
     """The analysis policy or request is contradictory or unsupported (class 6xxx)."""
 
 
+class IndeterminateError(MolframeError):
+    """An analysis has no defensible answer under its policy, and its value was asked for.
+
+    An indeterminate :class:`Analysis` holds a reason instead of a value, so the way
+    to a number is ``analysis.value`` and it raises this. Check ``analysis.is_determinate``
+    first, or read ``analysis.indeterminacy`` for why.
+    """
+
+
 class ResourceError(MolframeError, RuntimeError):
     """A resource limit, input or output failure stopped the operation (class 7xxx)."""
 

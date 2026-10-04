@@ -122,3 +122,10 @@ def test_warnings_are_warnings_that_filters_can_see():
     with pytest.warns(molframe.QueryWarning) as caught:
         warnings.warn(errors.QueryWarning("odd", code="MOLFRAME-W4001"), stacklevel=1)
     assert caught[0].message.code == "MOLFRAME-W4001"
+
+
+def test_an_indeterminate_error_is_a_molframe_error_that_carries_its_reason():
+    error = molframe.IndeterminateError("the policy rejects 3 missing and 0 ambiguous inputs")
+    assert isinstance(error, molframe.MolframeError)
+    assert "missing" in str(error)
+    assert not isinstance(error, ValueError)

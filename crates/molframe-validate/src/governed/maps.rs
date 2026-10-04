@@ -5,8 +5,8 @@ use crate::{
     real_space_map_correlation, sampled_real_space_correlation,
 };
 use molframe_core::contract::{
-    AlgorithmId, Analysis, AnalysisPolicy, Coverage, MissingPolicy, PeriodicPolicy, Provenance,
-    SourceRef, Status,
+    AlgorithmId, Analysis, AnalysisPolicy, Coverage, MissingPolicyError, PeriodicPolicy,
+    Provenance, Quality, SourceRef, resolve_missing,
 };
 use molframe_xtal::{DensityMap, MapBoundary};
 
@@ -38,28 +38,31 @@ fn result(
     let missing = intended
         .checked_sub(used)
         .ok_or(GovernedMapError::CoverageOverflow)?;
-    let status = match (missing, policy.missing_atoms) {
-        (0, _) => Status::Complete,
-        (_, MissingPolicy::Ignore | MissingPolicy::Report) => Status::Partial,
-        (_, MissingPolicy::Indeterminate) => Status::Indeterminate,
-        (_, MissingPolicy::Fail) => return Err(GovernedMapError::MissingSamples(missing)),
-        _ => return Err(GovernedMapError::UnsupportedPolicy("missing_atoms")),
+    let coverage = Coverage {
+        intended,
+        used,
+        missing,
+        ambiguous: 0,
     };
-    Ok(Analysis {
-        value,
-        status,
-        coverage: Coverage {
-            intended,
-            used,
-            missing,
-            ambiguous: 0,
-        },
-        warnings: Vec::new(),
-        assumptions: Vec::new(),
-        provenance: Provenance::new(policy)
+    let (outcome, quality) =
+        resolve_missing(value, Quality::Complete, coverage, policy.missing_atoms).map_err(
+            |error| match error {
+                MissingPolicyError::Fail { missing, .. } => {
+                    GovernedMapError::MissingSamples(missing)
+                }
+                _ => GovernedMapError::UnsupportedPolicy("missing_atoms"),
+            },
+        )?;
+    Ok(Analysis::from_parts(
+        outcome,
+        quality,
+        coverage,
+        Vec::new(),
+        Vec::new(),
+        Provenance::new(policy)
             .with_source(SourceRef::Memory)
             .with_algorithm(AlgorithmId::new(algorithm, "1")),
-    })
+    ))
 }
 
 /// Correlates every voxel of two compatible maps with governed provenance.

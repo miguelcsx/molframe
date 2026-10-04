@@ -63,7 +63,7 @@ fn merge_is_bit_identical_at_every_worker_count() {
                 .expect("worker context is valid");
             run_analysis(&trajectory, &analysis, &context).map_or_else(
                 |error| panic!("analysis failed: {error}"),
-                |result| result.value.to_bits(),
+                |result| result.value().map(|value| value.to_bits()),
             )
         })
         .collect();

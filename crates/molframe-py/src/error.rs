@@ -58,6 +58,7 @@ pub(crate) const CLASS_NAMES: &[&str] = &[
     "MolframeIOError",
     "MemoryBudgetError",
     "Cancelled",
+    "IndeterminateError",
     "InternalError",
     "MolframeWarning",
     "QueryWarning",
@@ -211,6 +212,11 @@ pub(crate) fn index(message: impl AsRef<str>) -> PyErr {
 /// An argument of the wrong type.
 pub(crate) fn type_error(message: impl AsRef<str>) -> PyErr {
     plain("MolframeTypeError", message.as_ref())
+}
+
+/// The analysis has no answer under its policy, and the caller asked for one.
+pub(crate) fn indeterminate(reason: impl AsRef<str>) -> PyErr {
+    plain("IndeterminateError", reason.as_ref())
 }
 
 /// A broken internal invariant.

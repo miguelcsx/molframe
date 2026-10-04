@@ -30,7 +30,7 @@ fn concrete_contact_adapter_records_identity_and_parameters() {
     ) else {
         panic!("contact analysis should succeed");
     };
-    assert_eq!(result.value.len(), 1);
+    assert_eq!(result.value().map(crate::ContactTable::len), Some(1));
     assert_eq!(result.coverage.used, 2);
     assert_eq!(
         result

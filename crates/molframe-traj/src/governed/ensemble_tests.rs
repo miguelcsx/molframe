@@ -22,8 +22,8 @@ fn clustering_medoid_and_convergence_are_governed() {
         panic!("valid governed blocks");
     };
     assert_eq!(clusters.coverage.used, 3);
-    assert_eq!(representative.value, 0);
-    assert_eq!(blocks.value.len(), 2);
+    assert_eq!(representative.value(), Some(&0));
+    assert_eq!(blocks.value().map(Vec::len), Some(2));
 }
 
 #[test]
@@ -44,8 +44,16 @@ fn both_similarity_families_are_governed() {
     let Ok(population) = analyse_cluster_population_similarity(&[0, 1], &[0, 1], 2, &policy) else {
         panic!("valid governed population similarity");
     };
-    assert!((harmonic.value.similarity - 1.0).abs() < 1e-12);
-    assert!((population.value - 1.0).abs() < 1e-12);
+    assert!(
+        harmonic
+            .value()
+            .is_some_and(|value| (value.similarity - 1.0).abs() < 1e-12)
+    );
+    assert!(
+        population
+            .value()
+            .is_some_and(|value| (value - 1.0).abs() < 1e-12)
+    );
 }
 
 #[test]
@@ -74,10 +82,10 @@ fn borrowed_frame_views_preserve_governed_results_and_provenance() {
     let groups = analyse_group_coordinate_variance_view(view, &[vec![0, 1, 2]], &policy)
         .expect("governed borrowed variance");
     assert_eq!(rmsd.coverage.used, 3);
-    assert_eq!(pairwise.value.size, 3);
-    assert_eq!(mean.value.len(), 3);
-    assert_eq!(msd.value.len(), 3);
-    assert_eq!(groups.value.len(), 1);
+    assert_eq!(pairwise.value().map(|value| value.size), Some(3));
+    assert_eq!(mean.value().map(Vec::len), Some(3));
+    assert_eq!(msd.value().map(Vec::len), Some(3));
+    assert_eq!(groups.value().map(Vec::len), Some(1));
     let Some(algorithm) = msd.provenance.algorithm.as_ref() else {
         panic!("MSD provenance has an algorithm");
     };

@@ -1,7 +1,7 @@
 use super::*;
 use crate::chunk::{AtomRecord, ChunkBuilder};
 use crate::column::Presence;
-use crate::contract::AltlocPolicy;
+use crate::contract::{AltlocPolicy, Status};
 use crate::element::Element;
 use crate::index::ResidueIndex;
 use crate::optional::{OptionalI32, OptionalSymbol};
@@ -98,10 +98,16 @@ fn disordered() -> Structure {
 fn selected(structure: &Structure, altloc: AltlocPolicy) -> (Vec<u32>, Vec<Code>, Status) {
     let policy = AnalysisPolicy::default().with_altloc(altloc);
     let result = structure.resolve_altlocs(&policy);
+    let Some(selection) = result.value() else {
+        panic!(
+            "altloc resolution had no answer: {:?}",
+            result.indeterminacy()
+        );
+    };
     (
-        result.value.iter().collect(),
+        selection.iter().collect(),
         result.warnings.iter().map(Diagnostic::code).collect(),
-        result.status,
+        result.status(),
     )
 }
 

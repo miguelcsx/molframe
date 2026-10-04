@@ -7,7 +7,7 @@ use crate::{
 use molframe_analysis::{
     AnalysisDescriptor, FrameKernelResult, StructureKernel, mapped_structure_kernel,
 };
-use molframe_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Status};
+use molframe_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Quality};
 use molframe_core::{AtomSelection, ExecutionContext, Structure};
 
 /// Plane fitting or coverage failure.
@@ -48,9 +48,9 @@ pub fn plane_restraint_outliers_kernel(
             Ok(FrameKernelResult::governed(
                 value,
                 if intended == used {
-                    Status::Complete
+                    Quality::Complete
                 } else {
-                    Status::Partial
+                    Quality::Partial
                 },
                 Coverage {
                     intended,

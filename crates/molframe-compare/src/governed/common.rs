@@ -3,7 +3,8 @@
 use crate::{CadConstructionError, CadError, CeError, CompareError};
 use molframe_core::Diagnostic;
 use molframe_core::contract::{
-    AlgorithmId, Analysis, AnalysisPolicy, Coverage, MissingPolicy, ParameterValue, Status,
+    AlgorithmId, Analysis, AnalysisPolicy, Coverage, MissingPolicyError, ParameterValue,
+    Provenance, Quality, resolve_missing,
 };
 
 /// A governed comparison failure.
@@ -65,24 +66,29 @@ pub(crate) fn covered<T>(
     let missing = intended
         .checked_sub(used)
         .ok_or(GovernedCompareError::CoverageOverflow)?;
-    let status = match (missing, policy.missing_atoms) {
-        (0, _) => Status::Complete,
-        (_, MissingPolicy::Ignore | MissingPolicy::Report) => Status::Partial,
-        (_, MissingPolicy::Indeterminate) => Status::Indeterminate,
-        (_, MissingPolicy::Fail) => return Err(GovernedCompareError::MissingData(missing)),
-        _ => return Err(GovernedCompareError::UnsupportedPolicy("missing_atoms")),
+    let coverage = Coverage {
+        intended,
+        used,
+        missing,
+        ambiguous: 0,
     };
-    let mut analysis = Analysis::complete(
-        value,
-        Coverage {
-            intended,
-            used,
-            missing,
-            ambiguous: 0,
-        },
-        policy,
+    let (outcome, quality) =
+        resolve_missing(value, Quality::Complete, coverage, policy.missing_atoms).map_err(
+            |error| match error {
+                MissingPolicyError::Fail { missing, .. } => {
+                    GovernedCompareError::MissingData(missing)
+                }
+                _ => GovernedCompareError::UnsupportedPolicy("missing_atoms"),
+            },
+        )?;
+    let mut analysis = Analysis::from_parts(
+        outcome,
+        quality,
+        coverage,
+        Vec::new(),
+        Vec::new(),
+        Provenance::new(policy),
     );
-    analysis.status = status;
     analysis.provenance = analysis
         .provenance
         .with_algorithm(AlgorithmId::new(name, "1"));

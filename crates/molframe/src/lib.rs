@@ -98,9 +98,10 @@ pub use molframe_core::annotation::{
 pub use molframe_core::contract::{
     AlgorithmId, AlignmentPolicy, AltlocPolicy, Analysis, AnalysisParameters, AnalysisPolicy,
     AssemblyChoice, Assumption, AssumptionSource, ContactDefinition, Coverage, DictionaryVersion,
-    EquivalencePolicy, Fingerprint, HydrogenPolicy, ImpactEstimate, MissingPolicy, ModelChoice,
-    Namespace, ParameterValue, PeriodicPolicy, PolicyField, PolicyParseError, Precision, ProfileId,
-    Provenance, RadiiSet, SourceRef, Status, SymmetryPolicy, Tolerance,
+    EquivalencePolicy, Fingerprint, HydrogenPolicy, Impact, Indeterminacy, MeasuredImpact,
+    MissingPolicy, ModelChoice, Namespace, Outcome, ParameterValue, PeriodicPolicy, PolicyField,
+    PolicyParseError, Precision, ProfileId, Provenance, Quality, RadiiSet, SourceRef, Status,
+    SymmetryPolicy, Tolerance,
 };
 pub use molframe_core::coords::Aabb;
 pub use molframe_core::diagnostic::{

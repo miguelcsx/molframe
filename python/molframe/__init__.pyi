@@ -48,6 +48,7 @@ from .errors import (
     ConversionError as ConversionError,
     Diagnostic as Diagnostic,
     GeometryError as GeometryError,
+    IndeterminateError as IndeterminateError,
     InternalError as InternalError,
     MemoryBudgetError as MemoryBudgetError,
     MolframeError as MolframeError,
@@ -109,7 +110,17 @@ class Coverage:
 
 class Analysis(Generic[_T_co]):
     @property
-    def value(self) -> _T_co: ...
+    def value(self) -> _T_co:
+        """The answer; raises ``IndeterminateError`` when the policy leaves none."""
+
+    @property
+    def is_determinate(self) -> bool:
+        """True when there is an answer to read."""
+
+    @property
+    def indeterminacy(self) -> str | None:
+        """Why there is no answer, or ``None`` when there is one."""
+
     @property
     def status(self) -> Literal["complete", "partial", "ambiguous", "indeterminate"]: ...
     @property

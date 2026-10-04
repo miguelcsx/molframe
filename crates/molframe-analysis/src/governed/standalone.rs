@@ -6,8 +6,8 @@ use crate::{
     Pucker, map_fragments, polymer_statistics, sugar_pucker,
 };
 use molframe_core::contract::{
-    Analysis, AnalysisPolicy, Coverage, MissingPolicy, ParameterValue, Provenance, SourceRef,
-    Status,
+    Analysis, AnalysisPolicy, Coverage, MissingPolicyError, Outcome, ParameterValue, Provenance,
+    Quality, SourceRef, resolve_missing,
 };
 
 /// A pure-domain kernel or governance failure.
@@ -47,28 +47,23 @@ fn governed<T, E>(
     policy: &AnalysisPolicy,
     descriptor: &super::AnalysisDescriptor,
 ) -> Result<Analysis<T>, StandaloneAnalysisError<E>> {
-    let status = if coverage.missing == 0 {
-        Status::Complete
-    } else {
-        match policy.missing_atoms {
-            MissingPolicy::Ignore | MissingPolicy::Report => Status::Partial,
-            MissingPolicy::Indeterminate => Status::Indeterminate,
-            MissingPolicy::Fail => {
-                return Err(StandaloneAnalysisError::MissingData {
-                    missing: coverage.missing,
-                });
-            }
-            _ => return Err(StandaloneAnalysisError::UnsupportedMissingPolicy),
-        }
-    };
-    Ok(Analysis {
-        value,
-        status,
+    let (outcome, quality) =
+        resolve_missing(value, Quality::Complete, coverage, policy.missing_atoms).map_err(
+            |error| match error {
+                MissingPolicyError::Fail { missing, .. } => {
+                    StandaloneAnalysisError::MissingData { missing }
+                }
+                _ => StandaloneAnalysisError::UnsupportedMissingPolicy,
+            },
+        )?;
+    Ok(Analysis::from_parts(
+        outcome,
+        quality,
         coverage,
-        warnings: Vec::new(),
-        assumptions: Vec::new(),
-        provenance: descriptor.apply(Provenance::new(policy).with_source(SourceRef::Memory)),
-    })
+        Vec::new(),
+        Vec::new(),
+        descriptor.apply(Provenance::new(policy).with_source(SourceRef::Memory)),
+    ))
 }
 
 /// Maps an optional trace to an explicit fragment library under missing policy.
@@ -114,14 +109,14 @@ pub fn governed_polymer_statistics(
 /// Computes governed five-torsion sugar pseudorotation.
 #[must_use]
 pub fn governed_sugar_pucker(nu: [f64; 5], policy: &AnalysisPolicy) -> Analysis<Pucker> {
-    Analysis {
-        value: sugar_pucker(nu),
-        status: Status::Complete,
-        coverage: Coverage::complete(5),
-        warnings: Vec::new(),
-        assumptions: Vec::new(),
-        provenance: descriptor("sugar-pucker")
+    Analysis::from_parts(
+        Outcome::Determinate(sugar_pucker(nu)),
+        Quality::Complete,
+        Coverage::complete(5),
+        Vec::new(),
+        Vec::new(),
+        descriptor("sugar-pucker")
             .with_parameter("torsions", ParameterValue::Text(format!("{nu:?}").into()))
             .apply(Provenance::new(policy).with_source(SourceRef::Memory)),
-    }
+    )
 }

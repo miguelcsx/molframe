@@ -108,7 +108,7 @@ fn gw_026_parallel_trajectory_analysis_is_byte_identical() {
         })
         .collect();
     assert!(results.windows(2).all(|pair| {
-        pair[0].value == pair[1].value
+        pair[0].value() == pair[1].value()
             && pair[0].coverage == pair[1].coverage
             && pair[0].provenance.fingerprint() == pair[1].provenance.fingerprint()
     }));

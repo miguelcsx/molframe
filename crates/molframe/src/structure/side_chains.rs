@@ -49,8 +49,7 @@ pub fn structure_side_chain_torsions(
 ) -> Result<SideChainTorsionReport, Findings> {
     let engine = structure.engine();
     require_polymer_roles(engine)?;
-    let selected = engine.resolve_altlocs(policy);
-    let mut findings = selected.warnings;
+    let (selected, mut findings) = engine.resolved_atoms(policy)?;
     let mut records = Vec::new();
     for residue in engine.data().residues() {
         let Some(component_id) = residue.name() else {
@@ -61,7 +60,7 @@ pub fn structure_side_chain_torsions(
                 .push(Diagnostic::new(crate::Code::W3201).with_context("component", component_id));
             continue;
         };
-        let Some(resolved) = side_chain_roles(engine, residue, &selected.value)? else {
+        let Some(resolved) = side_chain_roles(engine, residue, &selected)? else {
             continue;
         };
         let roles = SideChainRoles {
@@ -78,7 +77,7 @@ pub fn structure_side_chain_torsions(
             .map(|name| {
                 let mut matches = residue
                     .atoms()
-                    .filter(|atom| selected.value.contains(atom.index().get()))
+                    .filter(|atom| selected.contains(atom.index().get()))
                     .filter(|atom| atom.name() == Some(name));
                 let first = matches
                     .next()

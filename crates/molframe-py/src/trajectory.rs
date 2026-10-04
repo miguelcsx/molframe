@@ -129,9 +129,15 @@ fn rmsd(
     let analysis = py
         .detach(|| analyse_rmsd_to_reference_view(view, reference, alignment, &policy))
         .map_err(crate::error::failure)?;
-    let series = analysis.value.to_pyarray(py);
-    series.readwrite().make_nonwriteable();
-    Ok(PyAnalysis::new(&analysis, series.into_any().unbind()))
+    let series = match analysis.value() {
+        Some(values) => {
+            let series = values.to_pyarray(py);
+            series.readwrite().make_nonwriteable();
+            Some(series.into_any().unbind())
+        }
+        None => None,
+    };
+    Ok(PyAnalysis::new(&analysis, series))
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

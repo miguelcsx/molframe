@@ -5,7 +5,9 @@ use super::standalone::StandaloneAnalysisError;
 use crate::{
     BaseFrame, HelicalError, HelicalOptions, HelicalParameters, helical_parameters, helical_steps,
 };
-use molframe_core::contract::{Analysis, AnalysisPolicy, Coverage, Provenance, SourceRef, Status};
+use molframe_core::contract::{
+    Analysis, AnalysisPolicy, Coverage, Outcome, Provenance, Quality, SourceRef,
+};
 
 fn complete<T>(
     value: T,
@@ -19,14 +21,14 @@ fn complete<T>(
     let provenance = descriptor(algorithm)
         .with_parameter("frame_tolerance", float(options.frame_tolerance))
         .apply(Provenance::new(policy).with_source(SourceRef::Memory));
-    Ok(Analysis {
-        value,
-        status: Status::Complete,
-        coverage: Coverage::complete(frame_count),
-        warnings: Vec::new(),
-        assumptions: Vec::new(),
+    Ok(Analysis::from_parts(
+        Outcome::Determinate(value),
+        Quality::Complete,
+        Coverage::complete(frame_count),
+        Vec::new(),
+        Vec::new(),
         provenance,
-    })
+    ))
 }
 
 /// Computes governed base-pair or step parameters for two explicit frames.

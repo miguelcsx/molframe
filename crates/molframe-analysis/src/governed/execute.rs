@@ -2,8 +2,9 @@
 
 use super::{FrameKernelResult, GovernedAnalysisError, StructureKernel};
 use molframe_core::contract::{
-    Analysis, AnalysisPolicy, AssemblyChoice, Coverage, MissingPolicy, ModelChoice, ParameterValue,
-    Provenance, SourceRef, Status, SymmetryPolicy,
+    Analysis, AnalysisPolicy, AssemblyChoice, Coverage, Indeterminacy, MissingPolicy,
+    MissingPolicyError, ModelChoice, Outcome, ParameterValue, Provenance, Quality, SourceRef,
+    SymmetryPolicy, resolve_missing,
 };
 use molframe_core::index::ModelIndex;
 use molframe_core::structure::Structure;
@@ -18,7 +19,8 @@ pub struct GovernedStructureAnalysis<'a, K> {
     selected_atoms: Vec<usize>,
     policy: AnalysisPolicy,
     kernel: &'a K,
-    input_status: Status,
+    input_quality: Quality,
+    input_indeterminacy: Option<Indeterminacy>,
     input_warnings: Vec<molframe_core::diagnostic::Diagnostic>,
     input_assumptions: Vec<molframe_core::contract::Assumption>,
 }
@@ -42,26 +44,43 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
             return Err(GovernedAnalysisError::UnsupportedPolicyValue("symmetry"));
         }
         let resolution = template.resolve_altlocs(policy);
-        let selected_atoms = resolution.value.iter().map(|atom| atom as usize).collect();
-        let selected = if resolution.value.len() == u64::from(template.atom_count()) {
-            template.clone()
-        } else {
-            template
-                .materialize(&resolution.value)
-                .map_err(GovernedAnalysisError::InvalidStructure)?
-        };
-        let input_status = if resolution.coverage.ambiguous > 0 {
-            combine_status(resolution.status, Status::Ambiguous)
-        } else {
-            resolution.status
-        };
+        let (selected, selected_atoms, input_quality, input_indeterminacy) =
+            match resolution.value() {
+                None => (
+                    template.clone(),
+                    Vec::new(),
+                    Quality::Complete,
+                    resolution.indeterminacy().cloned(),
+                ),
+                Some(chosen) => {
+                    let atoms: Vec<usize> = chosen.iter().map(|atom| atom as usize).collect();
+                    let structure = if chosen.len() == u64::from(template.atom_count()) {
+                        template.clone()
+                    } else {
+                        template
+                            .materialize(chosen)
+                            .map_err(GovernedAnalysisError::InvalidStructure)?
+                    };
+                    let resolved = match resolution.quality() {
+                        Some(quality) => quality,
+                        None => Quality::Complete,
+                    };
+                    let quality = if resolution.coverage.ambiguous > 0 {
+                        resolved.worst(Quality::Ambiguous)
+                    } else {
+                        resolved
+                    };
+                    (structure, atoms, quality, None)
+                }
+            };
         Ok(Self {
             template: selected,
             source_atom_count: template.atom_count() as usize,
             selected_atoms,
             policy: policy.clone(),
             kernel,
-            input_status,
+            input_quality,
+            input_indeterminacy,
             input_warnings: resolution.warnings,
             input_assumptions: resolution.assumptions,
         })
@@ -70,7 +89,7 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
 
 impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
     type Output = Vec<K::Output>;
-    type Partial = Vec<(usize, FrameKernelResult<K::Output>)>;
+    type Partial = Vec<(usize, FrameRecord<K::Output>)>;
     type Error = GovernedAnalysisError<K::Error>;
 
     const NAME: &'static str = "governed-structure-kernel";
@@ -86,6 +105,11 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
         partial: &mut Self::Partial,
         context: &ExecutionContext,
     ) -> Result<(), Self::Error> {
+        if self.input_indeterminacy.is_some() {
+            // No atoms could be chosen under the policy: nothing is run, and the
+            // conclusion says why.
+            return Ok(());
+        }
         if timestep.positions.len() != self.source_atom_count {
             return Err(TrajectoryError::AtomCountMismatch {
                 expected: self.source_atom_count,
@@ -117,12 +141,12 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
         let frame = editor
             .commit()
             .map_err(GovernedAnalysisError::InvalidStructure)?;
-        let mut result = self
+        let result = self
             .kernel
             .analyse_mapped(&frame, &self.policy, &self.selected_atoms, context)
             .map_err(GovernedAnalysisError::Kernel)?;
-        enforce_missing_policy(&mut result, self.policy.missing_atoms)?;
-        partial.push((timestep.frame, result));
+        let record = apply_missing_policy(result, self.policy.missing_atoms)?;
+        partial.push((timestep.frame, record));
         Ok(())
     }
 
@@ -181,19 +205,24 @@ pub fn analyse_structure<K: StructureKernel>(
     }])
     .map_err(TrajectoryError::from)?;
     let result = analyse_trajectory(structure, &trajectory, policy, kernel, context)?;
-    let mut values = result.value;
-    if values.len() != 1 {
-        return Err(GovernedAnalysisError::MissingFrameOutput);
-    }
-    let value = values.remove(0);
-    Ok(Analysis {
-        value,
-        status: result.status,
-        coverage: result.coverage,
-        warnings: result.warnings,
-        assumptions: result.assumptions,
-        provenance: result.provenance,
-    })
+    let (outcome, quality, coverage, warnings, assumptions, provenance) = result.into_parts();
+    let outcome = match outcome {
+        Outcome::Determinate(mut values) => {
+            if values.len() != 1 {
+                return Err(GovernedAnalysisError::MissingFrameOutput);
+            }
+            Outcome::Determinate(values.remove(0))
+        }
+        Outcome::Indeterminate(reason) => Outcome::Indeterminate(reason),
+    };
+    Ok(Analysis::from_parts(
+        outcome,
+        quality,
+        coverage,
+        warnings,
+        assumptions,
+        provenance,
+    ))
 }
 
 /// Runs a structure kernel over every trajectory frame with fixed block order.
@@ -213,33 +242,35 @@ pub fn analyse_trajectory<K: StructureKernel>(
     run_analysis(trajectory, &analysis, context)
 }
 
-fn enforce_missing_policy<T, E>(
-    result: &mut FrameKernelResult<T>,
+/// One frame's answer after the missing-data policy has had its say.
+#[derive(Debug)]
+pub struct FrameRecord<T> {
+    outcome: Outcome<T>,
+    quality: Quality,
+    coverage: Coverage,
+    warnings: Vec<molframe_core::diagnostic::Diagnostic>,
+    assumptions: Vec<molframe_core::contract::Assumption>,
+}
+
+fn apply_missing_policy<T, E>(
+    result: FrameKernelResult<T>,
     policy: MissingPolicy,
-) -> Result<(), GovernedAnalysisError<E>> {
+) -> Result<FrameRecord<T>, GovernedAnalysisError<E>> {
     validate_coverage(result.coverage)?;
-    let incomplete = result.coverage.missing > 0 || result.coverage.ambiguous > 0;
-    if !incomplete {
-        return Ok(());
-    }
-    match policy {
-        MissingPolicy::Ignore => Ok(()),
-        MissingPolicy::Report => {
-            result.status = combine_status(result.status, Status::Partial);
-            Ok(())
-        }
-        MissingPolicy::Indeterminate => {
-            result.status = Status::Indeterminate;
-            Ok(())
-        }
-        MissingPolicy::Fail => Err(GovernedAnalysisError::MissingData {
-            missing: result.coverage.missing,
-            ambiguous: result.coverage.ambiguous,
-        }),
-        _ => Err(GovernedAnalysisError::UnsupportedPolicyValue(
-            "missing_atoms",
-        )),
-    }
+    let (outcome, quality) = resolve_missing(result.value, result.quality, result.coverage, policy)
+        .map_err(|error| match error {
+            MissingPolicyError::Fail { missing, ambiguous } => {
+                GovernedAnalysisError::MissingData { missing, ambiguous }
+            }
+            _ => GovernedAnalysisError::UnsupportedPolicyValue("missing_atoms"),
+        })?;
+    Ok(FrameRecord {
+        outcome,
+        quality,
+        coverage: result.coverage,
+        warnings: result.warnings,
+        assumptions: result.assumptions,
+    })
 }
 
 fn validate_coverage<E>(coverage: Coverage) -> Result<(), GovernedAnalysisError<E>> {
@@ -261,30 +292,49 @@ fn validate_coverage<E>(coverage: Coverage) -> Result<(), GovernedAnalysisError<
 
 fn combine_frames<K: StructureKernel>(
     analysis: &GovernedStructureAnalysis<'_, K>,
-    partial: Vec<(usize, FrameKernelResult<K::Output>)>,
+    partial: Vec<(usize, FrameRecord<K::Output>)>,
 ) -> Result<Analysis<Vec<K::Output>>, GovernedAnalysisError<K::Error>> {
     let frame_count =
         i64::try_from(partial.len()).map_err(|_| GovernedAnalysisError::CoverageOverflow)?;
-    let mut result = Analysis {
-        value: Vec::with_capacity(partial.len()),
-        status: analysis.input_status,
-        coverage: Coverage::default(),
-        warnings: analysis.input_warnings.clone(),
-        assumptions: analysis.input_assumptions.clone(),
-        provenance: analysis
-            .kernel
-            .descriptor()
-            .apply(Provenance::new(&analysis.policy).with_source(SourceRef::Memory))
-            .with_parameter("frame_count", ParameterValue::Integer(frame_count)),
-    };
-    for (_, frame) in partial {
-        result.status = combine_status(result.status, frame.status);
-        result.coverage = add_coverage(result.coverage, frame.coverage)?;
-        result.warnings.extend(frame.warnings);
-        result.assumptions.extend(frame.assumptions);
-        result.value.push(frame.value);
+    let provenance = analysis
+        .kernel
+        .descriptor()
+        .apply(Provenance::new(&analysis.policy).with_source(SourceRef::Memory))
+        .with_parameter("frame_count", ParameterValue::Integer(frame_count));
+    let mut quality = analysis.input_quality;
+    let mut coverage = Coverage::default();
+    let mut warnings = analysis.input_warnings.clone();
+    let mut assumptions = analysis.input_assumptions.clone();
+    let mut values = Vec::with_capacity(partial.len());
+    let mut refusal = analysis.input_indeterminacy.clone();
+    for (frame, record) in partial {
+        quality = quality.worst(record.quality);
+        coverage = add_coverage(coverage, record.coverage)?;
+        warnings.extend(record.warnings);
+        assumptions.extend(record.assumptions);
+        match record.outcome {
+            Outcome::Determinate(value) => values.push(value),
+            Outcome::Indeterminate(reason) => {
+                // One frame with no defensible answer leaves the series without one.
+                refusal.get_or_insert(Indeterminacy::Frame {
+                    frame,
+                    reason: Box::new(reason),
+                });
+            }
+        }
     }
-    Ok(result)
+    let outcome = match refusal {
+        Some(reason) => Outcome::Indeterminate(reason),
+        None => Outcome::Determinate(values),
+    };
+    Ok(Analysis::from_parts(
+        outcome,
+        quality,
+        coverage,
+        warnings,
+        assumptions,
+        provenance,
+    ))
 }
 
 fn add_coverage<E>(left: Coverage, right: Coverage) -> Result<Coverage, GovernedAnalysisError<E>> {
@@ -306,18 +356,6 @@ fn add_coverage<E>(left: Coverage, right: Coverage) -> Result<Coverage, Governed
             .checked_add(right.ambiguous)
             .ok_or(GovernedAnalysisError::CoverageOverflow)?,
     })
-}
-
-fn combine_status(left: Status, right: Status) -> Status {
-    if matches!(left, Status::Indeterminate) || matches!(right, Status::Indeterminate) {
-        Status::Indeterminate
-    } else if matches!(left, Status::Ambiguous) || matches!(right, Status::Ambiguous) {
-        Status::Ambiguous
-    } else if matches!(left, Status::Partial) || matches!(right, Status::Partial) {
-        Status::Partial
-    } else {
-        Status::Complete
-    }
 }
 
 #[cfg(test)]

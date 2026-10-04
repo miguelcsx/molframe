@@ -7,12 +7,13 @@
 //!
 //! Declining to answer is a result in its own right. A library that cannot
 //! return "no defensible number exists here" will always return a
-//! defensible-looking wrong one instead.
+//! defensible-looking wrong one instead. So an indeterminate analysis has no
+//! value to misread: its [`Outcome`] holds the reason in the value's place.
 
+use super::outcome::{Indeterminacy, Outcome, Quality};
 use super::policy::{AnalysisPolicy, Fingerprint, PolicyField};
 use super::provenance::Provenance;
 use crate::diagnostic::Diagnostic;
-use std::ops::Deref;
 
 /// How far an analysis got.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -27,7 +28,7 @@ pub enum Status {
     Ambiguous,
     /// No defensible single answer exists under this policy.
     ///
-    /// The value carried alongside this status is not meaningful.
+    /// An analysis in this state has no value: see [`Outcome::Indeterminate`].
     Indeterminate,
 }
 
@@ -91,21 +92,36 @@ impl Coverage {
     }
 }
 
-/// How much a decision could have changed the answer.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
+/// How much a decision changed the answer, where that is known.
+///
+/// An impact is a measurement or it is nothing. There is deliberately no
+/// "low", "moderate" or "high": such a label would be a property an author
+/// assigned, and presenting it beside measured values would lend it evidence it
+/// does not have. The way to learn an impact is to vary the decision and look,
+/// which is what an audit does and what [`MeasuredImpact`] records.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
 #[non_exhaustive]
-pub enum ImpactEstimate {
-    /// The decision could not have changed anything here.
-    None,
-    /// Unlikely to matter.
-    Low,
-    /// Could matter.
-    Moderate,
-    /// Likely to matter.
-    High,
-    /// Not estimated.
+pub enum Impact {
+    /// Not measured. The honest default: nothing has been varied.
     #[default]
-    Unknown,
+    Unmeasured,
+    /// The decision cannot change this result, for a structural reason (the
+    /// input has no alternate locations, say), not an estimated one.
+    Inert,
+    /// Measured by varying the decision across defensible alternatives.
+    Measured(MeasuredImpact),
+}
+
+/// The measured effect of one decision on one analysis.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct MeasuredImpact {
+    /// The distance used, such as `"jaccard-distance"` or `"relative-error"`.
+    pub metric: &'static str,
+    /// Mean distance between results that differ in this decision alone, in the
+    /// metric's own units.
+    pub change: f64,
+    /// How many pairs of results the measurement compared.
+    pub comparisons: u32,
 }
 
 /// Where a decision came from.
@@ -129,8 +145,8 @@ pub struct Assumption {
     pub value: Box<str>,
     /// Where the decision came from.
     pub source: AssumptionSource,
-    /// How much it could have mattered.
-    pub impact: ImpactEstimate,
+    /// How much it changed the answer, if that has been measured.
+    pub impact: Impact,
 }
 
 impl Assumption {
@@ -140,7 +156,7 @@ impl Assumption {
         field: PolicyField,
         value: impl Into<Box<str>>,
         source: AssumptionSource,
-        impact: ImpactEstimate,
+        impact: Impact,
     ) -> Self {
         Self {
             field,
@@ -150,24 +166,26 @@ impl Assumption {
         }
     }
 
-    /// Returns true when the caller did not choose this and it could matter.
+    /// Returns true when the caller did not choose this and it measurably
+    /// changed the answer by at least `threshold`, in the metric's units.
     ///
     /// These are the assumptions worth surfacing: a default the caller never saw
     /// that changed the answer is the failure this whole layer exists to expose.
+    /// An unmeasured impact is never material by this test; it is unknown.
     #[must_use]
-    pub fn is_silent_and_material(&self) -> bool {
+    pub fn is_silent_and_material(&self, threshold: f64) -> bool {
         self.source == AssumptionSource::ProfileDefault
-            && self.impact >= ImpactEstimate::Moderate
-            && self.impact != ImpactEstimate::Unknown
+            && matches!(self.impact, Impact::Measured(measured) if measured.change >= threshold)
     }
 }
 
-/// A value, and everything needed to judge it.
+/// An outcome, and everything needed to judge it.
 ///
-/// Dereferences to the value, so reading the answer costs one character and
-/// reading the rest is there when it matters. Ergonomics are load-bearing here:
-/// a contract that makes ordinary work painful gets bypassed, and a bypassed
-/// contract records nothing.
+/// The answer is behind [`Analysis::outcome`], [`Analysis::value`] or
+/// [`Analysis::into_result`], each of which says what happens when there is no
+/// answer. There is no `Deref` to the value: a contract that lets the value be
+/// read without asking whether it exists is a contract the indeterminate case
+/// can slip through.
 ///
 /// # Examples
 ///
@@ -177,16 +195,14 @@ impl Assumption {
 /// let policy = AnalysisPolicy::default();
 /// let radius = Analysis::complete(14.2_f64, Coverage::complete(1_960), &policy);
 ///
-/// assert_eq!(*radius, 14.2);
-/// assert_eq!(radius.status, Status::Complete);
+/// assert_eq!(radius.value(), Some(&14.2));
+/// assert_eq!(radius.status(), Status::Complete);
 /// assert_eq!(radius.coverage.fraction(), 1.0);
 /// ```
 #[derive(Clone, Debug)]
 pub struct Analysis<T> {
-    /// The answer.
-    pub value: T,
-    /// How far the analysis got.
-    pub status: Status,
+    outcome: Outcome<T>,
+    quality: Quality,
     /// How much of the intended data was used.
     pub coverage: Coverage,
     /// What the analysis found worth saying.
@@ -198,37 +214,164 @@ pub struct Analysis<T> {
 }
 
 impl<T> Analysis<T> {
+    /// An answer of the given quality.
+    #[must_use]
+    pub fn determinate(
+        value: T,
+        quality: Quality,
+        coverage: Coverage,
+        policy: &AnalysisPolicy,
+    ) -> Self {
+        Self::from_parts(
+            Outcome::Determinate(value),
+            quality,
+            coverage,
+            Vec::new(),
+            Vec::new(),
+            Provenance::new(policy),
+        )
+    }
+
     /// A complete result.
     #[must_use]
     pub fn complete(value: T, coverage: Coverage, policy: &AnalysisPolicy) -> Self {
-        Self {
-            value,
-            status: Status::Complete,
-            coverage,
-            warnings: Vec::new(),
-            assumptions: Vec::new(),
-            provenance: Provenance::new(policy),
-        }
+        Self::determinate(value, Quality::Complete, coverage, policy)
     }
 
     /// A result computed over less than it intended.
     #[must_use]
     pub fn partial(value: T, coverage: Coverage, policy: &AnalysisPolicy) -> Self {
+        Self::determinate(value, Quality::Partial, coverage, policy)
+    }
+
+    /// A result that is one of several defensible ones.
+    #[must_use]
+    pub fn ambiguous(value: T, coverage: Coverage, policy: &AnalysisPolicy) -> Self {
+        Self::determinate(value, Quality::Ambiguous, coverage, policy)
+    }
+
+    /// A refusal to answer, with the reason.
+    ///
+    /// There is no value to supply and none to read back.
+    #[must_use]
+    pub fn indeterminate(
+        reason: Indeterminacy,
+        coverage: Coverage,
+        policy: &AnalysisPolicy,
+    ) -> Self {
+        Self::from_parts(
+            Outcome::Indeterminate(reason),
+            Quality::default(),
+            coverage,
+            Vec::new(),
+            Vec::new(),
+            Provenance::new(policy),
+        )
+    }
+
+    /// Assembles an analysis from its parts.
+    ///
+    /// `quality` qualifies a determinate outcome and is ignored for an
+    /// indeterminate one, which has no answer to qualify.
+    #[must_use]
+    pub const fn from_parts(
+        outcome: Outcome<T>,
+        quality: Quality,
+        coverage: Coverage,
+        warnings: Vec<Diagnostic>,
+        assumptions: Vec<Assumption>,
+        provenance: Provenance,
+    ) -> Self {
         Self {
-            status: Status::Partial,
-            ..Self::complete(value, coverage, policy)
+            outcome,
+            quality,
+            coverage,
+            warnings,
+            assumptions,
+            provenance,
         }
     }
 
-    /// A refusal to answer.
-    ///
-    /// The value is whatever stands in for "nothing"; the status is the result.
+    /// Takes the analysis apart, for code that builds a new one from an old one.
     #[must_use]
-    pub fn indeterminate(value: T, coverage: Coverage, policy: &AnalysisPolicy) -> Self {
-        Self {
-            status: Status::Indeterminate,
-            ..Self::complete(value, coverage, policy)
+    pub fn into_parts(
+        self,
+    ) -> (
+        Outcome<T>,
+        Quality,
+        Coverage,
+        Vec<Diagnostic>,
+        Vec<Assumption>,
+        Provenance,
+    ) {
+        (
+            self.outcome,
+            self.quality,
+            self.coverage,
+            self.warnings,
+            self.assumptions,
+            self.provenance,
+        )
+    }
+
+    /// The answer or the reason there is none.
+    #[must_use]
+    pub const fn outcome(&self) -> &Outcome<T> {
+        &self.outcome
+    }
+
+    /// Consumes the analysis, keeping only the outcome.
+    #[must_use]
+    pub fn into_outcome(self) -> Outcome<T> {
+        self.outcome
+    }
+
+    /// The answer, if there is one.
+    #[must_use]
+    pub const fn value(&self) -> Option<&T> {
+        self.outcome.value()
+    }
+
+    /// The reason there is no answer, if there is none.
+    #[must_use]
+    pub const fn indeterminacy(&self) -> Option<&Indeterminacy> {
+        self.outcome.indeterminacy()
+    }
+
+    /// Consumes the analysis: the answer, or the reason it is missing.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`Indeterminacy`] when no defensible answer exists.
+    pub fn into_result(self) -> Result<T, Indeterminacy> {
+        self.outcome.into_result()
+    }
+
+    /// How far the analysis got: the quality of its answer, or `Indeterminate`.
+    #[must_use]
+    pub const fn status(&self) -> Status {
+        match self.outcome {
+            Outcome::Determinate(_) => match self.quality {
+                Quality::Complete => Status::Complete,
+                Quality::Partial => Status::Partial,
+                Quality::Ambiguous => Status::Ambiguous,
+            },
+            Outcome::Indeterminate(_) => Status::Indeterminate,
         }
+    }
+
+    /// The quality of the answer, when there is one.
+    #[must_use]
+    pub const fn quality(&self) -> Option<Quality> {
+        match self.outcome {
+            Outcome::Determinate(_) => Some(self.quality),
+            Outcome::Indeterminate(_) => None,
+        }
+    }
+
+    /// Lowers the quality to `quality` if that is worse; no effect on a refusal.
+    pub fn degrade(&mut self, quality: Quality) {
+        self.quality = self.quality.worst(quality);
     }
 
     /// Attaches a finding.
@@ -251,31 +394,24 @@ impl<T> Analysis<T> {
         self.provenance.policy_fingerprint
     }
 
-    /// The decisions the caller never made that could have changed the answer.
-    pub fn silent_assumptions(&self) -> impl Iterator<Item = &Assumption> {
+    /// The decisions the caller never made that measurably changed the answer by
+    /// at least `threshold`.
+    pub fn silent_assumptions(&self, threshold: f64) -> impl Iterator<Item = &Assumption> {
         self.assumptions
             .iter()
-            .filter(|assumption| assumption.is_silent_and_material())
+            .filter(move |assumption| assumption.is_silent_and_material(threshold))
     }
 
-    /// Applies a function to the value, keeping everything else.
+    /// Applies a function to the answer, keeping everything else.
     pub fn map<U>(self, transform: impl FnOnce(T) -> U) -> Analysis<U> {
         Analysis {
-            value: transform(self.value),
-            status: self.status,
+            outcome: self.outcome.map(transform),
+            quality: self.quality,
             coverage: self.coverage,
             warnings: self.warnings,
             assumptions: self.assumptions,
             provenance: self.provenance,
         }
-    }
-}
-
-impl<T> Deref for Analysis<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.value
     }
 }
 

@@ -11,6 +11,7 @@ mod fixture;
 mod data;
 mod diff;
 mod disorder;
+mod disorder_checked;
 mod edit;
 mod extensions;
 #[cfg(test)]

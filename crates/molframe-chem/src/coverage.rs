@@ -30,8 +30,15 @@ pub fn component_coverage(
     provider: &dyn ComponentProvider,
     policy: &AnalysisPolicy,
 ) -> Result<ComponentCoverage, Diagnostic> {
-    let selected = structure.resolve_altlocs(policy);
-    let mut findings = selected.warnings;
+    let resolved = structure.resolve_altlocs(policy);
+    let Some(selected) = resolved.value() else {
+        // No conformation could be chosen, so there is nothing to measure.
+        return Err(match resolved.warnings.into_iter().next() {
+            Some(finding) => finding,
+            None => Diagnostic::new(molframe_core::Code::E3001),
+        });
+    };
+    let mut findings = resolved.warnings.clone();
     let mut unresolved = BTreeSet::new();
     let mut coverage = Coverage::default();
     for residue in structure.data().residues() {
@@ -45,7 +52,7 @@ pub fn component_coverage(
         let mut observed = BTreeMap::<&str, u32>::new();
         for atom in residue
             .atoms()
-            .filter(|atom| selected.value.contains(atom.index().get()))
+            .filter(|atom| selected.contains(atom.index().get()))
         {
             if atom.component_name() != Some(component_id) {
                 continue;

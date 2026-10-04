@@ -38,7 +38,7 @@ diagnostic_from!(RotamerError, |error| match error {
     RotamerError::InvalidProfile
     | RotamerError::InvalidOptions
     | RotamerError::InvalidPath { .. } => Code::E5101,
-    RotamerError::Provider(inner) => inner.code(),
+    RotamerError::Provider(inner) | RotamerError::Resolution(inner) => inner.code(),
     RotamerError::Reference(inner) => Diagnostic::from(inner).code(),
 });
 diagnostic_from!(RealSpaceCorrelationError, |error| match error {

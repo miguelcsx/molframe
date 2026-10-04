@@ -189,8 +189,8 @@ fn bench_gw_007(group: &mut criterion::BenchmarkGroup<'_, criterion::measurement
                 structure
                     .engine()
                     .resolve_altlocs(&AnalysisPolicy::default().with_altloc(altloc))
-                    .value
-                    .len()
+                    .value()
+                    .map(molframe_core::AtomSelection::len)
             })
             .collect();
             black_box(counts);

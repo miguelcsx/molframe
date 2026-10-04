@@ -80,8 +80,7 @@ pub fn chirality_outliers(
     options: ChiralityOptions,
 ) -> Result<ChiralityReport, Diagnostic> {
     validate_options(options)?;
-    let selected = structure.resolve_altlocs(policy);
-    let mut findings = selected.warnings;
+    let (selected, mut findings) = structure.resolved_atoms(policy)?;
     let mut flags = Vec::new();
     let mut components: BTreeMap<Box<str>, Arc<Component>> = BTreeMap::new();
     let mut unresolved = BTreeSet::new();
@@ -106,7 +105,7 @@ pub fn chirality_outliers(
         let coverage = assess_residue(
             residue,
             &component,
-            &selected.value,
+            &selected,
             options,
             &mut flags,
             &mut findings,

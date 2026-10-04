@@ -19,7 +19,10 @@ fn governed_score_records_algorithm_parameters_and_coverage() {
     ) else {
         panic!("identical coordinates are comparable");
     };
-    assert_eq!(result.value.to_bits(), 1.0_f64.to_bits());
+    assert_eq!(
+        result.value().map(|value| value.to_bits()),
+        Some(1.0_f64.to_bits())
+    );
     assert_eq!(result.coverage.used, 2);
     assert_eq!(
         result
@@ -47,9 +50,12 @@ fn governed_contact_metrics_record_their_input_domain() {
     else {
         panic!("contact pairs fit public coverage");
     };
-    assert_eq!(cad.value.score.to_bits(), 1.0_f64.to_bits());
+    assert_eq!(
+        cad.value().map(|value| value.score.to_bits()),
+        Some(1.0_f64.to_bits())
+    );
     assert_eq!(cad.coverage.used, 1);
-    assert_eq!(similarity.value.shared, 1);
+    assert_eq!(similarity.value().map(|value| value.shared), Some(1));
     assert_eq!(similarity.coverage.intended, 2);
 }
 
@@ -75,6 +81,6 @@ fn explicit_alignment_policy_drives_the_workflow_fit() {
     else {
         panic!("explicit mapping should fit");
     };
-    assert!(result.value.0.rmsd < 1.0e-6);
-    assert!(result.value.1.passed);
+    assert!(result.value().is_some_and(|value| value.0.rmsd < 1.0e-6));
+    assert!(result.value().is_some_and(|value| value.1.passed));
 }

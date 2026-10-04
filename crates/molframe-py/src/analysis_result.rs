@@ -56,7 +56,9 @@ impl PyCoverage {
 #[derive(Debug)]
 #[pyclass(name = "Analysis", frozen, skip_from_py_object, module = "molframe")]
 pub(crate) struct PyAnalysis {
-    value: Py<PyAny>,
+    /// `None` exactly when the analysis is indeterminate: there is no value to hold.
+    value: Option<Py<PyAny>>,
+    reason: Option<String>,
     status: &'static str,
     coverage: PyCoverage,
     warnings: Vec<String>,
@@ -66,12 +68,13 @@ pub(crate) struct PyAnalysis {
 }
 
 impl PyAnalysis {
-    /// Wraps a native analysis whose value has already become a Python object.
-    pub(crate) fn new<T>(analysis: &molframe::Analysis<T>, value: Py<PyAny>) -> Self {
+    /// Wraps a native analysis whose value, if it has one, is already a Python object.
+    pub(crate) fn new<T>(analysis: &molframe::Analysis<T>, value: Option<Py<PyAny>>) -> Self {
         let coverage = analysis.coverage;
         Self {
             value,
-            status: match analysis.status {
+            reason: analysis.indeterminacy().map(ToString::to_string),
+            status: match analysis.status() {
                 molframe::Status::Complete => "complete",
                 molframe::Status::Partial => "partial",
                 molframe::Status::Ambiguous => "ambiguous",
@@ -103,7 +106,7 @@ impl PyAnalysis {
 
 impl PyAnalysis {
     /// The same envelope around a converted value.
-    pub(crate) fn with_value(mut self, value: Py<PyAny>) -> Self {
+    pub(crate) fn with_value(mut self, value: Option<Py<PyAny>>) -> Self {
         self.value = value;
         self
     }
@@ -111,10 +114,31 @@ impl PyAnalysis {
 
 #[pymethods]
 impl PyAnalysis {
-    /// The answer. Not meaningful when `status` is `"indeterminate"`.
+    /// The answer.
+    ///
+    /// Raises `IndeterminateError` when `status` is `"indeterminate"`: there is
+    /// no defensible answer under the policy, so there is nothing to return.
     #[getter]
-    fn value(&self, py: Python<'_>) -> Py<PyAny> {
-        self.value.clone_ref(py)
+    fn value(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match &self.value {
+            Some(value) => Ok(value.clone_ref(py)),
+            None => Err(crate::error::indeterminate(match self.reason.as_deref() {
+                Some(reason) => reason,
+                None => "no defensible answer",
+            })),
+        }
+    }
+
+    /// True when there is an answer; false when the policy leaves none.
+    #[getter]
+    const fn is_determinate(&self) -> bool {
+        self.value.is_some()
+    }
+
+    /// Why there is no answer, or `None` when there is one.
+    #[getter]
+    fn indeterminacy(&self) -> Option<&str> {
+        self.reason.as_deref()
     }
 
     /// `complete`, `partial`, `ambiguous` or `indeterminate`.
@@ -164,3 +188,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyAnalysis>()?;
     module.add_class::<PyCoverage>()
 }
+
+#[cfg(test)]
+#[path = "analysis_result_tests.rs"]
+mod tests;

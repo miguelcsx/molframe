@@ -8,7 +8,7 @@ use crate::{
 };
 use molframe_core::AtomSelection;
 use molframe_core::contract::{
-    Analysis, AnalysisPolicy, Coverage, ParameterValue, Provenance, SourceRef, Status,
+    Analysis, AnalysisPolicy, Coverage, Outcome, ParameterValue, Provenance, Quality, SourceRef,
 };
 
 fn complete<T>(
@@ -19,14 +19,14 @@ fn complete<T>(
 ) -> Result<Analysis<T>, StandaloneAnalysisError<DynamicsError>> {
     let observations =
         u32::try_from(observations).map_err(|_| StandaloneAnalysisError::CoverageOverflow)?;
-    Ok(Analysis {
-        value,
-        status: Status::Complete,
-        coverage: Coverage::complete(observations),
-        warnings: Vec::new(),
-        assumptions: Vec::new(),
-        provenance: descriptor.apply(Provenance::new(policy).with_source(SourceRef::Memory)),
-    })
+    Ok(Analysis::from_parts(
+        Outcome::Determinate(value),
+        Quality::Complete,
+        Coverage::complete(observations),
+        Vec::new(),
+        Vec::new(),
+        descriptor.apply(Provenance::new(policy).with_source(SourceRef::Memory)),
+    ))
 }
 
 /// Computes water survival and residence with explicit stable water IDs.

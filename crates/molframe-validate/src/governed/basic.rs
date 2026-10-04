@@ -8,7 +8,7 @@ use crate::{
 };
 use molframe_analysis::{AnalysisDescriptor, FrameKernelResult, StructureKernel, structure_kernel};
 use molframe_chem::RadiusSet;
-use molframe_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Status};
+use molframe_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Quality};
 use molframe_core::{Diagnostic, ExecutionContext, Structure};
 use molframe_spatial::{SpatialBackend, SpatialError};
 use std::convert::Infallible;
@@ -128,9 +128,9 @@ pub fn ligand_geometry_kernel(
             Ok(FrameKernelResult::governed(
                 value,
                 if missing == 0 {
-                    Status::Complete
+                    Quality::Complete
                 } else {
-                    Status::Partial
+                    Quality::Partial
                 },
                 Coverage {
                     intended,
@@ -211,9 +211,9 @@ pub fn altloc_occupancy_sums_kernel(
             Ok(FrameKernelResult::governed(
                 value,
                 if missing == 0 {
-                    Status::Complete
+                    Quality::Complete
                 } else {
-                    Status::Partial
+                    Quality::Partial
                 },
                 Coverage {
                     intended,
@@ -248,9 +248,9 @@ pub fn ccd_missing_atoms_kernel(
             Ok(FrameKernelResult::governed(
                 value,
                 if missing == 0 && ambiguous == 0 {
-                    Status::Complete
+                    Quality::Complete
                 } else {
-                    Status::Partial
+                    Quality::Partial
                 },
                 Coverage {
                     intended,

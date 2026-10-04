@@ -35,7 +35,7 @@ fn sampled_map_coverage_records_omitted_positions() {
     assert_eq!(result.coverage.intended, 3);
     assert_eq!(result.coverage.used, 2);
     assert_eq!(result.coverage.missing, 1);
-    assert_eq!(result.status, Status::Partial);
+    assert_eq!(result.status(), molframe_core::contract::Status::Partial);
 }
 
 #[test]

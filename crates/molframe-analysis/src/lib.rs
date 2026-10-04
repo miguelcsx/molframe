@@ -122,7 +122,7 @@ pub use pair_distribution::{
 };
 pub use paired_bases::{BasePair, BasePairError, BasePairOptions, base_pairs};
 pub use policy_execution::{
-    AnalysisDescriptor, FrameKernelResult, GovernedAnalysisError, GovernedNativeError,
+    AnalysisDescriptor, FrameKernelResult, FrameRecord, GovernedAnalysisError, GovernedNativeError,
     GovernedStructureAnalysis, MappedClosureStructureKernel, PhysicalKernelError,
     StandaloneAnalysisError, StructureKernel, analyse_structure, analyse_trajectory,
     base_pairs_kernel, cation_pi_kernel, centre_of_mass_radial_distribution_kernel,

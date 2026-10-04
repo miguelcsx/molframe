@@ -50,7 +50,7 @@ pub fn ccd_missing_atoms(
     provider: &dyn ComponentProvider,
     policy: &AnalysisPolicy,
 ) -> Result<CcdCompletenessReport, Diagnostic> {
-    let selected = structure.resolve_altlocs(policy).value;
+    let (selected, _) = structure.resolved_atoms(policy)?;
     let mut report = CcdCompletenessReport {
         intended: 0,
         assessed: 0,

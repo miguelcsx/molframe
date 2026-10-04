@@ -168,8 +168,8 @@ fn gw_007_altloc_policies_produce_recorded_atom_counts() {
         structure
             .engine()
             .resolve_altlocs(&AnalysisPolicy::default().with_altloc(altloc))
-            .value
-            .len()
+            .value()
+            .map_or(0, molframe_core::AtomSelection::len)
     })
     .collect();
     assert_eq!(counts, vec![3, 2, 2, 2, 2]);

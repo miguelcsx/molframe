@@ -158,6 +158,9 @@ pub enum RotamerError {
     /// Component provider failed.
     #[error("component provider failed: {0:?}")]
     Provider(Diagnostic),
+    /// The alternate-conformation rule selected no consistent atoms.
+    #[error("no consistent conformation could be selected: {0:?}")]
+    Resolution(Diagnostic),
     /// Empirical reference lookup or observation failed.
     #[error(transparent)]
     Reference(#[from] ReferenceError),
@@ -181,8 +184,9 @@ pub fn rotamer_outliers(
     options: RotamerOptions,
 ) -> Result<RotamerReport, RotamerError> {
     validate_options(options)?;
-    let selected = structure.resolve_altlocs(policy);
-    let mut findings = selected.warnings;
+    let (selected, mut findings) = structure
+        .resolved_atoms(policy)
+        .map_err(RotamerError::Resolution)?;
     let mut flags = Vec::new();
     let mut cache: BTreeMap<Box<str>, Arc<Component>> = BTreeMap::new();
     let mut unresolved = BTreeSet::new();
@@ -210,7 +214,7 @@ pub fn rotamer_outliers(
             .or_insert_with(|| component.clone());
         for definition in definitions {
             validate_path(&component, definition)?;
-            let Some(angle) = torsion(residue, &selected.value, definition) else {
+            let Some(angle) = torsion(residue, &selected, definition) else {
                 continue;
             };
             let assessment = references.assess_scalar(&definition.distribution, angle)?;

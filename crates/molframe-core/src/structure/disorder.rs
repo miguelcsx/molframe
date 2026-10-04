@@ -4,7 +4,7 @@
 //! policy into an atom selection while leaving the stored rows untouched.
 
 use super::{AtomRef, ResidueRef, Structure};
-use crate::contract::{AltlocPolicy, Analysis, AnalysisPolicy, Coverage, Status};
+use crate::contract::{AltlocPolicy, Analysis, AnalysisPolicy, Coverage, Indeterminacy, Quality};
 use crate::diagnostic::{Code, Diagnostic};
 use crate::hashing::IdentityBuildHasher;
 use crate::selection::AtomSelection;
@@ -89,7 +89,7 @@ impl Structure {
             Ok(used) if used <= total => used,
             _ => {
                 return Analysis::indeterminate(
-                    selection,
+                    Indeterminacy::UnresolvedConformations,
                     Coverage {
                         intended: total,
                         used: 0,
@@ -118,7 +118,7 @@ impl Structure {
         );
 
         if matches!(&policy.altloc, AltlocPolicy::KeepAll) && has_altlocs {
-            result.status = Status::Ambiguous;
+            result.degrade(Quality::Ambiguous);
         }
 
         if policy.altloc.is_hazardous() && has_altlocs {

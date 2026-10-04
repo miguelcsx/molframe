@@ -3,7 +3,7 @@ use crate::numeric::usize_to_f32;
 use crate::policy_execution::{AnalysisDescriptor, FrameKernelResult, structure_kernel};
 use molframe_core::ExecutionContext;
 use molframe_core::contract::{
-    AnalysisPolicy, AssemblyChoice, Coverage, MissingPolicy, ParameterValue, Status,
+    AnalysisPolicy, AssemblyChoice, Coverage, MissingPolicy, ParameterValue, Quality, Status,
 };
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
@@ -83,7 +83,13 @@ fn a_structure_is_the_one_frame_case_of_the_same_adapter() {
     ) else {
         panic!("trajectory execution should succeed");
     };
-    assert_eq!(single.value.to_bits(), series.value[0].to_bits());
+    assert_eq!(
+        single.value().map(|value| value.to_bits()),
+        series
+            .value()
+            .and_then(|values| values.first())
+            .map(|value| value.to_bits())
+    );
     assert_eq!(single.coverage, series.coverage);
     assert_eq!(
         single.provenance.fingerprint(),
@@ -117,11 +123,12 @@ fn serial_and_parallel_series_are_bit_identical_with_the_same_provenance() {
                 panic!("valid deterministic execution");
             };
             (
-                result
-                    .value
-                    .iter()
-                    .map(|value| value.to_bits())
-                    .collect::<Vec<_>>(),
+                result.value().map(|values| {
+                    values
+                        .iter()
+                        .map(|value| value.to_bits())
+                        .collect::<Vec<_>>()
+                }),
                 result.provenance.fingerprint(),
                 result.coverage,
             )
@@ -163,7 +170,7 @@ fn missing_data_policy_is_enforced_without_discarding_coverage() {
         |_structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok::<_, Infallible>(FrameKernelResult::governed(
                 3_u8,
-                Status::Complete,
+                Quality::Complete,
                 Coverage {
                     intended: 2,
                     used: 1,
@@ -178,7 +185,7 @@ fn missing_data_policy_is_enforced_without_discarding_coverage() {
     else {
         panic!("report policy computes a partial value");
     };
-    assert_eq!(result.status, Status::Partial);
+    assert_eq!(result.status(), Status::Partial);
     assert_eq!(result.coverage.missing, 1);
 
     let fail = AnalysisPolicy::default().with_missing_atoms(MissingPolicy::Fail);
@@ -193,7 +200,7 @@ fn inconsistent_kernel_coverage_is_rejected_before_publication() {
         |_structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok::<_, Infallible>(FrameKernelResult::governed(
                 0_u8,
-                Status::Complete,
+                Quality::Complete,
                 Coverage {
                     intended: 1,
                     used: 1,
@@ -212,4 +219,36 @@ fn inconsistent_kernel_coverage_is_rejected_before_publication() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn an_indeterminate_policy_leaves_no_value_and_says_what_was_missing() {
+    let structure = structure();
+    let kernel = structure_kernel(
+        AnalysisDescriptor::new("incomplete", "1"),
+        |_structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
+            Ok::<_, Infallible>(FrameKernelResult::governed(
+                3_u8,
+                Quality::Complete,
+                Coverage {
+                    intended: 2,
+                    used: 1,
+                    missing: 1,
+                    ambiguous: 0,
+                },
+            ))
+        },
+    );
+    let policy = AnalysisPolicy::default().with_missing_atoms(MissingPolicy::Indeterminate);
+    let Ok(result) = analyse_structure(&structure, &policy, &kernel, &ExecutionContext::default())
+    else {
+        panic!("an indeterminate policy is a result, not an error");
+    };
+    assert_eq!(result.status(), Status::Indeterminate);
+    assert_eq!(result.value(), None);
+    assert_eq!(result.coverage.missing, 1);
+    assert!(matches!(
+        result.indeterminacy(),
+        Some(molframe_core::contract::Indeterminacy::Frame { frame: 0, .. })
+    ));
 }

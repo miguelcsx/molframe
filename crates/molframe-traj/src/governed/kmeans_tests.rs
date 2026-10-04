@@ -18,5 +18,8 @@ fn borrowed_kmeans_preserves_governed_coverage() {
         panic!("valid governed borrowed k-means");
     };
     assert_eq!(result.coverage.used, 4);
-    assert_eq!(result.value.labels, vec![0, 0, 1, 1]);
+    assert_eq!(
+        result.value().map(|value| value.labels.clone()),
+        Some(vec![0, 0, 1, 1])
+    );
 }

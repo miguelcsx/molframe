@@ -35,8 +35,11 @@ where
             molframe::Diagnostic::from(inner)
         }))
     })?;
-    let envelope = PyAnalysis::new(&analysis, py.None());
-    let value = convert(py, analysis.value)?;
+    let envelope = PyAnalysis::new(&analysis, None);
+    let value = match analysis.into_result() {
+        Ok(value) => Some(convert(py, value)?),
+        Err(_) => None,
+    };
     Ok(envelope.with_value(value))
 }
 
