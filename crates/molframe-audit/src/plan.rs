@@ -2,7 +2,7 @@ use crate::PolicyValue;
 use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,
     EquivalencePolicy, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace, PeriodicPolicy,
-    PolicyField, Precision, RadiiSet, SymmetryPolicy, Tolerance,
+    PolicyField, PolicyParseError, Precision, RadiiSet, SymmetryPolicy, Tolerance,
 };
 use std::fmt;
 
@@ -45,6 +45,52 @@ impl PolicyDimension {
     dimension_constructor!(vdw_radii, VdwRadii, VdwRadii, RadiiSet);
     dimension_constructor!(contact_def, ContactDef, ContactDef, ContactDefinition);
     dimension_constructor!(float_tolerance, FloatTolerance, FloatTolerance, Tolerance);
+
+    /// Varies `field` over alternatives written in the vocabulary a written policy uses.
+    ///
+    /// Each word is read by the same parser as the policy itself, so `"first"`,
+    /// `"biological:1"` and `"crystal:8.0"` mean here what they mean there.
+    /// `float_tolerance` alternatives are written `"relative,absolute"`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the policy parse error for the first word the field's vocabulary
+    /// does not contain.
+    pub fn named(field: PolicyField, words: &[&str]) -> Result<Self, PolicyParseError> {
+        fn all<T: std::str::FromStr<Err = PolicyParseError>>(
+            words: &[&str],
+            wrap: fn(T) -> PolicyValue,
+        ) -> Result<Vec<PolicyValue>, PolicyParseError> {
+            words.iter().map(|word| word.parse().map(wrap)).collect()
+        }
+        let values = match field {
+            PolicyField::Assembly => all(words, PolicyValue::Assembly)?,
+            PolicyField::Model => all(words, PolicyValue::Model)?,
+            PolicyField::Altloc => all(words, PolicyValue::Altloc)?,
+            PolicyField::Identifiers => all(words, PolicyValue::Identifiers)?,
+            PolicyField::MissingAtoms => all(words, PolicyValue::MissingAtoms)?,
+            PolicyField::Hydrogens => all(words, PolicyValue::Hydrogens)?,
+            PolicyField::AtomEquivalence => all(words, PolicyValue::AtomEquivalence)?,
+            PolicyField::Symmetry => all(words, PolicyValue::Symmetry)?,
+            PolicyField::Alignment => all(words, PolicyValue::Alignment)?,
+            PolicyField::Precision => all(words, PolicyValue::Precision)?,
+            PolicyField::Periodic => all(words, PolicyValue::Periodic)?,
+            PolicyField::VdwRadii => all(words, PolicyValue::VdwRadii)?,
+            PolicyField::ContactDef => all(words, PolicyValue::ContactDef)?,
+            PolicyField::FloatTolerance => words
+                .iter()
+                .map(|word| tolerance(word).map(PolicyValue::FloatTolerance))
+                .collect::<Result<_, _>>()?,
+            _ => {
+                return Err(PolicyParseError::new(
+                    "policy field",
+                    field.name(),
+                    "a field this version of the audit knows",
+                ));
+            }
+        };
+        Ok(Self { field, values })
+    }
 
     /// The policy field varied by this dimension.
     #[must_use]
@@ -167,6 +213,21 @@ impl PolicySpace {
             policies,
             coordinates,
         })
+    }
+}
+
+fn tolerance(word: &str) -> Result<Tolerance, PolicyParseError> {
+    let refuse = || PolicyParseError::new("float_tolerance", word, "<relative>,<absolute>");
+    let (relative, absolute) = word.split_once(',').ok_or_else(refuse)?;
+    let parse = |text: &str| {
+        text.trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite() && *v >= 0.0)
+    };
+    match (parse(relative), parse(absolute)) {
+        (Some(relative), Some(absolute)) => Ok(Tolerance { relative, absolute }),
+        _ => Err(refuse()),
     }
 }
 

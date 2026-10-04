@@ -1,5 +1,5 @@
 use super::{PlanError, PolicyDimension, PolicySpace};
-use molframe_core::contract::{AnalysisPolicy, MissingPolicy, ModelChoice, Namespace};
+use molframe_core::contract::{AnalysisPolicy, MissingPolicy, ModelChoice, Namespace, PolicyField};
 
 #[test]
 fn cost_is_available_before_expansion() {
@@ -59,4 +59,22 @@ fn empty_duplicate_and_oversized_spaces_are_refused() {
         oversized,
         Err(PlanError::LimitExceeded { cost: 2, limit: 1 })
     ));
+}
+
+#[test]
+fn alternatives_written_as_words_mean_what_a_written_policy_means() {
+    let Ok(dimension) = PolicyDimension::named(
+        PolicyField::Assembly,
+        &["asymmetric-unit", "biological:1", "crystal:8"],
+    ) else {
+        panic!("a valid vocabulary");
+    };
+    assert_eq!(dimension.len(), 3);
+    let Ok(tolerances) = PolicyDimension::named(PolicyField::FloatTolerance, &["1e-6,1e-9"]) else {
+        panic!("a valid tolerance");
+    };
+    assert_eq!(tolerances.len(), 1);
+    assert!(PolicyDimension::named(PolicyField::Altloc, &["first", "nonsense"]).is_err());
+    assert!(PolicyDimension::named(PolicyField::FloatTolerance, &["1e-6"]).is_err());
+    assert!(PolicyDimension::named(PolicyField::FloatTolerance, &["-1,0"]).is_err());
 }
