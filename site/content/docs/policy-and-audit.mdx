@@ -1,0 +1,187 @@
+---
+title: Decisions, outcomes and audits
+description: What an analysis policy decides, what a result can and cannot hold, and how to measure how far an answer moves when a defensible decision changes.
+---
+
+A structure does not say how it should be read. Which conformer of a disordered
+side chain, which arrangement of the chains, whether the hydrogens count, what
+makes two atoms touch: each is a decision, and each can change the answer. MolFrame
+makes the decisions explicit (`AnalysisPolicy`), applies the ones an analysis
+reads, records which, and can measure how far the answer moves when one changes.
+
+## The policy
+
+`AnalysisPolicy` names fourteen decisions. Unnamed ones keep the default profile's
+choice.
+
+| Decision | Words | Applied by the governed executor |
+|---|---|---|
+| `assembly` | `asymmetric_unit`, `biological:<id>`, `crystal:<radius>` | yes: builds the system |
+| `symmetry` | `none`, `crystallographic`, `biological_assembly` | yes: must agree with `assembly` |
+| `model` | `first`, `index:<n>`, `all`, `ensemble` | yes |
+| `altloc` | `conformer_consistent`, `first`, `label:<x>`, `keep_all`, … | yes, over the whole system |
+| `missing_atoms` | `ignore`, `report`, `indeterminate`, `fail` | yes |
+| `hydrogens` | `explicit_only`, `exclude`, `include_inferred` | `exclude` yes; `include_inferred` is refused |
+| `vdw_radii`, `contact_def` | `bondi`…; `distance:<tol>`, `surface:<probe>` | by analyses that read them (`contacts_by_definition`) |
+| `periodic` | `none`, `minimum_image`, `pbc` | by the physical analyses |
+| `identifiers`, `atom_equivalence`, `alignment`, `precision`, `float_tolerance` | | by the analyses that read them |
+
+Every analysis records the decisions it applied in its provenance
+(`analysis.policy_reads`). A decision that is set but never read cannot change a
+result; the audit refuses to vary one.
+
+### What the system is
+
+`assembly` chooses the arrangement of the contents, and the executor builds it:
+
+- `asymmetric_unit` is the input as deposited.
+- `biological:<id>` is the chain instances of an assembly the file defines, each
+  placed by its operator. A missing assembly is `E6002`.
+- `crystal:<radius>` is the unit plus every chain that touches it from a
+  neighbouring cell. A chain is included whole, under its symmetry operation and
+  lattice translation, and so is the inverse placement that touches it from the
+  other side. An improper operation (a mirror) is refused, since it would turn a
+  chiral molecule into its mirror image (`E6015`); a file with no symmetry
+  operators is `E6016`.
+
+`symmetry` does not add copies of its own; it must not contradict `assembly`. A
+biological assembly goes with `none` or `biological_assembly`, crystal contacts
+with `none` or `crystallographic`, the asymmetric unit with `none`. Anything else
+describes no single system and is `E6004` naming both fields.
+
+Alternate conformations and hydrogens are resolved over the system, so a rule that
+picks one conformer picks it in every copy. Per-frame coordinates drive the copies:
+a trajectory of the unit moves its assembly. An analysis that pairs atoms across two
+structures (native contacts) refuses to run over copies.
+
+```python
+import molframe
+from molframe import analysis
+
+structure = molframe.read("1crn.cif")
+alone = analysis.contacts(structure, 3.5)
+in_crystal = analysis.contacts(
+    structure, 3.5, policy=molframe.AnalysisPolicy(assembly="crystal:4.0")
+)
+in_crystal.coverage.intended      # more atoms than the unit has
+in_crystal.assumptions            # ['Assembly = crystal contacts within 4 A: 3 chain instances ...']
+```
+
+## What a result holds
+
+An `Analysis` is an outcome and what is needed to judge it. When no defensible
+answer exists under the policy (`missing_atoms="indeterminate"` and atoms are
+missing, or no conformer can be chosen), there is no value to misread:
+
+```python
+result = analysis.contacts(structure, 4.0, policy=policy)
+result.status              # 'complete' | 'partial' | 'ambiguous' | 'indeterminate'
+result.is_determinate      # False when there is no answer
+result.indeterminacy       # why, as text
+result.value               # raises IndeterminateError when there is no answer
+```
+
+In Rust, `Analysis<T>` holds an `Outcome<T>`: `Determinate(value)` or
+`Indeterminate(reason)`. There is no `Deref` to the value; `value()`, `outcome()` and
+`into_result()` each say what happens when there is none. `Quality` (complete,
+partial, ambiguous) qualifies an answer that exists. A trajectory in which one frame
+has no answer has none as a whole, and the reason names the frame.
+
+An assumption records a decision made on the caller's behalf, and its impact is a
+measurement or nothing:
+
+- `Unmeasured` (the default): nothing has been varied.
+- `Inert`: the decision cannot change this result, for a structural reason.
+- `Measured`: the mean distance between results that differ in this decision alone,
+  the metric it is in, and how many pairs were compared.
+
+There is no "low", "moderate" or "high". Such a label would be a property an author
+assigned, and printing it beside measured values would lend it evidence it lacks.
+
+## Auditing a decision
+
+An audit runs an analysis under every defensible combination of some decisions and
+asks how far the answer moved.
+
+```python
+from molframe import audit
+
+space = (
+    audit.PolicySpace()
+    .vary("hydrogens", ["explicit_only", "exclude"],
+          rationale="the deposited entry has none, the prepared file has them added",
+          evidence="PDBbind v2020 protein files")
+    .vary("assembly", ["asymmetric_unit", "biological:1"])
+)
+plan = space.plan()                       # the whole product; contradictions refused
+
+result = audit.run(
+    plan,
+    lambda policy: analysis.contacts(structure, 4.0, policy=policy),
+    metric="set",
+    project=lambda table: list(zip(table.first.tolist(), table.second.tolist())),
+)
+result.effects          # per decision: mean_change, comparisons, share
+result.interactions     # per pair: the share that depends on the pair jointly
+result.shapley          # per decision: Shapley share of the variation (sums to 1)
+result.by_class         # the same over structural / interpretive / algorithmic / numerical
+result.agreement_with_first
+result.indeterminate_fraction
+```
+
+**What "far" means depends on the answer.** `metric` is one of `set` (one minus the
+Jaccard index), `absolute` and `relative` (error of a number), `rms` and
+`correlation` (vectors), `ranking` (Kendall tau for partial rankings), `graph`,
+`graph-nodes` and `graph-edges`, and `flip` (whether a categorical conclusion
+changed: zero or one, however large the change in the score behind it). A score that
+moves from 0.64 to 0.61 has changed little; the same score crossing the line
+between "acceptable" and "incorrect" has changed its conclusion, and `flip`
+measures that.
+
+**The variation is split, not only swept.** For a plan that is the whole product,
+the variation among runs is divided into what each decision explains alone, what each
+pair explains beyond the sum of their separate effects, and what is left to
+combinations of three or more (the distance-based analysis of variance, exact for a
+number). A decision that matters only together with another shows as an interaction
+instead of two small effects. The shares are fractions of the total variation, so
+they compare across analyses with different units. For a Jaccard distance, which is
+not Euclidean, a share can come out slightly negative; it is reported as computed.
+
+**Shapley shares need no whole product.** Hold a set of decisions fixed: the
+fraction of variation that removes is defined for any set of runs. Averaging each
+decision's marginal gain over the orders it could be fixed in gives shares that sum
+to one. For additive decisions they equal the main effects; for a pure interaction
+they split it equally. This is what carries the attribution when a space forbids
+some combinations.
+
+**Decisions are classed.** A choice of conformer and a choice of floating-point
+tolerance are not the same doubt. Structural decisions say which structures exist
+(`model`, `periodic`); interpretive ones how the structure is read (`assembly`,
+`symmetry`, `altloc`, `identifiers`, `missing_atoms`, `hydrogens`,
+`atom_equivalence`); algorithmic ones which method answers (`contact_def`,
+`vdw_radii`, `alignment`); numerical ones the width and tolerance (`precision`,
+`float_tolerance`). `result.by_class` reads the share of each.
+
+**Not every combination is a question.** A strict plan refuses a combination that
+contradicts itself or that the space forbids (`space.forbid(("hydrogens", "exclude"),
+("assembly", "biological:1"))`), rather than dropping it and leaving a design the
+additive split cannot describe. `space.plan(constrained=True)` drops such
+combinations on purpose, counts them (`plan.skipped`), and says the plan is not the
+whole product (`plan.balanced`).
+
+**An audit does not earn stability it did not test.** If the plan varies a decision
+the analysis never applied, `audit.run` raises `PolicyError` (`E6103`) naming it after
+the first run: a sweep over it would come back perfectly stable and mean nothing.
+Universes in which the analysis has no answer are reported as a fraction
+(`indeterminate_fraction`) and withhold the decomposition, since a variance split needs
+an answer in every cell.
+
+An audit says how much the answer depends on a decision. It does not say which
+choice is right.
+
+## Content digests
+
+`Fingerprint` is a fast 64-bit hash: it tells one policy or cache entry from another
+and nothing more. Re-execution verifies that the bytes are exactly those a result was
+computed from, and that rests on `ContentDigest`, SHA-256, a different type so neither
+is mistaken for the other. A provenance record carries `input_sha256`.

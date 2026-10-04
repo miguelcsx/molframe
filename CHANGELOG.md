@@ -6,6 +6,42 @@ change the public API.
 
 ## Unreleased
 
+### Changed
+
+- **Breaking.** An indeterminate analysis carries no value. `Analysis<T>` holds an
+  `Outcome<T>`, `Determinate(value)` or `Indeterminate(reason)`; the `Deref` and the
+  public `value` and `status` fields are gone, replaced by `value()`, `outcome()`,
+  `into_result()` and `status()`. `Quality` qualifies an answer that exists. In
+  Python, `Analysis.value` raises `IndeterminateError` when there is none, with
+  `is_determinate` and `indeterminacy` to ask first.
+- **Breaking.** `ImpactEstimate` (none, low, moderate, high) is replaced by `Impact`:
+  unmeasured, inert, or measured by an audit. The assigned labels claimed evidence
+  nothing supplied.
+- **Breaking.** Re-execution verifies input bytes with SHA-256 (`ContentDigest`,
+  `Provenance::input_digest`, serialised as `input_sha256`) instead of the 64-bit
+  `Fingerprint`, which stays as the fast identity of policies and cache entries.
+
+### Added (policy engine and audit)
+
+- The governed executor applies `assembly` (a biological assembly, or crystal
+  contacts within a radius as placed whole chains) and `symmetry`, resolves
+  alternate conformations and hydrogens over that system, drives copies from
+  per-frame coordinates, and applies `hydrogens = exclude`. Contradictory or
+  impossible systems are classified errors; `include_inferred` is refused.
+  Descriptors declare the policy fields they read and provenance records them.
+- `contacts_by_definition` (Rust `definition_contacts_kernel`): contacts under the
+  policy's `contact_def` and `vdw_radii`.
+- `molframe-audit` measures any outcome (`OutcomeMetric`: set overlap, scalar error,
+  vector difference, Kendall tau, graph difference, conclusion flip), splits the
+  variation into effects and pairwise interactions, attributes it by Shapley shares
+  and by class of uncertainty, supports forbidden pairs and constrained plans,
+  refuses decisions the analysis never read, and reports universes with no answer
+  as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
+  decisions.
+- Python physical analyses: `leaflets`, `radial_distribution`,
+  `coordination_numbers`, `linear_density`, `density_map`, `pore_profile`,
+  `surface_contacts`.
+
 ### Added
 
 - Secondary query macros, typed Rust/Python selectors, the public Python

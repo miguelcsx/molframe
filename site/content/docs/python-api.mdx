@@ -56,7 +56,7 @@ See [Selecting atoms](/docs/selections) and [Reading bytes and editing structure
 | `molframe.formats` | `write`, `to_mmcif`, `to_pdb`, `to_bcif` |
 | `molframe.interop` | `graph`, `Graph`, `coordinates`, `CoordinateTensor`, `Dataset`, `DatasetSplit`, `ManifestEntry`, `write_atoms_parquet`, `write_atoms_ipc` |
 | `molframe.sel` | Category, column, and spatial query constructors including `within()` |
-| `AnalysisPolicy` | Named analysis decisions (`identifiers`, `altloc`, `hydrogens`, `symmetry`, …); accepted by `select` and the governed analyses |
+| `AnalysisPolicy` | All fourteen analysis decisions (`assembly`, `model`, `altloc`, `hydrogens`, `symmetry`, `contact_def`, …); accepted by `select` and the governed analyses. See [Decisions, outcomes and audits](/docs/policy-and-audit) |
 | `Analysis` / `Coverage` | A value with its `status`, `coverage`, `warnings`, `assumptions` and `provenance` |
 | `Table` | Read-only named array columns returned inside an `Analysis`; Arrow C-stream export |
 | `ContactTable` | `len()` and Arrow C-stream export through `__arrow_c_stream__()` |

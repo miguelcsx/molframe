@@ -12,7 +12,11 @@ const FNV1A64_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
 /// FNV-1a's specified 64-bit prime multiplier.
 const FNV1A64_PRIME: u64 = 0x0000_0100_0000_01b3;
 
-/// A stable content fingerprint.
+/// A fast, stable 64-bit fingerprint of a policy, a record or a cache entry.
+///
+/// It is not collision resistant and must not be used to claim that two blocks of bytes are
+/// identical; [`ContentDigest`](crate::contract::ContentDigest) is SHA-256 and is what
+/// verification rests on.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Fingerprint(u64);
 
