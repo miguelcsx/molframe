@@ -1,4 +1,3 @@
-use crate::design::decompose;
 use crate::metric::jaccard_distance;
 use crate::{AuditPlan, AuditReport, AuditRun, DimensionSensitivity, SensitiveItem};
 use std::collections::{BTreeMap, BTreeSet};
@@ -59,9 +58,8 @@ where
             })
         })
         .collect();
-    let decomposition = decompose(&plan.fields, &plan.coordinates, |first, second| {
-        jaccard_distance(&sets[first], &sets[second])
-    });
+    let decomposition =
+        plan.decompose(|first, second| jaccard_distance(&sets[first], &sets[second]));
     let dimensions = plan
         .fields
         .iter()

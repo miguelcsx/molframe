@@ -158,3 +158,19 @@ fn a_dimension_carries_its_class_and_the_case_for_varying_it() {
     assert!(decision.rationale.contains("modelled"));
     assert!(decision.evidence.contains("PDBbind"));
 }
+
+#[test]
+fn a_plan_that_dropped_every_run_of_a_level_still_knows_it_is_not_the_whole_product() {
+    use molframe_core::contract::SymmetryPolicy;
+    let space = PolicySpace::new(AnalysisPolicy::default()).vary(PolicyDimension::symmetry([
+        SymmetryPolicy::None,
+        SymmetryPolicy::Crystallographic,
+    ]));
+    let Ok(plan) = space.plan_constrained() else {
+        panic!("the default unit survives with no symmetry");
+    };
+    assert_eq!(plan.cost(), 1);
+    assert_eq!(plan.skipped(), 1);
+    // The runs alone show one level of one decision, which looks whole.
+    assert!(!plan.decompose(|_, _| 0.0).balanced);
+}

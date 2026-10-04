@@ -60,38 +60,10 @@ impl PolicyDimension {
     /// Returns the policy parse error for the first word the field's vocabulary
     /// does not contain.
     pub fn named(field: PolicyField, words: &[&str]) -> Result<Self, PolicyParseError> {
-        fn all<T: std::str::FromStr<Err = PolicyParseError>>(
-            words: &[&str],
-            wrap: fn(T) -> PolicyValue,
-        ) -> Result<Vec<PolicyValue>, PolicyParseError> {
-            words.iter().map(|word| word.parse().map(wrap)).collect()
-        }
-        let values = match field {
-            PolicyField::Assembly => all(words, PolicyValue::Assembly)?,
-            PolicyField::Model => all(words, PolicyValue::Model)?,
-            PolicyField::Altloc => all(words, PolicyValue::Altloc)?,
-            PolicyField::Identifiers => all(words, PolicyValue::Identifiers)?,
-            PolicyField::MissingAtoms => all(words, PolicyValue::MissingAtoms)?,
-            PolicyField::Hydrogens => all(words, PolicyValue::Hydrogens)?,
-            PolicyField::AtomEquivalence => all(words, PolicyValue::AtomEquivalence)?,
-            PolicyField::Symmetry => all(words, PolicyValue::Symmetry)?,
-            PolicyField::Alignment => all(words, PolicyValue::Alignment)?,
-            PolicyField::Precision => all(words, PolicyValue::Precision)?,
-            PolicyField::Periodic => all(words, PolicyValue::Periodic)?,
-            PolicyField::VdwRadii => all(words, PolicyValue::VdwRadii)?,
-            PolicyField::ContactDef => all(words, PolicyValue::ContactDef)?,
-            PolicyField::FloatTolerance => words
-                .iter()
-                .map(|word| tolerance(word).map(PolicyValue::FloatTolerance))
-                .collect::<Result<_, _>>()?,
-            _ => {
-                return Err(PolicyParseError::new(
-                    "policy field",
-                    field.name(),
-                    "a field this version of the audit knows",
-                ));
-            }
-        };
+        let values = words
+            .iter()
+            .map(|word| PolicyValue::named(field, word))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             field,
             values,
@@ -308,21 +280,6 @@ impl PolicySpace {
     }
 }
 
-fn tolerance(word: &str) -> Result<Tolerance, PolicyParseError> {
-    let refuse = || PolicyParseError::new("float_tolerance", word, "<relative>,<absolute>");
-    let (relative, absolute) = word.split_once(',').ok_or_else(refuse)?;
-    let parse = |text: &str| {
-        text.trim()
-            .parse::<f64>()
-            .ok()
-            .filter(|v| v.is_finite() && *v >= 0.0)
-    };
-    match (parse(relative), parse(absolute)) {
-        (Some(relative), Some(absolute)) => Ok(Tolerance { relative, absolute }),
-        _ => Err(refuse()),
-    }
-}
-
 /// Whether the policy holds `value` for the field it names.
 fn holds(policy: &AnalysisPolicy, value: &PolicyValue) -> bool {
     let mut probe = policy.clone();
@@ -392,6 +349,16 @@ impl AuditPlan {
     #[must_use]
     pub fn cost(&self) -> usize {
         self.policies.len()
+    }
+
+    /// Decomposes the variation among this plan's runs, given the distance between two of them.
+    ///
+    /// The result is balanced only if the plan is the whole product of the alternatives it
+    /// was asked to vary, which the runs alone cannot show.
+    pub fn decompose(&self, distance: impl FnMut(usize, usize) -> f64) -> crate::Decomposition {
+        let mut decomposition = crate::decompose(&self.fields, &self.coordinates, distance);
+        decomposition.balanced = decomposition.balanced && self.balanced;
+        decomposition
     }
 
     /// Whether the plan is the whole product of the alternatives.

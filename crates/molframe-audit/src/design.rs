@@ -229,7 +229,12 @@ fn accumulate(
     sums
 }
 
-/// Decomposes the variation among the runs of a full-factorial plan.
+/// Decomposes the variation among the runs of a plan.
+///
+/// `balanced` in the result says only whether the levels that remain in the runs form a
+/// whole product; a plan that dropped every run of some level looks whole from the runs
+/// alone, so a caller holding the plan sets it from the plan (see
+/// [`AuditPlan::decompose`](crate::AuditPlan::decompose)).
 ///
 /// `fields` names the varied decisions; `coordinates[run]` gives each run's
 /// level in each of them, as the plan lays them out. `distance(i, j)` is the

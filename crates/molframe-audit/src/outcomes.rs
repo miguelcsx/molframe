@@ -6,7 +6,7 @@
 //! differ in one decision only, and how the variation splits among decisions and
 //! their interactions.
 
-use crate::design::{Decomposition, decompose};
+use crate::design::Decomposition;
 use crate::metric::OutcomeMetric;
 use crate::{AuditPlan, AuditRun, PlanError};
 use molframe_core::contract::{
@@ -106,7 +106,7 @@ where
     }
     let distance =
         |first: usize, second: usize| metric.distance(&runs[first].result, &runs[second].result);
-    let decomposition = decompose(plan.fields(), plan.coordinates(), distance);
+    let decomposition = plan.decompose(distance);
     let from_first = (0..runs.len())
         .map(|run| metric.distance(&runs[0].result, &runs[run].result))
         .collect();
@@ -268,7 +268,7 @@ where
     let (decomposition, from_first) = if indeterminate.is_empty() {
         let values: Vec<&R::Value> = runs.iter().filter_map(|run| run.result.answer()).collect();
         let distance = |first: usize, second: usize| metric.distance(values[first], values[second]);
-        let split = decompose(plan.fields(), plan.coordinates(), distance);
+        let split = plan.decompose(distance);
         let from_first: Vec<f64> = (0..values.len())
             .map(|run| metric.distance(values[0], values[run]))
             .collect();
