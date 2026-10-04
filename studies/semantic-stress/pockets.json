@@ -1,0 +1,3377 @@
+{
+ "plan": {
+  "universes": 24,
+  "decisions": [
+   {
+    "field": "hydrogens",
+    "uncertainty": "interpretive",
+    "rationale": "prepared protein files carry added hydrogens; deposited entries do not",
+    "evidence": "PDBbind v2020 protein files are written by X-Tool and are about half hydrogen"
+   },
+   {
+    "field": "vdw_radii",
+    "uncertainty": "algorithmic",
+    "rationale": "four radius sets ship with the library; none is claimed to be correct",
+    "evidence": "molframe-chem radius tables"
+   },
+   {
+    "field": "contact_def",
+    "uncertainty": "algorithmic",
+    "rationale": "no slack, a quarter angstrom, and the library's own default of half",
+    "evidence": "ContactDefinition::default"
+   }
+  ]
+ },
+ "tool_cutoff": 4.0,
+ "summary": {
+  "complexes_in_corpus": 60,
+  "refused_by_molframe": 1,
+  "refusal_codes": [
+   "MOLFRAME-E3009"
+  ],
+  "complexes": 59,
+  "pocket_changes_under_some_universe": 1.0,
+  "mean_distinct_pockets": 11.915254237288135,
+  "mean_fraction_of_pocket_residues_sensitive": 0.6828700580558201,
+  "mean_pairwise_jaccard_distance": 0.2567613951796763,
+  "max_jaccard_distance": 0.9473684210526316,
+  "entries_where_hydrogens_alone_change_the_pocket": 1.0,
+  "mean_shapley": {
+   "hydrogens": 0.18980979627665898,
+   "vdw_radii": 0.3500980439324864,
+   "contact_def": 0.4600921597908543
+  },
+  "mean_by_class": {
+   "interpretive": 0.19879482578180296,
+   "algorithmic": 0.8012051742181968
+  },
+  "tools": {
+   "biopython": {
+    "default_equals_a_universe": 0.06779661016949153,
+    "mean_nearest_universe_jaccard": 0.8849429626028281,
+    "mean_jaccard_to_first_universe": 0.5242176911549667
+   },
+   "biotite": {
+    "default_equals_a_universe": 0.06779661016949153,
+    "mean_nearest_universe_jaccard": 0.8849429626028281,
+    "mean_jaccard_to_first_universe": 0.5242176911549667
+   },
+   "gemmi": {
+    "default_equals_a_universe": 0.06779661016949153,
+    "mean_nearest_universe_jaccard": 0.8849429626028281,
+    "mean_jaccard_to_first_universe": 0.5242176911549667
+   }
+  }
+ },
+ "entries": [
+  {
+   "id": "1bgq",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 7008,
+   "ligand_atoms": 42,
+   "universes": 24,
+   "distinct_pockets": 11,
+   "union_residues": 15,
+   "invariant_residues": 7,
+   "sensitive_residues": 8,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.19423955673955684,
+   "max_distance": 0.5333333333333333,
+   "effects": {
+    "hydrogens": 0.13631507381507382,
+    "vdw_radii": 0.11005907672574339,
+    "contact_def": 0.18716491841491836
+   },
+   "shapley": {
+    "hydrogens": 0.24112827939603887,
+    "vdw_radii": 0.2287296696119508,
+    "contact_def": 0.5301420509920094
+   },
+   "by_class": {
+    "interpretive": 0.24216081335188616,
+    "algorithmic": 0.7578391866481129
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.056810030535227485,
+    "hydrogensxcontact_def": 0.0062570747401935675,
+    "vdw_radiixcontact_def": 0.09596868190902867
+   },
+   "higher_order": 0.006195203735084309,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 1.0
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 1.0
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 1.0
+    }
+   }
+  },
+  {
+   "id": "1c1u",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 4901,
+   "ligand_atoms": 34,
+   "universes": 24,
+   "distinct_pockets": 14,
+   "union_residues": 18,
+   "invariant_residues": 4,
+   "sensitive_residues": 14,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.3652127932099159,
+   "max_distance": 0.7777777777777778,
+   "effects": {
+    "hydrogens": 0.18406593406593405,
+    "vdw_radii": 0.29482615469135076,
+    "contact_def": 0.3551208765363177
+   },
+   "shapley": {
+    "hydrogens": 0.11600393994589867,
+    "vdw_radii": 0.3908217415809556,
+    "contact_def": 0.49317431847314563
+   },
+   "by_class": {
+    "interpretive": 0.12294845564087872,
+    "algorithmic": 0.8770515443591212
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.039117560531117306,
+    "hydrogensxcontact_def": 0.05792617629955937,
+    "vdw_radiixcontact_def": 0.12997577605402844
+   },
+   "higher_order": 0.04166709416988024,
+   "tools": {
+    "biopython": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.33333333333333326,
+     "nearest_universe_jaccard": 0.8095238095238095
+    },
+    "biotite": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.33333333333333326,
+     "nearest_universe_jaccard": 0.8095238095238095
+    },
+    "gemmi": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.33333333333333326,
+     "nearest_universe_jaccard": 0.8095238095238095
+    }
+   }
+  },
+  {
+   "id": "1c5q",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 3455,
+   "ligand_atoms": 20,
+   "universes": 24,
+   "distinct_pockets": 13,
+   "union_residues": 12,
+   "invariant_residues": 3,
+   "sensitive_residues": 9,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.3156859746533659,
+   "max_distance": 0.75,
+   "effects": {
+    "hydrogens": 0.17934704184704184,
+    "vdw_radii": 0.2202751723585057,
+    "contact_def": 0.3233796296296296
+   },
+   "shapley": {
+    "hydrogens": 0.14800152468896366,
+    "vdw_radii": 0.33501499067635254,
+    "contact_def": 0.5169834846346838
+   },
+   "by_class": {
+    "interpretive": 0.15345703325203816,
+    "algorithmic": 0.8465429667479618
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.02437792850099874,
+    "hydrogensxcontact_def": 0.0757739977906794,
+    "vdw_radiixcontact_def": 0.20689764706246475
+   },
+   "higher_order": 0.03273305137844762,
+   "tools": {
+    "biopython": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.2941176470588236,
+     "nearest_universe_jaccard": 0.7058823529411765
+    },
+    "biotite": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.2941176470588236,
+     "nearest_universe_jaccard": 0.7058823529411765
+    },
+    "gemmi": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.2941176470588236,
+     "nearest_universe_jaccard": 0.7058823529411765
+    }
+   }
+  },
+  {
+   "id": "1c5s",
+   "refused": "MOLFRAME-E3009",
+   "message": "occupancy outside the zero-to-one range"
+  },
+  {
+   "id": "1gjc",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 4068,
+   "ligand_atoms": 40,
+   "universes": 24,
+   "distinct_pockets": 12,
+   "union_residues": 17,
+   "invariant_residues": 5,
+   "sensitive_residues": 12,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.2653516338378871,
+   "max_distance": 0.7058823529411764,
+   "effects": {
+    "hydrogens": 0.1420127666451196,
+    "vdw_radii": 0.21077312982950236,
+    "contact_def": 0.2691851653248712
+   },
+   "shapley": {
+    "hydrogens": 0.11797082032147918,
+    "vdw_radii": 0.3771083416290245,
+    "contact_def": 0.5049208380494958
+   },
+   "by_class": {
+    "interpretive": 0.12757346013009369,
+    "algorithmic": 0.872426539869906
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.045271767918335676,
+    "hydrogensxcontact_def": 0.043139037128934216,
+    "vdw_radiixcontact_def": 0.15243166497343708
+   },
+   "higher_order": 0.05761583885168764,
+   "tools": {
+    "biopython": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.85
+    },
+    "biotite": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.85
+    },
+    "gemmi": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.85
+    }
+   }
+  },
+  {
+   "id": "1km3",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 6870,
+   "ligand_atoms": 33,
+   "universes": 24,
+   "distinct_pockets": 10,
+   "union_residues": 17,
+   "invariant_residues": 7,
+   "sensitive_residues": 10,
+   "agreement_with_first": 0.20833333333333334,
+   "mean_distance": 0.21377063840299176,
+   "max_distance": 0.5882352941176471,
+   "effects": {
+    "hydrogens": 0.16871067385773267,
+    "vdw_radii": 0.13889192688212296,
+    "contact_def": 0.20145473399149869
+   },
+   "shapley": {
+    "hydrogens": 0.2113176195380017,
+    "vdw_radii": 0.32580121359123027,
+    "contact_def": 0.46288116687076797
+   },
+   "by_class": {
+    "interpretive": 0.2167624526947332,
+    "algorithmic": 0.7832375473052668
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.028577705564540458,
+    "hydrogensxcontact_def": 0.03796030922663105,
+    "vdw_radiixcontact_def": 0.09158682668047936
+   },
+   "higher_order": 0.03266899894038977,
+   "tools": {
+    "biopython": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.44999999999999996,
+     "nearest_universe_jaccard": 0.85
+    },
+    "biotite": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.44999999999999996,
+     "nearest_universe_jaccard": 0.85
+    },
+    "gemmi": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.44999999999999996,
+     "nearest_universe_jaccard": 0.85
+    }
+   }
+  },
+  {
+   "id": "1nfy",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 4585,
+   "ligand_atoms": 49,
+   "universes": 24,
+   "distinct_pockets": 13,
+   "union_residues": 19,
+   "invariant_residues": 5,
+   "sensitive_residues": 14,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.2564916561336842,
+   "max_distance": 0.736842105263158,
+   "effects": {
+    "hydrogens": 0.13915671531770604,
+    "vdw_radii": 0.20617647793860377,
+    "contact_def": 0.256044508753487
+   },
+   "shapley": {
+    "hydrogens": 0.13001120056691712,
+    "vdw_radii": 0.40186082982815186,
+    "contact_def": 0.46812796960493075
+   },
+   "by_class": {
+    "interpretive": 0.1369032283752593,
+    "algorithmic": 0.8630967716247405
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.04631664784597821,
+    "hydrogensxcontact_def": 0.059783239176384485,
+    "vdw_radiixcontact_def": 0.2394998119676689
+   },
+   "higher_order": 0.04135216685005294,
+   "tools": {
+    "biopython": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.95
+    },
+    "biotite": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.95
+    },
+    "gemmi": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.95
+    }
+   }
+  },
+  {
+   "id": "1pph",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 3432,
+   "ligand_atoms": 58,
+   "universes": 24,
+   "distinct_pockets": 10,
+   "union_residues": 15,
+   "invariant_residues": 5,
+   "sensitive_residues": 10,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.25279742399307614,
+   "max_distance": 0.6666666666666667,
+   "effects": {
+    "hydrogens": 0.1843915343915344,
+    "vdw_radii": 0.18825803825803822,
+    "contact_def": 0.2414529914529914
+   },
+   "shapley": {
+    "hydrogens": 0.24007403337590547,
+    "vdw_radii": 0.3275890388467271,
+    "contact_def": 0.43233692777736743
+   },
+   "by_class": {
+    "interpretive": 0.24625582430660564,
+    "algorithmic": 0.7537441756933944
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.09578716060172542,
+    "hydrogensxcontact_def": 0.0651707219961375,
+    "vdw_radiixcontact_def": 0.21205792292327663
+   },
+   "higher_order": 0.037090745584200335,
+   "tools": {
+    "biopython": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "biotite": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "gemmi": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.8333333333333334
+    }
+   }
+  },
+  {
+   "id": "1qyg",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 6837,
+   "ligand_atoms": 41,
+   "universes": 24,
+   "distinct_pockets": 14,
+   "union_residues": 15,
+   "invariant_residues": 4,
+   "sensitive_residues": 11,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.30548809081417816,
+   "max_distance": 0.7333333333333334,
+   "effects": {
+    "hydrogens": 0.18813593813593812,
+    "vdw_radii": 0.22171709463376127,
+    "contact_def": 0.30371121933621936
+   },
+   "shapley": {
+    "hydrogens": 0.16200734328930202,
+    "vdw_radii": 0.32128392925956495,
+    "contact_def": 0.5167087274511329
+   },
+   "by_class": {
+    "interpretive": 0.1717444326484272,
+    "algorithmic": 0.8282555673515728
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.054371739508195904,
+    "hydrogensxcontact_def": 0.055563483926500984,
+    "vdw_radiixcontact_def": 0.15868585873849023
+   },
+   "higher_order": 0.058422536154751015,
+   "tools": {
+    "biopython": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.47058823529411764,
+     "nearest_universe_jaccard": 0.8823529411764706
+    },
+    "biotite": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.47058823529411764,
+     "nearest_universe_jaccard": 0.8823529411764706
+    },
+    "gemmi": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.47058823529411764,
+     "nearest_universe_jaccard": 0.8823529411764706
+    }
+   }
+  },
+  {
+   "id": "1ssq",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 23876,
+   "ligand_atoms": 15,
+   "universes": 24,
+   "distinct_pockets": 6,
+   "union_residues": 10,
+   "invariant_residues": 5,
+   "sensitive_residues": 5,
+   "agreement_with_first": 0.5833333333333334,
+   "mean_distance": 0.18289912583390835,
+   "max_distance": 0.5,
+   "effects": {
+    "hydrogens": 0.1812169312169312,
+    "vdw_radii": 0.1232253086419753,
+    "contact_def": 0.15162037037037035
+   },
+   "shapley": {
+    "hydrogens": 0.3710184113273972,
+    "vdw_radii": 0.26921203891652,
+    "contact_def": 0.35976954975608255
+   },
+   "by_class": {
+    "interpretive": 0.38172136309344257,
+    "algorithmic": 0.6182786369065573
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.12117028055270102,
+    "hydrogensxcontact_def": 0.11155256910094805,
+    "vdw_radiixcontact_def": 0.12516736621649555
+   },
+   "higher_order": 0.06421771059627301,
+   "tools": {
+    "biopython": {
+     "size": 11,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.8181818181818182,
+     "nearest_universe_jaccard": 0.9090909090909091
+    },
+    "biotite": {
+     "size": 11,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.8181818181818182,
+     "nearest_universe_jaccard": 0.9090909090909091
+    },
+    "gemmi": {
+     "size": 11,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.8181818181818182,
+     "nearest_universe_jaccard": 0.9090909090909091
+    }
+   }
+  },
+  {
+   "id": "1uto",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 3443,
+   "ligand_atoms": 21,
+   "universes": 24,
+   "distinct_pockets": 13,
+   "union_residues": 13,
+   "invariant_residues": 2,
+   "sensitive_residues": 11,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.41596640074900926,
+   "max_distance": 0.8461538461538461,
+   "effects": {
+    "hydrogens": 0.3077311577311577,
+    "vdw_radii": 0.28390097556764227,
+    "contact_def": 0.4173271173271173
+   },
+   "shapley": {
+    "hydrogens": 0.18392481915066394,
+    "vdw_radii": 0.31569902231137237,
+    "contact_def": 0.5003761585379635
+   },
+   "by_class": {
+    "interpretive": 0.1918855669785769,
+    "algorithmic": 0.8081144330214229
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.039000170854859025,
+    "hydrogensxcontact_def": 0.08010230088933432,
+    "vdw_radiixcontact_def": 0.18125386719590447
+   },
+   "higher_order": 0.04776448696747815,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.2666666666666666,
+     "nearest_universe_jaccard": 0.8666666666666667
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.2666666666666666,
+     "nearest_universe_jaccard": 0.8666666666666667
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.2666666666666666,
+     "nearest_universe_jaccard": 0.8666666666666667
+    }
+   }
+  },
+  {
+   "id": "1v2s",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 3341,
+   "ligand_atoms": 17,
+   "universes": 24,
+   "distinct_pockets": 11,
+   "union_residues": 12,
+   "invariant_residues": 3,
+   "sensitive_residues": 9,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.3114765669113499,
+   "max_distance": 0.75,
+   "effects": {
+    "hydrogens": 0.23041426166426163,
+    "vdw_radii": 0.23489057239057237,
+    "contact_def": 0.29095117845117846
+   },
+   "shapley": {
+    "hydrogens": 0.2524152538463548,
+    "vdw_radii": 0.3329649764236717,
+    "contact_def": 0.4146197697299734
+   },
+   "by_class": {
+    "interpretive": 0.26737056717657576,
+    "algorithmic": 0.7326294328234242
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.08966719731078336,
+    "hydrogensxcontact_def": 0.08597503651265324,
+    "vdw_radiixcontact_def": 0.11417144010574849
+   },
+   "higher_order": 0.08973187998132459,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4666666666666667,
+     "nearest_universe_jaccard": 0.8
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4666666666666667,
+     "nearest_universe_jaccard": 0.8
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4666666666666667,
+     "nearest_universe_jaccard": 0.8
+    }
+   }
+  },
+  {
+   "id": "1w3k",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 5022,
+   "ligand_atoms": 43,
+   "universes": 24,
+   "distinct_pockets": 9,
+   "union_residues": 15,
+   "invariant_residues": 9,
+   "sensitive_residues": 6,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.12851508394986652,
+   "max_distance": 0.4,
+   "effects": {
+    "hydrogens": 0.09572649572649572,
+    "vdw_radii": 0.09748677248677245,
+    "contact_def": 0.1111471861471861
+   },
+   "shapley": {
+    "hydrogens": 0.2661056305871971,
+    "vdw_radii": 0.34741188788973676,
+    "contact_def": 0.3864824815230652
+   },
+   "by_class": {
+    "interpretive": 0.27298967350521475,
+    "algorithmic": 0.7270103264947843
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.12155528867287092,
+    "hydrogensxcontact_def": 0.05847217748029925,
+    "vdw_radiixcontact_def": 0.15537140313627731
+   },
+   "higher_order": 0.04130425750810707,
+   "tools": {
+    "biopython": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.8125,
+     "nearest_universe_jaccard": 0.9375
+    },
+    "biotite": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.8125,
+     "nearest_universe_jaccard": 0.9375
+    },
+    "gemmi": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.8125,
+     "nearest_universe_jaccard": 0.9375
+    }
+   }
+  },
+  {
+   "id": "1yei",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 6856,
+   "ligand_atoms": 38,
+   "universes": 24,
+   "distinct_pockets": 13,
+   "union_residues": 17,
+   "invariant_residues": 4,
+   "sensitive_residues": 13,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.2637434753723116,
+   "max_distance": 0.7647058823529411,
+   "effects": {
+    "hydrogens": 0.19164484752720048,
+    "vdw_radii": 0.19566051459433811,
+    "contact_def": 0.2679511154694978
+   },
+   "shapley": {
+    "hydrogens": 0.22149154234522703,
+    "vdw_radii": 0.29405175801279704,
+    "contact_def": 0.4844566996419759
+   },
+   "by_class": {
+    "interpretive": 0.23463400517415006,
+    "algorithmic": 0.76536599482585
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.07712329715006984,
+    "hydrogensxcontact_def": 0.08215039800540852,
+    "vdw_radiixcontact_def": 0.14454875884245028
+   },
+   "higher_order": 0.07885477697353793,
+   "tools": {
+    "biopython": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.55,
+     "nearest_universe_jaccard": 0.85
+    },
+    "biotite": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.55,
+     "nearest_universe_jaccard": 0.85
+    },
+    "gemmi": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.55,
+     "nearest_universe_jaccard": 0.85
+    }
+   }
+  },
+  {
+   "id": "2drc",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 4950,
+   "ligand_atoms": 55,
+   "universes": 24,
+   "distinct_pockets": 12,
+   "union_residues": 18,
+   "invariant_residues": 5,
+   "sensitive_residues": 13,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.25112709351839796,
+   "max_distance": 0.7222222222222222,
+   "effects": {
+    "hydrogens": 0.23069580882080878,
+    "vdw_radii": 0.17651723276723275,
+    "contact_def": 0.24133077570577566
+   },
+   "shapley": {
+    "hydrogens": 0.2973201040512806,
+    "vdw_radii": 0.2822756470432287,
+    "contact_def": 0.42040424890549044
+   },
+   "by_class": {
+    "interpretive": 0.30594801759065954,
+    "algorithmic": 0.6940519824093403
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.07977179944574751,
+    "hydrogensxcontact_def": 0.12352012992847565,
+    "vdw_radiixcontact_def": 0.11685676573751352
+   },
+   "higher_order": 0.05176748123627406,
+   "tools": {
+    "biopython": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5789473684210527,
+     "nearest_universe_jaccard": 0.9473684210526315
+    },
+    "biotite": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5789473684210527,
+     "nearest_universe_jaccard": 0.9473684210526315
+    },
+    "gemmi": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5789473684210527,
+     "nearest_universe_jaccard": 0.9473684210526315
+    }
+   }
+  },
+  {
+   "id": "2e9u",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 4639,
+   "ligand_atoms": 41,
+   "universes": 24,
+   "distinct_pockets": 15,
+   "union_residues": 17,
+   "invariant_residues": 4,
+   "sensitive_residues": 13,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.28886475251564786,
+   "max_distance": 0.7647058823529411,
+   "effects": {
+    "hydrogens": 0.2710532931121166,
+    "vdw_radii": 0.1909554135044331,
+    "contact_def": 0.2694054277693983
+   },
+   "shapley": {
+    "hydrogens": 0.3338246372573149,
+    "vdw_radii": 0.2626059655421399,
+    "contact_def": 0.40356939720054513
+   },
+   "by_class": {
+    "interpretive": 0.3481577325593794,
+    "algorithmic": 0.6518422674406206
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.09194282137014023,
+    "hydrogensxcontact_def": 0.09815643927653238,
+    "vdw_radiixcontact_def": 0.11077373320520882
+   },
+   "higher_order": 0.08599857181238724,
+   "tools": {
+    "biopython": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6,
+     "nearest_universe_jaccard": 0.85
+    },
+    "biotite": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6,
+     "nearest_universe_jaccard": 0.85
+    },
+    "gemmi": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6,
+     "nearest_universe_jaccard": 0.85
+    }
+   }
+  },
+  {
+   "id": "2p15",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 8191,
+   "ligand_atoms": 61,
+   "universes": 24,
+   "distinct_pockets": 17,
+   "union_residues": 23,
+   "invariant_residues": 3,
+   "sensitive_residues": 20,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.39731405642836426,
+   "max_distance": 0.8695652173913043,
+   "effects": {
+    "hydrogens": 0.3264575178190739,
+    "vdw_radii": 0.271302064058071,
+    "contact_def": 0.3936318321901846
+   },
+   "shapley": {
+    "hydrogens": 0.255498431863229,
+    "vdw_radii": 0.2778945352495657,
+    "contact_def": 0.4666070328872045
+   },
+   "by_class": {
+    "interpretive": 0.26914181743604787,
+    "algorithmic": 0.7308581825639514
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06404847769001668,
+    "hydrogensxcontact_def": 0.11482501340035417,
+    "vdw_radiixcontact_def": 0.13620131428255142
+   },
+   "higher_order": 0.0818603134369138,
+   "tools": {
+    "biopython": {
+     "size": 24,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.9583333333333334
+    },
+    "biotite": {
+     "size": 24,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.9583333333333334
+    },
+    "gemmi": {
+     "size": 24,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.9583333333333334
+    }
+   }
+  },
+  {
+   "id": "2q64",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 3153,
+   "ligand_atoms": 86,
+   "universes": 24,
+   "distinct_pockets": 19,
+   "union_residues": 29,
+   "invariant_residues": 5,
+   "sensitive_residues": 24,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.3214429980874313,
+   "max_distance": 0.8275862068965517,
+   "effects": {
+    "hydrogens": 0.27175187027333325,
+    "vdw_radii": 0.2432300632176636,
+    "contact_def": 0.307296452649787
+   },
+   "shapley": {
+    "hydrogens": 0.2751998223091045,
+    "vdw_radii": 0.3112718855014253,
+    "contact_def": 0.4135282921894702
+   },
+   "by_class": {
+    "interpretive": 0.2899831062391622,
+    "algorithmic": 0.7100168937608378
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.08659754004169634,
+    "hydrogensxcontact_def": 0.10181110593329423,
+    "vdw_radiixcontact_def": 0.12844991504417433
+   },
+   "higher_order": 0.08869970358034573,
+   "tools": {
+    "biopython": {
+     "size": 31,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6129032258064516,
+     "nearest_universe_jaccard": 0.9354838709677419
+    },
+    "biotite": {
+     "size": 31,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6129032258064516,
+     "nearest_universe_jaccard": 0.9354838709677419
+    },
+    "gemmi": {
+     "size": 31,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6129032258064516,
+     "nearest_universe_jaccard": 0.9354838709677419
+    }
+   }
+  },
+  {
+   "id": "2qpq",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 4678,
+   "ligand_atoms": 21,
+   "universes": 24,
+   "distinct_pockets": 10,
+   "union_residues": 12,
+   "invariant_residues": 4,
+   "sensitive_residues": 8,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.279401938641069,
+   "max_distance": 0.6666666666666667,
+   "effects": {
+    "hydrogens": 0.18272005772005773,
+    "vdw_radii": 0.18841189674523007,
+    "contact_def": 0.27853535353535347
+   },
+   "shapley": {
+    "hydrogens": 0.20452098371983168,
+    "vdw_radii": 0.3012039066346874,
+    "contact_def": 0.49427510964548094
+   },
+   "by_class": {
+    "interpretive": 0.2143636988301893,
+    "algorithmic": 0.7856363011698106
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06697143923213443,
+    "hydrogensxcontact_def": 0.06147347228255604,
+    "vdw_radiixcontact_def": 0.16049182191690312
+   },
+   "higher_order": 0.059056290662145905,
+   "tools": {
+    "biopython": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4375,
+     "nearest_universe_jaccard": 0.75
+    },
+    "biotite": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4375,
+     "nearest_universe_jaccard": 0.75
+    },
+    "gemmi": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4375,
+     "nearest_universe_jaccard": 0.75
+    }
+   }
+  },
+  {
+   "id": "2ra6",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 4778,
+   "ligand_atoms": 19,
+   "universes": 24,
+   "distinct_pockets": 8,
+   "union_residues": 13,
+   "invariant_residues": 4,
+   "sensitive_residues": 9,
+   "agreement_with_first": 0.16666666666666666,
+   "mean_distance": 0.22023149957932606,
+   "max_distance": 0.6923076923076923,
+   "effects": {
+    "hydrogens": 0.2256216006216006,
+    "vdw_radii": 0.15370362662029327,
+    "contact_def": 0.18745548433048434
+   },
+   "shapley": {
+    "hydrogens": 0.3832680789210571,
+    "vdw_radii": 0.2843214036668681,
+    "contact_def": 0.33241051741207484
+   },
+   "by_class": {
+    "interpretive": 0.3998746720353401,
+    "algorithmic": 0.6001253279646599
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.12097159149897413,
+    "hydrogensxcontact_def": 0.059006794240191555,
+    "vdw_radiixcontact_def": 0.08274598645379935
+   },
+   "higher_order": 0.09963955868569818,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8666666666666667
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8666666666666667
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8666666666666667
+    }
+   }
+  },
+  {
+   "id": "2w5g",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 1821,
+   "ligand_atoms": 47,
+   "universes": 24,
+   "distinct_pockets": 13,
+   "union_residues": 14,
+   "invariant_residues": 5,
+   "sensitive_residues": 9,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.2448707190555017,
+   "max_distance": 0.6428571428571428,
+   "effects": {
+    "hydrogens": 0.11246276871276872,
+    "vdw_radii": 0.165190519357186,
+    "contact_def": 0.25635475635475635
+   },
+   "shapley": {
+    "hydrogens": 0.11305114100928465,
+    "vdw_radii": 0.2945023479901284,
+    "contact_def": 0.5924465110005869
+   },
+   "by_class": {
+    "interpretive": 0.11828857885025482,
+    "algorithmic": 0.8817114211497452
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.0406026838199884,
+    "hydrogensxcontact_def": 0.023008412197084546,
+    "vdw_radiixcontact_def": 0.1369170286668838
+   },
+   "higher_order": 0.03142462704582183,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5333333333333333,
+     "nearest_universe_jaccard": 0.9333333333333333
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5333333333333333,
+     "nearest_universe_jaccard": 0.9333333333333333
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5333333333333333,
+     "nearest_universe_jaccard": 0.9333333333333333
+    }
+   }
+  },
+  {
+   "id": "2y7z",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 4586,
+   "ligand_atoms": 60,
+   "universes": 24,
+   "distinct_pockets": 12,
+   "union_residues": 20,
+   "invariant_residues": 4,
+   "sensitive_residues": 16,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.23955858267929225,
+   "max_distance": 0.8,
+   "effects": {
+    "hydrogens": 0.19292622582096267,
+    "vdw_radii": 0.1772988605773693,
+    "contact_def": 0.22241253507700884
+   },
+   "shapley": {
+    "hydrogens": 0.25639561475429695,
+    "vdw_radii": 0.31753843874516097,
+    "contact_def": 0.426065946500542
+   },
+   "by_class": {
+    "interpretive": 0.27123721279595114,
+    "algorithmic": 0.728762787204049
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06600714314183406,
+    "hydrogensxcontact_def": 0.11893476603749167,
+    "vdw_radiixcontact_def": 0.17484291902489563
+   },
+   "higher_order": 0.08904958824992537,
+   "tools": {
+    "biopython": {
+     "size": 22,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5909090909090909,
+     "nearest_universe_jaccard": 0.9090909090909091
+    },
+    "biotite": {
+     "size": 22,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5909090909090909,
+     "nearest_universe_jaccard": 0.9090909090909091
+    },
+    "gemmi": {
+     "size": 22,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5909090909090909,
+     "nearest_universe_jaccard": 0.9090909090909091
+    }
+   }
+  },
+  {
+   "id": "3arw",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 9486,
+   "ligand_atoms": 45,
+   "universes": 24,
+   "distinct_pockets": 6,
+   "union_residues": 5,
+   "invariant_residues": 1,
+   "sensitive_residues": 4,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.2878623188405794,
+   "max_distance": 0.8,
+   "effects": {
+    "hydrogens": 0.1527777777777778,
+    "vdw_radii": 0.23935185185185187,
+    "contact_def": 0.2847222222222222
+   },
+   "shapley": {
+    "hydrogens": 0.14964728443257239,
+    "vdw_radii": 0.4158806059360816,
+    "contact_def": 0.43447210963134525
+   },
+   "by_class": {
+    "interpretive": 0.15593265716544832,
+    "algorithmic": 0.844067342834551
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.07704951715636046,
+    "hydrogensxcontact_def": 0.04736288299058087,
+    "vdw_radiixcontact_def": 0.3105329024786612
+   },
+   "higher_order": 0.03771223639725685,
+   "tools": {
+    "biopython": {
+     "size": 6,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.33333333333333326,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "biotite": {
+     "size": 6,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.33333333333333326,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "gemmi": {
+     "size": 6,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.33333333333333326,
+     "nearest_universe_jaccard": 0.8333333333333334
+    }
+   }
+  },
+  {
+   "id": "3bgc",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 3223,
+   "ligand_atoms": 77,
+   "universes": 24,
+   "distinct_pockets": 17,
+   "union_residues": 32,
+   "invariant_residues": 10,
+   "sensitive_residues": 22,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.26707868054150374,
+   "max_distance": 0.6875,
+   "effects": {
+    "hydrogens": 0.20230523818849144,
+    "vdw_radii": 0.182426277514879,
+    "contact_def": 0.260266819741315
+   },
+   "shapley": {
+    "hydrogens": 0.2275055823355628,
+    "vdw_radii": 0.2878633162137587,
+    "contact_def": 0.48463110145067845
+   },
+   "by_class": {
+    "interpretive": 0.23679550704948246,
+    "algorithmic": 0.7632044929505175
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06539192128286316,
+    "hydrogensxcontact_def": 0.07505898231596168,
+    "vdw_radiixcontact_def": 0.1159377045220104
+   },
+   "higher_order": 0.055739548283518126,
+   "tools": {
+    "biopython": {
+     "size": 37,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5675675675675675,
+     "nearest_universe_jaccard": 0.8648648648648649
+    },
+    "biotite": {
+     "size": 37,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5675675675675675,
+     "nearest_universe_jaccard": 0.8648648648648649
+    },
+    "gemmi": {
+     "size": 37,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5675675675675675,
+     "nearest_universe_jaccard": 0.8648648648648649
+    }
+   }
+  },
+  {
+   "id": "3cd5",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 25663,
+   "ligand_atoms": 76,
+   "universes": 24,
+   "distinct_pockets": 20,
+   "union_residues": 26,
+   "invariant_residues": 8,
+   "sensitive_residues": 18,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.26368352962378955,
+   "max_distance": 0.6923076923076923,
+   "effects": {
+    "hydrogens": 0.19661730908298414,
+    "vdw_radii": 0.19841769885887534,
+    "contact_def": 0.24206682568078788
+   },
+   "shapley": {
+    "hydrogens": 0.2381253387556782,
+    "vdw_radii": 0.34540628392407746,
+    "contact_def": 0.41646837732024433
+   },
+   "by_class": {
+    "interpretive": 0.24512983325764892,
+    "algorithmic": 0.7548701667423511
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.07104917492102367,
+    "hydrogensxcontact_def": 0.06151891103859936,
+    "vdw_radiixcontact_def": 0.11501667034422171
+   },
+   "higher_order": 0.04202696701182429,
+   "tools": {
+    "biopython": {
+     "size": 28,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5714285714285714,
+     "nearest_universe_jaccard": 0.9285714285714286
+    },
+    "biotite": {
+     "size": 28,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5714285714285714,
+     "nearest_universe_jaccard": 0.9285714285714286
+    },
+    "gemmi": {
+     "size": 28,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5714285714285714,
+     "nearest_universe_jaccard": 0.9285714285714286
+    }
+   }
+  },
+  {
+   "id": "3fh7",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 10176,
+   "ligand_atoms": 52,
+   "universes": 24,
+   "distinct_pockets": 10,
+   "union_residues": 22,
+   "invariant_residues": 11,
+   "sensitive_residues": 11,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.1394671708387385,
+   "max_distance": 0.5,
+   "effects": {
+    "hydrogens": 0.07321578884078885,
+    "vdw_radii": 0.11163344452818134,
+    "contact_def": 0.12767556517556516
+   },
+   "shapley": {
+    "hydrogens": 0.14169419171779707,
+    "vdw_radii": 0.3973870860991021,
+    "contact_def": 0.4609187221830971
+   },
+   "by_class": {
+    "interpretive": 0.14251164688246173,
+    "algorithmic": 0.8574883531175348
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.03056867515786334,
+    "hydrogensxcontact_def": 0.09373418939708304,
+    "vdw_radiixcontact_def": 0.22721918387628842
+   },
+   "higher_order": 0.004904730987990602,
+   "tools": {
+    "biopython": {
+     "size": 26,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6153846153846154,
+     "nearest_universe_jaccard": 0.8461538461538461
+    },
+    "biotite": {
+     "size": 26,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6153846153846154,
+     "nearest_universe_jaccard": 0.8461538461538461
+    },
+    "gemmi": {
+     "size": 26,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6153846153846154,
+     "nearest_universe_jaccard": 0.8461538461538461
+    }
+   }
+  },
+  {
+   "id": "3ga5",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 4986,
+   "ligand_atoms": 35,
+   "universes": 24,
+   "distinct_pockets": 11,
+   "union_residues": 18,
+   "invariant_residues": 10,
+   "sensitive_residues": 8,
+   "agreement_with_first": 0.3333333333333333,
+   "mean_distance": 0.1730248001028053,
+   "max_distance": 0.4444444444444444,
+   "effects": {
+    "hydrogens": 0.15364489813019225,
+    "vdw_radii": 0.11706452362089619,
+    "contact_def": 0.15367014861500156
+   },
+   "shapley": {
+    "hydrogens": 0.30921732589463313,
+    "vdw_radii": 0.271230725667171,
+    "contact_def": 0.41955194843819577
+   },
+   "by_class": {
+    "interpretive": 0.314733595431476,
+    "algorithmic": 0.685266404568524
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.0660578021333906,
+    "hydrogensxcontact_def": 0.06437611626271211,
+    "vdw_radiixcontact_def": 0.07509396651165981
+   },
+   "higher_order": 0.03309761722105675,
+   "tools": {
+    "biopython": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8571428571428571
+    },
+    "biotite": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8571428571428571
+    },
+    "gemmi": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8571428571428571
+    }
+   }
+  },
+  {
+   "id": "3hs4",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 4443,
+   "ligand_atoms": 19,
+   "universes": 24,
+   "distinct_pockets": 11,
+   "union_residues": 13,
+   "invariant_residues": 2,
+   "sensitive_residues": 11,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.2072203360246841,
+   "max_distance": 0.8333333333333334,
+   "effects": {
+    "hydrogens": 0.14835858585858588,
+    "vdw_radii": 0.17847384097384092,
+    "contact_def": 0.17973484848484844
+   },
+   "shapley": {
+    "hydrogens": 0.19795271306255163,
+    "vdw_radii": 0.4395409436274119,
+    "contact_def": 0.3625063433100346
+   },
+   "by_class": {
+    "interpretive": 0.21877450201007873,
+    "algorithmic": 0.7812254979899194
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.07916599624421189,
+    "hydrogensxcontact_def": 0.08382151210116161,
+    "vdw_radiixcontact_def": 0.1735438126882066
+   },
+   "higher_order": 0.12493073368516472,
+   "tools": {
+    "biopython": {
+     "size": 14,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5714285714285714,
+     "nearest_universe_jaccard": 0.8571428571428571
+    },
+    "biotite": {
+     "size": 14,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5714285714285714,
+     "nearest_universe_jaccard": 0.8571428571428571
+    },
+    "gemmi": {
+     "size": 14,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5714285714285714,
+     "nearest_universe_jaccard": 0.8571428571428571
+    }
+   }
+  },
+  {
+   "id": "3mdz",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 3933,
+   "ligand_atoms": 26,
+   "universes": 24,
+   "distinct_pockets": 17,
+   "union_residues": 16,
+   "invariant_residues": 3,
+   "sensitive_residues": 13,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.35508797764232575,
+   "max_distance": 0.8,
+   "effects": {
+    "hydrogens": 0.2851273726273726,
+    "vdw_radii": 0.300883954008954,
+    "contact_def": 0.2850663225663225
+   },
+   "shapley": {
+    "hydrogens": 0.2733557678395244,
+    "vdw_radii": 0.41155969964800154,
+    "contact_def": 0.3150845325124739
+   },
+   "by_class": {
+    "interpretive": 0.28033926666347203,
+    "algorithmic": 0.7196607333365279
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.09439030120153348,
+    "hydrogensxcontact_def": 0.07615132675112701,
+    "vdw_radiixcontact_def": 0.16005519682421912
+   },
+   "higher_order": 0.04190099294368499,
+   "tools": {
+    "biopython": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "biotite": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "gemmi": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5,
+     "nearest_universe_jaccard": 0.8333333333333334
+    }
+   }
+  },
+  {
+   "id": "3n7o",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 3621,
+   "ligand_atoms": 43,
+   "universes": 24,
+   "distinct_pockets": 7,
+   "union_residues": 19,
+   "invariant_residues": 7,
+   "sensitive_residues": 12,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.13562331853782605,
+   "max_distance": 0.631578947368421,
+   "effects": {
+    "hydrogens": 0.08802997076023393,
+    "vdw_radii": 0.10081296496092679,
+    "contact_def": 0.1491729732828804
+   },
+   "shapley": {
+    "hydrogens": 0.1942761462168276,
+    "vdw_radii": 0.3308146925454892,
+    "contact_def": 0.474909161237683
+   },
+   "by_class": {
+    "interpretive": 0.21602349447934038,
+    "algorithmic": 0.7839765055206593
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06855380599557861,
+    "hydrogensxcontact_def": 0.10330565298360755,
+    "vdw_radiixcontact_def": 0.1882045034039802
+   },
+   "higher_order": 0.1304840895750773,
+   "tools": {
+    "biopython": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6521739130434783,
+     "nearest_universe_jaccard": 0.8260869565217391
+    },
+    "biotite": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6521739130434783,
+     "nearest_universe_jaccard": 0.8260869565217391
+    },
+    "gemmi": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6521739130434783,
+     "nearest_universe_jaccard": 0.8260869565217391
+    }
+   }
+  },
+  {
+   "id": "3q6z",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 2921,
+   "ligand_atoms": 59,
+   "universes": 24,
+   "distinct_pockets": 18,
+   "union_residues": 22,
+   "invariant_residues": 5,
+   "sensitive_residues": 17,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.325578754489106,
+   "max_distance": 0.7727272727272727,
+   "effects": {
+    "hydrogens": 0.23874743677375257,
+    "vdw_radii": 0.22156346966395984,
+    "contact_def": 0.34065443196151396
+   },
+   "shapley": {
+    "hydrogens": 0.1980338943164182,
+    "vdw_radii": 0.2739040052835937,
+    "contact_def": 0.5280621003999877
+   },
+   "by_class": {
+    "interpretive": 0.20758243536841478,
+    "algorithmic": 0.7924175646315847
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.05073257933520076,
+    "hydrogensxcontact_def": 0.07737081777133267,
+    "vdw_radiixcontact_def": 0.12245589382969561
+   },
+   "higher_order": 0.057291246311980126,
+   "tools": {
+    "biopython": {
+     "size": 24,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.45833333333333326,
+     "nearest_universe_jaccard": 0.9166666666666666
+    },
+    "biotite": {
+     "size": 24,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.45833333333333326,
+     "nearest_universe_jaccard": 0.9166666666666666
+    },
+    "gemmi": {
+     "size": 24,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.45833333333333326,
+     "nearest_universe_jaccard": 0.9166666666666666
+    }
+   }
+  },
+  {
+   "id": "3r4p",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 3685,
+   "ligand_atoms": 53,
+   "universes": 24,
+   "distinct_pockets": 14,
+   "union_residues": 17,
+   "invariant_residues": 6,
+   "sensitive_residues": 11,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.2313242437443206,
+   "max_distance": 0.6470588235294117,
+   "effects": {
+    "hydrogens": 0.12508116883116882,
+    "vdw_radii": 0.14762267280649632,
+    "contact_def": 0.2557040998217469
+   },
+   "shapley": {
+    "hydrogens": 0.13324767893837478,
+    "vdw_radii": 0.2546762995221783,
+    "contact_def": 0.612076021539447
+   },
+   "by_class": {
+    "interpretive": 0.14267195986321068,
+    "algorithmic": 0.8573280401367893
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.03983946292242394,
+    "hydrogensxcontact_def": 0.062305870370707714,
+    "vdw_radiixcontact_def": 0.1508637886289488
+   },
+   "higher_order": 0.0565456855490154,
+   "tools": {
+    "biopython": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.9444444444444444
+    },
+    "biotite": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.9444444444444444
+    },
+    "gemmi": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.9444444444444444
+    }
+   }
+  },
+  {
+   "id": "3s8o",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 1731,
+   "ligand_atoms": 69,
+   "universes": 24,
+   "distinct_pockets": 4,
+   "union_residues": 12,
+   "invariant_residues": 9,
+   "sensitive_residues": 3,
+   "agreement_with_first": 0.7083333333333334,
+   "mean_distance": 0.05195432586736942,
+   "max_distance": 0.25,
+   "effects": {
+    "hydrogens": 0.04545454545454546,
+    "vdw_radii": 0.03964646464646466,
+    "contact_def": 0.04457070707070707
+   },
+   "shapley": {
+    "hydrogens": 0.29657716745234686,
+    "vdw_radii": 0.3469605478213801,
+    "contact_def": 0.35646228472627306
+   },
+   "by_class": {
+    "interpretive": 0.3101833603985682,
+    "algorithmic": 0.6898166396014318
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.09459693821243455,
+    "hydrogensxcontact_def": 0.11152979015246013,
+    "vdw_radiixcontact_def": 0.09372454422669779
+   },
+   "higher_order": 0.08163715767732871,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7333333333333333,
+     "nearest_universe_jaccard": 0.8
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7333333333333333,
+     "nearest_universe_jaccard": 0.8
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7333333333333333,
+     "nearest_universe_jaccard": 0.8
+    }
+   }
+  },
+  {
+   "id": "3shc",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 4661,
+   "ligand_atoms": 51,
+   "universes": 24,
+   "distinct_pockets": 14,
+   "union_residues": 20,
+   "invariant_residues": 5,
+   "sensitive_residues": 15,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.29477898382570955,
+   "max_distance": 0.75,
+   "effects": {
+    "hydrogens": 0.22300442505550866,
+    "vdw_radii": 0.21534578181250008,
+    "contact_def": 0.2993062466214557
+   },
+   "shapley": {
+    "hydrogens": 0.21477824411983734,
+    "vdw_radii": 0.28948782614459045,
+    "contact_def": 0.4957339297355721
+   },
+   "by_class": {
+    "interpretive": 0.22707713317307998,
+    "algorithmic": 0.77292286682692
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.07172597072383069,
+    "hydrogensxcontact_def": 0.06250048942342036,
+    "vdw_radiixcontact_def": 0.1507685557702218
+   },
+   "higher_order": 0.07379333431945523,
+   "tools": {
+    "biopython": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5238095238095238,
+     "nearest_universe_jaccard": 0.9047619047619048
+    },
+    "biotite": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5238095238095238,
+     "nearest_universe_jaccard": 0.9047619047619048
+    },
+    "gemmi": {
+     "size": 21,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5238095238095238,
+     "nearest_universe_jaccard": 0.9047619047619048
+    }
+   }
+  },
+  {
+   "id": "3zk6",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 2305,
+   "ligand_atoms": 71,
+   "universes": 24,
+   "distinct_pockets": 9,
+   "union_residues": 16,
+   "invariant_residues": 5,
+   "sensitive_residues": 11,
+   "agreement_with_first": 0.2916666666666667,
+   "mean_distance": 0.22381725058355517,
+   "max_distance": 0.6875,
+   "effects": {
+    "hydrogens": 0.20833333333333334,
+    "vdw_radii": 0.166252035002035,
+    "contact_def": 0.20639054232804235
+   },
+   "shapley": {
+    "hydrogens": 0.2990918542276122,
+    "vdw_radii": 0.3164290244386727,
+    "contact_def": 0.3844791213337146
+   },
+   "by_class": {
+    "interpretive": 0.31728809964961335,
+    "algorithmic": 0.6827119003503862
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.10601895540082473,
+    "hydrogensxcontact_def": 0.08862178851054708,
+    "vdw_radiixcontact_def": 0.11779754513012856
+   },
+   "higher_order": 0.10917747253200705,
+   "tools": {
+    "biopython": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7058823529411765,
+     "nearest_universe_jaccard": 0.9411764705882353
+    },
+    "biotite": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7058823529411765,
+     "nearest_universe_jaccard": 0.9411764705882353
+    },
+    "gemmi": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7058823529411765,
+     "nearest_universe_jaccard": 0.9411764705882353
+    }
+   }
+  },
+  {
+   "id": "4avs",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 11270,
+   "ligand_atoms": 22,
+   "universes": 24,
+   "distinct_pockets": 8,
+   "union_residues": 10,
+   "invariant_residues": 3,
+   "sensitive_residues": 7,
+   "agreement_with_first": 0.20833333333333334,
+   "mean_distance": 0.3611686220381875,
+   "max_distance": 0.7,
+   "effects": {
+    "hydrogens": 0.05714285714285714,
+    "vdw_radii": 0.30870811287477945,
+    "contact_def": 0.31220238095238095
+   },
+   "shapley": {
+    "hydrogens": 0.028267297497343462,
+    "vdw_radii": 0.5099326211649049,
+    "contact_def": 0.4618000813377515
+   },
+   "by_class": {
+    "interpretive": 0.03424812881638042,
+    "algorithmic": 0.9657518711836196
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.006043787438185946,
+    "hydrogensxcontact_def": 0.001385034621251772,
+    "vdw_radiixcontact_def": 0.13056070487925112
+   },
+   "higher_order": 0.035884987914221456,
+   "tools": {
+    "biopython": {
+     "size": 10,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.30000000000000004,
+     "nearest_universe_jaccard": 1.0
+    },
+    "biotite": {
+     "size": 10,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.30000000000000004,
+     "nearest_universe_jaccard": 1.0
+    },
+    "gemmi": {
+     "size": 10,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.30000000000000004,
+     "nearest_universe_jaccard": 1.0
+    }
+   }
+  },
+  {
+   "id": "4h3j",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 6536,
+   "ligand_atoms": 52,
+   "universes": 24,
+   "distinct_pockets": 14,
+   "union_residues": 22,
+   "invariant_residues": 5,
+   "sensitive_residues": 17,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.31648220714464503,
+   "max_distance": 0.7727272727272727,
+   "effects": {
+    "hydrogens": 0.16704545454545452,
+    "vdw_radii": 0.2421058244587656,
+    "contact_def": 0.31207770987182754
+   },
+   "shapley": {
+    "hydrogens": 0.12319546508335426,
+    "vdw_radii": 0.3524441641106413,
+    "contact_def": 0.5243603708060043
+   },
+   "by_class": {
+    "interpretive": 0.13203352149560618,
+    "algorithmic": 0.8679664785043937
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.05164306032940532,
+    "hydrogensxcontact_def": 0.029780703814308657,
+    "vdw_radiixcontact_def": 0.20765984329557427
+   },
+   "higher_order": 0.053028338473512404,
+   "tools": {
+    "biopython": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4347826086956521,
+     "nearest_universe_jaccard": 0.9565217391304348
+    },
+    "biotite": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4347826086956521,
+     "nearest_universe_jaccard": 0.9565217391304348
+    },
+    "gemmi": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4347826086956521,
+     "nearest_universe_jaccard": 0.9565217391304348
+    }
+   }
+  },
+  {
+   "id": "4iuo",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 8404,
+   "ligand_atoms": 25,
+   "universes": 24,
+   "distinct_pockets": 10,
+   "union_residues": 15,
+   "invariant_residues": 6,
+   "sensitive_residues": 9,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.23156149406149432,
+   "max_distance": 0.6,
+   "effects": {
+    "hydrogens": 0.17950660450660447,
+    "vdw_radii": 0.15137385762385758,
+    "contact_def": 0.2227983821733822
+   },
+   "shapley": {
+    "hydrogens": 0.25299785030316324,
+    "vdw_radii": 0.26775896223764284,
+    "contact_def": 0.4792431874591938
+   },
+   "by_class": {
+    "interpretive": 0.26360427954245147,
+    "algorithmic": 0.7363957204575485
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.07351403258319511,
+    "hydrogensxcontact_def": 0.0641397970153501,
+    "vdw_radiixcontact_def": 0.12053093184121076
+   },
+   "higher_order": 0.06363857543572904,
+   "tools": {
+    "biopython": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6470588235294118,
+     "nearest_universe_jaccard": 0.8823529411764706
+    },
+    "biotite": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6470588235294118,
+     "nearest_universe_jaccard": 0.8823529411764706
+    },
+    "gemmi": {
+     "size": 17,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6470588235294118,
+     "nearest_universe_jaccard": 0.8823529411764706
+    }
+   }
+  },
+  {
+   "id": "4k77",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 4664,
+   "ligand_atoms": 34,
+   "universes": 24,
+   "distinct_pockets": 17,
+   "union_residues": 16,
+   "invariant_residues": 2,
+   "sensitive_residues": 14,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.3550189896657289,
+   "max_distance": 0.875,
+   "effects": {
+    "hydrogens": 0.26270604395604397,
+    "vdw_radii": 0.24789716456383123,
+    "contact_def": 0.34550328144078146
+   },
+   "shapley": {
+    "hydrogens": 0.21505976051732917,
+    "vdw_radii": 0.32620599907543424,
+    "contact_def": 0.45873424040723654
+   },
+   "by_class": {
+    "interpretive": 0.22680814154091633,
+    "algorithmic": 0.7731918584590837
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06014478890954872,
+    "hydrogensxcontact_def": 0.06226810477050731,
+    "vdw_radiixcontact_def": 0.17463452157539414
+   },
+   "higher_order": 0.07049028614152253,
+   "tools": {
+    "biopython": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.8
+    },
+    "biotite": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.8
+    },
+    "gemmi": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.8
+    }
+   }
+  },
+  {
+   "id": "4keq",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 5213,
+   "ligand_atoms": 19,
+   "universes": 24,
+   "distinct_pockets": 16,
+   "union_residues": 14,
+   "invariant_residues": 3,
+   "sensitive_residues": 11,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.33879619776358927,
+   "max_distance": 0.7692307692307692,
+   "effects": {
+    "hydrogens": 0.1858814796314796,
+    "vdw_radii": 0.27366576324909664,
+    "contact_def": 0.3055441086691087
+   },
+   "shapley": {
+    "hydrogens": 0.1297016997522135,
+    "vdw_radii": 0.42920631335826825,
+    "contact_def": 0.44109198688951823
+   },
+   "by_class": {
+    "interpretive": 0.13408581448622964,
+    "algorithmic": 0.8659141855137704
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.03221002413059785,
+    "hydrogensxcontact_def": 0.054194269386964276,
+    "vdw_radiixcontact_def": 0.1284936792304644
+   },
+   "higher_order": 0.026304688404096055,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.8
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.8
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4,
+     "nearest_universe_jaccard": 0.8
+    }
+   }
+  },
+  {
+   "id": "4mdn",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 1653,
+   "ligand_atoms": 64,
+   "universes": 24,
+   "distinct_pockets": 14,
+   "union_residues": 19,
+   "invariant_residues": 1,
+   "sensitive_residues": 18,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.3848483586398347,
+   "max_distance": 0.9473684210526316,
+   "effects": {
+    "hydrogens": 0.318020990447461,
+    "vdw_radii": 0.29198394484772183,
+    "contact_def": 0.3619114701303168
+   },
+   "shapley": {
+    "hydrogens": 0.2855608071977044,
+    "vdw_radii": 0.32232381084830514,
+    "contact_def": 0.39211538195399026
+   },
+   "by_class": {
+    "interpretive": 0.30415703733201915,
+    "algorithmic": 0.6958429626679806
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.09248813571472281,
+    "hydrogensxcontact_def": 0.10170096656102612,
+    "vdw_radiixcontact_def": 0.18398980944178853
+   },
+   "higher_order": 0.11157738080588864,
+   "tools": {
+    "biopython": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6,
+     "nearest_universe_jaccard": 0.95
+    },
+    "biotite": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6,
+     "nearest_universe_jaccard": 0.95
+    },
+    "gemmi": {
+     "size": 20,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6,
+     "nearest_universe_jaccard": 0.95
+    }
+   }
+  },
+  {
+   "id": "4oag",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 6698,
+   "ligand_atoms": 42,
+   "universes": 24,
+   "distinct_pockets": 8,
+   "union_residues": 16,
+   "invariant_residues": 9,
+   "sensitive_residues": 7,
+   "agreement_with_first": 0.20833333333333334,
+   "mean_distance": 0.17250385484081143,
+   "max_distance": 0.4375,
+   "effects": {
+    "hydrogens": 0.04687499999999999,
+    "vdw_radii": 0.15647130647130647,
+    "contact_def": 0.14229763292263287
+   },
+   "shapley": {
+    "hydrogens": 0.036820960303602025,
+    "vdw_radii": 0.5856405108334931,
+    "contact_def": 0.37753852886290473
+   },
+   "by_class": {
+    "interpretive": 0.03870464026567025,
+    "algorithmic": 0.9612953597343297
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.009546603240809658,
+    "hydrogensxcontact_def": 0.011765679125581624,
+    "vdw_radiixcontact_def": 0.13875994504502695
+   },
+   "higher_order": 0.011302079772409157,
+   "tools": {
+    "biopython": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.8888888888888888
+    },
+    "biotite": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.8888888888888888
+    },
+    "gemmi": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.8888888888888888
+    }
+   }
+  },
+  {
+   "id": "4ovg",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 7332,
+   "ligand_atoms": 36,
+   "universes": 24,
+   "distinct_pockets": 12,
+   "union_residues": 12,
+   "invariant_residues": 5,
+   "sensitive_residues": 7,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.23859401468097133,
+   "max_distance": 0.5833333333333333,
+   "effects": {
+    "hydrogens": 0.0799963924963925,
+    "vdw_radii": 0.17530964405964405,
+    "contact_def": 0.25267706830206826
+   },
+   "shapley": {
+    "hydrogens": 0.0745029459964533,
+    "vdw_radii": 0.3389995578787477,
+    "contact_def": 0.586497496124799
+   },
+   "by_class": {
+    "interpretive": 0.07310914785464236,
+    "algorithmic": 0.9268908521453576
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.014377945773991147,
+    "hydrogensxcontact_def": 0.0545719539416985,
+    "vdw_radiixcontact_def": 0.18392509018810646
+   },
+   "higher_order": -0.008362788850865277,
+   "tools": {
+    "biopython": {
+     "size": 12,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.5833333333333334,
+     "nearest_universe_jaccard": 1.0
+    },
+    "biotite": {
+     "size": 12,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.5833333333333334,
+     "nearest_universe_jaccard": 1.0
+    },
+    "gemmi": {
+     "size": 12,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.5833333333333334,
+     "nearest_universe_jaccard": 1.0
+    }
+   }
+  },
+  {
+   "id": "4u6w",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 3107,
+   "ligand_atoms": 34,
+   "universes": 24,
+   "distinct_pockets": 9,
+   "union_residues": 17,
+   "invariant_residues": 10,
+   "sensitive_residues": 7,
+   "agreement_with_first": 0.16666666666666666,
+   "mean_distance": 0.17514323645237959,
+   "max_distance": 0.4117647058823529,
+   "effects": {
+    "hydrogens": 0.09359349800526272,
+    "vdw_radii": 0.15165678548031492,
+    "contact_def": 0.12015468191938779
+   },
+   "shapley": {
+    "hydrogens": 0.14660456480168751,
+    "vdw_radii": 0.5269670517527242,
+    "contact_def": 0.3264283834455883
+   },
+   "by_class": {
+    "interpretive": 0.15295077218720712,
+    "algorithmic": 0.8470492278127928
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.012224962312078605,
+    "hydrogensxcontact_def": 0.013523727657832323,
+    "vdw_radiixcontact_def": 0.027188492510303627
+   },
+   "higher_order": 0.03807724431311854,
+   "tools": {
+    "biopython": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5789473684210527,
+     "nearest_universe_jaccard": 0.8947368421052632
+    },
+    "biotite": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5789473684210527,
+     "nearest_universe_jaccard": 0.8947368421052632
+    },
+    "gemmi": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5789473684210527,
+     "nearest_universe_jaccard": 0.8947368421052632
+    }
+   }
+  },
+  {
+   "id": "4xtz",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 2619,
+   "ligand_atoms": 65,
+   "universes": 24,
+   "distinct_pockets": 14,
+   "union_residues": 28,
+   "invariant_residues": 9,
+   "sensitive_residues": 19,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.20304598198924625,
+   "max_distance": 0.6785714285714286,
+   "effects": {
+    "hydrogens": 0.1196021571021571,
+    "vdw_radii": 0.15840945130196338,
+    "contact_def": 0.20345773757911445
+   },
+   "shapley": {
+    "hydrogens": 0.15916978679082108,
+    "vdw_radii": 0.3473945277316266,
+    "contact_def": 0.49343568547755223
+   },
+   "by_class": {
+    "interpretive": 0.1696606532666799,
+    "algorithmic": 0.8303393467333201
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.05916525307422527,
+    "hydrogensxcontact_def": 0.06579876630834841,
+    "vdw_radiixcontact_def": 0.20775170587807848
+   },
+   "higher_order": 0.06294519885515193,
+   "tools": {
+    "biopython": {
+     "size": 29,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6206896551724138,
+     "nearest_universe_jaccard": 0.9655172413793104
+    },
+    "biotite": {
+     "size": 29,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6206896551724138,
+     "nearest_universe_jaccard": 0.9655172413793104
+    },
+    "gemmi": {
+     "size": 29,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6206896551724138,
+     "nearest_universe_jaccard": 0.9655172413793104
+    }
+   }
+  },
+  {
+   "id": "4z1k",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 2696,
+   "ligand_atoms": 40,
+   "universes": 24,
+   "distinct_pockets": 13,
+   "union_residues": 14,
+   "invariant_residues": 2,
+   "sensitive_residues": 12,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.29590560405777827,
+   "max_distance": 0.8461538461538461,
+   "effects": {
+    "hydrogens": 0.13660714285714284,
+    "vdw_radii": 0.26442007067007056,
+    "contact_def": 0.2655039405039405
+   },
+   "shapley": {
+    "hydrogens": 0.15521679696725033,
+    "vdw_radii": 0.42645512253592166,
+    "contact_def": 0.418328080496828
+   },
+   "by_class": {
+    "interpretive": 0.16702481577450395,
+    "algorithmic": 0.832975184225496
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06520472752999089,
+    "hydrogensxcontact_def": 0.06680043921978943,
+    "vdw_radiixcontact_def": 0.17199784233840407
+   },
+   "higher_order": 0.07084811284352177,
+   "tools": {
+    "biopython": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4375,
+     "nearest_universe_jaccard": 0.8125
+    },
+    "biotite": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4375,
+     "nearest_universe_jaccard": 0.8125
+    },
+    "gemmi": {
+     "size": 16,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4375,
+     "nearest_universe_jaccard": 0.8125
+    }
+   }
+  },
+  {
+   "id": "5c28",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 3454,
+   "ligand_atoms": 22,
+   "universes": 24,
+   "distinct_pockets": 10,
+   "union_residues": 10,
+   "invariant_residues": 2,
+   "sensitive_residues": 8,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.25853174603174633,
+   "max_distance": 0.8,
+   "effects": {
+    "hydrogens": 0.12787698412698412,
+    "vdw_radii": 0.2356922398589065,
+    "contact_def": 0.24379960317460317
+   },
+   "shapley": {
+    "hydrogens": 0.13227866178103115,
+    "vdw_radii": 0.4576844771123896,
+    "contact_def": 0.4100368611065791
+   },
+   "by_class": {
+    "interpretive": 0.1328175496999539,
+    "algorithmic": 0.8671824503000458
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.0381283134503027,
+    "hydrogensxcontact_def": 0.06637606761908087,
+    "vdw_radiixcontact_def": 0.2567053608959545
+   },
+   "higher_order": 0.0032333275135367767,
+   "tools": {
+    "biopython": {
+     "size": 11,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.36363636363636365,
+     "nearest_universe_jaccard": 0.9090909090909091
+    },
+    "biotite": {
+     "size": 11,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.36363636363636365,
+     "nearest_universe_jaccard": 0.9090909090909091
+    },
+    "gemmi": {
+     "size": 11,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.36363636363636365,
+     "nearest_universe_jaccard": 0.9090909090909091
+    }
+   }
+  },
+  {
+   "id": "5kr1",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 2036,
+   "ligand_atoms": 73,
+   "universes": 24,
+   "distinct_pockets": 16,
+   "union_residues": 28,
+   "invariant_residues": 6,
+   "sensitive_residues": 22,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.34172843368626143,
+   "max_distance": 0.7857142857142857,
+   "effects": {
+    "hydrogens": 0.1754245321316933,
+    "vdw_radii": 0.2656449522029233,
+    "contact_def": 0.3407414317708435
+   },
+   "shapley": {
+    "hydrogens": 0.10558065279600629,
+    "vdw_radii": 0.38692140726012336,
+    "contact_def": 0.5074979399438703
+   },
+   "by_class": {
+    "interpretive": 0.11315917265041434,
+    "algorithmic": 0.8868408273495856
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.02342974015501078,
+    "hydrogensxcontact_def": 0.022497852128688208,
+    "vdw_radiixcontact_def": 0.17470090111437028
+   },
+   "higher_order": 0.045471119126447634,
+   "tools": {
+    "biopython": {
+     "size": 29,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.31034482758620685,
+     "nearest_universe_jaccard": 0.9655172413793104
+    },
+    "biotite": {
+     "size": 29,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.31034482758620685,
+     "nearest_universe_jaccard": 0.9655172413793104
+    },
+    "gemmi": {
+     "size": 29,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.31034482758620685,
+     "nearest_universe_jaccard": 0.9655172413793104
+    }
+   }
+  },
+  {
+   "id": "5n2z",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 3319,
+   "ligand_atoms": 63,
+   "universes": 24,
+   "distinct_pockets": 18,
+   "union_residues": 19,
+   "invariant_residues": 6,
+   "sensitive_residues": 13,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.2978250935361585,
+   "max_distance": 0.6666666666666667,
+   "effects": {
+    "hydrogens": 0.1072568158965218,
+    "vdw_radii": 0.2404661929010484,
+    "contact_def": 0.2813126586104528
+   },
+   "shapley": {
+    "hydrogens": 0.060300230409886975,
+    "vdw_radii": 0.4356159474101919,
+    "contact_def": 0.5040838221799211
+   },
+   "by_class": {
+    "interpretive": 0.06140854798488944,
+    "algorithmic": 0.9385914520151106
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.009514431978473868,
+    "hydrogensxcontact_def": 0.02740655272307933,
+    "vdw_radiixcontact_def": 0.17012513469682913
+   },
+   "higher_order": 0.00664990545001487,
+   "tools": {
+    "biopython": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.42105263157894735,
+     "nearest_universe_jaccard": 0.9473684210526315
+    },
+    "biotite": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.42105263157894735,
+     "nearest_universe_jaccard": 0.9473684210526315
+    },
+    "gemmi": {
+     "size": 19,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.42105263157894735,
+     "nearest_universe_jaccard": 0.9473684210526315
+    }
+   }
+  },
+  {
+   "id": "5nk7",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 2998,
+   "ligand_atoms": 57,
+   "universes": 24,
+   "distinct_pockets": 17,
+   "union_residues": 20,
+   "invariant_residues": 4,
+   "sensitive_residues": 16,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.29980578879362396,
+   "max_distance": 0.75,
+   "effects": {
+    "hydrogens": 0.11000136165577344,
+    "vdw_radii": 0.24544976485120962,
+    "contact_def": 0.2998321826737074
+   },
+   "shapley": {
+    "hydrogens": 0.06288847072946585,
+    "vdw_radii": 0.4138979940516248,
+    "contact_def": 0.5232135352189092
+   },
+   "by_class": {
+    "interpretive": 0.06325126616135186,
+    "algorithmic": 0.9367487338386482
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.005928709957343512,
+    "hydrogensxcontact_def": 0.02302258102021566,
+    "vdw_radiixcontact_def": 0.28828895750563766
+   },
+   "higher_order": 0.0021767725913157676,
+   "tools": {
+    "biopython": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.30434782608695654,
+     "nearest_universe_jaccard": 0.8695652173913043
+    },
+    "biotite": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.30434782608695654,
+     "nearest_universe_jaccard": 0.8695652173913043
+    },
+    "gemmi": {
+     "size": 23,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.30434782608695654,
+     "nearest_universe_jaccard": 0.8695652173913043
+    }
+   }
+  },
+  {
+   "id": "5ttw",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 3774,
+   "ligand_atoms": 100,
+   "universes": 24,
+   "distinct_pockets": 6,
+   "union_residues": 11,
+   "invariant_residues": 4,
+   "sensitive_residues": 7,
+   "agreement_with_first": 0.125,
+   "mean_distance": 0.19366438714264814,
+   "max_distance": 0.6363636363636364,
+   "effects": {
+    "hydrogens": 0.15185185185185188,
+    "vdw_radii": 0.1074074074074074,
+    "contact_def": 0.20880832130832128
+   },
+   "shapley": {
+    "hydrogens": 0.26837205428310396,
+    "vdw_radii": 0.21280270707341503,
+    "contact_def": 0.5188252386434808
+   },
+   "by_class": {
+    "interpretive": 0.28034610910511804,
+    "algorithmic": 0.7196538908948819
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.050174261191254586,
+    "hydrogensxcontact_def": 0.16853034819593615,
+    "vdw_radiixcontact_def": 0.11449664988087395
+   },
+   "higher_order": 0.07184432893208381,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5333333333333333,
+     "nearest_universe_jaccard": 0.7333333333333333
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5333333333333333,
+     "nearest_universe_jaccard": 0.7333333333333333
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5333333333333333,
+     "nearest_universe_jaccard": 0.7333333333333333
+    }
+   }
+  },
+  {
+   "id": "5yj8",
+   "strata": [
+    "resolution-mid"
+   ],
+   "protein_atoms": 635,
+   "ligand_atoms": 28,
+   "universes": 24,
+   "distinct_pockets": 4,
+   "union_residues": 5,
+   "invariant_residues": 3,
+   "sensitive_residues": 2,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.07807971014492746,
+   "max_distance": 0.4,
+   "effects": {
+    "hydrogens": 0.05416666666666666,
+    "vdw_radii": 0.05277777777777778,
+    "contact_def": 0.08333333333333333
+   },
+   "shapley": {
+    "hydrogens": 0.19859462409605683,
+    "vdw_radii": 0.32958111611406715,
+    "contact_def": 0.4718242597898755
+   },
+   "by_class": {
+    "interpretive": 0.19381907490790032,
+    "algorithmic": 0.8061809250920993
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": -0.014326647564470179,
+    "hydrogensxcontact_def": 0.21530904625460467,
+    "vdw_radiixcontact_def": 0.34629553827261483
+   },
+   "higher_order": -0.02865329512893977,
+   "tools": {
+    "biopython": {
+     "size": 6,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "biotite": {
+     "size": 6,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8333333333333334
+    },
+    "gemmi": {
+     "size": 6,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8333333333333334
+    }
+   }
+  },
+  {
+   "id": "5ymx",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 2228,
+   "ligand_atoms": 42,
+   "universes": 24,
+   "distinct_pockets": 5,
+   "union_residues": 16,
+   "invariant_residues": 10,
+   "sensitive_residues": 6,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.10474465148378172,
+   "max_distance": 0.375,
+   "effects": {
+    "hydrogens": 0.027777777777777773,
+    "vdw_radii": 0.08237433862433861,
+    "contact_def": 0.11279761904761905
+   },
+   "shapley": {
+    "hydrogens": 0.05518363896978404,
+    "vdw_radii": 0.3971884276767589,
+    "contact_def": 0.547627933353457
+   },
+   "by_class": {
+    "interpretive": 0.060992443071866166,
+    "algorithmic": 0.9390075569281338
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.01742641230624985,
+    "hydrogensxcontact_def": 0.03485282461249782,
+    "vdw_radiixcontact_def": 0.22237413529208824
+   },
+   "higher_order": 0.03485282461249373,
+   "tools": {
+    "biopython": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8888888888888888
+    },
+    "biotite": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8888888888888888
+    },
+    "gemmi": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6666666666666666,
+     "nearest_universe_jaccard": 0.8888888888888888
+    }
+   }
+  },
+  {
+   "id": "5zyl",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 2638,
+   "ligand_atoms": 61,
+   "universes": 24,
+   "distinct_pockets": 19,
+   "union_residues": 22,
+   "invariant_residues": 4,
+   "sensitive_residues": 18,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.397871389558528,
+   "max_distance": 0.8181818181818181,
+   "effects": {
+    "hydrogens": 0.18734141102562155,
+    "vdw_radii": 0.3087806324938678,
+    "contact_def": 0.40999448464618743
+   },
+   "shapley": {
+    "hydrogens": 0.08636604711708962,
+    "vdw_radii": 0.37299150386745306,
+    "contact_def": 0.5406424490154573
+   },
+   "by_class": {
+    "interpretive": 0.09488964562039245,
+    "algorithmic": 0.9051103543796075
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.023300517754439243,
+    "hydrogensxcontact_def": 0.03659988603232534,
+    "vdw_radiixcontact_def": 0.1813501479880376
+   },
+   "higher_order": 0.05114159101981741,
+   "tools": {
+    "biopython": {
+     "size": 25,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.24,
+     "nearest_universe_jaccard": 0.88
+    },
+    "biotite": {
+     "size": 25,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.24,
+     "nearest_universe_jaccard": 0.88
+    },
+    "gemmi": {
+     "size": 25,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.24,
+     "nearest_universe_jaccard": 0.88
+    }
+   }
+  },
+  {
+   "id": "6d1h",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 2389,
+   "ligand_atoms": 26,
+   "universes": 24,
+   "distinct_pockets": 10,
+   "union_residues": 13,
+   "invariant_residues": 6,
+   "sensitive_residues": 7,
+   "agreement_with_first": 0.125,
+   "mean_distance": 0.2731334888943587,
+   "max_distance": 0.5384615384615384,
+   "effects": {
+    "hydrogens": 0.09244690494690494,
+    "vdw_radii": 0.25395329978663317,
+    "contact_def": 0.19674792799792795
+   },
+   "shapley": {
+    "hydrogens": 0.0755058373919209,
+    "vdw_radii": 0.5843497174249808,
+    "contact_def": 0.34014444518309833
+   },
+   "by_class": {
+    "interpretive": 0.07895143075788552,
+    "algorithmic": 0.9210485692421144
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.010826272222024175,
+    "hydrogensxcontact_def": 0.002259400064525933,
+    "vdw_radiixcontact_def": 0.09515819283719372
+   },
+   "higher_order": 0.020673560195788254,
+   "tools": {
+    "biopython": {
+     "size": 14,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4285714285714286,
+     "nearest_universe_jaccard": 0.9285714285714286
+    },
+    "biotite": {
+     "size": 14,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4285714285714286,
+     "nearest_universe_jaccard": 0.9285714285714286
+    },
+    "gemmi": {
+     "size": 14,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4285714285714286,
+     "nearest_universe_jaccard": 0.9285714285714286
+    }
+   }
+  },
+  {
+   "id": "6d9x",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 2975,
+   "ligand_atoms": 23,
+   "universes": 24,
+   "distinct_pockets": 9,
+   "union_residues": 13,
+   "invariant_residues": 5,
+   "sensitive_residues": 8,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.2668543915826524,
+   "max_distance": 0.6153846153846154,
+   "effects": {
+    "hydrogens": 0.11338383838383836,
+    "vdw_radii": 0.1938611542778209,
+    "contact_def": 0.2742315554815554
+   },
+   "shapley": {
+    "hydrogens": 0.08841413941018948,
+    "vdw_radii": 0.33617314103605744,
+    "contact_def": 0.575412719553752
+   },
+   "by_class": {
+    "interpretive": 0.09522496051044721,
+    "algorithmic": 0.9047750394895517
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.019387414522006687,
+    "hydrogensxcontact_def": 0.014209361001465045,
+    "vdw_radiixcontact_def": 0.1291788485240108
+   },
+   "higher_order": 0.0408649266015475,
+   "tools": {
+    "biopython": {
+     "size": 13,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.3846153846153846,
+     "nearest_universe_jaccard": 1.0
+    },
+    "biotite": {
+     "size": 13,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.3846153846153846,
+     "nearest_universe_jaccard": 1.0
+    },
+    "gemmi": {
+     "size": 13,
+     "equals_a_universe": true,
+     "jaccard_to_first": 0.3846153846153846,
+     "nearest_universe_jaccard": 1.0
+    }
+   }
+  },
+  {
+   "id": "6hke",
+   "strata": [
+    "control"
+   ],
+   "protein_atoms": 2700,
+   "ligand_atoms": 15,
+   "universes": 24,
+   "distinct_pockets": 8,
+   "union_residues": 13,
+   "invariant_residues": 7,
+   "sensitive_residues": 6,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.09259238145107715,
+   "max_distance": 0.46153846153846156,
+   "effects": {
+    "hydrogens": 0.057504532504532496,
+    "vdw_radii": 0.0839500777000777,
+    "contact_def": 0.09124255374255373
+   },
+   "shapley": {
+    "hydrogens": 0.16548568653742463,
+    "vdw_radii": 0.4083958970727427,
+    "contact_def": 0.4261184163898326
+   },
+   "by_class": {
+    "interpretive": 0.16660262550241217,
+    "algorithmic": 0.8333973744975878
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.06311063093156122,
+    "hydrogensxcontact_def": 0.08020369666350753,
+    "vdw_radiixcontact_def": 0.3146262012020799
+   },
+   "higher_order": 0.006701633789924499,
+   "tools": {
+    "biopython": {
+     "size": 13,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6923076923076923,
+     "nearest_universe_jaccard": 0.8571428571428571
+    },
+    "biotite": {
+     "size": 13,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6923076923076923,
+     "nearest_universe_jaccard": 0.8571428571428571
+    },
+    "gemmi": {
+     "size": 13,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.6923076923076923,
+     "nearest_universe_jaccard": 0.8571428571428571
+    }
+   }
+  },
+  {
+   "id": "6i62",
+   "strata": [
+    "multi-chain"
+   ],
+   "protein_atoms": 4692,
+   "ligand_atoms": 30,
+   "universes": 24,
+   "distinct_pockets": 11,
+   "union_residues": 18,
+   "invariant_residues": 6,
+   "sensitive_residues": 12,
+   "agreement_with_first": 0.041666666666666664,
+   "mean_distance": 0.2076296376967732,
+   "max_distance": 0.6666666666666667,
+   "effects": {
+    "hydrogens": 0.09041412019353195,
+    "vdw_radii": 0.17166309997192347,
+    "contact_def": 0.21714833369245135
+   },
+   "shapley": {
+    "hydrogens": 0.0884031925389494,
+    "vdw_radii": 0.370345376769321,
+    "contact_def": 0.5412514306917285
+   },
+   "by_class": {
+    "interpretive": 0.0968651202535106,
+    "algorithmic": 0.9031348797464884
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.02736742537186989,
+    "hydrogensxcontact_def": 0.041581042399695456,
+    "vdw_radiixcontact_def": 0.1975925617481553
+   },
+   "higher_order": 0.05077156628736934,
+   "tools": {
+    "biopython": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.9444444444444444
+    },
+    "biotite": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.9444444444444444
+    },
+    "gemmi": {
+     "size": 18,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.5555555555555556,
+     "nearest_universe_jaccard": 0.9444444444444444
+    }
+   }
+  },
+  {
+   "id": "6i8y",
+   "strata": [
+    "resolution-high"
+   ],
+   "protein_atoms": 1947,
+   "ligand_atoms": 52,
+   "universes": 24,
+   "distinct_pockets": 7,
+   "union_residues": 8,
+   "invariant_residues": 1,
+   "sensitive_residues": 7,
+   "agreement_with_first": 0.08333333333333333,
+   "mean_distance": 0.20988612836438922,
+   "max_distance": 0.875,
+   "effects": {
+    "hydrogens": 0.17807539682539683,
+    "vdw_radii": 0.14847883597883596,
+    "contact_def": 0.2199900793650794
+   },
+   "shapley": {
+    "hydrogens": 0.2552334750011659,
+    "vdw_radii": 0.28230012009701033,
+    "contact_def": 0.4624664049018237
+   },
+   "by_class": {
+    "interpretive": 0.2790145777948789,
+    "algorithmic": 0.7209854222051211
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.08230944802014857,
+    "hydrogensxcontact_def": 0.14287900517699748,
+    "vdw_radiixcontact_def": 0.1946293025045476
+   },
+   "higher_order": 0.14268661676227767,
+   "tools": {
+    "biopython": {
+     "size": 9,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7777777777777778,
+     "nearest_universe_jaccard": 0.8888888888888888
+    },
+    "biotite": {
+     "size": 9,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7777777777777778,
+     "nearest_universe_jaccard": 0.8888888888888888
+    },
+    "gemmi": {
+     "size": 9,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.7777777777777778,
+     "nearest_universe_jaccard": 0.8888888888888888
+    }
+   }
+  },
+  {
+   "id": "6nmb",
+   "strata": [
+    "insertion-codes"
+   ],
+   "protein_atoms": 2391,
+   "ligand_atoms": 27,
+   "universes": 24,
+   "distinct_pockets": 15,
+   "union_residues": 13,
+   "invariant_residues": 1,
+   "sensitive_residues": 12,
+   "agreement_with_first": 0.20833333333333334,
+   "mean_distance": 0.38255477413086125,
+   "max_distance": 0.9230769230769231,
+   "effects": {
+    "hydrogens": 0.3746628371628371,
+    "vdw_radii": 0.2730252001085335,
+    "contact_def": 0.3796737984237984
+   },
+   "shapley": {
+    "hydrogens": 0.29502091247539997,
+    "vdw_radii": 0.2539034917000828,
+    "contact_def": 0.45107559582451584
+   },
+   "by_class": {
+    "interpretive": 0.3167200404858847,
+    "algorithmic": 0.683279959514114
+   },
+   "interactions": {
+    "hydrogensxvdw_radii": 0.04571845503709742,
+    "hydrogensxcontact_def": 0.13969508887333593,
+    "vdw_radiixcontact_def": 0.12377435853734389
+   },
+   "higher_order": 0.13019476806290997,
+   "tools": {
+    "biopython": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4666666666666667,
+     "nearest_universe_jaccard": 0.8666666666666667
+    },
+    "biotite": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4666666666666667,
+     "nearest_universe_jaccard": 0.8666666666666667
+    },
+    "gemmi": {
+     "size": 15,
+     "equals_a_universe": false,
+     "jaccard_to_first": 0.4666666666666667,
+     "nearest_universe_jaccard": 0.8666666666666667
+    }
+   }
+  }
+ ]
+}

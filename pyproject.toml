@@ -120,6 +120,26 @@ exclude = [".github/scripts/*.py"]
     "S603",
 ]
 
+# Study scripts are run once to produce a reported table, not imported. Each
+# one imports the foreign tool it probes inside the function that probes it, so
+# a missing optional package fails only that row; they print their JSON to stdout;
+# and the argument names the questions ask are the data, not an API.
+"studies/**/*.py" = [
+    "ANN001",
+    "ANN202",
+    "D100",
+    "D103",
+    "D401",
+    "E501",
+    "E741",
+    "INP001",
+    "PLC0415",
+    "PLR0402",
+    "PLR2004",
+    "T201",
+    "ARG001",
+]
+
 [tool.ruff.lint.isort]
 known-first-party = ["molframe"]
 # `from . import geometry as geometry` is a re-export, and re-exports belong in

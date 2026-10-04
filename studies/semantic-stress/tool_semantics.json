@@ -1,0 +1,280 @@
+{
+ "versions": {
+  "molframe": "0.4.0",
+  "biopython": "1.88",
+  "biotite": "1.7.1",
+  "gemmi": "0.7.5",
+  "MDAnalysis": "not installed"
+ },
+ "table": [
+  {
+   "condition": "auth_seq_id differs from label_seq_id (1AON)",
+   "tool": "molframe",
+   "default_behaviour": "selectors read author ids (Namespace::Auth); label ids need an explicit selector",
+   "information_retained": "both, as separate columns, per residue",
+   "result": {
+    "atoms_by_author_ids": 5,
+    "atoms_by_label_ids": 5
+   },
+   "probe": {
+    "label_chain": "A",
+    "auth_chain": "A",
+    "label_seq": 1,
+    "auth_seq": 2,
+    "name": "ALA"
+   }
+  },
+  {
+   "condition": "auth_seq_id differs from label_seq_id (1AON)",
+   "tool": "biopython",
+   "default_behaviour": "residue.id[1] is auth_seq_id; chain.id is auth_asym_id",
+   "information_retained": "label ids only in the raw MMCIF2Dict, not on Structure objects",
+   "result": {
+    "atoms_by_author_ids": 5,
+    "atoms_by_label_ids": 27,
+    "same_number_names_a_different_residue": true
+   },
+   "probe": {
+    "label_chain": "A",
+    "auth_chain": "A",
+    "label_seq": 1,
+    "auth_seq": 2,
+    "name": "ALA"
+   }
+  },
+  {
+   "condition": "auth_seq_id differs from label_seq_id (1AON)",
+   "tool": "biotite",
+   "default_behaviour": "use_author_fields=True: chain_id and res_id are auth_asym_id and auth_seq_id",
+   "information_retained": "either, by re-reading with use_author_fields=False; not both in one array",
+   "result": {
+    "atoms_by_author_ids": 5,
+    "atoms_by_label_ids": 5
+   },
+   "probe": {
+    "label_chain": "A",
+    "auth_chain": "A",
+    "label_seq": 1,
+    "auth_seq": 2,
+    "name": "ALA"
+   }
+  },
+  {
+   "condition": "auth_seq_id differs from label_seq_id (1AON)",
+   "tool": "gemmi",
+   "default_behaviour": "seqid is auth_seq_id and chain.name is auth_asym_id",
+   "information_retained": "label_seq on every residue, label chain as the residue's subchain",
+   "result": {
+    "atoms_by_author_ids": 5,
+    "atoms_by_label_ids": 5
+   },
+   "probe": {
+    "label_chain": "A",
+    "auth_chain": "A",
+    "label_seq": 1,
+    "auth_seq": 2,
+    "name": "ALA"
+   }
+  },
+  {
+   "condition": "auth_seq_id differs from label_seq_id (1AON)",
+   "tool": "MDAnalysis",
+   "default_behaviour": "reads PDB, GRO and other formats; has no mmCIF reader",
+   "information_retained": "n/a",
+   "result": "not applicable to an mmCIF-only distinction",
+   "probe": {
+    "label_chain": "A",
+    "auth_chain": "A",
+    "label_seq": 1,
+    "auth_seq": 2,
+    "name": "ALA"
+   }
+  },
+  {
+   "condition": "insertion codes (1c1u): residues numbered 52, 52A, 52B",
+   "tool": "molframe",
+   "default_behaviour": "residue identity is the topology row; the insertion code is a column",
+   "information_retained": "insertion code per residue",
+   "result": {
+    "residues": 574
+   },
+   "probe": {
+    "entry": "1c1u",
+    "residues": 574,
+    "distinct_chain_and_number": 531
+   }
+  },
+  {
+   "condition": "insertion codes (1c1u): residues numbered 52, 52A, 52B",
+   "tool": "biopython",
+   "default_behaviour": "residue id is the triple (hetero flag, number, insertion code)",
+   "information_retained": "insertion code in residue.id[2]",
+   "result": {
+    "residues": 574
+   },
+   "probe": {
+    "entry": "1c1u",
+    "residues": 574,
+    "distinct_chain_and_number": 531
+   }
+  },
+  {
+   "condition": "insertion codes (1c1u): residues numbered 52, 52A, 52B",
+   "tool": "biotite",
+   "default_behaviour": "res_id is the number; ins_code is a separate annotation",
+   "information_retained": "ins_code annotation; residue starts are computed from changes of (chain, res_id, ins_code, res_name)",
+   "result": {
+    "residues": 574,
+    "distinct_chain_and_res_id": 531
+   },
+   "probe": {
+    "entry": "1c1u",
+    "residues": 574,
+    "distinct_chain_and_number": 531
+   }
+  },
+  {
+   "condition": "insertion codes (1c1u): residues numbered 52, 52A, 52B",
+   "tool": "gemmi",
+   "default_behaviour": "ResidueId is (number, insertion code)",
+   "information_retained": "icode on every residue",
+   "result": {
+    "residues": 574
+   },
+   "probe": {
+    "entry": "1c1u",
+    "residues": 574,
+    "distinct_chain_and_number": 531
+   }
+  },
+  {
+   "condition": "explicit hydrogens in the input (6d9x): heavy-atom SASA with and without them",
+   "tool": "molframe",
+   "default_behaviour": "every atom of the file occludes; hydrogens are atoms like the rest",
+   "information_retained": "all atoms; removal is an explicit selection",
+   "result": {
+    "hydrogens": 526,
+    "heavy_sasa_with_hydrogens": 9687.360373432639,
+    "heavy_sasa_without_hydrogens": 12268.013592628165
+   }
+  },
+  {
+   "condition": "explicit hydrogens in the input (6d9x): heavy-atom SASA with and without them",
+   "tool": "biotite",
+   "default_behaviour": "every atom occludes, with radii from its own table",
+   "information_retained": "all atoms; filtering is the caller's mask",
+   "result": {
+    "hydrogens": 526,
+    "heavy_sasa_with_hydrogens": 12221.6650390625,
+    "heavy_sasa_without_hydrogens": 12221.6650390625
+   }
+  },
+  {
+   "condition": "explicit hydrogens in the input (6d9x): heavy-atom SASA with and without them",
+   "tool": "biopython",
+   "default_behaviour": "ShrakeRupley uses a radius table keyed by element; hydrogens occlude unless removed",
+   "information_retained": "all atoms",
+   "result": "not run: no comparable SASA default"
+  },
+  {
+   "condition": "explicit hydrogens in the input (6d9x): heavy-atom SASA with and without them",
+   "tool": "gemmi",
+   "default_behaviour": "has no SASA; neighbour searches include hydrogens unless filtered",
+   "information_retained": "all atoms",
+   "result": "not run: no comparable SASA default"
+  },
+  {
+   "condition": "32-model NMR ensemble (2M7C)",
+   "tool": "molframe",
+   "default_behaviour": "analyses run on the first model unless the policy names another or all",
+   "information_retained": "every model",
+   "result": {
+    "models": 32,
+    "atoms_per_model": 300
+   }
+  },
+  {
+   "condition": "32-model NMR ensemble (2M7C)",
+   "tool": "biopython",
+   "default_behaviour": "iterating a Structure yields every model; most examples index model 0",
+   "information_retained": "every model",
+   "result": {
+    "models": 32,
+    "atoms_in_model_0": 300
+   }
+  },
+  {
+   "condition": "32-model NMR ensemble (2M7C)",
+   "tool": "biotite",
+   "default_behaviour": "model=None returns an AtomArrayStack of every model",
+   "information_retained": "every model, as a stack with shared annotations",
+   "result": {
+    "models": 32,
+    "atoms_per_model": 300
+   }
+  },
+  {
+   "condition": "32-model NMR ensemble (2M7C)",
+   "tool": "gemmi",
+   "default_behaviour": "Structure holds every model",
+   "information_retained": "every model",
+   "result": {
+    "models": 32,
+    "atoms_in_model_0": 300
+   }
+  },
+  {
+   "condition": "alternate conformations (synthetic two-conformer probe built from 1UBQ MET1)",
+   "tool": "molframe",
+   "default_behaviour": "ConformerConsistent: one self-consistent label per region, applied by every governed analysis and recorded in its coverage",
+   "information_retained": "every conformer as atoms with an altloc label and occupancy; selection alone does not resolve them",
+   "result": {
+    "atoms_in_file": 8,
+    "atoms_analysed_by_default": 6,
+    "status_by_default": "ambiguous",
+    "atoms_analysed_keep_all": 8,
+    "status_keep_all": "ambiguous",
+    "atoms_selected_by_a_query_under_the_default": 8
+   },
+   "probe": "synthetic: built from real coordinates, not a corpus entry"
+  },
+  {
+   "condition": "alternate conformations (synthetic two-conformer probe built from 1UBQ MET1)",
+   "tool": "biopython",
+   "default_behaviour": "disordered atoms are DisorderedAtom; the highest-occupancy conformer is selected",
+   "information_retained": "all conformers inside DisorderedAtom",
+   "result": {
+    "atoms_iterated": 6,
+    "cb_altloc_selected": "A",
+    "cb_x": 25.112
+   },
+   "probe": "synthetic: built from real coordinates, not a corpus entry"
+  },
+  {
+   "condition": "alternate conformations (synthetic two-conformer probe built from 1UBQ MET1)",
+   "tool": "biotite",
+   "default_behaviour": "altloc='first': the first label of each atom",
+   "information_retained": "with altloc='all' every conformer, labelled in an annotation",
+   "result": {
+    "atoms_by_default": 6,
+    "atoms_with_altloc_all": 8
+   },
+   "probe": "synthetic: built from real coordinates, not a corpus entry"
+  },
+  {
+   "condition": "alternate conformations (synthetic two-conformer probe built from 1UBQ MET1)",
+   "tool": "gemmi",
+   "default_behaviour": "keeps every conformer as its own atom with an altloc character",
+   "information_retained": "all conformers; selection is the caller's",
+   "result": {
+    "atoms_iterated": 8,
+    "altlocs": [
+     "\u0000",
+     "A",
+     "B"
+    ]
+   },
+   "probe": "synthetic: built from real coordinates, not a corpus entry"
+  }
+ ]
+}

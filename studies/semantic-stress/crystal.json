@@ -1,0 +1,139 @@
+{
+ "radius": 5.0,
+ "plan": {
+  "universes": 8,
+  "decisions": [
+   {
+    "field": "assembly",
+    "uncertainty": "interpretive",
+    "rationale": "the deposited unit is what the file holds; the crystal is what it was measured in",
+    "evidence": "every entry here has a unit cell and space-group operators"
+   },
+   {
+    "field": "contact_def",
+    "uncertainty": "algorithmic",
+    "rationale": "no slack, and the library's own default of half an angstrom",
+    "evidence": "ContactDefinition::default"
+   },
+   {
+    "field": "vdw_radii",
+    "uncertainty": "algorithmic",
+    "rationale": "two of the four radius sets that ship with the library",
+    "evidence": "molframe-chem radius tables"
+   }
+  ]
+ },
+ "entries": [
+  {
+   "id": "1crn",
+   "atoms": 327,
+   "residues": 46,
+   "universes": 8,
+   "interface_residues_by_assembly": {
+    "asymmetric_unit": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "crystal:5": [
+     12,
+     27,
+     27,
+     31
+    ]
+   },
+   "agreement_with_first": 0.5,
+   "effects": {
+    "assembly": 1.0,
+    "contact_def": 0.17114695340501793,
+    "vdw_radii": 0.17114695340501793
+   },
+   "shapley": {
+    "assembly": 0.9068982853946551,
+    "contact_def": 0.04655085730267242,
+    "vdw_radii": 0.04655085730267242
+   },
+   "interactions": {
+    "assemblyxcontact_def": 0.022063034438736168,
+    "assemblyxvdw_radii": 0.022063034438736168,
+    "contact_defxvdw_radii": 0.016147566773482138
+   },
+   "balanced": true
+  },
+  {
+   "id": "1ubq",
+   "atoms": 660,
+   "residues": 76,
+   "universes": 8,
+   "interface_residues_by_assembly": {
+    "asymmetric_unit": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "crystal:5": [
+     12,
+     30,
+     31,
+     45
+    ]
+   },
+   "agreement_with_first": 0.5,
+   "effects": {
+    "assembly": 1.0,
+    "contact_def": 0.22777777777777777,
+    "vdw_radii": 0.23655913978494625
+   },
+   "shapley": {
+    "assembly": 0.8674477709257451,
+    "contact_def": 0.06370777057677879,
+    "vdw_radii": 0.06884445849747603
+   },
+   "interactions": {
+    "assemblyxcontact_def": 0.030321902901806048,
+    "assemblyxvdw_radii": 0.03374636151560431,
+    "contact_defxvdw_radii": 0.021869899468884506
+   },
+   "balanced": true
+  },
+  {
+   "id": "4hhb",
+   "atoms": 4779,
+   "residues": 574,
+   "universes": 8,
+   "interface_residues_by_assembly": {
+    "asymmetric_unit": [
+     22,
+     50,
+     55,
+     69
+    ],
+    "crystal:5": [
+     44,
+     95,
+     102,
+     142
+    ]
+   },
+   "agreement_with_first": 0.125,
+   "effects": {
+    "assembly": 0.4871382578235149,
+    "contact_def": 0.3953576992082165,
+    "vdw_radii": 0.4437439213284824
+   },
+   "shapley": {
+    "assembly": 0.4300654660250439,
+    "contact_def": 0.25296175630411066,
+    "vdw_radii": 0.3169727776708453
+   },
+   "interactions": {
+    "assemblyxcontact_def": 0.013365935562611874,
+    "assemblyxvdw_radii": 0.018730757757997738,
+    "contact_defxvdw_radii": 0.16459371359189434
+   },
+   "balanced": true
+  }
+ ]
+}

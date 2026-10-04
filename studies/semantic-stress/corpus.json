@@ -1,0 +1,1972 @@
+{
+ "name": "molframe semantic-stress corpus",
+ "version": 1,
+ "refined_set": {
+  "dataset": "PDBbind v2020 refined set (protein files prepared by X-Tool)",
+  "root": "<refined-set>",
+  "entries": 5316,
+  "strata_sizes": {
+   "control": 2132,
+   "insertion-codes": 413,
+   "multi-chain": 2135,
+   "resolution-high": 1306,
+   "resolution-mid": 4010
+  },
+  "per_stratum": 12,
+  "selection": "sha256(tag:id) ascending within each stratum"
+ },
+ "entries": [
+  {
+   "id": "1bgq",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 2.5,
+   "year": 1999,
+   "ligand": "RDC",
+   "facts": {
+    "atoms": 7008,
+    "residues": 616,
+    "chains": 3,
+    "hydrogen_fraction": 0.4889,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 188,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1bgq/1bgq_protein.pdb",
+     "sha256": "ad4e8c3057807d1b98d14d9c624a3b08fa16e6d43f001c97a071c987e6be0d21"
+    },
+    "ligand": {
+     "path": "1bgq/1bgq_ligand.sdf",
+     "sha256": "0862a2b59ac498a4399bf6d3106e16c7282442ccc0fcdadb71f51d30be724023"
+    },
+    "pocket": {
+     "path": "1bgq/1bgq_pocket.pdb",
+     "sha256": "57a49b3a64e07d1c832b8911408af682037cd06eb11b070b8b0ee984d140d636"
+    }
+   }
+  },
+  {
+   "id": "1c1u",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.75,
+   "year": 2000,
+   "ligand": "BAI",
+   "facts": {
+    "atoms": 4901,
+    "residues": 574,
+    "chains": 3,
+    "hydrogen_fraction": 0.467,
+    "insertion_code_residues": 44,
+    "hetero_atoms": 286,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1c1u/1c1u_protein.pdb",
+     "sha256": "d199c504ad759e774b54d435c6be18fa493233e03399064b1594225f1983877a"
+    },
+    "ligand": {
+     "path": "1c1u/1c1u_ligand.sdf",
+     "sha256": "9943ef46efef3c0370c92ffca6f7489f70ff3911ced28cbe267bb560760f22a4"
+    },
+    "pocket": {
+     "path": "1c1u/1c1u_pocket.pdb",
+     "sha256": "2d7169ccd5d05356ad834343ff136b23e8a12b47c8504d98c07083a50ded301b"
+    }
+   }
+  },
+  {
+   "id": "1c5q",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.43,
+   "year": 2000,
+   "ligand": "ESI",
+   "facts": {
+    "atoms": 3455,
+    "residues": 461,
+    "chains": 2,
+    "hydrogen_fraction": 0.4596,
+    "insertion_code_residues": 4,
+    "hetero_atoms": 238,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1c5q/1c5q_protein.pdb",
+     "sha256": "52447c2e1300fb824d6fe90a52dc92e54d609fbd249f3f3981007f70d4c89de8"
+    },
+    "ligand": {
+     "path": "1c5q/1c5q_ligand.sdf",
+     "sha256": "6ff03e78d03dae4921a7df4c5d52a364d8b8c22737de7b3c4d5449b06a50fb23"
+    },
+    "pocket": {
+     "path": "1c5q/1c5q_pocket.pdb",
+     "sha256": "df1a29d920156095a1dfa61028b9fbebc4587ef6823c59cc58a84fe400e40401"
+    }
+   }
+  },
+  {
+   "id": "1c5s",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.36,
+   "year": 2000,
+   "ligand": "ESX",
+   "facts": {
+    "atoms": 3415,
+    "residues": 421,
+    "chains": 2,
+    "hydrogen_fraction": 0.465,
+    "insertion_code_residues": 3,
+    "hetero_atoms": 198,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1c5s/1c5s_protein.pdb",
+     "sha256": "ff647f643a42a26caf1ebbeec03b7030df7bce5d3ff5a5e940dc9fbcf53da728"
+    },
+    "ligand": {
+     "path": "1c5s/1c5s_ligand.sdf",
+     "sha256": "df49b8fb9b5d581b25a32dbf8b61233a35678f39de1eb8ddc4f417435efb7c3c"
+    },
+    "pocket": {
+     "path": "1c5s/1c5s_pocket.pdb",
+     "sha256": "e893af80f5e035e18ef23b7e232900d5a734d3ba49b0a5f6882ee30503314933"
+    }
+   }
+  },
+  {
+   "id": "1gjc",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.73,
+   "year": 2002,
+   "ligand": "130",
+   "facts": {
+    "atoms": 4068,
+    "residues": 491,
+    "chains": 2,
+    "hydrogen_fraction": 0.4631,
+    "insertion_code_residues": 19,
+    "hetero_atoms": 245,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1gjc/1gjc_protein.pdb",
+     "sha256": "8394c95275f6c7531539bf2c16cd857087ed24064915900fd3280f3ec64e89d7"
+    },
+    "ligand": {
+     "path": "1gjc/1gjc_ligand.sdf",
+     "sha256": "9721a7fbeaabaed71c5ad9ee91fb74de3d9b52798e6531fec49c22a5dd2adf49"
+    },
+    "pocket": {
+     "path": "1gjc/1gjc_pocket.pdb",
+     "sha256": "fce1432bce0de5b43e46f903d923c9ddf4d929f0c175b1c78ac5ddb016466941"
+    }
+   }
+  },
+  {
+   "id": "1km3",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.5,
+   "year": 2002,
+   "ligand": "UP6",
+   "facts": {
+    "atoms": 6870,
+    "residues": 868,
+    "chains": 3,
+    "hydrogen_fraction": 0.4693,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 444,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1km3/1km3_protein.pdb",
+     "sha256": "5cd2faa9cf830c22ce77b00bcb45bd74474b280b2ffa03dfd22e5454474a5793"
+    },
+    "ligand": {
+     "path": "1km3/1km3_ligand.sdf",
+     "sha256": "78b12f36da12aad9144a8d564025ec8f99ab46d70715224071e6d4ee44b3e5a8"
+    },
+    "pocket": {
+     "path": "1km3/1km3_pocket.pdb",
+     "sha256": "2f79b553cdbaf5127209aefc5a8495a53b72410c5e495ef7fddb6b9fb12516cd"
+    }
+   }
+  },
+  {
+   "id": "1nfy",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 2.1,
+   "year": 2003,
+   "ligand": "RTR",
+   "facts": {
+    "atoms": 4585,
+    "residues": 455,
+    "chains": 3,
+    "hydrogen_fraction": 0.4733,
+    "insertion_code_residues": 7,
+    "hetero_atoms": 168,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1nfy/1nfy_protein.pdb",
+     "sha256": "291d28452eab327229177c87d38d78c55a0cc8c2c62e58d646cdcff65dc34953"
+    },
+    "ligand": {
+     "path": "1nfy/1nfy_ligand.sdf",
+     "sha256": "7f180ed891b7e136d404a4086a186e6bb6c7e9b1531462cb50b2178de5911e05"
+    },
+    "pocket": {
+     "path": "1nfy/1nfy_pocket.pdb",
+     "sha256": "4812add864cd21be35ab4355ff5471144bc7e9edba9627f54a90d5fc383af481"
+    }
+   }
+  },
+  {
+   "id": "1pph",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.9,
+   "year": 1994,
+   "ligand": "0ZG",
+   "facts": {
+    "atoms": 3432,
+    "residues": 438,
+    "chains": 2,
+    "hydrogen_fraction": 0.4627,
+    "insertion_code_residues": 3,
+    "hetero_atoms": 215,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1pph/1pph_protein.pdb",
+     "sha256": "44b89aaaf88532c8c43552c4ff369287e5e1d1bf419b406563e41a42d1e55738"
+    },
+    "ligand": {
+     "path": "1pph/1pph_ligand.sdf",
+     "sha256": "c970f6a57026fdeb3fffd2ba9c64baeeec20a8c59324ce8140db78b57cf79967"
+    },
+    "pocket": {
+     "path": "1pph/1pph_pocket.pdb",
+     "sha256": "f57817e5c9e6a2d7434efb6842f7c3bcea52215347d5f9375e2c42f90b42b8df"
+    }
+   }
+  },
+  {
+   "id": "1qyg",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.81,
+   "year": 2003,
+   "ligand": "BCG",
+   "facts": {
+    "atoms": 6837,
+    "residues": 771,
+    "chains": 3,
+    "hydrogen_fraction": 0.4664,
+    "insertion_code_residues": 13,
+    "hetero_atoms": 333,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1qyg/1qyg_protein.pdb",
+     "sha256": "0b649adf08e662a0003ab3cc22e5dadc5d244d4ebcff0adf0242ff09b668e202"
+    },
+    "ligand": {
+     "path": "1qyg/1qyg_ligand.sdf",
+     "sha256": "d792e9572a850c6e280367082bce331d2f50d3eb2e152e3c0efa701d89f0aa5e"
+    },
+    "pocket": {
+     "path": "1qyg/1qyg_pocket.pdb",
+     "sha256": "87c8ccf269223d4f3f9098594b198f247baecceea6a3bb06fabc91153447b529"
+    }
+   }
+  },
+  {
+   "id": "1ssq",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.85,
+   "year": 2004,
+   "ligand": "CYS",
+   "facts": {
+    "atoms": 23876,
+    "residues": 2603,
+    "chains": 7,
+    "hydrogen_fraction": 0.4762,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 1109,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1ssq/1ssq_protein.pdb",
+     "sha256": "7369e562c93b634004ce758ed535a252f7f4f41876dc06d712ff5c82b6e5bc2e"
+    },
+    "ligand": {
+     "path": "1ssq/1ssq_ligand.sdf",
+     "sha256": "2e0d2b3dc9e543a914db81436545b4c6a40ff6931a10ffd318e58134b81e7fc9"
+    },
+    "pocket": {
+     "path": "1ssq/1ssq_pocket.pdb",
+     "sha256": "bb0f20eecdfd0cb27786c9c6c5a5a4f9f770bc6a925031edf1989fb7c56944df"
+    }
+   }
+  },
+  {
+   "id": "1uto",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.15,
+   "year": 2004,
+   "ligand": "PEA",
+   "facts": {
+    "atoms": 3443,
+    "residues": 449,
+    "chains": 2,
+    "hydrogen_fraction": 0.4612,
+    "insertion_code_residues": 3,
+    "hetero_atoms": 226,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1uto/1uto_protein.pdb",
+     "sha256": "3a3d2b0ffb775baa4e338e00740302f7e67b6d846cfc8d4945ec50d657d20a38"
+    },
+    "ligand": {
+     "path": "1uto/1uto_ligand.sdf",
+     "sha256": "645f754b201d457246d1b19490478e3c51be865a894837369b15502763fd76b0"
+    },
+    "pocket": {
+     "path": "1uto/1uto_pocket.pdb",
+     "sha256": "b23458266d2693bb8085f4ec061783db784b5b941d54a2b9219b5d0125ffba03"
+    }
+   }
+  },
+  {
+   "id": "1v2s",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.72,
+   "year": 2004,
+   "ligand": "BEN",
+   "facts": {
+    "atoms": 3341,
+    "residues": 341,
+    "chains": 2,
+    "hydrogen_fraction": 0.4765,
+    "insertion_code_residues": 3,
+    "hetero_atoms": 118,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1v2s/1v2s_protein.pdb",
+     "sha256": "a36974fe3ee0a2f430f2db19819993b6532b0600ed9db720a2160e0ae40a560a"
+    },
+    "ligand": {
+     "path": "1v2s/1v2s_ligand.sdf",
+     "sha256": "df78cb866fbb9e7fe2a21365e6deacefdb141769269db3e2bb414c85ce9cf17a"
+    },
+    "pocket": {
+     "path": "1v2s/1v2s_pocket.pdb",
+     "sha256": "09c59b6970e15aaa54d4894e915d7f988fc9993c3099525326856310bc96a6df"
+    }
+   }
+  },
+  {
+   "id": "1w3k",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.2,
+   "year": 2004,
+   "ligand": "BGC-OXZ",
+   "facts": {
+    "atoms": 5022,
+    "residues": 760,
+    "chains": 2,
+    "hydrogen_fraction": 0.4351,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 460,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1w3k/1w3k_protein.pdb",
+     "sha256": "43670613acaaa36710cb566cb8f3ed58959ffe13215405d3cce4a4ef3a99d116"
+    },
+    "ligand": {
+     "path": "1w3k/1w3k_ligand.sdf",
+     "sha256": "3478a55f926b642ed70c6e0dcd1d0d17ca6b36dcead555e39671292127a81492"
+    },
+    "pocket": {
+     "path": "1w3k/1w3k_pocket.pdb",
+     "sha256": "5e33a1ddb15d7fb2f98fe0fcb654c9cba04183894cfc74ac3e67bec1969f620c"
+    }
+   }
+  },
+  {
+   "id": "1yei",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.9,
+   "year": 1999,
+   "ligand": "PGG",
+   "facts": {
+    "atoms": 6856,
+    "residues": 596,
+    "chains": 3,
+    "hydrogen_fraction": 0.4831,
+    "insertion_code_residues": 15,
+    "hetero_atoms": 155,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "1yei/1yei_protein.pdb",
+     "sha256": "e31173a567620b33801e773759f79207a933e4266dd3f26198650b5d9a17a42a"
+    },
+    "ligand": {
+     "path": "1yei/1yei_ligand.sdf",
+     "sha256": "80f512ebb7aa8534cd27ff4e6f6bc91262b8cfd966b69bc98f40d3e5e7d5c797"
+    },
+    "pocket": {
+     "path": "1yei/1yei_pocket.pdb",
+     "sha256": "21a5ab5a9e4f721efadfb3540b079ce9ec8141a27c4f6c2ccd9c723b69b50a8a"
+    }
+   }
+  },
+  {
+   "id": "2drc",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.9,
+   "year": 1994,
+   "ligand": "MTX",
+   "facts": {
+    "atoms": 4950,
+    "residues": 367,
+    "chains": 3,
+    "hydrogen_fraction": 0.4846,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 49,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2drc/2drc_protein.pdb",
+     "sha256": "7aae2e4ee00e5b4be3db8531f4e291595f26cd06f8003d51c3951e99eada20bc"
+    },
+    "ligand": {
+     "path": "2drc/2drc_ligand.sdf",
+     "sha256": "273b44b2175043641fa080bdd21a9eb91381adccee28cc1f2bb70f254e092929"
+    },
+    "pocket": {
+     "path": "2drc/2drc_pocket.pdb",
+     "sha256": "a24ef7c51e7672fe121c3014ce732c73ddebf79aa1d31b8f28e39eb95be85112"
+    }
+   }
+  },
+  {
+   "id": "2e9u",
+   "strata": [
+    "control"
+   ],
+   "resolution": 2.0,
+   "year": 2008,
+   "ligand": "A25",
+   "facts": {
+    "atoms": 4639,
+    "residues": 551,
+    "chains": 2,
+    "hydrogen_fraction": 0.4682,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 282,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2e9u/2e9u_protein.pdb",
+     "sha256": "b26790bfc56f90ee96626444c7c9e114fb04c7ebd36756dddb5427b6f2e894d5"
+    },
+    "ligand": {
+     "path": "2e9u/2e9u_ligand.sdf",
+     "sha256": "a95d49b45e1bea8665991bf21b13de30cd2313201cb39aba74dcf92f8fcd8b09"
+    },
+    "pocket": {
+     "path": "2e9u/2e9u_pocket.pdb",
+     "sha256": "e747fd0d8dad04938d7b25bf16939ff0d385e5b1ff73f904c0ad44324efb1119"
+    }
+   }
+  },
+  {
+   "id": "2p15",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 1.94,
+   "year": 2007,
+   "ligand": "EZT",
+   "facts": {
+    "atoms": 8191,
+    "residues": 945,
+    "chains": 3,
+    "hydrogen_fraction": 0.477,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 461,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2p15/2p15_protein.pdb",
+     "sha256": "020781d66fc7721bc560ae646b480aa4b5662196365cd235de828394b7840998"
+    },
+    "ligand": {
+     "path": "2p15/2p15_ligand.sdf",
+     "sha256": "36e926ede2120ca4f3ebdebe3a37b5e0a43a5cd91df529718cb752f0625f3a44"
+    },
+    "pocket": {
+     "path": "2p15/2p15_pocket.pdb",
+     "sha256": "5d9409fdd7337ee83cfcfa47dc68d6ec790271dbc7dcddd52252acb2ecab4de8"
+    }
+   }
+  },
+  {
+   "id": "2q64",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 2.5,
+   "year": 2008,
+   "ligand": "1UN",
+   "facts": {
+    "atoms": 3153,
+    "residues": 253,
+    "chains": 3,
+    "hydrogen_fraction": 0.5056,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 55,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2q64/2q64_protein.pdb",
+     "sha256": "fbd09310adb11f3b1717b428a6877d4db91595f7d3b7950d2eb39c9ab168b8d9"
+    },
+    "ligand": {
+     "path": "2q64/2q64_ligand.sdf",
+     "sha256": "5069388adf445c658584c40421939d1ffbbef078b9835763d66d018e00bb7c0f"
+    },
+    "pocket": {
+     "path": "2q64/2q64_pocket.pdb",
+     "sha256": "de2167c94647d2ac629d222f20381f696dddf9f6dc66aaf852d7e092cd05b3e3"
+    }
+   }
+  },
+  {
+   "id": "2qpq",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 1.92,
+   "year": 2007,
+   "ligand": "CIT",
+   "facts": {
+    "atoms": 4678,
+    "residues": 557,
+    "chains": 2,
+    "hydrogen_fraction": 0.4758,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 261,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2qpq/2qpq_protein.pdb",
+     "sha256": "5a1108c9e40f1133af5f5d87d6bf63db48b1ea6833c35e1cfa16bdc54a0a29cf"
+    },
+    "ligand": {
+     "path": "2qpq/2qpq_ligand.sdf",
+     "sha256": "86dc657cadd6bc72f9f3a139e7321f88ae01023c738b68c9be7c6b24460d9130"
+    },
+    "pocket": {
+     "path": "2qpq/2qpq_pocket.pdb",
+     "sha256": "dc37722f8b5cc819c043ba0870bcb71341f3ea01e102fdc1766318c9cf6eff8e"
+    }
+   }
+  },
+  {
+   "id": "2ra6",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.5,
+   "year": 2007,
+   "ligand": "ETY",
+   "facts": {
+    "atoms": 4778,
+    "residues": 471,
+    "chains": 3,
+    "hydrogen_fraction": 0.4674,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 188,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2ra6/2ra6_protein.pdb",
+     "sha256": "56cfd1f9cc120b310172e24542a613250c0bad79c37ba178899068ea7562f8f5"
+    },
+    "ligand": {
+     "path": "2ra6/2ra6_ligand.sdf",
+     "sha256": "1a204ac3e1d47f9839e527be552c2cb5f1812780146c03a3d2e82345288ef4f2"
+    },
+    "pocket": {
+     "path": "2ra6/2ra6_pocket.pdb",
+     "sha256": "1bc3d27b53b69a64ede86a22073608946d450d25f7921a357a6eae1b35498842"
+    }
+   }
+  },
+  {
+   "id": "2w5g",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 1.7,
+   "year": 2009,
+   "ligand": "ATP",
+   "facts": {
+    "atoms": 1821,
+    "residues": 173,
+    "chains": 2,
+    "hydrogen_fraction": 0.4673,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 49,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2w5g/2w5g_protein.pdb",
+     "sha256": "93b567bb79248ad05131893eda80f748fc4d78d3a48969bd8450610b59a47b71"
+    },
+    "ligand": {
+     "path": "2w5g/2w5g_ligand.sdf",
+     "sha256": "60ae0e3a8b387d6ed37d44f97523324902aee73bee27df239095ddd69d10056d"
+    },
+    "pocket": {
+     "path": "2w5g/2w5g_pocket.pdb",
+     "sha256": "45aaf8ad1646163560c9f6b4320c9ab3126e6fffc64e9104f990d7abdc413b8e"
+    }
+   }
+  },
+  {
+   "id": "2y7z",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.84,
+   "year": 2011,
+   "ligand": "C0Z",
+   "facts": {
+    "atoms": 4586,
+    "residues": 498,
+    "chains": 3,
+    "hydrogen_fraction": 0.4684,
+    "insertion_code_residues": 7,
+    "hetero_atoms": 210,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "2y7z/2y7z_protein.pdb",
+     "sha256": "5837f6690144af1907462d21f2e5a52de84a302e8bab12aa4b3955db9b165d68"
+    },
+    "ligand": {
+     "path": "2y7z/2y7z_ligand.sdf",
+     "sha256": "6e229cd78d6cc98747b1dde810ca7961f33fcacf4a1ce35619a635102149817e"
+    },
+    "pocket": {
+     "path": "2y7z/2y7z_pocket.pdb",
+     "sha256": "f2b078f2d384814da1db628954a8e34d735439c27cb4ee77b29854c20176e472"
+    }
+   }
+  },
+  {
+   "id": "3arw",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.5,
+   "year": 2011,
+   "ligand": "CTI",
+   "facts": {
+    "atoms": 9486,
+    "residues": 1501,
+    "chains": 2,
+    "hydrogen_fraction": 0.438,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 926,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3arw/3arw_protein.pdb",
+     "sha256": "0371498e52fa602a19eb76aae18e6047cc28570b153eefa936a252a2f309a5bc"
+    },
+    "ligand": {
+     "path": "3arw/3arw_ligand.sdf",
+     "sha256": "1e3f7e52f29ab6d6484a7150633ca40eacabeee7cd98e75043b780984bd84c4c"
+    },
+    "pocket": {
+     "path": "3arw/3arw_pocket.pdb",
+     "sha256": "dda525aff60dfd7d4272fe61edf8383e23ae89b3faac456609694db691600792"
+    }
+   }
+  },
+  {
+   "id": "3bgc",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 1.8,
+   "year": 2008,
+   "ligand": "LJH",
+   "facts": {
+    "atoms": 3223,
+    "residues": 353,
+    "chains": 3,
+    "hydrogen_fraction": 0.4871,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 155,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3bgc/3bgc_protein.pdb",
+     "sha256": "7bd235df68c75b1fc1541f73599b9b81e35cb98baa79d4cd5dcbaca50f6b0b83"
+    },
+    "ligand": {
+     "path": "3bgc/3bgc_ligand.sdf",
+     "sha256": "f92a1bc3fa437632733ec83bb03c78111be276b6be853dbaf61802e15b661c83"
+    },
+    "pocket": {
+     "path": "3bgc/3bgc_pocket.pdb",
+     "sha256": "ae74bc0a6ecfbbcbeddca41bcc5a8990a2d4a3efe6c2009ec1cee9ad98921b99"
+    }
+   }
+  },
+  {
+   "id": "3cd5",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 2.39,
+   "year": 2008,
+   "ligand": "7HI",
+   "facts": {
+    "atoms": 25663,
+    "residues": 2130,
+    "chains": 5,
+    "hydrogen_fraction": 0.4944,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 446,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3cd5/3cd5_protein.pdb",
+     "sha256": "aef8778494df4ff83a36b08b51b66171c3dc0087ff0e877092b6495918fbbf9e"
+    },
+    "ligand": {
+     "path": "3cd5/3cd5_ligand.sdf",
+     "sha256": "c6d4830acd85742386ba0a64a34b1856ba353361db1beec770423341a35049a4"
+    },
+    "pocket": {
+     "path": "3cd5/3cd5_pocket.pdb",
+     "sha256": "aa08fe905bb6649037ccaab39eeb45f6dee26e33e09810f2bdd03b16f8b1e939"
+    }
+   }
+  },
+  {
+   "id": "3fh7",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 2.05,
+   "year": 2010,
+   "ligand": "25P",
+   "facts": {
+    "atoms": 10176,
+    "residues": 1133,
+    "chains": 2,
+    "hydrogen_fraction": 0.4714,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 526,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3fh7/3fh7_protein.pdb",
+     "sha256": "1f283b0844a9ac007f50a375cef4455b1685a89b20c8b431f2fc60f0b6c1a9cc"
+    },
+    "ligand": {
+     "path": "3fh7/3fh7_ligand.sdf",
+     "sha256": "9eb4c6239664b8ceeb3a7e4d1d4d660c0ddce61b8c9a5822755034533dc8f294"
+    },
+    "pocket": {
+     "path": "3fh7/3fh7_pocket.pdb",
+     "sha256": "c90a80f252582e5ad84495fc41a54ba2e11cb74f6fb3a0d3686c111952249195"
+    }
+   }
+  },
+  {
+   "id": "3ga5",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.87,
+   "year": 2009,
+   "ligand": "RGG",
+   "facts": {
+    "atoms": 4986,
+    "residues": 658,
+    "chains": 2,
+    "hydrogen_fraction": 0.4641,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 353,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3ga5/3ga5_protein.pdb",
+     "sha256": "0ddbb5105c5fa73e1eb82eaa734e7b077f6bddca06a9e6add6a6614e33ea72f4"
+    },
+    "ligand": {
+     "path": "3ga5/3ga5_ligand.sdf",
+     "sha256": "7b2f2483f6b2a1e6034b81fcd2b97ea380fcf3935e8e42e709fe0bfe152429c7"
+    },
+    "pocket": {
+     "path": "3ga5/3ga5_pocket.pdb",
+     "sha256": "c3b902d468e66c4d39de523f8140b8c327173c6e33d1d687d486195c5ed2e480"
+    }
+   }
+  },
+  {
+   "id": "3hs4",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.1,
+   "year": 2009,
+   "ligand": "AZM",
+   "facts": {
+    "atoms": 4443,
+    "residues": 657,
+    "chains": 2,
+    "hydrogen_fraction": 0.4488,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 400,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3hs4/3hs4_protein.pdb",
+     "sha256": "946c039a024640f1ffd05ac5299fe1836e70bfca596e7254d7fdb52cf8c200d5"
+    },
+    "ligand": {
+     "path": "3hs4/3hs4_ligand.sdf",
+     "sha256": "d063fe38e160e89304cc3bfdd19b955c8e87f7fcf22b37fe428f6d417510c0be"
+    },
+    "pocket": {
+     "path": "3hs4/3hs4_pocket.pdb",
+     "sha256": "d302b38c4d5500b39e5f76deb8a2bbbe7a6a899de7e1f13b1627fe06d26c2f80"
+    }
+   }
+  },
+  {
+   "id": "3mdz",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 2.32,
+   "year": 2010,
+   "ligand": "EZL",
+   "facts": {
+    "atoms": 3933,
+    "residues": 308,
+    "chains": 2,
+    "hydrogen_fraction": 0.4823,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 49,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3mdz/3mdz_protein.pdb",
+     "sha256": "8e2f22e9c2c2f7e936c8ec49b21a8705e63d1ad0c01e094ab96b2b99299a42c8"
+    },
+    "ligand": {
+     "path": "3mdz/3mdz_ligand.sdf",
+     "sha256": "c79fd30a280f38d5140771e63bedd9aa0fb02797eb2e752a65ec46c02daf7d71"
+    },
+    "pocket": {
+     "path": "3mdz/3mdz_pocket.pdb",
+     "sha256": "4e6e2b23c0f1adde9d71472d57492a858c3a0d86fe181d7b9af1806d2c9f583e"
+    }
+   }
+  },
+  {
+   "id": "3n7o",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.8,
+   "year": 2010,
+   "ligand": "N7O",
+   "facts": {
+    "atoms": 3621,
+    "residues": 385,
+    "chains": 2,
+    "hydrogen_fraction": 0.4778,
+    "insertion_code_residues": 7,
+    "hetero_atoms": 162,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3n7o/3n7o_protein.pdb",
+     "sha256": "8715de57a68017f321ffdadd4dd0e27a303ac28ce5eece0faf70ab21c8d06cd4"
+    },
+    "ligand": {
+     "path": "3n7o/3n7o_ligand.sdf",
+     "sha256": "ad607a73fb1cc52fb7347172378b82541f3352df29bd46f73ad47f23ab153ad9"
+    },
+    "pocket": {
+     "path": "3n7o/3n7o_pocket.pdb",
+     "sha256": "753edc39bf477e3e72f1698e3d08dc1472d516ea4b27ec291a30cb667022725c"
+    }
+   }
+  },
+  {
+   "id": "3q6z",
+   "strata": [
+    "control"
+   ],
+   "resolution": 2.23,
+   "year": 2011,
+   "ligand": "APR",
+   "facts": {
+    "atoms": 2921,
+    "residues": 245,
+    "chains": 2,
+    "hydrogen_fraction": 0.4957,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 60,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3q6z/3q6z_protein.pdb",
+     "sha256": "a66ca5727fc9430bce1066adb71ea94ff173818acb1a30567fd6cbf84b34531b"
+    },
+    "ligand": {
+     "path": "3q6z/3q6z_ligand.sdf",
+     "sha256": "c0e6bf33876eee428de59dcfdb4989dd3917ccefa63e50deda6cc39c7115d5c7"
+    },
+    "pocket": {
+     "path": "3q6z/3q6z_pocket.pdb",
+     "sha256": "afba343995c4e0563bb8d618068f6cfa7408131119beef579d78f3204d0559ab"
+    }
+   }
+  },
+  {
+   "id": "3r4p",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.7,
+   "year": 2011,
+   "ligand": "FU7",
+   "facts": {
+    "atoms": 3685,
+    "residues": 415,
+    "chains": 2,
+    "hydrogen_fraction": 0.4703,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 193,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3r4p/3r4p_protein.pdb",
+     "sha256": "84cdf1a870ddce8ce7b5dd78ae7f73cb92445b35d0eba970e49818d54fa3496c"
+    },
+    "ligand": {
+     "path": "3r4p/3r4p_ligand.sdf",
+     "sha256": "df4ca49d40e0d2f341ee453d17bbe2c6fb246f96124b4c963ff70bfa408ad7e8"
+    },
+    "pocket": {
+     "path": "3r4p/3r4p_pocket.pdb",
+     "sha256": "5fe0e4e053b4b6d46b7ef935a7fa8cf52e29f56bc7d24e0818e45ec5c640de39"
+    }
+   }
+  },
+  {
+   "id": "3s8o",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.85,
+   "year": 2011,
+   "ligand": "5-mer",
+   "facts": {
+    "atoms": 1731,
+    "residues": 193,
+    "chains": 2,
+    "hydrogen_fraction": 0.4679,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 92,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3s8o/3s8o_protein.pdb",
+     "sha256": "46f362faae316df5a0e00324b72e870237be575b6064fea57bb66064a8781b21"
+    },
+    "ligand": {
+     "path": "3s8o/3s8o_ligand.sdf",
+     "sha256": "e34c4716652d880de75195294b3a352f87228388850cf2f339d03a9aa4b518fc"
+    },
+    "pocket": {
+     "path": "3s8o/3s8o_pocket.pdb",
+     "sha256": "62be608300cf2dd6b770cf790f6e680b0eacf25d04163066c518138a83fa1806"
+    }
+   }
+  },
+  {
+   "id": "3shc",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 1.9,
+   "year": 2012,
+   "ligand": "B01",
+   "facts": {
+    "atoms": 4661,
+    "residues": 504,
+    "chains": 3,
+    "hydrogen_fraction": 0.4714,
+    "insertion_code_residues": 37,
+    "hetero_atoms": 225,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3shc/3shc_protein.pdb",
+     "sha256": "7ba5531262338f2958cd7b3ae1484bdf220ca2407e817429fdc0b3be1c921f12"
+    },
+    "ligand": {
+     "path": "3shc/3shc_ligand.sdf",
+     "sha256": "1d3155ab4aa80e86e986d23ad8342690f4018f87b5a57f369834da4fef4de081"
+    },
+    "pocket": {
+     "path": "3shc/3shc_pocket.pdb",
+     "sha256": "b63211c0baa673da39a52b461e89d509cecbb947b029240fc90704b7b480cc85"
+    }
+   }
+  },
+  {
+   "id": "3zk6",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 2.48,
+   "year": 2013,
+   "ligand": "H1I",
+   "facts": {
+    "atoms": 2305,
+    "residues": 170,
+    "chains": 2,
+    "hydrogen_fraction": 0.4824,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 26,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "3zk6/3zk6_protein.pdb",
+     "sha256": "7320015d5c2a2fa60d700570fe2953370f9288f4963ba4ee062c141e1ecb7336"
+    },
+    "ligand": {
+     "path": "3zk6/3zk6_ligand.sdf",
+     "sha256": "27093e7f4dbfb0298e0bbbd7d6cb98a94a52ae2dfdb065826666c05cb3951076"
+    },
+    "pocket": {
+     "path": "3zk6/3zk6_pocket.pdb",
+     "sha256": "441e8edc9b8988728d4b7ec34f41f3ce19f478efb78c4c9fdd9968f1b3948ac0"
+    }
+   }
+  },
+  {
+   "id": "4avs",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.4,
+   "year": 2013,
+   "ligand": "N7P",
+   "facts": {
+    "atoms": 11270,
+    "residues": 2305,
+    "chains": 6,
+    "hydrogen_fraction": 0.1544,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 1285,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4avs/4avs_protein.pdb",
+     "sha256": "976dddc45052f06a1dd0a799e0e69763a4e1df19c4eef6079394331c0c82c68a"
+    },
+    "ligand": {
+     "path": "4avs/4avs_ligand.sdf",
+     "sha256": "b8b2834602247cbc998240c526ec17319af6e773e9d38d646e30e012572a09ec"
+    },
+    "pocket": {
+     "path": "4avs/4avs_pocket.pdb",
+     "sha256": "c60c6a854ce9876a4ad72c0d98a988f207886fc7befbbb12def1335ef6aefc74"
+    }
+   }
+  },
+  {
+   "id": "4h3j",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.6,
+   "year": 2012,
+   "ligand": "10W",
+   "facts": {
+    "atoms": 6536,
+    "residues": 900,
+    "chains": 2,
+    "hydrogen_fraction": 0.4538,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 510,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4h3j/4h3j_protein.pdb",
+     "sha256": "6669c0fef4510f2dc9bbd3a6f00ce66a1830116d2dca2d484c711075b1862c43"
+    },
+    "ligand": {
+     "path": "4h3j/4h3j_ligand.sdf",
+     "sha256": "314e8a4185d72a3ff8c7074a213290f0d2023cd9d9dce7814a8e2858e34291da"
+    },
+    "pocket": {
+     "path": "4h3j/4h3j_pocket.pdb",
+     "sha256": "a13384d67bb104da1de2d7d8acb869df44817786ee09ede41ae3d7cd5a5d470a"
+    }
+   }
+  },
+  {
+   "id": "4iuo",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.8,
+   "year": 2013,
+   "ligand": "QIC",
+   "facts": {
+    "atoms": 8404,
+    "residues": 954,
+    "chains": 3,
+    "hydrogen_fraction": 0.477,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 435,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4iuo/4iuo_protein.pdb",
+     "sha256": "8a232d508ef086fcb9f8f06ab1d3297dc03fb72a0461d931da0c6fe34befc077"
+    },
+    "ligand": {
+     "path": "4iuo/4iuo_ligand.sdf",
+     "sha256": "d2ef0c32b4961892f27e13564d44e3f8b38d5d60290870a5775d51bcf6ffa945"
+    },
+    "pocket": {
+     "path": "4iuo/4iuo_pocket.pdb",
+     "sha256": "ca462f9e1da0e1e301ee482ef551b572ec64e490883a00c310d51e73d83127ac"
+    }
+   }
+  },
+  {
+   "id": "4k77",
+   "strata": [
+    "control"
+   ],
+   "resolution": 2.4,
+   "year": 2013,
+   "ligand": "1Q4",
+   "facts": {
+    "atoms": 4664,
+    "residues": 354,
+    "chains": 2,
+    "hydrogen_fraction": 0.4919,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 120,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4k77/4k77_protein.pdb",
+     "sha256": "6d9348237d7a50577fbfde494b74d3ca3960cad5a0cc05aef950d532e2b62866"
+    },
+    "ligand": {
+     "path": "4k77/4k77_ligand.sdf",
+     "sha256": "6fbe00f1e2a1a65ebda17faa14cd9f6c6ccd55016d72fe431a252cc465e273f0"
+    },
+    "pocket": {
+     "path": "4k77/4k77_pocket.pdb",
+     "sha256": "ba96ac41ae84abf60b00936662efd6e7140a1e6a99542ac30758ab785214477e"
+    }
+   }
+  },
+  {
+   "id": "4keq",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 2.28,
+   "year": 2014,
+   "ligand": "5PN",
+   "facts": {
+    "atoms": 5213,
+    "residues": 625,
+    "chains": 3,
+    "hydrogen_fraction": 0.1654,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 85,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4keq/4keq_protein.pdb",
+     "sha256": "73b70c07e09821d6ccd7f5d26656e6e94cd4c4e67d2a3a78f4ca319583f299ec"
+    },
+    "ligand": {
+     "path": "4keq/4keq_ligand.sdf",
+     "sha256": "b38e5c279f92645a1db21e947ebfac0697e370214dee309508da329dfa1627be"
+    },
+    "pocket": {
+     "path": "4keq/4keq_pocket.pdb",
+     "sha256": "b5d8b3d81f645ac321321b57fc29f57a7d2ce3c3baf9b286cce19388e6fdb9c5"
+    }
+   }
+  },
+  {
+   "id": "4mdn",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 1.91,
+   "year": 2013,
+   "ligand": "Y30",
+   "facts": {
+    "atoms": 1653,
+    "residues": 165,
+    "chains": 2,
+    "hydrogen_fraction": 0.4894,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 71,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4mdn/4mdn_protein.pdb",
+     "sha256": "7691b857647a27a597526df867706fd9cf688a8a11866e133bdb6fa31622686b"
+    },
+    "ligand": {
+     "path": "4mdn/4mdn_ligand.sdf",
+     "sha256": "ada2074b9cef76348a57be84f1ed477550f082834b972a3461966d50e96ad593"
+    },
+    "pocket": {
+     "path": "4mdn/4mdn_pocket.pdb",
+     "sha256": "cee43b3d415b8c5e72b6ec81c4cd6d06208744bb6f8ec81bf9fd2da818d28f62"
+    }
+   }
+  },
+  {
+   "id": "4oag",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 2.0,
+   "year": 2014,
+   "ligand": "ADP",
+   "facts": {
+    "atoms": 6698,
+    "residues": 1183,
+    "chains": 3,
+    "hydrogen_fraction": 0.1596,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 531,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4oag/4oag_protein.pdb",
+     "sha256": "acf2d92e06cec109ea99703bb25acca451528487d3436520ef49db2e63fc45d6"
+    },
+    "ligand": {
+     "path": "4oag/4oag_ligand.sdf",
+     "sha256": "3433b88a1893b9b4a67f8b3361af80c144c07e27c5e70eae57059a2e7344160b"
+    },
+    "pocket": {
+     "path": "4oag/4oag_pocket.pdb",
+     "sha256": "f6061c6731769881d59dc92d0546f50b533a8327b5b7179fe583dbea42b5d787"
+    }
+   }
+  },
+  {
+   "id": "4ovg",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.9,
+   "year": 2014,
+   "ligand": "2VF",
+   "facts": {
+    "atoms": 7332,
+    "residues": 1256,
+    "chains": 3,
+    "hydrogen_fraction": 0.1638,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 529,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4ovg/4ovg_protein.pdb",
+     "sha256": "1f0bc075125e9bb012f5ea790bffba1ba4d38e54a0a8ff27f026ed9051651b82"
+    },
+    "ligand": {
+     "path": "4ovg/4ovg_ligand.sdf",
+     "sha256": "8899434bb74b13cd74b1cbbd9eeb070891c35483dd691b7c0fc92b097cf36796"
+    },
+    "pocket": {
+     "path": "4ovg/4ovg_pocket.pdb",
+     "sha256": "eb1af7128c80efa2fcc0377068d95e2c98dac77585eefb3c22956c74401065a6"
+    }
+   }
+  },
+  {
+   "id": "4u6w",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.83,
+   "year": 2015,
+   "ligand": "Q08",
+   "facts": {
+    "atoms": 3107,
+    "residues": 500,
+    "chains": 2,
+    "hydrogen_fraction": 0.167,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 196,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4u6w/4u6w_protein.pdb",
+     "sha256": "1edd787d1b6a9e489dbef558277abdcea5358e4806fe556597c10ceb9c796f87"
+    },
+    "ligand": {
+     "path": "4u6w/4u6w_ligand.sdf",
+     "sha256": "c64d80d6836bd1279e84540ac1201f771fc544da341f94ecaf111d1be091eb3f"
+    },
+    "pocket": {
+     "path": "4u6w/4u6w_pocket.pdb",
+     "sha256": "c771e08b2a87ca956db7555d32220dd69c5bad5d2ed599bc754b033f14658e1d"
+    }
+   }
+  },
+  {
+   "id": "4xtz",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.9,
+   "year": 2015,
+   "ligand": "594",
+   "facts": {
+    "atoms": 2619,
+    "residues": 444,
+    "chains": 2,
+    "hydrogen_fraction": 0.176,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 178,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4xtz/4xtz_protein.pdb",
+     "sha256": "84258643764a6f1c2270f5e8e1260be34b2602e60439e16e5ffd178263ae0555"
+    },
+    "ligand": {
+     "path": "4xtz/4xtz_ligand.sdf",
+     "sha256": "f51a34a9d7afea2441f03de3d1ba08809c84e8a95e679a66d429ee4c32364592"
+    },
+    "pocket": {
+     "path": "4xtz/4xtz_pocket.pdb",
+     "sha256": "cb95a115a818a84b69512139eca2e5ed82505c111792fa432b44aca847f0bf58"
+    }
+   }
+  },
+  {
+   "id": "4z1k",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.35,
+   "year": 2015,
+   "ligand": "4KB",
+   "facts": {
+    "atoms": 2696,
+    "residues": 500,
+    "chains": 2,
+    "hydrogen_fraction": 0.1569,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 243,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "4z1k/4z1k_protein.pdb",
+     "sha256": "2fa64df39d297273fb72097ec7015f7c5e99b0642c66d307c1ecd07b29cebbe2"
+    },
+    "ligand": {
+     "path": "4z1k/4z1k_ligand.sdf",
+     "sha256": "abaec8f16e1acd874850dbe2703bc0d80b44a6b71afd79d23e92b16a929d555b"
+    },
+    "pocket": {
+     "path": "4z1k/4z1k_pocket.pdb",
+     "sha256": "0ef0ac8fcfd1e710e8dac64db4e700f5172cb2ebb15bd2872780b7f69cc84af2"
+    }
+   }
+  },
+  {
+   "id": "5c28",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.56,
+   "year": 2015,
+   "ligand": "4XV",
+   "facts": {
+    "atoms": 3454,
+    "residues": 612,
+    "chains": 2,
+    "hydrogen_fraction": 0.1584,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 287,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5c28/5c28_protein.pdb",
+     "sha256": "31ecf25724404702a9d81e29b75e3fe86818a29871a2efc64d676f340338a437"
+    },
+    "ligand": {
+     "path": "5c28/5c28_ligand.sdf",
+     "sha256": "6bb87906eebcc5bc00beb268c3079087cfe89e4a8641d2e9eb721659b1f2582d"
+    },
+    "pocket": {
+     "path": "5c28/5c28_pocket.pdb",
+     "sha256": "37f85e5c9ac4f7c7edeb89d217b6ecbc4142a7827d3749f2069fb529e6758a32"
+    }
+   }
+  },
+  {
+   "id": "5kr1",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.6,
+   "year": 2016,
+   "ligand": "017",
+   "facts": {
+    "atoms": 2036,
+    "residues": 404,
+    "chains": 3,
+    "hydrogen_fraction": 0.1601,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 206,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5kr1/5kr1_protein.pdb",
+     "sha256": "27ef548af22b04e8324ba61643e9372cf6173d17185bdbe2183d46ec94da7737"
+    },
+    "ligand": {
+     "path": "5kr1/5kr1_ligand.sdf",
+     "sha256": "85d676e451fd75b7a19c1c7eef7007732d6293c6972a566c711e8bc5aeaba0b2"
+    },
+    "pocket": {
+     "path": "5kr1/5kr1_pocket.pdb",
+     "sha256": "4559a198b9ac1bfb832ed4bda267111f1474ad7b7ca4d870dc79ac4ecc28c866"
+    }
+   }
+  },
+  {
+   "id": "5n2z",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.37,
+   "year": 2017,
+   "ligand": "8JH",
+   "facts": {
+    "atoms": 3319,
+    "residues": 697,
+    "chains": 2,
+    "hydrogen_fraction": 0.1594,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 381,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5n2z/5n2z_protein.pdb",
+     "sha256": "342ca49cce18ddec96ed554a30a2bcb60a88882e5598b2078821d1b2f9b9d82e"
+    },
+    "ligand": {
+     "path": "5n2z/5n2z_ligand.sdf",
+     "sha256": "4447881a2c2bf9a3033df6385b429d63fc45ac1159164a4efda3f5ff79f0d1ff"
+    },
+    "pocket": {
+     "path": "5n2z/5n2z_pocket.pdb",
+     "sha256": "75a3ad5dfcf217dfa4bd0ae875f3e36f81499e78352e12b7cae29d402ae5cc66"
+    }
+   }
+  },
+  {
+   "id": "5nk7",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.89,
+   "year": 2017,
+   "ligand": "8ZZ",
+   "facts": {
+    "atoms": 2998,
+    "residues": 511,
+    "chains": 2,
+    "hydrogen_fraction": 0.1671,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 227,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5nk7/5nk7_protein.pdb",
+     "sha256": "1cd84df3488007e378bbbb4cfe438cdab7c5500ab215fc4f00cf5c4104a2f79a"
+    },
+    "ligand": {
+     "path": "5nk7/5nk7_ligand.sdf",
+     "sha256": "bb5e64c58d0d312987ac2fb8cf94607e6a8b607e23c1dec42c53f2bda277492a"
+    },
+    "pocket": {
+     "path": "5nk7/5nk7_pocket.pdb",
+     "sha256": "a71a3513bb67ba0903e63036cf5864f71fafdbf74bd69a136b5831cdad0bf3cc"
+    }
+   }
+  },
+  {
+   "id": "5ttw",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 1.74,
+   "year": 2017,
+   "ligand": "5-mer",
+   "facts": {
+    "atoms": 3774,
+    "residues": 649,
+    "chains": 2,
+    "hydrogen_fraction": 0.1622,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 287,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5ttw/5ttw_protein.pdb",
+     "sha256": "2f799d471e77f46ca75d7e66aa99667fe87063a8496616a51b98f9d1c4ba9e0d"
+    },
+    "ligand": {
+     "path": "5ttw/5ttw_ligand.sdf",
+     "sha256": "a5c655dbf851e430d55e70077ceb8de0a0548ee4169c63e825e1f78bf08fc0c7"
+    },
+    "pocket": {
+     "path": "5ttw/5ttw_pocket.pdb",
+     "sha256": "a45658da20bdb3c0ce25359f75f27c409a077b863b5459322ca5a6f7fc9b9687"
+    }
+   }
+  },
+  {
+   "id": "5yj8",
+   "strata": [
+    "resolution-mid"
+   ],
+   "resolution": 1.76,
+   "year": 2018,
+   "ligand": "8W9",
+   "facts": {
+    "atoms": 635,
+    "residues": 98,
+    "chains": 2,
+    "hydrogen_fraction": 0.1465,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 38,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5yj8/5yj8_protein.pdb",
+     "sha256": "d7e1bf12a80573465c293a4205d033e388faf040ac7fcaaafa33b341e0adb1b9"
+    },
+    "ligand": {
+     "path": "5yj8/5yj8_ligand.sdf",
+     "sha256": "7b5d0aa0f326367518bbf01fdc6b1d1a08ca11d4ead8c1fc34ff0f4c63944a46"
+    },
+    "pocket": {
+     "path": "5yj8/5yj8_pocket.pdb",
+     "sha256": "7a3caf71b1b6c66ec7a03b30f319bdff27c67bfda32d486e3dfc9923be308d6c"
+    }
+   }
+  },
+  {
+   "id": "5ymx",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.35,
+   "year": 2018,
+   "ligand": "GDP",
+   "facts": {
+    "atoms": 2228,
+    "residues": 463,
+    "chains": 2,
+    "hydrogen_fraction": 0.1611,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 261,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5ymx/5ymx_protein.pdb",
+     "sha256": "83218b4b654165334bbe3a8e53e8f19ef5aeaf87f85cf783cd4b37b84ebcfc70"
+    },
+    "ligand": {
+     "path": "5ymx/5ymx_ligand.sdf",
+     "sha256": "bf07c21c739b43b686b04eea86b0908a6dc5f1c561101bc84cd3bdd817440d83"
+    },
+    "pocket": {
+     "path": "5ymx/5ymx_pocket.pdb",
+     "sha256": "92e3534cb2beb3240c255445a8e1ba2e2a28b3d297266671ea3a55ebddc994be"
+    }
+   }
+  },
+  {
+   "id": "5zyl",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.8,
+   "year": 2019,
+   "ligand": "9MC",
+   "facts": {
+    "atoms": 2638,
+    "residues": 565,
+    "chains": 2,
+    "hydrogen_fraction": 0.1588,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 330,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "5zyl/5zyl_protein.pdb",
+     "sha256": "f5b500e318673210b6e6bd7aef52ed5ab3863f13d94e3de434bede772746c31c"
+    },
+    "ligand": {
+     "path": "5zyl/5zyl_ligand.sdf",
+     "sha256": "25e4215055dfa129ab28c564fd3613e09f99e5c36a629f2d2c1b48aeaeceb641"
+    },
+    "pocket": {
+     "path": "5zyl/5zyl_pocket.pdb",
+     "sha256": "3089c2c4c08e2ec83e10b658226978d4d7542c4a9a5fac2e8618b06c309a8ebe"
+    }
+   }
+  },
+  {
+   "id": "6d1h",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.25,
+   "year": 2019,
+   "ligand": "KED",
+   "facts": {
+    "atoms": 2389,
+    "residues": 558,
+    "chains": 2,
+    "hydrogen_fraction": 0.1499,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 329,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "6d1h/6d1h_protein.pdb",
+     "sha256": "43d1789375a29f8c3b8902b2c8df5678649eb2672305833da7bfa9c3baa96a50"
+    },
+    "ligand": {
+     "path": "6d1h/6d1h_ligand.sdf",
+     "sha256": "258fb2b246bd4c2d3e86edd499553d2527a5332375ea21ef2060342294947e14"
+    },
+    "pocket": {
+     "path": "6d1h/6d1h_pocket.pdb",
+     "sha256": "a456a2051a4d6644e771662448b2beb5aa9e8f08b98f161cd225170f5b6fd579"
+    }
+   }
+  },
+  {
+   "id": "6d9x",
+   "strata": [
+    "control"
+   ],
+   "resolution": 1.83,
+   "year": 2018,
+   "ligand": "FZM",
+   "facts": {
+    "atoms": 2975,
+    "residues": 390,
+    "chains": 2,
+    "hydrogen_fraction": 0.1768,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 85,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "6d9x/6d9x_protein.pdb",
+     "sha256": "ac4977c39d7c5cf3cbef2cb71be5fb86ea1e699cc5e2382a94f9c599aecacf6d"
+    },
+    "ligand": {
+     "path": "6d9x/6d9x_ligand.sdf",
+     "sha256": "b26887fa1c8dd9b8ef126478a430c4f0420b1df949b0a42507a416712fc114df"
+    },
+    "pocket": {
+     "path": "6d9x/6d9x_pocket.pdb",
+     "sha256": "d88f97ee9069e6eddff9ff132ee1c1274b9eecfa4f6b40965c2d0ad04c316afe"
+    }
+   }
+  },
+  {
+   "id": "6hke",
+   "strata": [
+    "control"
+   ],
+   "resolution": 2.11,
+   "year": 2018,
+   "ligand": "MLT",
+   "facts": {
+    "atoms": 2700,
+    "residues": 345,
+    "chains": 2,
+    "hydrogen_fraction": 0.167,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 51,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "6hke/6hke_protein.pdb",
+     "sha256": "76556940260beec13245b238da25f518c26c85040740b3454b48df1e67073145"
+    },
+    "ligand": {
+     "path": "6hke/6hke_ligand.sdf",
+     "sha256": "50601510c4e0acd37d0d82ca8bba4b6c97fc01ddb5e1d2409048faf3510cd9fa"
+    },
+    "pocket": {
+     "path": "6hke/6hke_pocket.pdb",
+     "sha256": "b7ef739ebf69a1277cd9325a16d2f5a3e12b26d9e55aadc92a194372f06836da"
+    }
+   }
+  },
+  {
+   "id": "6i62",
+   "strata": [
+    "multi-chain"
+   ],
+   "resolution": 1.65,
+   "year": 2019,
+   "ligand": "27N",
+   "facts": {
+    "atoms": 4692,
+    "residues": 942,
+    "chains": 3,
+    "hydrogen_fraction": 0.1449,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 494,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "6i62/6i62_protein.pdb",
+     "sha256": "3b5940b50439adb18ebefb4779e9915d1b1e94aae089502ef2b1814361f59482"
+    },
+    "ligand": {
+     "path": "6i62/6i62_ligand.sdf",
+     "sha256": "7f0715b50a59740c6bb03fc5785af3af8fa6d0986c87e6978e57218c87133e50"
+    },
+    "pocket": {
+     "path": "6i62/6i62_pocket.pdb",
+     "sha256": "952b36ad99ded6548b3345debe8860f30ce21bd73dcd829a4fa24d254cae272d"
+    }
+   }
+  },
+  {
+   "id": "6i8y",
+   "strata": [
+    "resolution-high"
+   ],
+   "resolution": 1.52,
+   "year": 2018,
+   "ligand": "2OD",
+   "facts": {
+    "atoms": 1947,
+    "residues": 298,
+    "chains": 2,
+    "hydrogen_fraction": 0.1608,
+    "insertion_code_residues": 0,
+    "hetero_atoms": 108,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "6i8y/6i8y_protein.pdb",
+     "sha256": "c652c88fddaf980b6b0ded0ff7dd40e71581ccc3b67320f4bc0f4e4745a5cd7e"
+    },
+    "ligand": {
+     "path": "6i8y/6i8y_ligand.sdf",
+     "sha256": "b875637de133dc0623663d2a556c11709d029b130015a9c3ffde398df3492da6"
+    },
+    "pocket": {
+     "path": "6i8y/6i8y_pocket.pdb",
+     "sha256": "a77ba8d1f9768135628fb84cca6c254fad328b049fd75c93df10adc7a2dc8038"
+    }
+   }
+  },
+  {
+   "id": "6nmb",
+   "strata": [
+    "insertion-codes"
+   ],
+   "resolution": 2.3,
+   "year": 2019,
+   "ligand": "AMH",
+   "facts": {
+    "atoms": 2391,
+    "residues": 336,
+    "chains": 2,
+    "hydrogen_fraction": 0.1648,
+    "insertion_code_residues": 18,
+    "hetero_atoms": 85,
+    "altloc_atoms": 0
+   },
+   "files": {
+    "protein": {
+     "path": "6nmb/6nmb_protein.pdb",
+     "sha256": "15989f670cde11f43ded1565b642b6e19d4ab55b89f60718ac88f3f1f75836ea"
+    },
+    "ligand": {
+     "path": "6nmb/6nmb_ligand.sdf",
+     "sha256": "08b75886afe42f1a90a00a909ec8bae4df0e5e83003ba14356c9e55c820b37ba"
+    },
+    "pocket": {
+     "path": "6nmb/6nmb_pocket.pdb",
+     "sha256": "1732b1f0c473d333a0b023dc197191146b68daf4c27570ce79a2a2e6ba7b8efe"
+    }
+   }
+  }
+ ],
+ "bench": [
+  {
+   "id": "1crn",
+   "path": "crates/molframe-bench/data/1crn.cif",
+   "sha256": "23787562c427d7c1abe5420e86d5f1d0a6c7007dec1e8ce85645a6d69c32e8ba",
+   "bytes": 69506
+  },
+  {
+   "id": "1ubq",
+   "path": "crates/molframe-bench/data/1ubq.cif",
+   "sha256": "056f98710cb2b36f633c45e41902a02eb446e82871da21ff2dd44f74a56ca0f6",
+   "bytes": 103220
+  },
+  {
+   "id": "4hhb",
+   "path": "crates/molframe-bench/data/4hhb.cif",
+   "sha256": "6c977e3c48fcae60ef116dffff90ce2ae2dbc987f39c3f930d325361a1916812",
+   "bytes": 764822
+  },
+  {
+   "id": "1aon",
+   "path": "crates/molframe-bench/data/1aon.cif.gz",
+   "sha256": "56e2d0e883e8114a354c1d8f4a770a85a3e8e870cf5111179aecc39751360808",
+   "bytes": 1436003
+  },
+  {
+   "id": "2m7c",
+   "path": "crates/molframe-bench/data/2m7c.pdb",
+   "sha256": "20d8395ea6cc950716351c48e161c1f9bf32b1f2b5dac06b6bac383b8bbae0c9",
+   "bytes": 802710
+  }
+ ]
+}

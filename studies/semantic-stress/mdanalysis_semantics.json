@@ -1,0 +1,51 @@
+{
+ "MDAnalysis": "2.10.0",
+ "table": [
+  {
+   "condition": "insertion codes (1c1u)",
+   "tool": "MDAnalysis",
+   "default_behaviour": "a residue is a run of atoms with the same (resid, resname, segid)",
+   "information_retained": "icode kept as a per-atom attribute (`icodes`)",
+   "result": {
+    "residues": 574,
+    "distinct_resid": 286,
+    "distinct_resid_and_icode": 330
+   }
+  },
+  {
+   "condition": "32-model NMR ensemble (2M7C)",
+   "tool": "MDAnalysis",
+   "default_behaviour": "models become trajectory frames; the Universe sits on the first",
+   "information_retained": "every model, as frames",
+   "result": {
+    "frames": 32,
+    "atoms": 300
+   }
+  },
+  {
+   "condition": "alternate conformations (synthetic two-conformer probe built from 1UBQ MET1)",
+   "tool": "MDAnalysis",
+   "default_behaviour": "every conformer is a separate atom; no conformer is chosen",
+   "information_retained": "altLoc per atom (`altLocs`) and occupancy",
+   "result": {
+    "atoms": 8,
+    "altlocs": [
+     "",
+     "A",
+     "B"
+    ]
+   }
+  },
+  {
+   "condition": "explicit hydrogens in the input",
+   "tool": "MDAnalysis",
+   "default_behaviour": "hydrogens are atoms; selections such as 'not name H*' remove them by name",
+   "information_retained": "all atoms and the element column",
+   "result": {
+    "atoms": 4901,
+    "hydrogens_by_element_column": 2289,
+    "hydrogens_by_name_prefix": 1754
+   }
+  }
+ ]
+}
