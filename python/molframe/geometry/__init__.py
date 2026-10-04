@@ -2,6 +2,10 @@
 
 from .._native import geometry as _native
 
+BatFrame = _native.BatFrame
+InternalCoordinates = _native.InternalCoordinates
+internal_coordinates = _native.internal_coordinates
+place_atom = _native.place_atom
 Superposition = _native.Superposition
 centroid = _native.centroid
 distance_matrix = _native.distance_matrix
@@ -24,6 +28,8 @@ superpose = _native.superpose
 rmsf = _native.rmsf
 
 __all__ = [
+    "BatFrame",
+    "InternalCoordinates",
     "Superposition",
     "angles",
     "asphericity",
@@ -36,6 +42,8 @@ __all__ = [
     "distances",
     "gyration_axes",
     "inertia_tensor",
+    "internal_coordinates",
+    "place_atom",
     "plane_deviation",
     "principal_axes",
     "radius_of_gyration",

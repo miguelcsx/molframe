@@ -2,11 +2,18 @@
 
 use super::*;
 
-const WATER_SDF: &str = "water\n  test\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n\
-    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n\
-    0.7570    0.5860    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n\
-   -0.7570    0.5860    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n\
-  1  2  1  0\n  1  3  1  0\nM  END\n$$$$\n";
+const WATER_SDF: &str = "water
+  test
+
+  3  2  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0
+    0.7570    0.5860    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7570    0.5860    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  1  0
+  1  3  1  0
+M  END
+$$$$
+";
 
 const WATER_MOL2: &str = "@<TRIPOS>MOLECULE\nwat\n 3 2 1 0 0\nSMALL\nNO_CHARGES\n\n\n\
 @<TRIPOS>ATOM\n\

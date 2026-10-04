@@ -116,8 +116,14 @@ jobs:
           set -euo pipefail
           uv python install 3.13
           uv sync --group dev --no-install-project
-          uvx maturin develop
+          uvx maturin develop --release
+          uv run --no-sync ruff format --check .
+          uv run --no-sync ruff check
           uv run --no-sync pytest python/tests -q
+          export PYO3_PYTHON=$(uv run --no-sync python -c 'import sys; print(sys.executable)')
+          export PYTHONPATH=$(uv run --no-sync python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+          cargo test -p molframe-py python_numeric_results_equal_rust_on_a_real_structure -- --ignored
+          uv run --no-sync pyright
           uv run --no-sync pyright --verifytypes molframe
 
   wheels:
@@ -185,7 +191,9 @@ jobs:
           python -m venv .venv
           if [ -d .venv/Scripts ]; then py=.venv/Scripts/python; else py=.venv/bin/python; fi
           "$py" -m pip install --force-reinstall dist/*.whl
-          "$py" -c 'import molframe; print(molframe.__name__, "imports")'
+          "$py" -m pip install pytest pyarrow
+          "$py" -c 'import sys; from pathlib import Path; import molframe; assert Path(molframe.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()); print(molframe.__name__, molframe.__version__, "imports from installed wheel")'
+          "$py" -m pytest python/tests -q
 
   sdist:
     needs: verify

@@ -166,6 +166,11 @@ pub enum AuditError<E> {
     Plan(PlanError),
     /// The analysis itself failed.
     Analysis(E),
+    /// A run declares a different quantity, or omits an earlier declaration.
+    IncompatibleEstimand {
+        /// Zero-based run whose declaration differs from the first run.
+        run: usize,
+    },
 }
 
 impl<E: std::fmt::Display> std::fmt::Display for AuditError<E> {
@@ -173,6 +178,10 @@ impl<E: std::fmt::Display> std::fmt::Display for AuditError<E> {
         match self {
             Self::Plan(error) => error.fmt(formatter),
             Self::Analysis(error) => write!(formatter, "analysis failed: {error}"),
+            Self::IncompatibleEstimand { run } => write!(
+                formatter,
+                "run {run} declares a different estimand; compare answers to the same question"
+            ),
         }
     }
 }
@@ -235,14 +244,17 @@ impl<R> AnalysisAudit<R> {
 
 /// Runs a plan over a governed analysis and compares the answers with `metric`.
 ///
-/// The first run decides whether the audit means anything: the analysis records
-/// which policy fields it applied, and a plan that varies another is refused
-/// before the rest are paid for. An analysis that records nothing applied nothing.
+/// Every run records which policy fields it applied. A plan that varies another
+/// is refused as soon as that run completes, before further runs are paid for.
+/// An analysis that records nothing applied nothing.
+/// Every run must have the same estimand declaration, including its absence.
+/// Matching text does not independently validate biological equivalence.
 ///
 /// # Errors
 ///
 /// Returns [`AuditError::Plan`] for a varied field the analysis does not apply,
 /// and [`AuditError::Analysis`] for the first failure of `analyse`.
+/// Returns [`AuditError::IncompatibleEstimand`] if a declaration changes.
 pub fn audit_analyses<R, E, A, M>(
     plan: &AuditPlan,
     mut analyse: A,
@@ -255,17 +267,24 @@ where
 {
     let mut runs: Vec<AuditRun<R>> = Vec::with_capacity(plan.cost());
     let mut read: Vec<PolicyField> = Vec::new();
-    for (index, policy) in plan.policies().iter().enumerate() {
+    for policy in plan.policies() {
         let result = analyse(policy).map_err(AuditError::Analysis)?;
-        if let Some(applied) = result.policy_reads() {
-            for field in applied {
-                if !read.contains(&field) {
-                    read.push(field);
-                }
+        let applied = match result.policy_reads() {
+            Some(fields) => fields,
+            None => Vec::new(),
+        };
+        plan.require_read(&applied).map_err(AuditError::Plan)?;
+        if let Some(first) = runs.first() {
+            let expected = first.result.provenance().and_then(Provenance::estimand);
+            let declared = result.provenance().and_then(Provenance::estimand);
+            if expected != declared {
+                return Err(AuditError::IncompatibleEstimand { run: runs.len() });
             }
         }
-        if index == 0 {
-            plan.require_read(&read).map_err(AuditError::Plan)?;
+        for field in applied {
+            if !read.contains(&field) {
+                read.push(field);
+            }
         }
         runs.push(AuditRun {
             policy: policy.clone(),

@@ -47,9 +47,10 @@ fn parse_v2000<'a>(
     counts: &str,
     mut lines: impl Iterator<Item = &'a str>,
 ) -> Result<MolRecord, MolError> {
-    let mut count_fields = counts.split_whitespace();
-    let atoms = number::<usize>(count_fields.next())?;
-    let bonds = number::<usize>(count_fields.next())?;
+    // Three-column fields touch at three digits; whitespace tokenisation changes
+    // both the counts and bond endpoints for molecules with at least 100 atoms.
+    let atoms = number::<usize>(field(counts, 0, 3))?;
+    let bonds = number::<usize>(field(counts, 3, 6))?;
     let mut molecule = Molecule {
         atoms: Vec::with_capacity(atoms),
         bonds: Vec::with_capacity(bonds),
@@ -57,43 +58,32 @@ fn parse_v2000<'a>(
     let mut atom_metadata = Vec::with_capacity(atoms);
     for _ in 0..atoms {
         let line = lines.next().ok_or(MolError::Malformed)?;
-        let fields: Vec<_> = line.split_whitespace().collect();
-        if fields.len() < 4 {
-            return Err(MolError::Malformed);
-        }
         molecule.atoms.push(MolAtom {
             position: [
-                number(Some(fields[0]))?,
-                number(Some(fields[1]))?,
-                number(Some(fields[2]))?,
+                number(field(line, 0, 10))?,
+                number(field(line, 10, 20))?,
+                number(field(line, 20, 30))?,
             ],
-            element: element(fields[3]),
+            element: element(field(line, 31, 34).ok_or(MolError::Malformed)?),
         });
         atom_metadata.push(MolAtomMetadata {
-            formal_charge: fields.get(5).and_then(charge_code),
-            stereo_parity: fields.get(6).and_then(nonzero_u8),
+            formal_charge: field(line, 36, 39).and_then(charge_code),
+            stereo_parity: field(line, 39, 42).and_then(nonzero_u8),
             ..MolAtomMetadata::default()
         });
     }
     let mut bond_metadata = Vec::with_capacity(bonds);
     for _ in 0..bonds {
-        let fields: Vec<_> = lines
-            .next()
-            .ok_or(MolError::Malformed)?
-            .split_whitespace()
-            .collect();
-        if fields.len() < 3 {
-            return Err(MolError::Malformed);
-        }
-        let first = one_based(fields[0])?;
-        let second = one_based(fields[1])?;
+        let line = lines.next().ok_or(MolError::Malformed)?;
+        let first = one_based(field(line, 0, 3).ok_or(MolError::Malformed)?)?;
+        let second = one_based(field(line, 3, 6).ok_or(MolError::Malformed)?)?;
         molecule.bonds.push(MolBond {
             first,
             second,
-            order: number(Some(fields[2]))?,
+            order: number(field(line, 6, 9))?,
         });
         bond_metadata.push(MolBondMetadata {
-            stereo: fields.get(3).and_then(nonzero_u8),
+            stereo: field(line, 9, 12).and_then(nonzero_u8),
         });
     }
     let mut properties = Vec::new();
@@ -249,12 +239,16 @@ fn element(symbol: &str) -> Element {
     }
 }
 
-fn nonzero_u8(value: &&str) -> Option<u8> {
+fn field(line: &str, start: usize, end: usize) -> Option<&str> {
+    line.get(start..end).map(str::trim)
+}
+
+fn nonzero_u8(value: &str) -> Option<u8> {
     value.parse().ok().filter(|value| *value != 0)
 }
 
-fn charge_code(value: &&str) -> Option<i8> {
-    match *value {
+fn charge_code(value: &str) -> Option<i8> {
+    match value {
         "1" => Some(3),
         "2" => Some(2),
         "3" => Some(1),

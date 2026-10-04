@@ -1,7 +1,8 @@
 """How much a ligand pocket depends on defensible decisions.
 
-For every complex of the frozen corpus, the pocket is the set of protein residues that
-touch the ligand. It is computed under every combination of three decisions an analyst
+For every complex of the frozen corpus, the pocket is the set of non-HOH residues in
+the receptor file that touch the ligand (including ions and cofactors). It is computed
+under the valid combinations of three decisions an analyst
 makes without usually noticing:
 
 - whether the hydrogens the file carries count (``hydrogens``: interpretive),
@@ -27,9 +28,11 @@ import statistics
 import sys
 import tempfile
 import warnings
+from importlib import metadata
 from pathlib import Path
 
 import numpy as np
+from build_corpus import sha256, verify_files
 
 import molframe
 from molframe import analysis, audit
@@ -58,8 +61,9 @@ SPACE = (
         rationale="no slack, a quarter angstrom, and the library's own default of half",
         evidence="ContactDefinition::default",
     )
+    .forbid(("hydrogens", "explicit_only"), ("vdw_radii", "amber_united"))
 )
-PLAN = SPACE.plan()
+PLAN = SPACE.plan(constrained=True)
 
 
 def parse_sdf(path: Path) -> list[tuple[str, float, float, float]]:
@@ -168,7 +172,7 @@ def run_entry(refined: Path, entry: dict, scratch: Path) -> dict:
         combined,
     )
     n_protein = len(keys)
-    structure = molframe.read(combined)
+    structure = molframe.read(combined, options=molframe.ReadOptions(digest_input=True))
     if structure.atom_count <= n_protein:
         return {"id": code, "skipped": "no ligand atoms"}
     polymer = np.array([atom["name"] != "HOH" for atom in keys])
@@ -207,6 +211,7 @@ def run_entry(refined: Path, entry: dict, scratch: Path) -> dict:
         "protein_atoms": n_protein,
         "ligand_atoms": structure.atom_count - n_protein,
         "universes": result.runs.__len__(),
+        "balanced": result.balanced,
         "distinct_pockets": len({tuple(sorted(p)) for p in pockets}),
         "union_residues": len(union),
         "invariant_residues": len(inter),
@@ -217,8 +222,10 @@ def run_entry(refined: Path, entry: dict, scratch: Path) -> dict:
         "effects": effects,
         "shapley": shapley,
         "by_class": classes,
-        "interactions": {f"{i.first}x{i.second}": i.share for i in result.interactions or []},
-        "higher_order": result.higher_order,
+        "interactions": {f"{i.first}x{i.second}": i.share for i in result.interactions or []}
+        if result.balanced
+        else None,
+        "higher_order": result.higher_order if result.balanced else None,
         "tools": tools,
     }
 
@@ -283,6 +290,7 @@ def main() -> None:
     arguments = parser.parse_args()
     corpus = json.loads(arguments.corpus.read_text())
     entries = corpus["entries"][: arguments.limit or None]
+    verify_files(arguments.refined_set, [f for e in entries for f in e["files"].values()])
     rows = []
     with tempfile.TemporaryDirectory() as scratch:
         for number, entry in enumerate(entries, start=1):
@@ -295,8 +303,15 @@ def main() -> None:
             sys.stderr.write(f"{number}/{len(entries)} {entry['id']}\n")
     json.dump(
         {
+            "corpus_sha256": sha256(arguments.corpus),
+            "versions": {
+                name: metadata.version(name)
+                for name in ("molframe", "biopython", "biotite", "gemmi")
+            },
             "plan": {
                 "universes": PLAN.cost,
+                "skipped": PLAN.skipped,
+                "balanced": PLAN.balanced,
                 "decisions": [
                     {
                         "field": decision.field,

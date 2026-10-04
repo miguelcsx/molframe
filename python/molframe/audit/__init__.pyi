@@ -188,9 +188,13 @@ def run(
 ) -> AuditResult:
     """Run ``analyse`` under every policy of ``plan`` and measure how far the answers move.
 
+    Estimand declarations must match across runs, including their absence. A mismatch
+    raises ``ValueError`` before attribution; matching text alone does not prove that
+    different structural systems answer the same biological question.
+
     ``project`` reduces an ``Analysis`` (its value, and for instance its ``atom_origin``) to what
     ``metric`` compares: items for ``set`` and
     ``ranking``, a number for ``absolute`` and ``relative``, numbers for ``rms`` and
     ``correlation``, a category for ``flip``, ``(nodes, edges)`` for the graph metrics. A plan
-    that varies a decision the analysis never applied is refused after the first run.
+    that varies a decision a run did not apply is refused as soon as that run completes.
     """

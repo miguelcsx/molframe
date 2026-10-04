@@ -137,6 +137,45 @@ fn an_analysis_that_never_read_a_varied_field_refuses_the_audit() {
 }
 
 #[test]
+fn a_later_universe_cannot_borrow_policy_reads_from_the_first() {
+    let metric = ScalarError::new(|value: &f64| *value, ScalarMode::Absolute);
+    let mut calls = 0;
+    let outcome = |policy: &AnalysisPolicy| -> Result<Analysis<f64>, Infallible> {
+        calls += 1;
+        let fields = if calls == 1 {
+            &[PolicyField::Hydrogens, PolicyField::Altloc][..]
+        } else {
+            &[PolicyField::Hydrogens][..]
+        };
+        Ok(read_all(policy, 1.0, fields))
+    };
+    assert!(matches!(
+        audit_analyses(&plan(), outcome, &metric),
+        Err(AuditError::Plan(PlanError::NotRead(PolicyField::Altloc)))
+    ));
+    assert_eq!(calls, 2);
+}
+
+#[test]
+fn a_later_universe_without_a_read_record_refuses_the_audit() {
+    let metric = ScalarError::new(|value: &f64| *value, ScalarMode::Absolute);
+    let mut calls = 0;
+    let outcome = |policy: &AnalysisPolicy| -> Result<Analysis<f64>, Infallible> {
+        calls += 1;
+        Ok(if calls == 1 {
+            read_all(policy, 1.0, &[PolicyField::Hydrogens, PolicyField::Altloc])
+        } else {
+            Analysis::complete(1.0, Coverage::complete(1), policy)
+        })
+    };
+    assert!(matches!(
+        audit_analyses(&plan(), outcome, &metric),
+        Err(AuditError::Plan(PlanError::NotRead(PolicyField::Hydrogens)))
+    ));
+    assert_eq!(calls, 2);
+}
+
+#[test]
 fn universes_with_no_answer_are_a_fraction_and_withhold_the_decomposition() {
     let metric = ScalarError::new(|value: &f64| *value, ScalarMode::Absolute);
     let space = PolicySpace::new(AnalysisPolicy::default()).vary(PolicyDimension::missing_atoms([
@@ -209,4 +248,71 @@ fn set_overlap_audits_agree_with_the_set_audit() {
         audit.decomposition.main_effects[0].share,
         sets.dimensions[0].main_effect_share
     ));
+}
+
+#[test]
+fn a_changed_or_omitted_estimand_refuses_before_attribution() {
+    for later in [Some("crystal packing interface"), None] {
+        let mut calls = 0;
+        let result = audit_analyses(
+            &plan(),
+            |policy| -> Result<Analysis<f64>, Infallible> {
+                calls += 1;
+                let mut result =
+                    read_all(policy, 0.0, &[PolicyField::Hydrogens, PolicyField::Altloc]);
+                let estimand = if calls == 1 {
+                    Some("biological interface")
+                } else {
+                    later
+                };
+                if let Some(text) = estimand {
+                    result.provenance = result.provenance.with_estimand(text);
+                }
+                Ok(result)
+            },
+            &ScalarError::new(|value: &f64| *value, ScalarMode::Absolute),
+        );
+        assert!(matches!(
+            result,
+            Err(AuditError::IncompatibleEstimand { run: 1 })
+        ));
+        assert_eq!(calls, 2);
+    }
+}
+
+#[test]
+fn an_estimand_cannot_appear_only_after_the_first_universe() {
+    let mut calls = 0;
+    let result = audit_analyses(
+        &plan(),
+        |policy| -> Result<Analysis<f64>, Infallible> {
+            calls += 1;
+            let mut result = read_all(policy, 0.0, &[PolicyField::Hydrogens, PolicyField::Altloc]);
+            if calls > 1 {
+                result.provenance = result.provenance.with_estimand("ligand contacts");
+            }
+            Ok(result)
+        },
+        &ScalarError::new(|value: &f64| *value, ScalarMode::Absolute),
+    );
+    assert!(matches!(
+        result,
+        Err(AuditError::IncompatibleEstimand { run: 1 })
+    ));
+}
+
+#[test]
+fn consistent_estimands_keep_the_conclusion_comparable() {
+    let result = audit_analyses(
+        &plan(),
+        |policy| -> Result<Analysis<f64>, Infallible> {
+            let mut result = read_all(policy, 0.0, &[PolicyField::Hydrogens, PolicyField::Altloc]);
+            result.provenance = result.provenance.with_estimand("ligand contacts");
+            Ok(result)
+        },
+        &ScalarError::new(|value: &f64| *value, ScalarMode::Absolute),
+    )
+    .unwrap();
+    assert!(result.decomposition.is_some());
+    assert_eq!(result.runs.len(), 4);
 }

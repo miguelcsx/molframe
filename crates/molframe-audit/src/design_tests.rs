@@ -142,7 +142,14 @@ fn shapley_shares_exist_and_sum_to_one_when_a_combination_is_forbidden() {
         .map(|attribution| attribution.share)
         .sum();
     assert!(close(total, 1.0));
-    assert!(share_of(&result, PolicyField::Hydrogens) > share_of(&result, PolicyField::Altloc));
+    // Under the uniform distribution on the three valid cells, Var(Y) = 26/9.
+    // Holding altloc explains 1/13; holding hydrogens explains 49/52.
+    // Averaging the two orders gives 7/104 and 97/104, independently of distances.
+    assert!(close(share_of(&result, PolicyField::Altloc), 7.0 / 104.0));
+    assert!(close(
+        share_of(&result, PolicyField::Hydrogens),
+        97.0 / 104.0
+    ));
 }
 
 #[test]

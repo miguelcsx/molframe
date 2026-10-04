@@ -225,9 +225,12 @@ is `site/content/docs/parity.mdx`; the measurements are in
 - **M1** read-path throughput: the targets (BinaryCIF 1AON at 1 GB/s of input, mmCIF
   at 300 MiB/s) are **not met**; the achieved figures and the limiting frames are
   in the evidence ledger.
-- **M4** the Python surface beyond what already ships (exception hierarchy,
-  `ExecutionContext`, interop, I/O breadth, structure depth, the remaining
-  namespaces).
+- **M4** Python exposes the native exception hierarchy, `ExecutionContext`,
+  interop, structure depth and scientific namespaces, including IC/BAT. The
+  curated surface is checked against registration and stubs; direct numerical
+  Rust/Python parity is tested on a real structure. Low-level Rust APIs and
+  caller-controlled trajectory format options are not all Python constructors;
+  do not equate this with one-for-one coverage of every public Rust type.
 - **M5** independent reference validation and parity promotion.
 
 ### Deferred, by decision
@@ -243,8 +246,11 @@ Each would need a convention the library refuses to pick silently.
 
 ### Blocked
 
-GW-031 (the `complex_info` source is absent), GW-032 (the ATPTS driver is
-absent) and GW-044 to GW-047 (the OpenStructure, Graphein and Geomstats pins and
+GW-031 (`complex_info`) and GW-032 (ATPTS) stay `β` until their references
+are pinned and runnable in a reproducible workflow. Sources for both, plus
+ATPTS templates and examples, exist in the machine-local sibling
+`../ligare/deleteme/`; the supplied `complex_info` executable targets Linux
+x86-64. GW-044 to GW-047 (the OpenStructure, Graphein and Geomstats pins and
 corpora are not selected) stay `β` until their prerequisite exists.
 
 **Where the golden and benchmark registers live.** They are the crates, not a

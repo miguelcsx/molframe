@@ -20,10 +20,10 @@ fails when a `✓` row has no GW, or when a named GW has no `gw_NNN_` test.
 
 ## Blocked
 
-These golden workflows cannot be promoted until the missing prerequisite exists.
+These golden workflows cannot be promoted until their reference prerequisites are reproducible.
 
-- **GW-031**: the `complex_info` source is absent.
-- **GW-032**: the ATPTS driver is absent.
+- **GW-031**: `complex_info` is not pinned and runnable in the reference workflow. Sources exist in the local sibling `ligare/deleteme/complex_info`; the supplied executable targets Linux x86-64.
+- **GW-032**: ATPTS is not pinned and runnable in the reference workflow. Driver sources, templates and examples exist in the local sibling `ligare/deleteme/atpts`.
 - **GW-044 to GW-047**: the OpenStructure, Graphein and Geomstats pins and their corpora are not selected.
 
 | Capability | molframe | Crate | GW | Evidence |
@@ -413,7 +413,7 @@ These golden workflows cannot be promoted until the missing prerequisite exists.
 | Full provenance record | β | `molframe-core` | — | Not yet promoted |
 | Provenance serialisation (JSON + mmCIF) | β | `molframe-core` | — | Not yet promoted |
 | Versioned verdict profiles | β | `molframe-fx` | — | Not yet promoted |
-| Policy sensitivity audit | β | `molframe-audit` | — | Not yet promoted |
+| Policy sensitivity audit | β | `molframe-audit` | — | Per-universe policy reads and consistent declared estimands checked; external domain and runner pilot evidence recorded in the study README. Not yet promoted. |
 | PDB-scale audit study | · | `molframe-audit` | — | Reference-library column is `·`; this is external evidence work, not missing library code. |
 | Declarative motif specification | β | `molframe-fx` | — | Not yet promoted |
 | Chemistry-aware motif mapping | β | `molframe-fx` | — | Not yet promoted |
@@ -446,4 +446,3 @@ These golden workflows cannot be promoted until the missing prerequisite exists.
 | 8 | β |  | — | Not yet promoted |
 | `–` | β |  | — | Not yet promoted |
 | **Total** | β |  | — | Not yet promoted |
-

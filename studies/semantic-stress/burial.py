@@ -29,6 +29,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+from build_corpus import sha256, verify_files
 from pockets import combine
 
 import molframe
@@ -70,7 +71,7 @@ def run_entry(refined: Path, entry: dict, scratch: Path) -> dict:
         combined,
     )
     n_protein = len(keys)
-    structure = molframe.read(combined)
+    structure = molframe.read(combined, options=molframe.ReadOptions(digest_input=True))
     cache: dict[str, object] = {}
 
     def analyse(policy):
@@ -163,6 +164,7 @@ def main() -> None:
     arguments = parser.parse_args()
     corpus = json.loads(arguments.corpus.read_text())
     entries = corpus["entries"][: arguments.limit or None]
+    verify_files(arguments.refined_set, [f for e in entries for f in e["files"].values()])
     rows = []
     with tempfile.TemporaryDirectory() as scratch:
         for number, entry in enumerate(entries, start=1):
@@ -174,6 +176,8 @@ def main() -> None:
             sys.stderr.write(f"{number}/{len(entries)} {entry['id']}\n")
     json.dump(
         {
+            "corpus_sha256": sha256(arguments.corpus),
+            "molframe_version": molframe.__version__,
             "plan": {
                 "universes": PLAN.cost,
                 "skipped": PLAN.skipped,

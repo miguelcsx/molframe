@@ -4,7 +4,27 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
-## Unreleased
+## 0.5.0 — 2026-10-04
+
+### Research validation and Python parity
+
+- Python geometry now exposes Rust's internal-coordinate forest, Cartesian
+  rebuilding and reusable bond-angle-torsion frames, retaining native atom
+  indices, missing coordinates and radian units. In-process differential tests
+  compare Python and Rust on ubiquitin, including TM-score, GDT and distances.
+- Release wheels run the Python contract suite after installation on all five
+  supported platform builds. Python formatting, linting and strict typing also
+  gate publication.
+- Audit runs refuse inconsistent estimands and check policy reads in every
+  universe, with matching Python error behavior.
+- Fixed-column V2000 parsing handles three-digit atom indices correctly;
+  acquisition and study runners verify frozen input SHA-256 before analysis.
+- Added reproducible, external-data studies against ProLIF, FreeSASA, Boba,
+  Gemmi and EvoEF and a grouped SKEMPI2 alanine-scanning panel. Measured
+  sensitivity and descriptive experimental associations do not establish
+  predictive superiority or publication readiness. External data and tools
+  remain separate from the library distribution.
+
 
 ### Changed
 

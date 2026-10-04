@@ -90,7 +90,11 @@ jobs:
         run: uv run --no-sync ruff check
 
       - name: Smoke suite
-        run: uv run --no-sync pytest python/tests -q
+        run: |
+          uv run --no-sync pytest python/tests -q
+          export PYO3_PYTHON=$(uv run --no-sync python -c 'import sys; print(sys.executable)')
+          export PYTHONPATH=$(uv run --no-sync python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+          cargo test -p molframe-py python_numeric_results_equal_rust_on_a_real_structure -- --ignored
 
       - name: Type check
         run: uv run --no-sync pyright

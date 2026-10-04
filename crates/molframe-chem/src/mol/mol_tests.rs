@@ -55,3 +55,39 @@ fn complete_parser_exposes_the_graph_without_discarding_metadata() {
     assert_eq!(record.molecule.atoms[0].element, Element::CARBON);
     assert_eq!(record.molecule.bonds[0].order, 2);
 }
+
+#[test]
+fn adjacent_three_digit_counts_and_bond_endpoints_are_distinct_fields() {
+    let source = format!(
+        "large\nmolframe\n\n128128  0  0  0  0  0  0  0  0999 V2000\n{}{}M  END\n$$$$\n",
+        "    0.0000    0.0000    0.0000 C   0  0\n".repeat(128),
+        "127128  1  0\n".repeat(128),
+    );
+    let records = parse_sdf_records(&source).expect("fixed-width SDF");
+    let record = &records[0];
+    assert_eq!(record.molecule.atoms.len(), 128);
+    assert_eq!(record.molecule.bonds.len(), 128);
+    assert_eq!(record.molecule.bonds[0].first, 126);
+    assert_eq!(record.molecule.bonds[0].second, 127);
+    let encoded = write_sdf(&records).expect("write large SDF");
+    assert_eq!(
+        parse_sdf_records(&encoded).expect("reread large SDF"),
+        records
+    );
+}
+
+#[test]
+fn adjacent_full_width_coordinates_are_not_merged() {
+    let source = CARBON_MONOXIDE.replace(
+        "    0.0000    0.0000    0.0000",
+        "-1234.0000-2345.0000-3456.0000",
+    );
+    let record = parse_mol_record(&source).expect("fixed-width coordinates");
+    for (actual, expected) in record.molecule.atoms[0]
+        .position
+        .iter()
+        .zip([-1234.0, -2345.0, -3456.0])
+    {
+        assert!((actual - expected).abs() < f32::EPSILON);
+    }
+}

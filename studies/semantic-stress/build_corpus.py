@@ -42,6 +42,16 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def verify_files(root: Path, files: list[dict]) -> None:
+    """Refuse changed or missing frozen inputs before any analysis runs."""
+    for record in files:
+        path = root / record["path"]
+        actual = sha256(path)
+        if actual != record["sha256"]:
+            msg = f"frozen input changed: {path} (expected {record['sha256']}, found {actual})"
+            raise ValueError(msg)
+
+
 def index(refined: Path) -> dict[str, dict[str, object]]:
     """Resolution, release year and ligand name for every entry of the dataset's own index."""
     entries: dict[str, dict[str, object]] = {}

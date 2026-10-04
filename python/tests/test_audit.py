@@ -443,3 +443,15 @@ def test_an_element_without_a_radius_makes_the_area_partial_and_the_policy_decid
     complete = analysis.sasa(site, policy=molframe.AnalysisPolicy(vdw_radii="alvarez"))
     assert complete.status == "complete"
     assert np.all(np.isfinite(complete.value))
+
+
+def test_different_declared_contact_questions_are_refused_before_attribution(dimer):
+    plan = audit.PolicySpace().vary("hydrogens", ["explicit_only", "exclude"]).plan()
+
+    def changing_question(policy):
+        if policy.hydrogens == "explicit_only":
+            return analysis.contacts(dimer, 2.0, policy=policy)
+        return analysis.contacts_by_definition(dimer, policy=policy)
+
+    with pytest.raises(ValueError, match="run 1 declares a different estimand"):
+        audit.run(plan, changing_question, metric="absolute", project=lambda run: len(run.value))

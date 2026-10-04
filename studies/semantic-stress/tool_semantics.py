@@ -26,6 +26,7 @@ from importlib import metadata
 from pathlib import Path
 
 import numpy as np
+from build_corpus import verify_files
 
 import molframe
 
@@ -489,6 +490,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--refined-set", type=Path, required=True)
     arguments = parser.parse_args()
+    corpus = json.loads(Path(__file__).with_name("corpus.json").read_text())
+    verify_files(arguments.refined_set, [f for e in corpus["entries"] for f in e["files"].values()])
+    verify_files(Path(), corpus["bench"])
     table = (
         case_identifiers()
         + case_insertion_codes(arguments.refined_set)

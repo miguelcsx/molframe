@@ -302,6 +302,11 @@ fn run(
     let audit = audit_analyses(&plan.0, call, &kind).map_err(|error| match error {
         molframe::audit::AuditError::Plan(error) => plan_error(&error),
         molframe::audit::AuditError::Analysis(error) => error,
+        molframe::audit::AuditError::IncompatibleEstimand { run } => {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "run {run} declares a different estimand; compare answers to the same question"
+            ))
+        }
         _ => crate::error::internal("the audit failed in a way this binding does not know"),
     })?;
     let certificate = molframe::audit::certificate(&plan.0, &audit);

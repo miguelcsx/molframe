@@ -54,6 +54,8 @@ mod governed_field;
 mod governed_physical;
 mod governed_structure;
 mod hierarchy;
+#[cfg(feature = "geometry")]
+mod internal_coordinates;
 mod interop;
 #[cfg(feature = "motif")]
 mod motif;

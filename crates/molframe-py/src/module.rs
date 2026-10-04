@@ -81,6 +81,7 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
         geometry.add_function(wrap_pyfunction!(distance_matrix, &geometry)?)?;
         geometry.add_function(wrap_pyfunction!(rmsd, &geometry)?)?;
         bindings::measures::register(&geometry)?;
+        crate::internal_coordinates::register(&geometry)?;
     }
     module.add_submodule(&geometry)?;
 

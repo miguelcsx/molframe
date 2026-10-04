@@ -131,3 +131,65 @@ named benchmark did not improve.
 | First-byte number prefilter in `CifValueRef::parse` | `cif_read/4hhb` | 3.12 ms | 3.11 ms |
 | Whitespace lookup table in the lexer | `cif_read/4hhb` | 3.12 ms | 3.25 ms |
 | Packed-word bitmap in spatial `within` | `spatial_pairs_within/within` | 491–541 µs | 518–552 µs |
+
+
+## Experimental research pilot (2026-10-04)
+
+This exploratory evidence does not promote a parity row or establish biological
+prediction superiority. Portable workflows and reproduction commands are in
+`studies/semantic-stress/README.md`; frozen inputs/reports live in the local
+sibling `ligare/data/molframe-research/experimental`, not in a standalone clone.
+The publisher SKEMPI 2.0 supplement contains 7,085 experimental records; a pinned
+CSV mirror is checked against original scientific fields. The deterministic
+fourteen-complex pilot retains 631 measures of 545 residues after excluding
+censored/ambiguous measurements, discordant source rows, mismatched reference
+and mutant temperatures, and an explicitly contradictory experimental WT identity.
+The assay-condition amendment followed preliminary analysis, whose protocol and
+results remain archived. It is not external preregistration.
+
+| Boundary | Observed evidence |
+|---|---|
+| Experimental residue identity | 545 author-chain/residue/insertion/WT joins; independently checked with Gemmi |
+| Admissible geometry pilot | 168 configurations: fourteen structures × twelve heavy-atom vdW policies |
+| Domain kernel reference | 468 residue-degree comparisons against ProLIF over 1BRS, 1GUA and 4PWX; no differences |
+| Wrong identifier namespace | 371 measured residues changed or lost across eight systems |
+| Baseline / uniform policy median | Equal-weight AUROC 0.7223 / 0.7197; held-out balanced accuracy 0.6755 / 0.6871 across eleven two-class systems |
+| Outcome dependence on policy | Contact degree changes for 204 of 545 measured residues |
+| Sequence leakage screen | 473 cross-group chain comparisons; no pair has both >=30% identity and >=80% coverage under the recorded alignment |
+
+Seven residues have conflicting measured hotspot labels and stay ambiguous.
+Three systems have a single class and retain unavailable AUROC/accuracy rather
+than being silently removed from the corpus. Bootstrap summaries condition on
+fitted predictions and do not establish confirmatory significance. Grouping uses
+source holdout metadata/shared names; the sequence screen is not exhaustive
+family validation. Experimental construct/state matching, external frozen
+validation and an additional biological task remain pending. A checked generic
+runner can perform the same identity safeguards; enumeration itself is not novelty.
+
+
+## Python/Rust release-boundary checks (0.5.0, 2026-10-04)
+
+The Python package remains a curated interface over native kernels, not a
+one-for-one export of every low-level Rust type. The local Python suite passed
+337 tests; strict Pyright reported no errors and `--verifytypes` reported 100%
+type completeness. Type completeness alone is not numerical parity.
+
+`molframe-py` tests directly compare Python and Rust centroid, distance matrix,
+RMSD, TM-score and GDT on the same 1UBQ coordinates, plus internal-coordinate
+seeds, Cartesian rebuilding, BAT measurement and BAT rebuilding. The numerical
+array test runs in the Python CI/release job with NumPy on the embedded
+interpreter's search path. Lengths retain Å; IC/BAT angles retain Rust radians,
+while the established Python angle/torsion array operations return degrees.
+
+The optional external-corpus test compared all 5,316 Ligare refined-set SDFs:
+Python and Rust atom counts and every coordinate were identical. Reproduce it
+with `MOLFRAME_PARITY_CORPUS` pointing to that acquired corpus, `PYO3_PYTHON`
+pointing to the project interpreter, and `PYTHONPATH` containing its site-packages:
+`cargo test -p molframe-py python_and_rust_read_the_same_external_ligand_corpus -- --ignored --nocapture`.
+The corpus is not bundled and this check does not validate chemical truth.
+
+The release workflow installs each built wheel into an isolated environment,
+asserts that import resolves inside that environment, and runs the Python
+contract suite on Linux x86-64/arm64, macOS x86-64/arm64 and Windows x86-64
+before publication. This is a gate, not a claim that those remote runs have
+already completed.

@@ -27,11 +27,17 @@ fn every_radius_set_round_trips_through_its_name() {
 
 #[test]
 fn per_atom_radii_follow_the_requested_set_and_mark_unknown_elements() {
-    const WATER_MOL: &str = "water\n  test\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n\
-        0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\n\
-        0.7570    0.5860    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0\n\
-       -0.7570    0.5860    0.0000 Xx  0  0  0  0  0  0  0  0  0  0  0  0\n\
-      1  2  1  0\n  1  3  1  0\nM  END\n";
+    const WATER_MOL: &str = "water
+  test
+
+  3  2  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0
+    0.7570    0.5860    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.7570    0.5860    0.0000 Xx  0  0  0  0  0  0  0  0  0  0  0  0
+  1  2  1  0
+  1  3  1  0
+M  END
+";
     let record = crate::parse_mol_record(WATER_MOL).expect("the record parses");
     let structure = crate::mol_record_to_structure(&record).expect("the record lowers");
     let radii = atom_radii(&structure, RadiusSet::Bondi);

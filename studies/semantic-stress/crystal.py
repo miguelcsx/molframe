@@ -20,6 +20,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+from build_corpus import sha256, verify_files
 
 import molframe
 from molframe import analysis, audit
@@ -116,7 +117,9 @@ def residue_labels(structure: molframe.Structure) -> tuple[list[str], np.ndarray
 
 
 def run_entry(code: str) -> dict:
-    structure = molframe.read(BENCH / f"{code}.cif")
+    structure = molframe.read(
+        BENCH / f"{code}.cif", options=molframe.ReadOptions(digest_input=True)
+    )
     labels, chain_of = residue_labels(structure)
     atoms = structure.atom_count
 
@@ -160,12 +163,17 @@ def run_entry(code: str) -> dict:
 
 
 def main() -> None:
+    corpus_path = Path(__file__).with_name("corpus.json")
+    corpus = json.loads(corpus_path.read_text())
+    verify_files(Path(), [entry for entry in corpus["bench"] if entry["id"] in ENTRIES])
     rows = []
     for code in ENTRIES:
         rows.append(run_entry(code))
         sys.stderr.write(f"{code}\n")
     json.dump(
         {
+            "corpus_sha256": sha256(corpus_path),
+            "molframe_version": molframe.__version__,
             "radius": RADIUS,
             "plan": {
                 "universes": PLAN.cost,

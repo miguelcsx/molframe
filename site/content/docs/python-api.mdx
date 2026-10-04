@@ -42,7 +42,7 @@ See [Selecting atoms](/docs/selections) and [Reading bytes and editing structure
 
 | Module or object | Public entry points |
 | --- | --- |
-| `molframe.geometry` | `centroid`, `distance_matrix`, `rmsd` |
+| `molframe.geometry` | `centroid`, `distance_matrix`, `rmsd`, `internal_coordinates`, `place_atom` |
 | `molframe.analysis` | `atom_contacts`, `contacts`, `hydrogen_bonds`, `salt_bridges` |
 | `molframe.validation` | `clashes` |
 | `molframe.surface` | `sasa`, `lee_richards`, `cavities`, `surface_points`, `surface_points_at_density`, `solvent_excluded_surface` (a `Mesh`), `buried_surface`, `buried_solvent_excluded_surface`, `atom_depths`; `Mesh` carries components, curvatures, edge distances, patches and OBJ output |
@@ -86,3 +86,13 @@ See [Compiled workflows](/docs/workflows).
 ## Verification status
 
 The Python suite (`python -m pytest python/tests`) ran 73 tests green against an extension built from this tree, including real-Gemmi reference values for structure factors, analytic checks for accessible area and cavities, and a brute-force oracle for neighbour search. Interaction analyses are tested with a small hand-written component dictionary; they have not been run against the full wwPDB dictionary. The exact workspace verification commands are maintained in `molframe/AGENTS.md`.
+
+
+`geometry.internal_coordinates(structure, model=0)` exposes the native deterministic
+bond-graph forest. `InternalCoordinates.seeds` retains Cartesian seeds and `atoms`
+retains atom indices, reference indices and the six dihedron measurements.
+`rebuild()` preserves absent atoms as `None`. Reuse the forest across frames with
+`measure_bat(positions)` and `rebuild_bat(frame)`: `BatFrame.coordinates` stores
+bond length, angle and torsion in Å and **radians**, matching Rust's `molframe.ic`.
+`geometry.place_atom` also accepts radians; the existing `angles` and `dihedrals`
+functions return degrees.

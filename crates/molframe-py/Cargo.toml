@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 numpy.workspace = true
-molframe = { path = "../molframe", version = "0.4.0", default-features = false }
+molframe = { path = "../molframe", version = "0.5.0", default-features = false }
 pyo3.workspace = true
 
 [build-dependencies]
@@ -30,7 +30,7 @@ query = ["molframe/query"]
 interop = ["molframe/interop"]
 # Reading and selection are the module root every domain builds on.
 base = ["formats", "query", "interop"]
-geometry = ["base", "molframe/geometry"]
+geometry = ["base", "molframe/geometry", "molframe/ic"]
 chemistry = ["base", "molframe/chemistry"]
 validation = ["analysis", "molframe/validation"]
 crystal = ["base", "molframe/crystal"]

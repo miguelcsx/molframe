@@ -17,6 +17,7 @@ import warnings
 from pathlib import Path
 
 import MDAnalysis as mda  # noqa: N813
+from build_corpus import verify_files
 
 warnings.simplefilter("ignore")
 BENCH = Path("/Users/mcs/Documents/code/biology/molframe/crates/molframe-bench/data")
@@ -39,6 +40,8 @@ def main() -> None:
     parser.add_argument("--refined-set", type=Path, required=True)
     arguments = parser.parse_args()
     corpus = json.loads(Path(__file__).with_name("corpus.json").read_text())
+    verify_files(arguments.refined_set, [f for e in corpus["entries"] for f in e["files"].values()])
+    verify_files(Path(), corpus["bench"])
     rows = []
 
     with_icodes = next(e for e in corpus["entries"] if e["facts"]["insertion_code_residues"] >= 5)
