@@ -1,6 +1,6 @@
 //! The words a split strategy is spelled with.
 
-use super::SplitStrategy;
+use super::{DatasetWarning, SplitStrategy};
 use molframe_core::contract::{PolicyParseError, canonical_spelling};
 
 impl SplitStrategy {
@@ -45,6 +45,17 @@ impl SplitStrategy {
             ("random", None, Some(seed)) => Ok(Self::Random { seed }),
             ("random", _, _) => Err(refused("random with a seed and no threshold")),
             _ => Err(refused(&Self::NAMES.join(", "))),
+        }
+    }
+}
+
+impl std::fmt::Display for DatasetWarning {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RandomSplitMayLeak => formatter.write_str(
+                "a random split makes no redundancy guarantee: related structures may land \
+                 in different partitions",
+            ),
         }
     }
 }
