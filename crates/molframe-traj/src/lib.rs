@@ -215,10 +215,10 @@ pub use dielectric::{
 };
 pub use diffusion::{DiffusionMap, diffusion_map};
 pub use dispatch::{
-    AmberAsciiReadOptions, FormatMetadata, TrajectoryData, TrajectoryFormat, TrajectoryIoError,
-    TrajectoryMetadata, TrajectoryReadOptions, TrajectoryReaderOptions, TrajectoryWriteOptions,
-    TrzWriteOptions, read_trajectory, read_trajectory_in, read_trajectory_materialized,
-    write_trajectory,
+    AmberAsciiReadOptions, DensePositions, FormatMetadata, TrajectoryData, TrajectoryFormat,
+    TrajectoryIoError, TrajectoryMetadata, TrajectoryReadOptions, TrajectoryReaderOptions,
+    TrajectoryWriteOptions, TrzWriteOptions, read_trajectory, read_trajectory_in,
+    read_trajectory_materialized, write_trajectory,
 };
 pub use dlpoly::{
     DlPolyAtom, DlPolyConfig, DlPolyError, DlPolyFrame, DlPolyHistory, parse_dlpoly_config,

@@ -36,18 +36,8 @@ fn count(
     data.frames.iter().filter(|frame| predicate(frame)).count()
 }
 
-pub(super) const fn format_name(format: TrajectoryFormat) -> &'static str {
-    match format {
-        TrajectoryFormat::Xtc => "xtc",
-        TrajectoryFormat::Trr => "trr",
-        TrajectoryFormat::Dcd => "dcd",
-        TrajectoryFormat::AmberNetcdf => "amber-netcdf",
-        TrajectoryFormat::Tng => "tng",
-        TrajectoryFormat::Gsd => "gsd",
-        TrajectoryFormat::H5md => "h5md",
-        TrajectoryFormat::Trz => "trz",
-        _ => "unsupported",
-    }
+pub(super) fn format_name(format: TrajectoryFormat) -> &'static str {
+    format.name()
 }
 
 pub(super) const fn canonical_length_unit() -> &'static str {

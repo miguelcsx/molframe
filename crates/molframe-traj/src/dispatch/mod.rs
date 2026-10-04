@@ -1,13 +1,16 @@
 //! Declarative path-based trajectory I/O.
 
 mod accounted;
+mod dense;
 mod error;
 mod model;
+mod names;
 mod read;
 mod stream;
 mod write;
 
 pub use accounted::read_trajectory_in;
+pub use dense::DensePositions;
 pub use error::TrajectoryIoError;
 pub use model::{
     AmberAsciiReadOptions, FormatMetadata, TrajectoryData, TrajectoryFormat, TrajectoryMetadata,
