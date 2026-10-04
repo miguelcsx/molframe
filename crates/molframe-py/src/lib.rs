@@ -9,6 +9,7 @@
 mod analysis_result;
 #[cfg(any(feature = "analysis", feature = "validation", feature = "spatial"))]
 mod backend;
+mod batches;
 mod bindings;
 mod catalog;
 #[cfg(feature = "chemistry")]
@@ -40,6 +41,7 @@ mod policy;
 mod query_aliases;
 mod query_cache;
 mod query_messages;
+mod reading;
 mod secondary;
 #[cfg(feature = "query")]
 mod selection_expr;

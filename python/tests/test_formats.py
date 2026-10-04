@@ -45,6 +45,6 @@ def test_unknown_formats_and_missing_extensions_are_rejected(tmp_path, structure
     with pytest.raises(molframe.MolframeError) as unnamed:
         molframe.formats.write(structure, tmp_path / "noextension")
     assert unnamed.value.code == "MOLFRAME-E1001"
-    with pytest.raises(molframe.MolframeError) as forced:
+    with pytest.raises(molframe.PolicyError) as forced:
         molframe.formats.write(structure, tmp_path / "out.dat", format="nonsense")
-    assert forced.value.code == "MOLFRAME-E1001"
+    assert forced.value.code == "MOLFRAME-E6104"

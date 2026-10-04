@@ -119,8 +119,13 @@ impl PyExecutionContext {
 }
 
 impl PyExecutionContext {
+    /// The switch `cancel()` flips.
+    pub(crate) const fn token(&self) -> &CancellationToken {
+        &self.token
+    }
+
     /// The Rust context for one operation, cancelled by `token`.
-    fn build(&self, token: &CancellationToken) -> PyResult<ExecutionContext> {
+    pub(crate) fn build(&self, token: &CancellationToken) -> PyResult<ExecutionContext> {
         let mut builder = ExecutionContext::builder()
             .scratch_policy(ScratchPolicy::new(self.scratch_bytes))
             .cancellation(token.clone());
@@ -165,6 +170,11 @@ where
             .map_err(crate::error::kernel)?,
     };
     let user = context.map(|context| context.token.clone());
+    // A context cancelled before the call refuses it, without waiting for the
+    // first poll to notice.
+    if user.as_ref().is_some_and(CancellationToken::is_cancelled) {
+        token.cancel();
+    }
     let finished = AtomicBool::new(false);
     let waiter = std::thread::current();
     let mut interrupted = None;

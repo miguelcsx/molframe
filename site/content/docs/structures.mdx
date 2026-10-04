@@ -15,7 +15,52 @@ structure = molframe.read("model.cif")
 structure = molframe.read("model.pdb")
 ```
 
-The default Python build includes PDB and mmCIF support. Reading local paths and caller-supplied bytes is the verified loading boundary. Identifier acquisition is not silently mapped to a guessed archive URL: the current adapters expose a typed unavailable-provider diagnostic until a provider manifest supplies a canonical URL and authoritative checksum. For a direct remote resource, use the Rust adapter's verified-download boundary with an expected SHA-256 digest, byte limit, timeout, and redirect policy.
+The Python build reads mmCIF, BinaryCIF, PDB, PQR, PDBQT, MMTF, PDBML, SDF, MOL2 and core CIF (`format="smallcif"`). Reading local paths and caller-supplied bytes is the verified loading boundary. Identifier acquisition is not silently mapped to a guessed archive URL: the current adapters expose a typed unavailable-provider diagnostic until a provider manifest supplies a canonical URL and authoritative checksum. For a direct remote resource, use the Rust adapter's verified-download boundary with an expected SHA-256 digest, byte limit, timeout, and redirect policy.
+
+### Stating how a read is done
+
+`format=` names the format when neither the content nor the file name settles it (a file suffix such as `"cif"` or `"mol"` is accepted as a name). Every other decision lives in a `ReadOptions`, which is reusable across reads:
+
+```python
+options = molframe.ReadOptions(
+    mode="strict",                       # "strict", "permissive" (default) or "recover"
+    first_model_only=True,
+    discard_hydrogens=True,
+    skip_categories=["struct_conf"],     # or only_categories=[...]; required ones are always read
+    max_nesting_depth=8,                 # bounds on hostile or oversized input
+)
+structure = molframe.read("model.cif", options=options)
+small_molecule = molframe.read(sdf_text.encode(), format="sdf")
+```
+
+A word outside a decision's vocabulary raises `PolicyError` (code `MOLFRAME-E6104`) and lists what is accepted. Stating the format twice, in `format=` and in `ReadOptions`, is refused.
+
+### What was wrong with the file
+
+`read()` returns the structure and discards the findings; a file that parses is not the same as a file that is right. `read_with_diagnostics()` keeps them:
+
+```python
+structure, findings = molframe.read_with_diagnostics("model.pdb")
+for finding in findings:
+    print(finding.code, finding.message, finding.remedy, finding.span)
+```
+
+### Bounding and cancelling a read
+
+`context=` governs the part of a read that is parallel and large, bond and secondary-structure perception: its worker count, its memory budget and its cancellation. A cancelled context stops the read with `Cancelled` and an exhausted budget with `MemoryBudgetError`, instead of returning a structure that skipped the step.
+
+### Files too large to hold at once
+
+`open_structure_batches()` yields bounded runs of atom rows, so memory stays bounded by `rows`, `bytes` and the context budget whatever the file's size:
+
+```python
+for batch in molframe.open_structure_batches("1aon.cif", rows=8192):
+    xyz = batch.positions          # (rows, 3) float32
+    names = batch.atom_names       # list of text
+    occupancy = batch.occupancies  # NaN where the file records none
+```
+
+Formats without a bounded reader are refused rather than read whole.
 
 ## The hierarchy
 

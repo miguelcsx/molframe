@@ -20,7 +20,7 @@ where
 
 /// A decision's canonical spelling in the underscore form Python uses; a
 /// `name:payload` value keeps its payload as written.
-fn snake(canonical: &str) -> String {
+pub(crate) fn snake(canonical: &str) -> String {
     match canonical.split_once(':') {
         Some((head, payload)) => format!("{}:{payload}", head.replace('-', "_")),
         None => canonical.replace('-', "_"),

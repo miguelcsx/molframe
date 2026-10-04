@@ -286,9 +286,6 @@ const HOLDS_THE_GIL: &[(&str, &str)] = &[
     ("chemistry.rs", "element"),
     ("chemistry.rs", "vdw_radius"),
     ("chemistry/carbohydrates.rs", "snfg_symbol"),
-    ("compare.rs", "tm_score"),
-    ("compare.rs", "gdt_ts"),
-    ("compare.rs", "gdt_ha"),
     ("crystal.rs", "assemblies"),
     ("interop/dlpack.rs", "coordinates"),
     ("crystal_reduction.rs", "reduce_cell"),
@@ -315,7 +312,72 @@ fn rust_sources(directory: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// `(file, function)` for every `#[pyfunction]` whose body never releases the GIL.
+fn is_identifier_character(character: char) -> bool {
+    character.is_alphanumeric() || character == '_'
+}
+
+/// Every function in `text` with the source of its body, which ends at the
+/// closing brace in the column the function's own line starts in.
+fn function_bodies(text: &str) -> Vec<(String, &str)> {
+    text.match_indices("fn ")
+        .filter(|(start, _)| {
+            text[..*start]
+                .chars()
+                .next_back()
+                .is_none_or(|before| !is_identifier_character(before))
+        })
+        .map(|(start, _)| {
+            let line_start = text[..start].rfind('\n').map_or(0, |newline| newline + 1);
+            let indent = text[line_start..]
+                .chars()
+                .take_while(|character| *character == ' ')
+                .count();
+            let tail = &text[start..];
+            let closing = format!("\n{}}}\n", " ".repeat(indent));
+            let end = match tail.find(&closing) {
+                Some(end) => end,
+                None => tail.len(),
+            };
+            (identifier(&tail[3..]), &tail[..end])
+        })
+        .collect()
+}
+
+/// Whether `body` calls `name`.
+fn calls(body: &str, name: &str) -> bool {
+    let call = format!("{name}(");
+    body.match_indices(&call).any(|(start, _)| {
+        body[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|before| !is_identifier_character(before))
+    })
+}
+
+/// The functions of one file that release the GIL, directly or by calling a
+/// function of the same file that does.
+fn releasing_functions(text: &str) -> BTreeSet<String> {
+    let functions = function_bodies(text);
+    let mut releasing: BTreeSet<String> = functions
+        .iter()
+        .filter(|(_, body)| body.contains("detach(") || body.contains("run("))
+        .map(|(name, _)| name.clone())
+        .collect();
+    loop {
+        let before = releasing.len();
+        for (name, body) in &functions {
+            if !releasing.contains(name) && releasing.iter().any(|callee| calls(body, callee)) {
+                releasing.insert(name.clone());
+            }
+        }
+        if releasing.len() == before {
+            return releasing;
+        }
+    }
+}
+
+/// `(file, function)` for every `#[pyfunction]` that never releases the GIL,
+/// directly or through a helper in its own file.
 fn functions_that_hold_the_gil() -> BTreeSet<(String, String)> {
     let source = source_root();
     let mut files = Vec::new();
@@ -330,23 +392,30 @@ fn functions_that_hold_the_gil() -> BTreeSet<(String, String)> {
             continue;
         }
         let text = read(&path);
+        let releasing = releasing_functions(&text);
         for (start, _) in text.match_indices("#[pyfunction]") {
             let tail = &text[start..];
             let Some(position) = tail.find("fn ") else {
                 continue;
             };
-            // A function written inside a macro has no name to list.
-            let name = match identifier(&tail[position + 3..]) {
-                name if name.is_empty() => "(macro)".to_owned(),
-                name => name,
-            };
+            let name = identifier(&tail[position + 3..]);
             let end = tail[position..]
                 .find("\n}\n")
                 .map_or(tail.len(), |end| position + end);
             let body = &tail[..end];
-            let releases = body.contains("detach(") || body.contains("run(");
+            let releases = if name.is_empty() {
+                // A function written inside a macro has no name to look up.
+                body.contains("detach(") || body.contains("run(")
+            } else {
+                releasing.contains(&name)
+            };
             if !releases {
-                holding.insert((relative.clone(), name));
+                let listed = if name.is_empty() {
+                    "(macro)".to_owned()
+                } else {
+                    name
+                };
+                holding.insert((relative.clone(), listed));
             }
         }
     }

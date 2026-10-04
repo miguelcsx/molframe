@@ -1,12 +1,12 @@
 //! The native module and the namespaces it registers.
 
 use super::{
-    analysis_result, bindings, catalog, chemistry, compare, crystal, formats, governed, hierarchy,
-    interop, policy, query_aliases, selection_expr, sequence, spatial, surface, table, trajectory,
-    validation, workflow,
+    analysis_result, batches, bindings, catalog, chemistry, compare, crystal, formats, governed,
+    hierarchy, interop, policy, query_aliases, reading, selection_expr, sequence, spatial, surface,
+    table, trajectory, validation, workflow,
 };
 use bindings::{PyContactTable, atom_contacts};
-use bindings::{PyQuery, PyReader, PySelection, PyStructure, PyStructureEditor, read};
+use bindings::{PyQuery, PySelection, PyStructure, PyStructureEditor};
 #[cfg(feature = "geometry")]
 use bindings::{centroid, distance_matrix, rmsd};
 use hierarchy::{
@@ -14,6 +14,7 @@ use hierarchy::{
     PyResidues,
 };
 use pyo3::prelude::*;
+use reading::{PyReadOptions, PyReader, read, read_with_diagnostics};
 #[cfg(feature = "analysis")]
 use workflow::{PyCompiledWorkflow, PyWorkflow, PyWorkflowNode};
 
@@ -45,6 +46,9 @@ pub(super) fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "query")]
     module.add_class::<query_aliases::PyQueryAliases>()?;
     module.add_class::<PyReader>()?;
+    module.add_class::<PyReadOptions>()?;
+    module.add_class::<batches::PyStructureBatch>()?;
+    module.add_class::<batches::PyStructureBatches>()?;
     #[cfg(feature = "analysis")]
     module.add_class::<PyContactTable>()?;
     #[cfg(feature = "analysis")]
@@ -54,6 +58,8 @@ pub(super) fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "analysis")]
     module.add_class::<PyCompiledWorkflow>()?;
     module.add_function(wrap_pyfunction!(read, module)?)?;
+    module.add_function(wrap_pyfunction!(read_with_diagnostics, module)?)?;
+    module.add_function(wrap_pyfunction!(batches::open_structure_batches, module)?)?;
     register_namespaces(module)?;
     catalog::validate_registration(module)
 }

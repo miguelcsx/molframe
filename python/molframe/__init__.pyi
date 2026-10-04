@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from os import PathLike
 from typing import ClassVar, Generic, Literal, Protocol, TypeVar
 
@@ -50,6 +50,14 @@ class Float32Array(Protocol):
     def shape(self) -> tuple[int, ...]: ...
 
 class UInt32Array(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
+class Int32Array(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
+class UInt8Array(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...
 
@@ -314,11 +322,103 @@ class QueryAliases:
     def __len__(self) -> int: ...
     def __contains__(self, name: str) -> bool: ...
 
+type _Format = Literal[
+    "auto", "mmcif", "pdbml", "bcif", "mmtf", "pdb", "pqr", "pdbqt", "sdf", "mol2", "smallcif"
+]
+
+class ReadOptions:
+    """Every decision a read makes, stated once and reusable across reads.
+
+    Omitted arguments keep the library's choices. ``only_categories`` and
+    ``skip_categories`` choose which optional mmCIF/BinaryCIF categories or PDB
+    records are read (names the structure cannot be built without are always read);
+    the ``max_*`` limits bound hostile or oversized input.
+    """
+
+    def __init__(
+        self,
+        *,
+        format: _Format = "auto",
+        mode: Literal["strict", "permissive", "recover"] = "permissive",
+        first_model_only: bool = False,
+        coordinates_only: bool = False,
+        discard_hydrogens: bool = False,
+        missing_element: Literal["preserve_unknown", "infer_from_atom_name"] = "preserve_unknown",
+        ambiguous_residue_boundary: Literal["reject", "infer_from_file_order"] = "reject",
+        only_categories: Sequence[str] | None = None,
+        skip_categories: Sequence[str] | None = None,
+        max_decompressed_bytes: int | None = None,
+        max_compression_ratio: int | None = None,
+        max_rows_per_category: int | None = None,
+        max_nesting_depth: int | None = None,
+        max_dictionary_entries: int | None = None,
+    ) -> None: ...
+    @property
+    def format(self) -> str: ...
+    @property
+    def mode(self) -> str: ...
+    @property
+    def first_model_only(self) -> bool: ...
+    @property
+    def coordinates_only(self) -> bool: ...
+    @property
+    def discard_hydrogens(self) -> bool: ...
+    @property
+    def missing_element(self) -> str: ...
+    @property
+    def ambiguous_residue_boundary(self) -> str: ...
+    @property
+    def only_categories(self) -> list[str] | None: ...
+    @property
+    def skip_categories(self) -> list[str] | None: ...
+
 class Reader:
     def __init__(self, data: bytes, *, name: str | None = ...) -> None: ...
     @property
     def byte_length(self) -> int: ...
-    def read(self) -> Structure: ...
+    def read(
+        self,
+        *,
+        format: _Format | None = None,
+        options: ReadOptions | None = None,
+        context: ExecutionContext | None = None,
+    ) -> Structure: ...
+
+class StructureBatch:
+    """One bounded run of atom rows, in file order.
+
+    ``occupancies`` and ``b_factors`` are ``NaN`` where the file records no value.
+    """
+
+    def __len__(self) -> int: ...
+    @property
+    def models(self) -> Int32Array: ...
+    @property
+    def sequences(self) -> Int32Array: ...
+    @property
+    def elements(self) -> UInt8Array: ...
+    @property
+    def positions(self) -> Float32Array: ...
+    @property
+    def occupancies(self) -> Float32Array: ...
+    @property
+    def b_factors(self) -> Float32Array: ...
+    @property
+    def atom_site_ids(self) -> UInt32Array: ...
+    @property
+    def heterogens(self) -> UInt8Array: ...
+    @property
+    def chains(self) -> list[str]: ...
+    @property
+    def components(self) -> list[str]: ...
+    @property
+    def atom_names(self) -> list[str]: ...
+    @property
+    def diagnostics(self) -> list[Diagnostic]: ...
+
+class StructureBatches:
+    def __iter__(self) -> StructureBatches: ...
+    def __next__(self) -> StructureBatch: ...
 
 class WorkflowNode: ...
 
@@ -349,4 +449,27 @@ class CompiledWorkflow:
 
 __version__: str
 
-def read(source: str | PathLike[str] | bytes, *, name: str | None = ...) -> Structure: ...
+def read(
+    source: str | PathLike[str] | bytes,
+    *,
+    name: str | None = None,
+    format: _Format | None = None,
+    options: ReadOptions | None = None,
+    context: ExecutionContext | None = None,
+) -> Structure: ...
+def read_with_diagnostics(
+    source: str | PathLike[str] | bytes,
+    *,
+    name: str | None = None,
+    format: _Format | None = None,
+    options: ReadOptions | None = None,
+    context: ExecutionContext | None = None,
+) -> tuple[Structure, list[Diagnostic]]: ...
+def open_structure_batches(
+    path: str | PathLike[str],
+    *,
+    rows: int = 8192,
+    bytes: int = 4_194_304,
+    options: ReadOptions | None = None,
+    context: ExecutionContext | None = None,
+) -> StructureBatches: ...

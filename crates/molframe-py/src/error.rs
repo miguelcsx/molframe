@@ -90,6 +90,18 @@ fn diagnostic_value<'py>(py: Python<'py>, diagnostic: &Diagnostic) -> PyResult<B
     ))
 }
 
+/// The Python `Diagnostic` values for a list of findings, in order.
+pub(crate) fn diagnostic_list<'py>(
+    py: Python<'py>,
+    findings: &[Diagnostic],
+) -> PyResult<Bound<'py, pyo3::types::PyList>> {
+    let values = findings
+        .iter()
+        .map(|finding| diagnostic_value(py, finding))
+        .collect::<PyResult<Vec<_>>>()?;
+    pyo3::types::PyList::new(py, values)
+}
+
 /// Builds `name(message, code=…, remedy=…, span=…, findings=…)`.
 fn build(
     py: Python<'_>,

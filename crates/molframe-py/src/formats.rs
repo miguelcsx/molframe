@@ -24,12 +24,7 @@ fn to_pdb(
     chain_map: Option<BTreeMap<String, String>>,
 ) -> PyResult<String> {
     let structure = structure.inner.clone();
-    let mut options = molframe::formats::pdb::PdbOptions::new().hybrid36(hybrid36);
-    if let Some(chain_map) = chain_map {
-        for (from, to) in chain_map {
-            options = options.chain_map(from, to);
-        }
-    }
+    let options = pdb_options(hybrid36, chain_map);
     py.detach(move || molframe::write_pdb(&structure, &options))
         .map_err(|findings| findings_error(&findings))
 }
@@ -44,26 +39,51 @@ fn to_bcif<'py>(py: Python<'py>, structure: &PyStructure) -> PyResult<Bound<'py,
     Ok(PyBytes::new(py, &bytes))
 }
 
+/// The PDB writing decisions a call states: hybrid-36 numbering and chain renames.
+fn pdb_options(
+    hybrid36: bool,
+    chain_map: Option<BTreeMap<String, String>>,
+) -> molframe::formats::pdb::PdbOptions {
+    let mut options = molframe::formats::pdb::PdbOptions::new().hybrid36(hybrid36);
+    for (from, to) in chain_map.into_iter().flatten() {
+        options = options.chain_map(from, to);
+    }
+    options
+}
+
 /// Writes the structure to `path`, choosing the format from `format` or the
 /// file name.
+///
+/// A `.gz` or `.zst` suffix applies deterministic compression. `hybrid36` and
+/// `chain_map` are the PDB decisions of `to_pdb`; `memory_limit` bounds, in
+/// bytes, the working memory the writer may keep.
 #[pyfunction]
-#[pyo3(signature = (structure, path, *, format=None))]
+#[pyo3(signature = (structure, path, *, format=None, hybrid36=false, chain_map=None, memory_limit=None))]
 fn write(
     py: Python<'_>,
     structure: &PyStructure,
     path: PathBuf,
     format: Option<&str>,
+    hybrid36: bool,
+    chain_map: Option<BTreeMap<String, String>>,
+    memory_limit: Option<usize>,
 ) -> PyResult<()> {
     let format = match format {
-        Some(name) => Some(molframe::Format::from_extension(name).ok_or_else(|| {
-            crate::error::from_diagnostic(
-                &molframe::Diagnostic::new(molframe::Code::E1001).with_context("name", name),
-            )
-        })?),
+        Some(name) => match name
+            .parse::<molframe::Format>()
+            .map_err(crate::error::kernel)?
+        {
+            molframe::Format::Auto => None,
+            chosen => Some(chosen),
+        },
         None => None,
     };
+    let mut options =
+        molframe::WriteOptions::canonical().with_pdb(pdb_options(hybrid36, chain_map));
+    if let Some(bytes) = memory_limit {
+        options = options.with_output(molframe::OutputOptions::default().with_memory_limit(bytes));
+    }
     let structure = structure.inner.clone();
-    let options = molframe::WriteOptions::canonical();
     py.detach(move || match format {
         Some(format) => molframe::write_as(&path, &structure, format, &options),
         None => molframe::write_with_options(&path, &structure, &options),

@@ -136,6 +136,7 @@ pub use molframe_core::{
     AnisotropicDisplacement, AnisotropyTable, AnisotropyTableBuilder, BondAdjacency, BondOrder,
     BondProvenance, BondRecord, BondTable, BondTableBuilder,
 };
+pub use molframe_core::{Backpressure, BatchDemand, BatchLease, BatchSource, Presence};
 pub use molframe_core::{SecondaryAssignment, SecondarySource, SecondaryStructure};
 pub use molframe_engine::{
     CompiledWorkflow, Cost, Explanation, Input, Node, OperationMetadata, Output, PhysicalNode,

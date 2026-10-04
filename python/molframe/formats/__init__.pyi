@@ -16,5 +16,8 @@ def write(
     structure: Structure,
     path: str | PathLike[str],
     *,
-    format: Literal["mmcif", "cif", "pdb", "ent", "bcif"] | None = None,
+    format: Literal["mmcif", "bcif", "pdb", "pqr", "pdbqt", "mmtf", "sdf", "mol2"] | None = None,
+    hybrid36: bool = False,
+    chain_map: Mapping[str, str] | None = None,
+    memory_limit: int | None = None,
 ) -> None: ...

@@ -4,10 +4,7 @@ use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidueSelection, PyResidu
 use numpy::ndarray::ArrayView2;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
-use pyo3::pybacked::PyBackedBytes;
 use pyo3::types::PyAny;
-use std::fmt;
-use std::path::PathBuf;
 
 #[cfg(feature = "analysis")]
 mod analysis;
@@ -374,74 +371,6 @@ impl PyQuery {
     fn __invert__(&self) -> Self {
         Self::from_native(!self.compiled.clone())
     }
-}
-
-struct PythonBytes(PyBackedBytes);
-
-impl AsRef<[u8]> for PythonBytes {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl fmt::Debug for PythonBytes {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("PythonBytes")
-            .field("len", &self.0.len())
-            .finish()
-    }
-}
-
-#[derive(Clone, Debug)]
-#[pyclass(name = "Reader", frozen, skip_from_py_object)]
-pub(crate) struct PyReader {
-    input: molframe::InputBuffer,
-    name: Option<Box<str>>,
-}
-
-#[pymethods]
-impl PyReader {
-    #[new]
-    #[pyo3(signature = (data, *, name=None))]
-    fn new(data: PyBackedBytes, name: Option<&str>) -> Self {
-        Self {
-            input: molframe::InputBuffer::from_owner(PythonBytes(data)),
-            name: name.map(Into::into),
-        }
-    }
-
-    fn read(&self, py: Python<'_>) -> PyResult<PyStructure> {
-        let input = self.input.clone();
-        let name = self.name.clone();
-        py.detach(move || {
-            molframe::read_buffer(&input, name.as_deref(), &molframe::ReadOptions::new())
-        })
-        .map(|(structure, _)| PyStructure::new(structure))
-        .map_err(|findings| findings_error(&findings))
-    }
-
-    #[getter]
-    fn byte_length(&self) -> usize {
-        self.input.len()
-    }
-}
-
-#[pyfunction]
-#[pyo3(signature = (source, *, name=None))]
-pub(crate) fn read(
-    py: Python<'_>,
-    source: &Bound<'_, PyAny>,
-    name: Option<&str>,
-) -> PyResult<PyStructure> {
-    if let Ok(path) = source.extract::<PathBuf>() {
-        return py
-            .detach(move || molframe::read(path))
-            .map(PyStructure::new)
-            .map_err(|findings| findings_error(&findings));
-    }
-    let bytes = source.extract::<PyBackedBytes>()?;
-    PyReader::new(bytes, name).read(py)
 }
 
 pub(crate) fn findings_error(findings: &molframe::Findings) -> PyErr {
