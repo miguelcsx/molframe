@@ -358,5 +358,8 @@ pub(super) fn validate_cutoff(cutoff: f32) -> Result<(), SpatialError> {
 }
 
 #[cfg(test)]
+#[path = "search_parallel_tests.rs"]
+mod parallel_tests;
+#[cfg(test)]
 #[path = "search_tests.rs"]
 mod tests;
