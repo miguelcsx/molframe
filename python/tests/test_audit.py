@@ -406,3 +406,40 @@ def test_the_radius_set_and_the_system_are_decisions_an_sasa_audit_can_vary():
     # Neighbours in the crystal can only cover surface, never expose more of it.
     unit, crystal = (exposed_total(run) for run in result.runs[:2])
     assert crystal == pytest.approx(unit) or crystal < unit
+
+
+ZINC_SITE = b"""data_zn
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+1 C C1 LIG A 1 0.0 0.0 0.0
+2 N N1 LIG A 1 1.5 0.0 0.0
+3 ZN ZN ZN A 2 0.0 2.5 0.0
+"""
+
+
+def test_an_element_without_a_radius_makes_the_area_partial_and_the_policy_decides_the_rest():
+    site = molframe.read(ZINC_SITE, name="zn.cif")
+    # Bondi has no zinc: the zinc has no area, and says so, rather than being given one.
+    partial = analysis.sasa(site, policy=molframe.AnalysisPolicy(vdw_radii="bondi"))
+    assert partial.status == "partial"
+    assert (partial.coverage.intended, partial.coverage.used, partial.coverage.missing) == (3, 2, 1)
+    assert np.isnan(partial.value[2])
+    assert np.all(np.isfinite(partial.value[:2]))
+    assert any("no radius" in note for note in partial.assumptions)
+    # A policy that will not compute over missing atoms has no answer at all.
+    refused = analysis.sasa(
+        site, policy=molframe.AnalysisPolicy(vdw_radii="bondi", missing_atoms="indeterminate")
+    )
+    assert refused.status == "indeterminate"
+    # A set that has the element answers completely.
+    complete = analysis.sasa(site, policy=molframe.AnalysisPolicy(vdw_radii="alvarez"))
+    assert complete.status == "complete"
+    assert np.all(np.isfinite(complete.value))

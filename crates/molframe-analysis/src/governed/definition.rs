@@ -42,8 +42,8 @@ pub enum DefinitionError {
     UnknownRadiusSet(Box<str>),
     /// A surface contact cannot be decided for an atom with no radius.
     #[error(
-        "{atoms} atoms have an element with no radius in the {set} set, and a surface contact \
-         cannot be decided without one"
+        "{atoms} atoms have an element with no radius in the {set} set, and a surface \
+         calculation cannot be decided without one"
     )]
     UnknownRadius {
         /// How many atoms lack a radius.
