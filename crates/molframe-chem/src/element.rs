@@ -181,6 +181,23 @@ pub fn atom_radii(structure: &molframe_core::structure::Structure, set: RadiusSe
     radii
 }
 
+/// The atomic weight of every atom of `structure`, indexed by atom, in daltons;
+/// `NaN` marks an atom whose element is unknown.
+#[must_use]
+pub fn atom_masses(structure: &molframe_core::structure::Structure) -> Vec<f64> {
+    let mut masses = vec![f64::NAN; structure.atom_count() as usize];
+    for atom in structure.data().atoms() {
+        let weight = atom
+            .element()
+            .and_then(element_properties)
+            .map(|properties| properties.atomic_weight);
+        if let (Some(weight), Some(slot)) = (weight, masses.get_mut(atom.index().as_usize())) {
+            *slot = weight;
+        }
+    }
+    masses
+}
+
 /// Returns a van der Waals radius in ångström from exactly the requested set.
 #[must_use]
 pub fn vdw_radius(element: Element, set: RadiusSet) -> Option<f32> {
