@@ -1,15 +1,15 @@
 ---
 title: Python API index
-description: Curated map of every currently exported MolFrame Python class and function.
+description: Guide to the main MolFrame Python entry points and their native contracts.
 ---
 
-This is an index of the supported Python facade, not a second copy of every task guide. Start with the linked guides for examples and scientific interpretation.
+This guide lists the main entry points of the supported Python facade. The complete typed surface is maintained in the package’s handwritten `.pyi` files and checked against native registration. Start with the linked guides for examples and scientific interpretation.
 
 ## Root functions
 
 | API | Purpose |
 | --- | --- |
-| `read(source, *, name=None)` | Read a path, path-like value, or bytes into a `Structure`. |
+| `read(source, *, name=None, format=None, options=None, context=None)` | Read a path, path-like value, or bytes into a `Structure`. |
 
 Identifier acquisition is not currently part of the Python facade. The verified boundary is local paths or caller-supplied bytes through `read()`. The Rust adapters expose a typed unavailable-provider diagnostic rather than guessing a remote URL when no authoritative identifier manifest and checksum are configured. See [Structures](/docs/structures) for the distinction between loading and acquisition.
 

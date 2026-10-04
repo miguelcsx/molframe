@@ -94,6 +94,7 @@ jobs:
           uv run --no-sync pytest python/tests -q
           export PYO3_PYTHON=$(uv run --no-sync python -c 'import sys; print(sys.executable)')
           export PYTHONPATH=$(uv run --no-sync python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')
+          export LD_LIBRARY_PATH="$(uv run --no-sync python -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           cargo test -p molframe-py python_numeric_results_equal_rust_on_a_real_structure -- --ignored
 
       - name: Type check
