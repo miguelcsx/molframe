@@ -32,6 +32,11 @@ impl<'py> TableBuilder<'py> {
         self.column(name, values)
     }
 
+    /// Adds a `u64` count column.
+    pub(crate) fn counts(self, name: &'static str, values: &[u64]) -> Self {
+        self.column(name, values)
+    }
+
     /// Adds an `f32` column.
     pub(crate) fn single(self, name: &'static str, values: &[f32]) -> Self {
         self.column(name, values)

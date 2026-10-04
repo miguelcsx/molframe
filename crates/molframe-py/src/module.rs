@@ -94,6 +94,8 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
         analysis.add_function(wrap_pyfunction!(governed::hydrogen_bonds, &analysis)?)?;
         analysis.add_function(wrap_pyfunction!(governed::salt_bridges, &analysis)?)?;
         crate::governed_structure::register(&analysis)?;
+        crate::governed_physical::register(&analysis)?;
+        crate::governed_field::register(&analysis)?;
         analysis.add("ContactTable", module.getattr("ContactTable")?)?;
     }
     module.add_submodule(&analysis)?;

@@ -1,7 +1,10 @@
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from .. import Analysis, AnalysisPolicy, ExecutionContext, Structure, Table
+from .. import Analysis, AnalysisPolicy, ExecutionContext, Float64Array, Query, Structure, Table
+from .._structure import Selection
+
+type _RadiusSet = Literal["bondi", "amber_united", "charmm", "alvarez"]
 
 class ArrayColumn(Protocol):
     @property
@@ -148,3 +151,114 @@ def native_contacts(
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[dict[str, float]]: ...
+
+class DensityGrid:
+    """A weighted density on a rectilinear grid."""
+
+    @property
+    def origin(self) -> tuple[float, float, float]: ...
+    @property
+    def spacing(self) -> tuple[float, float, float]: ...
+    @property
+    def shape(self) -> tuple[int, int, int]: ...
+    @property
+    def excluded_weight(self) -> float:
+        """Weight that fell outside the grid."""
+
+    @property
+    def values(self) -> Float64Array:
+        """Weight per unit volume, shape ``(nx, ny, nz)``."""
+
+def leaflets(
+    structure: Structure,
+    sites: str | Query | Selection,
+    *,
+    connection_distance: float,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Group the selected sites into connected components: ``site``, ``leaflet``."""
+
+def radial_distribution(
+    structure: Structure,
+    first: str | Query | Selection,
+    second: str | Query | Selection,
+    *,
+    minimum_distance: float,
+    maximum_distance: float,
+    bins: int,
+    volume: float,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Pair counts and g(r) per shell: ``lower``, ``upper``, ``count``, ``distribution``."""
+
+def coordination_numbers(
+    structure: Structure,
+    first: str | Query | Selection,
+    second: str | Query | Selection,
+    *,
+    minimum_distance: float,
+    maximum_distance: float,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Neighbours of each ``first`` atom among ``second`` in the shell: ``atom``, ``count``."""
+
+def linear_density(
+    structure: Structure,
+    *,
+    axis: Literal["x", "y", "z"],
+    minimum: float,
+    maximum: float,
+    bins: int,
+    weights: Literal["count", "mass"] | Sequence[float] | None = None,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Weighted profile along an axis: ``lower``, ``upper``, ``weight``, ``density``."""
+
+def density_map(
+    structure: Structure,
+    *,
+    origin: tuple[float, float, float],
+    spacing: tuple[float, float, float],
+    shape: tuple[int, int, int],
+    weights: Literal["count", "mass"] | Sequence[float] | None = None,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[DensityGrid]: ...
+def pore_profile(
+    structure: Structure,
+    *,
+    axis_origin: tuple[float, float, float],
+    axis_direction: tuple[float, float, float],
+    start: float,
+    end: float,
+    samples: int,
+    search_radius: float,
+    grid_spacing: float,
+    probe_radius: float = 0.0,
+    radii: _RadiusSet = "bondi",
+    memory_limit_bytes: int = ...,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Largest probe fitting each slice: ``axial_coordinate``, ``centre_x/y/z``, ``radius``."""
+
+def surface_contacts(
+    structure: Structure,
+    *,
+    tolerance: float,
+    probe: float,
+    surface_density: float,
+    minimum_area: float,
+    radii: _RadiusSet = "bondi",
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Close atom pairs whose atoms are both exposed: ``first``, ``second``, ``distance``."""

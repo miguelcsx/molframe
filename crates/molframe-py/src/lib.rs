@@ -36,6 +36,8 @@ mod formats;
 #[cfg(feature = "analysis")]
 mod governed;
 #[cfg(feature = "analysis")]
+mod governed_field;
+mod governed_physical;
 mod governed_structure;
 mod hierarchy;
 mod interop;
