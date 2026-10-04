@@ -40,7 +40,12 @@ Issues = "https://github.com/miguelcsx/molframe/issues"
 Documentation = "https://miguelcsx.github.io/molframe/"
 
 [dependency-groups]
-dev = ["pyright>=1.1.405", "pytest>=8", "ruff>=0.16"]
+dev = [
+    "pyarrow>=16",
+    "pyright>=1.1.405",
+    "pytest>=8",
+    "ruff>=0.16",
+]
 
 # Typing and linting are separate contracts with separate jobs.
 # `pyright` in strict mode owns types, including `pyright --verifytypes
