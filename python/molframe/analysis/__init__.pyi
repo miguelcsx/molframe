@@ -120,7 +120,7 @@ def chain_interface(
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[Table]:
-    """Residues of two chains within ``cutoff`` Å; a name matches a chain's label or author label."""
+    """Residues of two chains within ``cutoff`` Å (a name matches a label or author label)."""
 
 def half_sphere_exposure(
     structure: Structure,
