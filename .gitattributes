@@ -1,0 +1,2 @@
+# Embedded NCBI section markers must retain their canonical line endings on Windows.
+crates/molframe-seq/data/ncbi_matrices.txt text eol=lf
