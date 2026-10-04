@@ -1,4 +1,4 @@
-use super::{AnalysisPolicy, DictionaryVersion, Fingerprint, Provenance};
+use super::{AnalysisPolicy, ContentDigest, DictionaryVersion, Provenance};
 
 /// Versions of executable and reference data available for a re-execution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,9 +36,9 @@ pub struct Reexecution<T> {
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ReexecutionError {
-    /// The original run did not fingerprint its input bytes.
-    #[error("provenance has no input fingerprint")]
-    MissingInputFingerprint,
+    /// The original run did not record the digest of its input bytes.
+    #[error("provenance has no input digest")]
+    MissingInputDigest,
     /// Supplied bytes are not the bytes used by the original run.
     #[error("input fingerprint does not match provenance")]
     InputMismatch,
@@ -90,10 +90,10 @@ fn validate(
     input: &[u8],
     environment: ReexecutionEnvironment<'_>,
 ) -> Result<(), ReexecutionError> {
-    let Some(expected_input) = provenance.input_fingerprint else {
-        return Err(ReexecutionError::MissingInputFingerprint);
+    let Some(expected_input) = provenance.input_digest else {
+        return Err(ReexecutionError::MissingInputDigest);
     };
-    if expected_input != Fingerprint::of(input) {
+    if expected_input != ContentDigest::of(input) {
         return Err(ReexecutionError::InputMismatch);
     }
     if provenance.policy_fingerprint != provenance.policy.fingerprint() {

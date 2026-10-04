@@ -2298,6 +2298,7 @@ dependencies = [
  "molframe-mmap",
  "num-traits",
  "rayon",
+ "sha2",
  "smallvec",
  "thiserror 2.0.21",
  "zstd",

@@ -1,9 +1,9 @@
 use super::{ReexecutionEnvironment, ReexecutionError, reexecute_from_provenance};
-use crate::contract::{AnalysisPolicy, Fingerprint, Namespace, Provenance};
+use crate::contract::{AnalysisPolicy, ContentDigest, Namespace, Provenance};
 
 fn provenance(input: &[u8]) -> Provenance {
     let policy = AnalysisPolicy::default().with_identifiers(Namespace::Explicit);
-    Provenance::new(&policy).with_input_fingerprint(Fingerprint::of(input))
+    Provenance::new(&policy).with_input_digest(ContentDigest::of(input))
 }
 
 #[test]
@@ -14,10 +14,10 @@ fn replay_receives_exact_bytes_and_recorded_policy() {
         &original,
         input,
         ReexecutionEnvironment::current(),
-        |bytes, policy| (Fingerprint::of(bytes), policy.fingerprint()),
+        |bytes, policy| (ContentDigest::of(bytes), policy.fingerprint()),
     )
     .unwrap_or_else(|error| panic!("re-execution failed: {error}"));
-    assert_eq!(replay.value.0, Fingerprint::of(input));
+    assert_eq!(replay.value.0, ContentDigest::of(input));
     assert_eq!(replay.value.1, original.policy_fingerprint);
     assert_eq!(replay.provenance.fingerprint(), original.fingerprint());
 }

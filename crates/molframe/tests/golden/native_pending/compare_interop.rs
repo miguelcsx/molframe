@@ -163,7 +163,7 @@ fn gw_041_reexecutes_only_with_matching_provenance() {
     let policy = molframe::AnalysisPolicy::default();
     let provenance = molframe::Provenance::new(&policy)
         .with_source(molframe::SourceRef::Memory)
-        .with_input_fingerprint(molframe_core::contract::Fingerprint::of(input));
+        .with_input_digest(molframe_core::contract::ContentDigest::of(input));
     let replay = molframe_core::contract::reexecute_from_provenance(
         &provenance,
         input,

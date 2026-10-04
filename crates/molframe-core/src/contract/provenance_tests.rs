@@ -25,8 +25,8 @@ fn the_clock_does_not_change_the_fingerprint() {
 #[test]
 fn a_different_input_changes_the_fingerprint() {
     let policy = AnalysisPolicy::default();
-    let first = Provenance::new(&policy).with_input_fingerprint(Fingerprint::of(b"one"));
-    let second = Provenance::new(&policy).with_input_fingerprint(Fingerprint::of(b"two"));
+    let first = Provenance::new(&policy).with_input_digest(ContentDigest::of(b"one"));
+    let second = Provenance::new(&policy).with_input_digest(ContentDigest::of(b"two"));
     assert_ne!(first.fingerprint(), second.fingerprint());
 }
 

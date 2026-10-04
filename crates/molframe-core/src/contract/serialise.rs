@@ -54,10 +54,7 @@ fn fields(record: &Provenance) -> Vec<(String, String)> {
     let mut result = vec![
         ("molframe_version", record.molframe_version.to_owned()),
         ("input_source", record.input_source.to_string()),
-        (
-            "input_fingerprint",
-            optional_display(record.input_fingerprint),
-        ),
+        ("input_sha256", optional_display(record.input_digest)),
         ("policy_fingerprint", record.policy_fingerprint.to_string()),
         ("profile", optional_profile(record)),
         (

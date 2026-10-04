@@ -164,7 +164,7 @@ fn bench_gw_041(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     let policy = molframe::AnalysisPolicy::default();
     let provenance = molframe::Provenance::new(&policy)
         .with_source(molframe::SourceRef::Memory)
-        .with_input_fingerprint(molframe_core::contract::Fingerprint::of(input));
+        .with_input_digest(molframe_core::contract::ContentDigest::of(input));
     group.throughput(Throughput::Bytes(input.len() as u64));
     group.bench_function("GW-041", |b| {
         b.iter(|| {

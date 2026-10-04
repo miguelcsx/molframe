@@ -7,6 +7,7 @@
 //! can be inspected, fingerprinted, varied and published.
 
 mod analysis;
+mod digest;
 mod outcome;
 mod policy;
 mod provenance;
@@ -16,6 +17,7 @@ mod serialise;
 pub use analysis::{
     Analysis, Assumption, AssumptionSource, Coverage, Impact, MeasuredImpact, Status,
 };
+pub use digest::ContentDigest;
 pub use outcome::{Indeterminacy, MissingPolicyError, Outcome, Quality, resolve_missing};
 pub(crate) use policy::closed_vocabulary;
 pub use policy::{

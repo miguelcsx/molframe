@@ -8,6 +8,7 @@
 //! run a week apart must fingerprint identically, or the fingerprint identifies
 //! the run rather than the result.
 
+use super::digest::ContentDigest;
 use super::policy::{AnalysisPolicy, Fingerprint, PolicyField, ProfileId};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -159,8 +160,8 @@ pub struct Provenance {
     pub molframe_version: &'static str,
     /// Where the input came from.
     pub input_source: SourceRef,
-    /// A fingerprint of the input's bytes, where they were read.
-    pub input_fingerprint: Option<Fingerprint>,
+    /// The SHA-256 digest of the input's bytes, where they were read.
+    pub input_digest: Option<ContentDigest>,
     /// The policy in force.
     pub policy: AnalysisPolicy,
     /// A fingerprint of that policy.
@@ -188,7 +189,7 @@ impl Provenance {
         Self {
             molframe_version: env!("CARGO_PKG_VERSION"),
             input_source: SourceRef::None,
-            input_fingerprint: None,
+            input_digest: None,
             policy: policy.clone(),
             policy_fingerprint: policy.fingerprint(),
             profile: policy.profile(),
@@ -235,10 +236,10 @@ impl Provenance {
         self
     }
 
-    /// Records a fingerprint of the input's bytes.
+    /// Records the SHA-256 digest of the input's bytes.
     #[must_use]
-    pub const fn with_input_fingerprint(mut self, fingerprint: Fingerprint) -> Self {
-        self.input_fingerprint = Some(fingerprint);
+    pub const fn with_input_digest(mut self, digest: ContentDigest) -> Self {
+        self.input_digest = Some(digest);
         self
     }
 
@@ -273,8 +274,8 @@ impl Provenance {
         let mut bytes = Vec::with_capacity(64);
         bytes.extend_from_slice(self.molframe_version.as_bytes());
         bytes.extend_from_slice(&self.policy_fingerprint.get().to_le_bytes());
-        if let Some(input) = self.input_fingerprint {
-            bytes.extend_from_slice(&input.get().to_le_bytes());
+        if let Some(input) = self.input_digest {
+            bytes.extend_from_slice(input.as_bytes());
         }
         if let Some(version) = &self.schema_version {
             bytes.extend_from_slice(version.as_str().as_bytes());
