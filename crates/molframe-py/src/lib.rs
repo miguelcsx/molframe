@@ -53,6 +53,8 @@ mod secondary;
 mod selection_expr;
 #[cfg(feature = "sequence")]
 mod sequence;
+#[cfg(feature = "sequence")]
+mod sequence_more;
 #[cfg(feature = "spatial")]
 mod spatial;
 mod structure_data;

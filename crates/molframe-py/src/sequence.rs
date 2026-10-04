@@ -168,35 +168,83 @@ impl PyScoring {
 }
 
 /// Aligns two sequences globally, locally or semi-globally.
+///
+/// With `scoring` (or neither argument) residues score as equal or unequal. With
+/// `matrix`, residues score from a substitution matrix and the affine gap
+/// costs are stated explicitly as `gap_open` and `gap_extend`, which must be
+/// zero or negative; `scoring` and `matrix` are not combined.
 #[pyfunction]
-#[pyo3(signature = (left, right, *, mode="global", scoring=None))]
+#[pyo3(signature = (
+    left,
+    right,
+    *,
+    mode="global",
+    scoring=None,
+    matrix=None,
+    gap_open=None,
+    gap_extend=None,
+))]
+#[allow(clippy::too_many_arguments)]
 fn align(
     py: Python<'_>,
     left: &str,
     right: &str,
     mode: &str,
     scoring: Option<PyScoring>,
+    matrix: Option<&crate::sequence_more::PySubstitutionMatrix>,
+    gap_open: Option<i32>,
+    gap_extend: Option<i32>,
 ) -> PyResult<PyAlignment> {
-    let scoring = scoring.map_or_else(Scoring::simple, |value| value.0);
-    let solve = match mode {
-        "global" => seq::global,
-        "local" => seq::local,
-        "semi_global" => seq::semi_global,
-        _ => {
+    let (left_bytes, right_bytes) = (left.as_bytes().to_vec(), right.as_bytes().to_vec());
+    let inner = if let Some(matrix) = matrix {
+        if scoring.is_some() {
             return Err(crate::error::value(
-                "mode must be 'global', 'local' or 'semi_global'",
+                "pass scoring or matrix, not both: a matrix replaces the match and mismatch scores",
             ));
         }
-    };
-    let (left_bytes, right_bytes) = (left.as_bytes().to_vec(), right.as_bytes().to_vec());
-    let inner = py
-        .detach(|| solve(&left_bytes, &right_bytes, scoring))
-        .map_err(crate::error::kernel)?;
+        let (Some(gap_open), Some(gap_extend)) = (gap_open, gap_extend) else {
+            return Err(crate::error::value(
+                "a matrix alignment needs gap_open and gap_extend stated",
+            ));
+        };
+        if gap_open > 0 || gap_extend > 0 {
+            return Err(crate::error::value(
+                "gap_open and gap_extend must be zero or negative",
+            ));
+        }
+        let solve = match mode {
+            "global" => seq::global_matrix,
+            "local" => seq::local_matrix,
+            "semi_global" => seq::semi_global_matrix,
+            _ => return Err(mode_error()),
+        };
+        let matrix = matrix.inner.clone();
+        py.detach(|| solve(&left_bytes, &right_bytes, &matrix, gap_open, gap_extend))
+    } else {
+        if gap_open.is_some() || gap_extend.is_some() {
+            return Err(crate::error::value(
+                "gap_open and gap_extend go with a matrix; a Scoring carries its own gap scores",
+            ));
+        }
+        let scoring = scoring.map_or_else(Scoring::simple, |value| value.0);
+        let solve = match mode {
+            "global" => seq::global,
+            "local" => seq::local,
+            "semi_global" => seq::semi_global,
+            _ => return Err(mode_error()),
+        };
+        py.detach(|| solve(&left_bytes, &right_bytes, scoring))
+    }
+    .map_err(crate::error::kernel)?;
     Ok(PyAlignment {
         inner,
         left: left_bytes,
         right: right_bytes,
     })
+}
+
+fn mode_error() -> PyErr {
+    crate::error::value("mode must be 'global', 'local' or 'semi_global'")
 }
 
 /// Parses FASTA text into records, preserving order.
@@ -229,6 +277,7 @@ fn kmer_counts(py: Python<'_>, sequence: &str, k: usize) -> PyResult<Vec<(String
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    crate::sequence_more::register(module)?;
     module.add_class::<PyAlignment>()?;
     module.add_class::<PyFastaRecord>()?;
     module.add_class::<PyScoring>()?;
