@@ -39,7 +39,12 @@ def test_write_picks_the_format_from_the_extension(tmp_path, structure):
 
 
 def test_unknown_formats_and_missing_extensions_are_rejected(tmp_path, structure):
-    with pytest.raises(ValueError, match='unsupported format "xyz"; expected mmcif, pdb or bcif'):
+    with pytest.raises(molframe.MolframeError) as unknown:
         molframe.formats.write(structure, tmp_path / "out.xyz")
-    with pytest.raises(ValueError, match=r"cannot infer a format; pass format="):
+    assert unknown.value.code == "MOLFRAME-E1001"
+    with pytest.raises(molframe.MolframeError) as unnamed:
         molframe.formats.write(structure, tmp_path / "noextension")
+    assert unnamed.value.code == "MOLFRAME-E1001"
+    with pytest.raises(molframe.MolframeError) as forced:
+        molframe.formats.write(structure, tmp_path / "out.dat", format="nonsense")
+    assert forced.value.code == "MOLFRAME-E1001"

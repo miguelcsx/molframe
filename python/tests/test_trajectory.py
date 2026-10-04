@@ -39,9 +39,7 @@ def test_an_unknown_extension_needs_an_explicit_format(tmp_path):
     with pytest.raises(ValueError, match="trajectory format cannot be inferred from the path"):
         molframe.trajectory.read(path)
     assert molframe.trajectory.read(path, format="xyz").n_frames == 3
-    with pytest.raises(
-        ValueError, match="format must be xtc, trr, dcd, tng, gro, xyz, lammps_dump or netcdf"
-    ):
+    with pytest.raises(molframe.PolicyError, match=r"format: mdcrd .expected xtc, trr, dcd"):
         molframe.trajectory.read(path, format="mdcrd")
     with pytest.raises(ValueError, match="trajectory input could not be read"):
         molframe.trajectory.read(tmp_path / "missing.xyz")

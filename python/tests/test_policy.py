@@ -70,31 +70,35 @@ def test_a_policy_is_a_named_value_with_a_stable_fingerprint():
 @pytest.mark.parametrize(
     ("keyword", "allowed"),
     [
-        ({"identifiers": "both"}, "identifiers must be one of label, auth, explicit"),
-        ({"altloc": "label:"}, "altloc 'label:' needs a label"),
+        ({"identifiers": "both"}, "identifiers: both .expected label, auth, explicit"),
+        ({"altloc": "label:"}, "altloc: label: .expected a value after 'label:'"),
         (
             {"altloc": "newest"},
             (
-                "altloc must be keep_all, conformer_consistent, first, "
-                "highest_occupancy_per_residue, highest_occupancy_per_atom or label:<id>"
+                "altloc: newest .expected keep-all, conformer-consistent, first, "
+                "highest-occupancy-per-residue, highest-occupancy-per-atom or label:<id>"
             ),
         ),
         (
             {"missing_atoms": "guess"},
-            "missing_atoms must be one of ignore, report, indeterminate, fail",
+            "missing_atoms: guess .expected ignore, report, indeterminate, fail",
         ),
         (
             {"hydrogens": "all"},
-            "hydrogens must be one of explicit_only, include_inferred, exclude",
+            "hydrogens: all .expected explicit-only, include-inferred, exclude",
         ),
         (
             {"symmetry": "p1"},
-            "symmetry must be one of none, crystallographic, biological_assembly",
+            "symmetry: p1 .expected none, crystallographic, biological-assembly",
         ),
-        ({"vdw_radii": "uff"}, "vdw_radii must be one of bondi, amber_united, charmm, alvarez"),
-        ({"precision": "f16"}, "precision must be one of f32, f64"),
+        (
+            {"vdw_radii": "uff"},
+            "vdw_radii: uff .expected bondi, amber-united, charmm, alvarez",
+        ),
+        ({"precision": "f16"}, "precision: f16 .expected f32, f64"),
     ],
 )
 def test_unknown_choices_are_rejected_with_the_allowed_names(keyword, allowed):
-    with pytest.raises(ValueError, match=allowed):
+    with pytest.raises(molframe.PolicyError, match=allowed) as raised:
         molframe.AnalysisPolicy(**keyword)
+    assert raised.value.code == "MOLFRAME-E6104"

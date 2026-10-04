@@ -9,7 +9,7 @@ import pytest
 import molframe
 
 DATA = Path(__file__).resolve().parents[2] / "crates" / "molframe-py" / "tests" / "data"
-BACKEND_CHOICES = r"backend must be 'auto', 'cell', 'kd_tree', or 'brute_force'"
+BACKEND_CHOICES = r"backend: octree .expected brute-force, cell-list, kd-tree, neighbor-list, auto"
 
 
 def test_element_properties_are_case_insensitive_and_complete():
@@ -26,7 +26,7 @@ def test_radius_sets_differ_and_unknown_sets_are_rejected():
     assert bondi == pytest.approx(1.7)
     assert molframe.chemistry.vdw_radius("C", radii="alvarez") != bondi
     with pytest.raises(
-        ValueError, match="radii must be 'bondi', 'amber_united', 'charmm' or 'alvarez'"
+        molframe.PolicyError, match=r"radii: made_up .expected bondi, amber-united, charmm, alvarez"
     ):
         molframe.chemistry.vdw_radius("C", radii="made_up")
 

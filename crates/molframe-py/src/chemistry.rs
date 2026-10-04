@@ -10,16 +10,9 @@ use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 use std::path::PathBuf;
 
+/// The radius set a name selects, through the spelling Rust owns.
 pub(crate) fn radius_set(name: &str) -> PyResult<RadiusSet> {
-    match name {
-        "bondi" => Ok(RadiusSet::Bondi),
-        "amber_united" => Ok(RadiusSet::AmberUnited),
-        "charmm" => Ok(RadiusSet::Charmm),
-        "alvarez" => Ok(RadiusSet::Alvarez),
-        _ => Err(crate::error::value(
-            "radii must be 'bondi', 'amber_united', 'charmm' or 'alvarez'",
-        )),
-    }
+    name.parse().map_err(crate::error::kernel)
 }
 
 /// Reference properties of one element.

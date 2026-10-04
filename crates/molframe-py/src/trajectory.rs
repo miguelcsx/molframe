@@ -3,8 +3,8 @@
 use crate::analysis_result::PyAnalysis;
 use crate::policy::PyAnalysisPolicy;
 use molframe::trajectory::{
-    FrameAlignment, FrameView, TrajectoryFormat, TrajectoryReadOptions,
-    analyse_rmsd_to_reference_view, read_trajectory_materialized,
+    FrameAlignment, FrameView, TrajectoryReadOptions, analyse_rmsd_to_reference_view,
+    read_trajectory_materialized,
 };
 use numpy::{PyArray1, PyArray3, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
@@ -19,7 +19,7 @@ use std::path::PathBuf;
     module = "molframe.trajectory"
 )]
 struct PyTrajectory {
-    format: &'static str,
+    format: String,
     positions: Py<PyArray3<f32>>,
     times: Py<PyArray1<f64>>,
 }
@@ -28,8 +28,8 @@ struct PyTrajectory {
 impl PyTrajectory {
     /// Container the frames were read from.
     #[getter]
-    fn format(&self) -> &'static str {
-        self.format
+    fn format(&self) -> String {
+        self.format.clone()
     }
 
     /// Coordinates with shape `(frames, atoms, 3)`.
@@ -68,76 +68,27 @@ impl PyTrajectory {
     }
 }
 
-fn format_name(format: TrajectoryFormat) -> &'static str {
-    match format {
-        TrajectoryFormat::Xtc => "xtc",
-        TrajectoryFormat::Trr => "trr",
-        TrajectoryFormat::Dcd => "dcd",
-        TrajectoryFormat::Tng => "tng",
-        TrajectoryFormat::Gro => "gro",
-        TrajectoryFormat::Xyz => "xyz",
-        TrajectoryFormat::LammpsDump => "lammps_dump",
-        TrajectoryFormat::AmberNetcdf => "netcdf",
-        _ => "other",
-    }
-}
-
-fn parse_format(name: &str) -> PyResult<TrajectoryFormat> {
-    match name {
-        "xtc" => Ok(TrajectoryFormat::Xtc),
-        "trr" => Ok(TrajectoryFormat::Trr),
-        "dcd" => Ok(TrajectoryFormat::Dcd),
-        "tng" => Ok(TrajectoryFormat::Tng),
-        "gro" => Ok(TrajectoryFormat::Gro),
-        "xyz" => Ok(TrajectoryFormat::Xyz),
-        "lammps_dump" => Ok(TrajectoryFormat::LammpsDump),
-        "netcdf" => Ok(TrajectoryFormat::AmberNetcdf),
-        _ => Err(crate::error::value(
-            "format must be xtc, trr, dcd, tng, gro, xyz, lammps_dump or netcdf",
-        )),
-    }
-}
-
 /// Reads every frame of a self-describing trajectory file.
 #[pyfunction]
 #[pyo3(signature = (path, *, format=None))]
 fn read(py: Python<'_>, path: PathBuf, format: Option<&str>) -> PyResult<PyTrajectory> {
     let options = TrajectoryReadOptions {
-        format: format.map(parse_format).transpose()?,
+        format: format
+            .map(|name| name.parse().map_err(crate::error::kernel))
+            .transpose()?,
         ..TrajectoryReadOptions::default()
     };
     let data = py
         .detach(move || read_trajectory_materialized(&path, &options))
         .map_err(crate::error::failure)?;
-    let atoms = data.frames.first().map_or(0, |frame| frame.positions.len());
-    if let Some(frame) = data
-        .frames
-        .iter()
-        .find(|frame| frame.positions.len() != atoms)
-    {
-        return Err(crate::error::value(format!(
-            "frame {} has {} atoms, expected {atoms}",
-            frame.frame,
-            frame.positions.len()
-        )));
-    }
-    let frames = data.frames.len();
-    let mut flat = Vec::with_capacity(frames * atoms * 3);
-    let mut times = Vec::with_capacity(frames);
-    for frame in &data.frames {
-        flat.extend(frame.positions.iter().flatten());
-        // A frame without a time is reported as NaN rather than invented.
-        times.push(match frame.time {
-            Some(time) => time,
-            None => f64::NAN,
-        });
-    }
-    let positions = PyArray1::from_vec(py, flat).reshape([frames, atoms, 3])?;
+    let dense = data.dense_positions().map_err(crate::error::kernel)?;
+    let positions =
+        PyArray1::from_vec(py, dense.coordinates).reshape([dense.frames, dense.atoms, 3])?;
     positions.readwrite().make_nonwriteable();
-    let times = PyArray1::from_vec(py, times);
+    let times = PyArray1::from_vec(py, dense.times);
     times.readwrite().make_nonwriteable();
     Ok(PyTrajectory {
-        format: format_name(data.format),
+        format: data.format.name().replace('-', "_"),
         positions: positions.unbind(),
         times: times.unbind(),
     })

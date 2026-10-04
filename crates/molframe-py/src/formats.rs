@@ -44,34 +44,8 @@ fn to_bcif<'py>(py: Python<'py>, structure: &PyStructure) -> PyResult<Bound<'py,
     Ok(PyBytes::new(py, &bytes))
 }
 
-#[derive(Clone, Copy)]
-enum Format {
-    Mmcif,
-    Pdb,
-    Bcif,
-}
-
-fn format_of(path: &std::path::Path, explicit: Option<&str>) -> PyResult<Format> {
-    let name = match explicit {
-        Some(name) => name.to_ascii_lowercase(),
-        None => path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .map(str::to_ascii_lowercase)
-            .ok_or_else(|| crate::error::value("cannot infer a format; pass format="))?,
-    };
-    match name.as_str() {
-        "cif" | "mmcif" => Ok(Format::Mmcif),
-        "pdb" | "ent" => Ok(Format::Pdb),
-        "bcif" => Ok(Format::Bcif),
-        other => Err(crate::error::value(format!(
-            "unsupported format {other:?}; expected mmcif, pdb or bcif"
-        ))),
-    }
-}
-
 /// Writes the structure to `path`, choosing the format from `format` or the
-/// file extension.
+/// file name.
 #[pyfunction]
 #[pyo3(signature = (structure, path, *, format=None))]
 fn write(
@@ -80,20 +54,21 @@ fn write(
     path: PathBuf,
     format: Option<&str>,
 ) -> PyResult<()> {
-    let format = format_of(&path, format)?;
+    let format = match format {
+        Some(name) => Some(molframe::Format::from_extension(name).ok_or_else(|| {
+            crate::error::from_diagnostic(
+                &molframe::Diagnostic::new(molframe::Code::E1001).with_context("name", name),
+            )
+        })?),
+        None => None,
+    };
     let structure = structure.inner.clone();
-    py.detach(move || {
-        let bytes = match format {
-            Format::Mmcif => molframe::write_mmcif(&structure).map(String::into_bytes),
-            Format::Pdb => {
-                molframe::write_pdb(&structure, &molframe::formats::pdb::PdbOptions::new())
-                    .map(String::into_bytes)
-            }
-            Format::Bcif => molframe::write_bcif(&structure),
-        }
-        .map_err(|findings| findings_error(&findings))?;
-        std::fs::write(&path, bytes).map_err(PyErr::from)
+    let options = molframe::WriteOptions::canonical();
+    py.detach(move || match format {
+        Some(format) => molframe::write_as(&path, &structure, format, &options),
+        None => molframe::write_with_options(&path, &structure, &options),
     })
+    .map_err(|findings| findings_error(&findings))
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

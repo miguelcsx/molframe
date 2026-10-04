@@ -2,10 +2,7 @@
 //! silently, named once and carried into selections and results.
 
 use crate::bindings::{PySelection, PyStructure};
-use molframe::{
-    AltlocPolicy, AnalysisPolicy, HydrogenPolicy, MissingPolicy, Namespace, Precision, RadiiSet,
-    SymmetryPolicy,
-};
+use molframe::AnalysisPolicy;
 use pyo3::prelude::*;
 
 /// An immutable set of analysis decisions.
@@ -13,82 +10,20 @@ use pyo3::prelude::*;
 #[pyclass(name = "AnalysisPolicy", frozen, from_py_object, module = "molframe")]
 pub(crate) struct PyAnalysisPolicy(pub(crate) AnalysisPolicy);
 
-fn choose<T: Copy>(name: &str, value: &str, table: &[(&str, T)]) -> PyResult<T> {
-    table
-        .iter()
-        .find_map(|(label, choice)| (*label == value).then_some(*choice))
-        .ok_or_else(|| {
-            let allowed: Vec<&str> = table.iter().map(|(label, _)| *label).collect();
-            crate::error::value(format!("{name} must be one of {}", allowed.join(", ")))
-        })
+/// Parses one decision through the Rust vocabulary that owns its spelling.
+fn parse<T>(value: &str) -> PyResult<T>
+where
+    T: std::str::FromStr<Err = molframe::PolicyParseError>,
+{
+    value.parse().map_err(crate::error::kernel)
 }
 
-fn name_of<T: Copy + PartialEq>(value: T, table: &[(&'static str, T)]) -> &'static str {
-    table
-        .iter()
-        .find_map(|(label, choice)| (*choice == value).then_some(*label))
-        .map_or("custom", |label| label)
-}
-
-const NAMESPACES: &[(&str, Namespace)] = &[
-    ("label", Namespace::Label),
-    ("auth", Namespace::Auth),
-    ("explicit", Namespace::Explicit),
-];
-const MISSING: &[(&str, MissingPolicy)] = &[
-    ("ignore", MissingPolicy::Ignore),
-    ("report", MissingPolicy::Report),
-    ("indeterminate", MissingPolicy::Indeterminate),
-    ("fail", MissingPolicy::Fail),
-];
-const HYDROGENS: &[(&str, HydrogenPolicy)] = &[
-    ("explicit_only", HydrogenPolicy::ExplicitOnly),
-    ("include_inferred", HydrogenPolicy::IncludeInferred),
-    ("exclude", HydrogenPolicy::Exclude),
-];
-const SYMMETRY: &[(&str, SymmetryPolicy)] = &[
-    ("none", SymmetryPolicy::None),
-    ("crystallographic", SymmetryPolicy::Crystallographic),
-    ("biological_assembly", SymmetryPolicy::BiologicalAssembly),
-];
-const RADII: &[(&str, RadiiSet)] = &[
-    ("bondi", RadiiSet::Bondi),
-    ("amber_united", RadiiSet::AmberUnited),
-    ("charmm", RadiiSet::Charmm),
-    ("alvarez", RadiiSet::Alvarez),
-];
-const PRECISION: &[(&str, Precision)] = &[("f32", Precision::F32), ("f64", Precision::F64)];
-
-fn parse_altloc(value: &str) -> PyResult<AltlocPolicy> {
-    if let Some(label) = value.strip_prefix("label:") {
-        return if label.is_empty() {
-            Err(crate::error::value("altloc 'label:' needs a label"))
-        } else {
-            Ok(AltlocPolicy::Label(label.into()))
-        };
-    }
-    match value {
-        "keep_all" => Ok(AltlocPolicy::KeepAll),
-        "conformer_consistent" => Ok(AltlocPolicy::ConformerConsistent),
-        "first" => Ok(AltlocPolicy::First),
-        "highest_occupancy_per_residue" => Ok(AltlocPolicy::HighestOccupancyPerResidue),
-        "highest_occupancy_per_atom" => Ok(AltlocPolicy::HighestOccupancyPerAtom),
-        _ => Err(crate::error::value(
-            "altloc must be keep_all, conformer_consistent, first, \
-             highest_occupancy_per_residue, highest_occupancy_per_atom or label:<id>",
-        )),
-    }
-}
-
-fn altloc_name(policy: &AltlocPolicy) -> String {
-    match policy {
-        AltlocPolicy::KeepAll => "keep_all".to_owned(),
-        AltlocPolicy::ConformerConsistent => "conformer_consistent".to_owned(),
-        AltlocPolicy::First => "first".to_owned(),
-        AltlocPolicy::HighestOccupancyPerResidue => "highest_occupancy_per_residue".to_owned(),
-        AltlocPolicy::HighestOccupancyPerAtom => "highest_occupancy_per_atom".to_owned(),
-        AltlocPolicy::Label(label) => format!("label:{label}"),
-        _ => "custom".to_owned(),
+/// A decision's canonical spelling in the underscore form Python uses; a
+/// `name:payload` value keeps its payload as written.
+fn snake(canonical: &str) -> String {
+    match canonical.split_once(':') {
+        Some((head, payload)) => format!("{}:{payload}", head.replace('-', "_")),
+        None => canonical.replace('-', "_"),
     }
 }
 
@@ -117,62 +52,62 @@ impl PyAnalysisPolicy {
     ) -> PyResult<Self> {
         let mut policy = AnalysisPolicy::default();
         if let Some(value) = identifiers {
-            policy.identifiers = choose("identifiers", value, NAMESPACES)?;
+            policy.identifiers = parse(value)?;
         }
         if let Some(value) = altloc {
-            policy.altloc = parse_altloc(value)?;
+            policy.altloc = parse(value)?;
         }
         if let Some(value) = missing_atoms {
-            policy.missing_atoms = choose("missing_atoms", value, MISSING)?;
+            policy.missing_atoms = parse(value)?;
         }
         if let Some(value) = hydrogens {
-            policy.hydrogens = choose("hydrogens", value, HYDROGENS)?;
+            policy.hydrogens = parse(value)?;
         }
         if let Some(value) = symmetry {
-            policy.symmetry = choose("symmetry", value, SYMMETRY)?;
+            policy.symmetry = parse(value)?;
         }
         if let Some(value) = vdw_radii {
-            policy.vdw_radii = choose("vdw_radii", value, RADII)?;
+            policy.vdw_radii = parse(value)?;
         }
         if let Some(value) = precision {
-            policy.precision = choose("precision", value, PRECISION)?;
+            policy.precision = parse(value)?;
         }
         Ok(Self(policy))
     }
 
     #[getter]
-    fn identifiers(&self) -> &'static str {
-        name_of(self.0.identifiers, NAMESPACES)
+    fn identifiers(&self) -> String {
+        snake(self.0.identifiers.name())
     }
 
     #[getter]
     fn altloc(&self) -> String {
-        altloc_name(&self.0.altloc)
+        snake(&self.0.altloc.to_string())
     }
 
     #[getter]
-    fn missing_atoms(&self) -> &'static str {
-        name_of(self.0.missing_atoms, MISSING)
+    fn missing_atoms(&self) -> String {
+        snake(self.0.missing_atoms.name())
     }
 
     #[getter]
-    fn hydrogens(&self) -> &'static str {
-        name_of(self.0.hydrogens, HYDROGENS)
+    fn hydrogens(&self) -> String {
+        snake(self.0.hydrogens.name())
     }
 
     #[getter]
-    fn symmetry(&self) -> &'static str {
-        name_of(self.0.symmetry, SYMMETRY)
+    fn symmetry(&self) -> String {
+        snake(self.0.symmetry.name())
     }
 
     #[getter]
-    fn vdw_radii(&self) -> &'static str {
-        name_of(self.0.vdw_radii, RADII)
+    fn vdw_radii(&self) -> String {
+        snake(self.0.vdw_radii.name())
     }
 
     #[getter]
-    fn precision(&self) -> &'static str {
-        name_of(self.0.precision, PRECISION)
+    fn precision(&self) -> String {
+        snake(self.0.precision.name())
     }
 
     /// The named profile when no decision has been changed, else `None`.
