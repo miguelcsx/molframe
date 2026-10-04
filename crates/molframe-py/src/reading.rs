@@ -67,8 +67,10 @@ impl PyReadOptions {
         max_rows_per_category=None,
         max_nesting_depth=None,
         max_dictionary_entries=None,
+        digest_input=false,
     ))]
-    #[allow(clippy::too_many_arguments)]
+    // The keywords are flags in the Python signature; an enum there would be a worse API.
+    #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
     fn new(
         format: &str,
         mode: &str,
@@ -84,6 +86,7 @@ impl PyReadOptions {
         max_rows_per_category: Option<u64>,
         max_nesting_depth: Option<u32>,
         max_dictionary_entries: Option<u32>,
+        digest_input: bool,
     ) -> PyResult<Self> {
         let categories = match (only_categories, skip_categories) {
             (None, None) => CategoryFilter::All,
@@ -115,8 +118,14 @@ impl PyReadOptions {
                     ambiguous_residue_boundary,
                 )?)
                 .categories(categories)
+                .digest_input(digest_input)
                 .limits(limits),
         })
+    }
+
+    #[getter]
+    const fn digest_input(&self) -> bool {
+        matches!(self.inner.input_digest, molframe::InputDigest::Sha256)
     }
 
     #[getter]

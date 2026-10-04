@@ -40,6 +40,12 @@ pub struct EntryMetadata {
     /// The space-group symbol as the file wrote it, for formats that carry
     /// only a name (a PDB `CRYST1` record) rather than symmetry operations.
     pub space_group: Option<Box<str>>,
+    /// The name of the input the structure was read from, where it had one.
+    pub input_name: Option<Box<str>>,
+    /// The SHA-256 of the bytes that were parsed, recorded when the read asked for it
+    /// (`ReadOptions::digest_input`). Hashing costs time on every read, so it is a
+    /// choice, and a structure read without it cannot be certified byte-identical.
+    pub input_sha256: Option<crate::contract::ContentDigest>,
 }
 
 /// The crystallographic cell.
@@ -243,6 +249,21 @@ impl Structure {
             }
         }
         data.reservation = Some(reservation);
+        self
+    }
+
+    /// Returns this structure recording the input it was read from.
+    ///
+    /// The digest is of the bytes the reader parsed, after any decompression.
+    #[must_use]
+    pub fn with_input(
+        mut self,
+        name: Option<Box<str>>,
+        digest: Option<crate::contract::ContentDigest>,
+    ) -> Self {
+        let data = Arc::make_mut(&mut self.0);
+        data.entry.input_name = name;
+        data.entry.input_sha256 = digest;
         self
     }
 

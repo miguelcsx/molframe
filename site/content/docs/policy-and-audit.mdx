@@ -214,6 +214,9 @@ and class shares, the fraction of universes with no answer, and how many inputs 
 digest and so cannot be claimed byte-identical. The vocabulary is schema.org as a
 process-run crate uses it (`SoftwareApplication`, `CreateAction`, `OrganizeAction`);
 mapped to PROV an action is an activity, a file an entity and the software an agent.
+Inputs carry a digest only when they were read with `ReadOptions(digest_input=True)`
+(hashing is work on every read, so it is off by default); the digest is of the bytes
+parsed, after decompression, and the certificate counts the inputs without one.
 The document has no clock and no host name, so the same audit of the same bytes writes
 the same text. It has not been checked against an external RO-Crate validator.
 

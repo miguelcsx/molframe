@@ -38,6 +38,11 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- `ReadOptions::digest_input` (Python `ReadOptions(digest_input=True)`) records the
+  SHA-256 of the bytes parsed in the structure's metadata (`input_sha256`,
+  `input_name`), and governed analyses carry it in their provenance, so an audit
+  certificate can tie its results to the bytes. Off by default: hashing is work on
+  every read.
 - A descriptor can forbid a resolution, require information and state its estimand.
   `hydrogen_bonds`, `water_bridges` and base pairing refuse `hydrogens = exclude`
   (`E6103`) and are indeterminate, with the reason, on an input that models no

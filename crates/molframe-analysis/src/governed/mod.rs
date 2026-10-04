@@ -12,6 +12,7 @@ mod kernel;
 mod native;
 mod physical;
 mod requirements;
+mod source;
 mod standalone;
 mod structure;
 mod system;

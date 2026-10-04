@@ -54,6 +54,28 @@ impl PyEntryMetadata {
             .map(str::to_owned)
     }
 
+    /// The name of the input the structure was read from, where it had one.
+    #[getter]
+    fn input_name(&self) -> Option<String> {
+        self.parent
+            .inner
+            .metadata()
+            .input_name
+            .as_deref()
+            .map(str::to_owned)
+    }
+
+    /// The SHA-256 of the bytes parsed, as `sha256:` and lowercase hexadecimal, when the read was made
+    /// with `ReadOptions(digest_input=True)`.
+    #[getter]
+    fn input_sha256(&self) -> Option<String> {
+        self.parent
+            .inner
+            .metadata()
+            .input_sha256
+            .map(|digest| digest.to_string())
+    }
+
     /// Resolution in ångström, where the method reports one.
     #[getter]
     fn resolution(&self) -> Option<f32> {

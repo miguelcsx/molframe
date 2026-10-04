@@ -302,7 +302,9 @@ class ReadOptions:
     Omitted arguments keep the library's choices. ``only_categories`` and
     ``skip_categories`` choose which optional mmCIF/BinaryCIF categories or PDB
     records are read (names the structure cannot be built without are always read);
-    the ``max_*`` limits bound hostile or oversized input.
+    the ``max_*`` limits bound hostile or oversized input. ``digest_input`` records the
+    SHA-256 of the bytes parsed in the structure's metadata, so a result and its audit
+    certificate can be tied to them; it is off because hashing is work on every read.
     """
 
     def __init__(
@@ -322,11 +324,14 @@ class ReadOptions:
         max_rows_per_category: int | None = None,
         max_nesting_depth: int | None = None,
         max_dictionary_entries: int | None = None,
+        digest_input: bool = False,
     ) -> None: ...
     @property
     def format(self) -> str: ...
     @property
     def mode(self) -> str: ...
+    @property
+    def digest_input(self) -> bool: ...
     @property
     def first_model_only(self) -> bool: ...
     @property

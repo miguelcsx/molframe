@@ -1,5 +1,6 @@
 """Policy audits: measured against quantities worked out by hand."""
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -328,3 +329,36 @@ def test_an_audit_writes_a_certificate_that_is_a_closed_ro_crate_graph(dimer):
             project=lambda analysis: len(analysis.value),
         ).certificate
     )
+
+
+def test_a_certificate_ties_the_audit_to_the_bytes_that_were_read():
+    path = BENCH / "1crn.cif"
+    structure = molframe.read(path, options=molframe.ReadOptions(digest_input=True))
+    expected = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    assert structure.metadata.input_sha256 == expected
+    assert structure.metadata.input_name == "1crn.cif"
+    space = audit.PolicySpace().vary("assembly", ["asymmetric_unit", "crystal:4.0"])
+    result = audit.run(
+        space.plan(),
+        contact_count(structure, 3.5),
+        metric="absolute",
+        project=lambda analysis: len(analysis.value),
+    )
+    graph = {node["@id"]: node for node in json.loads(result.certificate)["@graph"]}
+    (file,) = [node for node in graph.values() if node.get("@type") == "File"]
+    assert file["name"] == "1crn.cif"
+    assert file["additionalProperty"]["value"] == expected
+    measured = {item["name"]: item["value"] for item in graph["#findings"]["variableMeasured"]}
+    assert measured["inputs_without_sha256"] == 0
+    # Reading without asking records the name and no digest, and the certificate counts it.
+    unhashed = molframe.read(path)
+    assert unhashed.metadata.input_sha256 is None
+    again = audit.run(
+        space.plan(),
+        contact_count(unhashed, 3.5),
+        metric="absolute",
+        project=lambda analysis: len(analysis.value),
+    )
+    later = {node["@id"]: node for node in json.loads(again.certificate)["@graph"]}
+    flagged = {item["name"]: item["value"] for item in later["#findings"]["variableMeasured"]}
+    assert flagged["inputs_without_sha256"] == 1

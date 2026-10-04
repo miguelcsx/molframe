@@ -119,9 +119,9 @@ pub use molframe_core::index::{
 };
 pub use molframe_core::io::{
     AmbiguousResidueBoundaryPolicy, BatchContinuity, CategoryFilter, Compression, ContinuityLevel,
-    Format, InputBuffer, InputKind, Limits, MissingElementPolicy, OutputOptions, ParseMode,
-    ReadOptions, ReadResult, Reader, Select, SelectAll, StructureAtomRecord, StructureBatch,
-    StructureBatchBuilder, StructureBatchError, collect_structure,
+    Format, InputBuffer, InputDigest, InputKind, Limits, MissingElementPolicy, OutputOptions,
+    ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll, StructureAtomRecord,
+    StructureBatch, StructureBatchBuilder, StructureBatchError, collect_structure,
 };
 pub use molframe_core::span::{ByteSpan, Position};
 pub use molframe_core::structure::{

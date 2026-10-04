@@ -1,12 +1,13 @@
 //! Single-structure and trajectory execution through one frame adapter.
 
 use super::requirements::without_hydrogens;
+use super::source::{input_source, with_digest};
 use super::system::AnalysisSystem;
 use super::{FrameKernelResult, GovernedAnalysisError, StructureKernel};
 use molframe_core::contract::{
-    Analysis, AnalysisPolicy, Assumption, AssumptionSource, Coverage, HydrogenPolicy, Impact,
-    Indeterminacy, MissingPolicy, MissingPolicyError, ModelChoice, Outcome, ParameterValue,
-    PolicyField, Provenance, Quality, SourceRef, resolve_missing,
+    Analysis, AnalysisPolicy, Assumption, AssumptionSource, ContentDigest, Coverage,
+    HydrogenPolicy, Impact, Indeterminacy, MissingPolicy, MissingPolicyError, ModelChoice, Outcome,
+    ParameterValue, PolicyField, Provenance, Quality, SourceRef, resolve_missing,
 };
 use molframe_core::index::ModelIndex;
 use molframe_core::structure::Structure;
@@ -39,6 +40,8 @@ pub struct GovernedStructureAnalysis<'a, K> {
     input_indeterminacy: Option<Indeterminacy>,
     input_warnings: Vec<molframe_core::diagnostic::Diagnostic>,
     input_assumptions: Vec<Assumption>,
+    source: SourceRef,
+    input_digest: Option<ContentDigest>,
 }
 
 impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
@@ -174,6 +177,8 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
             input_indeterminacy,
             input_warnings: resolution.warnings,
             input_assumptions: assumptions,
+            source: input_source(template),
+            input_digest: template.data().entry.input_sha256,
         })
     }
 }
@@ -408,7 +413,10 @@ fn combine_frames<K: StructureKernel>(
     let provenance = analysis
         .kernel
         .descriptor()
-        .apply(Provenance::new(&analysis.policy).with_source(SourceRef::Memory))
+        .apply(with_digest(
+            Provenance::new(&analysis.policy).with_source(analysis.source.clone()),
+            analysis.input_digest,
+        ))
         .with_parameter("frame_count", ParameterValue::Integer(frame_count))
         .with_policy_reads(&executor_reads(analysis.kernel.descriptor().policy_reads()));
     let mut quality = analysis.input_quality;

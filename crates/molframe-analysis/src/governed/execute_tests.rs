@@ -251,3 +251,35 @@ fn an_indeterminate_policy_leaves_no_value_and_says_what_was_missing() {
         Some(molframe_core::contract::Indeterminacy::Frame { frame: 0, .. })
     ));
 }
+
+#[test]
+fn an_analysis_records_the_input_it_was_built_from() {
+    use molframe_core::contract::{ContentDigest, SourceRef};
+    let digest = ContentDigest::of(SOURCE.as_bytes());
+    let structure = structure().with_input(Some("s.cif".into()), Some(digest));
+    let Ok(result) = analyse_structure(
+        &structure,
+        &AnalysisPolicy::default(),
+        &x_sum_kernel(),
+        &ExecutionContext::default(),
+    ) else {
+        panic!("a structure with a recorded input analyses as usual");
+    };
+    assert_eq!(result.provenance.input_digest, Some(digest));
+    assert!(
+        matches!(&result.provenance.input_source, SourceRef::Path(path) if path.ends_with("s.cif"))
+    );
+    let Ok(anonymous) = analyse_structure(
+        &self::structure(),
+        &AnalysisPolicy::default(),
+        &x_sum_kernel(),
+        &ExecutionContext::default(),
+    ) else {
+        panic!("a structure with no recorded input analyses as usual");
+    };
+    assert_eq!(anonymous.provenance.input_digest, None);
+    assert!(matches!(
+        anonymous.provenance.input_source,
+        SourceRef::Memory
+    ));
+}

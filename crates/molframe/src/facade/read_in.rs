@@ -3,8 +3,9 @@
 use super::{dispatch_read, enrich_read};
 use crate::structure::Structure;
 use molframe_core::ExecutionContext;
+use molframe_core::contract::ContentDigest;
 use molframe_core::diagnostic::{Diagnostic, Findings};
-use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::io::{InputBuffer, InputDigest, ReadOptions};
 use std::path::Path;
 
 /// [`read_with_options`](super::read_with_options) on the worker budget,
@@ -52,6 +53,12 @@ pub fn read_buffer_in(
     options: &ReadOptions,
     context: &ExecutionContext,
 ) -> Result<(Structure, Vec<Diagnostic>), Findings> {
-    enrich_read(dispatch_read(input, name, options), options, context)
-        .map(|(structure, diagnostics)| (structure.into(), diagnostics))
+    enrich_read(dispatch_read(input, name, options), options, context).map(
+        |(structure, diagnostics)| {
+            let digest = matches!(options.input_digest, InputDigest::Sha256)
+                .then(|| ContentDigest::of(input.as_bytes()));
+            let structure = structure.with_input(name.map(Into::into), digest);
+            (structure.into(), diagnostics)
+        },
+    )
 }

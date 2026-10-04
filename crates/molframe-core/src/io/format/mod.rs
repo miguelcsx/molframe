@@ -11,7 +11,7 @@ use crate::diagnostic::{Code, Strictness};
 
 pub use detect::Format;
 pub use options::{
-    AmbiguousResidueBoundaryPolicy, CategoryFilter, MissingElementPolicy, ParseMode,
+    AmbiguousResidueBoundaryPolicy, CategoryFilter, InputDigest, MissingElementPolicy, ParseMode,
     REQUIRED_CIF_CATEGORIES, REQUIRED_PDB_RECORDS, ReadOptions, ReadResult, Reader, Select,
     SelectAll,
 };

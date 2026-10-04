@@ -210,6 +210,12 @@ class EntryMetadata:
     def resolution(self) -> float | None: ...
     @property
     def space_group(self) -> str | None: ...
+    @property
+    def input_name(self) -> str | None:
+        """The name of the input the structure was read from, where it had one."""
+    @property
+    def input_sha256(self) -> str | None:
+        """``sha256:`` and the digest of the bytes parsed, when read with ``digest_input=True``."""
 
 class Annotation:
     """One per-atom column; ``values`` at an atom where ``present`` is false is a placeholder."""

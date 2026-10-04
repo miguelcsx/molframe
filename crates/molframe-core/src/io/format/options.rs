@@ -31,6 +31,17 @@ impl ParseMode {
     }
 }
 
+/// Whether a read records a digest of the bytes it parsed.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum InputDigest {
+    /// Record nothing: hashing is work on every read, and the read path is measured on
+    /// throughput.
+    #[default]
+    Skip,
+    /// Record the SHA-256 of the bytes parsed, after decompression.
+    Sha256,
+}
+
 /// Policy for atom rows whose format-specific element field is absent or invalid.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum MissingElementPolicy {
@@ -151,6 +162,9 @@ pub struct ReadOptions {
     pub limits: Limits,
     /// Which optional categories or records to read.
     pub categories: CategoryFilter,
+    /// Whether to record the SHA-256 of the bytes parsed in the structure's entry
+    /// metadata; only a result certified as computed from exactly these bytes needs it.
+    pub input_digest: InputDigest,
 }
 
 impl ReadOptions {
@@ -217,6 +231,17 @@ impl ReadOptions {
     #[must_use]
     pub fn categories(mut self, categories: CategoryFilter) -> Self {
         self.categories = categories;
+        self
+    }
+
+    /// Records the SHA-256 of the bytes parsed, so a result can be tied to them.
+    #[must_use]
+    pub const fn digest_input(mut self, digest: bool) -> Self {
+        self.input_digest = if digest {
+            InputDigest::Sha256
+        } else {
+            InputDigest::Skip
+        };
         self
     }
 

@@ -439,6 +439,9 @@ fn enrich_read(
 }
 
 #[cfg(all(test, feature = "pdb"))]
+#[path = "facade/input_digest_tests.rs"]
+mod input_digest_tests;
+#[cfg(all(test, feature = "pdb"))]
 #[path = "facade/pdb_symmetry_tests.rs"]
 mod pdb_symmetry_tests;
 #[cfg(all(test, feature = "chemistry", feature = "mmcif", feature = "pdb"))]
