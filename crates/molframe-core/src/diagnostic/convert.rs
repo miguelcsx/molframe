@@ -51,3 +51,10 @@ macro_rules! diagnostic_from {
         }
     };
 }
+
+impl From<&std::convert::Infallible> for crate::Diagnostic {
+    /// An error that cannot be constructed has no code to name.
+    fn from(never: &std::convert::Infallible) -> Self {
+        match *never {}
+    }
+}

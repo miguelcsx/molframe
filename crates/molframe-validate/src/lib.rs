@@ -23,6 +23,7 @@ mod coordination_valence;
 mod covalent;
 #[path = "bond_length.rs"]
 mod covalent_length;
+mod diagnostics;
 #[path = "reference.rs"]
 mod distributions;
 #[path = "plane_restraint.rs"]
