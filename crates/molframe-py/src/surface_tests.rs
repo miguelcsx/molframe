@@ -281,8 +281,8 @@ fn the_catalog_and_the_registered_operations_name_each_other() {
 /// over arrays already borrowed from `NumPy`, where handing the arrays across
 /// the boundary would cost as much as the pass.
 const HOLDS_THE_GIL: &[(&str, &str)] = &[
-    ("bindings.rs", "centroid"),
-    ("bindings.rs", "rmsd"),
+    ("bindings/geometry.rs", "centroid"),
+    ("bindings/geometry.rs", "rmsd"),
     ("chemistry.rs", "element"),
     ("chemistry.rs", "vdw_radius"),
     ("chemistry/carbohydrates.rs", "snfg_symbol"),

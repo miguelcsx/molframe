@@ -1,10 +1,6 @@
 //! Central facade handles and stateless namespace functions.
 
 use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidueSelection, PyResidues};
-#[cfg(feature = "geometry")]
-use numpy::PyReadonlyArray2;
-#[cfg(feature = "geometry")]
-use numpy::PyUntypedArrayMethods;
 use numpy::ndarray::ArrayView2;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
@@ -15,6 +11,10 @@ use std::path::PathBuf;
 
 #[cfg(feature = "analysis")]
 mod analysis;
+#[cfg(feature = "geometry")]
+mod geometry;
+#[cfg(feature = "geometry")]
+pub(crate) use geometry::{centroid, coordinates, distance_matrix, rmsd};
 #[cfg(feature = "analysis")]
 mod bonds;
 #[cfg(feature = "analysis")]
@@ -436,52 +436,6 @@ pub(crate) fn read(
     }
     let bytes = source.extract::<PyBackedBytes>()?;
     PyReader::new(bytes, name).read(py)
-}
-
-#[cfg(feature = "geometry")]
-pub(crate) fn coordinates<'a>(array: &'a PyReadonlyArray2<'_, f32>) -> PyResult<&'a [[f32; 3]]> {
-    let shape = array.shape();
-    if shape.len() != 2 || shape[1] != 3 {
-        return Err(crate::error::value("coordinates must have shape (n, 3)"));
-    }
-    let contiguous = array.as_slice().map_err(|_| {
-        crate::error::value("coordinates must be C-contiguous; call numpy.ascontiguousarray")
-    })?;
-    Ok(contiguous.as_chunks::<3>().0)
-}
-
-#[pyfunction]
-#[cfg(feature = "geometry")]
-pub(crate) fn centroid(array: &Bound<'_, PyArray2<f32>>) -> PyResult<Option<[f64; 3]>> {
-    let array = array.readonly();
-    Ok(molframe::geometry::centroid(coordinates(&array)?))
-}
-
-#[pyfunction]
-#[cfg(feature = "geometry")]
-pub(crate) fn rmsd(
-    mobile: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
-) -> PyResult<f64> {
-    let mobile = mobile.readonly();
-    let reference = reference.readonly();
-    molframe::geometry::rmsd(coordinates(&mobile)?, coordinates(&reference)?)
-        .map_err(crate::error::kernel)
-}
-
-#[pyfunction]
-#[cfg(feature = "geometry")]
-pub(crate) fn distance_matrix<'py>(
-    py: Python<'py>,
-    array: &Bound<'_, PyArray2<f32>>,
-) -> PyResult<Bound<'py, PyArray2<f64>>> {
-    let array = array.readonly();
-    let positions = coordinates(&array)?;
-    let matrix = py
-        .detach(|| molframe::geometry::distance_matrix(positions))
-        .map_err(crate::error::kernel)?;
-    let rows = matrix.rows();
-    matrix.into_values().into_pyarray(py).reshape((rows, rows))
 }
 
 pub(crate) fn findings_error(findings: &molframe::Findings) -> PyErr {
