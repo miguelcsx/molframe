@@ -211,6 +211,7 @@ pub struct Analysis<T> {
     pub assumptions: Vec<Assumption>,
     /// Where the inputs came from and under what policy.
     pub provenance: Provenance,
+    atom_origin: Option<Vec<u32>>,
 }
 
 impl<T> Analysis<T> {
@@ -289,7 +290,27 @@ impl<T> Analysis<T> {
             warnings,
             assumptions,
             provenance,
+            atom_origin: None,
         }
+    }
+
+    /// Records which input atom each analysed atom is.
+    ///
+    /// A governed analysis runs over a system the policy builds: the input with some atoms
+    /// dropped (a conformer not chosen, hydrogens excluded) or copied (an assembly). The
+    /// atom indices in its result number that system, not the input; this map says which
+    /// input atom each one is, and copies of an atom share it.
+    #[must_use]
+    pub fn with_atom_origin(mut self, origin: Vec<u32>) -> Self {
+        self.atom_origin = Some(origin);
+        self
+    }
+
+    /// For each analysed atom, the input atom it is; `None` when the result's atoms are the
+    /// input's own.
+    #[must_use]
+    pub fn atom_origin(&self) -> Option<&[u32]> {
+        self.atom_origin.as_deref()
     }
 
     /// Takes the analysis apart, for code that builds a new one from an old one.
@@ -411,6 +432,7 @@ impl<T> Analysis<T> {
             warnings: self.warnings,
             assumptions: self.assumptions,
             provenance: self.provenance,
+            atom_origin: self.atom_origin,
         }
     }
 }

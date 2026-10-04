@@ -368,3 +368,37 @@ fn crystal_contacts_of_crambin_equal_the_pairs_a_brute_force_finds_between_unit_
         "the unit's own contacts are unchanged by its neighbours"
     );
 }
+
+#[test]
+fn the_result_says_which_input_atom_each_analysed_atom_is() {
+    let kernel = contacts_kernel(4.0, SpatialBackend::BruteForce);
+    let context = ExecutionContext::default();
+    let origin = |structure: &Structure, policy: &AnalysisPolicy| -> Option<Vec<u32>> {
+        match analyse_structure(structure, policy, &kernel, &context) {
+            Ok(result) => result.atom_origin().map(<[u32]>::to_vec),
+            Err(error) => panic!("analysis failed: {error}"),
+        }
+    };
+    // An assembly of one carbon and its copy: two analysed atoms, one input atom.
+    let assembly = policy(AssemblyChoice::Biological("1".into()), SymmetryPolicy::None);
+    assert_eq!(origin(&dimer(), &assembly), Some(vec![0, 0]));
+
+    // Excluding hydrogens drops the atom that was there: the carbon is input atom 0.
+    let text = DIMER.replace(
+        "1 C CA GLY A 1 1 A 0 0 0\n",
+        "1 H H1 GLY A 1 1 A 1 0 0\n2 C CA GLY A 1 1 A 0 0 0\n",
+    );
+    let input = InputBuffer::from_bytes(text.into_bytes());
+    let Ok((hydrogen_first, _)) = read(&input, &ReadOptions::new()) else {
+        panic!("a valid fixture");
+    };
+    let excluded = AnalysisPolicy {
+        hydrogens: HydrogenPolicy::Exclude,
+        ..AnalysisPolicy::default()
+    };
+    assert_eq!(origin(&hydrogen_first, &excluded), Some(vec![1]));
+    assert_eq!(
+        origin(&hydrogen_first, &AnalysisPolicy::default()),
+        Some(vec![0, 1])
+    );
+}

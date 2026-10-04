@@ -302,6 +302,7 @@ pub fn analyse_structure<K: StructureKernel>(
     }])
     .map_err(TrajectoryError::from)?;
     let result = analyse_trajectory(structure, &trajectory, policy, kernel, context)?;
+    let origin = result.atom_origin().map(<[u32]>::to_vec);
     let (outcome, quality, coverage, warnings, assumptions, provenance) = result.into_parts();
     let outcome = match outcome {
         Outcome::Determinate(mut values) => {
@@ -312,14 +313,18 @@ pub fn analyse_structure<K: StructureKernel>(
         }
         Outcome::Indeterminate(reason) => Outcome::Indeterminate(reason),
     };
-    Ok(Analysis::from_parts(
+    let analysis = Analysis::from_parts(
         outcome,
         quality,
         coverage,
         warnings,
         assumptions,
         provenance,
-    ))
+    );
+    Ok(match origin {
+        Some(origin) => analysis.with_atom_origin(origin),
+        None => analysis,
+    })
 }
 
 /// Runs a structure kernel over every trajectory frame with fixed block order.
@@ -431,6 +436,11 @@ fn combine_frames<K: StructureKernel>(
         Some(reason) => Outcome::Indeterminate(reason),
         None => Outcome::Determinate(values),
     };
+    let origin = analysis
+        .selected_atoms
+        .iter()
+        .map(|&atom| u32::try_from(atom).map_err(|_| GovernedAnalysisError::CoverageOverflow))
+        .collect::<Result<Vec<u32>, _>>()?;
     Ok(Analysis::from_parts(
         outcome,
         quality,
@@ -438,7 +448,8 @@ fn combine_frames<K: StructureKernel>(
         warnings,
         assumptions,
         provenance,
-    ))
+    )
+    .with_atom_origin(origin))
 }
 
 fn add_coverage<E>(left: Coverage, right: Coverage) -> Result<Coverage, GovernedAnalysisError<E>> {
