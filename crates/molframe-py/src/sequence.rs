@@ -201,8 +201,8 @@ fn align(
 
 /// Parses FASTA text into records, preserving order.
 #[pyfunction]
-fn parse_fasta(text: &str) -> Vec<PyFastaRecord> {
-    seq::parse_fasta(text)
+fn parse_fasta(py: Python<'_>, text: &str) -> Vec<PyFastaRecord> {
+    py.detach(|| seq::parse_fasta(text))
         .into_iter()
         .map(|inner| PyFastaRecord { inner })
         .collect()
@@ -210,18 +210,19 @@ fn parse_fasta(text: &str) -> Vec<PyFastaRecord> {
 
 /// Writes records as FASTA text.
 #[pyfunction]
-fn write_fasta(records: Vec<PyFastaRecord>) -> String {
+fn write_fasta(py: Python<'_>, records: Vec<PyFastaRecord>) -> String {
     let records: Vec<FastaRecord> = records.into_iter().map(|record| record.inner).collect();
-    seq::write_fasta(&records)
+    py.detach(|| seq::write_fasta(&records))
 }
 
 /// Counts each distinct k-mer of a sequence.
 #[pyfunction]
-fn kmer_counts(sequence: &str, k: usize) -> PyResult<Vec<(String, u32)>> {
+fn kmer_counts(py: Python<'_>, sequence: &str, k: usize) -> PyResult<Vec<(String, u32)>> {
     if k == 0 {
         return Err(crate::error::value("k must be positive"));
     }
-    Ok(seq::kmer_counts(sequence.as_bytes(), k)
+    Ok(py
+        .detach(|| seq::kmer_counts(sequence.as_bytes(), k))
         .into_iter()
         .map(|(kmer, count)| (String::from_utf8_lossy(&kmer).into_owned(), count))
         .collect())

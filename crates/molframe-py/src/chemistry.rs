@@ -109,16 +109,8 @@ fn vdw_radii<'py>(
     radii: &str,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
     let set = radius_set(radii)?;
-    let engine = structure.inner.engine();
-    let mut values = vec![f32::NAN; engine.atom_count() as usize];
-    for atom in engine.data().atoms() {
-        let radius = atom
-            .element()
-            .and_then(|element| chem::vdw_radius(element, set));
-        if let (Some(radius), Some(slot)) = (radius, values.get_mut(atom.index().as_usize())) {
-            *slot = radius;
-        }
-    }
+    let source = structure.inner.clone();
+    let values = py.detach(move || chem::atom_radii(source.engine(), set));
     Ok(values.to_pyarray(py))
 }
 

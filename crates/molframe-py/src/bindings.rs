@@ -476,8 +476,10 @@ pub(crate) fn distance_matrix<'py>(
     array: &Bound<'_, PyArray2<f32>>,
 ) -> PyResult<Bound<'py, PyArray2<f64>>> {
     let array = array.readonly();
-    let matrix =
-        molframe::geometry::distance_matrix(coordinates(&array)?).map_err(crate::error::kernel)?;
+    let positions = coordinates(&array)?;
+    let matrix = py
+        .detach(|| molframe::geometry::distance_matrix(positions))
+        .map_err(crate::error::kernel)?;
     let rows = matrix.rows();
     matrix.into_values().into_pyarray(py).reshape((rows, rows))
 }

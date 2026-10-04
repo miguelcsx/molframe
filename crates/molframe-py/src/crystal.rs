@@ -178,8 +178,17 @@ fn assemblies(structure: &PyStructure) -> Vec<String> {
 /// Each carries a transform and the chains it applies to; the transform of
 /// every chain is the product of the operators the entry lists for it.
 #[pyfunction]
-fn assembly(structure: &PyStructure, id: &str) -> PyResult<Vec<PyAssemblyInstance>> {
-    let engine = structure.inner.engine();
+fn assembly(
+    py: Python<'_>,
+    structure: &PyStructure,
+    id: &str,
+) -> PyResult<Vec<PyAssemblyInstance>> {
+    let source = structure.inner.clone();
+    py.detach(|| placements(&source, id))
+}
+
+fn placements(structure: &molframe::Structure, id: &str) -> PyResult<Vec<PyAssemblyInstance>> {
+    let engine = structure.engine();
     let set = engine
         .assembly_set()
         .ok_or_else(|| crate::error::value("the structure declares no biological assemblies"))?;
