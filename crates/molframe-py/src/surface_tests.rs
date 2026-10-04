@@ -128,7 +128,7 @@ fn compare_classes(
 fn every_namespace_matches_its_stub_name_for_name_and_member_for_member() {
     let root = python_root();
     let native_stub = reexports(&read(&root.join("_native.pyi")));
-    let root_stub = parse_stub(&read(&root.join("__init__.pyi")));
+    let root_stub = stubs::parse_root_stub(&root);
     let mut problems = Vec::new();
     let mut every_stub_name = BTreeSet::new();
     with_native(|module| {

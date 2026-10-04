@@ -62,6 +62,22 @@ for batch in molframe.open_structure_batches("1aon.cif", rows=8192):
 
 Formats without a bounded reader are refused rather than read whole.
 
+## What a structure carries
+
+Beyond the hierarchy, a structure exposes the facts its file states. Anything the file does not say is `None` or `NaN`, never a guess:
+
+```python
+structure.metadata.id, structure.metadata.method, structure.metadata.resolution
+structure.cell                 # a crystal.UnitCell, or None (a placeholder unit cube is not reported)
+structure.entities[0].sequence # the canonical sequence; chains[i].entity says which chains copy it
+structure.anisotropy           # a Table of U11..U23 per atom, None when the file did not say
+structure.annotations["plddt"] # .values and .present: which atoms record a value
+structure.elements, structure.occupancies, structure.b_factors   # bulk per-atom arrays
+structure.secondary_source     # SecondarySource.File / Dssp / CaOnly / Unassigned per residue
+```
+
+Atoms expose `element`, `atomic_number`, `occupancy`, `b_factor`, `formal_charge`, `altloc`, `serial`, `auth_name` and `anisotropy`; residues `number`, `auth_number`, `insertion_code`, `is_hetero`, `chain`, `secondary_structure` and `secondary_source`; chains `auth_label`, `entity` and `polymer_kind`.
+
 ## The hierarchy
 
 <Mermaid chart={`flowchart LR

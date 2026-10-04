@@ -1,14 +1,15 @@
 //! The native module and the namespaces it registers.
 
 use super::{
-    analysis_result, batches, bindings, catalog, chemistry, compare, crystal, formats, governed,
-    hierarchy, interop, policy, query_aliases, reading, selection_expr, sequence, spatial, surface,
-    table, trajectory, validation, workflow,
+    analysis_result, batches, bindings, catalog, chemistry, compare, crystal, editing, formats,
+    governed, hierarchy, interop, policy, query_aliases, reading, selection_expr, sequence,
+    spatial, surface, table, trajectory, validation, workflow,
 };
 use bindings::{PyContactTable, atom_contacts};
-use bindings::{PyQuery, PySelection, PyStructure, PyStructureEditor};
+use bindings::{PyQuery, PySelection, PyStructure};
 #[cfg(feature = "geometry")]
 use bindings::{centroid, distance_matrix, rmsd};
+use editing::{PyCoordinateEditor, PyStructureEditor};
 use hierarchy::{
     PyAtom, PyAtoms, PyChain, PyChains, PyModel, PyModels, PyResidue, PyResidueSelection,
     PyResidues,
@@ -27,8 +28,15 @@ pub(super) fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyStructure>()?;
     module.add_class::<crate::execution::PyExecutionContext>()?;
     module.add_class::<PyStructureEditor>()?;
+    module.add_class::<PyCoordinateEditor>()?;
     module.add_class::<crate::interop::PyBondTable>()?;
     module.add_class::<crate::secondary::PySecondaryStructure>()?;
+    module.add_class::<crate::secondary::PySecondarySource>()?;
+    module.add_class::<crate::structure_data::PyEntryMetadata>()?;
+    module.add_class::<crate::structure_data::PyAnnotations>()?;
+    module.add_class::<crate::structure_data::PyAnnotation>()?;
+    module.add_class::<crate::entities::PyEntity>()?;
+    module.add_class::<crate::entities::PyEntities>()?;
     module.add_class::<PyAtom>()?;
     module.add_class::<PyAtoms>()?;
     module.add_class::<PyResidue>()?;

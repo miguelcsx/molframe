@@ -1,14 +1,17 @@
 //! Stable secondary-structure vocabulary and Python analysis boundary.
 
+use molframe::SecondarySource as Source;
 use molframe::SecondaryStructure as Ss;
 use pyo3::prelude::*;
 
 /// Per-residue secondary state; integer values are the native wire codes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[pyclass(
     name = "SecondaryStructure",
     eq,
     eq_int,
+    hash,
+    frozen,
     skip_from_py_object,
     module = "molframe"
 )]
@@ -74,6 +77,35 @@ impl PySecondaryStructure {
 
     fn is_sheet_like(&self) -> bool {
         self.native().is_sheet_like()
+    }
+}
+
+/// Where a residue's secondary-structure state came from.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[pyclass(
+    name = "SecondarySource",
+    eq,
+    eq_int,
+    hash,
+    frozen,
+    skip_from_py_object,
+    module = "molframe"
+)]
+pub(crate) enum PySecondarySource {
+    Unassigned = Source::None.code() as isize,
+    File = Source::File.code() as isize,
+    Dssp = Source::Dssp.code() as isize,
+    CaOnly = Source::CaOnly.code() as isize,
+}
+
+impl From<Source> for PySecondarySource {
+    fn from(value: Source) -> Self {
+        match value {
+            Source::File => Self::File,
+            Source::Dssp => Self::Dssp,
+            Source::CaOnly => Self::CaOnly,
+            Source::None => Self::Unassigned,
+        }
     }
 }
 

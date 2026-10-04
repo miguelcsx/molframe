@@ -19,14 +19,28 @@ structure = reader.read()
 
 `molframe.read(payload, name="model.cif")` is the equivalent one-call form. The `name` is format-identification metadata; it does not change the bytes.
 
-## Rename a chain
+## Editing a structure
 
-`Structure.edit()` returns a `StructureEditor`. The currently exposed edit is `rename_chain(chain, label)`. Edits become visible only after `finish()` returns a new `Structure`.
+A structure is immutable. An edit is a transaction: `Structure.edit()` returns a `StructureEditor`, topology changes are staged, and `finish()` validates the result as a whole and returns a **new** `Structure`. The original, and every view into it, is untouched, whether `finish()` succeeds or raises.
 
 ```python
 edited = structure.edit()
-edited.rename_chain(0, "A")
+edited.rename_chain(0, "A")             # a zero-based hierarchy index, not an author label
+edited.delete(structure.select("water"))
 renamed = edited.finish()
 ```
 
-The chain argument is a zero-based hierarchy index, not an author-provided chain label. Keep the original structure if later work needs its original identifiers.
+Topology edits are refused with `MOLFRAME-E3014` while the structure carries domain extensions (biological assemblies, symmetry, non-crystallographic symmetry, model-quality metadata) because they refer to atoms and chains the edit may remove. `edited.clear_extensions()` is the explicit, lossy choice that allows the edit.
+
+## Rewriting coordinates
+
+Coordinates are edited through a separate, memory-budgeted transaction on a private copy:
+
+```python
+scoped = structure.edit().coordinates(context=molframe.ExecutionContext(memory_budget=2**28))
+positions = scoped.positions()          # writable (atoms, 3) float32 view of the copy
+positions += 1.0
+moved = scoped.commit()                 # a new structure with its own copy of the result
+```
+
+The copy is charged to the context's budget before it is allocated, and refused with `MemoryBudgetError` if it does not fit. `commit()` publishes an independent snapshot: writing to `positions` afterwards cannot change a structure that was already committed. The original structure is never modified.

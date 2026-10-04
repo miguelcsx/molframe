@@ -170,3 +170,31 @@ pub(super) fn dunder_all(text: &str) -> BTreeSet<String> {
         .map(str::to_owned)
         .collect()
 }
+
+/// The root package's stub: `__init__.pyi` and the private parts it imports from
+/// (`_structure.pyi`, ...), which exist only to keep each file under the cap.
+pub(super) fn parse_root_stub(root: &Path) -> Stub {
+    let mut merged = parse_stub(&read(&root.join("__init__.pyi")));
+    let Ok(entries) = fs::read_dir(root) else {
+        panic!("{} should be readable", root.display())
+    };
+    let mut parts: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension().is_some_and(|extension| extension == "pyi")
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with('_') && name != "_native.pyi")
+        })
+        .collect();
+    parts.sort();
+    for part in parts {
+        let stub = parse_stub(&read(&part));
+        merged.names.extend(stub.names);
+        merged.protocols.extend(stub.protocols);
+        merged.members.extend(stub.members);
+    }
+    merged
+}

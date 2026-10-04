@@ -24,8 +24,10 @@ mod crystal_links;
 mod crystal_reduction;
 #[cfg(feature = "crystal")]
 mod crystal_statistics;
+mod editing;
 #[cfg(feature = "analysis")]
 mod electrostatics;
+mod entities;
 mod error;
 mod execution;
 mod formats;
@@ -49,6 +51,7 @@ mod selection_expr;
 mod sequence;
 #[cfg(feature = "spatial")]
 mod spatial;
+mod structure_data;
 #[cfg(feature = "surface")]
 mod surface;
 mod table;

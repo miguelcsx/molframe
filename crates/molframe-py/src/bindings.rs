@@ -2,7 +2,7 @@
 
 use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidueSelection, PyResidues};
 use numpy::ndarray::ArrayView2;
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
@@ -125,10 +125,10 @@ impl PyStructure {
         })?;
         crate::policy::select_compiled(py, self, &compiled, &policy)
     }
-    fn edit(&self) -> PyStructureEditor {
-        PyStructureEditor {
-            inner: Some(self.inner.edit()),
-        }
+    /// Starts an edit: topology changes are staged and published together by
+    /// `finish()`, coordinate changes go through `coordinates()`.
+    fn edit(&self) -> crate::editing::PyStructureEditor {
+        crate::editing::PyStructureEditor::new(self.inner.edit())
     }
 
     /// The covalent bonds the structure carries, as an Arrow-readable table.
@@ -163,6 +163,81 @@ impl PyStructure {
     ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
         crate::native_source::capsule(py, &self.inner)
     }
+    /// Entry-level facts the file states: identifier, title, method, resolution.
+    #[getter]
+    fn metadata(&self) -> crate::structure_data::PyEntryMetadata {
+        crate::structure_data::PyEntryMetadata {
+            parent: self.clone(),
+        }
+    }
+
+    /// The crystallographic cell, or `None` when the file defines none.
+    ///
+    /// The placeholder unit cube some files write in place of a cell is not
+    /// reported as one.
+    #[getter]
+    fn cell(&self) -> PyResult<Option<crate::crystal::PyUnitCell>> {
+        match self.inner.cell() {
+            Some(cell) if !cell.is_placeholder() => {
+                crate::crystal::PyUnitCell::from_cell(&cell).map(Some)
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Anisotropic displacement parameters, one row per atom that has them.
+    ///
+    /// Columns are `atom` and the `Å²` tensor `u11`, `u22`, `u33`, `u12`,
+    /// `u13`, `u23`. `None` means the file did not say whether any exist; an
+    /// empty table means it said there are none.
+    #[getter]
+    fn anisotropy(&self, py: Python<'_>) -> Option<crate::table::PyTable> {
+        crate::structure_data::anisotropy(py, &self.inner)
+    }
+
+    /// The distinct species the structure contains.
+    #[getter]
+    fn entities(&self) -> crate::entities::PyEntities {
+        crate::entities::PyEntities::new(self.clone())
+    }
+
+    /// Custom per-atom columns, such as partial charges or confidence scores.
+    #[getter]
+    fn annotations(&self) -> crate::structure_data::PyAnnotations {
+        crate::structure_data::PyAnnotations {
+            parent: self.clone(),
+        }
+    }
+
+    /// Atomic number of each atom (`0` for an unknown element).
+    #[getter]
+    fn elements<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
+        crate::structure_data::elements(&self.inner).to_pyarray(py)
+    }
+
+    /// Occupancy of each atom; `NaN` where the file records none.
+    #[getter]
+    fn occupancies<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        crate::structure_data::occupancies(&self.inner).to_pyarray(py)
+    }
+
+    /// Temperature factor of each atom; `NaN` where the file records none.
+    #[getter]
+    fn b_factors<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        crate::structure_data::b_factors(&self.inner).to_pyarray(py)
+    }
+
+    /// Which assigner produced each residue's secondary state.
+    #[getter]
+    fn secondary_source(&self) -> Vec<crate::secondary::PySecondarySource> {
+        self.inner
+            .secondary_source()
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect()
+    }
+
     /// Per-residue states in topology order, including deposited assignments.
     #[getter]
     fn secondary_structure(&self) -> Vec<crate::secondary::PySecondaryStructure> {
@@ -187,32 +262,6 @@ impl PyStructure {
             .iter()
             .map(|source| source.code())
             .collect()
-    }
-}
-#[derive(Debug)]
-#[pyclass(name = "StructureEditor", skip_from_py_object)]
-pub(crate) struct PyStructureEditor {
-    inner: Option<molframe::StructureEditor>,
-}
-#[pymethods]
-impl PyStructureEditor {
-    fn rename_chain(&mut self, chain: u32, label: &str) -> PyResult<()> {
-        let Some(editor) = self.inner.as_mut() else {
-            return Err(crate::error::internal("editor has already been finished"));
-        };
-        editor
-            .rename_chain(molframe::ChainIndex::new(chain), label)
-            .map_err(crate::error::kernel)
-    }
-
-    fn finish(&mut self) -> PyResult<PyStructure> {
-        let Some(editor) = self.inner.take() else {
-            return Err(crate::error::internal("editor has already been finished"));
-        };
-        editor
-            .finish()
-            .map(PyStructure::new)
-            .map_err(|diagnostics| crate::error::value(format!("{diagnostics:?}")))
     }
 }
 #[derive(Clone, Debug)]
@@ -290,6 +339,10 @@ impl PySelection {
 }
 
 impl PySelection {
+    pub(crate) const fn native(&self) -> &molframe::Selection {
+        &self.selection
+    }
+
     pub(crate) fn from_native(parent: PyStructure, selection: molframe::Selection) -> Self {
         let indices = selection.atoms().map(|atom| atom.index().get()).collect();
         Self {

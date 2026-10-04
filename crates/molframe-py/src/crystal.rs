@@ -14,15 +14,55 @@ use pyo3::prelude::*;
     skip_from_py_object,
     module = "molframe.crystal"
 )]
-pub(crate) struct PyUnitCell(pub(crate) CellTransform);
+pub(crate) struct PyUnitCell(pub(crate) CellTransform, UnitCell);
+
+impl PyUnitCell {
+    /// The cell a structure carries, as its conversion and its parameters.
+    pub(crate) fn from_cell(cell: &UnitCell) -> PyResult<Self> {
+        CellTransform::new(cell)
+            .map(|transform| Self(transform, *cell))
+            .map_err(crate::error::kernel)
+    }
+}
 
 #[pymethods]
 impl PyUnitCell {
     #[new]
     fn new(lengths: [f64; 3], angles: [f64; 3]) -> PyResult<Self> {
-        CellTransform::new(&UnitCell { lengths, angles })
-            .map(Self)
-            .map_err(crate::error::kernel)
+        Self::from_cell(&UnitCell { lengths, angles })
+    }
+
+    /// Edge lengths in ångström.
+    #[getter]
+    const fn lengths(&self) -> [f64; 3] {
+        self.1.lengths
+    }
+
+    /// Angles in degrees.
+    #[getter]
+    const fn angles(&self) -> [f64; 3] {
+        self.1.angles
+    }
+
+    #[pyo3(name = "to_cartesian")]
+    fn fractional_to_cartesian(&self, fractional: [f64; 3]) -> [f64; 3] {
+        self.0.to_cartesian(fractional)
+    }
+
+    #[pyo3(name = "to_fractional")]
+    fn cartesian_to_fractional(&self, cartesian: [f64; 3]) -> [f64; 3] {
+        self.0.to_fractional(cartesian)
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "UnitCell(lengths={:?}, angles={:?})",
+            self.1.lengths, self.1.angles
+        )
     }
 
     fn reciprocal_vector(&self, hkl: [i32; 3]) -> [f64; 3] {
