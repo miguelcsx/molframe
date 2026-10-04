@@ -151,6 +151,10 @@ pub(super) fn delete_from(
                 .is_some_and(|mapped| *mapped != DELETED_ATOM)
         })
         .map_err(|_| Diagnostic::new(Code::E6009))?;
+    // A residue, chain or entity that lost every atom is not left behind as an
+    // empty record: the hierarchy and the per-residue columns are compacted
+    // exactly as when a selection is materialised.
+    super::super::materialize::compact_hierarchy(&mut candidate)?;
     Ok(candidate)
 }
 

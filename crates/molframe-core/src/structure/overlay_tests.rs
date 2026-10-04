@@ -327,3 +327,43 @@ fn assert_position(actual: [f32; 3], expected: [f32; 3]) {
         assert!((actual - expected).abs() < f32::EPSILON);
     }
 }
+
+#[test]
+fn deleting_every_atom_of_a_residue_removes_the_residue_and_an_emptied_chain() {
+    let original = crate::structure::fixture::sample();
+    let residues_before = original.data().residues().count();
+    let first_residue = original
+        .data()
+        .topology
+        .residues
+        .atoms(ResidueIndex::new(0))
+        .expect("residue 0 has atoms");
+    let mut editor = original.edit();
+    let deleted = AtomSelection::from_sorted(first_residue.clone().collect());
+    if let Err(finding) = editor.delete_atoms(&deleted) {
+        panic!("delete failed: {finding}")
+    }
+    let edited = match editor.commit() {
+        Ok(structure) => structure,
+        Err(findings) => panic!("commit failed: {findings:?}"),
+    };
+    assert_eq!(edited.data().residues().count(), residues_before - 1);
+    assert!(
+        edited
+            .data()
+            .residues()
+            .all(|residue| residue.atoms().next().is_some()),
+        "no residue is left without atoms"
+    );
+    let everything = AtomSelection::from_sorted((0..original.atom_count()).collect());
+    let mut editor = original.edit();
+    if let Err(finding) = editor.delete_atoms(&everything) {
+        panic!("delete failed: {finding}")
+    }
+    let emptied = match editor.commit() {
+        Ok(structure) => structure,
+        Err(findings) => panic!("commit failed: {findings:?}"),
+    };
+    assert_eq!(emptied.data().residues().count(), 0);
+    assert_eq!(emptied.data().chains().count(), 0);
+}
