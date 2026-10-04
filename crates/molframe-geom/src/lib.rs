@@ -13,6 +13,7 @@
 /// Discrete geometry of ordered backbone traces.
 pub mod backbone;
 mod batch_measure;
+mod diagnostics;
 /// Deterministic symmetric eigendecomposition.
 pub mod eigen;
 /// Per-atom positional fluctuation across frames.
