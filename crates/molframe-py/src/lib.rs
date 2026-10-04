@@ -33,6 +33,8 @@ mod execution;
 mod formats;
 #[cfg(feature = "analysis")]
 mod governed;
+#[cfg(feature = "analysis")]
+mod governed_structure;
 mod hierarchy;
 mod interop;
 #[cfg(feature = "motif")]

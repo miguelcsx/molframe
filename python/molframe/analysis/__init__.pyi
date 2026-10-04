@@ -71,3 +71,80 @@ class ScalarGrid:
 def contact_potential(
     structure: Structure, charges: Sequence[float], spec: GridSpec, *, cutoff: float = 12.0
 ) -> ScalarGrid: ...
+def contact_map(
+    structure: Structure,
+    *,
+    cutoff: float,
+    min_separation: int,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Residue pairs within ``cutoff`` Å, with their closest atom distance."""
+
+def pi_stacking(
+    structure: Structure,
+    *,
+    max_centre_distance: float,
+    max_parallel_angle: float,
+    min_perpendicular_angle: float,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Ring stacking; ``kind`` is 0 for parallel planes and 1 for T-shaped ones."""
+
+def cation_pi(
+    structure: Structure,
+    *,
+    max_distance: float,
+    max_face_angle: float,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]: ...
+def water_bridges(
+    structure: Structure,
+    *,
+    max_distance: float,
+    min_angle: float,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]: ...
+def chain_interface(
+    structure: Structure,
+    *,
+    first_chain: str,
+    second_chain: str,
+    cutoff: float,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Residues of two chains within ``cutoff`` Å; a name matches a chain's label or author label."""
+
+def half_sphere_exposure(
+    structure: Structure,
+    *,
+    radius: float,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]: ...
+def nucleic_torsions(
+    structure: Structure,
+    *,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[Table]:
+    """Seven torsions per nucleotide in degrees; ``NaN`` where one cannot be defined."""
+
+def native_contacts(
+    reference: Structure,
+    target: Structure,
+    *,
+    cutoff: float,
+    tolerance: float,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[dict[str, float]]: ...

@@ -113,7 +113,20 @@ fn apply_polymer_role_profile(
     })
 }
 
+/// The polymer atom roles by name, as the integer codes a profile combines.
+///
+/// A rule's `role` is a bitwise or of these codes, for example
+/// `roles["protein_alpha_carbon"] | roles["protein_backbone"]`.
+#[pyfunction]
+fn polymer_atom_roles() -> std::collections::BTreeMap<&'static str, i64> {
+    chem::PolymerAtomRole::NAMED
+        .into_iter()
+        .map(|(name, role)| (name, role.code()))
+        .collect()
+}
+
 pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(polymer_atom_roles, module)?)?;
     module.add_class::<PyPolymerRoleRule>()?;
     module.add_class::<PyPolymerRoleReport>()?;
     module.add_function(wrap_pyfunction!(apply_polymer_role_profile, module)?)

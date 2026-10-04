@@ -15,6 +15,7 @@ partial_charges = _native.partial_charges
 PolymerRoleRule = _native.PolymerRoleRule
 PolymerRoleReport = _native.PolymerRoleReport
 apply_polymer_role_profile = _native.apply_polymer_role_profile
+polymer_atom_roles = _native.polymer_atom_roles
 annotate = _native.annotate
 element = _native.element
 vdw_radii = _native.vdw_radii
@@ -35,6 +36,7 @@ __all__ = [
     "carbohydrates",
     "element",
     "partial_charges",
+    "polymer_atom_roles",
     "snfg_symbol",
     "vdw_radii",
     "vdw_radius",

@@ -184,3 +184,5 @@ def carbohydrates(
     version: str = "unversioned",
     spatial_fallback: bool = True,
 ) -> CarbohydrateReport: ...
+def polymer_atom_roles() -> dict[str, int]:
+    """Polymer atom roles by name, as the integer codes a role rule combines with ``|``."""
