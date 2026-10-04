@@ -12,6 +12,7 @@ mod native;
 mod physical;
 mod standalone;
 mod structure;
+mod system;
 
 pub use descriptor::AnalysisDescriptor;
 pub use dynamics::{governed_dielectric_from_dipoles, governed_water_dynamics};

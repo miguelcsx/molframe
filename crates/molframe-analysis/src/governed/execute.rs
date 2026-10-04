@@ -1,15 +1,30 @@
 //! Single-structure and trajectory execution through one frame adapter.
 
+use super::system::AnalysisSystem;
 use super::{FrameKernelResult, GovernedAnalysisError, StructureKernel};
+use molframe_core::AtomSelection;
 use molframe_core::contract::{
-    Analysis, AnalysisPolicy, AssemblyChoice, Coverage, Indeterminacy, MissingPolicy,
-    MissingPolicyError, ModelChoice, Outcome, ParameterValue, Provenance, Quality, SourceRef,
-    SymmetryPolicy, resolve_missing,
+    Analysis, AnalysisPolicy, Assumption, AssumptionSource, Coverage, HydrogenPolicy, Impact,
+    Indeterminacy, MissingPolicy, MissingPolicyError, ModelChoice, Outcome, ParameterValue,
+    PolicyField, Provenance, Quality, SourceRef, resolve_missing,
 };
 use molframe_core::index::ModelIndex;
 use molframe_core::structure::Structure;
 use molframe_core::{ExecutionContext, MemoryBudgetError};
+use molframe_geom::Rigid;
 use molframe_traj::{Frame, FrameAnalysis, Timestep, Trajectory, TrajectoryError, run_analysis};
+
+/// The policy fields the executor itself applies to every kernel, before the kernel
+/// runs: which system, which model, which conformations, which hydrogens, and what
+/// to do about missing atoms.
+const EXECUTOR_READS: [PolicyField; 6] = [
+    PolicyField::Assembly,
+    PolicyField::Symmetry,
+    PolicyField::Model,
+    PolicyField::Altloc,
+    PolicyField::Hydrogens,
+    PolicyField::MissingAtoms,
+];
 
 /// An existing structure kernel bound to topology, policy and altloc selection.
 #[derive(Debug)]
@@ -17,48 +32,102 @@ pub struct GovernedStructureAnalysis<'a, K> {
     template: Structure,
     source_atom_count: usize,
     selected_atoms: Vec<usize>,
+    motions: Vec<Option<Rigid>>,
     policy: AnalysisPolicy,
     kernel: &'a K,
     input_quality: Quality,
     input_indeterminacy: Option<Indeterminacy>,
     input_warnings: Vec<molframe_core::diagnostic::Diagnostic>,
-    input_assumptions: Vec<molframe_core::contract::Assumption>,
+    input_assumptions: Vec<Assumption>,
 }
 
 impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
-    /// Resolves alternate conformations once and retains their source atom map.
+    /// Builds the analysed system, resolves its alternate conformations and hydrogens
+    /// once, and retains the source atom and motion of every atom it keeps.
+    ///
+    /// Equivalent to [`GovernedStructureAnalysis::new_in`] under a default context.
     ///
     /// # Errors
     ///
-    /// Returns every structural diagnostic if the selected topology cannot be
-    /// materialised as a valid immutable structure.
+    /// See [`GovernedStructureAnalysis::new_in`].
     pub fn new(
         template: &Structure,
         policy: &AnalysisPolicy,
         kernel: &'a K,
     ) -> Result<Self, GovernedAnalysisError<K::Error>> {
-        if !matches!(policy.assembly, AssemblyChoice::AsymmetricUnit) {
-            return Err(GovernedAnalysisError::UnsupportedPolicyValue("assembly"));
+        Self::new_in(template, policy, kernel, &ExecutionContext::default())
+    }
+
+    /// Builds the analysed system under an execution context.
+    ///
+    /// The policy decides what the system is. The asymmetric unit is the input;
+    /// a biological assembly is its generated chain instances; crystal contacts
+    /// are the unit plus every chain that touches it from a neighbouring cell.
+    /// Alternate conformations and hydrogens are then resolved over that system,
+    /// so a rule that picks one conformer picks it in every copy.
+    ///
+    /// # Errors
+    ///
+    /// Returns the findings that explain a contradictory policy or a system that
+    /// cannot be built, an unsupported hydrogen rule, a kernel that cannot run over
+    /// replicated atoms, or the diagnostics of a topology that cannot be materialised.
+    pub fn new_in(
+        template: &Structure,
+        policy: &AnalysisPolicy,
+        kernel: &'a K,
+        context: &ExecutionContext,
+    ) -> Result<Self, GovernedAnalysisError<K::Error>> {
+        if matches!(policy.hydrogens, HydrogenPolicy::IncludeInferred) {
+            // Adding hydrogens that were not modelled is not something this library does,
+            // and silently using the modelled ones would be a different decision.
+            return Err(GovernedAnalysisError::UnsupportedPolicyValue("hydrogens"));
         }
-        if !matches!(policy.symmetry, SymmetryPolicy::None) {
-            return Err(GovernedAnalysisError::UnsupportedPolicyValue("symmetry"));
+        let system = AnalysisSystem::build(template, policy, context)
+            .map_err(GovernedAnalysisError::System)?;
+        if system.is_replicated() && !kernel.descriptor().allows_replicated_systems() {
+            return Err(GovernedAnalysisError::ReplicatedSystemUnsupported(
+                kernel.descriptor().name().into(),
+            ));
         }
-        let resolution = template.resolve_altlocs(policy);
-        let (selected, selected_atoms, input_quality, input_indeterminacy) =
+        let mut assumptions: Vec<Assumption> = system.assumption().into_iter().collect();
+        if matches!(policy.hydrogens, HydrogenPolicy::Exclude) {
+            assumptions.push(Assumption::new(
+                PolicyField::Hydrogens,
+                "hydrogens excluded from the analysed atoms",
+                AssumptionSource::Explicit,
+                Impact::Unmeasured,
+            ));
+        }
+        let resolution = system.structure.resolve_altlocs(policy);
+        let (selected, selected_atoms, motions, input_quality, input_indeterminacy) =
             match resolution.value() {
                 None => (
                     template.clone(),
+                    Vec::new(),
                     Vec::new(),
                     Quality::Complete,
                     resolution.indeterminacy().cloned(),
                 ),
                 Some(chosen) => {
-                    let atoms: Vec<usize> = chosen.iter().map(|atom| atom as usize).collect();
-                    let structure = if chosen.len() == u64::from(template.atom_count()) {
-                        template.clone()
+                    let chosen = match policy.hydrogens {
+                        HydrogenPolicy::Exclude => without_hydrogens(&system.structure, chosen),
+                        _ => chosen.clone(),
+                    };
+                    let kept: Vec<usize> = chosen.iter().map(|atom| atom as usize).collect();
+                    let selected_atoms: Vec<usize> = kept
+                        .iter()
+                        .map(|&atom| system.placements[atom].source)
+                        .collect();
+                    let motions: Vec<Option<Rigid>> = kept
+                        .iter()
+                        .map(|&atom| system.placements[atom].motion)
+                        .collect();
+                    let structure = if chosen.len() == u64::from(system.structure.atom_count()) {
+                        system.structure.clone()
                     } else {
-                        template
-                            .materialize(chosen)
+                        system
+                            .structure
+                            .materialize(&chosen)
                             .map_err(GovernedAnalysisError::InvalidStructure)?
                     };
                     let resolved = match resolution.quality() {
@@ -70,21 +139,42 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
                     } else {
                         resolved
                     };
-                    (structure, atoms, quality, None)
+                    (structure, selected_atoms, motions, quality, None)
                 }
             };
+        assumptions.extend(resolution.assumptions);
         Ok(Self {
             template: selected,
             source_atom_count: template.atom_count() as usize,
             selected_atoms,
+            motions,
             policy: policy.clone(),
             kernel,
             input_quality,
             input_indeterminacy,
             input_warnings: resolution.warnings,
-            input_assumptions: resolution.assumptions,
+            input_assumptions: assumptions,
         })
     }
+}
+
+/// The selection without its hydrogen atoms.
+fn without_hydrogens(structure: &Structure, chosen: &AtomSelection) -> AtomSelection {
+    let mut hydrogen = vec![false; structure.atom_count() as usize];
+    for atom in structure.data().atoms() {
+        let is_hydrogen = atom
+            .element()
+            .is_some_and(|element| element.atomic_number() == 1);
+        if let Some(slot) = hydrogen.get_mut(atom.index().as_usize()) {
+            *slot = is_hydrogen;
+        }
+    }
+    AtomSelection::from_sorted(
+        chosen
+            .iter()
+            .filter(|&atom| !matches!(hydrogen.get(atom as usize), Some(true)))
+            .collect(),
+    )
 }
 
 impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
@@ -128,7 +218,11 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
             }
             .into());
         };
-        for (target, source) in positions.iter_mut().zip(&self.selected_atoms) {
+        for ((target, source), motion) in positions
+            .iter_mut()
+            .zip(&self.selected_atoms)
+            .zip(&self.motions)
+        {
             let Some(position) = timestep.positions.get(*source) else {
                 return Err(TrajectoryError::SelectionOutOfRange {
                     index: *source,
@@ -136,7 +230,10 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
                 }
                 .into());
             };
-            *target = *position;
+            *target = match motion {
+                Some(motion) => motion.apply(*position),
+                None => *position,
+            };
         }
         let frame = editor
             .commit()
@@ -238,7 +335,7 @@ pub fn analyse_trajectory<K: StructureKernel>(
     kernel: &K,
     context: &ExecutionContext,
 ) -> Result<Analysis<Vec<K::Output>>, GovernedAnalysisError<K::Error>> {
-    let analysis = GovernedStructureAnalysis::new(topology, policy, kernel)?;
+    let analysis = GovernedStructureAnalysis::new_in(topology, policy, kernel, context)?;
     run_analysis(trajectory, &analysis, context)
 }
 
@@ -290,6 +387,12 @@ fn validate_coverage<E>(coverage: Coverage) -> Result<(), GovernedAnalysisError<
     }
 }
 
+fn executor_reads(declared: &[PolicyField]) -> Vec<PolicyField> {
+    let mut reads = EXECUTOR_READS.to_vec();
+    reads.extend_from_slice(declared);
+    reads
+}
+
 fn combine_frames<K: StructureKernel>(
     analysis: &GovernedStructureAnalysis<'_, K>,
     partial: Vec<(usize, FrameRecord<K::Output>)>,
@@ -300,7 +403,8 @@ fn combine_frames<K: StructureKernel>(
         .kernel
         .descriptor()
         .apply(Provenance::new(&analysis.policy).with_source(SourceRef::Memory))
-        .with_parameter("frame_count", ParameterValue::Integer(frame_count));
+        .with_parameter("frame_count", ParameterValue::Integer(frame_count))
+        .with_policy_reads(&executor_reads(analysis.kernel.descriptor().policy_reads()));
     let mut quality = analysis.input_quality;
     let mut coverage = Coverage::default();
     let mut warnings = analysis.input_warnings.clone();

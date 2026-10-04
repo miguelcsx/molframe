@@ -2181,6 +2181,7 @@ dependencies = [
  "molframe-spatial",
  "molframe-surface",
  "molframe-traj",
+ "molframe-xtal",
  "nalgebra",
  "num-traits",
  "thiserror 2.0.21",

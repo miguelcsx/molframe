@@ -6,8 +6,8 @@ use crate::{
     Pucker, map_fragments, polymer_statistics, sugar_pucker,
 };
 use molframe_core::contract::{
-    Analysis, AnalysisPolicy, Coverage, MissingPolicyError, Outcome, ParameterValue, Provenance,
-    Quality, SourceRef, resolve_missing,
+    Analysis, AnalysisPolicy, Coverage, MissingPolicyError, Outcome, ParameterValue, PolicyField,
+    Provenance, Quality, SourceRef, resolve_missing,
 };
 
 /// A pure-domain kernel or governance failure.
@@ -47,6 +47,7 @@ fn governed<T, E>(
     policy: &AnalysisPolicy,
     descriptor: &super::AnalysisDescriptor,
 ) -> Result<Analysis<T>, StandaloneAnalysisError<E>> {
+    let descriptor = descriptor.clone().reading(&[PolicyField::MissingAtoms]);
     let (outcome, quality) =
         resolve_missing(value, Quality::Complete, coverage, policy.missing_atoms).map_err(
             |error| match error {

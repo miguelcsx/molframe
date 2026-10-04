@@ -17,6 +17,7 @@ molframe-geom.workspace = true
 molframe-spatial.workspace = true
 molframe-surface.workspace = true
 molframe-traj.workspace = true
+molframe-xtal.workspace = true
 nalgebra.workspace = true
 thiserror.workspace = true
 

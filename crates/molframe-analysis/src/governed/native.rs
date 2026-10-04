@@ -3,7 +3,7 @@
 use super::common::{backend, complete, descriptor, float};
 use super::{StructureKernel, mapped_structure_kernel};
 use crate::{NativeContacts, NativeError, native_contact_fraction};
-use molframe_core::contract::{AnalysisPolicy, ModelChoice, PeriodicPolicy};
+use molframe_core::contract::{AnalysisPolicy, ModelChoice, PeriodicPolicy, PolicyField};
 use molframe_core::index::ModelIndex;
 use molframe_core::{AtomSelection, Diagnostic, ExecutionContext, Structure};
 use molframe_spatial::SpatialBackend;
@@ -109,6 +109,8 @@ pub fn native_contact_fraction_kernel(
 ) -> impl StructureKernel<Output = NativeContacts, Error = GovernedNativeError> + '_ {
     mapped_structure_kernel(
         descriptor("native-contact-fraction")
+            .reading(&[PolicyField::Periodic])
+            .without_replicated_systems()
             .with_parameter("cutoff", float(cutoff))
             .with_parameter("tolerance", float(tolerance))
             .with_parameter("spatial_backend", backend(spatial)),

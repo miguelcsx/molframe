@@ -29,6 +29,10 @@ pub enum GovernedAnalysisError<E> {
     MissingFrameOutput,
     /// This crate version does not understand a newer non-exhaustive policy value.
     UnsupportedPolicyValue(&'static str),
+    /// The policy describes a system that cannot be built or is contradictory.
+    System(Vec<Diagnostic>),
+    /// The analysis pairs atoms across structures and cannot run over copies.
+    ReplicatedSystemUnsupported(Box<str>),
     /// A kernel reported mutually inconsistent coverage counters.
     InvalidCoverage {
         /// Inputs the kernel intended to use.
@@ -70,6 +74,14 @@ impl<E: fmt::Display> fmt::Display for GovernedAnalysisError<E> {
             Self::UnsupportedPolicyValue(field) => {
                 write!(formatter, "unsupported analysis policy value for {field}")
             }
+            Self::System(findings) => match findings.first() {
+                Some(first) => write!(formatter, "the policy describes no runnable system: {first}"),
+                None => formatter.write_str("the policy describes no runnable system"),
+            },
+            Self::ReplicatedSystemUnsupported(analysis) => write!(
+                formatter,
+                "{analysis} pairs atoms across structures, which is not defined over copies of atoms"
+            ),
             Self::InvalidCoverage {
                 intended,
                 used,

@@ -9,7 +9,7 @@ use crate::{
     coordination_numbers, density_map, identify_leaflets, linear_density, pore_profile,
     radial_distribution,
 };
-use molframe_core::contract::{AnalysisPolicy, ParameterValue, PeriodicPolicy};
+use molframe_core::contract::{AnalysisPolicy, ParameterValue, PeriodicPolicy, PolicyField};
 use molframe_core::{AtomSelection, ExecutionContext, Structure};
 use molframe_spatial::{PeriodicBox, SpatialBackend, SpatialError};
 
@@ -141,6 +141,7 @@ pub fn leaflets_kernel(
 ) -> impl StructureKernel<Output = Vec<Leaflet>, Error = PhysicalKernelError<SpatialError>> + '_ {
     mapped_structure_kernel(
         descriptor("membrane-leaflets")
+            .reading(&[PolicyField::Periodic])
             .with_parameter("connection_distance", float(options.connection_distance))
             .with_parameter("spatial_backend", backend(options.backend)),
         move |structure: &Structure,
@@ -196,6 +197,7 @@ pub fn radial_distribution_kernel<'a>(
 ) -> impl StructureKernel<Output = Vec<RadialBin>, Error = PhysicalKernelError<RadialError>> + 'a {
     mapped_structure_kernel(
         descriptor("radial-distribution")
+            .reading(&[PolicyField::Periodic])
             .with_parameter("minimum_distance", float(options.minimum_distance))
             .with_parameter("maximum_distance", float(options.maximum_distance))
             .with_parameter("bins", integer(options.bins))
@@ -232,6 +234,7 @@ pub fn centre_of_mass_radial_distribution_kernel<'a>(
 ) -> impl StructureKernel<Output = Vec<RadialBin>, Error = PhysicalKernelError<RadialError>> + 'a {
     mapped_structure_kernel(
         descriptor("centre-of-mass-radial-distribution")
+            .reading(&[PolicyField::Periodic])
             .with_parameter("minimum_distance", float(options.minimum_distance))
             .with_parameter("maximum_distance", float(options.maximum_distance))
             .with_parameter("bins", integer(options.bins))
@@ -286,6 +289,7 @@ pub fn coordination_numbers_kernel<'a>(
 ) -> impl StructureKernel<Output = Vec<u32>, Error = PhysicalKernelError<RadialError>> + 'a {
     mapped_structure_kernel(
         descriptor("coordination-numbers")
+            .reading(&[PolicyField::Periodic])
             .with_parameter("minimum_distance", float(minimum_distance))
             .with_parameter("maximum_distance", float(maximum_distance))
             .with_parameter("spatial_backend", backend(spatial)),

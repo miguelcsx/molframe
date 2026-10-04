@@ -163,9 +163,16 @@ pub fn governed_diagnostic<E: std::fmt::Display>(
             None => Code::E9001,
         },
         GovernedAnalysisError::Kernel(inner) => return kernel(inner),
+        // The first finding says what is wrong with the system; the wrapper would only
+        // say that something is.
+        GovernedAnalysisError::System(findings) => match findings.first() {
+            Some(first) => return first.clone(),
+            None => Code::E6103,
+        },
         GovernedAnalysisError::MissingData { .. } => Code::E5103,
         GovernedAnalysisError::CoverageOverflow => Code::E1903,
         GovernedAnalysisError::MultipleModelsRequested
+        | GovernedAnalysisError::ReplicatedSystemUnsupported(_)
         | GovernedAnalysisError::UnsupportedPolicyValue(_) => Code::E6103,
         GovernedAnalysisError::MissingFrameOutput
         | GovernedAnalysisError::InvalidCoverage { .. } => Code::E9001,
