@@ -127,8 +127,10 @@ pub fn governed_diagnostic<E: std::fmt::Display>(
 ) -> Diagnostic {
     let code = match error {
         GovernedAnalysisError::Trajectory(inner) => Diagnostic::from(inner).code(),
+        // The structure's own finding says what is wrong with it; the wrapper
+        // would only say that something is.
         GovernedAnalysisError::InvalidStructure(findings) => match findings.first() {
-            Some(first) => first.code(),
+            Some(first) => return first.clone(),
             None => Code::E9001,
         },
         GovernedAnalysisError::Kernel(inner) => return kernel(inner),
