@@ -78,7 +78,8 @@ pub const REQUIRED_PDB_RECORDS: [&str; 6] = ["ATOM", "HETATM", "MODEL", "ENDMDL"
 ///
 /// Names are compared ASCII case-insensitively. Required names (see
 /// [`REQUIRED_CIF_CATEGORIES`], [`REQUIRED_PDB_RECORDS`]) are kept by
-/// [`CategoryFilter::keeps`] regardless of the filter.
+/// [`CategoryFilter::keeps_category`] and [`CategoryFilter::keeps_record`]
+/// regardless of the filter.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum CategoryFilter {
     /// Keep everything.
