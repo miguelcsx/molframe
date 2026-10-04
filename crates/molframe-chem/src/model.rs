@@ -134,6 +134,36 @@ impl PolymerAtomRole {
         Self(Self::NUCLEIC_GLYCOSIDIC.0 | Self::NUCLEIC_BASE_REFERENCE.0 | Self::NUCLEIC_BASE.0);
     const ALL: u32 = (1 << 18) - 1;
 
+    /// Every single-bit role and every membership mask, by stable name.
+    ///
+    /// A profile combines roles with a bitwise or of their codes; the names are
+    /// what a caller-authored profile refers to them by.
+    pub const NAMED: [(&'static str, Self); 23] = [
+        ("protein_nitrogen", Self::PROTEIN_NITROGEN),
+        ("protein_alpha_carbon", Self::PROTEIN_ALPHA_CARBON),
+        ("protein_carbonyl_carbon", Self::PROTEIN_CARBONYL_CARBON),
+        ("protein_carbonyl_oxygen", Self::PROTEIN_CARBONYL_OXYGEN),
+        ("protein_sidechain", Self::PROTEIN_SIDECHAIN),
+        ("protein_beta_carbon", Self::PROTEIN_BETA_CARBON),
+        ("nucleic_phosphate", Self::NUCLEIC_PHOSPHATE),
+        ("nucleic_o5", Self::NUCLEIC_O5),
+        ("nucleic_c5", Self::NUCLEIC_C5),
+        ("nucleic_c4", Self::NUCLEIC_C4),
+        ("nucleic_c3", Self::NUCLEIC_C3),
+        ("nucleic_o3", Self::NUCLEIC_O3),
+        ("nucleic_o4", Self::NUCLEIC_O4),
+        ("nucleic_c1", Self::NUCLEIC_C1),
+        ("nucleic_c2", Self::NUCLEIC_C2),
+        ("nucleic_glycosidic", Self::NUCLEIC_GLYCOSIDIC),
+        ("nucleic_base_reference", Self::NUCLEIC_BASE_REFERENCE),
+        ("nucleic_base", Self::NUCLEIC_BASE),
+        ("protein_backbone", Self::PROTEIN_BACKBONE),
+        ("nucleic_backbone", Self::NUCLEIC_BACKBONE),
+        ("nucleic_sugar", Self::NUCLEIC_SUGAR),
+        ("nucleic_base_group", Self::NUCLEIC_BASE_GROUP),
+        ("unknown", Self::UNKNOWN),
+    ];
+
     /// Stable integer representation stored in atom annotations.
     #[must_use]
     pub const fn code(self) -> i64 {
@@ -239,3 +269,7 @@ impl Component {
         self.atoms.iter().find(|atom| atom.name.as_ref() == name)
     }
 }
+
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod tests;
