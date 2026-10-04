@@ -1,6 +1,7 @@
 //! Format dispatch and the shared reader/writer contract.
 
 mod detect;
+mod names;
 mod options;
 
 #[cfg(test)]

@@ -103,6 +103,9 @@ fn finite_float(
 }
 
 /// Declares the spelling of a decision that is a plain closed set of words.
+///
+/// Other modules of this crate use it for their own closed sets, so every path
+/// it names is spelled in full.
 macro_rules! closed_vocabulary {
     ($type:ty, $field:literal, [$(($variant:path, $name:literal)),+ $(,)?]) => {
         impl $type {
@@ -120,24 +123,30 @@ macro_rules! closed_vocabulary {
             }
         }
 
-        impl fmt::Display for $type {
-            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        impl ::std::fmt::Display for $type {
+            fn fmt(&self, formatter: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
                 formatter.write_str(self.name())
             }
         }
 
-        impl FromStr for $type {
-            type Err = PolicyParseError;
+        impl ::std::str::FromStr for $type {
+            type Err = $crate::contract::PolicyParseError;
 
             fn from_str(value: &str) -> Result<Self, Self::Err> {
-                match canonical(value).as_str() {
+                match $crate::contract::canonical_spelling(value).as_str() {
                     $($name => Ok($variant),)+
-                    _ => Err(refused($field, value, &Self::NAMES.join(", "))),
+                    _ => Err($crate::contract::PolicyParseError::new(
+                        $field,
+                        value,
+                        &Self::NAMES.join(", "),
+                    )),
                 }
             }
         }
     };
 }
+
+pub(crate) use closed_vocabulary;
 
 closed_vocabulary!(
     Namespace,

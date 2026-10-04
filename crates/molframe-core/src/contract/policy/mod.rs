@@ -12,4 +12,5 @@ pub use fields::{
 };
 pub use fingerprint::Fingerprint;
 pub use profile::AnalysisPolicy;
+pub(crate) use vocabulary::closed_vocabulary;
 pub use vocabulary::{PolicyParseError, canonical_spelling};

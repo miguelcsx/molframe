@@ -13,6 +13,7 @@ mod reexecution;
 mod serialise;
 
 pub use analysis::{Analysis, Assumption, AssumptionSource, Coverage, ImpactEstimate, Status};
+pub(crate) use policy::closed_vocabulary;
 pub use policy::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,
     EquivalencePolicy, Fingerprint, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace,
