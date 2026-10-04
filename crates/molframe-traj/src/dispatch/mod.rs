@@ -21,5 +21,8 @@ pub use stream::read_trajectory;
 pub use write::write_trajectory;
 
 #[cfg(test)]
+#[path = "names_tests.rs"]
+mod names_tests;
+#[cfg(test)]
 #[path = "dispatch_tests.rs"]
 mod tests;
