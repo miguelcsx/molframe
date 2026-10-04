@@ -139,6 +139,22 @@ impl AssemblyView {
         })
     }
 
+    /// Wraps already-resolved instances; the caller guarantees the records
+    /// refer to chains and transforms of `structure`.
+    pub(crate) fn assemble(
+        structure: &Structure,
+        id: &str,
+        instances: Vec<InstanceRecord>,
+        transforms: Vec<Rigid>,
+    ) -> Self {
+        Self {
+            structure: structure.clone(),
+            assembly_id: id.into(),
+            instances: instances.into(),
+            transforms: transforms.into(),
+        }
+    }
+
     /// Source assembly identifier.
     #[must_use]
     pub fn id(&self) -> &str {
@@ -263,7 +279,7 @@ fn resolve_chains(
     Ok(chains)
 }
 
-fn chain_atoms(structure: &Structure, chain: ChainIndex) -> Range<u32> {
+pub(crate) fn chain_atoms(structure: &Structure, chain: ChainIndex) -> Range<u32> {
     let Some(residues) = structure.data().topology.chains.residues(chain) else {
         return 0..0;
     };

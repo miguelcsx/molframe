@@ -13,6 +13,7 @@ mod cell_reduction;
 mod crystal;
 mod crystal_batch;
 mod crystal_images;
+mod crystal_system;
 mod expression;
 mod grid;
 mod lower;
@@ -49,6 +50,7 @@ pub use crystal_batch::{
     CrystalImageBatch, CrystalImageBatchOptions, crystal_image_batches, visit_crystal_images,
 };
 pub use crystal_images::CrystalImage;
+pub use crystal_system::{chain_atom_ranges, crystal_contact_view, operation_motion};
 pub use expression::{DEFAULT_INSTANCE_LIMIT, OperExpression};
 pub use grid::{CubeAtom, CubeGrid, GridError, read_cube, read_dx};
 pub use lower::lower_assemblies;
