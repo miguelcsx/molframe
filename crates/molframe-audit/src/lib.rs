@@ -17,6 +17,7 @@
 
 mod batch;
 mod design;
+mod diagnostics;
 mod engine;
 mod metric;
 mod numeric;
@@ -32,7 +33,9 @@ pub use metric::{
     CategoricalFlip, Graph, GraphDifference, GraphPart, OutcomeMetric, RankingDistance,
     ScalarError, ScalarMode, SetOverlap, VectorDifference, VectorMode,
 };
-pub use outcomes::{AnalysisAudit, AuditError, OutcomeAudit, audit_analyses, audit_outcomes};
+pub use outcomes::{
+    AnalysisAudit, AuditError, AuditedRun, OutcomeAudit, audit_analyses, audit_outcomes,
+};
 pub use plan::{AuditPlan, PlanError, PolicyDimension, PolicySpace};
 pub use report::{AuditReport, AuditRun, DimensionSensitivity, SensitiveItem};
 pub use value::PolicyValue;

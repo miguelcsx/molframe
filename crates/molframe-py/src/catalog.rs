@@ -3,6 +3,7 @@
 use pyo3::prelude::*;
 
 mod analysis;
+mod audit;
 mod chemistry;
 mod compare;
 mod crystal;
@@ -31,8 +32,9 @@ pub(crate) struct Capability {
 }
 
 /// Every catalogued operation, grouped by what it operates on.
-const GROUPS: [&[Capability]; 13] = [
+const GROUPS: [&[Capability]; 14] = [
     analysis::ROWS,
+    audit::ROWS,
     chemistry::ROWS,
     compare::ROWS,
     crystal::ROWS,

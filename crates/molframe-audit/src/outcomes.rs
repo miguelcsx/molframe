@@ -118,6 +118,34 @@ where
     })
 }
 
+/// A run of an analysis the audit can interrogate: whether it has an answer, what the
+/// answer is, and which policy fields the analysis applied.
+///
+/// Implemented for [`Analysis`]; a binding that holds its results in another shape
+/// implements it to get the same audit.
+pub trait AuditedRun {
+    /// The answer, when there is one.
+    type Value;
+
+    /// The answer, or `None` when the analysis declined.
+    fn answer(&self) -> Option<&Self::Value>;
+
+    /// The policy fields the analysis recorded as applied, when it recorded them.
+    fn policy_reads(&self) -> Option<Vec<PolicyField>>;
+}
+
+impl<T> AuditedRun for Analysis<T> {
+    type Value = T;
+
+    fn answer(&self) -> Option<&T> {
+        self.value()
+    }
+
+    fn policy_reads(&self) -> Option<Vec<PolicyField>> {
+        self.provenance.policy_reads()
+    }
+}
+
 /// Why an audit of governed analyses could not be completed.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -147,9 +175,9 @@ impl<E: std::error::Error + 'static> std::error::Error for AuditError<E> {}
 /// distance, and the decomposition is withheld while any run is indeterminate,
 /// because a variance split needs an answer in every cell.
 #[derive(Debug)]
-pub struct AnalysisAudit<T> {
+pub struct AnalysisAudit<R> {
     /// Completed runs in the plan's deterministic order.
-    pub runs: Vec<AuditRun<Analysis<T>>>,
+    pub runs: Vec<AuditRun<R>>,
     /// The metric the distances are in.
     pub metric: &'static str,
     /// The policy fields the analysis applied across the runs.
@@ -161,7 +189,7 @@ pub struct AnalysisAudit<T> {
     from_first: Option<Vec<f64>>,
 }
 
-impl<T> AnalysisAudit<T> {
+impl<R> AnalysisAudit<R> {
     /// The fraction of defensible universes in which the analysis has no answer.
     #[must_use]
     pub fn indeterminate_fraction(&self) -> f64 {
@@ -203,20 +231,21 @@ impl<T> AnalysisAudit<T> {
 ///
 /// Returns [`AuditError::Plan`] for a varied field the analysis does not apply,
 /// and [`AuditError::Analysis`] for the first failure of `analyse`.
-pub fn audit_analyses<T, E, A, M>(
+pub fn audit_analyses<R, E, A, M>(
     plan: &AuditPlan,
     mut analyse: A,
     metric: &M,
-) -> Result<AnalysisAudit<T>, AuditError<E>>
+) -> Result<AnalysisAudit<R>, AuditError<E>>
 where
-    A: FnMut(&AnalysisPolicy) -> Result<Analysis<T>, E>,
-    M: OutcomeMetric<T>,
+    R: AuditedRun,
+    A: FnMut(&AnalysisPolicy) -> Result<R, E>,
+    M: OutcomeMetric<R::Value>,
 {
-    let mut runs: Vec<AuditRun<Analysis<T>>> = Vec::with_capacity(plan.cost());
+    let mut runs: Vec<AuditRun<R>> = Vec::with_capacity(plan.cost());
     let mut read: Vec<PolicyField> = Vec::new();
     for (index, policy) in plan.policies().iter().enumerate() {
         let result = analyse(policy).map_err(AuditError::Analysis)?;
-        if let Some(applied) = result.provenance.policy_reads() {
+        if let Some(applied) = result.policy_reads() {
             for field in applied {
                 if !read.contains(&field) {
                     read.push(field);
@@ -234,10 +263,10 @@ where
     let indeterminate: Vec<usize> = runs
         .iter()
         .enumerate()
-        .filter_map(|(index, run)| run.result.value().is_none().then_some(index))
+        .filter_map(|(index, run)| run.result.answer().is_none().then_some(index))
         .collect();
     let (decomposition, from_first) = if indeterminate.is_empty() {
-        let values: Vec<&T> = runs.iter().filter_map(|run| run.result.value()).collect();
+        let values: Vec<&R::Value> = runs.iter().filter_map(|run| run.result.answer()).collect();
         let distance = |first: usize, second: usize| metric.distance(values[first], values[second]);
         let split = decompose(plan.fields(), plan.coordinates(), distance);
         let from_first: Vec<f64> = (0..values.len())

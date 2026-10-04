@@ -59,6 +59,7 @@ pub(crate) struct PyAnalysis {
     /// `None` exactly when the analysis is indeterminate: there is no value to hold.
     value: Option<Py<PyAny>>,
     reason: Option<String>,
+    reads: Option<Vec<molframe::PolicyField>>,
     status: &'static str,
     coverage: PyCoverage,
     warnings: Vec<String>,
@@ -74,6 +75,7 @@ impl PyAnalysis {
         Self {
             value,
             reason: analysis.indeterminacy().map(ToString::to_string),
+            reads: analysis.provenance.policy_reads(),
             status: match analysis.status() {
                 molframe::Status::Complete => "complete",
                 molframe::Status::Partial => "partial",
@@ -105,6 +107,16 @@ impl PyAnalysis {
 }
 
 impl PyAnalysis {
+    /// The policy fields the analysis recorded as applied.
+    pub(crate) fn reads(&self) -> Option<Vec<molframe::PolicyField>> {
+        self.reads.clone()
+    }
+
+    /// The value, when there is one, without raising.
+    pub(crate) fn answer(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.value.as_ref().map(|value| value.clone_ref(py))
+    }
+
     /// The same envelope around a converted value.
     pub(crate) fn with_value(mut self, value: Option<Py<PyAny>>) -> Self {
         self.value = value;
@@ -133,6 +145,14 @@ impl PyAnalysis {
     #[getter]
     const fn is_determinate(&self) -> bool {
         self.value.is_some()
+    }
+
+    /// The policy decisions the analysis applied, or `None` when it did not record them.
+    #[getter]
+    fn policy_reads(&self) -> Option<Vec<&'static str>> {
+        self.reads
+            .as_ref()
+            .map(|fields| fields.iter().map(|field| field.name()).collect())
     }
 
     /// Why there is no answer, or `None` when there is one.

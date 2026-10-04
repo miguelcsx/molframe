@@ -2,6 +2,7 @@
 
 from . import (
     analysis,
+    audit,
     chemistry,
     compare,
     crystal,
@@ -142,6 +143,7 @@ __all__ = [
     "WorkflowNode",
     "__version__",
     "analysis",
+    "audit",
     "chemistry",
     "compare",
     "crystal",

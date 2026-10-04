@@ -48,6 +48,7 @@ from . import (
     WorkflowNode as WorkflowNode,
     __version__ as __version__,
     analysis as analysis,
+    audit as audit,
     chemistry as chemistry,
     compare as compare,
     crystal as crystal,

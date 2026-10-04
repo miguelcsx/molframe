@@ -154,6 +154,10 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     #[cfg(feature = "motif")]
     crate::motif::register(&motif)?;
     module.add_submodule(&motif)?;
+    let audit = PyModule::new(py, "audit")?;
+    #[cfg(feature = "audit")]
+    crate::audit::register(&audit)?;
+    module.add_submodule(&audit)?;
     let interop = PyModule::new(py, "interop")?;
     interop::register(&interop)?;
     module.add_submodule(&interop)?;

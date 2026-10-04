@@ -4,6 +4,7 @@ from typing import ClassVar, Generic, Literal, Protocol, TypeVar
 
 from . import (
     analysis as analysis,
+    audit as audit,
     chemistry as chemistry,
     compare as compare,
     crystal as crystal,
@@ -120,6 +121,10 @@ class Analysis(Generic[_T_co]):
     @property
     def indeterminacy(self) -> str | None:
         """Why there is no answer, or ``None`` when there is one."""
+
+    @property
+    def policy_reads(self) -> list[str] | None:
+        """The policy decisions the analysis applied, or ``None`` when it did not record them."""
 
     @property
     def status(self) -> Literal["complete", "partial", "ambiguous", "indeterminate"]: ...

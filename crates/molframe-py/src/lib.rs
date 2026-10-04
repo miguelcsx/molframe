@@ -7,6 +7,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod analysis_result;
+#[cfg(feature = "audit")]
+mod audit;
+#[cfg(feature = "audit")]
+mod audit_metric;
 #[cfg(any(feature = "analysis", feature = "validation", feature = "spatial"))]
 mod backend;
 mod batches;
