@@ -58,3 +58,10 @@ impl From<&std::convert::Infallible> for crate::Diagnostic {
         match *never {}
     }
 }
+
+impl From<&crate::Diagnostic> for crate::Diagnostic {
+    /// A finding is already a diagnostic; kernels that fail with one convert by copy.
+    fn from(diagnostic: &crate::Diagnostic) -> Self {
+        diagnostic.clone()
+    }
+}
