@@ -73,6 +73,8 @@ mod surface_mesh;
 mod table;
 #[cfg(feature = "trajectory")]
 mod trajectory;
+#[cfg(feature = "trajectory")]
+mod trajectory_ensemble;
 #[cfg(feature = "validation")]
 mod validation;
 #[cfg(feature = "validation")]

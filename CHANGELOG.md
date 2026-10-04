@@ -21,6 +21,12 @@ change the public API.
   `Provenance::input_digest`, serialised as `input_sha256`) instead of the 64-bit
   `Fingerprint`, which stays as the fast identity of policies and cache entries.
 
+### Fixed
+
+- `group_coordinate_variance` centred a group's samples on the group's grand mean, so a
+  group of atoms at different places reported its extent in space as fluctuation; it is
+  now the mean of each atom's variance about its own mean position.
+
 ### Added (policy engine and audit)
 
 - The governed executor applies `assembly` (a biological assembly, or crystal
@@ -38,6 +44,11 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- Python `molframe.trajectory`: pairwise fitted RMSD, Cartesian PCA, the Procrustes mean
+  structure, diffusion maps, k-means, agglomerative and DBSCAN clustering, medoids, mean
+  squared displacement, group variance, block convergence, harmonic and population
+  ensemble similarity and path similarity, each with provenance. Their errors gain
+  diagnostic codes, and the method words are read once in Rust.
 - Python `molframe.chemistry`: `Molecule` (an MDL record: graph, header and data fields),
   `read_sdf`, `read_mol`, `write_sdf`, `molecule(structure)` and `smarts(structure, pattern)`.
   MOL, MOL2, SMARTS and automorphism errors gain diagnostic codes (`E1301` is new).

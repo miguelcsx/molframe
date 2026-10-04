@@ -132,6 +132,7 @@ pub mod topology_minimal;
 mod trajectory_batch;
 #[path = "reader.rs"]
 pub mod trajectory_stream;
+mod words;
 
 pub use centroid_clustering as kmeans;
 pub use cluster_algorithms as clustering;
@@ -315,6 +316,7 @@ pub use txyz::{TxyzAtom, TxyzError, TxyzFrame, parse_txyz_records, write_txyz};
 pub use water_dynamics::{
     SurvivalMode, WaterDynamics, WaterDynamicsError, WaterSurvival, water_dynamics,
 };
+pub use words::UnknownWord;
 pub use xtc::{
     XtcError, XtcReader, XtcTrajectory, XtcWriteOptions, parse_xtc, write_xtc,
     write_xtc_with_precisions,

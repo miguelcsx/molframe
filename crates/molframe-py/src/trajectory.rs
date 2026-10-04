@@ -141,6 +141,7 @@ fn rmsd(
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    crate::trajectory_ensemble::register(module)?;
     module.add_class::<PyTrajectory>()?;
     module.add_function(wrap_pyfunction!(read, module)?)?;
     module.add_function(wrap_pyfunction!(rmsd, module)?)

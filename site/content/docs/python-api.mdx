@@ -52,7 +52,7 @@ See [Selecting atoms](/docs/selections) and [Reading bytes and editing structure
 | `molframe.chemistry` | `element`, `vdw_radius`, `vdw_radii`, `annotate`, `Molecule`, `read_sdf`, `read_mol`, `write_sdf`, `molecule`, `smarts` (plus charges, carbohydrates and polymer roles) |
 | `molframe.motif` | `evaluate`, `MotifReport`, `MotifEvaluation`, `ConstraintResult` |
 | `molframe.crystal` | `UnitCell`, `SpaceGroup`, `structure_factors`, `ResolutionBins`, `normalizers`, `reduce_cell` |
-| `molframe.trajectory` | `read`, `rmsd`, `Trajectory` |
+| `molframe.trajectory` | `read`, `rmsd`, `Trajectory`; ensemble analyses over `(frames, atoms, 3)` arrays: `pairwise_rmsd`, `pca`, `mean_structure`, `diffusion_map`, `kmeans`, `agglomerative_clustering`, `dbscan`, `medoid`, `msd`, `group_variance`, `block_convergence`, `harmonic_similarity`, `population_similarity`, `path_similarity` |
 | `molframe.formats` | `write`, `to_mmcif`, `to_pdb`, `to_bcif` |
 | `molframe.interop` | `graph`, `Graph`, `coordinates`, `CoordinateTensor`, `Dataset`, `DatasetSplit`, `ManifestEntry`, `write_atoms_parquet`, `write_atoms_ipc` |
 | `molframe.sel` | Category, column, and spatial query constructors including `within()` |
