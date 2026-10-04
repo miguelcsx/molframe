@@ -9,9 +9,10 @@ use crate::policy_execution::{
     GovernedAnalysisError, GovernedNativeError, PhysicalKernelError, StandaloneAnalysisError,
 };
 use crate::{
-    AnmError, BasePairError, CationPiError, DsspBinaryError, DsspError, FragmentMappingError,
-    GnmError, HelicalError, HseError, HydrogenBondError, NativeError, NmdError,
-    NucleicTorsionError, PiStackingError, PolymerError, PoreError, PotentialError, RadialError,
+    AnmError, BasePairError, CationPiError, DensityError, DsspBinaryError, DsspError,
+    FragmentMappingError, GnmError, HelicalError, HseError, HydrogenBondError, NativeError,
+    NmdError, NucleicTorsionError, PiStackingError, PolymerError, PoreError, PotentialError,
+    RadialError,
 };
 use molframe_core::{Code, Diagnostic, diagnostic_from};
 
@@ -114,6 +115,34 @@ diagnostic_from!(FragmentMappingError, |error| match error {
     FragmentMappingError::InvalidLibrary | FragmentMappingError::InvalidInput => Code::E5101,
     FragmentMappingError::Superpose(inner) => Diagnostic::from(inner).code(),
 });
+
+diagnostic_from!(DensityError, |error| match error {
+    DensityError::LengthMismatch { .. } => Code::E5102,
+    DensityError::InvalidBins | DensityError::InvalidGrid | DensityError::NonFiniteInput => {
+        Code::E5101
+    }
+    DensityError::GridTooLarge => Code::E7001,
+});
+
+/// Classifies a physical kernel's error as its own inner error would be.
+///
+/// One concrete impl per payload, because a generic `From` over a payload that
+/// itself needs `From` makes every conversion in this crate recurse.
+macro_rules! physical_diagnostic_from {
+    ($($inner:ty),+ $(,)?) => {$(
+        impl From<&PhysicalKernelError<$inner>> for Diagnostic {
+            fn from(error: &PhysicalKernelError<$inner>) -> Self {
+                physical_diagnostic(error, |inner| Self::from(inner))
+            }
+        }
+    )+};
+}
+physical_diagnostic_from!(
+    DensityError,
+    PoreError,
+    RadialError,
+    molframe_spatial::SpatialError
+);
 
 /// The diagnostic for a governed-execution failure, with `kernel` classifying
 /// the kernel's own error type.

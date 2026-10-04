@@ -28,6 +28,7 @@ mod chain_statistics;
 #[path = "pore.rs"]
 mod channel_profile;
 mod chemistry;
+mod density_names;
 mod diagnostics;
 #[path = "gnm.rs"]
 mod elastic_network;
