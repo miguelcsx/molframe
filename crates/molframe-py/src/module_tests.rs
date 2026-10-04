@@ -14,7 +14,7 @@ fn curated_module_and_catalog_are_bidirectionally_consistent() {
         if let Err(error) = crate::module::native(&module) {
             panic!("the extension module should register: {error}");
         }
-        for capability in super::catalog::CAPABILITIES {
+        for capability in super::catalog::capabilities() {
             let domain = match module.getattr(capability.domain) {
                 Ok(value) => value,
                 Err(error) => panic!("{} should be registered: {error}", capability.domain),

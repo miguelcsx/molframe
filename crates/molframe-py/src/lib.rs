@@ -59,6 +59,9 @@ mod workflow;
 pub use native_source::{NativeAtom, NativeBond, NativeStructureSource, NativeTopology};
 
 #[cfg(test)]
+#[path = "surface_tests.rs"]
+mod surface_tests;
+#[cfg(test)]
 #[path = "module_tests.rs"]
 mod tests;
 
