@@ -107,6 +107,47 @@ impl RadiusSet {
     }
 }
 
+impl RadiusSet {
+    /// The words a radius set can be spelled with, in declaration order.
+    pub const NAMES: &'static [&'static str] = &["bondi", "amber-united", "charmm", "alvarez"];
+
+    /// The canonical spelling of this set.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Bondi => "bondi",
+            Self::AmberUnited => "amber-united",
+            Self::Charmm => "charmm",
+            Self::Alvarez => "alvarez",
+        }
+    }
+}
+
+impl std::fmt::Display for RadiusSet {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.name())
+    }
+}
+
+impl std::str::FromStr for RadiusSet {
+    type Err = molframe_core::contract::PolicyParseError;
+
+    /// An underscore is read as a hyphen.
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match molframe_core::contract::canonical_spelling(value).as_str() {
+            "bondi" => Ok(Self::Bondi),
+            "amber-united" => Ok(Self::AmberUnited),
+            "charmm" => Ok(Self::Charmm),
+            "alvarez" => Ok(Self::Alvarez),
+            _ => Err(molframe_core::contract::PolicyParseError::new(
+                "radii",
+                value,
+                &Self::NAMES.join(", "),
+            )),
+        }
+    }
+}
+
 /// Returns reference properties by atomic number.
 #[must_use]
 pub fn element_properties(element: Element) -> Option<ElementProperties> {
