@@ -17,6 +17,8 @@ use crate::structure::Structure;
 
 mod formats;
 
+pub use read_in::{read_buffer_in, read_bytes_in, read_with_options_in};
+
 #[cfg(feature = "chemistry")]
 pub use formats::read_component_dictionary;
 #[cfg(feature = "geometry")]
@@ -35,6 +37,7 @@ mod dispatch;
 mod extensions;
 #[cfg(feature = "pdb")]
 mod pdb_symmetry;
+mod read_in;
 #[cfg(feature = "chemistry")]
 mod small_molecule;
 // The enum holds one variant per format crate, so with none of them linked it
@@ -313,12 +316,7 @@ pub fn read_buffer(
     name: Option<&str>,
     options: &ReadOptions,
 ) -> Result<(Structure, Vec<Diagnostic>), Findings> {
-    enrich_read(
-        dispatch_read(input, name, options),
-        options,
-        &ExecutionContext::default(),
-    )
-    .map(|(structure, diagnostics)| (structure.into(), diagnostics))
+    read_buffer_in(input, name, options, &ExecutionContext::default())
 }
 
 /// Applies the default chemistry perception pass to a caller-created structure.

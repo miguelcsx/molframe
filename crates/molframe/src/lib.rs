@@ -217,8 +217,9 @@ mod structure;
 mod validation_inputs;
 
 pub use facade::{
-    WriteOptions, read, read_buffer, read_bytes, read_with_diagnostics, read_with_options, write,
-    write_as, write_with_options,
+    WriteOptions, read, read_buffer, read_buffer_in, read_bytes, read_bytes_in,
+    read_with_diagnostics, read_with_options, read_with_options_in, write, write_as,
+    write_with_options,
 };
 #[cfg(all(feature = "chemistry", feature = "spatial"))]
 pub use facade::{perceive, perceive_in};
