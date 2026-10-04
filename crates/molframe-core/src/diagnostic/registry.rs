@@ -280,6 +280,9 @@ registry! {
     E6103 = Error 6103, Invalidating,
         "the requested operation is unsupported for this input or policy",
         "choose a supported input form, a source that offers the capability, or a policy this operation can represent";
+    E6104 = Error 6104, Invalidating,
+        "a policy value is not in the vocabulary of its decision",
+        "use one of the documented words for that decision; names are kebab-case and an underscore is read as a hyphen";
     E7001 = Error 7001, Invalidating,
         "operation exceeds the execution memory budget",
         "raise the memory budget deliberately, narrow the selection, or process the input in smaller pieces";

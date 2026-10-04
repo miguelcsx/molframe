@@ -16,7 +16,8 @@ pub use analysis::{Analysis, Assumption, AssumptionSource, Coverage, ImpactEstim
 pub use policy::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,
     EquivalencePolicy, Fingerprint, HydrogenPolicy, MissingPolicy, ModelChoice, Namespace,
-    PeriodicPolicy, PolicyField, Precision, ProfileId, RadiiSet, SymmetryPolicy, Tolerance,
+    PeriodicPolicy, PolicyField, PolicyParseError, Precision, ProfileId, RadiiSet, SymmetryPolicy,
+    Tolerance, canonical_spelling,
 };
 pub use provenance::{
     AlgorithmId, AnalysisParameters, DictionaryVersion, ParameterValue, Provenance, SourceRef,

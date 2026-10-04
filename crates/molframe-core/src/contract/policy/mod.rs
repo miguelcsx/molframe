@@ -3,6 +3,7 @@
 mod fields;
 mod fingerprint;
 mod profile;
+mod vocabulary;
 
 pub use fields::{
     AlignmentPolicy, AltlocPolicy, AssemblyChoice, ContactDefinition, EquivalencePolicy,
@@ -11,3 +12,4 @@ pub use fields::{
 };
 pub use fingerprint::Fingerprint;
 pub use profile::AnalysisPolicy;
+pub use vocabulary::{PolicyParseError, canonical_spelling};

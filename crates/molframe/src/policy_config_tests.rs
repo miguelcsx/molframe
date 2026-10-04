@@ -1,4 +1,5 @@
 use super::*;
+use molframe_core::contract::{ContactDefinition, ModelChoice, Namespace, RadiiSet};
 
 #[test]
 fn strict_toml_document_applies_named_overrides() {
