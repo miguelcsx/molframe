@@ -121,7 +121,7 @@ impl PyFastaRecord {
 /// Match, mismatch and affine gap scores, validated once.
 #[derive(Clone, Copy, Debug)]
 #[pyclass(name = "Scoring", frozen, from_py_object, module = "molframe.sequence")]
-struct PyScoring(Scoring);
+pub(crate) struct PyScoring(pub(crate) Scoring);
 
 #[pymethods]
 impl PyScoring {

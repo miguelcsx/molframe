@@ -14,7 +14,7 @@ Non-fatal diagnostics are :class:`MolframeWarning` instead.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,6 +30,7 @@ class Diagnostic:
     remedy: str | None = None
     span: tuple[int, int] | None = None
     severity: str | None = None
+    context: dict[str, str] = field(default_factory=dict[str, str])
 
 
 class MolframeError(Exception):
@@ -62,7 +63,10 @@ class MolframeError(Exception):
         """Return the message and its code, without the quoting a bare ``KeyError`` adds."""
         if self.code is None:
             return self.message
-        return f"{self.message} [{self.code}]"
+        detail = ""
+        if self.findings and self.findings[0].context:
+            detail = " (" + ", ".join(f"{k}={v}" for k, v in self.findings[0].context.items()) + ")"
+        return f"{self.message}{detail} [{self.code}]"
 
 
 class MolframeValueError(MolframeError, ValueError):

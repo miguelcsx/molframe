@@ -81,12 +81,17 @@ fn diagnostic_value<'py>(py: Python<'py>, diagnostic: &Diagnostic) -> PyResult<B
     let span = diagnostic
         .span()
         .map(|span| (span.start.byte_offset, span.end));
+    let context = PyDict::new(py);
+    for item in diagnostic.context() {
+        context.set_item(item.label(), item.value())?;
+    }
     class(py, "Diagnostic")?.call1((
         diagnostic.code().to_string(),
         diagnostic.message(),
         diagnostic.remedy(),
         span,
         diagnostic.severity().label(),
+        context,
     ))
 }
 

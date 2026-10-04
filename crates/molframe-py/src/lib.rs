@@ -16,6 +16,8 @@ mod catalog;
 mod chemistry;
 #[cfg(feature = "compare")]
 mod compare;
+#[cfg(feature = "compare")]
+mod compare_structures;
 #[cfg(feature = "crystal")]
 mod crystal;
 #[cfg(feature = "crystal")]
