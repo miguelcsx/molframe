@@ -154,7 +154,22 @@ class AnalysisPolicy:
         symmetry: Literal["none", "crystallographic", "biological_assembly"] | None = None,
         vdw_radii: Literal["bondi", "amber_united", "charmm", "alvarez"] | None = None,
         precision: Literal["f32", "f64"] | None = None,
-    ) -> None: ...
+        assembly: str | None = None,
+        model: str | None = None,
+        atom_equivalence: Literal["none", "ccd", "explicit"] | None = None,
+        alignment: str | None = None,
+        periodic: Literal["none", "pbc", "minimum_image"] | None = None,
+        contact_def: str | None = None,
+        float_tolerance: tuple[float, float] | None = None,
+    ) -> None:
+        """Name the decisions an analysis would otherwise make silently.
+
+        ``assembly`` is ``"asymmetric_unit"``, ``"biological:<id>"`` or
+        ``"crystal:<radius>"``; ``model`` is ``"first"``, ``"all"``, ``"ensemble"`` or
+        ``"index:<n>"``; ``alignment`` is ``"none"``, ``"global"``, ``"local"`` or
+        ``"explicit:<selection>"``; ``contact_def`` is ``"distance:<tolerance>"`` or
+        ``"surface:<probe>"``. Unnamed decisions keep the default profile's choice.
+        """
     @property
     def identifiers(self) -> str: ...
     @property
@@ -169,6 +184,20 @@ class AnalysisPolicy:
     def vdw_radii(self) -> str: ...
     @property
     def precision(self) -> str: ...
+    @property
+    def assembly(self) -> str: ...
+    @property
+    def model(self) -> str: ...
+    @property
+    def atom_equivalence(self) -> str: ...
+    @property
+    def alignment(self) -> str: ...
+    @property
+    def periodic(self) -> str: ...
+    @property
+    def contact_def(self) -> str: ...
+    @property
+    def float_tolerance(self) -> tuple[float, float]: ...
     @property
     def profile(self) -> str | None: ...
     @property

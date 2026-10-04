@@ -40,7 +40,15 @@ impl PyAnalysisPolicy {
         symmetry=None,
         vdw_radii=None,
         precision=None,
+        assembly=None,
+        model=None,
+        atom_equivalence=None,
+        alignment=None,
+        periodic=None,
+        contact_def=None,
+        float_tolerance=None,
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         identifiers: Option<&str>,
         altloc: Option<&str>,
@@ -49,8 +57,42 @@ impl PyAnalysisPolicy {
         symmetry: Option<&str>,
         vdw_radii: Option<&str>,
         precision: Option<&str>,
+        assembly: Option<&str>,
+        model: Option<&str>,
+        atom_equivalence: Option<&str>,
+        alignment: Option<&str>,
+        periodic: Option<&str>,
+        contact_def: Option<&str>,
+        float_tolerance: Option<(f64, f64)>,
     ) -> PyResult<Self> {
         let mut policy = AnalysisPolicy::default();
+        if let Some(value) = assembly {
+            policy.assembly = parse(value)?;
+        }
+        if let Some(value) = model {
+            policy.model = parse(value)?;
+        }
+        if let Some(value) = atom_equivalence {
+            policy.atom_equivalence = parse(value)?;
+        }
+        if let Some(value) = alignment {
+            policy.alignment = parse(value)?;
+        }
+        if let Some(value) = periodic {
+            policy.periodic = parse(value)?;
+        }
+        if let Some(value) = contact_def {
+            policy.contact_def = parse(value)?;
+        }
+        if let Some((relative, absolute)) = float_tolerance {
+            if !(relative.is_finite() && absolute.is_finite() && relative >= 0.0 && absolute >= 0.0)
+            {
+                return Err(crate::error::value(
+                    "float_tolerance must be two finite non-negative numbers (relative, absolute)",
+                ));
+            }
+            policy.float_tolerance = molframe::Tolerance { relative, absolute };
+        }
         if let Some(value) = identifiers {
             policy.identifiers = parse(value)?;
         }
@@ -108,6 +150,45 @@ impl PyAnalysisPolicy {
     #[getter]
     fn precision(&self) -> String {
         snake(self.0.precision.name())
+    }
+
+    #[getter]
+    fn assembly(&self) -> String {
+        snake(&self.0.assembly.to_string())
+    }
+
+    #[getter]
+    fn model(&self) -> String {
+        snake(&self.0.model.to_string())
+    }
+
+    #[getter]
+    fn atom_equivalence(&self) -> String {
+        snake(self.0.atom_equivalence.name())
+    }
+
+    #[getter]
+    fn alignment(&self) -> String {
+        snake(&self.0.alignment.to_string())
+    }
+
+    #[getter]
+    fn periodic(&self) -> String {
+        snake(self.0.periodic.name())
+    }
+
+    #[getter]
+    fn contact_def(&self) -> String {
+        snake(&self.0.contact_def.to_string())
+    }
+
+    /// `(relative, absolute)` tolerance for comparing floating-point values.
+    #[getter]
+    fn float_tolerance(&self) -> (f64, f64) {
+        (
+            self.0.float_tolerance.relative,
+            self.0.float_tolerance.absolute,
+        )
     }
 
     /// The named profile when no decision has been changed, else `None`.
