@@ -129,6 +129,16 @@ class AuditResult:
     @property
     def policies(self) -> list[AnalysisPolicy]: ...
     @property
+    def certificate(self) -> str:
+        """The audit as an RO-Crate 1.1 metadata document (JSON-LD).
+
+        Write it as ``ro-crate-metadata.json``. It holds the inputs and their SHA-256, the
+        algorithm and estimand, each decision with its class, rationale and evidence,
+        every universe's exact policy and provenance, and what was measured. It says how far
+        the answer moved, not which choice is right.
+        """
+
+    @property
     def metric(self) -> str: ...
     @property
     def read(self) -> list[str]:

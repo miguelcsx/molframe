@@ -1,5 +1,6 @@
 """Policy audits: measured against quantities worked out by hand."""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -262,3 +263,68 @@ def test_a_forbidden_pair_is_dropped_from_a_constrained_plan_and_refuses_a_stric
     assert (plan.cost, plan.skipped) == (3, 1)
     with pytest.raises(molframe.MolframeError):
         space.forbid(("hydrogens", "nonsense"), ("assembly", "biological:1"))
+
+
+def references(node: object) -> set[str]:
+    if isinstance(node, dict):
+        found = {node["@id"]} if set(node) == {"@id"} else set()
+        for value in node.values():
+            found |= references(value)
+        return found
+    if isinstance(node, list):
+        return set().union(*(references(item) for item in node)) if node else set()
+    return set()
+
+
+def test_an_audit_writes_a_certificate_that_is_a_closed_ro_crate_graph(dimer):
+    space = (
+        audit.PolicySpace()
+        .vary(
+            "hydrogens",
+            ["explicit_only", "exclude"],
+            rationale="the deposited entry has none, the prepared file has them added",
+            evidence="PDBbind v2020 protein files",
+        )
+        .vary("assembly", ["asymmetric_unit", "biological:1"])
+    )
+    result = audit.run(
+        space.plan(),
+        contact_count(dimer, 2.0),
+        metric="absolute",
+        project=lambda analysis: len(analysis.value),
+    )
+    document = json.loads(result.certificate)
+    assert document["@context"] == "https://w3id.org/ro/crate/1.1/context"
+    graph = {node["@id"]: node for node in document["@graph"]}
+    assert graph["ro-crate-metadata.json"]["about"] == {"@id": "./"}
+    assert len([key for key in graph if key.startswith("#universe-")]) == 4
+    # Every local reference points at an entity the document defines; the specification
+    # the crate conforms to is an external IRI.
+    local = {ref for ref in references(document["@graph"]) if not ref.startswith("https://")}
+    assert local <= set(graph)
+    decision = graph["#decision-hydrogens"]
+    assert (
+        decision["description"] == "the deposited entry has none, the prepared file has them added"
+    )
+    classes = {item["name"]: item["value"] for item in decision["additionalProperty"]}
+    assert classes["uncertainty_class"] == "interpretive"
+    assert classes["evidence"] == "PDBbind v2020 protein files"
+    assert sorted(decision["value"]) == ["Exclude", "ExplicitOnly"]
+    measured = {item["name"]: item["value"] for item in graph["#findings"]["variableMeasured"]}
+    assert measured["metric"] == "absolute-error"
+    assert measured["universes"] == 4
+    assert measured["main_effect.hydrogens.share"] == pytest.approx(4.0 / 6.0)
+    assert measured["interaction.hydrogens.assembly"] == pytest.approx(1.0 / 6.0)
+    assert measured["shapley.hydrogens"] == pytest.approx(0.75)
+    assert graph["#algorithm"]["description"] is not None
+    # A structure read from memory carries no digest, and the certificate says so.
+    assert measured["inputs_without_sha256"] >= 1
+    assert (
+        result.certificate
+        == audit.run(
+            space.plan(),
+            contact_count(dimer, 2.0),
+            metric="absolute",
+            project=lambda analysis: len(analysis.value),
+        ).certificate
+    )

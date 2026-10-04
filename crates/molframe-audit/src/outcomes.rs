@@ -10,7 +10,7 @@ use crate::design::Decomposition;
 use crate::metric::OutcomeMetric;
 use crate::{AuditPlan, AuditRun, PlanError};
 use molframe_core::contract::{
-    Analysis, AnalysisPolicy, Assumption, Impact, MeasuredImpact, PolicyField,
+    Analysis, AnalysisPolicy, Assumption, Impact, MeasuredImpact, PolicyField, Provenance,
 };
 
 /// A completed audit of results compared by one metric.
@@ -132,6 +132,14 @@ pub trait AuditedRun {
 
     /// The policy fields the analysis recorded as applied, when it recorded them.
     fn policy_reads(&self) -> Option<Vec<PolicyField>>;
+
+    /// The record of what produced this run, when it kept one.
+    ///
+    /// A certificate lists the inputs, algorithm and exact policy of every universe
+    /// from these records; a run without one is listed without them.
+    fn provenance(&self) -> Option<&Provenance> {
+        None
+    }
 }
 
 impl<T> AuditedRun for Analysis<T> {
@@ -143,6 +151,10 @@ impl<T> AuditedRun for Analysis<T> {
 
     fn policy_reads(&self) -> Option<Vec<PolicyField>> {
         self.provenance.policy_reads()
+    }
+
+    fn provenance(&self) -> Option<&Provenance> {
+        Some(&self.provenance)
     }
 }
 

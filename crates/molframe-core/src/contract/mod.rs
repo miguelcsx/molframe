@@ -32,3 +32,4 @@ pub use provenance::{
 pub use reexecution::{
     Reexecution, ReexecutionEnvironment, ReexecutionError, reexecute_from_provenance,
 };
+pub use serialise::push_json_string;

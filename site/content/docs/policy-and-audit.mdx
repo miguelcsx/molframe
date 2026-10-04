@@ -203,6 +203,20 @@ an answer in every cell.
 An audit says how much the answer depends on a decision. It does not say which
 choice is right.
 
+## The certificate
+
+`result.certificate` is the audit as an RO-Crate 1.1 metadata document (JSON-LD),
+written as `ro-crate-metadata.json`. It lists the inputs with the SHA-256 of their
+bytes, the algorithm and its estimand, every varied decision with its class, rationale
+and evidence, one action per universe carrying the exact policy and provenance of the
+run that answered it, and what was measured: the metric, effects, interactions, Shapley
+and class shares, the fraction of universes with no answer, and how many inputs have no
+digest and so cannot be claimed byte-identical. The vocabulary is schema.org as a
+process-run crate uses it (`SoftwareApplication`, `CreateAction`, `OrganizeAction`);
+mapped to PROV an action is an activity, a file an entity and the software an agent.
+The document has no clock and no host name, so the same audit of the same bytes writes
+the same text. It has not been checked against an external RO-Crate validator.
+
 ## Content digests
 
 `Fingerprint` is a fast 64-bit hash: it tells one policy or cache entry from another

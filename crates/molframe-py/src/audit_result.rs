@@ -49,6 +49,7 @@ pub(crate) struct PyInteraction {
     module = "molframe.audit"
 )]
 pub(crate) struct PyAuditResult {
+    pub(crate) certificate: String,
     pub(crate) runs: Vec<Py<PyAny>>,
     pub(crate) policies: Vec<AnalysisPolicy>,
     pub(crate) metric: &'static str,
@@ -112,6 +113,18 @@ impl PyAuditResult {
     }
 
     /// The distance the numbers are in.
+    /// The audit as an RO-Crate 1.1 metadata document (JSON-LD): the inputs and their
+    /// SHA-256, the algorithm and what it estimates, every decision with its class,
+    /// rationale and evidence, the exact policy and provenance of every universe, and what
+    /// was measured. Write it as ``ro-crate-metadata.json``.
+    ///
+    /// It says how far the answer moved when the listed decisions changed; it does not say
+    /// which choice is right.
+    #[getter]
+    fn certificate(&self) -> &str {
+        &self.certificate
+    }
+
     #[getter]
     const fn metric(&self) -> &'static str {
         self.metric

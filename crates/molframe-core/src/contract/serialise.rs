@@ -28,6 +28,13 @@ impl Provenance {
         output
     }
 
+    /// The record as ordered key and value pairs: the one list that `to_json` and
+    /// `to_mmcif` both project, for a caller that writes another format.
+    #[must_use]
+    pub fn entries(&self) -> Vec<(String, String)> {
+        fields(self)
+    }
+
     /// Serialises the complete record as a standalone mmCIF data block.
     ///
     /// The two-column category is deliberately lossless and extensible: older
@@ -139,6 +146,11 @@ fn optional_text(value: Option<&str>) -> String {
         Some(value) => value.to_owned(),
         None => ".".to_owned(),
     }
+}
+
+/// Appends `value` to `output` as a JSON string literal.
+pub fn push_json_string(output: &mut String, value: &str) {
+    json_string(output, value);
 }
 
 fn json_string(output: &mut String, value: &str) {

@@ -22,6 +22,7 @@ struct Run {
     original: Py<PyAny>,
     projected: Option<Projected>,
     reads: Option<Vec<PolicyField>>,
+    record: molframe::Provenance,
 }
 
 impl AuditedRun for Run {
@@ -33,6 +34,10 @@ impl AuditedRun for Run {
 
     fn policy_reads(&self) -> Option<Vec<PolicyField>> {
         self.reads.clone()
+    }
+
+    fn provenance(&self) -> Option<&molframe::Provenance> {
+        Some(&self.record)
     }
 }
 
@@ -275,6 +280,7 @@ fn run(
             .extract()
             .map_err(|_| crate::error::type_error("analyse must return an Analysis"))?;
         let reads = analysis.reads();
+        let record = analysis.record();
         let projected = match analysis.answer(py) {
             Some(value) => {
                 let reduced = match project {
@@ -290,6 +296,7 @@ fn run(
             original: original.unbind(),
             projected,
             reads,
+            record,
         })
     };
     let audit = audit_analyses(&plan.0, call, &kind).map_err(|error| match error {
@@ -297,7 +304,9 @@ fn run(
         molframe::audit::AuditError::Analysis(error) => error,
         _ => crate::error::internal("the audit failed in a way this binding does not know"),
     })?;
+    let certificate = molframe::audit::certificate(&plan.0, &audit);
     Ok(PyAuditResult {
+        certificate,
         runs: audit
             .runs
             .iter()

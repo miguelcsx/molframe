@@ -16,10 +16,12 @@
 #![forbid(unsafe_code)]
 
 mod batch;
+mod certificate;
 mod class;
 mod design;
 mod diagnostics;
 mod engine;
+mod json;
 mod metric;
 mod numeric;
 mod outcomes;
@@ -29,6 +31,7 @@ mod report;
 mod value;
 
 pub use batch::{BatchAudit, BatchDimension, audit_batch};
+pub use certificate::certificate;
 pub use class::UncertaintyClass;
 pub use design::{Attribution, Decomposition, Interaction, MainEffect, decompose};
 pub use engine::audit;
