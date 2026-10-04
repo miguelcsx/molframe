@@ -62,6 +62,16 @@ impl StructureEditor {
         self.overlay.delete_atoms(selection.atom_selection())
     }
 
+    /// Drops every domain extension (assemblies, symmetry, non-crystallographic
+    /// symmetry, model-quality metadata) from the structure being published.
+    ///
+    /// A topology edit refuses to run while extensions are attached, because
+    /// they refer to atoms and chains that the edit may remove. Clearing them is
+    /// the explicit, lossy choice that allows the edit.
+    pub fn clear_extensions(&mut self) {
+        self.overlay.clear_extensions();
+    }
+
     /// Stages a rename of one chain in both identifier namespaces.
     ///
     /// # Errors
