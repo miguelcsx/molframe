@@ -10,6 +10,7 @@ const GOLDEN_SOURCES: &[&str] = &[
     include_str!("golden_tests.rs"),
     include_str!("golden_workflows.rs"),
     include_str!("golden/connection_round_trip.rs"),
+    include_str!("golden/evidence.rs"),
     include_str!("golden/named_queries.rs"),
     include_str!("golden/native_pending.rs"),
     include_str!("golden/native_pending/analysis.rs"),
