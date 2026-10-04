@@ -31,6 +31,7 @@ mod formats;
 #[cfg(feature = "analysis")]
 mod governed;
 mod hierarchy;
+mod interop;
 #[cfg(feature = "motif")]
 mod motif;
 mod native_source;

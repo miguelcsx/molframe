@@ -277,9 +277,9 @@ fn the_catalog_and_the_registered_operations_name_each_other() {
 }
 
 /// `#[pyfunction]`s that do not release the GIL, and why that is right: each
-/// is a table lookup, a small expression constructor, or a single linear pass
-/// over arrays already borrowed from `NumPy`, where handing the arrays across
-/// the boundary would cost as much as the pass.
+/// is a table lookup, a handle constructor, a small expression constructor, or a
+/// single linear pass over arrays already borrowed from `NumPy`, where handing
+/// the arrays across the boundary would cost as much as the pass.
 const HOLDS_THE_GIL: &[(&str, &str)] = &[
     ("bindings/geometry.rs", "centroid"),
     ("bindings/geometry.rs", "rmsd"),
@@ -290,6 +290,7 @@ const HOLDS_THE_GIL: &[(&str, &str)] = &[
     ("compare.rs", "gdt_ts"),
     ("compare.rs", "gdt_ha"),
     ("crystal.rs", "assemblies"),
+    ("interop/dlpack.rs", "coordinates"),
     ("crystal_reduction.rs", "reduce_cell"),
     ("query_aliases.rs", "complete"),
     ("selection_expr.rs", "(macro)"),

@@ -2,7 +2,7 @@
 
 use super::{
     analysis_result, bindings, catalog, chemistry, compare, crystal, formats, governed, hierarchy,
-    policy, query_aliases, selection_expr, sequence, spatial, surface, table, trajectory,
+    interop, policy, query_aliases, selection_expr, sequence, spatial, surface, table, trajectory,
     validation, workflow,
 };
 use bindings::{PyContactTable, atom_contacts};
@@ -26,6 +26,7 @@ pub(super) fn native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyStructure>()?;
     module.add_class::<crate::execution::PyExecutionContext>()?;
     module.add_class::<PyStructureEditor>()?;
+    module.add_class::<crate::interop::PyBondTable>()?;
     module.add_class::<crate::secondary::PySecondaryStructure>()?;
     module.add_class::<PyAtom>()?;
     module.add_class::<PyAtoms>()?;
@@ -135,6 +136,9 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     #[cfg(feature = "motif")]
     crate::motif::register(&motif)?;
     module.add_submodule(&motif)?;
+    let interop = PyModule::new(py, "interop")?;
+    interop::register(&interop)?;
+    module.add_submodule(&interop)?;
     let formats = PyModule::new(py, "formats")?;
     formats::register(&formats)?;
     module.add_submodule(&formats)

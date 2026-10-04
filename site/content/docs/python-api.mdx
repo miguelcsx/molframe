@@ -54,11 +54,13 @@ See [Selecting atoms](/docs/selections) and [Reading bytes and editing structure
 | `molframe.crystal` | `UnitCell`, `SpaceGroup`, `structure_factors`, `ResolutionBins`, `normalizers`, `reduce_cell` |
 | `molframe.trajectory` | `read`, `rmsd`, `Trajectory` |
 | `molframe.formats` | `write`, `to_mmcif`, `to_pdb`, `to_bcif` |
+| `molframe.interop` | `graph`, `Graph`, `coordinates`, `CoordinateTensor`, `Dataset`, `DatasetSplit`, `ManifestEntry`, `write_atoms_parquet`, `write_atoms_ipc` |
 | `molframe.sel` | Category, column, and spatial query constructors including `within()` |
 | `AnalysisPolicy` | Named analysis decisions (`identifiers`, `altloc`, `hydrogens`, `symmetry`, …); accepted by `select` and the governed analyses |
 | `Analysis` / `Coverage` | A value with its `status`, `coverage`, `warnings`, `assumptions` and `provenance` |
-| `Table` | Read-only named array columns returned inside an `Analysis` |
+| `Table` | Read-only named array columns returned inside an `Analysis`; Arrow C-stream export |
 | `ContactTable` | `len()` and Arrow C-stream export through `__arrow_c_stream__()` |
+| `BondTable` | `structure.bonds`: `len()` and Arrow C-stream export |
 
 Functions that take coordinates take C-contiguous `float32` arrays of shape `(n, 3)`; ones that take a structure read its own coordinates. The governed analyses (`contacts`, `hydrogen_bonds`, `salt_bridges`, `validation.clashes`, `trajectory.rmsd`) take `policy=` and return an `Analysis`.
 

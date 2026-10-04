@@ -78,7 +78,16 @@ fn member_name(body: &str) -> Option<String> {
 pub(super) fn parse_stub(text: &str) -> Stub {
     let mut stub = Stub::default();
     let mut current: Option<String> = None;
+    let mut in_docstring = false;
     for line in text.lines() {
+        // Prose inside a docstring declares nothing, whatever it looks like.
+        let delimiters = line.matches("\"\"\"").count();
+        if in_docstring || delimiters % 2 == 1 {
+            if delimiters % 2 == 1 {
+                in_docstring = !in_docstring;
+            }
+            continue;
+        }
         if let Some(rest) = line.strip_prefix("class ") {
             let name = identifier(rest);
             if name.starts_with('_') {

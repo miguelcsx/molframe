@@ -92,6 +92,17 @@ pub(crate) struct PyAtoms {
 
 #[pymethods]
 impl PyAtoms {
+    /// The atoms of this view as an Arrow stream, converted a batch at a time.
+    #[pyo3(signature = (_requested_schema=None))]
+    fn __arrow_c_stream__<'py>(
+        &self,
+        py: Python<'py>,
+        _requested_schema: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
+        let rows = self.first as usize..self.first as usize + self.len;
+        let table = molframe::interop::AtomTable::new(self.parent.inner.engine());
+        crate::interop::arrow_capsule(py, table.arrow_stream_rows(rows))
+    }
     const fn __len__(&self) -> usize {
         self.len
     }
@@ -218,6 +229,17 @@ pub(crate) struct PyResidues {
 
 #[pymethods]
 impl PyResidues {
+    /// The residues of this view as an Arrow stream, converted a batch at a time.
+    #[pyo3(signature = (_requested_schema=None))]
+    fn __arrow_c_stream__<'py>(
+        &self,
+        py: Python<'py>,
+        _requested_schema: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
+        let rows = self.first as usize..self.first as usize + self.len;
+        let table = molframe::interop::ResidueTable::new(self.parent.inner.engine());
+        crate::interop::arrow_capsule(py, table.arrow_stream_rows(rows))
+    }
     const fn __len__(&self) -> usize {
         self.len
     }
@@ -299,6 +321,17 @@ pub(crate) struct PyChains {
 
 #[pymethods]
 impl PyChains {
+    /// The chains of this view as an Arrow stream, converted a batch at a time.
+    #[pyo3(signature = (_requested_schema=None))]
+    fn __arrow_c_stream__<'py>(
+        &self,
+        py: Python<'py>,
+        _requested_schema: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
+        let rows = self.first as usize..self.first as usize + self.len;
+        let table = molframe::interop::ChainTable::new(self.parent.inner.engine());
+        crate::interop::arrow_capsule(py, table.arrow_stream_rows(rows))
+    }
     fn __len__(&self) -> usize {
         self.len
     }

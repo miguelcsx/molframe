@@ -24,8 +24,9 @@ workspace = true
 default = ["full"]
 formats = ["molframe/mmcif", "molframe/pdb", "molframe/bcif"]
 query = ["molframe/query"]
+interop = ["molframe/interop"]
 # Reading and selection are the module root every domain builds on.
-base = ["formats", "query"]
+base = ["formats", "query", "interop"]
 geometry = ["base", "molframe/geometry"]
 chemistry = ["base", "molframe/chemistry"]
 validation = ["analysis", "molframe/validation"]

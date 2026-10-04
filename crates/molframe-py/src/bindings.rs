@@ -134,6 +134,12 @@ impl PyStructure {
         }
     }
 
+    /// The covalent bonds the structure carries, as an Arrow-readable table.
+    #[getter]
+    fn bonds(&self) -> crate::interop::PyBondTable {
+        crate::interop::PyBondTable::new(self.clone())
+    }
+
     /// Covalent bonds the structure carries.
     #[getter]
     fn bond_count(&self) -> usize {

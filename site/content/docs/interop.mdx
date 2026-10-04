@@ -1,6 +1,6 @@
 ---
-title: NumPy and Arrow interoperability
-description: Move coordinates and contact results into scientific Python without rebuilding the structure.
+title: NumPy, Arrow and tensor interoperability
+description: Move coordinates, tables, graphs and datasets into scientific Python without rebuilding the structure.
 ---
 
 ## Coordinates in NumPy workflows
@@ -15,18 +15,90 @@ xyz = np.asarray(ca.to_coordinates())
 centre = xyz.mean(axis=0)
 ```
 
-Use `np.asarray()` when a downstream library requires a NumPy ndarray explicitly. The structure-backed coordinate view must not outlive the `Structure` from which it came.
+Use `np.asarray()` when a downstream library requires a NumPy ndarray explicitly. The structure-backed coordinate view is read-only and must not outlive the `Structure` from which it came.
 
-## Contact tables in Arrow
+## Tables in Arrow
 
-A `ContactTable` implements the Arrow C stream protocol through `__arrow_c_stream__`. Arrow-aware Python libraries can import it without a row-by-row Python loop.
+Every tabular object implements the Arrow C stream protocol through `__arrow_c_stream__`, so any Arrow-aware library imports it without a row-by-row Python loop:
+
+| Object | Columns |
+| --- | --- |
+| `structure.atoms` | `atom_index`, `residue_index`, `coordinates` (fixed-size list of three `float32`), `element`, `atom_name`, `altloc`, `occupancy`, `b_factor` and their `*_unknown` companions |
+| `structure.residues` | `residue_index`, `chain_index`, `first_atom`, `atom_count`, `label_comp_id`, `label_seq_id`, `auth_seq_id` |
+| `structure.chains` | `chain_index`, `label_asym_id`, `entity_index`, `first_residue`, `residue_count` |
+| `structure.bonds` | `bond_index`, `atom_a`, `atom_b`, `order`, `provenance` |
+| `ContactTable` | `first`, `second`, `distance` |
+| `Table` (analysis results) | the table's own named columns, with their own types |
 
 ```python
-from molframe import analysis
+import pyarrow as pa
+import polars as pl
 
-contacts = analysis.atom_contacts(structure, cutoff=4.0)
-# Pass `contacts` directly to an Arrow-aware consumer.
-# Columns: first, second, distance
+atoms = pa.table(structure.atoms)
+bonds = pl.DataFrame(pa.table(structure.bonds))
 ```
 
-`first` and `second` identify atoms by index within the supplied structural input; `distance` is in Å. Keep that structural input available whenever indices must be resolved back to atoms.
+A view streams only its own rows: `pa.table(structure.residues[10].atoms)` converts the atoms of that residue and nothing else, and `pa.table(structure.chains[1].residues)` the residues of one chain. The stream converts one batch per pull, so a consumer may keep it, or an array it pulled, after every Python handle is gone.
+
+Each column's schema metadata records its cost: `zero-copy` for columns that alias the structure's own storage (coordinates, occupancy, B-factors), `decode` for columns derived in one pass, and `copy` for result tables, whose values are copied once.
+
+### Parquet and Arrow IPC files
+
+```python
+from molframe import interop
+
+interop.write_atoms_parquet(structure, "atoms.parquet", metadata={"source": "4hhb"})
+interop.write_atoms_ipc(structure, "atoms.arrow")
+```
+
+Files are written one record batch at a time, so peak memory is one batch rather than the whole table. `metadata` is stored in the file's schema. A destination that cannot be written raises `MolframeIOError` with code `MOLFRAME-E7901`.
+
+## Coordinates through DLPack
+
+```python
+import numpy as np
+
+tensor = interop.coordinates(structure)
+host = np.from_dlpack(tensor)   # (atoms, 3) float32
+```
+
+`interop.coordinates` returns an object with `__dlpack__` and `__dlpack_device__`, so any library that implements `from_dlpack` can import it. The test suite checks the NumPy import; other frameworks follow the same protocol but are not exercised here.
+
+`DLPack` has no read-only flag, so a consumer may legally write to a tensor it imports. To keep the structure immutable, every import is an independent copy; writing to it never changes the structure, and importing twice gives two buffers. A capsule that no consumer takes is freed when it is garbage collected.
+
+## Graphs for graph neural networks
+
+`interop.graph` builds the tensors PyG and DGL consume. Every decision is stated:
+
+```python
+graph = interop.graph(
+    structure,
+    nodes="residues",          # "atoms" or "residues"
+    edges="contacts",          # "bonds", "contacts", "radius" or "k_nearest"
+    cutoff=8.0,                # Å; "k_nearest" takes neighbors=... instead
+    direction="symmetric",     # "undirected", "symmetric" or "directed"
+    node_features=["atom_count", "b_factor"],
+    edge_features=["distance"],
+)
+graph.edge_index        # (2, edges) int64: every source, then every target
+graph.node_features     # (nodes, 2) float32, columns named by graph.node_feature_names
+graph.edge_features     # (edges, 1) float32
+```
+
+Node features are `element`, `formal_charge`, `partial_charge`, `b_factor`, `occupancy`, `atom_count` (residue graphs), `position_x`, `position_y` and `position_z`; edge features are `distance` and `bond_order` (bond graphs). A parameter the chosen algorithm does not take is refused, never ignored.
+
+A feature a structure does not carry raises an error rather than becoming a number. Pass `missing=0.0` (or any finite value) to fill absent cells deliberately. `periodic=True` measures through the unit cell and requires one. The arrays are the caller's own copies.
+
+## Datasets
+
+A `Dataset` is an immutable, lazy list of structures described by a JSON manifest. Filtering, splitting and batching read only the manifest; `load(i)` reads one structure.
+
+```python
+dataset = interop.Dataset.from_manifest("manifest.json")
+sharp = dataset.filter(resolution_below=2.0, method="X-RAY")
+split = sharp.split("sequence_identity", ratios=(0.8, 0.1, 0.1), threshold=0.3)
+for batch in split.train.batches(32):
+    structures = [batch.load(i) for i in range(len(batch))]
+```
+
+Splitting strategies are `"sequence_identity"` (single-linkage groups from global alignment identity, with `threshold`), `"structural_cluster"`, `"temporal"` and `"random"` (with an explicit `seed`; a random split has no redundancy guarantee and says so in `split.warnings`). Ratios are always stated and must sum to one.

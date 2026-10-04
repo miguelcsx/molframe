@@ -90,6 +90,16 @@ impl PyTable {
         Ok(dictionary)
     }
 
+    /// The columns as an Arrow stream, copied once.
+    #[pyo3(signature = (_requested_schema=None))]
+    fn __arrow_c_stream__<'py>(
+        &self,
+        py: Python<'py>,
+        _requested_schema: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyCapsule>> {
+        crate::interop::columns_stream(py, &self.columns)
+    }
+
     fn __repr__(&self) -> String {
         let names: Vec<&str> = self.columns.iter().map(|(name, _)| *name).collect();
         format!("Table(rows={}, columns={})", self.length, names.join(", "))
