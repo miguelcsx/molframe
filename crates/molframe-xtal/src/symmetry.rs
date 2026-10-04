@@ -153,6 +153,44 @@ impl SymmetryOperation {
     }
 }
 
+impl std::fmt::Display for SymmetryOperation {
+    /// The operation as a CIF algebraic triplet such as `1/2-x,1/2+y,-z`, which
+    /// [`SymmetryOperation::parse`] reads back to an equal operation.
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use std::fmt::Write as _;
+
+        for row in 0..3 {
+            if row != 0 {
+                formatter.write_str(",")?;
+            }
+            let mut text = String::new();
+            let translation = self.translation[row];
+            if translation != Rational::ZERO {
+                if translation.denominator() == 1 {
+                    write!(text, "{}", translation.numerator())?;
+                } else {
+                    write!(
+                        text,
+                        "{}/{}",
+                        translation.numerator(),
+                        translation.denominator()
+                    )?;
+                }
+            }
+            for (axis, name) in ["x", "y", "z"].into_iter().enumerate() {
+                match self.rotation[row][axis] {
+                    0 => {}
+                    1 => write!(text, "+{name}")?,
+                    -1 => write!(text, "-{name}")?,
+                    other => write!(text, "{other:+}{name}")?,
+                }
+            }
+            formatter.write_str(text.trim_start_matches('+'))?;
+        }
+        Ok(())
+    }
+}
+
 /// Space-group identity and explicit coordinate representatives.
 #[derive(Clone, Debug, Default)]
 pub struct SymmetrySet {

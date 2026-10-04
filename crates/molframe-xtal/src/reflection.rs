@@ -69,6 +69,48 @@ pub enum ReflectionColumnType {
     Text,
 }
 
+impl ReflectionColumnType {
+    /// The word that names this type.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::MillerIndex => "miller_index",
+            Self::Amplitude => "amplitude",
+            Self::Intensity => "intensity",
+            Self::StandardDeviation => "standard_deviation",
+            Self::Phase => "phase",
+            Self::Flag => "flag",
+            Self::Real => "real",
+            Self::Text => "text",
+        }
+    }
+}
+
+/// A word that names no reflection column type.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{0:?} is not a reflection column type")]
+pub struct UnknownColumnType(pub Box<str>);
+
+impl std::str::FromStr for ReflectionColumnType {
+    type Err = UnknownColumnType;
+
+    fn from_str(word: &str) -> Result<Self, Self::Err> {
+        [
+            Self::MillerIndex,
+            Self::Amplitude,
+            Self::Intensity,
+            Self::StandardDeviation,
+            Self::Phase,
+            Self::Flag,
+            Self::Real,
+            Self::Text,
+        ]
+        .into_iter()
+        .find(|candidate| candidate.name() == word)
+        .ok_or_else(|| UnknownColumnType(word.into()))
+    }
+}
+
 /// One named reflection column.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReflectionColumn {
@@ -193,6 +235,42 @@ impl ReflectionTable {
         Ok(())
     }
 
+    /// Fills the symmetry operations from the table's space group when it records none.
+    ///
+    /// The group is found by its Hermann–Mauguin name when the table has one, otherwise by
+    /// its International Tables number (the standard setting). A table that already lists its
+    /// operations, or names no group, is left as it is.
+    ///
+    /// # Errors
+    ///
+    /// Returns `E6018` when the named group is not in the catalogue.
+    pub fn resolve_symmetry_operations(&mut self) -> Result<(), molframe_core::Diagnostic> {
+        if !self.symmetry_operations.is_empty() {
+            return Ok(());
+        }
+        let setting = match (&self.space_group_name, self.space_group_number) {
+            (Some(name), _) => crate::space_group_by_hermann_mauguin(name)?,
+            (None, Some(number)) => {
+                let number = u16::try_from(number)
+                    .map_err(|_| molframe_core::Diagnostic::new(molframe_core::Code::E6018))?;
+                let settings = crate::space_group_settings(number)?;
+                match settings.first() {
+                    Some(setting) => *setting,
+                    None => {
+                        return Err(molframe_core::Diagnostic::new(molframe_core::Code::E6018));
+                    }
+                }
+            }
+            (None, None) => return Ok(()),
+        };
+        self.symmetry_operations = setting
+            .operations
+            .iter()
+            .map(|operation| operation.to_string().into_boxed_str())
+            .collect();
+        Ok(())
+    }
+
     /// Finds a column case-insensitively by any of the supplied labels.
     #[must_use]
     pub fn column_any(&self, labels: &[&str]) -> Option<&ReflectionColumn> {
@@ -248,3 +326,7 @@ impl ReflectionTable {
             }))
     }
 }
+
+#[cfg(test)]
+#[path = "reflection_tests.rs"]
+mod tests;

@@ -106,3 +106,31 @@ fn assert_near(actual: [f64; 3], expected: [f64; 3]) {
             .all(|(actual, expected)| (*actual - expected).abs() < 1e-12)
     );
 }
+
+#[test]
+fn every_operation_of_every_catalogued_setting_prints_as_a_triplet_that_parses_back() {
+    for hall_number in 1..=530_u16 {
+        let setting = match crate::space_group_setting(hall_number) {
+            Ok(setting) => setting,
+            Err(finding) => panic!("setting {hall_number}: {finding}"),
+        };
+        for operation in &setting.operations {
+            let text = operation.to_string();
+            let Ok(parsed) = SymmetryOperation::parse(operation.id.clone(), &text) else {
+                panic!("setting {hall_number}: {text:?} does not parse");
+            };
+            assert_eq!(&parsed, operation, "setting {hall_number}: {text:?}");
+        }
+    }
+}
+
+#[test]
+fn a_triplet_is_written_in_the_form_the_tables_use() {
+    let Ok(operation) = SymmetryOperation::parse("2", "-x+1/2,-y,1/2+z") else {
+        panic!("a valid operation");
+    };
+    assert_eq!(
+        operation.to_string(),
+        "-x+1/2,-y,1/2+z".replace("-x+1/2", "1/2-x")
+    );
+}

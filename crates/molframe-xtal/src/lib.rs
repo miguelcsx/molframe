@@ -14,6 +14,7 @@ mod crystal;
 mod crystal_batch;
 mod crystal_images;
 mod crystal_system;
+mod diagnostics;
 mod expression;
 mod grid;
 mod lower;
@@ -68,7 +69,7 @@ pub use ncs::{
 };
 pub use reflection::{
     ReflectionColumn, ReflectionColumnType, ReflectionDataset, ReflectionError, ReflectionTable,
-    ReflectionValue,
+    ReflectionValue, UnknownColumnType,
 };
 pub use reflection_binning::{
     BinMethod, ReflectionBinningError, ResolutionBinner, amplitude_normalizers,
