@@ -253,10 +253,11 @@ impl PyAuditPlan {
 /// Runs `analyse` under every policy of `plan` and measures how far the answers move.
 ///
 /// `analyse` takes an `AnalysisPolicy` and returns a governed `Analysis`.
-/// `project` reduces its value to what `metric` compares: items for `set` and
+/// `project` reduces the whole `Analysis` (its value, and for instance its `atom_origin`) to
+/// what `metric` compares: items for `set` and
 /// `ranking`, a number for `absolute` and `relative`, numbers for `rms` and
 /// `correlation`, a category for `flip`, `(nodes, edges)` for the graph metrics;
-/// the default is the value itself. A plan that varies a decision the analysis never
+/// the default is its value. A plan that varies a decision the analysis never
 /// applied is refused after the first run.
 #[pyfunction]
 #[pyo3(signature = (plan, analyse, *, metric, project=None))]
@@ -276,10 +277,9 @@ fn run(
         let reads = analysis.reads();
         let projected = match analysis.answer(py) {
             Some(value) => {
-                let value = value.into_bound(py);
                 let reduced = match project {
-                    Some(project) => project.call1((value,))?,
-                    None => value,
+                    Some(project) => project.call1((original.clone(),))?,
+                    None => value.into_bound(py),
                 };
                 Some(kind.project(&reduced)?)
             }

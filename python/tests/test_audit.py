@@ -36,7 +36,7 @@ def test_the_variation_among_runs_splits_into_decisions_and_their_interaction(di
         space.plan(),
         contact_count(dimer, 2.0),
         metric="absolute",
-        project=len,
+        project=lambda analysis: len(analysis.value),
     )
     assert result.metric == "absolute-error"
     assert result.indeterminate == []
@@ -63,7 +63,9 @@ def test_sets_of_contacts_are_compared_by_overlap(dimer):
         space.plan(),
         contact_count(dimer, 2.0),
         metric="set",
-        project=lambda table: list(zip(table.first.tolist(), table.second.tolist(), strict=True)),
+        project=lambda analysis: list(
+            zip(analysis.value.first.tolist(), analysis.value.second.tolist(), strict=True)
+        ),
     )
     # The unit has one contact; the assembly's three include it: Jaccard distance 1 - 1/3.
     (effect,) = result.effects or []
@@ -76,7 +78,7 @@ def test_a_conclusion_that_flips_is_counted_not_averaged(dimer):
         space.plan(),
         contact_count(dimer, 2.0),
         metric="flip",
-        project=lambda table: len(table) > 0,
+        project=lambda analysis: len(analysis.value) > 0,
     )
     assert result.effects is not None
     assert result.effects[0].mean_change == pytest.approx(1.0)
@@ -88,7 +90,12 @@ def test_a_decision_the_analysis_never_applied_is_refused_not_reported_stable(di
     # come back perfectly stable, and that stability would be an artefact.
     space = audit.PolicySpace().vary("vdw_radii", ["bondi", "charmm"])
     with pytest.raises(molframe.PolicyError) as refused:
-        audit.run(space.plan(), contact_count(dimer, 2.0), metric="absolute", project=len)
+        audit.run(
+            space.plan(),
+            contact_count(dimer, 2.0),
+            metric="absolute",
+            project=lambda analysis: len(analysis.value),
+        )
     assert refused.value.code == "MOLFRAME-E6103"
     assert "vdw_radii" in str(refused.value)
 
@@ -126,7 +133,12 @@ def test_the_metric_and_the_analysis_are_checked(dimer):
 def test_crambin_in_its_crystal_is_a_different_system_from_crambin_alone():
     crambin = molframe.read(BENCH / "1crn.cif")
     space = audit.PolicySpace().vary("assembly", ["asymmetric_unit", "crystal:4.0"])
-    result = audit.run(space.plan(), contact_count(crambin, 3.5), metric="absolute", project=len)
+    result = audit.run(
+        space.plan(),
+        contact_count(crambin, 3.5),
+        metric="absolute",
+        project=lambda analysis: len(analysis.value),
+    )
     unit, crystal = (len(run.value) for run in result.runs)
     assert crystal > unit
     assert (result.effects or [])[0].mean_change == pytest.approx(crystal - unit)
@@ -167,7 +179,7 @@ def test_the_contact_definition_and_the_radii_are_decisions_an_audit_can_vary():
         space.plan(),
         analyse,
         metric="set",
-        project=lambda table: sorted(pair_set(table)),
+        project=lambda analysis: sorted(pair_set(analysis.value)),
     )
     assert {"contact_def", "vdw_radii"} <= set(result.read)
     effects = {effect.field: effect for effect in result.effects or []}
@@ -202,7 +214,12 @@ def test_shapley_shares_of_the_dimer_audit_are_the_ones_worked_out_by_hand(dimer
     assert "modelled" in hydrogens.rationale
     assert "PDBbind" in hydrogens.evidence
     assert assembly.rationale == ""
-    result = audit.run(plan, contact_count(dimer, 2.0), metric="absolute", project=len)
+    result = audit.run(
+        plan,
+        contact_count(dimer, 2.0),
+        metric="absolute",
+        project=lambda analysis: len(analysis.value),
+    )
     shares = {share.name: share.share for share in result.shapley or []}
     assert shares["hydrogens"] == pytest.approx(0.75)
     assert shares["assembly"] == pytest.approx(0.25)
@@ -220,7 +237,12 @@ def test_a_constrained_plan_attributes_by_shapley_when_the_product_is_not_whole(
     )
     plan = space.plan(constrained=True)
     assert (plan.cost, plan.skipped, plan.balanced) == (2, 2, False)
-    result = audit.run(plan, contact_count(dimer, 2.0), metric="absolute", project=len)
+    result = audit.run(
+        plan,
+        contact_count(dimer, 2.0),
+        metric="absolute",
+        project=lambda analysis: len(analysis.value),
+    )
     assert result.balanced is False
     assert sum(share.share for share in result.shapley or []) == pytest.approx(1.0)
     assert result.indeterminate == []

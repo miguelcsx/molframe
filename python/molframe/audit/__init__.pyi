@@ -174,11 +174,12 @@ def run(
     analyse: Callable[[AnalysisPolicy], Analysis[object]],
     *,
     metric: Metric,
-    project: Callable[[object], object] | None = None,
+    project: Callable[[Analysis[object]], object] | None = None,
 ) -> AuditResult:
     """Run ``analyse`` under every policy of ``plan`` and measure how far the answers move.
 
-    ``project`` reduces an analysis' value to what ``metric`` compares: items for ``set`` and
+    ``project`` reduces an ``Analysis`` (its value, and for instance its ``atom_origin``) to what
+    ``metric`` compares: items for ``set`` and
     ``ranking``, a number for ``absolute`` and ``relative``, numbers for ``rms`` and
     ``correlation``, a category for ``flip``, ``(nodes, edges)`` for the graph metrics. A plan
     that varies a decision the analysis never applied is refused after the first run.

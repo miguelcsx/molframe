@@ -60,6 +60,7 @@ pub(crate) struct PyAnalysis {
     value: Option<Py<PyAny>>,
     reason: Option<String>,
     reads: Option<Vec<molframe::PolicyField>>,
+    origin: Option<Vec<u32>>,
     status: &'static str,
     coverage: PyCoverage,
     warnings: Vec<String>,
@@ -76,6 +77,7 @@ impl PyAnalysis {
             value,
             reason: analysis.indeterminacy().map(ToString::to_string),
             reads: analysis.provenance.policy_reads(),
+            origin: analysis.atom_origin().map(<[u32]>::to_vec),
             status: match analysis.status() {
                 molframe::Status::Complete => "complete",
                 molframe::Status::Partial => "partial",
@@ -145,6 +147,19 @@ impl PyAnalysis {
     #[getter]
     const fn is_determinate(&self) -> bool {
         self.value.is_some()
+    }
+
+    /// For each atom the analysis ran over, the input atom it is.
+    ///
+    /// The atom indices in a result number the system the policy built: the input with
+    /// some atoms dropped (a conformer not chosen, hydrogens excluded) or copied (an
+    /// assembly). `None` when the result's atoms are the input's own.
+    #[getter]
+    fn atom_origin<'py>(&self, py: Python<'py>) -> Option<Bound<'py, numpy::PyArray1<u32>>> {
+        use numpy::{PyArrayMethods, ToPyArray};
+        let array = self.origin.as_ref()?.to_pyarray(py);
+        array.readwrite().make_nonwriteable();
+        Some(array)
     }
 
     /// The policy decisions the analysis applied, or `None` when it did not record them.

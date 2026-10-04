@@ -90,3 +90,18 @@ def test_crystal_contacts_of_crambin_add_the_neighbours_a_unit_alone_cannot_see(
     inside = int(((first < atoms) & (second < atoms)).sum())
     assert inside == len(unit.value)
     assert any("crystal contacts" in line for line in crystal.assumptions)
+
+
+def test_a_result_says_which_input_atom_each_analysed_atom_is(crambin):
+    atoms = crambin.atom_count
+    unit = analysis.contacts(crambin, 3.5)
+    assert np.array_equal(unit.atom_origin, np.arange(atoms))
+    crystal = analysis.contacts(
+        crambin, 3.5, policy=molframe.AnalysisPolicy(assembly="crystal:4.0")
+    )
+    origin = np.asarray(crystal.atom_origin)
+    assert len(origin) == crystal.coverage.intended > atoms
+    # The deposited unit comes first, unchanged; every copy is a copy of one of its atoms.
+    assert np.array_equal(origin[:atoms], np.arange(atoms))
+    assert origin.max() < atoms
+    assert not crystal.atom_origin.flags.writeable  # type: ignore[union-attr]

@@ -119,7 +119,7 @@ result = audit.run(
     plan,
     lambda policy: analysis.contacts(structure, 4.0, policy=policy),
     metric="set",
-    project=lambda table: list(zip(table.first.tolist(), table.second.tolist())),
+    project=lambda a: list(zip(a.value.first.tolist(), a.value.second.tolist())),
 )
 result.effects          # per decision: mean_change, comparisons, share
 result.interactions     # per pair: the share that depends on the pair jointly

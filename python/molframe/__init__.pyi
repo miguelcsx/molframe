@@ -123,6 +123,14 @@ class Analysis(Generic[_T_co]):
         """Why there is no answer, or ``None`` when there is one."""
 
     @property
+    def atom_origin(self) -> UInt32Array | None:
+        """For each atom analysed, the input atom it is; ``None`` when they are the input's own.
+
+        The atom indices in a result number the system the policy built (some atoms dropped,
+        or copied for an assembly), and copies of an atom share its origin.
+        """
+
+    @property
     def policy_reads(self) -> list[str] | None:
         """The policy decisions the analysis applied, or ``None`` when it did not record them."""
 
