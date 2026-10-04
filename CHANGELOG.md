@@ -38,6 +38,11 @@ change the public API.
   refuses decisions the analysis never read, and reports universes with no answer
   as a fraction. Python: `molframe.audit`. `AnalysisPolicy` names all fourteen
   decisions.
+- A descriptor can forbid a resolution, require information and state its estimand.
+  `hydrogen_bonds`, `water_bridges` and base pairing refuse `hydrogens = exclude`
+  (`E6103`) and are indeterminate, with the reason, on an input that models no
+  hydrogens, where they used to return an empty table. `Analysis.estimand` (Rust
+  `Provenance::estimand`) says what each analysis estimates.
 - Python physical analyses: `leaflets`, `radial_distribution`,
   `coordination_numbers`, `linear_density`, `density_map`, `pore_profile`,
   `surface_contacts`.

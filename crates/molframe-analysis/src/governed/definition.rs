@@ -67,6 +67,9 @@ pub fn definition_contacts_kernel(
 ) -> impl StructureKernel<Output = ContactTable, Error = DefinitionError> {
     structure_kernel(
         descriptor("contacts-by-definition")
+            .estimating(
+                "the atom pairs in contact under the policy's radius set and contact definition",
+            )
             .reading(&[PolicyField::ContactDef, PolicyField::VdwRadii])
             .with_parameter("spatial_backend", backend(spatial))
             .with_parameter("surface_tolerance", float(surface.tolerance))

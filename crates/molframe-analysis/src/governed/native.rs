@@ -109,6 +109,7 @@ pub fn native_contact_fraction_kernel(
 ) -> impl StructureKernel<Output = NativeContacts, Error = GovernedNativeError> + '_ {
     mapped_structure_kernel(
         descriptor("native-contact-fraction")
+            .estimating("the fraction of the reference structure's contacts that the frame keeps")
             .reading(&[PolicyField::Periodic])
             .without_replicated_systems()
             .with_parameter("cutoff", float(cutoff))

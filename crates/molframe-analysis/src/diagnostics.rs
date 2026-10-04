@@ -180,6 +180,7 @@ pub fn governed_diagnostic<E: std::fmt::Display>(
         GovernedAnalysisError::CoverageOverflow => Code::E1903,
         GovernedAnalysisError::MultipleModelsRequested
         | GovernedAnalysisError::ReplicatedSystemUnsupported(_)
+        | GovernedAnalysisError::ForbiddenResolution { .. }
         | GovernedAnalysisError::UnsupportedPolicyValue(_) => Code::E6103,
         GovernedAnalysisError::MissingFrameOutput
         | GovernedAnalysisError::InvalidCoverage { .. } => Code::E9001,

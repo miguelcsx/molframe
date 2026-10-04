@@ -60,6 +60,7 @@ pub(crate) struct PyAnalysis {
     value: Option<Py<PyAny>>,
     reason: Option<String>,
     reads: Option<Vec<molframe::PolicyField>>,
+    estimand: Option<String>,
     origin: Option<Vec<u32>>,
     status: &'static str,
     coverage: PyCoverage,
@@ -77,6 +78,7 @@ impl PyAnalysis {
             value,
             reason: analysis.indeterminacy().map(ToString::to_string),
             reads: analysis.provenance.policy_reads(),
+            estimand: analysis.provenance.estimand().map(str::to_owned),
             origin: analysis.atom_origin().map(<[u32]>::to_vec),
             status: match analysis.status() {
                 molframe::Status::Complete => "complete",
@@ -168,6 +170,12 @@ impl PyAnalysis {
         self.reads
             .as_ref()
             .map(|fields| fields.iter().map(|field| field.name()).collect())
+    }
+
+    /// The quantity the analysis estimates, in words, or `None` when it did not say.
+    #[getter]
+    fn estimand(&self) -> Option<&str> {
+        self.estimand.as_deref()
     }
 
     /// Why there is no answer, or `None` when there is one.

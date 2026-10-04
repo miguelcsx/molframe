@@ -33,6 +33,16 @@ pub enum GovernedAnalysisError<E> {
     System(Vec<Diagnostic>),
     /// The analysis pairs atoms across structures and cannot run over copies.
     ReplicatedSystemUnsupported(Box<str>),
+    /// The analysis cannot be answered under a resolution the policy chose, because
+    /// the resolution removes what the analysis measures.
+    ForbiddenResolution {
+        /// The analysis that refused.
+        analysis: Box<str>,
+        /// The policy decision whose value it refuses.
+        field: &'static str,
+        /// Why that value leaves nothing to measure.
+        reason: &'static str,
+    },
     /// A kernel reported mutually inconsistent coverage counters.
     InvalidCoverage {
         /// Inputs the kernel intended to use.
@@ -81,6 +91,14 @@ impl<E: fmt::Display> fmt::Display for GovernedAnalysisError<E> {
             Self::ReplicatedSystemUnsupported(analysis) => write!(
                 formatter,
                 "{analysis} pairs atoms across structures, which is not defined over copies of atoms"
+            ),
+            Self::ForbiddenResolution {
+                analysis,
+                field,
+                reason,
+            } => write!(
+                formatter,
+                "{analysis} cannot run under this {field}: {reason}"
             ),
             Self::InvalidCoverage {
                 intended,

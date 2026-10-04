@@ -135,6 +135,10 @@ class Analysis(Generic[_T_co]):
         """The policy decisions the analysis applied, or ``None`` when it did not record them."""
 
     @property
+    def estimand(self) -> str | None:
+        """The quantity the analysis estimates, in words, or ``None`` when it did not say."""
+
+    @property
     def status(self) -> Literal["complete", "partial", "ambiguous", "indeterminate"]: ...
     @property
     def coverage(self) -> Coverage: ...

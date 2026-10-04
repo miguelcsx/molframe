@@ -1,8 +1,8 @@
 //! Single-structure and trajectory execution through one frame adapter.
 
+use super::requirements::without_hydrogens;
 use super::system::AnalysisSystem;
 use super::{FrameKernelResult, GovernedAnalysisError, StructureKernel};
-use molframe_core::AtomSelection;
 use molframe_core::contract::{
     Analysis, AnalysisPolicy, Assumption, AssumptionSource, Coverage, HydrogenPolicy, Impact,
     Indeterminacy, MissingPolicy, MissingPolicyError, ModelChoice, Outcome, ParameterValue,
@@ -82,6 +82,18 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
             // and silently using the modelled ones would be a different decision.
             return Err(GovernedAnalysisError::UnsupportedPolicyValue("hydrogens"));
         }
+        if let Some(refused) = kernel
+            .descriptor()
+            .forbidden_resolutions()
+            .iter()
+            .find(|resolution| resolution.forbids(policy))
+        {
+            return Err(GovernedAnalysisError::ForbiddenResolution {
+                analysis: kernel.descriptor().name().into(),
+                field: refused.field().name(),
+                reason: refused.reason(),
+            });
+        }
         let system = AnalysisSystem::build(template, policy, context)
             .map_err(GovernedAnalysisError::System)?;
         if system.is_replicated() && !kernel.descriptor().allows_replicated_systems() {
@@ -143,6 +155,14 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
                 }
             };
         assumptions.extend(resolution.assumptions);
+        let input_indeterminacy = input_indeterminacy.or_else(|| {
+            kernel
+                .descriptor()
+                .required_information()
+                .iter()
+                .find(|requirement| !requirement.satisfied_by(&selected))
+                .map(|requirement| Indeterminacy::Other(requirement.reason().into()))
+        });
         Ok(Self {
             template: selected,
             source_atom_count: template.atom_count() as usize,
@@ -156,25 +176,6 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
             input_assumptions: assumptions,
         })
     }
-}
-
-/// The selection without its hydrogen atoms.
-fn without_hydrogens(structure: &Structure, chosen: &AtomSelection) -> AtomSelection {
-    let mut hydrogen = vec![false; structure.atom_count() as usize];
-    for atom in structure.data().atoms() {
-        let is_hydrogen = atom
-            .element()
-            .is_some_and(|element| element.atomic_number() == 1);
-        if let Some(slot) = hydrogen.get_mut(atom.index().as_usize()) {
-            *slot = is_hydrogen;
-        }
-    }
-    AtomSelection::from_sorted(
-        chosen
-            .iter()
-            .filter(|&atom| !matches!(hydrogen.get(atom as usize), Some(true)))
-            .collect(),
-    )
 }
 
 impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {

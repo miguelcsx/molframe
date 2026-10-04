@@ -137,6 +137,7 @@ impl ParameterValue {
 
 /// The reserved parameter that names the policy fields an analysis applied.
 const POLICY_READS: &str = "policy_reads";
+const ESTIMAND: &str = "estimand";
 
 /// Sorted algorithm parameters that participate in provenance fingerprints.
 pub type AnalysisParameters = BTreeMap<Box<str>, ParameterValue>;
@@ -225,6 +226,24 @@ impl Provenance {
                     .filter_map(PolicyField::from_name)
                     .collect(),
             ),
+            _ => None,
+        }
+    }
+
+    /// Records the quantity the analysis estimates, in words.
+    ///
+    /// Two analyses under the same name can ask different questions of the same
+    /// structure; saying which one was asked is part of what a result means.
+    #[must_use]
+    pub fn with_estimand(self, estimand: &str) -> Self {
+        self.with_parameter(ESTIMAND, ParameterValue::Text(estimand.into()))
+    }
+
+    /// The quantity the analysis estimates, when it said.
+    #[must_use]
+    pub fn estimand(&self) -> Option<&str> {
+        match self.parameters.get(ESTIMAND)? {
+            ParameterValue::Text(text) => Some(text),
             _ => None,
         }
     }

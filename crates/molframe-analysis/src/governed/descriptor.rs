@@ -1,5 +1,6 @@
 //! Stable algorithm identity and sorted result-affecting parameters.
 
+use super::{ForbiddenResolution, Requirement};
 use molframe_core::contract::{
     AlgorithmId, AnalysisParameters, ParameterValue, PolicyField, Provenance,
 };
@@ -12,6 +13,9 @@ pub struct AnalysisDescriptor {
     parameters: AnalysisParameters,
     reads: Vec<PolicyField>,
     replicated_systems: bool,
+    forbidden: Vec<ForbiddenResolution>,
+    required: Vec<Requirement>,
+    estimand: Option<&'static str>,
 }
 
 impl AnalysisDescriptor {
@@ -24,6 +28,9 @@ impl AnalysisDescriptor {
             parameters: AnalysisParameters::new(),
             reads: Vec::new(),
             replicated_systems: true,
+            forbidden: Vec::new(),
+            required: Vec::new(),
+            estimand: None,
         }
     }
 
@@ -53,6 +60,47 @@ impl AnalysisDescriptor {
         self
     }
 
+    /// Declares a resolution of a decision under which this analysis has nothing to
+    /// measure, so the executor refuses it rather than return an empty answer.
+    #[must_use]
+    pub fn forbidding(mut self, resolution: ForbiddenResolution) -> Self {
+        self.forbidden.push(resolution);
+        self
+    }
+
+    /// Declares information the analysed atoms must carry for there to be an answer;
+    /// an input without it is indeterminate, not empty.
+    #[must_use]
+    pub fn requiring(mut self, requirement: Requirement) -> Self {
+        self.required.push(requirement);
+        self
+    }
+
+    /// States, in words, the quantity this analysis estimates.
+    #[must_use]
+    pub const fn estimating(mut self, estimand: &'static str) -> Self {
+        self.estimand = Some(estimand);
+        self
+    }
+
+    /// The resolutions this analysis refuses.
+    #[must_use]
+    pub fn forbidden_resolutions(&self) -> &[ForbiddenResolution] {
+        &self.forbidden
+    }
+
+    /// The information this analysis needs.
+    #[must_use]
+    pub fn required_information(&self) -> &[Requirement] {
+        &self.required
+    }
+
+    /// The quantity this analysis estimates, when it says.
+    #[must_use]
+    pub const fn estimand(&self) -> Option<&'static str> {
+        self.estimand
+    }
+
     /// The policy fields the descriptor declares, beyond the executor's own.
     #[must_use]
     pub fn policy_reads(&self) -> &[PolicyField] {
@@ -78,6 +126,9 @@ impl AnalysisDescriptor {
         ));
         for (name, value) in &self.parameters {
             provenance = provenance.with_parameter(name.clone(), value.clone());
+        }
+        if let Some(estimand) = self.estimand {
+            provenance = provenance.with_estimand(estimand);
         }
         if self.reads.is_empty() {
             provenance

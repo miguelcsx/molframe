@@ -24,6 +24,7 @@ pub fn chain_interface_kernel<'a>(
 ) -> impl StructureKernel<Output = Vec<ResidueIndex>, Error = SpatialError> + 'a {
     structure_kernel(
         descriptor("chain-interface")
+            .estimating("the residues of one chain that touch another chain within the cutoff")
             .with_parameter("first_chain", ParameterValue::Text(first_chain.into()))
             .with_parameter("second_chain", ParameterValue::Text(second_chain.into()))
             .with_parameter("cutoff", float(cutoff))
@@ -49,6 +50,7 @@ pub fn secondary_structure_kernel(
 ) -> impl StructureKernel<Output = SseTable, Error = DsspError> + '_ {
     structure_kernel(
         descriptor("secondary-structure-dssp")
+            .estimating("the DSSP secondary-structure class of each residue from its backbone hydrogen bonds")
             .with_parameter(
                 "electrostatic_prefactor",
                 float(options.electrostatic_prefactor),
@@ -79,6 +81,7 @@ pub fn half_sphere_exposure_kernel(
 ) -> impl StructureKernel<Output = Vec<HalfSphereExposure>, Error = HseError> {
     structure_kernel(
         descriptor("half-sphere-exposure")
+            .estimating("the neighbours of each residue in the half-sphere towards and away from its side chain")
             .with_parameter("radius", float(radius))
             .with_parameter("spatial_backend", backend(spatial)),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {

@@ -176,8 +176,16 @@ def test_cation_pi_and_water_bridges_return_their_documented_columns(crambin):
     table = analysis.cation_pi(annotated, max_distance=6.0, max_face_angle=30.0).value
     assert table.names == ["cation_residue", "ring_residue", "distance"]
     assert np.all(np.asarray(table["distance"]) <= 6.0 + 1e-4)
-    bridges = analysis.water_bridges(annotated, max_distance=3.5, min_angle=120.0).value
-    assert bridges.names == ["water", "first", "second"]
+
+
+def test_water_bridges_need_modelled_hydrogens_and_say_so_when_there_are_none(crambin):
+    annotated = molframe.chemistry.annotate(crambin, CCD, version="wwPDB-2026-10-03")
+    bridges = analysis.water_bridges(annotated, max_distance=3.5, min_angle=120.0)
+    # Crambin is deposited without hydrogens: "no water bridges" would be a claim about
+    # the protein, and the input cannot support it.
+    assert bridges.status == "indeterminate"
+    assert bridges.indeterminacy is not None
+    assert "no hydrogen" in bridges.indeterminacy
 
 
 def test_nucleic_torsions_refuse_a_structure_without_roles(crambin):

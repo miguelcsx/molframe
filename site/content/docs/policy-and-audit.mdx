@@ -67,6 +67,30 @@ in_crystal.coverage.intended      # more atoms than the unit has
 in_crystal.assumptions            # ['Assembly = crystal contacts within 4 A: 3 chain instances ...']
 ```
 
+### What an analysis forbids and requires
+
+There is no one policy that suits every analysis. Resolving a decision first can
+destroy exactly what an analysis measures: a hydrogen-bond geometry is the position of
+a modelled hydrogen, so excluding the hydrogens would return an empty table, which reads
+as "there are no hydrogen bonds". Each analysis therefore declares:
+
+- **forbidden resolutions**: values of a decision under which it has nothing to measure.
+  The executor refuses them (`E6103`, naming the analysis, the decision and why) instead
+  of answering empty. `hydrogen_bonds`, `water_bridges` and base pairing forbid
+  `hydrogens="exclude"`.
+- **required information**: what the analysed atoms must carry. An input without it is
+  *indeterminate*, with the reason, not an empty answer. The same three analyses require
+  at least one modelled hydrogen.
+- **an estimand**: the quantity it estimates, in words (`analysis.estimand`), because two
+  analyses can share a name and ask different questions of the same structure.
+
+```python
+result = analysis.hydrogen_bonds(annotated)       # a structure deposited without hydrogens
+result.status                                     # 'indeterminate'
+result.indeterminacy                              # 'the input models no hydrogen atoms, ...'
+analysis.salt_bridges(annotated).estimand         # 'the oppositely charged groups, by formal charge, ...'
+```
+
 ## What a result holds
 
 An `Analysis` is an outcome and what is needed to judge it. When no defensible

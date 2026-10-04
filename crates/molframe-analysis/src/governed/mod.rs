@@ -11,6 +11,7 @@ mod interactions;
 mod kernel;
 mod native;
 mod physical;
+mod requirements;
 mod standalone;
 mod structure;
 mod system;
@@ -36,6 +37,7 @@ pub use physical::{
     density_map_kernel, leaflets_kernel, linear_density_kernel, pore_profile_kernel,
     radial_distribution_kernel,
 };
+pub use requirements::{ForbiddenResolution, Requirement};
 pub use standalone::{
     StandaloneAnalysisError, governed_fragment_mapping, governed_polymer_statistics,
     governed_sugar_pucker,
@@ -48,3 +50,7 @@ pub use structure::{
 #[cfg(test)]
 #[path = "adapters_tests.rs"]
 mod adapters_tests;
+
+#[cfg(test)]
+#[path = "requirements_tests.rs"]
+mod requirements_tests;

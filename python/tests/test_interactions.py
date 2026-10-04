@@ -90,8 +90,10 @@ def annotated(tmp_path_factory):
     return structure, molframe.chemistry.annotate(structure, path, version="test-1")
 
 
-def test_without_a_dictionary_the_chemistry_analyses_say_what_is_missing(annotated):
-    plain, _ = annotated
+def test_without_a_dictionary_the_chemistry_analyses_say_what_is_missing():
+    # The hydrogen keeps the input from being indeterminate for lack of hydrogens first.
+    with_hydrogen = STRUCTURE + b"ATOM 6 H HZ1 LYS A 1 2 2.9 -1.5 0.5 2 LYS A HZ1\n"
+    plain = molframe.read(with_hydrogen, name="sb-h.cif")
     with pytest.raises(ValueError, match="CCD donor/acceptor annotations"):
         molframe.analysis.hydrogen_bonds(plain)
 
@@ -119,3 +121,31 @@ def test_a_salt_bridge_is_found_between_the_charged_atoms(annotated):
     far = molframe.analysis.salt_bridges(chemical, max_distance=1.0)
     assert len(far.value) == 0
     assert far.status == "complete"
+
+
+def test_a_hydrogen_bond_geometry_without_hydrogens_has_no_answer_not_an_empty_one(annotated):
+    _, chemical = annotated
+    result = molframe.analysis.hydrogen_bonds(chemical)
+    # An empty table would say "there are no hydrogen bonds"; the input cannot say that.
+    assert result.status == "indeterminate"
+    assert result.indeterminacy is not None
+    assert "no hydrogen" in result.indeterminacy
+    with pytest.raises(molframe.IndeterminateError):
+        result.value  # noqa: B018
+
+
+def test_excluding_hydrogens_is_refused_for_an_analysis_that_measures_them(annotated):
+    _, chemical = annotated
+    with pytest.raises(molframe.PolicyError) as refused:
+        molframe.analysis.hydrogen_bonds(
+            chemical, policy=molframe.AnalysisPolicy(hydrogens="exclude")
+        )
+    assert refused.value.code == "MOLFRAME-E6103"
+    assert "hydrogen" in str(refused.value)
+
+
+def test_an_analysis_says_what_it_estimates(annotated):
+    _, chemical = annotated
+    estimand = molframe.analysis.salt_bridges(chemical).estimand
+    assert estimand is not None
+    assert "charge" in estimand

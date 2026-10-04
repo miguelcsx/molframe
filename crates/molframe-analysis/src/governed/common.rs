@@ -1,5 +1,5 @@
-use super::{AnalysisDescriptor, FrameKernelResult};
-use molframe_core::contract::ParameterValue;
+use super::{AnalysisDescriptor, ForbiddenResolution, FrameKernelResult, Requirement};
+use molframe_core::contract::{HydrogenPolicy, ParameterValue, PolicyField};
 use molframe_core::structure::Structure;
 use molframe_spatial::SpatialBackend;
 
@@ -26,4 +26,17 @@ pub(super) fn backend(value: SpatialBackend) -> ParameterValue {
 
 pub(super) fn complete<T>(structure: &Structure, value: T) -> FrameKernelResult<T> {
     FrameKernelResult::complete(value, structure.atom_count())
+}
+
+/// An analysis whose geometry is the position of a modelled hydrogen: excluding the
+/// hydrogens leaves it nothing to measure, and an input without them has no answer.
+pub(super) fn needing_hydrogens(descriptor: AnalysisDescriptor) -> AnalysisDescriptor {
+    descriptor
+        .forbidding(ForbiddenResolution::new(
+            PolicyField::Hydrogens,
+            "the donor-hydrogen-acceptor geometry is the modelled hydrogen, and excluding \
+             the hydrogens would return no bonds rather than an answer",
+            |policy| matches!(policy.hydrogens, HydrogenPolicy::Exclude),
+        ))
+        .requiring(Requirement::ExplicitHydrogens)
 }

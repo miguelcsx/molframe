@@ -1,6 +1,6 @@
 //! Ready-to-run governed kernels for intermolecular interactions.
 
-use super::common::{backend, complete, descriptor, float, integer};
+use super::common::{backend, complete, descriptor, float, integer, needing_hydrogens};
 use super::{StructureKernel, structure_kernel};
 use crate::{
     BasePair, BasePairError, BasePairOptions, CationPiError, CationPiOptions, CationPiTable,
@@ -53,6 +53,7 @@ pub fn contacts_kernel(
 ) -> impl StructureKernel<Output = ContactTable, Error = SpatialError> {
     structure_kernel(
         descriptor("atom-contacts")
+            .estimating("the atom pairs within the cutoff, whatever their chemistry")
             .with_parameter("cutoff", float(cutoff))
             .with_parameter("spatial_backend", backend(spatial)),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
@@ -71,6 +72,7 @@ pub fn contact_map_kernel(
 ) -> impl StructureKernel<Output = ContactMap, Error = SpatialError> {
     structure_kernel(
         descriptor("residue-contact-map")
+            .estimating("which residue pairs, at least the minimum apart in sequence, have an atom pair within the cutoff")
             .with_parameter("cutoff", float(cutoff))
             .with_parameter(
                 "minimum_separation",
@@ -90,7 +92,12 @@ pub fn hydrogen_bonds_kernel(
     options: HydrogenBondOptions,
 ) -> impl StructureKernel<Output = HydrogenBondTable, Error = HydrogenBondError> {
     structure_kernel(
-        with_hydrogen_bond_parameters(descriptor("hydrogen-bonds"), options),
+        with_hydrogen_bond_parameters(
+            needing_hydrogens(descriptor("hydrogen-bonds").estimating(
+                "the donor-acceptor pairs that meet the distance and angle of a modelled hydrogen",
+            )),
+            options,
+        ),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
             hydrogen_bonds(structure, options, context).map(|value| complete(structure, value))
         },
@@ -105,6 +112,7 @@ pub fn salt_bridges_kernel(
 ) -> impl StructureKernel<Output = SaltBridgeTable, Error = SpatialError> {
     structure_kernel(
         descriptor("salt-bridges")
+            .estimating("the oppositely charged groups, by formal charge, within the distance")
             .with_parameter("maximum_distance", float(maximum_distance))
             .with_parameter("spatial_backend", backend(spatial)),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
@@ -122,6 +130,7 @@ pub fn pi_stacking_kernel(
     structure_kernel(
         with_plane_fit(
             descriptor("pi-stacking")
+                .estimating("the aromatic ring pairs that meet the stacking distance and angles")
                 .with_parameter(
                     "maximum_centre_distance",
                     float(options.maximum_centre_distance),
@@ -150,6 +159,7 @@ pub fn cation_pi_kernel(
     structure_kernel(
         with_plane_fit(
             descriptor("cation-pi")
+                .estimating("the cationic groups that sit over an aromatic ring within the distance and face angle")
                 .with_parameter("maximum_distance", float(options.maximum_distance))
                 .with_parameter("maximum_face_angle", float(options.maximum_face_angle)),
             options.plane_fit,
@@ -166,7 +176,12 @@ pub fn water_bridges_kernel(
     options: WaterBridgeOptions,
 ) -> impl StructureKernel<Output = WaterBridgeTable, Error = HydrogenBondError> {
     structure_kernel(
-        with_hydrogen_bond_parameters(descriptor("water-bridges"), options.hydrogen_bonds),
+        with_hydrogen_bond_parameters(
+            needing_hydrogens(descriptor("water-bridges").estimating(
+                "the waters that hydrogen-bond two polar atoms, by modelled hydrogen geometry",
+            )),
+            options.hydrogen_bonds,
+        ),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
             water_bridges(structure, options, context).map(|value| complete(structure, value))
         },
@@ -181,7 +196,10 @@ pub fn base_pairs_kernel(
 ) -> impl StructureKernel<Output = Vec<BasePair>, Error = BasePairError> + '_ {
     structure_kernel(
         with_hydrogen_bond_parameters(
-            descriptor("canonical-base-pairs").with_parameter(
+            needing_hydrogens(descriptor("canonical-base-pairs").estimating(
+                "the nucleotide pairs with enough modelled hydrogen bonds between their bases",
+            ))
+            .with_parameter(
                 "minimum_hydrogen_bonds",
                 integer(options.minimum_hydrogen_bonds),
             ),
@@ -202,6 +220,7 @@ pub fn surface_contacts_kernel(
 ) -> impl StructureKernel<Output = Vec<Contact>, Error = SasaError> + '_ {
     structure_kernel(
         descriptor("surface-contacts")
+            .estimating("the atom pairs whose exposed surfaces touch within the tolerance")
             .with_parameter("tolerance", float(options.tolerance))
             .with_parameter("probe", float(options.probe))
             .with_parameter("surface_density", float(options.surface_density))
