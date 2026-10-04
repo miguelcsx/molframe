@@ -2,4 +2,6 @@
 
 mod dlpack;
 
-pub use dlpack::{DLDataType, DLDevice, DLManagedTensor, DLTensor, DlpackError, DlpackTensor};
+pub use dlpack::{
+    DLDataType, DLDevice, DLManagedTensor, DLTensor, DlpackError, DlpackTensor, release,
+};

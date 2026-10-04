@@ -177,6 +177,30 @@ impl Drop for DlpackTensor {
     }
 }
 
+/// Releases a managed tensor whose ownership was transferred with
+/// [`DlpackTensor::into_raw`] but which no consumer took.
+///
+/// A consumer that takes a tensor owns the deleter call; this is for the
+/// producer-side capsule that is destroyed unconsumed. It calls the tensor's own
+/// deleter exactly once.
+///
+/// # Safety
+///
+/// `managed` must be null or a pointer returned by [`DlpackTensor::into_raw`]
+/// that no consumer has taken and that has not been released.
+pub unsafe fn release(managed: *mut DLManagedTensor) {
+    let Some(pointer) = NonNull::new(managed) else {
+        return;
+    };
+    // SAFETY: the caller guarantees `managed` is a live, unconsumed tensor.
+    let deleter = unsafe { pointer.as_ref() }.deleter;
+    if let Some(deleter) = deleter {
+        // SAFETY: the deleter is the one published with this tensor and the
+        // caller guarantees it has not run.
+        unsafe { deleter(managed) };
+    }
+}
+
 /// Releases one producer allocation after `DLPack` ownership transfer.
 ///
 /// # Safety

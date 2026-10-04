@@ -50,6 +50,40 @@ fn topology_exports_are_split_into_bounded_batches() {
     assert_eq!(batches[1].num_rows(), 1);
 }
 
+#[test]
+fn a_row_window_over_derived_batches_slices_only_the_overlapping_ones() {
+    let mut data = molframe_core::StructureData::empty();
+    let mut bonds = molframe_core::BondTableBuilder::new();
+    let batch_rows = u32::try_from(TABLE_BATCH_ROWS).expect("batch rows fit u32");
+    for atom in 0..=batch_rows {
+        bonds.push(molframe_core::BondRecord {
+            atom_a: molframe_core::AtomIndex::new(atom),
+            atom_b: molframe_core::AtomIndex::new(atom + 1),
+            order: molframe_core::BondOrder::Single,
+            provenance: molframe_core::BondProvenance::User,
+        });
+    }
+    data.bonds = bonds.finish();
+    let table = BondTable::new(&Structure::new(data));
+    let stream = table
+        .arrow_stream_rows(TABLE_BATCH_ROWS - 3..TABLE_BATCH_ROWS + 1)
+        .expect("a window inside the table");
+    let reader = arrow::ffi_stream::ArrowArrayStreamReader::try_new(stream.into_ffi())
+        .expect("the stream imports");
+    let mut firsts = Vec::new();
+    for batch in reader {
+        let batch = batch.expect("the window batch converts");
+        let column = batch
+            .column_by_name("bond_index")
+            .and_then(|array| array.as_any().downcast_ref::<arrow::array::UInt32Array>())
+            .expect("index column");
+        firsts.extend(column.values().iter().copied());
+    }
+    let expected: Vec<u32> = (batch_rows - 3..=batch_rows).collect();
+    assert_eq!(firsts, expected);
+    assert!(table.arrow_stream_rows(0..TABLE_BATCH_ROWS + 2).is_err());
+}
+
 fn rows(result: Result<Vec<RecordBatch>>) -> usize {
     match result {
         Ok(batches) => batches.iter().map(RecordBatch::num_rows).sum(),

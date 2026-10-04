@@ -69,6 +69,17 @@ impl AtomTable {
         <Self as ArrowTableExport>::arrow_stream(self)
     }
 
+    /// As [`Self::arrow_stream`], restricted to the atoms in `rows`.
+    ///
+    /// Chunks wholly outside the window are never converted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an Arrow error when the window lies outside the table.
+    pub fn arrow_stream_rows(&self, rows: std::ops::Range<usize>) -> Result<ArrowStream> {
+        <Self as ArrowTableExport>::arrow_stream_rows(self, rows)
+    }
+
     fn chunk_batch(&self, chunk: &AtomChunk) -> Result<RecordBatch> {
         let range = chunk.atoms();
         let positions = self
@@ -179,6 +190,17 @@ impl ArrowTableExport for AtomTable {
 
     fn batch_count(&self) -> usize {
         self.structure.data().chunks.len()
+    }
+
+    fn row_count(&self) -> usize {
+        self.structure.atom_count() as usize
+    }
+
+    fn batch_rows(&self, index: usize) -> std::ops::Range<usize> {
+        match self.structure.data().chunks.get(index) {
+            Some(chunk) => chunk.atoms().start as usize..chunk.atoms().end as usize,
+            None => 0..0,
+        }
     }
 
     fn batch(&self, index: usize) -> Result<RecordBatch> {

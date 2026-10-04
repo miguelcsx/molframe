@@ -58,6 +58,18 @@ macro_rules! table_type {
             ) -> ::arrow::error::Result<crate::columnar::stream::ArrowStream> {
                 <$name as crate::columnar::stream::ArrowTableExport>::arrow_stream(self)
             }
+
+            /// As [`Self::arrow_stream`], restricted to the rows in `rows`.
+            ///
+            /// # Errors
+            ///
+            /// Returns an Arrow error when the window lies outside the table.
+            pub fn arrow_stream_rows(
+                &self,
+                rows: ::std::ops::Range<usize>,
+            ) -> ::arrow::error::Result<crate::columnar::stream::ArrowStream> {
+                <$name as crate::columnar::stream::ArrowTableExport>::arrow_stream_rows(self, rows)
+            }
         }
 
         impl crate::columnar::stream::ArrowTableExport for $name {
@@ -67,6 +79,21 @@ macro_rules! table_type {
 
             fn batch_count(&self) -> usize {
                 $count(&self.structure).div_ceil(crate::columnar::table::TABLE_BATCH_ROWS)
+            }
+
+            fn row_count(&self) -> usize {
+                $count(&self.structure)
+            }
+
+            fn batch_rows(&self, index: usize) -> ::std::ops::Range<usize> {
+                let count = $count(&self.structure);
+                let start = index
+                    .saturating_mul(crate::columnar::table::TABLE_BATCH_ROWS)
+                    .min(count);
+                start
+                    ..start
+                        .saturating_add(crate::columnar::table::TABLE_BATCH_ROWS)
+                        .min(count)
             }
 
             fn batch(

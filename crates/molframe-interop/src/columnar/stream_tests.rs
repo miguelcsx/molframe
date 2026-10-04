@@ -33,6 +33,14 @@ impl ArrowTableExport for ProbeSource {
         self.batches
     }
 
+    fn row_count(&self) -> usize {
+        0
+    }
+
+    fn batch_rows(&self, _index: usize) -> std::ops::Range<usize> {
+        0..0
+    }
+
     fn batch(&self, index: usize) -> Result<RecordBatch> {
         self.produced.fetch_add(1, Ordering::SeqCst);
         if self.fail_at == Some(index) {

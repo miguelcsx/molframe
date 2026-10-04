@@ -1,9 +1,10 @@
 //! Owned Arrow C Stream values.
 
 use arrow::datatypes::SchemaRef;
-use arrow::error::Result;
+use arrow::error::{ArrowError, Result};
 use arrow::ffi_stream::FFI_ArrowArrayStream;
 use arrow::record_batch::{RecordBatch, RecordBatchReader};
+use std::ops::Range;
 
 /// One consumable Arrow C Stream Interface value.
 ///
@@ -34,6 +35,10 @@ pub(crate) trait ArrowTableExport: Clone + Send + 'static {
     fn schema(&self) -> SchemaRef;
     fn batch_count(&self) -> usize;
     fn batch(&self, index: usize) -> Result<RecordBatch>;
+    /// Rows in the whole table.
+    fn row_count(&self) -> usize;
+    /// The rows batch `index` holds, known without materialising it.
+    fn batch_rows(&self, index: usize) -> Range<usize>;
 
     fn record_batches(&self) -> Result<Vec<RecordBatch>> {
         (0..self.batch_count())
@@ -43,6 +48,81 @@ pub(crate) trait ArrowTableExport: Clone + Send + 'static {
 
     fn arrow_stream(&self) -> Result<ArrowStream> {
         Ok(ArrowStream::from_reader(LazyBatchReader::new(self.clone())))
+    }
+
+    /// A lazy stream over only the rows in `rows`.
+    ///
+    /// Batches wholly outside the window are never materialised; the first and
+    /// last overlapping batches are sliced, which shares their buffers.
+    fn arrow_stream_rows(&self, rows: Range<usize>) -> Result<ArrowStream> {
+        if rows.start > rows.end || rows.end > self.row_count() {
+            return Err(ArrowError::InvalidArgumentError(
+                "row window lies outside the table".to_owned(),
+            ));
+        }
+        Ok(ArrowStream::from_reader(LazyBatchReader::new(
+            RowWindow::new(self.clone(), rows),
+        )))
+    }
+}
+
+/// A table restricted to a contiguous window of rows.
+#[derive(Clone)]
+struct RowWindow<S> {
+    source: S,
+    rows: Range<usize>,
+    first_batch: usize,
+    batches: usize,
+}
+
+impl<S: ArrowTableExport> RowWindow<S> {
+    fn new(source: S, rows: Range<usize>) -> Self {
+        let total = source.batch_count();
+        let mut overlapping = (0..total).filter(|index| {
+            let held = source.batch_rows(*index);
+            held.start < rows.end && held.end > rows.start
+        });
+        let first_batch = match overlapping.next() {
+            Some(index) => index,
+            None => 0,
+        };
+        let batches = usize::from(rows.start < rows.end) * (1 + overlapping.count());
+        Self {
+            source,
+            rows,
+            first_batch,
+            batches,
+        }
+    }
+}
+
+impl<S: ArrowTableExport> ArrowTableExport for RowWindow<S> {
+    fn schema(&self) -> SchemaRef {
+        self.source.schema()
+    }
+
+    fn batch_count(&self) -> usize {
+        self.batches
+    }
+
+    fn batch(&self, index: usize) -> Result<RecordBatch> {
+        let absolute = self.first_batch + index;
+        let held = self.source.batch_rows(absolute);
+        let start = held.start.max(self.rows.start);
+        let end = held.end.min(self.rows.end);
+        let batch = self.source.batch(absolute)?;
+        Ok(batch.slice(start - held.start, end - start))
+    }
+
+    fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+
+    fn batch_rows(&self, index: usize) -> Range<usize> {
+        let held = self.source.batch_rows(self.first_batch + index);
+        let start = held.start.max(self.rows.start) - self.rows.start;
+        let end = held.end.min(self.rows.end) - self.rows.start;
+        start..end
     }
 }
 

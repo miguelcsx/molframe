@@ -86,6 +86,42 @@ fn atom_c_stream_yields_one_internal_chunk_at_a_time() {
     assert_eq!(rows, [2, 2, 2]);
 }
 
+fn window_indices(table: &AtomTable, rows: std::ops::Range<usize>) -> Vec<u32> {
+    let stream = match table.arrow_stream_rows(rows) {
+        Ok(stream) => stream,
+        Err(error) => panic!("window creation failed: {error}"),
+    };
+    let reader = match ArrowArrayStreamReader::try_new(stream.into_ffi()) {
+        Ok(reader) => reader,
+        Err(error) => panic!("stream import failed: {error}"),
+    };
+    let mut indices = Vec::new();
+    for batch in reader {
+        let batch = match batch {
+            Ok(batch) => batch,
+            Err(error) => panic!("stream pull failed: {error}"),
+        };
+        let Some(column) = batch
+            .column_by_name("atom_index")
+            .and_then(|array| array.as_any().downcast_ref::<UInt32Array>())
+        else {
+            panic!("index column absent")
+        };
+        indices.extend(column.values().iter().copied());
+    }
+    indices
+}
+
+#[test]
+fn an_atom_window_streams_only_its_rows_across_chunk_boundaries() {
+    let table = AtomTable::new(&chunked_structure());
+    assert_eq!(window_indices(&table, 1..5), [1, 2, 3, 4]);
+    assert_eq!(window_indices(&table, 2..4), [2, 3]);
+    assert_eq!(window_indices(&table, 0..6), [0, 1, 2, 3, 4, 5]);
+    assert!(window_indices(&table, 3..3).is_empty());
+    assert!(table.arrow_stream_rows(4..7).is_err(), "past the last atom");
+}
+
 #[test]
 fn pulled_batch_outlives_stream_table_and_structure_handles() {
     let structure = structure();

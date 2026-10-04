@@ -9,6 +9,7 @@
 mod atoms;
 mod bond;
 mod chain;
+mod columns;
 mod contact;
 mod extension;
 mod ipc;
@@ -22,6 +23,7 @@ mod table_file;
 pub use atoms::AtomTable;
 pub use bond::BondTable;
 pub use chain::ChainTable;
+pub use columns::{Column, ColumnTable, ColumnTableError};
 pub use contact::ContactArrowTable;
 pub use extension::{ExportCost, MolframeExtension, extension_name};
 pub use ipc::{write_atom_ipc, write_atom_ipc_with_metadata};

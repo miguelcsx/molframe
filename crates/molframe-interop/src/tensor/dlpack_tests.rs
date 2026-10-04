@@ -96,3 +96,14 @@ fn managed_deleter_accepts_the_protocol_null_sentinel() {
     // SAFETY: the deleter explicitly accepts null as a no-op sentinel.
     unsafe { delete_managed(std::ptr::null_mut()) };
 }
+
+#[test]
+fn releasing_an_unconsumed_tensor_runs_its_deleter_once_and_null_is_a_no_op() {
+    let raw = DlpackTensor::coordinates(&structure())
+        .expect("dense tensor")
+        .into_raw();
+    // SAFETY: nothing consumed the tensor and this is the only release.
+    unsafe { release(raw) };
+    // SAFETY: null is the documented no-op.
+    unsafe { release(std::ptr::null_mut()) };
+}

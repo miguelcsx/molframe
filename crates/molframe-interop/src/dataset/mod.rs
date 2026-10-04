@@ -2,6 +2,7 @@
 
 mod filtering;
 mod manifest;
+mod names;
 mod splitting;
 
 pub use filtering::DatasetFilter;

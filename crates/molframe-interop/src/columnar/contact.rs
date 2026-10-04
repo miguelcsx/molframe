@@ -65,6 +65,14 @@ impl ArrowTableExport for ContactArrowTable {
         usize::from(!self.contacts.is_empty())
     }
 
+    fn row_count(&self) -> usize {
+        self.contacts.len()
+    }
+
+    fn batch_rows(&self, _index: usize) -> std::ops::Range<usize> {
+        0..self.contacts.len()
+    }
+
     fn batch(&self, index: usize) -> Result<RecordBatch> {
         if index != 0 || self.contacts.is_empty() {
             return Err(ArrowError::InvalidArgumentError(

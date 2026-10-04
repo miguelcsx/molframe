@@ -4,6 +4,7 @@ mod build;
 mod edges;
 mod features;
 mod model;
+mod names;
 mod nodes;
 
 pub use build::graph;
