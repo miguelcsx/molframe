@@ -14,15 +14,14 @@ Non-fatal diagnostics are :class:`MolframeWarning` instead.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from types import MappingProxyType
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 
-@dataclass(frozen=True, slots=True)
-class Diagnostic:
+class Diagnostic(NamedTuple):
     """One finding about data: a registered code, what happened and what to do."""
 
     code: str
@@ -30,7 +29,23 @@ class Diagnostic:
     remedy: str | None = None
     span: tuple[int, int] | None = None
     severity: str | None = None
-    context: dict[str, str] = field(default_factory=dict[str, str])
+    context: Mapping[str, str] = MappingProxyType({})
+
+    def __reduce__(
+        self,
+    ) -> tuple[
+        type[Diagnostic],
+        tuple[str, str, str | None, tuple[int, int] | None, str | None, dict[str, str]],
+    ]:
+        """Preserve diagnostic fields and portable context through pickling."""
+        return Diagnostic, (
+            self.code,
+            self.message,
+            self.remedy,
+            self.span,
+            self.severity,
+            dict(self.context),
+        )
 
 
 class MolframeError(Exception):
