@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from .. import Structure, Table
+from .. import Float64Array, Structure, Table
 
 class Coordinates(Protocol):
     @property
@@ -29,15 +29,15 @@ class Superposition:
 def centroid(coordinates: Coordinates) -> list[float] | None: ...
 def distance_matrix(coordinates: Coordinates) -> DistanceMatrix: ...
 def rmsd(mobile: Coordinates, reference: Coordinates) -> float: ...
-def distances(left: Coordinates, right: Coordinates) -> Vector:
+def distances(left: Coordinates, right: Coordinates) -> Float64Array:
     """Distances between corresponding rows, in Å."""
 
-def angles(first: Coordinates, vertex: Coordinates, third: Coordinates) -> Vector:
+def angles(first: Coordinates, vertex: Coordinates, third: Coordinates) -> Float64Array:
     """Angles at ``vertex`` in degrees; ``NaN`` where undefined."""
 
 def dihedrals(
     first: Coordinates, second: Coordinates, third: Coordinates, fourth: Coordinates
-) -> Vector:
+) -> Float64Array:
     """Signed torsions in degrees in ``(-180, 180]``; ``NaN`` where undefined."""
 
 def centre_of_mass(positions: Coordinates, masses: Vector | None = None) -> list[float] | None: ...

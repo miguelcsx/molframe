@@ -1,6 +1,9 @@
 from collections.abc import Mapping, Sequence
 from os import PathLike
-from typing import ClassVar, Generic, Literal, Protocol, TypeVar
+from typing import ClassVar, Generic, Literal, TypeVar
+
+import numpy as np
+from numpy.typing import NDArray
 
 from . import (
     analysis as analysis,
@@ -69,33 +72,13 @@ from .errors import (
 
 _T_co = TypeVar("_T_co", covariant=True)
 
-class Float32Array(Protocol):
-    @property
-    def shape(self) -> tuple[int, ...]: ...
-
-class Float64Array(Protocol):
-    @property
-    def shape(self) -> tuple[int, ...]: ...
-
-class UInt32Array(Protocol):
-    @property
-    def shape(self) -> tuple[int, ...]: ...
-
-class UInt64Array(Protocol):
-    @property
-    def shape(self) -> tuple[int, ...]: ...
-
-class BoolArray(Protocol):
-    @property
-    def shape(self) -> tuple[int, ...]: ...
-
-class Int32Array(Protocol):
-    @property
-    def shape(self) -> tuple[int, ...]: ...
-
-class UInt8Array(Protocol):
-    @property
-    def shape(self) -> tuple[int, ...]: ...
+type Float32Array = NDArray[np.float32]
+type Float64Array = NDArray[np.float64]
+type UInt32Array = NDArray[np.uint32]
+type UInt64Array = NDArray[np.uint64]
+type BoolArray = NDArray[np.bool_]
+type Int32Array = NDArray[np.int32]
+type UInt8Array = NDArray[np.uint8]
 
 class Coverage:
     @property
