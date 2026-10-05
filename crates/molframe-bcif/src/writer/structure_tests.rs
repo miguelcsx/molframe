@@ -214,3 +214,23 @@ fn direct_structure_bytes_match_the_projection_with_declared_polymers() {
     assert!(findings.is_empty(), "findings: {findings:?}");
     assert_eq!(actual, write_document(&document).expect("document writes"));
 }
+
+#[test]
+fn binary_coordinates_preserve_precision_beyond_three_decimal_places() {
+    let source = SIMPLE.replace("1.125 2.25 3.5", "1.125718 2.250394 3.500271");
+    let structure = read_structure(&source);
+    let bytes = write_structure(&structure).expect("binary write succeeds");
+    let input = InputBuffer::from_bytes(bytes);
+    let (decoded, findings) =
+        crate::read(&input, &ReadOptions::new()).expect("binary read succeeds");
+    assert!(findings.is_empty(), "findings: {findings:?}");
+    let difference = structure_difference(
+        &structure,
+        &decoded,
+        StructureDifferenceOptions {
+            coordinate_tolerance: 0.0,
+        },
+    )
+    .expect("tolerance is valid");
+    assert!(difference.is_empty(), "difference: {difference:?}");
+}

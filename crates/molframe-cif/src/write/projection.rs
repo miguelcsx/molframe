@@ -316,11 +316,11 @@ impl<'a> CanonicalAtomRow<'a> {
         unknown_text(self.residue.ins_code())
     }
 
-    /// Cartesian coordinate rounded to canonical text precision.
+    /// Cartesian coordinate at stored precision; text writers choose their own precision.
     #[must_use]
     pub fn coordinate(self, axis: usize) -> CanonicalValue<f64> {
         match self.position.and_then(|point| point.get(axis).copied()) {
-            Some(value) => CanonicalValue::Present(round_decimal(f64::from(value), 1_000.0)),
+            Some(value) => CanonicalValue::Present(f64::from(value)),
             None => CanonicalValue::Unknown,
         }
     }
