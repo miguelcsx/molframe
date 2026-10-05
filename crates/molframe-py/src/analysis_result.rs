@@ -67,6 +67,7 @@ pub(crate) struct PyAnalysis {
     warnings: Vec<String>,
     assumptions: Vec<String>,
     provenance: String,
+    #[cfg(feature = "audit")]
     record: molframe::Provenance,
     profile: Option<&'static str>,
 }
@@ -106,6 +107,7 @@ impl PyAnalysis {
                 })
                 .collect(),
             provenance: analysis.provenance.to_json(),
+            #[cfg(feature = "audit")]
             record: analysis.provenance.clone(),
             profile: analysis.provenance.profile.map(molframe::ProfileId::as_str),
         }
@@ -114,16 +116,19 @@ impl PyAnalysis {
 
 impl PyAnalysis {
     /// The policy fields the analysis recorded as applied.
+    #[cfg(feature = "audit")]
     pub(crate) fn reads(&self) -> Option<Vec<molframe::PolicyField>> {
         self.reads.clone()
     }
 
     /// The record of what produced the analysis.
+    #[cfg(feature = "audit")]
     pub(crate) fn record(&self) -> molframe::Provenance {
         self.record.clone()
     }
 
     /// The value, when there is one, without raising.
+    #[cfg(feature = "audit")]
     pub(crate) fn answer(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         self.value.as_ref().map(|value| value.clone_ref(py))
     }

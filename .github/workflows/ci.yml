@@ -35,6 +35,9 @@ jobs:
       # end gate nothing in `molframe` itself, but they change how
       # `molframe-core` is built, and nothing else here reaches that
       # configuration.
+      - name: Domain-featured Python bridge
+        run: cargo clippy -p molframe-py --no-default-features --features base,analysis,crystal -- -D warnings
+
       - name: Facade features
         run: |
           set -e
