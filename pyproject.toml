@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "molframe"
-version = "0.5.1"
+version = "0.5.2"
 description = "Structural bioinformatics on a columnar engine: read, select, measure, analyze and compare molecular structures"
 readme = "README.md"
 authors = [{ name = "Miguel Cárdenas", email = "miguelecsx@gmail.com" }]
