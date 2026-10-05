@@ -194,14 +194,13 @@ impl<'a> Matcher<'a> {
     }
 
     fn atom_matches(&self, query: usize, atom: usize) -> bool {
-        self.pattern.atoms[query]
-            .alternatives
-            .iter()
-            .any(|alternative| {
-                alternative
+        self.pattern.atoms[query].groups.iter().all(|alternatives| {
+            alternatives.iter().any(|tests| {
+                tests
                     .iter()
                     .all(|signed| self.test_matches(&signed.test, atom) != signed.negated)
             })
+        })
     }
 
     fn test_matches(&self, test: &AtomTest, atom: usize) -> bool {
@@ -230,11 +229,13 @@ impl<'a> Matcher<'a> {
     }
 
     fn hydrogen_count(&self, atom: usize) -> usize {
-        self.graph
-            .adjacency
-            .row(atom)
-            .iter()
-            .filter(|(other, _)| self.graph.atoms[*other].element == Element::HYDROGEN)
-            .count()
+        self.graph.atoms[atom].implicit_hydrogens
+            + self
+                .graph
+                .adjacency
+                .row(atom)
+                .iter()
+                .filter(|(other, _)| self.graph.atoms[*other].element == Element::HYDROGEN)
+                .count()
     }
 }

@@ -179,7 +179,7 @@ impl<'a> Parser<'a> {
             });
         }
         Ok(AtomExpression {
-            alternatives: vec![tests],
+            groups: vec![vec![tests]],
         })
     }
 
@@ -265,10 +265,10 @@ impl<'a> Parser<'a> {
 
 fn single(test: AtomTest) -> AtomExpression {
     AtomExpression {
-        alternatives: vec![vec![SignedAtomTest {
+        groups: vec![vec![vec![SignedAtomTest {
             negated: false,
             test,
-        }]],
+        }]]],
     }
 }
 
@@ -276,11 +276,18 @@ fn parse_bracket(text: &str, offset: usize) -> Result<AtomExpression, SmartsErro
     if text.is_empty() {
         return Err(SmartsError::new(offset, "empty atom expression"));
     }
-    let alternatives = split_top_level(text, b',', offset)?
+    let groups = split_top_level(text, b';', offset)?
         .into_iter()
-        .map(|(part_offset, part)| parse_conjunction(part, offset + part_offset))
+        .map(|(group_offset, group)| {
+            split_top_level(group, b',', offset + group_offset)?
+                .into_iter()
+                .map(|(part_offset, part)| {
+                    parse_conjunction(part, offset + group_offset + part_offset)
+                })
+                .collect::<Result<Vec<_>, _>>()
+        })
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(AtomExpression { alternatives })
+    Ok(AtomExpression { groups })
 }
 
 fn parse_conjunction(
@@ -356,7 +363,7 @@ fn parse_element_test(text: &str, offset: usize) -> Result<(AtomTest, usize), Sm
         // both into a recursive one-atom expression so the public AST stays AND-based.
         let expression = SmartsPattern {
             atoms: vec![AtomExpression {
-                alternatives: vec![vec![
+                groups: vec![vec![vec![
                     SignedAtomTest {
                         negated: false,
                         test: AtomTest::Element(element),
@@ -365,7 +372,7 @@ fn parse_element_test(text: &str, offset: usize) -> Result<(AtomTest, usize), Sm
                         negated: false,
                         test: AtomTest::Aromatic,
                     },
-                ]],
+                ]]],
             }],
             bonds: Vec::new(),
         };

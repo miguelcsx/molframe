@@ -119,8 +119,8 @@ impl std::error::Error for SmartsDataError {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct AtomExpression {
-    /// Comma-separated alternatives, each containing AND-connected tests.
-    pub(crate) alternatives: Vec<Vec<SignedAtomTest>>,
+    /// Low-precedence conjunctions of alternatives of high-precedence tests.
+    pub(crate) groups: Vec<Vec<Vec<SignedAtomTest>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

@@ -169,3 +169,13 @@ fn component(
         model_coordinates: None,
     }
 }
+
+#[test]
+fn low_precedence_conjunction_applies_to_every_alternative() {
+    let component = acetamide();
+    let matches = SmartsPattern::parse("[C,O;D1]")
+        .expect("valid SMARTS")
+        .find_matches(&component);
+    let atoms: Vec<_> = matches.iter().map(|found| found.atom_indices[0]).collect();
+    assert_eq!(atoms, [0, 2]);
+}

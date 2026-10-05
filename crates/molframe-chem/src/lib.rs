@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod annotate;
+mod aromaticity;
 mod bonds;
 mod carbohydrates;
 mod coverage;

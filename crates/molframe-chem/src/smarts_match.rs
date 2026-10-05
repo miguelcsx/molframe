@@ -37,6 +37,7 @@ struct GraphAtom {
     charge: Option<i8>,
     aromatic: Option<bool>,
     stereo: Option<StereoConfiguration>,
+    implicit_hydrogens: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -60,6 +61,7 @@ impl Graph {
                 charge: Some(atom.charge),
                 aromatic: Some(atom.aromatic),
                 stereo: atom.stereo,
+                implicit_hydrogens: 0,
             })
             .collect();
         let names: BTreeMap<&str, usize> = component
@@ -84,7 +86,7 @@ impl Graph {
         let aromatic = data.annotations.get(AROMATIC_ATOM_ANNOTATION);
         let charges = data.annotations.get(FORMAL_CHARGE_ANNOTATION);
         let stereo = data.annotations.get(STEREO_CONFIGURATION_ANNOTATION);
-        let atoms = data
+        let atoms: Vec<GraphAtom> = data
             .atoms()
             .map(|atom| {
                 let index = atom.index().get();
@@ -97,16 +99,44 @@ impl Graph {
                         .and_then(|value| i8::try_from(value).ok()),
                     aromatic: boolean_annotation(aromatic, index),
                     stereo: symbol_annotation(stereo, index, structure).and_then(stereo_value),
+                    implicit_hydrogens: match integer_annotation(
+                        data.annotations.get("mdl_implicit_hydrogens"),
+                        index,
+                    )
+                    .and_then(|value| usize::try_from(value).ok())
+                    {
+                        Some(value) => value,
+                        None => 0,
+                    },
                 }
             })
             .collect();
-        let edges = data.bonds.iter().map(|bond| {
+        let original: Vec<_> = data
+            .bonds
+            .iter()
+            .map(|bond| (bond.atom_a.as_usize(), bond.atom_b.as_usize(), bond.order))
+            .filter(|&(a, b, _)| a < atoms.len() && b < atoms.len())
+            .collect();
+        let elements: Vec<_> = atoms.iter().map(|atom| atom.element).collect();
+        let charges: Vec<_> = atoms.iter().map(|atom| atom.charge).collect();
+        let perceived = crate::aromaticity::perceive(&elements, &charges, &original);
+        let edges = original.iter().enumerate().map(|(edge, &(a, b, order))| {
             (
-                bond.atom_a.as_usize(),
-                bond.atom_b.as_usize(),
-                GraphBond { order: bond.order },
+                a,
+                b,
+                GraphBond {
+                    order: if perceived.bonds[edge]
+                        && atoms[a].aromatic == Some(true)
+                        && atoms[b].aromatic == Some(true)
+                    {
+                        BondOrder::Aromatic
+                    } else {
+                        order
+                    },
+                },
             )
         });
+        let edges: Vec<_> = edges.collect();
         Ok(Self::build(atoms, edges))
     }
 
@@ -250,7 +280,7 @@ fn validate_structure_data(
 
 fn pattern_uses(pattern: &SmartsPattern, predicate: impl Fn(&AtomTest) -> bool + Copy) -> bool {
     pattern.atoms.iter().any(|expression| {
-        expression.alternatives.iter().flatten().any(|signed| {
+        expression.groups.iter().flatten().flatten().any(|signed| {
             predicate(&signed.test)
                 || matches!(&signed.test, AtomTest::Recursive(nested) if pattern_uses(nested, predicate))
         })
