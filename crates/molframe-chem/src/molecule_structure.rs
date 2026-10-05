@@ -179,9 +179,99 @@ fn build(
         });
     }
     data.bonds = table.finish();
+    attach_chemistry(&mut data, sites, bonds)?;
     data.secondary_structure = vec![SecondaryStructure::Unknown].into();
     data.secondary_source = vec![SecondarySource::None].into();
     Ok(Structure::new(data))
+}
+
+fn attach_chemistry(
+    data: &mut StructureData,
+    sites: &[Site],
+    bonds: &[(usize, usize, BondOrder)],
+) -> Result<(), Diagnostic> {
+    use molframe_core::{AnnotationColumn, AtomAnnotation};
+    let elements: Vec<_> = sites.iter().map(|site| site.atom.element).collect();
+    let charges: Vec<_> = sites.iter().map(|site| site.formal_charge).collect();
+    let aromatic = crate::aromaticity::perceive(&elements, &charges, bonds);
+    let charge_entries: Vec<_> = charges
+        .iter()
+        .map(|charge| match charge {
+            Some(charge) => (i64::from(*charge), Presence::Present),
+            None => (0, Presence::Unknown),
+        })
+        .collect();
+    let aromatic_entries: Vec<_> = aromatic
+        .atoms
+        .into_iter()
+        .map(|value| {
+            (
+                value,
+                if value {
+                    Presence::Present
+                } else {
+                    Presence::Unknown
+                },
+            )
+        })
+        .collect();
+    // Infer only the unambiguous MDL valences used by organic ligands. Aromatic
+    // bond encoding alone cannot distinguish pyridine from pyrrole.
+    let mut valences = vec![Some(0_i64); sites.len()];
+    for &(a, b, order) in bonds {
+        let weight = match order {
+            BondOrder::Single => Some(1),
+            BondOrder::Double => Some(2),
+            BondOrder::Triple => Some(3),
+            _ => None,
+        };
+        for atom in [a, b] {
+            valences[atom] = valences[atom].zip(weight).map(|(sum, value)| sum + value);
+        }
+    }
+    let hydrogens: Vec<_> = sites
+        .iter()
+        .zip(valences)
+        .map(
+            |(site, valence)| match (site.atom.element, site.formal_charge, valence) {
+                (Element::NITROGEN, Some(0), Some(value)) if value <= 3 => {
+                    (3 - value, Presence::Present)
+                }
+                (Element::CARBON, Some(0), Some(value))
+                | (Element::NITROGEN, Some(1), Some(value))
+                    if value <= 4 =>
+                {
+                    (4 - value, Presence::Present)
+                }
+                (Element::OXYGEN | Element::SULFUR, Some(0), Some(value)) if value <= 2 => {
+                    (2 - value, Presence::Present)
+                }
+                (Element::OXYGEN | Element::SULFUR, Some(-1), Some(value)) if value <= 1 => {
+                    (1 - value, Presence::Present)
+                }
+                _ => (0, Presence::Unknown),
+            },
+        )
+        .collect();
+    let hydrogen_column = AnnotationColumn::from_entries(hydrogens)
+        .map_err(|error| consistency(&error.to_string()))?;
+    let _ = data.annotations.insert(
+        "mdl_implicit_hydrogens",
+        AtomAnnotation::Integer(hydrogen_column),
+    );
+    let charge_column = AnnotationColumn::from_entries(charge_entries)
+        .map_err(|error| consistency(&error.to_string()))?;
+    let aromatic_column = AnnotationColumn::from_entries(aromatic_entries)
+        .map_err(|error| consistency(&error.to_string()))?;
+    let _ = data.annotations.insert(
+        molframe_core::FORMAL_CHARGE_ANNOTATION,
+        AtomAnnotation::Integer(charge_column),
+    );
+    let _ = data.annotations.insert(
+        molframe_core::AROMATIC_ATOM_ANNOTATION,
+        AtomAnnotation::Boolean(aromatic_column),
+    );
+    Ok(())
 }
 
 fn plain_sites(molecule: &Molecule) -> Vec<Site> {
@@ -215,15 +305,24 @@ pub fn molecule_to_structure(name: &str, molecule: &Molecule) -> Result<Structur
     build(name, &plain_sites(molecule), &plain_bonds(&molecule.bonds))
 }
 
-/// Lowers a MOL block or SDF record, keeping its declared formal charges.
+/// Lowers a MOL/SDF record with known formal charges (omitted means neutral).
+/// Aromatic bonds and conservatively perceived conjugated circuits annotate atoms.
 ///
 /// # Errors
 ///
 /// As [`molecule_to_structure`].
 pub fn mol_record_to_structure(record: &MolRecord) -> Result<Structure, Diagnostic> {
     let mut sites = plain_sites(&record.molecule);
+    if record.atom_metadata.len() != sites.len()
+        || record.bond_metadata.len() != record.molecule.bonds.len()
+    {
+        return Err(consistency("MOL/SDF metadata does not match its graph"));
+    }
     for (site, metadata) in sites.iter_mut().zip(&record.atom_metadata) {
-        site.formal_charge = metadata.formal_charge;
+        site.formal_charge = Some(match metadata.formal_charge {
+            Some(charge) => charge,
+            None => 0,
+        });
     }
     build(&record.name, &sites, &plain_bonds(&record.molecule.bonds))
 }

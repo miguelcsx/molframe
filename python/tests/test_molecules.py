@@ -1,5 +1,7 @@
 """Small molecules: MDL records, their data fields and substructure queries."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -127,3 +129,45 @@ def test_a_pattern_that_is_not_smarts_names_its_position():
     with pytest.raises(molframe.ParseError) as bad:
         chemistry.smarts(structure, "C(")
     assert bad.value.code == "MOLFRAME-E1301"
+
+
+def test_sdf_charges_are_known_and_available_to_smarts():
+    ethanol, acetate = (record.to_structure() for record in chemistry.read_sdf(SDF))
+    assert chemistry.smarts(acetate, "[-1]") == [[3]]
+    assert chemistry.smarts(acetate, "[O;+0]") == [[2]]
+    assert chemistry.smarts(ethanol, "[O;+0]") == [[2]]
+    positive = chemistry.read_sdf(SDF.replace("  -1", "   1"))[1].to_structure()
+    assert chemistry.smarts(positive, "[+1]") == [[3]]
+
+
+@pytest.mark.parametrize("encoding", ["aromatic", "kekulized"])
+def test_benzene_smarts_is_independent_of_sdf_bond_encoding(encoding):
+    fixtures = Path(__file__).resolve().parents[2] / "crates/molframe-chem/tests/fixtures"
+    molecule = chemistry.read_sdf((fixtures / f"benzene-{encoding}.sdf").read_text())[0]
+    structure = molecule.to_structure()
+    expected = [[i] for i in range(6)]
+    assert chemistry.smarts(structure, "[a]") == expected
+    assert chemistry.smarts(structure, "[c]") == expected
+    assert len(chemistry.smarts(structure, "c:c")) == 12
+    assert chemistry.smarts(structure, "[nH]") == []
+    assert molecule.bonds.tolist() == chemistry.molecule(structure).bonds.tolist()
+
+
+@pytest.mark.parametrize("encoding", ["aromatic", "kekulized"])
+def test_pyrrole_matches_its_nitrogen_hydrogen_in_both_encodings(encoding):
+    fixtures = Path(__file__).resolve().parents[2] / "crates/molframe-chem/tests/fixtures"
+    structure = chemistry.read_sdf((fixtures / f"pyrrole-{encoding}.sdf").read_text())[
+        0
+    ].to_structure()
+    assert chemistry.smarts(structure, "[nH]") == [[0]]
+    assert chemistry.smarts(structure, "[a]") == [[i] for i in range(5)]
+
+
+def test_implicit_hydroxyl_hydrogens_and_low_precedence_smarts_are_preserved():
+    ethanol = chemistry.read_sdf(SDF)[0].to_structure()
+    assert chemistry.smarts(ethanol, "[O;H1]") == [[2]]
+    assert chemistry.smarts(ethanol, "[C,O;H1]") == [[2]]
+    ammonium = chemistry.Molecule(
+        ["N"], np.array([[0, 0, 0]], dtype=np.float32), formal_charges=[1]
+    ).to_structure()
+    assert chemistry.smarts(ammonium, "[N;H4;+1]") == [[0]]

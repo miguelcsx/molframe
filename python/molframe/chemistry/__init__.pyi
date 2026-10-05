@@ -231,11 +231,16 @@ class Molecule:
     def bonds(self) -> UInt32Array:
         """``(first, second, order)`` rows, zero-based; order 4 is aromatic."""
     @property
-    def formal_charges(self) -> list[int]: ...
+    def formal_charges(self) -> list[int]:
+        """Known MDL formal charges; an omitted charge is neutral (zero)."""
     @property
     def properties(self) -> dict[str, str]: ...
     def to_structure(self) -> Structure:
-        """Return the molecule as a structure with its bonds; hydrogens and charges are kept."""
+        """Return a structure with source bonds and known MDL formal charges.
+
+        Explicit aromatic bonds and conservatively perceived conjugated circuits
+        annotate aromatic atoms. Unproved aromaticity remains unknown.
+        """
     def to_mol(self) -> str: ...
     def to_sdf(self) -> str: ...
 

@@ -243,7 +243,7 @@ impl PyMolecule {
         Ok(array)
     }
 
-    /// Formal charge of each atom (0 where the record declares none).
+    /// Known MDL formal charges; an omitted charge is neutral (zero).
     #[getter]
     fn formal_charges(&self) -> Vec<i8> {
         self.record
@@ -266,7 +266,9 @@ impl PyMolecule {
         Ok(fields)
     }
 
-    /// The molecule as a structure with its bonds; hydrogens and charges are kept.
+    /// The molecule as a structure with source bonds and known MDL formal charges.
+    /// Explicit aromatic bonds and conservatively perceived conjugated circuits
+    /// annotate aromatic atoms. Unproved aromaticity remains unknown.
     fn to_structure(&self) -> PyResult<PyStructure> {
         mol_record_to_structure(&self.record)
             .map(|structure| PyStructure::new(molframe::Structure::from(structure)))
