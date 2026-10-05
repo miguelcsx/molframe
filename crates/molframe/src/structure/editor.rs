@@ -46,6 +46,18 @@ pub struct StructureEditor {
 }
 
 impl StructureEditor {
+    /// Stages a per-atom annotation with explicit availability.
+    ///
+    /// # Errors
+    /// Returns a diagnostic for an empty name or a mismatched column length.
+    pub fn set_annotation(
+        &mut self,
+        name: &str,
+        column: molframe_core::annotation::AtomAnnotation,
+    ) -> Result<(), Diagnostic> {
+        self.overlay.set_annotation(name, column)
+    }
+
     pub(super) fn new(base: &CoreStructure) -> Self {
         Self {
             base: base.clone(),

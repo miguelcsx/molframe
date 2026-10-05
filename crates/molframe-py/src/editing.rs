@@ -38,6 +38,21 @@ impl PyStructureEditor {
 
 #[pymethods]
 impl PyStructureEditor {
+    /// Stages caller-authorised boolean roles; None explicitly means unavailable.
+    fn set_boolean_annotation(&mut self, name: &str, values: Vec<Option<bool>>) -> PyResult<()> {
+        use molframe::engine::core::Presence;
+        use molframe::{AnnotationColumn, AtomAnnotation};
+        let entries = values.into_iter().map(|value| match value {
+            Some(value) => (value, Presence::Present),
+            None => (false, Presence::Unknown),
+        });
+        let column = AnnotationColumn::from_entries(entries)
+            .map_err(|error| crate::error::value(error.to_string()))?;
+        self.open()?
+            .set_annotation(name, AtomAnnotation::Boolean(column))
+            .map_err(crate::error::kernel)
+    }
+
     /// Stages a rename of the chain at hierarchy index `chain`.
     fn rename_chain(&mut self, chain: u32, label: &str) -> PyResult<()> {
         self.open()?

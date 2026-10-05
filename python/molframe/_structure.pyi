@@ -1,6 +1,8 @@
+from collections.abc import Sequence
 from typing import Literal
 
 from . import (
+    Analysis,
     AnalysisPolicy,
     BoolArray,
     ExecutionContext,
@@ -14,6 +16,9 @@ from . import (
 )
 
 class Structure:
+    @staticmethod
+    def merge(structures: Sequence[Structure]) -> Structure:
+        """Concatenate compatible snapshots in input row order, retaining annotations."""
     @property
     def atom_count(self) -> int: ...
     @property
@@ -33,6 +38,7 @@ class Structure:
     @property
     def coordinates(self) -> Float32Array: ...
     def select(self, query: str | Query, *, policy: AnalysisPolicy | None = ...) -> Selection: ...
+    def resolve_altlocs(self, *, policy: AnalysisPolicy | None = ...) -> Analysis[Selection]: ...
     def edit(self) -> StructureEditor: ...
     @property
     def bonds(self) -> BondTable: ...
@@ -184,6 +190,8 @@ class StructureEditor:
     """Staged topology edits, validated as a whole and published by ``finish()``."""
 
     def rename_chain(self, chain: int, label: str) -> None: ...
+    def set_boolean_annotation(self, name: str, values: Sequence[bool | None]) -> None:
+        """Stage per-atom boolean values; None preserves an unknown annotation."""
     def clear_extensions(self) -> None: ...
     def delete(self, selection: Selection) -> None: ...
     def coordinates(self, *, context: ExecutionContext | None = None) -> CoordinateEditor: ...

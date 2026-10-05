@@ -10,9 +10,11 @@
 
 mod collections;
 mod difference;
+mod disorder;
 mod editor;
 mod extensions;
 mod handle;
+mod merge;
 mod selection;
 
 #[cfg(all(feature = "geometry", feature = "chemistry"))]

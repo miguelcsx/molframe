@@ -61,6 +61,18 @@ impl PyStructure {
 }
 #[pymethods]
 impl PyStructure {
+    /// Concatenates snapshots in input row order, preserving bonds and annotations.
+    #[staticmethod]
+    fn merge(py: Python<'_>, structures: Vec<PyRef<'_, Self>>) -> PyResult<Self> {
+        let sources: Vec<_> = structures
+            .into_iter()
+            .map(|value| value.inner.clone())
+            .collect();
+        py.detach(|| molframe::Structure::merge(&sources))
+            .map(Self::new)
+            .map_err(|findings| findings_error(&findings))
+    }
+
     fn __repr__(&self) -> String {
         self.inner.to_string()
     }
@@ -127,6 +139,30 @@ impl PyStructure {
         })?;
         crate::policy::select_compiled(py, self, &compiled, &policy)
     }
+    /// Resolves alternate conformations without changing stored atom rows.
+    #[pyo3(signature = (*, policy=None))]
+    fn resolve_altlocs(
+        &self,
+        py: Python<'_>,
+        policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
+    ) -> PyResult<crate::analysis_result::PyAnalysis> {
+        let policy = match policy {
+            Some(policy) => policy.0.clone(),
+            None => molframe::AnalysisPolicy::default(),
+        };
+        let analysis = self.inner.resolve_altlocs(&policy);
+        let value = match analysis.value() {
+            Some(selection) => {
+                let view = self.inner.engine().view_of(selection.clone());
+                let selected =
+                    PySelection::from_native(self.clone(), molframe::Selection::from(view));
+                Some(Py::new(py, selected)?.into_any())
+            }
+            None => None,
+        };
+        Ok(crate::analysis_result::PyAnalysis::new(&analysis, value))
+    }
+
     /// Starts an edit: topology changes are staged and published together by
     /// `finish()`, coordinate changes go through `coordinates()`.
     fn edit(&self) -> crate::editing::PyStructureEditor {
