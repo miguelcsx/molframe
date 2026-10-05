@@ -91,3 +91,15 @@ fn adjacent_full_width_coordinates_are_not_merged() {
         assert!((actual - expected).abs() < f32::EPSILON);
     }
 }
+
+#[test]
+fn unversioned_fixed_column_counts_preserve_model_server_records() {
+    let source = CARBON_MONOXIDE.replace(
+        "  2  1  0  0  0  0  0  0  0  0999 V2000",
+        "  2  1  0  0  0  0  0  0  0  0  0",
+    );
+    let record = parse_mol_record(&source).expect("unversioned fixed-column record");
+    let expected = parse_mol_record(CARBON_MONOXIDE).expect("versioned record");
+    assert_eq!(record, expected);
+    assert!(parse_mol_record(&CARBON_MONOXIDE.replace("V2000", "V4000")).is_err());
+}

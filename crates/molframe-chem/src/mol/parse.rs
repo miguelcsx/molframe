@@ -20,7 +20,12 @@ pub fn parse_mol_record(text: &str) -> Result<MolRecord, MolError> {
     let counts = lines.next().ok_or(MolError::Malformed)?;
     if counts.contains("V3000") {
         parse_v3000(name, program, comment, lines)
-    } else if counts.contains("V2000") {
+    } else if counts.contains("V2000")
+        || (counts.len() == 33
+            && counts
+                .split_whitespace()
+                .all(|value| value.parse::<u16>().is_ok()))
+    {
         parse_v2000(name, program, comment, counts, lines)
     } else {
         Err(MolError::Malformed)
