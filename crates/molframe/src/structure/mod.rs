@@ -16,6 +16,7 @@ mod extensions;
 mod handle;
 mod merge;
 mod selection;
+mod transport;
 
 #[cfg(all(feature = "geometry", feature = "chemistry"))]
 mod backbone;

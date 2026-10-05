@@ -71,7 +71,13 @@ unsafe extern "C" fn encode_bcif(
     // SAFETY: the API is the first field of its retained capsule allocation.
     let capsule = unsafe { &*source.cast::<NativeCapsule>() };
     let encoded = capsule.encoded_bcif.get_or_init(|| {
-        molframe::write_bcif_with_options(&capsule.structure, &transport_options()).map_err(|_| ())
+        capsule
+            .structure
+            .with_transport_identifiers()
+            .map_err(|_| ())
+            .and_then(|structure| {
+                molframe::write_bcif_with_options(&structure, &transport_options()).map_err(|_| ())
+            })
     });
     let Ok(encoded) = encoded else {
         return -1;

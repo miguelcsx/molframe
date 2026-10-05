@@ -31,10 +31,33 @@ fn to_pdb(
 
 /// Renders the structure as deterministic `BinaryCIF` bytes.
 #[pyfunction]
-fn to_bcif<'py>(py: Python<'py>, structure: &PyStructure) -> PyResult<Bound<'py, PyBytes>> {
-    let structure = structure.inner.clone();
+#[pyo3(signature = (structure, *, block_id=None, generated_connections=false, transport=false))]
+fn to_bcif<'py>(
+    py: Python<'py>,
+    structure: &PyStructure,
+    block_id: Option<&str>,
+    generated_connections: bool,
+    transport: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let structure = if transport {
+        structure
+            .inner
+            .with_transport_identifiers()
+            .map_err(crate::error::kernel)?
+    } else {
+        structure.inner.clone()
+    };
+    let mut options = molframe::formats::cif::CifWriteOptions::new();
+    if let Some(block_id) = block_id {
+        options = options.with_block_id(block_id);
+    }
+    if generated_connections {
+        options = options
+            .with_generated_connection_ids()
+            .with_connection_type_id("covale");
+    }
     let bytes = py
-        .detach(move || molframe::write_bcif(&structure))
+        .detach(move || molframe::write_bcif_with_options(&structure, &options))
         .map_err(|findings| findings_error(&findings))?;
     Ok(PyBytes::new(py, &bytes))
 }

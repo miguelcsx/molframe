@@ -48,3 +48,28 @@ def test_unknown_formats_and_missing_extensions_are_rejected(tmp_path, structure
     with pytest.raises(molframe.PolicyError) as forced:
         molframe.formats.write(structure, tmp_path / "out.dat", format="nonsense")
     assert forced.value.code == "MOLFRAME-E6104"
+
+
+def test_explicit_transport_identifiers_keep_author_chain_insertion_and_coordinates():
+    source = (
+        "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00  0.00           C\n"
+        "ATOM      2  CA  GLY A   1A      1.000   0.000   0.000  1.00  0.00           C\n"
+        "HETATM    3  O   HOH     2       4.000   0.000   0.000  1.00  0.00           O\n"
+        "END\n"
+    )
+    structure = molframe.read(source.encode(), format="pdb")
+    encoded = molframe.formats.to_bcif(
+        structure, block_id="transport", generated_connections=True, transport=True
+    )
+    assert encoded == molframe.formats.to_bcif(
+        structure, block_id="transport", generated_connections=True, transport=True
+    )
+    restored = molframe.read(encoded, format="bcif")
+    assert restored.coordinates.tolist() == structure.coordinates.tolist()
+    assert [chain.auth_label for chain in restored.chains] == [
+        chain.auth_label for chain in structure.chains
+    ]
+    assert [(residue.auth_number, residue.insertion_code) for residue in restored.residues] == [
+        (residue.auth_number, residue.insertion_code) for residue in structure.residues
+    ]
+    assert len({chain.label for chain in restored.chains}) == restored.chain_count

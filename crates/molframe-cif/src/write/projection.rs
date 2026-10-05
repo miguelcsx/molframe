@@ -352,7 +352,10 @@ impl<'a> CanonicalAtomRow<'a> {
     /// Depositor chain identifier.
     #[must_use]
     pub fn auth_asym_id(self) -> CanonicalValue<&'a str> {
-        unknown_text(self.chain.auth_label())
+        match self.chain.auth_label() {
+            Some(label) => CanonicalValue::Present(label),
+            None => CanonicalValue::Unknown,
+        }
     }
 
     /// Depositor atom identifier.

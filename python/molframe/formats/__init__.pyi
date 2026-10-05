@@ -11,7 +11,15 @@ def to_pdb(
     hybrid36: bool = False,
     chain_map: Mapping[str, str] | None = None,
 ) -> str: ...
-def to_bcif(structure: Structure) -> bytes: ...
+def to_bcif(
+    structure: Structure,
+    *,
+    block_id: str | None = None,
+    generated_connections: bool = False,
+    transport: bool = False,
+) -> bytes:
+    """Encode BinaryCIF with explicit identities; transport regenerates label namespaces."""
+
 def write(
     structure: Structure,
     path: str | PathLike[str],
