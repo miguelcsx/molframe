@@ -269,9 +269,15 @@ impl Annotator<'_> {
 }
 
 fn inconsistent(index: &ComponentIndex, atoms: &[AtomRef<'_>]) -> bool {
-    atoms
-        .iter()
-        .any(|atom| atom.name().is_some_and(|name| index.atom(name).is_none()))
+    atoms.iter().any(|atom| {
+        // Hydrogen naming varies between deposition and preparation tools.
+        // Unmatched hydrogens remain unannotated; matched heavy atoms retain
+        // their dictionary chemistry and only confirmed bonds are installed.
+        !atom
+            .element()
+            .is_some_and(molframe_core::Element::is_hydrogen)
+            && atom.name().is_some_and(|name| index.atom(name).is_none())
+    })
 }
 
 fn report_missing_atoms(

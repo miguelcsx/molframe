@@ -58,6 +58,35 @@ fn component() -> Component {
 }
 
 #[test]
+fn unmatched_hydrogen_names_do_not_discard_matched_heavy_atom_chemistry() {
+    let text = STRUCTURE.replace(
+        "ATOM 4 N N GLY A 2",
+        "ATOM 7 H H99 GLY A 1 0 1 0\nATOM 4 N N GLY A 2",
+    );
+    let input = InputBuffer::from_bytes(text.into_bytes());
+    let (structure, _) = molframe_cif::read(&input, &ReadOptions::new()).expect("fixture");
+    let provider =
+        MemoryProvider::new(DictionaryVersion::new("test"), [component()]).expect("dictionary");
+    let report = apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled)
+        .expect("annotation");
+    let Some(molframe_core::AtomAnnotation::Integer(charges)) = report
+        .structure
+        .annotations()
+        .get(molframe_core::FORMAL_CHARGE_ANNOTATION)
+    else {
+        panic!("charge column")
+    };
+    assert_eq!(
+        charges.get(0),
+        Some((-1, molframe_core::column::Presence::Present))
+    );
+    assert_eq!(
+        charges.get(3),
+        Some((0, molframe_core::column::Presence::Unknown))
+    );
+}
+
+#[test]
 fn ccd_edges_polymer_links_and_chain_classification_are_applied_together() {
     let input = InputBuffer::from_bytes(STRUCTURE.as_bytes().to_vec());
     let (structure, _) = molframe_cif::read(&input, &ReadOptions::new()).expect("fixture reads");
