@@ -4,6 +4,18 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## 0.5.1 — 2026-10-05
+
+- Synchronize MOL/SDF formal charges with chemistry annotations; omitted MDL charges are known neutral.
+- Annotate explicit aromatic bonds and perceive conjugated Hückel circuits conservatively, preserving original bond orders.
+- Match aromatic SMARTS consistently across aromatic and Kekulé SDF encodings, including implicit neutral nitrogen hydrogens.
+- Read unversioned fixed-column SDF records produced by RCSB ModelServer.
+- Preserve heavy atoms with hydrogen-like CCD names during annotation.
+- Resolve alternate conformers and merge annotated snapshots through Python.
+- Preserve molecular identifiers through native BinaryCIF transport.
+- Expose budgeted cross-set neighbour queries with independent local indices.
+- Describe native NumPy outputs with concrete scalar types for strict consumers.
+
 ## 0.5.0 — 2026-10-04
 
 ### Research validation and Python parity
