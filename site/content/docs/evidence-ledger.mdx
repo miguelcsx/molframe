@@ -166,13 +166,25 @@ family validation. Experimental construct/state matching, external frozen
 validation and an additional biological task remain pending. A checked generic
 runner can perform the same identity safeguards; enumeration itself is not novelty.
 
+A follow-up construct/state inventory covers all fourteen structures, 545
+mapped residues and 631 retained measurements with all sixteen frozen input
+hashes verified. Seven structures explicitly annotate mutation backgrounds;
+twelve have selected-partner reference-sequence difference records. These
+records can describe tags, variants or conflicts and require primary-methods
+adjudication. Missing annotations remain unknown. For example, 1BRS has unknown
+entity mutation fields but records ALA versus reference CYS at chain D positions
+40 and 82. The inventory is `experimental/construct-state-audit.json` in the
+external corpus; it leaves the pilot's sampling and estimates unchanged.
+
 
 ## Python/Rust release-boundary checks (0.5.0, 2026-10-04)
 
 The Python package remains a curated interface over native kernels, not a
 one-for-one export of every low-level Rust type. The local Python suite passed
-337 tests; strict Pyright reported no errors and `--verifytypes` reported 100%
-type completeness. Type completeness alone is not numerical parity.
+337 tests. The same locally built ABI3 wheel passed all 337 tests in isolated
+environments on Python 3.12, 3.13 and 3.14; strict Pyright reported no errors
+and `--verifytypes` reported 100% type completeness across 965 public symbols.
+Type completeness alone is not numerical parity.
 
 `molframe-py` tests directly compare Python and Rust centroid, distance matrix,
 RMSD, TM-score and GDT on the same 1UBQ coordinates, plus internal-coordinate
@@ -191,5 +203,15 @@ The corpus is not bundled and this check does not validate chemical truth.
 The release workflow installs each built wheel into an isolated environment,
 asserts that import resolves inside that environment, and runs the Python
 contract suite on Linux x86-64/arm64, macOS x86-64/arm64 and Windows x86-64
-before publication. This is a gate, not a claim that those remote runs have
-already completed.
+before publication. All five platform builds completed successfully for 0.5.0,
+with 337 tests passing on each installed wheel. The
+[Python release run](https://github.com/miguelcsx/molframe/actions/runs/37245481284)
+records those gates and the successful PyPI upload.
+
+The Rust 0.5.0 release completed its native gates and published all 25 crates.
+Independent downloads verified their registry SHA-256 checksums and found
+1,481 source/data files equal to the checkout. The manifests and local Python
+version-test logs are retained in `ligare/data/molframe-research/release-0.5.0`.
+The installed Windows wheel gate also exposed automatic CRLF conversion of
+the embedded NCBI matrix bundle; its Git attributes now preserve canonical LF
+bytes on every platform.

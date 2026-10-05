@@ -518,3 +518,22 @@ project Python interpreter and `PYTHONPATH` to its site-packages, then run insid
 `nix develop`: `cargo test -p molframe-py python_and_rust_read_the_same_external_ligand_corpus -- --ignored --nocapture`.
 This checks transfer/reading parity; independent scientific references remain
 the separate experiments above.
+
+### Construct and biological-state evidence
+
+`experimental/construct-state-audit.json` records a post hoc inventory of all
+fourteen deposited structures and the exact 545 mapped residues / 631 retained
+measurements. All sixteen source hashes were checked. With Gemmi 0.7.5, read
+each mmCIF's `_entity` category, retain polymer entities and their
+`pdbx_mutation` fields, and read `_struct_ref_seq_dif`, retaining the requested
+author-chain partners. Join the retained report measurements to their original
+references and assay notes; retain the source structure hash for each entry.
+
+Seven structures have explicit entity mutation annotations, and twelve have
+selected-partner reference-sequence differences. Tags, background variants and
+conflicts require separate adjudication; missing metadata remains unknown. In
+1BRS, the entity mutation field is unknown, while reference-sequence differences
+record CYS→ALA at chain D positions 40 and 82. Checking just one metadata field
+would miss that background. The inventory preserves the original pilot and its
+estimates and does not certify full construct/state compatibility with the
+original assays.
