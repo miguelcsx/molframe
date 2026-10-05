@@ -53,6 +53,40 @@ fn neighbor_pairs<'py>(
     ))
 }
 
+/// Cross-set pairs only, avoiding the quadratic within-set output of dense clouds.
+#[pyfunction]
+#[pyo3(signature = (first, second, cutoff, *, backend="auto", context=None))]
+fn cross_pairs<'py>(
+    py: Python<'py>,
+    first: &Bound<'py, PyArray2<f32>>,
+    second: &Bound<'py, PyArray2<f32>>,
+    cutoff: f32,
+    backend: &str,
+    context: Option<&crate::execution::PyExecutionContext>,
+) -> PyResult<Pairs<'py>> {
+    let backend = crate::backend::parse(backend)?;
+    let first = first.readonly();
+    let second = second.readonly();
+    let first = crate::bindings::coordinates(&first)?;
+    let second = crate::bindings::coordinates(&second)?;
+    let pairs = crate::execution::run(py, context, |context| {
+        molframe::spatial::cross_pairs(first, second, cutoff, backend, context)
+    })?
+    .map_err(crate::error::kernel)?;
+    let first: Vec<u32> = pairs.iter().map(|pair| pair.first).collect();
+    let second: Vec<u32> = pairs.iter().map(|pair| pair.second).collect();
+    let distance: Vec<f32> = pairs
+        .iter()
+        .map(|pair| pair.distance_squared.sqrt())
+        .collect();
+    Ok((
+        first.to_pyarray(py),
+        second.to_pyarray(py),
+        distance.to_pyarray(py),
+    ))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(neighbor_pairs, module)?)
+    module.add_function(wrap_pyfunction!(neighbor_pairs, module)?)?;
+    module.add_function(wrap_pyfunction!(cross_pairs, module)?)
 }

@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 mod backends;
+mod cross;
 mod geometry;
 mod model;
 mod planning;
@@ -12,6 +13,7 @@ pub(crate) use backends::brute;
 pub(crate) use geometry::numeric;
 
 pub use backends::{CellList, KdTree, NeighborList};
+pub use cross::{CrossPair, cross_pairs};
 pub use geometry::{PeriodicBox, PeriodicImage};
 pub use model::{NeighborPair, SpatialBackend, SpatialError, SpatialOption};
 pub use planning::{
