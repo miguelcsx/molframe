@@ -104,4 +104,6 @@ jobs:
         run: uv run --no-sync pyright
 
       - name: Public typing surface
-        run: uv run --no-sync pyright --verifytypes molframe
+        # Check MolFrame exports; NumPy owns its array implementation's typing.
+        # The preceding strict check still checks every shipped Python source.
+        run: uv run --no-sync pyright --verifytypes molframe --ignoreexternal

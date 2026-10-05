@@ -130,7 +130,7 @@ uv run ruff format --check .
 uv run ruff check
 uv run pytest python/tests -q
 uv run pyright
-uv run pyright --verifytypes molframe
+uv run pyright --verifytypes molframe --ignoreexternal
 
 # The facade compiles with any single feature and with none. This is what keeps
 # a gate on a module, a re-export or an enum variant matching the features that
