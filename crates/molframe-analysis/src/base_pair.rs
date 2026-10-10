@@ -7,10 +7,9 @@ use molframe_core::index::ResidueIndex;
 use molframe_core::{AtomAnnotation, Diagnostic, ExecutionContext, Presence, Structure};
 use std::collections::BTreeMap;
 
-#[path = "base_pair_edges.rs"]
-mod edges;
-
+use edges::CanonicalBase;
 pub use edges::WatsonCrickGeometry;
+use molframe_chem::base_pair as edges;
 
 /// Explicit chemical and geometric policy for canonical base pairing.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -59,38 +58,6 @@ pub enum BasePairError {
     /// Hydrogen-bond chemistry or geometry failed.
     #[error(transparent)]
     HydrogenBond(#[from] HydrogenBondError),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CanonicalBase {
-    Adenine,
-    Cytosine,
-    Guanine,
-    Thymine,
-    Uracil,
-}
-
-impl CanonicalBase {
-    const fn from_one_letter(code: u8) -> Option<Self> {
-        match code.to_ascii_uppercase() {
-            b'A' => Some(Self::Adenine),
-            b'C' => Some(Self::Cytosine),
-            b'G' => Some(Self::Guanine),
-            b'T' => Some(Self::Thymine),
-            b'U' => Some(Self::Uracil),
-            _ => None,
-        }
-    }
-
-    const fn complementary(self, other: Self) -> bool {
-        matches!(
-            (self, other),
-            (Self::Adenine, Self::Thymine | Self::Uracil)
-                | (Self::Thymine | Self::Uracil, Self::Adenine)
-                | (Self::Guanine, Self::Cytosine)
-                | (Self::Cytosine, Self::Guanine)
-        )
-    }
 }
 
 /// Finds canonical pairs supported by CCD identity, Watson–Crick-edge hydrogen

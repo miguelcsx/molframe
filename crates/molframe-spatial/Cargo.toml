@@ -9,6 +9,7 @@ description = "Deterministic spatial indices and neighbour search for molframe"
 
 [dependencies]
 molframe-core.workspace = true
+molframe-chem.workspace = true
 molframe-query.workspace = true
 num-traits.workspace = true
 thiserror.workspace = true

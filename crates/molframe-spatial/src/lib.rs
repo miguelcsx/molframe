@@ -3,6 +3,8 @@
 #![forbid(unsafe_code)]
 
 mod backends;
+mod base_pair_geometry;
+pub use base_pair_geometry::{GeometricBasePair, standard_base_pair_geometry};
 mod cross;
 mod geometry;
 mod model;
