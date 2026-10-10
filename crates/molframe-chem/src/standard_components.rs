@@ -3,7 +3,7 @@
 //! A component dictionary is the authority on what a residue is, but most
 //! structure files ship without one and every selector that asks "is this
 //! protein?" would then answer no. The standard amino acids and nucleotides
-//! are recognisable from their names alone, so this pass marks those and
+//! and curated saccharide aliases are recognisable from their names alone, so this pass marks those and
 //! leaves every other residue unknown. Solvent, ions and ligands are
 //! deliberately not guessed from names or atom counts: the file's declared
 //! entities say what they are, and a wrong guess here would silently override
@@ -19,13 +19,15 @@ use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::structure::Structure;
 
 /// The role the built-in tables assign to a residue named `component`:
-/// amino acid or nucleotide for the standard components, unknown otherwise.
+/// amino acid, nucleotide or curated saccharide, unknown otherwise.
 #[must_use]
 pub fn standard_component_kind(component: &str) -> ComponentKind {
     if is_amino_acid_component(component) {
         ComponentKind::AminoAcid
     } else if is_nucleotide_component(component) {
         ComponentKind::Nucleotide
+    } else if crate::snfg_symbol(component).is_some() {
+        ComponentKind::Saccharide
     } else {
         ComponentKind::Unknown
     }

@@ -2459,6 +2459,7 @@ version = "0.6.0"
 dependencies = [
  "criterion",
  "molframe-bench",
+ "molframe-chem",
  "molframe-cif",
  "molframe-core",
  "molframe-query",

@@ -4,6 +4,7 @@
 
 mod annotate;
 mod aromaticity;
+pub mod base_pair;
 mod bonds;
 mod carbohydrates;
 mod coverage;

@@ -46,7 +46,8 @@ impl Default for WatsonCrickGeometry {
 ///
 /// A–T/U pairs through N6…O4 and N1…N3; G–C pairs through O6…N4, N1…N3 and
 /// N2…O2.
-pub(super) fn watson_crick_contact(
+#[must_use]
+pub fn watson_crick_contact(
     left_base: CanonicalBase,
     left: &str,
     right_base: CanonicalBase,
@@ -75,7 +76,8 @@ pub(super) fn watson_crick_contact(
 ///
 /// Returns false when a required atom (C1', C2, C4 or C6) is missing, since the
 /// geometry then cannot be shown to hold.
-pub(super) fn has_watson_crick_geometry(
+#[must_use]
+pub fn has_watson_crick_geometry(
     first: ResidueRef<'_>,
     second: ResidueRef<'_>,
     limits: WatsonCrickGeometry,
