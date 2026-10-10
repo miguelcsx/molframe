@@ -1,4 +1,4 @@
-use super::salt_bridges;
+use super::{SaltBridgeError, SaltBridgeOptions, salt_bridges, salt_bridges_with_options};
 use molframe_core::ExecutionContext;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
@@ -150,4 +150,95 @@ fn the_bridge_list_is_identical_at_every_worker_count() {
             "worker count {workers} changed the result"
         );
     }
+}
+
+fn pair(cell: &str, residues: (u32, u32), second_x: f32) -> Structure {
+    let header = HEADER.replacen("data_s\n", &format!("data_s\n{cell}"), 1);
+    let source = format!(
+        "{header}\
+ATOM 1 O OD1 ASP A {} 5 5 5\n\
+ATOM 2 N NZ LYS A {} {second_x} 5 5\n",
+        residues.0, residues.1
+    );
+    crate::chemistry_test_support::charges(&structure(&source), &[(0, -1), (1, 1)])
+}
+
+fn count(structure: &Structure, options: SaltBridgeOptions) -> Result<usize, SaltBridgeError> {
+    salt_bridges_with_options(structure, options, &ExecutionContext::default())
+        .map(|table| table.len())
+}
+
+#[test]
+fn same_residue_pairs_are_excluded_unless_included() {
+    let same = pair("", (1, 1), 8.5);
+    let mut options = SaltBridgeOptions::new(4.0, SpatialBackend::BruteForce);
+    assert_eq!(count(&same, options), Ok(0));
+    options.include_same_residue_pairs = true;
+    assert_eq!(count(&same, options), Ok(1));
+    assert_eq!(
+        salt_bridges(
+            &same,
+            4.0,
+            SpatialBackend::BruteForce,
+            &ExecutionContext::default()
+        )
+        .map(|t| t.len()),
+        Ok(0)
+    );
+}
+
+#[test]
+fn bonded_pairs_are_excluded_unless_included() {
+    use molframe_core::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
+    let base = pair("", (1, 2), 6.5);
+    let mut data = base.data().clone();
+    let mut bonds = BondTableBuilder::new();
+    bonds.push(BondRecord {
+        atom_a: molframe_core::AtomIndex::new(0),
+        atom_b: molframe_core::AtomIndex::new(1),
+        order: BondOrder::Single,
+        provenance: BondProvenance::ChemicalComponentDictionary,
+    });
+    data.bonds = bonds.finish();
+    let bonded = Structure::new(data);
+    let mut options = SaltBridgeOptions::new(4.0, SpatialBackend::BruteForce);
+    assert_eq!(count(&bonded, options), Ok(0));
+    options.include_bonded_pairs = true;
+    assert_eq!(count(&bonded, options), Ok(1));
+}
+
+const CELL: &str = "_cell.length_a 10\n_cell.length_b 10\n_cell.length_c 10\n\
+_cell.angle_alpha 90\n_cell.angle_beta 90\n_cell.angle_gamma 90\n";
+
+#[test]
+fn periodic_salt_bridges_use_the_minimum_image_distance() {
+    // Anion at x=5, cation at x=11.5 in a 10 Å cell: 6.5 Å directly, 3.5 Å
+    // through the boundary (image at 1.5).
+    let wrapped = pair(CELL, (1, 2), 11.5);
+    let mut options = SaltBridgeOptions::new(4.0, SpatialBackend::BruteForce);
+    assert_eq!(count(&wrapped, options), Ok(0));
+    options.periodic = true;
+    let Ok(table) = salt_bridges_with_options(&wrapped, options, &ExecutionContext::default())
+    else {
+        panic!("periodic search");
+    };
+    assert_eq!(table.len(), 1);
+    let row = table.row(0).expect("one bridge");
+    assert!((row.distance - 3.5).abs() < 1e-4, "got {}", row.distance);
+}
+
+#[test]
+fn periodic_requests_reject_missing_and_placeholder_cells() {
+    let mut options = SaltBridgeOptions::new(4.0, SpatialBackend::BruteForce);
+    options.periodic = true;
+    assert_eq!(
+        count(&pair("", (1, 2), 6.5), options),
+        Err(SaltBridgeError::MissingCell)
+    );
+    let placeholder = "_cell.length_a 1\n_cell.length_b 1\n_cell.length_c 1\n\
+_cell.angle_alpha 90\n_cell.angle_beta 90\n_cell.angle_gamma 90\n";
+    let cube = pair(placeholder, (1, 2), 6.5);
+    assert_eq!(count(&cube, options), Err(SaltBridgeError::PlaceholderCell));
+    options.allow_placeholder_cell = true;
+    assert!(count(&cube, options).is_ok());
 }

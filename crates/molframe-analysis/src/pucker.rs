@@ -21,32 +21,49 @@ pub struct Pucker {
 /// Computes the pseudorotation phase and amplitude from the torsions ν0–ν4.
 ///
 /// The torsions are given in degrees, `nu[k]` being νk; the phase is returned in
-/// degrees and the amplitude in degrees. Equal torsions give a phase of zero.
+/// degrees and the amplitude in degrees. The phase follows the Altona-Sundaralingam
+/// tangent form. The amplitude is the least-squares fit of
+/// `nu_j = amplitude * cos(P + 144 * (j - 2))` over all five torsions, i.e. the
+/// length of the projection onto the two ring-puckering basis vectors, so it
+/// stays finite and accurate at every phase, including 90 and 270 degrees where
+/// ν2 vanishes. A ring whose torsions are all equal has no puckering component:
+/// the amplitude is zero and the phase is reported as zero.
 ///
 /// # Examples
 ///
 /// ```
 /// use molframe_analysis::sugar_pucker;
 ///
-/// // Five equal torsions have no preferred direction: the phase is zero and the
-/// // amplitude is the central torsion.
+/// // Five equal torsions have no puckering component.
 /// let pucker = sugar_pucker([5.0, 5.0, 5.0, 5.0, 5.0]);
 /// assert!(pucker.phase_degrees.abs() < 1e-9);
-/// assert!((pucker.amplitude - 5.0).abs() < 1e-9);
+/// assert!(pucker.amplitude.abs() < 1e-9);
 /// ```
 #[must_use]
 pub fn sugar_pucker(nu: [f64; 5]) -> Pucker {
     let numerator = (nu[4] + nu[1]) - (nu[3] + nu[0]);
     let spread = 36.0_f64.to_radians().sin() + 72.0_f64.to_radians().sin();
     let denominator = 2.0 * nu[2] * spread;
-    let phase = numerator.atan2(denominator);
+    let phase = if numerator == 0.0 && denominator == 0.0 {
+        0.0
+    } else {
+        numerator.atan2(denominator)
+    };
     let mut phase_degrees = phase.to_degrees();
     if phase_degrees < 0.0 {
         phase_degrees += 360.0;
     }
+    // Projections of the torsions onto cos/sin of the 144-degree stepped angles.
+    let (mut cos_part, mut sin_part) = (0.0, 0.0);
+    for (step, value) in [-2.0_f64, -1.0, 0.0, 1.0, 2.0].into_iter().zip(nu.iter()) {
+        let angle = (144.0 * step).to_radians();
+        cos_part += value * angle.cos();
+        sin_part -= value * angle.sin();
+    }
+    let amplitude = 0.4 * cos_part.hypot(sin_part);
     Pucker {
         phase_degrees,
-        amplitude: nu[2] / phase.cos(),
+        amplitude,
     }
 }
 

@@ -91,3 +91,20 @@ fn positions_of_the_first_model_are_the_buffer_itself() {
     assert_eq!(first.len(), 3);
     assert!(std::ptr::eq(first.as_ptr(), structure.positions().as_ptr()));
 }
+
+#[test]
+fn a_ragged_ensemble_is_refused_by_the_resolved_model_guard() {
+    let child = crate::structure::fixture::sample();
+    let mut data = StructureData::empty();
+    data.coords = CoordinateStore::Ragged {
+        models: vec![child.clone()],
+    };
+    let ensemble = Structure::new(data);
+    assert!(ensemble.is_ragged_ensemble());
+    assert!(ensemble.require_resolved_model().is_err());
+    assert!(!child.is_ragged_ensemble());
+    assert!(child.require_resolved_model().is_ok());
+
+    let policy = crate::contract::AnalysisPolicy::default();
+    assert!(ensemble.resolved_atoms(&policy).is_err());
+}

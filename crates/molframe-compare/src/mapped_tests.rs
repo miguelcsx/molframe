@@ -122,6 +122,7 @@ ATOM 7 C CA SER Y 3 0 2 0\n";
 fn dockq_options() -> DockQOptions {
     DockQOptions {
         contact_distance: 5.0,
+        interface_distance: 10.0,
         ligand_scale: 8.5,
         interface_scale: 1.5,
     }

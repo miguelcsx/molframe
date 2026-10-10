@@ -2,8 +2,9 @@
 
 use molframe_chem::PolymerAtomRole;
 use molframe_core::index::ResidueIndex;
+use molframe_core::selection::AtomSelection;
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
-use molframe_core::{AtomAnnotation, Presence};
+use molframe_core::{AnalysisPolicy, AtomAnnotation, Presence};
 
 /// The seven torsions of one nucleotide, in degrees where defined.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -50,10 +51,35 @@ pub enum NucleicTorsionError {
 /// # Errors
 ///
 /// Returns [`NucleicTorsionError`] when semantic roles are absent or ambiguous.
+/// Alternate conformations are resolved with the default analysis policy, one
+/// self-consistent conformer; use [`nucleic_torsions_with_policy`] to choose.
 pub fn nucleic_torsions(
     structure: &Structure,
 ) -> Result<Vec<NucleicTorsions>, NucleicTorsionError> {
+    nucleic_torsions_with_policy(structure, &AnalysisPolicy::default())
+}
+
+/// Like [`nucleic_torsions`], but selects atoms with the policy's
+/// alternate-conformation rule before looking up roles.
+///
+/// A residue with two altloc copies of an atom therefore no longer reports an
+/// ambiguous role, provided the policy keeps one copy. Under `KeepAll` the
+/// duplicates remain and are reported as ambiguous. When the policy cannot be
+/// resolved for the structure (for example a ragged ensemble) every atom is kept.
+///
+/// # Errors
+///
+/// Returns [`NucleicTorsionError`] when semantic roles are absent or ambiguous.
+pub fn nucleic_torsions_with_policy(
+    structure: &Structure,
+    policy: &AnalysisPolicy,
+) -> Result<Vec<NucleicTorsions>, NucleicTorsionError> {
     require_roles(structure)?;
+    let view = View {
+        structure,
+        selection: crate::secondary_structure_assignment::altloc_selection(structure, policy),
+    };
+
     let mut records = Vec::new();
     for chain in structure.data().chains() {
         let residues: Vec<ResidueRef<'_>> = chain
@@ -74,7 +100,7 @@ pub fn nucleic_torsions(
                 .checked_sub(1)
                 .and_then(|index| residues.get(index).copied());
             let next = residues.get(position + 1).copied();
-            records.push(torsions_of(structure, current, previous, next)?);
+            records.push(torsions_of(&view, current, previous, next)?);
         }
     }
     records.sort_by_key(|record| record.residue.get());
@@ -82,26 +108,26 @@ pub fn nucleic_torsions(
 }
 
 fn torsions_of(
-    structure: &Structure,
+    view: &View<'_>,
     current: ResidueRef<'_>,
     previous: Option<ResidueRef<'_>>,
     next: Option<ResidueRef<'_>>,
 ) -> Result<NucleicTorsions, NucleicTorsionError> {
     let previous = previous
-        .map(|residue| linked(structure, residue, current).map(|linked| linked.then_some(residue)))
+        .map(|residue| linked(view, residue, current).map(|linked| linked.then_some(residue)))
         .transpose()?
         .flatten();
     let next = next
-        .map(|residue| linked(structure, current, residue).map(|linked| linked.then_some(residue)))
+        .map(|residue| linked(view, current, residue).map(|linked| linked.then_some(residue)))
         .transpose()?
         .flatten();
-    let current_atoms = NucleotideAtoms::project(structure, current)?;
+    let current_atoms = NucleotideAtoms::project(view, current)?;
     let previous_o3 = previous
-        .map(|residue| role_position(structure, residue, PolymerAtomRole::NUCLEIC_O3))
+        .map(|residue| role_position(view, residue, PolymerAtomRole::NUCLEIC_O3))
         .transpose()?
         .flatten();
     let next_atoms = next
-        .map(|residue| NucleotideAtoms::project(structure, residue))
+        .map(|residue| NucleotideAtoms::project(view, residue))
         .transpose()?;
     Ok(NucleicTorsions {
         residue: current.index(),
@@ -165,39 +191,33 @@ struct NucleotideAtoms {
 }
 
 impl NucleotideAtoms {
-    fn project(
-        structure: &Structure,
-        residue: ResidueRef<'_>,
-    ) -> Result<Self, NucleicTorsionError> {
+    fn project(view: &View<'_>, residue: ResidueRef<'_>) -> Result<Self, NucleicTorsionError> {
         Ok(Self {
-            p: role_position(structure, residue, PolymerAtomRole::NUCLEIC_PHOSPHATE)?,
-            o5: role_position(structure, residue, PolymerAtomRole::NUCLEIC_O5)?,
-            c5: role_position(structure, residue, PolymerAtomRole::NUCLEIC_C5)?,
-            c4: role_position(structure, residue, PolymerAtomRole::NUCLEIC_C4)?,
-            c3: role_position(structure, residue, PolymerAtomRole::NUCLEIC_C3)?,
-            o3: role_position(structure, residue, PolymerAtomRole::NUCLEIC_O3)?,
-            o4: role_position(structure, residue, PolymerAtomRole::NUCLEIC_O4)?,
-            c1: role_position(structure, residue, PolymerAtomRole::NUCLEIC_C1)?,
-            glycosidic: role_position(structure, residue, PolymerAtomRole::NUCLEIC_GLYCOSIDIC)?,
-            base_reference: role_position(
-                structure,
-                residue,
-                PolymerAtomRole::NUCLEIC_BASE_REFERENCE,
-            )?,
+            p: role_position(view, residue, PolymerAtomRole::NUCLEIC_PHOSPHATE)?,
+            o5: role_position(view, residue, PolymerAtomRole::NUCLEIC_O5)?,
+            c5: role_position(view, residue, PolymerAtomRole::NUCLEIC_C5)?,
+            c4: role_position(view, residue, PolymerAtomRole::NUCLEIC_C4)?,
+            c3: role_position(view, residue, PolymerAtomRole::NUCLEIC_C3)?,
+            o3: role_position(view, residue, PolymerAtomRole::NUCLEIC_O3)?,
+            o4: role_position(view, residue, PolymerAtomRole::NUCLEIC_O4)?,
+            c1: role_position(view, residue, PolymerAtomRole::NUCLEIC_C1)?,
+            glycosidic: role_position(view, residue, PolymerAtomRole::NUCLEIC_GLYCOSIDIC)?,
+            base_reference: role_position(view, residue, PolymerAtomRole::NUCLEIC_BASE_REFERENCE)?,
         })
     }
 }
 
 fn linked(
-    structure: &Structure,
+    view: &View<'_>,
     first: ResidueRef<'_>,
     second: ResidueRef<'_>,
 ) -> Result<bool, NucleicTorsionError> {
-    let first_o3 = role_atom(structure, first, PolymerAtomRole::NUCLEIC_O3)?;
-    let second_p = role_atom(structure, second, PolymerAtomRole::NUCLEIC_PHOSPHATE)?;
+    let first_o3 = role_atom(view, first, PolymerAtomRole::NUCLEIC_O3)?;
+    let second_p = role_atom(view, second, PolymerAtomRole::NUCLEIC_PHOSPHATE)?;
     let (Some(first_o3), Some(second_p)) = (first_o3, second_p) else {
         return Ok(false);
     };
+    let structure = view.structure;
     if !structure.data().bonds.is_available() {
         return Ok(false);
     }
@@ -234,21 +254,22 @@ fn residue_has_role(
 }
 
 fn role_position(
-    structure: &Structure,
+    view: &View<'_>,
     residue: ResidueRef<'_>,
     required: PolymerAtomRole,
 ) -> Result<Option<[f32; 3]>, NucleicTorsionError> {
-    Ok(role_atom(structure, residue, required)?.and_then(AtomRef::position))
+    Ok(role_atom(view, residue, required)?.and_then(AtomRef::position))
 }
 
 fn role_atom<'a>(
-    structure: &'a Structure,
+    view: &View<'a>,
     residue: ResidueRef<'a>,
     required: PolymerAtomRole,
 ) -> Result<Option<AtomRef<'a>>, NucleicTorsionError> {
-    let mut matches = residue
-        .atoms()
-        .filter(|atom| atom_role(structure, *atom).is_some_and(|role| role.intersects(required)));
+    let mut matches = residue.atoms().filter(|atom| {
+        view.keeps(*atom)
+            && atom_role(view.structure, *atom).is_some_and(|role| role.intersects(required))
+    });
     let first = matches.next();
     if matches.next().is_some() {
         Err(NucleicTorsionError::AmbiguousRole {
@@ -257,6 +278,20 @@ fn role_atom<'a>(
         })
     } else {
         Ok(first)
+    }
+}
+
+/// The structure together with the atoms the alternate-conformation policy kept.
+struct View<'a> {
+    structure: &'a Structure,
+    selection: Option<AtomSelection>,
+}
+
+impl View<'_> {
+    fn keeps(&self, atom: AtomRef<'_>) -> bool {
+        self.selection
+            .as_ref()
+            .is_none_or(|selection| selection.contains(atom.index().get()))
     }
 }
 

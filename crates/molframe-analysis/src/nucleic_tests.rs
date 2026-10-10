@@ -1,5 +1,6 @@
-use super::nucleic_torsions;
+use super::{NucleicTorsionError, nucleic_torsions, nucleic_torsions_with_policy};
 use molframe_chem::PolymerAtomRole;
+use molframe_core::contract::{AltlocPolicy, AnalysisPolicy};
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_core::{AnnotationColumn, AtomAnnotation};
@@ -80,4 +81,42 @@ fn with_roles(structure: &Structure, roles: &[PolymerAtomRole]) -> Structure {
         ),
     );
     Structure::new(data)
+}
+
+#[test]
+fn altloc_copies_of_a_role_atom_are_resolved_before_role_lookup() {
+    let source = "data_s\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_alt_id\n_atom_site.label_comp_id\n\
+_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n\
+_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 P P . G A 1 -0.5 1 0\n\
+ATOM 2 O O5' . G A 1 0 0 0\n\
+ATOM 3 C C5' A G A 1 1.33 0 0\n\
+ATOM 4 C C5' B G A 1 1.33 0.1 0\n\
+ATOM 5 C C4' . G A 1 1.83 -1 0\n";
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let (parsed, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
+        Ok(result) => result,
+        Err(findings) => panic!("fixture failed: {findings:?}"),
+    };
+    let structure = with_roles(
+        &parsed,
+        &[
+            PolymerAtomRole::NUCLEIC_PHOSPHATE,
+            PolymerAtomRole::NUCLEIC_O5,
+            PolymerAtomRole::NUCLEIC_C5,
+            PolymerAtomRole::NUCLEIC_C5,
+            PolymerAtomRole::NUCLEIC_C4,
+        ],
+    );
+    let Ok(records) = nucleic_torsions(&structure) else {
+        panic!("the default policy keeps one conformer");
+    };
+    assert!(records[0].beta.is_some());
+    let keep_all = AnalysisPolicy::default().with_altloc(AltlocPolicy::KeepAll);
+    assert!(matches!(
+        nucleic_torsions_with_policy(&structure, &keep_all),
+        Err(NucleicTorsionError::AmbiguousRole { .. })
+    ));
 }

@@ -6,6 +6,7 @@ use molframe_spatial::{
     PairQuery, PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions,
     for_each_pairs_within_unsorted,
 };
+use std::collections::BTreeMap;
 
 use crate::numeric::{f32_to_usize, f64_to_f32, u64_to_f64, usize_to_f32};
 
@@ -83,6 +84,12 @@ pub enum RadialError {
 /// Group coordinates must already be imaged as whole molecules. The resulting
 /// centres can still be compared through the supplied periodic box.
 ///
+/// Groups are identified by their atom set. A group that appears in both lists,
+/// or more than once in one list, is a single site: it is never paired with
+/// itself, a pair of sites is counted once however many lists contain them, and
+/// the ideal pair population follows the same unique-pair rule as
+/// [`radial_distribution`].
+///
 /// # Errors
 ///
 /// Returns invalid-group, radial-policy or spatial errors.
@@ -98,26 +105,48 @@ pub fn centre_of_mass_radial_distribution(
     if positions.len() != masses.len() || left.is_empty() || right.is_empty() {
         return Err(RadialError::InvalidGroups);
     }
-    let same = left == right;
-    let mut centres = group_centres(positions, masses, left)?;
-    let left_selection =
-        AtomSelection::All(u32::try_from(centres.len()).map_err(|_| RadialError::InvalidGroups)?);
-    let right_selection = if same {
-        left_selection.clone()
-    } else {
-        let start = u32::try_from(centres.len()).map_err(|_| RadialError::InvalidGroups)?;
-        centres.extend(group_centres(positions, masses, right)?);
-        let end = u32::try_from(centres.len()).map_err(|_| RadialError::InvalidGroups)?;
-        AtomSelection::from_sorted((start..end).collect())
-    };
+    let mut sites: Vec<&CentreGroup> = Vec::new();
+    let mut identity: BTreeMap<Vec<u32>, u32> = BTreeMap::new();
+    let left_ids = site_ids(left, &mut sites, &mut identity)?;
+    let right_ids = site_ids(right, &mut sites, &mut identity)?;
+    let mut centres = Vec::with_capacity(sites.len());
+    for group in sites {
+        centres.extend(group_centres(
+            positions,
+            masses,
+            core::slice::from_ref(group),
+        )?);
+    }
     radial_distribution(
         &centres,
-        &left_selection,
-        &right_selection,
+        &AtomSelection::from_sorted(left_ids),
+        &AtomSelection::from_sorted(right_ids),
         options,
         periodic,
         context,
     )
+}
+
+/// Assigns each group a site id by atom-set identity and returns the sorted,
+/// unique ids of the given list.
+fn site_ids<'a>(
+    groups: &'a [CentreGroup],
+    sites: &mut Vec<&'a CentreGroup>,
+    identity: &mut BTreeMap<Vec<u32>, u32>,
+) -> Result<Vec<u32>, RadialError> {
+    let mut ids = Vec::with_capacity(groups.len());
+    for group in groups {
+        let key: Vec<u32> = group.atoms.iter().collect();
+        let next = u32::try_from(sites.len()).map_err(|_| RadialError::InvalidGroups)?;
+        let id = *identity.entry(key).or_insert(next);
+        if id == next {
+            sites.push(group);
+        }
+        ids.push(id);
+    }
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
 }
 
 fn group_centres(
@@ -157,8 +186,10 @@ fn group_centres(
 /// Computes a normalized site-site radial distribution function.
 ///
 /// Pair enumeration delegates to the shared spatial planner. When `left` and
-/// `right` are identical, the ideal population is `N(N-1)/2`; otherwise it is
-/// `N_left N_right`, matching the unique cross-pairs returned by the planner.
+/// `right` are identical, the ideal population is `N(N-1)/2`; for disjoint
+/// selections it is `N_left N_right`. Overlapping selections share `I` sites:
+/// the planner never pairs a site with itself and reports a pair of shared
+/// sites once, so the ideal population is `N_left N_right - I - I(I-1)/2`.
 ///
 /// # Errors
 ///
@@ -279,20 +310,23 @@ fn validate_bounds(minimum: f32, maximum: f32) -> Result<(), RadialError> {
     }
 }
 
+/// Counts the unique unordered pairs of distinct sites with one end in `left`
+/// and the other in `right`.
+///
+/// Ordered pairs `(l, r)` with `l != r` number `|L||R| - |I|` for an
+/// intersection `I`. A pair of two distinct shared sites appears as both
+/// `(a, b)` and `(b, a)`, so `C(|I|, 2)` of them are removed.
 fn possible_pair_count(left: &AtomSelection, right: &AtomSelection) -> Result<u64, RadialError> {
-    let left_len = left.len();
-    let right_len = right.len();
-    if left == right {
-        let predecessor = if left_len == 0 { 0 } else { left_len - 1 };
-        left_len
-            .checked_mul(predecessor)
-            .map(|count| count / 2)
-            .ok_or(RadialError::PairCountOverflow)
-    } else {
-        left_len
-            .checked_mul(right_len)
-            .ok_or(RadialError::PairCountOverflow)
-    }
+    let shared = left.intersect(right).len();
+    let ordered = left
+        .len()
+        .checked_mul(right.len())
+        .ok_or(RadialError::PairCountOverflow)?;
+    let shared_pairs = shared
+        .checked_mul(shared.saturating_sub(1))
+        .ok_or(RadialError::PairCountOverflow)?
+        / 2;
+    Ok(ordered - shared - shared_pairs)
 }
 
 fn make_bin(

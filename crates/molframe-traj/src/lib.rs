@@ -295,7 +295,7 @@ pub use path_similarity::{
     PathFrameMetric, PathSimilarity, PathSimilarityError, path_similarity, path_similarity_view,
 };
 pub use pca::{CartesianFit, PcaResult, cartesian_pca, cartesian_pca_view, dihedral_pca};
-pub use periodic_transform::{Unwrap, Wrap};
+pub use periodic_transform::{TemporalUnwrap, Unwrap, Wrap};
 pub use psf::{PsfAtom, PsfError, PsfTopology, parse_psf, write_psf};
 pub use reader::{
     ChainedReader, FrameValue, MemoryReader, RandomAccess, StreamingReader, Timestep,

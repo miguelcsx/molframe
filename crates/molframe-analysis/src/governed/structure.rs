@@ -12,7 +12,7 @@ use molframe_core::contract::{AnalysisPolicy, ParameterValue};
 use molframe_core::index::ResidueIndex;
 use molframe_core::selection::AtomSelection;
 use molframe_core::structure::Structure;
-use molframe_spatial::{PeriodicBox, SpatialBackend, SpatialError};
+use molframe_spatial::{PeriodicBox, SpatialBackend};
 
 /// Governed chain-interface kernel.
 #[must_use]
@@ -21,7 +21,7 @@ pub fn chain_interface_kernel<'a>(
     second_chain: &'a str,
     cutoff: f32,
     spatial: SpatialBackend,
-) -> impl StructureKernel<Output = Vec<ResidueIndex>, Error = SpatialError> + 'a {
+) -> impl StructureKernel<Output = Vec<ResidueIndex>, Error = crate::InterfaceError> + 'a {
     structure_kernel(
         descriptor("chain-interface")
             .estimating("the residues of one chain that touch another chain within the cutoff")

@@ -1,6 +1,6 @@
 use super::{
-    HydrogenBondError, HydrogenBondOptions, HydrogenBondTable,
-    hydrogen_bonds as hydrogen_bonds_native,
+    HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
+    hydrogen_bonds as hydrogen_bonds_native, hydrogen_bonds_with_policy,
 };
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{
@@ -202,4 +202,109 @@ fn the_bond_list_is_identical_at_every_worker_count() {
             "worker count {workers} changed the result"
         );
     }
+}
+
+const ALT_HEADER: &str = "data_s\n\
+_cell.length_a 10\n_cell.length_b 10\n_cell.length_c 10\n\
+_cell.angle_alpha 90\n_cell.angle_beta 90\n_cell.angle_gamma 90\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_alt_id\n_atom_site.label_comp_id\n\
+_atom_site.label_asym_id\n_atom_site.label_seq_id\n\
+_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
+
+fn alt_source(donor: &str, hydrogen: &str, acceptor: &str) -> String {
+    format!(
+        "{ALT_HEADER}ATOM 1 N N {donor} DON A 1 0 0 0\n\
+ATOM 2 H H {hydrogen} DON A 1 1 0 0\nATOM 3 O O {acceptor} ACC A 2 2.8 0 0\n"
+    )
+}
+
+fn count(structure: &molframe_core::Structure) -> usize {
+    hydrogen_bonds(structure, options(150.0))
+        .expect("valid request")
+        .len()
+}
+
+#[test]
+fn incompatible_alternate_locations_are_never_paired() {
+    assert_eq!(count(&annotated_structure(&alt_source("A", "A", "B"))), 0);
+    assert_eq!(count(&annotated_structure(&alt_source("A", "A", "A"))), 1);
+    assert_eq!(count(&annotated_structure(&alt_source(".", "A", "B"))), 1);
+    assert_eq!(count(&annotated_structure(&alt_source("A", "A", "."))), 1);
+}
+
+/// Donor at x=1, hydrogen at 0.04, acceptor at 8.2 in a 10 Å cell: the acceptor
+/// image sits at -1.8, so the bond exists only through the minimum image.
+fn wrapped_source(cell: f64) -> String {
+    format!(
+        "data_s\n_cell.length_a {cell}\n_cell.length_b {cell}\n_cell.length_c {cell}\n\
+_cell.angle_alpha 90\n_cell.angle_beta 90\n_cell.angle_gamma 90\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 N N DON A 1 1 5 5\nATOM 2 H H DON A 1 0.04 5 5\nATOM 3 O O ACC A 2 8.2 5 5\n"
+    )
+}
+
+fn periodic() -> HydrogenBondOptions {
+    HydrogenBondOptions {
+        periodic: true,
+        ..options(150.0)
+    }
+}
+
+#[test]
+fn a_real_cell_finds_the_bond_across_the_boundary() {
+    let structure = annotated_structure(&wrapped_source(10.0));
+    assert_eq!(count(&structure), 0);
+    let bonds = hydrogen_bonds(&structure, periodic()).expect("real cell");
+    assert_eq!(bonds.len(), 1);
+    let bond = bonds.row(0).expect("one bond");
+    assert!((bond.donor_acceptor_distance - 2.8).abs() < 1.0e-4);
+    assert!((bond.hydrogen_acceptor_distance - 1.84).abs() < 1.0e-4);
+}
+
+#[test]
+fn a_placeholder_cell_is_refused_unless_explicitly_allowed() {
+    let structure = annotated_structure(&wrapped_source(1.0));
+    assert!(matches!(
+        hydrogen_bonds(&structure, periodic()),
+        Err(HydrogenBondError::MissingCell)
+    ));
+    let allowed = HydrogenBondPolicy {
+        allow_placeholder_cell: true,
+        ..HydrogenBondPolicy::default()
+    };
+    assert!(
+        hydrogen_bonds_with_policy(
+            &structure,
+            periodic(),
+            allowed,
+            &ExecutionContext::default()
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn the_hydrogen_acceptor_cutoff_is_optional_and_applies_when_set() {
+    let structure = annotated_structure(SOURCE);
+    let with = |limit: Option<f64>| {
+        let policy = HydrogenBondPolicy {
+            maximum_hydrogen_acceptor_distance: limit,
+            ..HydrogenBondPolicy::default()
+        };
+        hydrogen_bonds_with_policy(
+            &structure,
+            options(150.0),
+            policy,
+            &ExecutionContext::default(),
+        )
+        .map(|bonds| bonds.len())
+    };
+    // The fixture's hydrogen-acceptor distance is 1.8 Å.
+    assert_eq!(with(None), Ok(1));
+    assert_eq!(with(Some(2.0)), Ok(1));
+    assert_eq!(with(Some(1.5)), Ok(0));
+    assert_eq!(with(Some(0.0)), Err(HydrogenBondError::InvalidOptions));
 }

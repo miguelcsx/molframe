@@ -107,3 +107,62 @@ fn worker_count_does_not_change_the_map() {
         assert_eq!(serial, parallel, "worker count {workers} changed the map");
     }
 }
+
+fn read(source: &str) -> Structure {
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    match molframe_cif::read(&input, &ReadOptions::new()) {
+        Ok((structure, _)) => structure,
+        Err(findings) => panic!("fixture failed: {findings:?}"),
+    }
+}
+
+fn contact_pairs(structure: &Structure, min_separation: u32) -> Vec<(u32, u32)> {
+    let Ok(map) = residue_contact_map(
+        structure,
+        2.0,
+        min_separation,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
+        panic!("valid");
+    };
+    map.contacts()
+        .iter()
+        .map(|contact| (contact.first.get(), contact.second.get()))
+        .collect()
+}
+
+// Residues 0 and 1 are adjacent in chain A; residue 2 is the first of chain B and
+// sits 1 A from residue 1, so its global index is adjacent too. Residue 3 is the
+// second of chain B, 1 A from residue 2.
+const TWO_CHAINS: &str = "data_s\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 C CA GLY A 1 0 0 0\n\
+ATOM 2 C CA GLY A 2 1 0 0\n\
+ATOM 3 C CA GLY B 1 2 0 0\n\
+ATOM 4 C CA GLY B 2 3 0 0\n";
+
+#[test]
+fn separation_one_excludes_adjacent_residues_of_the_same_chain() {
+    let structure = read(TWO_CHAINS);
+    // Residue indices differ by 1 within a chain: 0-1 and 2-3. Cross-chain 1-2
+    // also differs by 1 globally but must survive. Pairs two apart (0-2, 1-3)
+    // are 2 A away, within the cutoff.
+    assert_eq!(
+        contact_pairs(&structure, 0),
+        vec![(0, 1), (0, 2), (1, 2), (1, 3), (2, 3)]
+    );
+    assert_eq!(
+        contact_pairs(&structure, 1),
+        vec![(0, 2), (1, 2), (1, 3)],
+        "same-chain neighbours are dropped and cross-chain pairs are kept"
+    );
+}
+
+#[test]
+fn cross_chain_pairs_survive_any_separation_filter() {
+    let structure = read(TWO_CHAINS);
+    assert_eq!(contact_pairs(&structure, 50), vec![(0, 2), (1, 2), (1, 3)]);
+}

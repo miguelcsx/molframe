@@ -5,6 +5,16 @@
 //! `O(N)` memory, then prune atoms whose conservative surface-clearance bound
 //! cannot improve a candidate. Query cost is `O(log N)` when bounds separate
 //! the atoms and `O(N)` in the degenerate worst case.
+//!
+//! # Scientific scope
+//!
+//! Each axial slice is optimized independently. The returned radii are the
+//! per-slice probe clearance, not a proof that consecutive optima form a
+//! continuous, traversable pathway: the best point in one slice may lie in a
+//! cavity disconnected from the best point in the next. Treat the profile as a
+//! clearance estimate along the supplied axis, and confirm connectivity
+//! (centerline continuity, probe accessibility) before drawing conclusions
+//! about ion or solute permeation.
 
 use crate::numeric::{f32_to_usize, usize_to_f32};
 

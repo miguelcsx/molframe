@@ -73,3 +73,25 @@ fn ragged_models_receive_shared_metadata_and_connectivity() {
     assert!(models.iter().all(|model| model.data().cell.is_some()));
     assert!(structure.pdb_headers().is_some());
 }
+
+#[test]
+fn a_ragged_pdb_ensemble_is_refused_by_the_model_guard() {
+    let text = "MODEL        1\nATOM      1  N   GLY A   1      1.000   1.000   1.000  1.00 10.00           N\nENDMDL\nMODEL        2\nATOM      1  O   GLY A   1      2.000   2.000   2.000  1.00 20.00           O\nENDMDL\n";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let (structure, _) = crate::read(&input, &ReadOptions::new())
+        .unwrap_or_else(|findings| panic!("read failed: {findings:?}"));
+    assert!(structure.is_ragged_ensemble());
+    // The outer shell has no atoms of its own, so an unguarded analysis sees an
+    // empty molecule; the guard turns that into an explicit refusal.
+    assert_eq!(structure.data().atoms().count(), 0);
+    let Err(finding) = structure.require_resolved_model() else {
+        panic!("a ragged ensemble must be refused");
+    };
+    assert_eq!(finding.code(), molframe_core::diagnostic::Code::E6003);
+    let Some((model, _)) = structure.model_snapshot(molframe_core::index::ModelIndex::new(1))
+    else {
+        panic!("model 2 exists");
+    };
+    assert!(model.require_resolved_model().is_ok());
+    assert_eq!(model.data().atoms().count(), 1);
+}

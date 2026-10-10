@@ -1,40 +1,14 @@
 //! Orthorhombic and triclinic minimum-image displacement.
 
+use super::reduction::{self, Matrix};
 use crate::SpatialError;
 use crate::numeric::{f64_f32, i64_f64, rounded_i64};
 use molframe_core::structure::UnitCell;
 
 const ORTHOGONAL_ANGLE_TOLERANCE: f64 = 1.0e-10;
 
-const IMAGE_OFFSETS: [[f64; 3]; 27] = [
-    [-1.0, -1.0, -1.0],
-    [-1.0, -1.0, 0.0],
-    [-1.0, -1.0, 1.0],
-    [-1.0, 0.0, -1.0],
-    [-1.0, 0.0, 0.0],
-    [-1.0, 0.0, 1.0],
-    [-1.0, 1.0, -1.0],
-    [-1.0, 1.0, 0.0],
-    [-1.0, 1.0, 1.0],
-    [0.0, -1.0, -1.0],
-    [0.0, -1.0, 0.0],
-    [0.0, -1.0, 1.0],
-    [0.0, 0.0, -1.0],
-    [0.0, 0.0, 0.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 1.0, -1.0],
-    [0.0, 1.0, 0.0],
-    [0.0, 1.0, 1.0],
-    [1.0, -1.0, -1.0],
-    [1.0, -1.0, 0.0],
-    [1.0, -1.0, 1.0],
-    [1.0, 0.0, -1.0],
-    [1.0, 0.0, 0.0],
-    [1.0, 0.0, 1.0],
-    [1.0, 1.0, -1.0],
-    [1.0, 1.0, 0.0],
-    [1.0, 1.0, 1.0],
-];
+/// Safety cap on the per-axis offset search; reduced bases need at most 2.
+const MAX_SEARCH_REACH: f64 = 16.0;
 
 /// An invertible unit-cell basis and its inverse.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -42,6 +16,77 @@ pub struct PeriodicBox {
     basis: [[f64; 3]; 3],
     inverse: [[f64; 3]; 3],
     orthogonal: bool,
+    reduction: Reduction,
+}
+
+/// Integer change of basis to a lattice-reduced basis, `reduced = basis * T`.
+///
+/// Only the integer matrices are stored; the reduced basis is rebuilt per
+/// search. That keeps the box small enough to pass by value.
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct Reduction {
+    transform: [[i32; 3]; 3],
+    inverse_transform: [[i32; 3]; 3],
+}
+
+/// The reduced basis, its inverse and the row norms bounding the search.
+struct ReducedFrame {
+    basis: Matrix,
+    inverse: Matrix,
+    row_norms: [f64; 3],
+}
+
+impl Reduction {
+    const IDENTITY: Self = Self {
+        transform: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        inverse_transform: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    };
+
+    fn new(basis: Matrix) -> Self {
+        let reduced = reduction::reduce(basis);
+        reduction::narrow(reduced.transform).map_or(
+            Self::IDENTITY,
+            |(transform, inverse_transform)| Self {
+                transform,
+                inverse_transform,
+            },
+        )
+    }
+
+    fn frame(&self, basis: Matrix, inverse: Matrix) -> ReducedFrame {
+        let to_f64 = |matrix: [[i32; 3]; 3]| matrix.map(|row| row.map(f64::from));
+        let reduced = multiply_matrices(basis, to_f64(self.transform));
+        let reduced_inverse = multiply_matrices(to_f64(self.inverse_transform), inverse);
+        ReducedFrame {
+            basis: reduced,
+            inverse: reduced_inverse,
+            row_norms: reduced_inverse.map(|row| squared(row).sqrt()),
+        }
+    }
+
+    /// Maps an integer shift in reduced coordinates to the original basis.
+    fn original_shift(&self, shift: [i64; 3]) -> [i64; 3] {
+        std::array::from_fn(|row| {
+            (0..3).fold(0_i64, |total, column| {
+                total.saturating_add(
+                    i64::from(self.transform[row][column]).saturating_mul(shift[column]),
+                )
+            })
+        })
+    }
+}
+
+fn small_integer(value: f64) -> i32 {
+    match i32::try_from(rounded_i64(value)) {
+        Ok(converted) => converted,
+        Err(_) => 0,
+    }
+}
+
+fn multiply_matrices(left: Matrix, right: Matrix) -> Matrix {
+    std::array::from_fn(|row| {
+        std::array::from_fn(|column| (0..3).map(|k| left[row][k] * right[k][column]).sum())
+    })
 }
 
 /// A shortest displacement on a periodic flat torus and the chosen image.
@@ -73,10 +118,13 @@ impl PeriodicBox {
             return Err(SpatialError::InvalidCell);
         };
 
+        let reduction = Reduction::new(basis);
+
         Ok(Self {
             basis,
             inverse,
             orthogonal,
+            reduction,
         })
     }
 
@@ -84,8 +132,8 @@ impl PeriodicBox {
     ///
     /// The nearest rounded fractional image is sufficient for an orthogonal
     /// cell. In a skewed cell a neighbouring lattice translation can be
-    /// shorter, so all twenty-seven candidates around it are checked in a
-    /// fixed order.
+    /// shorter, so a lattice-reduced basis is searched over a provably
+    /// sufficient neighbourhood and the result is exact.
     #[must_use]
     pub fn displacement(&self, left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
         self.minimum_image(left, right).displacement
@@ -114,11 +162,11 @@ impl PeriodicBox {
 
     fn image_f64(&self, left: [f64; 3], right: [f64; 3]) -> ([f64; 3], [i64; 3]) {
         let cartesian = cartesian_delta(left, right);
-        let fractional = multiply(self.inverse, cartesian);
         if self.orthogonal {
+            let fractional = multiply(self.inverse, cartesian);
             orthogonal_image(self.basis, cartesian, fractional)
         } else {
-            triclinic_image(self.basis, cartesian, fractional)
+            triclinic_image(&self.reduction, self.basis, self.inverse, cartesian)
         }
     }
 
@@ -284,13 +332,21 @@ fn orthogonal_image(
 
 /// Computes the minimum image for a skewed triclinic cell.
 ///
-/// All 27 translations around the rounded fractional image are evaluated in a
-/// deterministic order. Runtime and auxiliary space are `O(1)`.
+/// The search runs in a lattice-reduced basis. The rounded fractional position
+/// there is a candidate at distance `r`; the true nearest image lies within
+/// `r` of the target, hence within `2r` of that candidate, which bounds each
+/// reduced-coordinate offset by `2r` times the norm of the matching row of the
+/// reduced inverse. Every offset inside those bounds is evaluated, so the
+/// result is exact for any valid cell. Runtime is bounded by the reduced
+/// basis, not by the skew of the cell parameters.
 fn triclinic_image(
-    basis: [[f64; 3]; 3],
+    reduction: &Reduction,
+    basis: Matrix,
+    inverse: Matrix,
     cartesian: [f64; 3],
-    fractional: [f64; 3],
 ) -> ([f64; 3], [i64; 3]) {
+    let frame = reduction.frame(basis, inverse);
+    let fractional = multiply(frame.inverse, cartesian);
     let centre = fractional.map(f64::round);
     let base = [
         fractional[0] - centre[0],
@@ -298,28 +354,43 @@ fn triclinic_image(
         fractional[2] - centre[2],
     ];
 
+    let rounded = multiply(frame.basis, base);
+    let radius = squared(rounded).sqrt();
+    if !radius.is_finite() {
+        return (cartesian, [0; 3]);
+    }
+
+    let reach = frame.row_norms.map(|norm| {
+        let bound = (2.0 * radius * norm).mul_add(1.0 + 1.0e-9, 1.0e-9).ceil();
+        small_integer(bound.clamp(0.0, MAX_SEARCH_REACH))
+    });
+
     let mut best = cartesian;
     let mut best_squared = squared(best);
     let mut best_shift = [0; 3];
 
-    for offset in IMAGE_OFFSETS {
-        let image = [
-            base[0] - offset[0],
-            base[1] - offset[1],
-            base[2] - offset[2],
-        ];
+    for first in -reach[0]..=reach[0] {
+        for second in -reach[1]..=reach[1] {
+            for third in -reach[2]..=reach[2] {
+                let offset = [first, second, third].map(f64::from);
+                let image = [
+                    base[0] - offset[0],
+                    base[1] - offset[1],
+                    base[2] - offset[2],
+                ];
+                let candidate = multiply(frame.basis, image);
+                let candidate_squared = squared(candidate);
 
-        let candidate = multiply(basis, image);
-        let candidate_squared = squared(candidate);
-
-        if candidate_squared < best_squared {
-            best = candidate;
-            best_squared = candidate_squared;
-            best_shift = integer_shift([
-                centre[0] + offset[0],
-                centre[1] + offset[1],
-                centre[2] + offset[2],
-            ]);
+                if candidate_squared < best_squared {
+                    best = candidate;
+                    best_squared = candidate_squared;
+                    best_shift = reduction.original_shift([
+                        rounded_i64(centre[0]).saturating_add(i64::from(first)),
+                        rounded_i64(centre[1]).saturating_add(i64::from(second)),
+                        rounded_i64(centre[2]).saturating_add(i64::from(third)),
+                    ]);
+                }
+            }
         }
     }
 

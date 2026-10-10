@@ -3,12 +3,16 @@
 //! Reading never collapses disorder. This module turns a declared analysis
 //! policy into an atom selection while leaving the stored rows untouched.
 
+#[path = "disorder_compat.rs"]
+mod compat;
+
 use super::{AtomRef, ResidueRef, Structure};
 use crate::contract::{AltlocPolicy, Analysis, AnalysisPolicy, Coverage, Indeterminacy, Quality};
 use crate::diagnostic::{Code, Diagnostic};
 use crate::hashing::IdentityBuildHasher;
 use crate::selection::AtomSelection;
 use crate::symbol::{AltId, SymbolId};
+pub use compat::{altloc_compatible, compatible_pairs};
 use hashbrown::HashMap;
 
 /// Occupancy scratch keyed by an identifier the engine assigned itself.
@@ -65,6 +69,20 @@ impl Structure {
     /// indeterminate analysis instead.
     #[must_use]
     pub fn resolve_altlocs(&self, policy: &AnalysisPolicy) -> Analysis<AtomSelection> {
+        if let Err(finding) = self.require_resolved_model() {
+            return Analysis::indeterminate(
+                Indeterminacy::UnresolvedConformations,
+                Coverage {
+                    intended: 0,
+                    used: 0,
+                    missing: 0,
+                    ambiguous: 0,
+                },
+                policy,
+            )
+            .with_warning(finding);
+        }
+
         let total = self.atom_count();
 
         let AltlocResolution {
@@ -433,10 +451,7 @@ fn best_scored_label(scores: &ScoreTable<AltId, LabelScore>) -> Option<AltId> {
     }
 }
 
-/// Updates the retained alternate row for one atom name.
-///
-/// Equal occupancies preserve the first encountered atom because replacement
-/// occurs only for a strictly greater occupancy.
+/// Retains the first atom of equal occupancy; only a strictly greater one replaces it.
 fn record_atom_choice(
     choices: &mut ScoreTable<SymbolId, AtomChoice>,
     name: SymbolId,
@@ -465,18 +480,13 @@ fn occupancy(atom: AtomRef<'_>) -> f32 {
     value
 }
 
-/// Returns whether an atom belongs to the selected conformation.
-///
-/// Blank-labelled atoms belong to every conformation and are always retained.
+/// Whether an atom belongs to the selected conformation (blank labels always do).
 fn keeps_label(atom: AtomRef<'_>, selected: Option<AltId>) -> bool {
     atom.alt_id()
         .is_some_and(|label| label.is_blank() || Some(label) == selected)
 }
 
-/// Produces owned diagnostic context for a named alternate-location policy.
-///
-/// Allocation occurs only on the missing-label warning path, where the
-/// diagnostic must retain its own copy of the requested identifier.
+/// Owned diagnostic context for a named policy; allocates only on the missing-label warning.
 fn named_policy_label(policy: &AltlocPolicy) -> Box<str> {
     match policy {
         AltlocPolicy::Label(label) => label.clone(),

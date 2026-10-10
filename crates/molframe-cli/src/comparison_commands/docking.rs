@@ -32,6 +32,7 @@ pub(super) fn measure_dockq(
         contact_distance,
         ligand_scale,
         interface_scale,
+        ..molframe::compare::DockQOptions::published()
     };
     let scored = match options.mapped {
         None => molframe::compare::dockq(

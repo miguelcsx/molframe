@@ -25,6 +25,27 @@ pub struct HydrogenBondOptions {
     pub periodic: bool,
 }
 
+/// Optional refinements to hydrogen-bond detection that sit beside the core
+/// geometric options.
+///
+/// The default preserves the behaviour of a plain [`HydrogenBondOptions`]
+/// request: no hydrogen-to-acceptor cutoff and no placeholder cell accepted.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct HydrogenBondPolicy {
+    /// Maximum hydrogen–acceptor distance in ångström.
+    ///
+    /// `None` (the default) applies only the donor–acceptor distance and the
+    /// angle, which keeps long, bent contacts that a hydrogen-distance cutoff
+    /// would call weak. Set it (2.5 Å is a common choice) to drop them.
+    pub maximum_hydrogen_acceptor_distance: Option<f64>,
+    /// Accept a placeholder unit cell for periodic detection.
+    ///
+    /// A unit cube with right angles is what files write when they have no
+    /// cell, so periodic images built from it are fictitious. Periodic
+    /// requests are rejected unless this is set explicitly.
+    pub allow_placeholder_cell: bool,
+}
+
 /// One fully oriented hydrogen bond.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HydrogenBond {
@@ -70,8 +91,10 @@ pub enum HydrogenBondError {
     /// CCD donor/acceptor annotations or resolved bonds are absent.
     #[error("hydrogen bonds require CCD donor/acceptor annotations and connectivity")]
     MissingChemistry,
-    /// Periodic geometry was requested without a unit cell.
-    #[error("periodic hydrogen bonds require a unit cell")]
+    /// Periodic geometry was requested without a usable unit cell: the cell is
+    /// absent, or it is the placeholder some files write when they have none
+    /// and the policy does not allow it.
+    #[error("periodic hydrogen bonds require a real unit cell (absent or placeholder cell)")]
     MissingCell,
     /// Spatial indexing rejected the request.
     #[error(transparent)]
@@ -80,8 +103,10 @@ pub enum HydrogenBondError {
 
 /// Finds hydrogen bonds from CCD roles, explicit hydrogens and angular geometry.
 ///
-/// No heavy-atom-only direction or residue-name fallback is performed. Results
-/// are sorted by `(donor, hydrogen, acceptor)`.
+/// No heavy-atom-only direction or residue-name fallback is performed. Atoms
+/// from incompatible alternate locations are never paired: a blank label is
+/// compatible with anything and two equal labels are compatible. Results are
+/// sorted by `(donor, hydrogen, acceptor)`.
 ///
 /// # Errors
 ///
@@ -92,23 +117,28 @@ pub fn hydrogen_bonds(
     options: HydrogenBondOptions,
     context: &ExecutionContext,
 ) -> Result<HydrogenBondTable, HydrogenBondError> {
-    validate_options(options)?;
+    hydrogen_bonds_with_policy(structure, options, HydrogenBondPolicy::default(), context)
+}
+
+/// [`hydrogen_bonds`] with the optional [`HydrogenBondPolicy`] refinements.
+///
+/// # Errors
+///
+/// As [`hydrogen_bonds`]; a periodic request over a placeholder cell the
+/// policy does not allow is reported as [`HydrogenBondError::MissingCell`].
+pub fn hydrogen_bonds_with_policy(
+    structure: &Structure,
+    options: HydrogenBondOptions,
+    policy: HydrogenBondPolicy,
+    context: &ExecutionContext,
+) -> Result<HydrogenBondTable, HydrogenBondError> {
+    validate_options(options, policy)?;
     if !structure.data().bonds.is_available() {
         return Err(HydrogenBondError::MissingChemistry);
     }
     let donors = role_selection(structure, molframe_core::HBOND_DONOR_ANNOTATION)?;
     let acceptors = role_selection(structure, molframe_core::HBOND_ACCEPTOR_ANNOTATION)?;
-    let cell = if options.periodic {
-        Some(
-            structure
-                .data()
-                .cell
-                .ok_or(HydrogenBondError::MissingCell)?,
-        )
-    } else {
-        None
-    };
-    let periodic_box = cell.map(PeriodicBox::from_cell).transpose()?;
+    let periodic_box = periodic_box(structure, options, policy)?;
     let adjacency = structure.data().bonds.adjacency(structure.atom_count());
     let mut output = Vec::new();
 
@@ -127,6 +157,7 @@ pub fn hydrogen_bonds(
         reduce_pairs_within_unsorted(&query, Vec::new, |output: &mut Vec<HydrogenBond>, pair| {
             for (donor, acceptor) in orientations(pair.first, pair.second, &donors, &acceptors) {
                 if donor == acceptor
+                    || !altlocs_compatible(structure, donor, acceptor)
                     || adjacency
                         .neighbours(AtomIndex::new(donor))
                         .binary_search(&AtomIndex::new(acceptor))
@@ -138,6 +169,9 @@ pub fn hydrogen_bonds(
                     if let Some(bond) =
                         measure(structure, donor, hydrogen, acceptor, periodic_box.as_ref())
                         && bond.angle_degrees >= options.minimum_angle_degrees
+                        && policy
+                            .maximum_hydrogen_acceptor_distance
+                            .is_none_or(|limit| f64::from(bond.hydrogen_acceptor_distance) <= limit)
                     {
                         output.push(bond);
                     }
@@ -154,7 +188,16 @@ pub fn hydrogen_bonds(
     Ok(output.into_iter().collect())
 }
 
-fn validate_options(options: HydrogenBondOptions) -> Result<(), HydrogenBondError> {
+fn validate_options(
+    options: HydrogenBondOptions,
+    policy: HydrogenBondPolicy,
+) -> Result<(), HydrogenBondError> {
+    if policy
+        .maximum_hydrogen_acceptor_distance
+        .is_some_and(|limit| !limit.is_finite() || limit <= 0.0)
+    {
+        return Err(HydrogenBondError::InvalidOptions);
+    }
     if options.maximum_donor_acceptor_distance.is_finite()
         && options.maximum_donor_acceptor_distance > 0.0
         && options.minimum_angle_degrees.is_finite()
@@ -164,6 +207,87 @@ fn validate_options(options: HydrogenBondOptions) -> Result<(), HydrogenBondErro
     } else {
         Err(HydrogenBondError::InvalidOptions)
     }
+}
+
+/// The minimum-image box for a periodic request, refusing absent or placeholder
+/// cells.
+pub(crate) fn periodic_box(
+    structure: &Structure,
+    options: HydrogenBondOptions,
+    policy: HydrogenBondPolicy,
+) -> Result<Option<PeriodicBox>, HydrogenBondError> {
+    if !options.periodic {
+        return Ok(None);
+    }
+    let cell = structure
+        .data()
+        .cell
+        .ok_or(HydrogenBondError::MissingCell)?;
+    if cell.is_placeholder() && !policy.allow_placeholder_cell {
+        return Err(HydrogenBondError::MissingCell);
+    }
+    Ok(Some(PeriodicBox::from_cell(cell)?))
+}
+
+/// Whether two atoms can coexist in one conformation: a blank alternate
+/// location fits any other, and two labels must be equal.
+pub(crate) fn altlocs_compatible(structure: &Structure, first: u32, second: u32) -> bool {
+    let label = |atom: u32| {
+        structure
+            .data()
+            .atom(AtomIndex::new(atom))
+            .and_then(AtomRef::alt_label)
+    };
+    match (label(first), label(second)) {
+        (Some(a), Some(b)) => a == b,
+        _ => true,
+    }
+}
+
+/// Donor–acceptor heavy-atom pairs within the distance cutoff, with no
+/// hydrogen geometry. Pairs are oriented `(donor, acceptor)`, sorted and
+/// deduplicated; bonded and altloc-incompatible pairs are removed.
+pub(crate) fn heavy_atom_pairs(
+    structure: &Structure,
+    options: HydrogenBondOptions,
+    policy: HydrogenBondPolicy,
+    context: &ExecutionContext,
+) -> Result<Vec<(u32, u32)>, HydrogenBondError> {
+    validate_options(options, policy)?;
+    let donors = role_selection(structure, molframe_core::HBOND_DONOR_ANNOTATION)?;
+    let acceptors = role_selection(structure, molframe_core::HBOND_ACCEPTOR_ANNOTATION)?;
+    let periodic_box = periodic_box(structure, options, policy)?;
+    let bonds = &structure.data().bonds;
+    let adjacency = bonds
+        .is_available()
+        .then(|| bonds.adjacency(structure.atom_count()));
+    let query = PairQuery {
+        positions: structure.positions(),
+        left: &donors,
+        right: &acceptors,
+        cutoff: options.maximum_donor_acceptor_distance,
+        options: SpatialSearchOptions::with_backend(options.backend),
+        periodic: periodic_box.as_ref(),
+        context,
+    };
+    let parts =
+        reduce_pairs_within_unsorted(&query, Vec::new, |out: &mut Vec<(u32, u32)>, pair| {
+            for (donor, acceptor) in orientations(pair.first, pair.second, &donors, &acceptors) {
+                let bonded = adjacency.is_some_and(|adjacency| {
+                    adjacency
+                        .neighbours(AtomIndex::new(donor))
+                        .binary_search(&AtomIndex::new(acceptor))
+                        .is_ok()
+                });
+                if donor != acceptor && !bonded && altlocs_compatible(structure, donor, acceptor) {
+                    out.push((donor, acceptor));
+                }
+            }
+        })?;
+    let mut pairs: Vec<(u32, u32)> = parts.into_iter().flatten().collect();
+    pairs.sort_unstable();
+    pairs.dedup();
+    Ok(pairs)
 }
 
 fn role_selection(structure: &Structure, name: &str) -> Result<AtomSelection, HydrogenBondError> {

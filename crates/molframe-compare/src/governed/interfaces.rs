@@ -32,6 +32,7 @@ pub fn governed_dockq(
         .with_parameter("receptor", ParameterValue::Text(receptor.into()))
         .with_parameter("ligand", ParameterValue::Text(ligand.into()))
         .with_parameter("contact_distance", float(options.contact_distance))
+        .with_parameter("interface_distance", float(options.interface_distance))
         .with_parameter("ligand_scale", float(options.ligand_scale))
         .with_parameter("interface_scale", float(options.interface_scale));
     Ok(result)

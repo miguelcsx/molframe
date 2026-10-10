@@ -30,8 +30,8 @@ mod standard_bonds;
 mod standard_components;
 
 pub use annotate::{
-    ChemistryProvenance, ChemistryReport, PolymerLinkPolicy, PolymerLinkRule,
-    apply_component_chemistry,
+    ChemistryProvenance, ChemistryReport, FormalChargeSource, HBOND_WEAK_ACCEPTOR_ANNOTATION,
+    PolymerLinkPolicy, PolymerLinkRule, apply_component_chemistry,
 };
 pub use bonds::{covalent_pair, perceive_bonds, perceive_bonds_in};
 pub use carbohydrates::{

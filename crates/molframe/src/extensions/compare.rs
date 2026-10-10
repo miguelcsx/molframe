@@ -28,6 +28,7 @@ use molframe_seq::Scoring;
 /// # const PDB: &str = "\
 /// # ATOM      1  N   ALA A   1      11.104   6.134  -6.504  1.00  0.00           N
 /// # ATOM      2  CA  ALA A   1      12.560   6.195  -6.504  1.00  0.00           C
+/// # ATOM      3  CB  ALA A   1      13.100   6.900  -5.300  1.00  0.00           C
 /// # END
 /// # ";
 /// let (model, _) = read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;

@@ -78,3 +78,35 @@ fn a_trans_bond_is_not_flagged() {
         .unwrap_or_else(|error| panic!("cis validation failed: {error}"));
     assert!(findings.is_empty());
 }
+
+fn without_bond_table(source: &str) -> Structure {
+    let mut data = structure(source).data().clone();
+    data.bonds = BondTableBuilder::new().finish();
+    Structure::new(data)
+}
+
+#[test]
+fn a_peptide_link_missing_from_the_bond_table_is_found_by_distance() {
+    let findings = cis_peptides(&without_bond_table(&format!("{HEADER}{CIS}")), 30.0)
+        .unwrap_or_else(|error| panic!("cis validation failed: {error}"));
+    assert_eq!(findings.len(), 1);
+}
+
+#[test]
+fn a_distant_nitrogen_is_not_a_peptide_link() {
+    // C-N of 2.33 Å is a chain break, not a bond.
+    let broken = CIS
+        .replace("1.33 0 0", "2.33 0 0")
+        .replace("1.83 1 0", "2.83 1 0");
+    let findings = cis_peptides(&without_bond_table(&format!("{HEADER}{broken}")), 30.0)
+        .unwrap_or_else(|error| panic!("cis validation failed: {error}"));
+    assert!(findings.is_empty());
+}
+
+#[test]
+fn invalid_thresholds_are_rejected() {
+    let structure = structure(&format!("{HEADER}{CIS}"));
+    for threshold in [f64::NAN, f64::INFINITY, -1.0] {
+        assert!(cis_peptides(&structure, threshold).is_err());
+    }
+}

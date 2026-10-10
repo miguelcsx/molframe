@@ -1,62 +1,128 @@
 //! Per-atom CCD annotations and stereochemical observation.
 
 use crate::{Component, StereoConfiguration};
+use molframe_core::AltId;
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::column::Presence;
 use molframe_core::diagnostic::{Code, Diagnostic};
-use molframe_core::structure::{ResidueRef, StructureData};
+use molframe_core::structure::{AtomRef, StructureData};
+
+/// Name of the boolean atom annotation marking weak, nonconventional hydrogen-bond
+/// acceptors (neutral organic sulfur, fluorine and chlorine). It is disjoint
+/// from the conventional acceptor annotation.
+pub const HBOND_WEAK_ACCEPTOR_ANNOTATION: &str = "hbond_weak_acceptor";
 
 #[derive(Clone, Copy)]
+#[allow(clippy::struct_excessive_bools)] // one flag per independent boolean atom annotation column
 pub(super) struct AtomChemistry {
     pub(super) kind: crate::ComponentKind,
     pub(super) aromatic: bool,
     pub(super) charge: i8,
     pub(super) donor: bool,
     pub(super) acceptor: bool,
+    pub(super) weak_acceptor: bool,
     pub(super) stereo: Option<StereoConfiguration>,
 }
 
+/// The non-blank alternate-location label of an atom, if it has one.
+fn conformer(atom: AtomRef<'_>) -> Option<AltId> {
+    atom.alt_id().filter(|alt| !alt.is_blank())
+}
+
+/// Observed configuration of `centre`, judged per alternate conformer.
+///
+/// Each conformer uses only atoms that belong to it or are shared by all, so an
+/// A-conformer centre is never measured against a B-conformer neighbour. A
+/// shared centre with differing conformers reports a configuration only when
+/// every conformer agrees.
 pub(super) fn observed_stereo(
     component: &Component,
-    residue: ResidueRef<'_>,
-    centre_name: &str,
+    atoms: &[AtomRef<'_>],
+    centre: AtomRef<'_>,
     declared: Option<StereoConfiguration>,
 ) -> Option<StereoConfiguration> {
     let declared = declared?;
     if declared == StereoConfiguration::Mixed {
         return Some(declared);
     }
+    let centre_name = centre.name()?;
+    let centre_slot = component
+        .atoms
+        .iter()
+        .position(|atom| atom.name.as_ref() == centre_name)?;
+    let neighbours = first_three_neighbours(component, centre_slot)?;
+    let names = [
+        component.atoms.get(neighbours[0])?.name.as_ref(),
+        component.atoms.get(neighbours[1])?.name.as_ref(),
+        component.atoms.get(neighbours[2])?.name.as_ref(),
+    ];
+    let mut states: Vec<Option<AltId>> = if let Some(alt) = conformer(centre) {
+        vec![Some(alt)]
+    } else {
+        let mut found: Vec<Option<AltId>> = Vec::new();
+        for atom in atoms {
+            let alt = conformer(*atom);
+            if alt.is_some() && names.contains(&atom.name()?) && !found.contains(&alt) {
+                found.push(alt);
+            }
+        }
+        if found.is_empty() {
+            found.push(None);
+        }
+        found
+    };
+    states.sort_by_key(|alt| alt.map(AltId::symbol));
+    let mut result = None;
+    for state in states {
+        let configuration = state_stereo(
+            component,
+            atoms,
+            (centre, centre_slot, neighbours, names),
+            state,
+            declared,
+        )?;
+        match result {
+            None => result = Some(configuration),
+            Some(previous) if previous == configuration => {}
+            Some(_) => return None,
+        }
+    }
+    result
+}
+
+fn state_stereo(
+    component: &Component,
+    atoms: &[AtomRef<'_>],
+    (centre, centre_slot, neighbours, names): (AtomRef<'_>, usize, [usize; 3], [&str; 3]),
+    state: Option<AltId>,
+    declared: StereoConfiguration,
+) -> Option<StereoConfiguration> {
     let reference = component
         .ideal_coordinates
         .as_deref()
         .or(component.model_coordinates.as_deref())?;
-    let centre = component
-        .atoms
-        .iter()
-        .position(|atom| atom.name.as_ref() == centre_name)?;
-    let neighbours = first_three_neighbours(component, centre)?;
     let reference_volume = signed_volume(
-        *reference.get(centre)?,
+        *reference.get(centre_slot)?,
         [
             *reference.get(neighbours[0])?,
             *reference.get(neighbours[1])?,
             *reference.get(neighbours[2])?,
         ],
     );
-    let observed_centre = residue.atom(centre_name)?.position()?;
+    let compatible = |atom: &&AtomRef<'_>| match (conformer(**atom), state) {
+        (Some(own), Some(wanted)) => own == wanted,
+        _ => true,
+    };
+    let find = |name: &str| {
+        atoms
+            .iter()
+            .filter(|atom| atom.name() == Some(name))
+            .find(compatible)
+            .and_then(|atom| atom.position())
+    };
     let observed_volume = signed_volume(
-        observed_centre,
-        [
-            residue
-                .atom(component.atoms.get(neighbours[0])?.name.as_ref())?
-                .position()?,
-            residue
-                .atom(component.atoms.get(neighbours[1])?.name.as_ref())?
-                .position()?,
-            residue
-                .atom(component.atoms.get(neighbours[2])?.name.as_ref())?
-                .position()?,
-        ],
+        centre.position()?,
+        [find(names[0])?, find(names[1])?, find(names[2])?],
     );
     if reference_volume.abs() <= f64::EPSILON || observed_volume.abs() <= f64::EPSILON {
         return None;
@@ -128,6 +194,7 @@ pub(super) fn attach_annotations(
     let mut charges = Vec::with_capacity(chemistry.len());
     let mut donors = Vec::with_capacity(chemistry.len());
     let mut acceptors = Vec::with_capacity(chemistry.len());
+    let mut weak = Vec::with_capacity(chemistry.len());
     let mut stereo = Vec::with_capacity(chemistry.len());
     for annotation in chemistry {
         if let Some(annotation) = annotation {
@@ -136,6 +203,7 @@ pub(super) fn attach_annotations(
             charges.push((i64::from(annotation.charge), Presence::Present));
             donors.push((annotation.donor, Presence::Present));
             acceptors.push((annotation.acceptor, Presence::Present));
+            weak.push((annotation.weak_acceptor, Presence::Present));
             match annotation.stereo {
                 Some(configuration) => {
                     let symbol = data
@@ -152,6 +220,7 @@ pub(super) fn attach_annotations(
             charges.push((0, Presence::Unknown));
             donors.push((false, Presence::Unknown));
             acceptors.push((false, Presence::Unknown));
+            weak.push((false, Presence::Unknown));
             stereo.push((unknown, Presence::Unknown));
         }
     }
@@ -186,6 +255,12 @@ pub(super) fn attach_annotations(
                 AtomAnnotation::Boolean(AnnotationColumn::from_entries(acceptors).map_err(
                     |error| annotation_capacity().with_context("cause", error.to_string()),
                 )?),
+            ),
+            (
+                HBOND_WEAK_ACCEPTOR_ANNOTATION,
+                AtomAnnotation::Boolean(AnnotationColumn::from_entries(weak).map_err(|error| {
+                    annotation_capacity().with_context("cause", error.to_string())
+                })?),
             ),
             (
                 molframe_core::STEREO_CONFIGURATION_ANNOTATION,

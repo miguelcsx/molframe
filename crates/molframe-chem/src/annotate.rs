@@ -2,12 +2,14 @@
 
 mod atom_chemistry;
 mod component_index;
+mod linkage;
 
 use component_index::ComponentIndex;
+use linkage::link_polymer;
 
 use crate::{Component, ComponentKind, ComponentProvider};
+pub use atom_chemistry::HBOND_WEAK_ACCEPTOR_ANNOTATION;
 use atom_chemistry::{AtomChemistry, attach_annotations, observed_stereo};
-use molframe_core::BondOrder;
 use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
@@ -17,9 +19,24 @@ use molframe_core::topology::PolymerKind;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+/// Where the per-atom formal charges written by the pass come from.
+///
+/// A component dictionary records the charge of the free, isolated component in
+/// its reference protonation state. It is not the charge the atom carries at the
+/// pH or in the environment of the modelled structure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FormalChargeSource {
+    /// Copied from the component definition, with no protonation modelling.
+    ComponentDefault,
+}
+
 /// Provenance for the native component-chemistry pass.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChemistryProvenance {
+    /// Origin of the formal-charge annotation. Consumers that need the real
+    /// protonation state must not treat a `ComponentDefault` charge as one.
+    pub charge_source: FormalChargeSource,
     /// Stable identity of the native pipeline.
     pub algorithm: &'static str,
     /// Exact component dictionary version used for lookup.
@@ -127,7 +144,7 @@ pub fn apply_component_chemistry(
         chemistry: vec![None; structure.atom_count() as usize],
     };
     for chain in structure.data().chains() {
-        let mut kinds = BTreeSet::new();
+        let mut kinds = BTreeMap::new();
         let residues: Vec<_> = chain.residues().collect();
         for residue in &residues {
             state.annotate_residue(*residue, &mut kinds)?;
@@ -157,6 +174,7 @@ pub fn apply_component_chemistry(
         dictionary_version: provider.version().clone(),
         polymer_link_policy: polymer_link_policy.clone(),
         provenance: ChemistryProvenance {
+            charge_source: FormalChargeSource::ComponentDefault,
             algorithm: "component-chemistry",
             dictionary_version: provider.version().clone(),
             polymer_link_policy,
@@ -197,7 +215,7 @@ impl Annotator<'_> {
     fn annotate_residue<'a>(
         &mut self,
         residue: ResidueRef<'a>,
-        kinds: &mut BTreeSet<ComponentKind>,
+        kinds: &mut BTreeMap<ComponentKind, usize>,
     ) -> Result<(), Diagnostic> {
         let mut variants: BTreeMap<&str, Vec<AtomRef<'a>>> = BTreeMap::new();
         for atom in residue.atoms() {
@@ -223,7 +241,7 @@ impl Annotator<'_> {
                     .entry(component_id.into())
                     .or_insert_with(|| Arc::new(ComponentIndex::build(Arc::clone(&component)))),
             );
-            kinds.insert(component.kind);
+            *kinds.entry(component.kind).or_insert(0) += 1;
             if inconsistent(&index, &atoms) {
                 self.findings.push(
                     Diagnostic::new(Code::W3202)
@@ -233,18 +251,13 @@ impl Annotator<'_> {
                 continue;
             }
             report_missing_atoms(&component, &atoms, residue, &mut self.findings);
-            self.annotate_atoms(&index, residue, &atoms);
+            self.annotate_atoms(&index, &atoms);
             add_component_bonds(&component, &atoms, &mut self.bonds);
         }
         Ok(())
     }
 
-    fn annotate_atoms(
-        &mut self,
-        index: &ComponentIndex,
-        residue: ResidueRef<'_>,
-        atoms: &[AtomRef<'_>],
-    ) {
+    fn annotate_atoms(&mut self, index: &ComponentIndex, atoms: &[AtomRef<'_>]) {
         let component = index.component();
         for atom in atoms {
             let Some(name) = atom.name() else {
@@ -262,7 +275,8 @@ impl Annotator<'_> {
                 charge: expected.charge,
                 donor: index.is_donor(name),
                 acceptor: index.is_acceptor(name),
-                stereo: observed_stereo(component, residue, name, expected.stereo),
+                weak_acceptor: index.is_weak_acceptor(name),
+                stereo: observed_stereo(component, atoms, *atom, expected.stereo),
             });
         }
     }
@@ -353,16 +367,30 @@ fn alt_compatible(atom_a: AtomRef<'_>, atom_b: AtomRef<'_>) -> bool {
     }
 }
 
+/// Classifies a chain by the polymer kind most of its polymer residues share.
+///
+/// Waters, ions, ligands and other non-polymer components never vote, so a
+/// protein chain carrying a few modified or hetero residues is still a protein.
+/// A chain is left unclassified when no polymer kind holds a strict majority
+/// of the polymer residues.
 fn classify_chain(
     data: &mut molframe_core::StructureData,
     chain: ChainIndex,
-    kinds: &BTreeSet<ComponentKind>,
+    kinds: &BTreeMap<ComponentKind, usize>,
 ) -> Result<(), Diagnostic> {
-    let kind = if kinds.iter().all(|kind| *kind == ComponentKind::AminoAcid) && !kinds.is_empty() {
+    let polymer = |kind: ComponentKind| match kinds.get(&kind) {
+        Some(count) => *count,
+        None => 0,
+    };
+    let amino = polymer(ComponentKind::AminoAcid);
+    let nucleic = polymer(ComponentKind::Nucleotide);
+    let sugar = polymer(ComponentKind::Saccharide);
+    let total = amino + nucleic + sugar;
+    let kind = if amino * 2 > total {
         PolymerKind::Protein
-    } else if kinds.iter().all(|kind| *kind == ComponentKind::Nucleotide) && !kinds.is_empty() {
+    } else if nucleic * 2 > total {
         PolymerKind::NucleicHybrid
-    } else if kinds.iter().all(|kind| *kind == ComponentKind::Saccharide) && !kinds.is_empty() {
+    } else if sugar * 2 > total {
         PolymerKind::Saccharide
     } else {
         return Ok(());
@@ -371,65 +399,6 @@ fn classify_chain(
         .chains
         .set_polymer_kind(chain, kind)
         .map_err(|error| Diagnostic::new(Code::E3001).with_context("cause", error.to_string()))
-}
-
-fn link_polymer(
-    residues: &[ResidueRef<'_>],
-    components: &BTreeMap<Box<str>, Arc<Component>>,
-    bonds: &mut BondTableBuilder,
-    findings: &mut Diagnostics,
-    policy: &PolymerLinkPolicy,
-) {
-    let PolymerLinkPolicy::Explicit { angstrom, rules } = policy else {
-        return;
-    };
-    for pair in residues.windows(2) {
-        let [left, right] = pair else {
-            continue;
-        };
-        let Some(left_component) = left.name().and_then(|name| components.get(name)) else {
-            continue;
-        };
-        let Some(right_component) = right.name().and_then(|name| components.get(name)) else {
-            continue;
-        };
-        let Some(rule) = rules.iter().find(|rule| {
-            rule.left_kind == left_component.kind && rule.right_kind == right_component.kind
-        }) else {
-            continue;
-        };
-        let (Some(atom_a), Some(atom_b)) =
-            (left.atom(&rule.left_atom), right.atom(&rule.right_atom))
-        else {
-            continue;
-        };
-        if within_linkage(atom_a, atom_b, *angstrom) {
-            bonds.push(BondRecord {
-                atom_a: atom_a.index(),
-                atom_b: atom_b.index(),
-                order: BondOrder::Polymeric,
-                provenance: BondProvenance::ChemicalComponentDictionary,
-            });
-        } else {
-            findings.push(
-                Diagnostic::new(Code::W3302)
-                    .with_context("left residue", left.index().to_string())
-                    .with_context("right residue", right.index().to_string()),
-            );
-        }
-    }
-}
-
-fn within_linkage(atom_a: AtomRef<'_>, atom_b: AtomRef<'_>, max_distance: f32) -> bool {
-    let (Some(a), Some(b)) = (atom_a.position(), atom_b.position()) else {
-        return false;
-    };
-    let squared: f32 = a
-        .iter()
-        .zip(b)
-        .map(|(left, right)| (left - right).powi(2))
-        .sum();
-    squared <= max_distance.powi(2)
 }
 
 #[cfg(test)]

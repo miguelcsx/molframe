@@ -201,7 +201,7 @@ impl AnalysisExt for Structure {
         first: &str,
         second: &str,
         cutoff: f32,
-    ) -> Result<Vec<molframe_core::index::ResidueIndex>, SpatialError> {
+    ) -> Result<Vec<molframe_core::index::ResidueIndex>, molframe_analysis::InterfaceError> {
         self.chain_interface_with(
             first,
             second,
@@ -218,7 +218,7 @@ impl AnalysisExt for Structure {
         cutoff: f32,
         backend: SpatialBackend,
         context: &ExecutionContext,
-    ) -> Result<Vec<molframe_core::index::ResidueIndex>, SpatialError> {
+    ) -> Result<Vec<molframe_core::index::ResidueIndex>, molframe_analysis::InterfaceError> {
         molframe_analysis::chain_interface(self.engine(), first, second, cutoff, backend, context)
     }
 

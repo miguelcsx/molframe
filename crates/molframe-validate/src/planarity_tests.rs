@@ -15,7 +15,16 @@ fn structure(source: &str) -> Structure {
     }
 }
 
+/// Bonds closing a cycle over six consecutive atoms starting at `first`.
+fn ring_bonds(first: u32) -> Vec<(u32, u32)> {
+    (0..6).map(|k| (first + k, first + (k + 1) % 6)).collect()
+}
+
 fn aromatic_structure(source: &str) -> Structure {
+    bonded_structure(source, &ring_bonds(0))
+}
+
+fn bonded_structure(source: &str, bonds: &[(u32, u32)]) -> Structure {
     let structure = structure(source);
     let mut data = structure.data().clone();
     data.annotations.insert(
@@ -28,6 +37,16 @@ fn aromatic_structure(source: &str) -> Structure {
             .expect("small annotation column"),
         ),
     );
+    let mut table = molframe_core::BondTableBuilder::new();
+    for &(a, b) in bonds {
+        table.push(molframe_core::BondRecord {
+            atom_a: molframe_core::AtomIndex::new(a),
+            atom_b: molframe_core::AtomIndex::new(b),
+            order: molframe_core::BondOrder::Single,
+            provenance: molframe_core::BondProvenance::ChemicalComponentDictionary,
+        });
+    }
+    data.bonds = table.finish();
     Structure::new(data)
 }
 
@@ -103,4 +122,63 @@ fn invalid_plane_fit_controls_are_returned() {
         error,
         super::PlanarityError::Geometry(molframe_geom::EigenError::InvalidOptions)
     ));
+}
+
+/// Six ring atoms of radius 1.4 Å about `centre`, spanned by unit vectors `u`, `v`.
+fn ring_atoms(
+    first_serial: u32,
+    residue: &str,
+    centre: [f64; 3],
+    spans: ([f64; 3], [f64; 3]),
+    lift_last: f64,
+) -> String {
+    let (u, v) = spans;
+    (0..6)
+        .map(|k| {
+            let serial = first_serial + k;
+            let angle = f64::from(k) * std::f64::consts::FRAC_PI_3;
+            let p: Vec<f64> = (0..3)
+                .map(|axis| centre[axis] + 1.4 * (angle.cos() * u[axis] + angle.sin() * v[axis]))
+                .collect();
+            format!(
+                "ATOM {serial} C C{serial} {residue} A 1 {} {} {}\n",
+                p[0],
+                p[1],
+                p[2] + if k == 5 { lift_last } else { 0.0 }
+            )
+        })
+        .collect::<Vec<_>>()
+        .concat()
+}
+
+fn biphenyl(twist_degrees: f64, lift_second_ring_atom: f64) -> Structure {
+    let angle = twist_degrees.to_radians();
+    let twisted = [0.0, angle.cos(), angle.sin()];
+    let mut source = HEADER.to_string();
+    let first = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
+    source += &ring_atoms(1, "BIP", [0.0; 3], first, 0.0);
+    source += &ring_atoms(
+        7,
+        "BIP",
+        [4.3, 0.0, 0.0],
+        ([1.0, 0.0, 0.0], twisted),
+        lift_second_ring_atom,
+    );
+    let mut bonds = ring_bonds(0);
+    bonds.extend(ring_bonds(6));
+    bonds.push((0, 6));
+    bonded_structure(&source, &bonds)
+}
+
+#[test]
+fn biphenyl_with_rings_twisted_sixty_degrees_is_not_flagged() {
+    let flags = flags(&biphenyl(60.0, 0.0));
+    assert!(flags.is_empty(), "each ring is flat on its own: {flags:?}");
+}
+
+#[test]
+fn only_the_puckered_ring_of_a_biphenyl_is_flagged() {
+    let flags = flags(&biphenyl(60.0, 1.0));
+    assert_eq!(flags.len(), 1, "{flags:?}");
+    assert_eq!(flags[0].first_atom.get(), 6);
 }

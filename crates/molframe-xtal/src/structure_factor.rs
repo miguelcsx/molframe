@@ -61,12 +61,26 @@ pub enum StructureFactorError {
     NoOperations,
 }
 
+/// Fractional tolerance below which two images of one atom are one site.
+const COINCIDENT_SITE_TOLERANCE: f64 = 1.0e-4;
+
+/// Whether two fractional positions coincide modulo one lattice translation.
+fn same_site(left: [f64; 3], right: [f64; 3]) -> bool {
+    (0..3).all(|axis| {
+        let difference = left[axis] - right[axis];
+        (difference - difference.round()).abs() < COINCIDENT_SITE_TOLERANCE
+    })
+}
+
 /// Sums atomic scattering over a cell's symmetry-equivalent positions.
 ///
 /// `F(hkl) = Σ_sites Σ_ops occ · f(s) · T · exp(2πi h·(W x + w))`, where the
 /// operations are the complete space group including the identity and the
 /// centring translations, `s = sin θ / λ` and `T` is the Debye–Waller factor of
-/// the displacement carried through each operation.
+/// the displacement carried through each operation. Operations that map an atom
+/// onto a position it already occupies (modulo a lattice translation) add
+/// nothing: an atom on a special position is one atom, so its occupancy is not
+/// multiplied by the size of its site stabiliser.
 #[derive(Clone, Debug)]
 pub struct StructureFactorCalculator<'a> {
     cell: CellTransform,
@@ -108,8 +122,13 @@ impl<'a> StructureFactorCalculator<'a> {
             )?;
             let weight = site.occupancy * form.value(stol2);
             let (mut real, mut imaginary) = (0.0, 0.0);
+            let mut seen: Vec<[f64; 3]> = Vec::with_capacity(self.operations.len());
             for operation in self.operations {
                 let position = operation.apply_fractional(site.position);
+                if seen.iter().any(|known| same_site(*known, position)) {
+                    continue;
+                }
+                seen.push(position);
                 let angle = 2.0
                     * PI
                     * (indices[0] * position[0]

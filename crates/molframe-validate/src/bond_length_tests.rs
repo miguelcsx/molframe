@@ -58,3 +58,12 @@ ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 1 3 0 0\n";
     assert!(bond_length_deviations(&structure(no_conn), 0.3).is_empty());
 }
+
+#[test]
+fn invalid_tolerances_are_rejected_not_silently_empty() {
+    let structure = structure(&two_carbons(2.5));
+    assert_eq!(super::bond_length_deviations(&structure, 0.2).len(), 1);
+    for tolerance in [f32::NAN, f32::INFINITY, -0.1] {
+        assert!(super::bond_length_deviations_checked(&structure, tolerance).is_err());
+    }
+}

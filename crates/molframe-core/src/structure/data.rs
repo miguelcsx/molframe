@@ -20,8 +20,6 @@ use crate::topology::Topology;
 use std::fmt;
 use std::sync::Arc;
 
-const PLACEHOLDER_TOLERANCE: f64 = 1e-6;
-
 /// What the entry as a whole says about itself.
 ///
 /// The identifier is a variable-length string. Four characters was a property of
@@ -58,15 +56,14 @@ pub struct UnitCell {
 }
 
 impl UnitCell {
-    /// Returns true when the cell is the placeholder some files write when they
-    /// have no cell at all.
-    ///
-    /// A unit cube with right angles is what a structure determined without
-    /// crystallography carries, and treating it as a real cell would produce
-    /// periodic images of a molecule that was never in a crystal.
+    /// Returns true for the unit-cube placeholder some files write when they have
+    /// no cell; treating it as real would produce images of a molecule never in a crystal.
     #[must_use]
     pub fn is_placeholder(&self) -> bool {
-        values_are_near(&self.lengths, 1.0) && values_are_near(&self.angles, 90.0)
+        let near = |values: &[f64], expected: f64| {
+            values.iter().all(|value| (value - expected).abs() < 1e-6)
+        };
+        near(&self.lengths, 1.0) && near(&self.angles, 90.0)
     }
 }
 
@@ -342,6 +339,43 @@ impl Structure {
         self.0.coords.ragged_models()
     }
 
+    /// Whether this is the outer shell of a ragged ensemble.
+    ///
+    /// The shell carries the models and shared metadata but an empty topology
+    /// of its own: atoms, residues and chains live in the independent model
+    /// structures. Any analysis that walks this structure's atoms sees nothing,
+    /// which is indistinguishable from an empty molecule unless it asks.
+    #[must_use]
+    pub fn is_ragged_ensemble(&self) -> bool {
+        matches!(self.0.coords, CoordinateStore::Ragged { .. })
+    }
+
+    /// Refuses a structure whose atoms are not held in this structure.
+    ///
+    /// Structure-level analyses that read atoms, residues or chains must call
+    /// this first: on a ragged ensemble they would otherwise return empty
+    /// results silently. Select one model with [`Structure::model_snapshot`]
+    /// (or iterate [`Structure::ragged_models`]) and analyse that instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Code::E6003`] for a ragged ensemble, with the model count as
+    /// context.
+    pub fn require_resolved_model(&self) -> Result<&Self, crate::diagnostic::Diagnostic> {
+        if self.is_ragged_ensemble() {
+            Err(
+                crate::diagnostic::Diagnostic::new(crate::diagnostic::Code::E6003)
+                    .with_context(
+                        "reason",
+                        "ragged ensemble: its atoms live in per-model structures; select a model",
+                    )
+                    .with_context("models", self.model_count().to_string()),
+            )
+        } else {
+            Ok(self)
+        }
+    }
+
     /// The number of chains.
     #[must_use]
     pub fn chain_count(&self) -> usize {
@@ -442,12 +476,6 @@ impl From<StructureData> for Structure {
     fn from(data: StructureData) -> Self {
         Self::new(data)
     }
-}
-
-fn values_are_near(values: &[f64], expected: f64) -> bool {
-    values
-        .iter()
-        .all(|value| (value - expected).abs() < PLACEHOLDER_TOLERANCE)
 }
 
 impl fmt::Display for Structure {

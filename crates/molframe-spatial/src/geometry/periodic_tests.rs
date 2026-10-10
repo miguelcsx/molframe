@@ -75,3 +75,79 @@ fn wrapping_uses_fractional_primary_cell_for_a_skewed_box() {
             .all(|(value, expected)| (value - expected).abs() < 1.0e-6)
     );
 }
+
+fn exhaustive_min_squared(periodic: &PeriodicBox, fractional: [f64; 3], range: i32) -> f64 {
+    let mut best = f64::INFINITY;
+    for i in -range..=range {
+        for j in -range..=range {
+            for k in -range..=range {
+                let image = [
+                    fractional[0] - f64::from(i),
+                    fractional[1] - f64::from(j),
+                    fractional[2] - f64::from(k),
+                ];
+                let cart = multiply(periodic.basis, image);
+                best = best.min(squared(cart));
+            }
+        }
+    }
+    best
+}
+
+fn cell(lengths: [f64; 3], angles: [f64; 3]) -> Option<PeriodicBox> {
+    PeriodicBox::from_cell(UnitCell { lengths, angles }).ok()
+}
+
+#[test]
+fn a_highly_skewed_cell_finds_the_true_minimum_image() {
+    let Some(periodic) = cell([10.0, 1.0, 10.0], [90.0, 90.0, 1.0]) else {
+        panic!("valid cell rejected");
+    };
+    let fractional = [0.4, 0.4, 0.0];
+    let left = [0.0_f64; 3];
+    let right = multiply(periodic.basis, fractional);
+    let found = periodic.displacement_f64(left, right);
+    let expected = exhaustive_min_squared(&periodic, fractional, 12);
+    assert!((squared(found) - expected).abs() < 1e-9, "{found:?}");
+    assert!(expected.sqrt() < 0.41);
+}
+
+#[test]
+fn reported_lattice_shift_reproduces_the_displacement() {
+    let Some(periodic) = cell([10.0, 1.0, 10.0], [90.0, 90.0, 1.0]) else {
+        panic!("valid cell rejected");
+    };
+    let right = multiply(periodic.basis, [0.4, 0.4, 0.0]).map(f64_f32);
+    let image = periodic.minimum_image([0.0; 3], right);
+    let shift = multiply(
+        periodic.basis,
+        image.lattice_shift.map(|v| i64_f64(v).unwrap_or(0.0)),
+    );
+    for axis in 0..3 {
+        let expected = f64::from(right[axis]) - shift[axis];
+        assert!((expected - f64::from(image.displacement[axis])).abs() < 1e-4);
+    }
+}
+
+mod property {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn matches_exhaustive_search_for_random_cells(
+            a in 1.0_f64..20.0, b in 1.0_f64..20.0, c in 1.0_f64..20.0,
+            alpha in 1.0_f64..179.0, beta in 1.0_f64..179.0, gamma in 1.0_f64..179.0,
+            f0 in -3.0_f64..3.0, f1 in -3.0_f64..3.0, f2 in -3.0_f64..3.0,
+        ) {
+            let Some(periodic) = cell([a, b, c], [alpha, beta, gamma]) else {
+                return Ok(());
+            };
+            let fractional = [f0, f1, f2];
+            let right = multiply(periodic.basis, fractional);
+            let found = squared(periodic.displacement_f64([0.0; 3], right));
+            let expected = exhaustive_min_squared(&periodic, fractional, 10);
+            prop_assert!(found <= expected + 1e-9 * (1.0 + expected), "{found} vs {expected}");
+        }
+    }
+}

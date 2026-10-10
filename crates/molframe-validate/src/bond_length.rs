@@ -12,6 +12,7 @@
 
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::Structure;
+use molframe_core::{Code, Diagnostic};
 
 /// A bond whose length departs from the sum of covalent radii.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -30,10 +31,35 @@ pub struct BondDeviation {
 
 /// Flags bonds whose length differs from the expected by more than `tolerance`.
 ///
-/// Findings keep the bond table's order (by endpoint indices). Runs in
-/// `O(bonds)` time.
+/// An invalid `tolerance` (NaN, infinite or negative) yields no findings; use
+/// [`bond_length_deviations_checked`] to have it rejected instead. Findings
+/// keep the bond table's order (by endpoint indices). Runs in `O(bonds)` time.
 #[must_use]
 pub fn bond_length_deviations(structure: &Structure, tolerance: f32) -> Vec<BondDeviation> {
+    match bond_length_deviations_checked(structure, tolerance) {
+        Ok(found) => found,
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Like [`bond_length_deviations`], but rejects an invalid tolerance.
+///
+/// # Errors
+///
+/// Returns a diagnostic when `tolerance` is not finite and non-negative.
+pub fn bond_length_deviations_checked(
+    structure: &Structure,
+    tolerance: f32,
+) -> Result<Vec<BondDeviation>, Diagnostic> {
+    if !tolerance.is_finite() || tolerance < 0.0 {
+        return Err(Diagnostic::new(Code::E5101)
+            .with_context("parameter", "tolerance")
+            .with_context("value", tolerance.to_string()));
+    }
+    Ok(deviations(structure, tolerance))
+}
+
+fn deviations(structure: &Structure, tolerance: f32) -> Vec<BondDeviation> {
     if !structure.data().bonds.is_available() {
         return Vec::new();
     }

@@ -10,9 +10,9 @@
 //! exists and otherwise by a C–N distance short enough to be a peptide bond.
 
 use molframe_chem::PolymerAtomRole;
-use molframe_core::Diagnostic;
 use molframe_core::index::ResidueIndex;
 use molframe_core::structure::{ResidueRef, Structure};
+use molframe_core::{Code, Diagnostic};
 
 /// A residue whose peptide bond to the previous residue is cis.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,17 +27,25 @@ pub struct CisPeptide {
 ///
 /// A bond counts as cis when the magnitude of ω is at most `threshold_degrees`;
 /// about 30° captures cis bonds without catching ordinary trans distortion.
-/// Results are ordered by residue index.
+/// Results are ordered by residue index. A link missing from the bond table is
+/// accepted when the carbonyl carbon and the next nitrogen are altloc-compatible
+/// and between 1.2 and 1.5 Å apart.
 ///
 /// Runs in `O(residues)` time.
 ///
 /// # Errors
 ///
-/// Returns a diagnostic when explicit polymer roles are absent or ambiguous.
+/// Returns a diagnostic when explicit polymer roles are absent or ambiguous, or
+/// when `threshold_degrees` is not finite and non-negative.
 pub fn cis_peptides(
     structure: &Structure,
     threshold_degrees: f64,
 ) -> Result<Vec<CisPeptide>, Diagnostic> {
+    if !threshold_degrees.is_finite() || threshold_degrees < 0.0 {
+        return Err(Diagnostic::new(Code::E5101)
+            .with_context("parameter", "threshold_degrees")
+            .with_context("value", threshold_degrees.to_string()));
+    }
     crate::backbone::require_polymer_roles(structure)?;
     let mut findings = Vec::new();
     for chain in structure.data().chains() {

@@ -1,10 +1,16 @@
-//! Watson–Crick pairing from CCD base identity and oriented hydrogen bonds.
+//! Watson–Crick pairing from CCD base identity, oriented hydrogen bonds between
+//! the Watson–Crick edge atoms, and base reference geometry.
 
 use crate::{HydrogenBondError, HydrogenBondOptions, hydrogen_bonds};
 use molframe_chem::{ComponentKind, ComponentProvider};
 use molframe_core::index::ResidueIndex;
 use molframe_core::{AtomAnnotation, Diagnostic, ExecutionContext, Presence, Structure};
 use std::collections::BTreeMap;
+
+#[path = "base_pair_edges.rs"]
+mod edges;
+
+pub use edges::WatsonCrickGeometry;
 
 /// Explicit chemical and geometric policy for canonical base pairing.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -13,6 +19,11 @@ pub struct BasePairOptions {
     pub hydrogen_bonds: HydrogenBondOptions,
     /// Minimum number of oriented inter-base hydrogen bonds.
     pub minimum_hydrogen_bonds: usize,
+    /// Reference-geometry limits (C1'–C1' distance and base-plane alignment)
+    /// that a pair must meet to count as Watson–Crick. `None` skips the
+    /// geometry test and keeps only the edge-atom test; hydrogen bonds that do
+    /// not join Watson–Crick edge atoms never count either way.
+    pub geometry: Option<WatsonCrickGeometry>,
 }
 
 /// A Watson–Crick base pair between two CCD-identified nucleotide residues.
@@ -82,10 +93,14 @@ impl CanonicalBase {
     }
 }
 
-/// Finds canonical pairs supported by CCD identity and oriented hydrogen bonds.
+/// Finds canonical pairs supported by CCD identity, Watson–Crick-edge hydrogen
+/// bonds and, when requested, reference geometry.
 ///
 /// Modified nucleotides participate when their CCD entry supplies a canonical
-/// one-letter code. No residue names or atom-name edge tables are embedded.
+/// one-letter code. Only hydrogen bonds joining the Watson–Crick edge atoms
+/// (A–T/U: N6…O4, N1…N3; G–C: O6…N4, N1…N3, N2…O2) support a pair, so a
+/// Hoogsteen or sugar-edge contact between complementary bases is left out.
+/// Candidate pairs must also meet the [`WatsonCrickGeometry`] limits.
 ///
 /// # Errors
 ///
@@ -128,6 +143,19 @@ pub fn base_pairs(
         if !donor_base.complementary(acceptor_base) {
             continue;
         }
+        let (Some(donor_name), Some(acceptor_name)) = (
+            structure
+                .atom(bond.donor)
+                .and_then(molframe_core::structure::AtomRef::name),
+            structure
+                .atom(bond.acceptor)
+                .and_then(molframe_core::structure::AtomRef::name),
+        ) else {
+            continue;
+        };
+        if !edges::watson_crick_contact(donor_base, donor_name, acceptor_base, acceptor_name) {
+            continue;
+        }
         let pair = ordered(donor_residue.index(), acceptor_residue.index());
         support
             .entry(pair)
@@ -137,6 +165,18 @@ pub fn base_pairs(
     Ok(support
         .into_iter()
         .filter(|(_, distances)| distances.len() >= options.minimum_hydrogen_bonds)
+        .filter(|((first, second), _)| match options.geometry {
+            None => true,
+            Some(limits) => {
+                match (
+                    structure.data().residue(*first),
+                    structure.data().residue(*second),
+                ) {
+                    (Some(a), Some(b)) => edges::has_watson_crick_geometry(a, b, limits),
+                    _ => false,
+                }
+            }
+        })
         .map(|((first, second), distances)| BasePair {
             first,
             second,

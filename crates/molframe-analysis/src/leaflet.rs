@@ -1,4 +1,13 @@
 //! Membrane leaflet identification from an explicit lipid-site graph.
+//!
+//! # Scientific scope
+//!
+//! The result is a geometric clustering (connected components), not a
+//! biological leaflet classifier. A leaflet can fragment into several
+//! components, and sites of opposite leaflets can merge into one through local
+//! distortions. This matters for curved membranes, fusion intermediates and
+//! strongly perturbed bilayers; use surface orientation, lipid-tail direction
+//! or temporal continuity for those systems.
 
 use molframe_core::{ExecutionContext, selection::AtomSelection};
 use molframe_spatial::{

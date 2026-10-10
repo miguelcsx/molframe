@@ -112,6 +112,16 @@ diagnostic_from!(BasePairError, |error| match error {
     BasePairError::Provider(inner) => inner.code(),
     BasePairError::HydrogenBond(inner) => Diagnostic::from(inner).code(),
 });
+impl From<&crate::InterfaceError> for Diagnostic {
+    fn from(error: &crate::InterfaceError) -> Self {
+        match error {
+            crate::InterfaceError::Spatial(inner) => Self::from(inner),
+            other => Self::new(Code::E4002)
+                .with_context("interface", "invalid_selection")
+                .with_message(other.to_string()),
+        }
+    }
+}
 diagnostic_from!(FragmentMappingError, |error| match error {
     FragmentMappingError::InvalidLibrary | FragmentMappingError::InvalidInput => Code::E5101,
     FragmentMappingError::Superpose(inner) => Diagnostic::from(inner).code(),

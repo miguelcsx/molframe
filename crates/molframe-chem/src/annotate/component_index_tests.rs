@@ -160,3 +160,45 @@ fn a_component_with_no_atoms_indexes_without_panicking() {
     assert!(!index.is_acceptor("N"));
     assert_eq!(index.component().atoms.len(), 0);
 }
+
+fn single(element: Element, charge: i8) -> ComponentIndex {
+    ComponentIndex::build(Arc::new(Component {
+        id: "ONE".into(),
+        name: "ONE".into(),
+        parent: None,
+        one_letter_code: None,
+        formula: None,
+        kind: ComponentKind::NonPolymer,
+        atoms: vec![atom("X", element, charge, false)].into(),
+        bonds: Vec::new().into(),
+        ideal_coordinates: None,
+        model_coordinates: None,
+    }))
+}
+
+#[test]
+fn neutral_halogens_and_sulfur_are_weak_not_conventional_acceptors() {
+    for element in [Element::FLUORINE, Element::CHLORINE, Element::SULFUR] {
+        let index = single(element, 0);
+        assert!(
+            !index.is_acceptor("X"),
+            "{element:?} must not be conventional"
+        );
+        assert!(
+            index.is_weak_acceptor("X"),
+            "{element:?} is a weak acceptor"
+        );
+    }
+}
+
+#[test]
+fn anionic_halides_and_oxygen_remain_conventional_acceptors() {
+    for element in [Element::FLUORINE, Element::CHLORINE, Element::SULFUR] {
+        let index = single(element, -1);
+        assert!(index.is_acceptor("X"), "anionic {element:?} accepts");
+        assert!(!index.is_weak_acceptor("X"));
+    }
+    let oxygen = single(Element::OXYGEN, 0);
+    assert!(oxygen.is_acceptor("X"));
+    assert!(!oxygen.is_weak_acceptor("X"));
+}

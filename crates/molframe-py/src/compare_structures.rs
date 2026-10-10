@@ -219,6 +219,7 @@ pub(crate) fn dockq(
         contact_distance,
         ligand_scale,
         interface_scale,
+        ..DockQOptions::published()
     };
     let (model, native) = (model.inner.clone(), native.inner.clone());
     py.detach(|| model.dockq_in_namespace(&native, receptor, ligand, namespace, options))
@@ -226,7 +227,8 @@ pub(crate) fn dockq(
         .map_err(crate::error::kernel)
 }
 
-/// QS score (the Jaccard overlap of inter-chain contacts) between two chains.
+/// Residue-level, distance-weighted QS score between two chains (CB, or CA for glycine; a
+/// `contact_distance` of 12 reproduces the published cutoff).
 #[pyfunction]
 #[pyo3(signature = (
     model,
@@ -355,6 +357,7 @@ pub(crate) fn mapped_dockq(
         contact_distance,
         ligand_scale,
         interface_scale,
+        ..DockQOptions::published()
     };
     let (model, native) = (model.inner.clone(), native.inner.clone());
     py.detach(|| model.mapped_dockq(&native, receptor, ligand, &mapping.options(), options))

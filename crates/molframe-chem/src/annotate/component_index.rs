@@ -24,8 +24,10 @@ pub(crate) struct ComponentIndex {
     order: Box<[u32]>,
     /// Whether the atom at each position can donate a hydrogen bond.
     donor: Box<[bool]>,
-    /// Whether the atom at each position can accept one.
+    /// Whether the atom at each position is a conventional acceptor.
     acceptor: Box<[bool]>,
+    /// Whether the atom at each position is only a weak acceptor.
+    weak_acceptor: Box<[bool]>,
 }
 
 impl ComponentIndex {
@@ -47,11 +49,16 @@ impl ComponentIndex {
             .map(|position| evaluate_acceptor(&component, &order, position))
             .collect();
 
+        let weak_acceptor: Vec<bool> = (0..count)
+            .map(|position| evaluate_weak_acceptor(&component, position))
+            .collect();
+
         Self {
             component,
             order,
             donor: donor.into_boxed_slice(),
             acceptor: acceptor.into_boxed_slice(),
+            weak_acceptor: weak_acceptor.into_boxed_slice(),
         }
     }
 
@@ -78,10 +85,25 @@ impl ComponentIndex {
         }
     }
 
-    /// Whether the named atom can accept a hydrogen bond.
+    /// Whether the named atom is a conventional hydrogen-bond acceptor.
+    ///
+    /// Oxygen and non-amide, non-protonated nitrogen qualify, as do anionic
+    /// sulfur and halides. Neutral organic sulfur, fluorine and chlorine do
+    /// not; they are weak acceptors, see [`Self::is_weak_acceptor`].
     pub(crate) fn is_acceptor(&self, name: &str) -> bool {
         match self.position(name).and_then(|slot| self.acceptor.get(slot)) {
             Some(acceptor) => *acceptor,
+            None => false,
+        }
+    }
+
+    /// Whether the named atom is only a weak, nonconventional acceptor.
+    pub(crate) fn is_weak_acceptor(&self, name: &str) -> bool {
+        match self
+            .position(name)
+            .and_then(|slot| self.weak_acceptor.get(slot))
+        {
+            Some(weak) => *weak,
             None => false,
         }
     }
@@ -150,9 +172,10 @@ fn evaluate_acceptor(component: &Component, order: &[u32], position: usize) -> b
     };
 
     match atom.element {
-        Element::OXYGEN | Element::SULFUR | Element::FLUORINE | Element::CHLORINE => {
-            atom.charge <= 0
-        }
+        Element::OXYGEN => atom.charge <= 0,
+        // Covalently bound halogen and thioether sulfur hold their lone pairs
+        // too tightly to count as conventional acceptors; only the anions do.
+        Element::SULFUR | Element::FLUORINE | Element::CHLORINE => atom.charge < 0,
         Element::NITROGEN => {
             atom.charge <= 0
                 && !is_amide(component, order, position)
@@ -164,6 +187,18 @@ fn evaluate_acceptor(component: &Component, order: &[u32], position: usize) -> b
         }
         _ => false,
     }
+}
+
+/// Whether the atom at `position` accepts only weakly: a neutral sulfur or
+/// halogen, which the conventional class deliberately excludes.
+fn evaluate_weak_acceptor(component: &Component, position: usize) -> bool {
+    let Some(atom) = component.atoms.get(position) else {
+        return false;
+    };
+    matches!(
+        atom.element,
+        Element::SULFUR | Element::FLUORINE | Element::CHLORINE
+    ) && atom.charge == 0
 }
 
 /// Whether the nitrogen at `position` is bonded to a carbonyl or thiocarbonyl.

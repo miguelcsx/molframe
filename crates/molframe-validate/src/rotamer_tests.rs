@@ -138,3 +138,54 @@ fn non_ccd_connected_profile_path_is_rejected_instead_of_guessed() {
         Err(super::RotamerError::InvalidPath { .. })
     ));
 }
+
+fn altloc_structure(conformer_a_first: bool) -> Structure {
+    let a = "4 C Q4 CMP A 1 A 0.2 0 1 -1\n";
+    let b = "5 C Q4 CMP A 1 B 0.8 0 1 1\n";
+    let tail = if conformer_a_first {
+        format!("{a}{b}")
+    } else {
+        format!("{b}{a}")
+    };
+    let source = format!(
+        "data_r\n\
+loop_\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n\
+_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n\
+_atom_site.label_alt_id\n_atom_site.occupancy\n\
+_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+1 C Q1 CMP A 1 . 1.0 1 0 0\n\
+2 C Q2 CMP A 1 . 1.0 0 0 0\n\
+3 C Q3 CMP A 1 . 1.0 0 1 0\n{tail}"
+    );
+    let input = InputBuffer::from_bytes(source.into_bytes());
+    match molframe_cif::read(&input, &ReadOptions::new()) {
+        Ok((structure, _)) => structure,
+        Err(findings) => panic!("fixture failed: {findings:?}"),
+    }
+}
+
+#[test]
+fn record_order_of_alternate_locations_does_not_change_the_selected_conformer_result() {
+    let policy = AnalysisPolicy::default()
+        .with_altloc(molframe_core::contract::AltlocPolicy::Label("B".into()));
+    let run = |first: bool| {
+        rotamer_outliers(
+            &altloc_structure(first),
+            &provider(),
+            &policy,
+            &references(),
+            &profile(),
+            RotamerOptions {
+                minimum_probability: 0.6,
+            },
+        )
+        .expect("validation succeeds")
+    };
+    let a_first = run(true);
+    let b_first = run(false);
+    assert_eq!(a_first.assessed, 1);
+    assert_eq!(b_first.assessed, 1);
+    assert_eq!(a_first.flags.len(), b_first.flags.len());
+    assert!((a_first.flags[0].chi_degrees.abs() - 90.0).abs() < 1e-3);
+    assert!((a_first.flags[0].chi_degrees - b_first.flags[0].chi_degrees).abs() < 1e-9);
+}

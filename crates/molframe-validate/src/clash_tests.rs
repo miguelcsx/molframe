@@ -1,8 +1,10 @@
-use super::clashes;
+use super::{ClashOptions, clashes, clashes_with};
 use molframe_chem::RadiusSet;
-use molframe_core::ExecutionContext;
+use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
+use molframe_core::index::AtomIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
+use molframe_core::{BondOrder, ExecutionContext};
 use molframe_spatial::SpatialBackend;
 use std::fmt::Write;
 
@@ -146,4 +148,81 @@ fn the_clash_list_is_identical_at_every_worker_count() {
             "worker count {workers} changed the result"
         );
     }
+}
+
+fn bonded(source: &str, pairs: &[(u32, u32)]) -> Structure {
+    let mut data = structure(source).data().clone();
+    let mut bonds = BondTableBuilder::new();
+    for &(a, b) in pairs {
+        bonds.push(BondRecord {
+            atom_a: AtomIndex::new(a),
+            atom_b: AtomIndex::new(b),
+            order: BondOrder::Single,
+            provenance: BondProvenance::User,
+        });
+    }
+    data.bonds = bonds.finish();
+    Structure::new(data)
+}
+
+fn pairs(structure: &Structure, options: ClashOptions) -> Vec<(u32, u32)> {
+    let Ok(found) = clashes_with(structure, options, &ExecutionContext::default()) else {
+        panic!("valid");
+    };
+    found
+        .iter()
+        .map(|clash| (clash.first.get(), clash.second.get()))
+        .collect()
+}
+
+fn defaults() -> ClashOptions {
+    ClashOptions::new(0.4, RadiusSet::Bondi, SpatialBackend::BruteForce)
+}
+
+#[test]
+fn an_ideal_tetrahedral_carbon_chain_has_no_one_three_clash() {
+    // C-C 1.54 Å, C-C-C 109.5°: the 1-3 distance is 2.51 Å, deep inside the
+    // summed radii, yet it is fixed by the bonds and must not be reported.
+    let source = format!(
+        "{HEADER}\
+ATOM 1 C C1 LIG A 1 0 0 0\n\
+ATOM 2 C C2 LIG A 1 1.54 0 0\n\
+ATOM 3 C C3 LIG A 1 2.0539 1.4516 0\n"
+    );
+    assert!(pairs(&bonded(&source, &[(0, 1), (1, 2)]), defaults()).is_empty());
+}
+
+#[test]
+fn one_four_pairs_are_reported_unless_excluded_explicitly() {
+    let source = format!(
+        "{HEADER}\
+ATOM 1 C C1 LIG A 1 0 0 0\n\
+ATOM 2 C C2 LIG A 1 1.54 0 0\n\
+ATOM 3 C C3 LIG A 1 1.54 1.54 0\n\
+ATOM 4 C C4 LIG A 1 0 1.54 0\n"
+    );
+    let structure = bonded(&source, &[(0, 1), (1, 2), (2, 3)]);
+    assert_eq!(pairs(&structure, defaults()), vec![(0, 3)]);
+    let excluded = ClashOptions {
+        exclude_one_four: true,
+        ..defaults()
+    };
+    assert!(pairs(&structure, excluded).is_empty());
+}
+
+#[test]
+fn atoms_in_different_alternate_locations_do_not_clash() {
+    let header = "data_s\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.label_alt_id\n\
+_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
+    let run = |a: &str, b: &str| {
+        let source =
+            format!("{header}ATOM 1 C C1 LIG A 1 {a} 0 0 0\nATOM 2 C C2 LIG A 2 {b} 2 0 0\n");
+        pairs(&structure(&source), defaults())
+    };
+    assert!(run("A", "B").is_empty());
+    assert_eq!(run("A", "A"), vec![(0, 1)]);
+    assert_eq!(run(".", "B"), vec![(0, 1)]);
 }

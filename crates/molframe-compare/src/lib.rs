@@ -58,7 +58,10 @@ pub use correspondence::{
     ChainSequence, ResidueMatch, ResiduePair, assign_chains, chain_sequences, map_atoms,
     map_chains, map_residues, map_sequence_to_structure,
 };
-pub use docking_quality::{DockQ, DockQOptions, dockq, dockq_in_namespace};
+pub use docking_quality::{
+    AtomContactDockingOptions, AtomContactDockingScore, DockQ, DockQOptions,
+    atom_contact_docking_score, atom_contact_docking_score_in_namespace, dockq, dockq_in_namespace,
+};
 pub use failure::CompareError;
 pub use local_distance::{EmptyLddtPolicy, LddtOptions, lddt, lddt_with_options};
 pub use mapped::{
@@ -73,7 +76,10 @@ pub use policy_execution::{
     governed_map_sequence_to_structure, governed_pocket_rmsd, governed_qs_score, governed_tm_score,
     governed_weighted_rmsd,
 };
-pub use quaternary::{EmptyQsPolicy, QsOptions, qs_score, qs_score_in_namespace};
+pub use quaternary::{
+    AtomContactJaccardOptions, EmptyQsPolicy, QsOptions, atom_contact_jaccard,
+    atom_contact_jaccard_in_namespace, qs_score, qs_score_in_namespace,
+};
 pub use region::{InterfaceRmsd, PocketRmsd, interface_rmsd, pocket_rmsd};
 pub use superposed::{gdt_ha, gdt_ts, gdt_with_cutoffs, tm_score, weighted_rmsd};
 pub use workflow::{

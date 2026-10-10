@@ -1,4 +1,14 @@
 //! Calibration-free nucleic parameters from explicit orthonormal base frames.
+//!
+//! Two conventions are offered. [`helical_parameters`] reads the translation and
+//! the rotation vector in the first frame, which is exact and simple but is not
+//! what 3DNA or CEHS report. [`middle_frame_step`] reads the six step parameters
+//! in the middle frame, which is the standard convention.
+
+#[path = "helical_middle.rs"]
+mod middle;
+
+pub use middle::{MiddleFrameStep, middle_frame_step, middle_frame_steps};
 
 /// A caller-defined right-handed base frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -21,6 +31,11 @@ pub struct HelicalOptions {
 }
 
 /// Six rigid-body parameters in the first frame's coordinate system.
+///
+/// The translations are the displacement projected on the first frame's axes and
+/// the rotations are the components of the relative rotation vector in that
+/// frame. These are first-frame values, not the middle-frame step parameters of
+/// 3DNA or CEHS; use [`MiddleFrameStep`] for those.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HelicalParameters {
     /// Translation along the first frame's x axis.
@@ -48,7 +63,11 @@ pub enum HelicalError {
     InvalidFrame,
 }
 
-/// Computes a calibration-free relative rigid transform between two base frames.
+/// Computes a calibration-free relative rigid transform between two base frames,
+/// expressed in the first frame.
+///
+/// This is the first-frame convention. For the standard middle-frame step
+/// parameters use [`middle_frame_step`].
 ///
 /// For a base pair the fields correspond to shear, stretch, stagger, buckle,
 /// propeller and opening. For consecutive base-pair frames they correspond to

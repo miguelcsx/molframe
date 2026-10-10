@@ -109,6 +109,7 @@ fn bench_extended_scores(c: &mut Criterion) {
     let model = perturbed(&reference, 0.02);
     let options = DockQOptions {
         contact_distance: 5.0,
+        interface_distance: 10.0,
         ligand_scale: 8.5,
         interface_scale: 1.5,
     };

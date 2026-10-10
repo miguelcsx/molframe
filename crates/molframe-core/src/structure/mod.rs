@@ -28,6 +28,7 @@ mod view;
 
 pub use data::*;
 pub use diff::*;
+pub use disorder::{altloc_compatible, compatible_pairs};
 pub use edit::*;
 pub use extensions::*;
 pub use handle::*;

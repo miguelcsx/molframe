@@ -261,7 +261,7 @@ pub trait AnalysisExt {
         first: &str,
         second: &str,
         cutoff: f32,
-    ) -> Result<Vec<molframe_core::index::ResidueIndex>, SpatialError>;
+    ) -> Result<Vec<molframe_core::index::ResidueIndex>, molframe_analysis::InterfaceError>;
 
     /// [`Self::chain_interface`] with the backend and context given
     /// explicitly.
@@ -276,7 +276,7 @@ pub trait AnalysisExt {
         cutoff: f32,
         backend: SpatialBackend,
         context: &ExecutionContext,
-    ) -> Result<Vec<molframe_core::index::ResidueIndex>, SpatialError>;
+    ) -> Result<Vec<molframe_core::index::ResidueIndex>, molframe_analysis::InterfaceError>;
 
     /// The fraction of `target`'s native contacts this structure preserves.
     ///

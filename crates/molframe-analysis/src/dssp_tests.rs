@@ -1,9 +1,12 @@
-use super::{DsspError, DsspOptions, secondary_structure};
+use super::{
+    DsspError, DsspOptions, can_donate, secondary_structure, secondary_structure_with_policy,
+};
 use molframe_bench::{Sample, structure};
 use molframe_chem::{PolymerAtomRole, assign_secondary_structure};
 use molframe_core::Presence;
 use molframe_core::SecondaryStructure as Ss;
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
+use molframe_core::contract::{AltlocPolicy, AnalysisPolicy};
 use molframe_core::structure::Structure;
 
 fn with_roles(structure: &Structure) -> Structure {
@@ -95,6 +98,49 @@ fn ambiguous_polymer_roles_are_reported_instead_of_silently_chosen() {
     );
     assert!(matches!(
         secondary_structure(&Structure::new(data), &DsspOptions::default()),
+        Err(DsspError::AmbiguousRole { .. })
+    ));
+}
+
+#[test]
+fn donor_eligibility_comes_from_the_ring_nitrogen_not_the_residue_name() {
+    let source = with_roles(&structure(Sample::Tiny));
+    let mut prolines = 0;
+    for residue in source.data().residues() {
+        let donates = can_donate(&source, residue, None);
+        assert_eq!(
+            donates,
+            residue.name() != Some("PRO"),
+            "{:?}",
+            residue.name()
+        );
+        prolines += usize::from(!donates);
+    }
+    assert!(prolines > 0, "the sample must contain a proline");
+}
+
+#[test]
+fn altloc_backbone_copies_are_resolved_before_role_lookup() {
+    let source = "data_s\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_alt_id\n_atom_site.label_comp_id\n\
+_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n\
+_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 N N A ALA A 1 0 0 0\n\
+ATOM 2 N N B ALA A 1 0 0.1 0\n\
+ATOM 3 C CA . ALA A 1 1.4 0 0\n\
+ATOM 4 C C . ALA A 1 2 1.2 0\n\
+ATOM 5 O O . ALA A 1 1.5 2.3 0\n";
+    let input = molframe_core::io::InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let (parsed, _) = match molframe_cif::read(&input, &molframe_core::io::ReadOptions::new()) {
+        Ok(result) => result,
+        Err(findings) => panic!("fixture failed: {findings:?}"),
+    };
+    let structure = with_roles(&parsed);
+    assert!(secondary_structure(&structure, &DsspOptions::default()).is_ok());
+    let keep_all = AnalysisPolicy::default().with_altloc(AltlocPolicy::KeepAll);
+    assert!(matches!(
+        secondary_structure_with_policy(&structure, &DsspOptions::default(), &keep_all),
         Err(DsspError::AmbiguousRole { .. })
     ));
 }

@@ -68,7 +68,7 @@ pub use conformer_occupancy::{
     AltlocOccupancyReport, altloc_occupancy_sums,
 };
 pub use coordination_valence::{ValenceError, overvalent_atoms};
-pub use covalent_length::{BondDeviation, bond_length_deviations};
+pub use covalent_length::{BondDeviation, bond_length_deviations, bond_length_deviations_checked};
 pub use distributions::{
     ReferenceAssessment, ReferenceDistribution, ReferenceError, ReferenceLibrary,
     assess_bond_deviation, assess_ramachandran,
@@ -109,7 +109,7 @@ pub use sidechain_conformation::{
 pub use stereocentre::{
     ChiralityFlag, ChiralityIssue, ChiralityOptions, ChiralityReport, chirality_outliers,
 };
-pub use steric_overlap::{Clash, ClashTable, clashes};
+pub use steric_overlap::{Clash, ClashOptions, ClashTable, clashes, clashes_with};
 pub use thermal_motion::{
     BFactorDistribution, BFactorError, BFactorOutlier, TlsBFactorFlag, TlsBFactorReport, TlsGroup,
     TlsModel, b_factor_distribution, tls_b_factor_consistency,

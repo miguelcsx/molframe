@@ -130,3 +130,22 @@ fn a_missing_form_factor_and_an_empty_group_are_errors() {
         Some(StructureFactorError::NoOperations)
     );
 }
+
+#[test]
+fn an_atom_on_an_inversion_centre_is_counted_once() {
+    let ops = operations(&["x,y,z", "-x,-y,-z"]);
+    let atom = site("C", [0.0, 0.0, 0.0], Displacement::Isotropic(0.0));
+    let value = calculate(&ops, &[atom], [0, 0, 0]);
+    let expected = form("C").value(0.0);
+    assert!((value.re - expected).abs() < 1e-9, "{value:?}");
+    assert!(value.im.abs() < 1e-9);
+}
+
+#[test]
+fn an_atom_in_a_general_position_has_two_distinct_sites() {
+    let ops = operations(&["x,y,z", "-x,-y,-z"]);
+    let atom = site("C", [0.1, 0.2, 0.3], Displacement::Isotropic(0.0));
+    let value = calculate(&ops, &[atom], [0, 0, 0]);
+    let expected = 2.0 * form("C").value(0.0);
+    assert!((value.re - expected).abs() < 1e-9, "{value:?}");
+}

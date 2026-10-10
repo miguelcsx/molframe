@@ -11,7 +11,7 @@ use crate::correspondence::{
     ChainAssignment, ChainMapping, assign_chains, map_atoms, map_residues,
 };
 use crate::docking_quality::{DockQ, DockQOptions, dockq_on_positions};
-use crate::interface::chain_atoms;
+use crate::interface::{AtomInfo, UNANNOTATED, atom_infos, chain_atoms};
 use crate::quaternary::{QsOptions, qs_on_positions};
 use crate::workflow::PointMapping;
 use molframe_chem::ComponentProvider;
@@ -86,6 +86,8 @@ struct Rows {
     model: Vec<[f32; 3]>,
     native: Vec<[f32; 3]>,
     chains: Vec<Vec<usize>>,
+    /// Annotation of each row, taken from the native atom it came from.
+    info: Vec<AtomInfo>,
 }
 
 /// Targets a native chain may answer to: the one the optimal assignment chose
@@ -183,7 +185,9 @@ fn rows(
         model: Vec::new(),
         native: Vec::new(),
         chains: vec![Vec::new(); labels.len()],
+        info: Vec::new(),
     };
+    let infos = atom_infos(native);
     for pair in comparison.atoms.matches() {
         let (Some(from), Some(to)) = (
             native.positions().get(pair.reference),
@@ -194,6 +198,10 @@ fn rows(
         let row = rows.native.len();
         rows.native.push(*from);
         rows.model.push(*to);
+        rows.info.push(match infos.get(pair.reference) {
+            Some(&info) => info,
+            None => UNANNOTATED,
+        });
         for (chain, atoms) in rows.chains.iter_mut().zip(&wanted) {
             if atoms.contains(&pair.reference) {
                 chain.push(row);
@@ -293,6 +301,7 @@ pub fn mapped_dockq(
                 &rows.native,
                 &rows.chains[0],
                 &rows.chains[1],
+                &rows.info,
                 options,
             )
         },
@@ -329,6 +338,7 @@ pub fn mapped_qs_score(
                 &rows.native,
                 &rows.chains[0],
                 &rows.chains[1],
+                &rows.info,
                 options,
             )
         },

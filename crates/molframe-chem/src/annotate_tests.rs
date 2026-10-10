@@ -1,8 +1,8 @@
 use super::*;
 use crate::{ComponentAtom, ComponentBond, MemoryProvider, StereoConfiguration};
-use molframe_core::Element;
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::{BondOrder, Element};
 
 const STRUCTURE: &str = "data_gly\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -226,3 +226,6 @@ fn an_unknown_component_is_reported_once_and_yields_a_known_empty_graph() {
         1
     );
 }
+
+#[path = "annotate/linkage_tests.rs"]
+mod linkage_tests;

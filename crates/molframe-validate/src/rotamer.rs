@@ -265,14 +265,26 @@ fn torsion(
     selected: &molframe_core::AtomSelection,
     definition: &RotamerDefinition,
 ) -> Option<f64> {
-    let positions = definition.atoms.each_ref().map(|name| {
-        let atom = residue.atom(name)?;
-        selected
-            .contains(atom.index().get())
-            .then(|| atom.position())
-            .flatten()
-    });
-    let [Some(first), Some(second), Some(third), Some(fourth)] = positions else {
+    // Names are looked up among the selected atoms only: a residue can hold
+    // several conformers of one atom, and the first record by name need not be
+    // the selected one. Each chosen atom must also share a conformer with the
+    // atoms already chosen.
+    let mut chosen: Vec<molframe_core::structure::AtomRef<'_>> = Vec::with_capacity(4);
+    for name in &definition.atoms {
+        let atom = residue.atoms().find(|atom| {
+            atom.name() == Some(name.as_ref())
+                && selected.contains(atom.index().get())
+                && chosen
+                    .iter()
+                    .all(|other| crate::backbone::alt_compatible(*atom, *other))
+        })?;
+        chosen.push(atom);
+    }
+    let positions = chosen
+        .iter()
+        .map(|atom| atom.position())
+        .collect::<Vec<_>>();
+    let [Some(first), Some(second), Some(third), Some(fourth)] = positions[..] else {
         return None;
     };
     molframe_geom::dihedral(first, second, third, fourth).map(molframe_geom::degrees)

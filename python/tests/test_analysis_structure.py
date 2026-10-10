@@ -32,7 +32,7 @@ def test_contact_map_equals_a_brute_force_residue_minimum(crambin):
     cutoff, separation = 4.5, 3
     expected = {}
     for first, second in combinations(range(len(groups)), 2):
-        if second - first < separation:
+        if second - first <= separation:
             continue
         gap = xyz[groups[first]][:, None, :] - xyz[groups[second]][None, :, :]
         closest = float(np.sqrt((gap**2).sum(axis=2)).min())
@@ -73,14 +73,20 @@ def test_chain_interface_equals_a_brute_force_boundary():
         return found
 
     expected = set()
-    for left in named("A"):
-        for right in named("B"):
+    for left in named("E"):
+        for right in named("K"):
             gap = xyz[groups[left]][:, None, :] - xyz[groups[right]][None, :, :]
             if np.sqrt((gap**2).sum(axis=2)).min() <= cutoff:
                 expected.update({left, right})
-    result = analysis.chain_interface(hemoglobin, first_chain="A", second_chain="B", cutoff=cutoff)
+    result = analysis.chain_interface(hemoglobin, first_chain="E", second_chain="K", cutoff=cutoff)
     assert expected
     assert {int(each) for each in result.value["residue"]} == expected
+
+
+def test_a_chain_name_that_is_a_label_and_a_different_author_id_is_refused():
+    hemoglobin = molframe.read(BENCH / "4hhb.cif")
+    with pytest.raises(molframe.errors.ConversionError, match="ambiguous"):
+        analysis.chain_interface(hemoglobin, first_chain="A", second_chain="B", cutoff=4.5)
 
 
 def test_native_contacts_equal_a_brute_force_pair_count(crambin):

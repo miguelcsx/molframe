@@ -1,27 +1,6 @@
-use std::collections::BTreeSet;
-
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::column::Presence;
 use molframe_core::structure::Structure;
-
-pub(crate) fn aromatic(structure: &Structure, atoms: impl IntoIterator<Item = u32>) -> Structure {
-    let selected: BTreeSet<_> = atoms.into_iter().collect();
-    let entries = (0..structure.atom_count()).map(|atom| {
-        if selected.contains(&atom) {
-            (true, Presence::Present)
-        } else {
-            (false, Presence::Inapplicable)
-        }
-    });
-    let Ok(column) = AnnotationColumn::from_entries(entries) else {
-        panic!("test annotation fits the column index domain");
-    };
-    with_annotation(
-        structure,
-        molframe_core::AROMATIC_ATOM_ANNOTATION,
-        AtomAnnotation::Boolean(column),
-    )
-}
 
 pub(crate) fn charges(structure: &Structure, charges: &[(u32, i64)]) -> Structure {
     let entries = (0..structure.atom_count()).map(|atom| {

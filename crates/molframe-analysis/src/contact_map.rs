@@ -64,11 +64,15 @@ impl ContactMap {
 
 /// Builds the residue contact map at a distance cutoff.
 ///
-/// `min_separation` drops any pair whose residue indices differ by less than it,
-/// so passing `0` keeps every inter-residue contact and passing `1` keeps them
-/// all except adjacent residues. The separation is topological — a difference of
-/// residue positions in the structure — so cross-chain pairs, which have no
-/// shared numbering, are always kept.
+/// `min_separation` drops any pair of residues of the same chain whose index
+/// difference is at most it: passing `0` keeps every inter-residue contact,
+/// passing `1` drops adjacent residues (difference 1), passing `2` also drops
+/// residues one apart, and so on. A kept pair is therefore more than
+/// `min_separation` residues apart. Residue indices run consecutively within a
+/// chain, so the difference is the number of residues between the two plus one.
+/// The filter applies only between residues of the same chain and model;
+/// residues of different chains have no shared numbering and are always kept,
+/// however close their global indices are.
 ///
 /// Runs in the cost of one atom-contact search plus a reduction over its pairs.
 ///
@@ -101,7 +105,7 @@ pub fn residue_contact_map(
         &query,
         IdentityHashMap::<(u32, u32), f32>::default,
         |closest, pair| {
-            let (Some(&Some(first)), Some(&Some(second))) = (
+            let (Some(&Some((first, first_chain))), Some(&Some((second, second_chain)))) = (
                 residue_of.get(pair.first as usize),
                 residue_of.get(pair.second as usize),
             ) else {
@@ -115,7 +119,7 @@ pub fn residue_contact_map(
             } else {
                 (second, first)
             };
-            if high - low < min_separation {
+            if first_chain == second_chain && high - low <= min_separation {
                 return;
             }
             keep_closest(closest, (low, high), pair.distance_squared);
@@ -145,17 +149,22 @@ pub fn residue_contact_map(
     })
 }
 
-/// Maps each atom index to the residue that owns it.
+/// Maps each atom index to the residue that owns it and the chain holding that
+/// residue.
 ///
-/// Atoms outside any residue — which a malformed input can produce — map to
+/// Chain indices are unique across models, so equal chain indices mean the same
+/// chain of the same model. Atoms outside any residue — which a malformed input can produce — map to
 /// `None` and take no part in a contact.
-fn atom_to_residue(structure: &Structure) -> Vec<Option<u32>> {
+fn atom_to_residue(structure: &Structure) -> Vec<Option<(u32, u32)>> {
     let mut residue_of = vec![None; structure.atom_count() as usize];
-    for residue in structure.data().residues() {
-        let ordinal = residue.index().get();
-        for atom in residue.atoms() {
-            if let Some(slot) = residue_of.get_mut(atom.index().as_usize()) {
-                *slot = Some(ordinal);
+    for chain in structure.data().chains() {
+        let chain_ordinal = chain.index().get();
+        for residue in chain.residues() {
+            let ordinal = residue.index().get();
+            for atom in residue.atoms() {
+                if let Some(slot) = residue_of.get_mut(atom.index().as_usize()) {
+                    *slot = Some((ordinal, chain_ordinal));
+                }
             }
         }
     }

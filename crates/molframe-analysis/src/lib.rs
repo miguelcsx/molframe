@@ -15,6 +15,7 @@ mod tables;
 
 #[path = "anm.rs"]
 mod anisotropic_network;
+mod aromatic_rings;
 #[path = "pi_stacking.rs"]
 mod aromatic_stacking;
 #[path = "contacts.rs"]
@@ -79,19 +80,28 @@ mod water_mediation;
 
 #[cfg(test)]
 mod chemistry_test_support;
+#[cfg(test)]
+mod ring_test_support;
 
 pub use anisotropic_network::{
     AnisotropicNetworkModel, AnmError, AnmOptions, anisotropic_network_model,
 };
+pub use aromatic_rings::{AromaticRing, MAXIMUM_RING_SIZE, aromatic_rings};
 pub use aromatic_stacking::{
-    PiStacking, PiStackingError, PiStackingOptions, PiStackingTable, StackingKind, pi_stacking,
+    PiStacking, PiStackingError, PiStackingGeometry, PiStackingOptions, PiStackingTable,
+    StackingKind, pi_stacking, pi_stacking_with_geometry,
 };
 pub use atom_pairs::{
     Contact, ContactTable, atom_contacts, atom_contacts_between,
     atom_contacts_between_with_spatial, visit_atom_contacts, visit_atom_contacts_between,
 };
-pub use cation_aromatic::{CationPi, CationPiError, CationPiOptions, CationPiTable, cation_pi};
-pub use chain_boundary::{chain_interface, chain_interface_with_spatial};
+pub use cation_aromatic::{
+    CationPi, CationPiError, CationPiOptions, CationPiTable, cation_pi, cation_pi_periodic,
+};
+pub use chain_boundary::{
+    ChainNamespace, ChainSelector, InterfaceError, InterfaceOptions, chain_interface,
+    chain_interface_with_options, chain_interface_with_spatial,
+};
 pub use chain_statistics::{PolymerError, PolymerStatistics, polymer_statistics};
 pub use channel_profile::{PoreError, PoreProfileOptions, PoreSample, pore_profile};
 pub use diagnostics::{governed_diagnostic, physical_diagnostic, standalone_diagnostic};
@@ -104,10 +114,12 @@ pub use external_secondary_structure::{DsspBinaryError, DsspSegment, parse_dssp_
 pub use fragment_mapping::{FragmentMappingError, FragmentMatch, FragmentReference, map_fragments};
 pub use half_sphere::{HalfSphereExposure, HseError, half_sphere_exposure};
 pub use hbond::{
-    HydrogenBond, HydrogenBondError, HydrogenBondOptions, HydrogenBondTable, hydrogen_bonds,
+    HydrogenBond, HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
+    hydrogen_bonds, hydrogen_bonds_with_policy,
 };
 pub use helix_geometry::{
-    BaseFrame, HelicalError, HelicalOptions, HelicalParameters, helical_parameters, helical_steps,
+    BaseFrame, HelicalError, HelicalOptions, HelicalParameters, MiddleFrameStep,
+    helical_parameters, helical_steps, middle_frame_step, middle_frame_steps,
 };
 pub use membrane_layers::{Leaflet, LeafletOptions, identify_leaflets};
 pub use mode_interchange::{NmdError, NormalMode, NormalModeSet, read_nmd, write_nmd};
@@ -120,7 +132,7 @@ pub use pair_distribution::{
     CentreGroup, CoordinationOptions, RadialBin, RadialDistributionOptions, RadialError,
     centre_of_mass_radial_distribution, coordination_numbers, radial_distribution,
 };
-pub use paired_bases::{BasePair, BasePairError, BasePairOptions, base_pairs};
+pub use paired_bases::{BasePair, BasePairError, BasePairOptions, WatsonCrickGeometry, base_pairs};
 pub use policy_execution::{
     AnalysisDescriptor, DefinitionError, FrameKernelResult, FrameRecord, GovernedAnalysisError,
     GovernedNativeError, GovernedStructureAnalysis, MappedClosureStructureKernel,
@@ -138,7 +150,10 @@ pub use policy_execution::{
 };
 pub use reference_contacts::{NativeContacts, NativeError, native_contact_fraction};
 pub use residue_contacts::{ContactMap, ResidueContact, ResidueContactTable, residue_contact_map};
-pub use salt_bridge::{SaltBridge, SaltBridgeTable, salt_bridges};
+pub use salt_bridge::{
+    SaltBridge, SaltBridgeError, SaltBridgeOptions, SaltBridgeTable, salt_bridges,
+    salt_bridges_with_options,
+};
 pub use secondary_structure_assignment::{
     DsspError, DsspOptions, SseRecord, SseTable, secondary_structure,
 };
@@ -166,6 +181,9 @@ pub use vector_field::{
     StreamlineDirection, StreamlineOptions, VectorFieldError, VectorFieldGrid,
     integrate_streamlines,
 };
-pub use water_mediation::{WaterBridge, WaterBridgeOptions, WaterBridgeTable, water_bridges};
+pub use water_mediation::{
+    WaterBridge, WaterBridgeConfidence, WaterBridgeMode, WaterBridgeOptions, WaterBridgePolicy,
+    WaterBridgeReport, WaterBridgeTable, water_bridges, water_bridges_with_policy,
+};
 
 pub use stream_surface::{SasaStreamError, sasa_stream};

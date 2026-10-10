@@ -6,9 +6,10 @@
 
 pub use molframe_chem::DsspOptions;
 use molframe_chem::{DsspBackbone, PolymerAtomRole, dssp_from_backbones};
-use molframe_core::SecondaryStructure;
 use molframe_core::index::ResidueIndex;
+use molframe_core::selection::AtomSelection;
 use molframe_core::structure::{ResidueRef, Structure};
+use molframe_core::{AnalysisPolicy, SecondaryStructure};
 
 /// Why a secondary-structure assignment could not be evaluated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
@@ -73,12 +74,34 @@ pub fn secondary_structure(
     structure: &Structure,
     options: &DsspOptions,
 ) -> Result<SseTable, DsspError> {
+    secondary_structure_with_policy(structure, options, &AnalysisPolicy::default())
+}
+
+/// Like [`secondary_structure`], but selects atoms with the policy's
+/// alternate-conformation rule before looking up backbone roles.
+///
+/// With the default policy one self-consistent conformer is used, so a residue
+/// with altloc copies of its backbone atoms is evaluated rather than reported as
+/// ambiguous. Under `KeepAll` the duplicates remain and are reported. When the
+/// policy cannot be resolved for the structure (for example a ragged ensemble)
+/// every atom is kept.
+///
+/// # Errors
+///
+/// Same as [`secondary_structure`].
+pub fn secondary_structure_with_policy(
+    structure: &Structure,
+    options: &DsspOptions,
+    policy: &AnalysisPolicy,
+) -> Result<SseTable, DsspError> {
     if !options.is_valid() {
         return Err(DsspError::InvalidOptions);
     }
     if !crate::chemistry::has_polymer_roles(structure) {
         return Err(DsspError::MissingRoleAnnotation);
     }
+    let selection = altloc_selection(structure, policy);
+    let selection = selection.as_ref();
     let mut backbones = vec![DsspBackbone::default(); structure.residue_count()];
     for model in structure.data().models() {
         for chain in model.chains() {
@@ -86,18 +109,30 @@ pub fn secondary_structure(
                 backbones[residue.index().as_usize()] = DsspBackbone {
                     model: model.index().get(),
                     chain: chain.index().get(),
-                    proline: residue.name() == Some("PRO"),
-                    ca: role_position(structure, residue, PolymerAtomRole::PROTEIN_ALPHA_CARBON)?,
-                    nitrogen: role_position(structure, residue, PolymerAtomRole::PROTEIN_NITROGEN)?,
+                    proline: !can_donate(structure, residue, selection),
+                    ca: role_position(
+                        structure,
+                        residue,
+                        PolymerAtomRole::PROTEIN_ALPHA_CARBON,
+                        selection,
+                    )?,
+                    nitrogen: role_position(
+                        structure,
+                        residue,
+                        PolymerAtomRole::PROTEIN_NITROGEN,
+                        selection,
+                    )?,
                     carbon: role_position(
                         structure,
                         residue,
                         PolymerAtomRole::PROTEIN_CARBONYL_CARBON,
+                        selection,
                     )?,
                     oxygen: role_position(
                         structure,
                         residue,
                         PolymerAtomRole::PROTEIN_CARBONYL_OXYGEN,
+                        selection,
                     )?,
                 };
             }
@@ -116,14 +151,76 @@ pub fn secondary_structure(
         .collect())
 }
 
+/// The atoms kept by the policy's alternate-conformation rule, or `None` when
+/// that rule cannot be resolved for this structure and every atom is kept.
+pub(crate) fn altloc_selection(
+    structure: &Structure,
+    policy: &AnalysisPolicy,
+) -> Option<AtomSelection> {
+    structure.resolve_altlocs(policy).into_result().ok()
+}
+
+/// Whether the residue's backbone nitrogen can donate a hydrogen bond.
+///
+/// Decided from the structure, not the residue name. A backbone nitrogen with a
+/// third heavy-atom neighbour besides the two chain atoms (the ring carbon of
+/// proline, hydroxyproline and other proline-like residues) carries no N-H. The
+/// neighbours come from the structure's bonds. The test counts heavy neighbours
+/// inside the residue: an ordinary backbone nitrogen has only C-alpha there,
+/// while a ring or N-alkylated nitrogen has two or more. The peptide bond to the
+/// previous residue is deliberately not counted, because it exists only when
+/// polymer links were built. Without bond data the same count is taken from
+/// covalent-length contacts (under 1.9 angstrom) inside the residue, which is also
+/// used when the bond table holds nothing for the nitrogen.
+fn can_donate(
+    structure: &Structure,
+    residue: ResidueRef<'_>,
+    selection: Option<&AtomSelection>,
+) -> bool {
+    let data = structure.data();
+    let nitrogen = residue.atoms().find(|atom| {
+        selection.is_none_or(|kept| kept.contains(atom.index().get()))
+            && crate::chemistry::polymer_role(structure, atom.index().get())
+                .is_some_and(|role| role.intersects(PolymerAtomRole::PROTEIN_NITROGEN))
+    });
+    let Some(nitrogen) = nitrogen else {
+        return true;
+    };
+    let adjacency = data
+        .bonds
+        .is_available()
+        .then(|| data.bonds.adjacency(structure.atom_count()));
+    let bonded = adjacency
+        .as_ref()
+        .map_or(&[][..], |adjacency| adjacency.neighbours(nitrogen.index()));
+    if bonded.is_empty() {
+        return ring_contacts(residue, nitrogen, selection) < 2;
+    }
+    let heavy = bonded
+        .iter()
+        .filter(|neighbour| {
+            data.atom(**neighbour).is_some_and(|atom| {
+                atom.element() != Some(molframe_core::Element::HYDROGEN)
+                    && atom
+                        .residue()
+                        .is_some_and(|owner| owner.index() == residue.index())
+                    && selection.is_none_or(|kept| kept.contains(atom.index().get()))
+            })
+        })
+        .count();
+    heavy < 2
+}
+
 fn role_position(
     structure: &Structure,
     residue: ResidueRef<'_>,
     required: PolymerAtomRole,
+    selection: Option<&AtomSelection>,
 ) -> Result<Option<[f32; 3]>, DsspError> {
     let mut matches = residue.atoms().filter(|atom| {
-        crate::chemistry::polymer_role(structure, atom.index().get())
-            .is_some_and(|role| role.intersects(required))
+        selection.is_none_or(|kept| kept.contains(atom.index().get()))
+            && crate::chemistry::polymer_role(structure, atom.index().get())
+                .is_some_and(|role| role.intersects(required))
     });
     let first = matches
         .next()
@@ -136,6 +233,36 @@ fn role_position(
     } else {
         Ok(first)
     }
+}
+
+/// Heavy atoms of the residue within covalent distance of its nitrogen.
+fn ring_contacts(
+    residue: ResidueRef<'_>,
+    nitrogen: molframe_core::structure::AtomRef<'_>,
+    selection: Option<&AtomSelection>,
+) -> usize {
+    const COVALENT_LIMIT: f32 = 1.9;
+    let Some(origin) = nitrogen.position() else {
+        return 0;
+    };
+    residue
+        .atoms()
+        .filter(|atom| {
+            atom.index() != nitrogen.index()
+                && atom.element() != Some(molframe_core::Element::HYDROGEN)
+                && selection.is_none_or(|kept| kept.contains(atom.index().get()))
+        })
+        .filter_map(molframe_core::structure::AtomRef::position)
+        .filter(|point| {
+            let delta = [
+                point[0] - origin[0],
+                point[1] - origin[1],
+                point[2] - origin[2],
+            ];
+            (delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]).sqrt()
+                < COVALENT_LIMIT
+        })
+        .count()
 }
 
 #[cfg(test)]

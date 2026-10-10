@@ -6,14 +6,21 @@
 //! the cation is both close to the ring centre and roughly over its face —
 //! judged by the angle between the ring normal and the line to the cation —
 //! since a cation level with the ring edge is not a cation–π contact.
+//!
+//! Each aromatic ring is its own cycle of the bond graph, so a cation over the
+//! six-membered ring of tryptophan is reported against that ring, with the
+//! ring identified by its lowest atom. Geometry is non-periodic unless
+//! [`cation_pi_periodic`] is asked for the structure's unit cell.
 
-use molframe_core::index::ResidueIndex;
+use std::collections::BTreeMap;
+
+use molframe_core::index::{AtomIndex, ResidueIndex};
 use molframe_core::structure::Structure;
 
 use crate::numeric::f64_to_f32;
-use std::collections::BTreeMap;
 
-use crate::aromatic_stacking::{PiStackingError, aromatic_rings};
+use crate::aromatic_rings::aromatic_rings;
+use crate::aromatic_stacking::{PiStackingError, displacement, dot, norm, periodic_box};
 
 /// Explicit geometric policy for cation–π interactions.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -44,6 +51,8 @@ pub struct CationPi {
     pub cation_residue: ResidueIndex,
     /// The aromatic residue.
     pub ring_residue: ResidueIndex,
+    /// The lowest atom of the ring, identifying it within its residue.
+    pub ring_atom: AtomIndex,
     /// The distance from the cation to the ring centre, in ångström.
     pub distance: f32,
 }
@@ -55,15 +64,18 @@ define_soa_table! {
         cation_residue: ResidueIndex,
         /// Aromatic residue indices.
         ring_residue: ResidueIndex,
+        /// Lowest atom of each ring.
+        ring_atom: AtomIndex,
         /// Cation-to-ring distances.
         distance: f32,
     }
 }
 
-/// Finds cation–π interactions with the cation within `max_distance` of a ring.
+/// Finds cation–π interactions with the cation within `maximum_distance` of a
+/// ring centre, in the deposited (non-periodic) coordinates.
 ///
-/// Results are ordered by `(cation residue, ring residue)`. A cation off to the
-/// side of a ring, rather than over its face, is not reported.
+/// Results are ordered by `(cation residue, ring residue, ring)`. A cation off
+/// to the side of a ring, rather than over its face, is not reported.
 ///
 /// Runs in `O(cations · rings)` time, both of which are sparse.
 ///
@@ -74,10 +86,27 @@ pub fn cation_pi(
     structure: &Structure,
     options: CationPiOptions,
 ) -> Result<CationPiTable, CationPiError> {
+    cation_pi_periodic(structure, options, false)
+}
+
+/// As [`cation_pi`], optionally measuring through the minimum image of the
+/// structure's unit cell. Rings are assumed to be whole in the deposited
+/// coordinates.
+///
+/// # Errors
+///
+/// As [`cation_pi`], plus an error when `periodic` is set and the structure has
+/// no cell or only the placeholder unit cube.
+pub fn cation_pi_periodic(
+    structure: &Structure,
+    options: CationPiOptions,
+    periodic: bool,
+) -> Result<CationPiTable, CationPiError> {
     validate_options(options)?;
-    let rings = aromatic_rings(structure, options.plane_fit)?;
+    let periodic = periodic_box(structure, periodic)?;
+    let rings = aromatic_rings(structure, options.plane_fit).map_err(PiStackingError::Geometry)?;
     let limit = f64::from(options.maximum_distance);
-    let mut found: BTreeMap<(ResidueIndex, ResidueIndex), f64> = BTreeMap::new();
+    let mut found: BTreeMap<(ResidueIndex, ResidueIndex, AtomIndex), f64> = BTreeMap::new();
     for atom in structure.data().atoms() {
         if crate::chemistry::formal_charge(structure, atom.index().get()).is_none_or(|v| v <= 0) {
             continue;
@@ -90,11 +119,7 @@ pub fn cation_pi(
             if ring.residue == residue.index() {
                 continue;
             }
-            let to_cation = [
-                cation[0] - ring.centre[0],
-                cation[1] - ring.centre[1],
-                cation[2] - ring.centre[2],
-            ];
+            let to_cation = displacement(periodic.as_ref(), ring.centroid, cation);
             let distance = norm(to_cation);
             if distance == 0.0
                 || distance > limit
@@ -103,18 +128,21 @@ pub fn cation_pi(
                 continue;
             }
             found
-                .entry((residue.index(), ring.residue))
+                .entry((residue.index(), ring.residue, ring.first_atom()))
                 .and_modify(|current| *current = current.min(distance))
                 .or_insert(distance);
         }
     }
     Ok(found
         .into_iter()
-        .map(|((cation_residue, ring_residue), distance)| CationPi {
-            cation_residue,
-            ring_residue,
-            distance: f64_to_f32(distance),
-        })
+        .map(
+            |((cation_residue, ring_residue, ring_atom), distance)| CationPi {
+                cation_residue,
+                ring_residue,
+                ring_atom,
+                distance: f64_to_f32(distance),
+            },
+        )
         .collect())
 }
 
@@ -132,14 +160,8 @@ fn validate_options(options: CationPiOptions) -> Result<(), CationPiError> {
 
 /// The angle in degrees between the ring axis and the line to the cation.
 fn off_axis_angle(to_cation: [f64; 3], normal: [f64; 3], distance: f64) -> f64 {
-    let dot = to_cation[0] * normal[0] + to_cation[1] * normal[1] + to_cation[2] * normal[2];
-    let cosine = (dot / distance).abs().min(1.0);
+    let cosine = (dot(to_cation, normal) / distance).abs().min(1.0);
     molframe_geom::degrees(cosine.acos())
-}
-
-/// Euclidean length of a vector.
-fn norm(vector: [f64; 3]) -> f64 {
-    (vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]).sqrt()
 }
 
 #[cfg(test)]
