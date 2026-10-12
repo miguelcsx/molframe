@@ -14,6 +14,7 @@ mod element_data;
 mod equivalence;
 mod grid;
 mod ionic;
+mod library;
 mod model;
 mod mol;
 mod mol2;
@@ -48,8 +49,13 @@ pub use equivalence::{
     AutomorphismLimit, EquivalenceCache, EquivalenceClasses, automorphisms, equivalence_classes,
 };
 pub use ionic::{IonicRadius, IonicSpin, ionic_radii};
+pub use library::{
+    FINGERPRINT_BITS, Fingerprint, LigandDescriptors, RuleOfFive, cluster, describe, fingerprint,
+    tanimoto,
+};
 pub use model::{
-    Component, ComponentAtom, ComponentBond, ComponentKind, PolymerAtomRole, StereoConfiguration,
+    BondStereo, Component, ComponentAtom, ComponentBond, ComponentKind, PolymerAtomRole,
+    StereoConfiguration,
 };
 pub use mol::{
     MolAtom, MolAtomMetadata, MolBond, MolBondMetadata, MolError, MolRecord, MolVersion, Molecule,
@@ -72,7 +78,8 @@ pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };
 pub use secondary::{
-    DsspBackbone, DsspOptions, InvalidDsspOptions, assign_secondary_structure, dssp_from_backbones,
+    DsspBackbone, DsspOptions, InvalidDsspOptions, assign_secondary_structure, assign_secondary_structure_in,
+    dssp_from_backbones,
 };
 pub use side_chain::{SideChainDefinition, SideChainRoles, side_chain_definition};
 pub use smarts::{SmartsDataError, SmartsError, SmartsMatch, SmartsPattern};
