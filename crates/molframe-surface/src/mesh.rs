@@ -9,7 +9,9 @@ use crate::{
     SolventExcludedSurface, SurfaceTriangle,
     numeric::{f64_to_f32, usize_to_u32},
 };
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
+
+use crate::mesh_diagnostics::MeshDiagnostics;
 
 /// One indexed triangle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,7 +24,7 @@ pub struct MeshReport {
     pub boundary_edges: u32,
     /// Edges incident to more than two faces.
     pub non_manifold_edges: u32,
-    /// Faces with repeated vertices or negligible area.
+    /// Faces with repeated vertices, invalid coordinates or exactly zero area.
     pub degenerate_faces: u32,
     /// Connected face/vertex components.
     pub components: u32,
@@ -76,8 +78,11 @@ impl IndexedSurfaceMesh {
     /// Validates caller-supplied indexed geometry and computes normals.
     #[must_use]
     pub fn new(vertices: Vec<[f32; 3]>, faces: Vec<SurfaceFace>) -> Self {
-        let adjacency = edge_incidence(&faces);
-        let report = mesh_report(&vertices, &faces, &adjacency);
+        let mut diagnostics = MeshDiagnostics::new(vertices.len(), faces.len());
+        for &face in &faces {
+            diagnostics.add(&vertices, face);
+        }
+        let report = diagnostics.finish();
         let vertex_normals = vertex_normals(&vertices, &faces);
         Self {
             vertices,
@@ -85,6 +90,57 @@ impl IndexedSurfaceMesh {
             vertex_normals,
             report,
         }
+    }
+
+    /// Preserves analytical vertex normals and computes topology with cooperative cancellation.
+    /// No area-weighted normal column is allocated or computed for this path.
+    ///
+    /// # Errors
+    /// Rejects mismatched or nonfinite normal columns, nonunit normals and cancellation.
+    pub fn from_analytic_normals(
+        vertices: Vec<[f32; 3]>,
+        faces: Vec<SurfaceFace>,
+        vertex_normals: Vec<[f32; 3]>,
+        cancellation: &molframe_core::execution::CancellationToken,
+    ) -> Result<Self, crate::SurfaceOutputError> {
+        cancellation.check()?;
+        if vertices.len() != vertex_normals.len() {
+            return Err(crate::SurfaceOutputError::Invalid(
+                "normal column has a different length",
+            ));
+        }
+        for (index, (position, normal)) in vertices.iter().zip(&vertex_normals).enumerate() {
+            if index % 1024 == 0 {
+                cancellation.check()?;
+            }
+            let length = normal
+                .iter()
+                .map(|&value| f64::from(value).powi(2))
+                .sum::<f64>();
+            if position.iter().any(|value| !value.is_finite())
+                || !length.is_finite()
+                || (length - 1.0).abs() > 0.002
+            {
+                return Err(crate::SurfaceOutputError::Invalid(
+                    "positions and unit normals must be finite",
+                ));
+            }
+        }
+        let mut diagnostics = MeshDiagnostics::new(vertices.len(), faces.len());
+        for (index, &face) in faces.iter().enumerate() {
+            if index % 1024 == 0 {
+                cancellation.check()?;
+            }
+            diagnostics.add(&vertices, face);
+        }
+        let report = diagnostics.finish();
+        cancellation.check()?;
+        Ok(Self {
+            vertices,
+            faces,
+            vertex_normals,
+            report,
+        })
     }
 
     /// The total area of the faces whose three vertices exist.
@@ -161,29 +217,7 @@ fn edge_count(value: Option<u32>) -> u32 {
     value
 }
 
-fn mesh_report(
-    vertices: &[[f32; 3]],
-    faces: &[SurfaceFace],
-    edges: &BTreeMap<(u32, u32), u32>,
-) -> MeshReport {
-    let boundary_edges = usize_to_u32(edges.values().filter(|count| **count == 1).count());
-    let non_manifold_edges = usize_to_u32(edges.values().filter(|count| **count > 2).count());
-    let degenerate_faces = usize_to_u32(
-        faces
-            .iter()
-            .filter(|face| face_degenerate(vertices, **face))
-            .count(),
-    );
-    let components = usize_to_u32(component_count(vertices.len(), edges));
-    MeshReport {
-        boundary_edges,
-        non_manifold_edges,
-        degenerate_faces,
-        components,
-    }
-}
-
-fn face_degenerate(vertices: &[[f32; 3]], face: SurfaceFace) -> bool {
+pub(crate) fn face_degenerate(vertices: &[[f32; 3]], face: SurfaceFace) -> bool {
     if face.0[0] == face.0[1] || face.0[1] == face.0[2] || face.0[2] == face.0[0] {
         return true;
     }
@@ -196,44 +230,16 @@ fn face_degenerate(vertices: &[[f32; 3]], face: SurfaceFace) -> bool {
     let Some(c) = vertices.get(face.0[2] as usize) else {
         return true;
     };
-    triangle_cross(*a, *b, *c)
-        .iter()
-        .map(|value| value * value)
-        .sum::<f64>()
-        <= f64::EPSILON
+    let cross = triangle_cross(*a, *b, *c);
+    cross.iter().any(|value| !value.is_finite()) || cross.iter().all(|&value| value == 0.0)
 }
 
-fn component_count(vertex_count: usize, edges: &BTreeMap<(u32, u32), u32>) -> usize {
-    if vertex_count == 0 {
-        return 0;
+pub(crate) fn component_root(parents: &mut [usize], mut row: usize) -> usize {
+    while parents[row] != row {
+        parents[row] = parents[parents[row]];
+        row = parents[row];
     }
-    let mut graph = vec![Vec::new(); vertex_count];
-    for &(left, right) in edges.keys() {
-        if let (Some(left_edges), Some(_)) = (graph.get(left as usize), graph.get(right as usize)) {
-            let _ = left_edges;
-            graph[left as usize].push(right);
-            graph[right as usize].push(left);
-        }
-    }
-    let mut visited = vec![false; vertex_count];
-    let mut components = 0;
-    for start in 0..vertex_count {
-        if visited[start] {
-            continue;
-        }
-        components += 1;
-        visited[start] = true;
-        let mut queue = VecDeque::from([usize_to_u32(start)]);
-        while let Some(vertex) = queue.pop_front() {
-            for &next in &graph[vertex as usize] {
-                if !visited[next as usize] {
-                    visited[next as usize] = true;
-                    queue.push_back(next);
-                }
-            }
-        }
-    }
-    components
+    row
 }
 
 fn vertex_normals(vertices: &[[f32; 3]], faces: &[SurfaceFace]) -> Vec<[f32; 3]> {
@@ -259,7 +265,7 @@ fn vertex_normals(vertices: &[[f32; 3]], faces: &[SurfaceFace]) -> Vec<[f32; 3]>
         .into_iter()
         .map(|normal| {
             let length = normal.iter().map(|value| value * value).sum::<f64>().sqrt();
-            if length <= f64::EPSILON {
+            if length == 0.0 {
                 [0.0; 3]
             } else {
                 normal.map(|value| f64_to_f32(value / length))
@@ -270,14 +276,14 @@ fn vertex_normals(vertices: &[[f32; 3]], faces: &[SurfaceFace]) -> Vec<[f32; 3]>
 
 pub(crate) fn triangle_cross(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f64; 3] {
     let ab = [
-        f64::from(b[0] - a[0]),
-        f64::from(b[1] - a[1]),
-        f64::from(b[2] - a[2]),
+        f64::from(b[0]) - f64::from(a[0]),
+        f64::from(b[1]) - f64::from(a[1]),
+        f64::from(b[2]) - f64::from(a[2]),
     ];
     let ac = [
-        f64::from(c[0] - a[0]),
-        f64::from(c[1] - a[1]),
-        f64::from(c[2] - a[2]),
+        f64::from(c[0]) - f64::from(a[0]),
+        f64::from(c[1]) - f64::from(a[1]),
+        f64::from(c[2]) - f64::from(a[2]),
     ];
     [
         ab[1] * ac[2] - ab[2] * ac[1],
