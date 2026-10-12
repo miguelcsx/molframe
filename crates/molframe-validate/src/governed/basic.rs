@@ -1,10 +1,10 @@
 use crate::{
     AltlocOccupancyError, AltlocOccupancyOptions, AltlocOccupancyReport, BondDeviation,
-    CcdCompletenessReport, ChainCompleteness, CisPeptide, ClashTable, CompletenessError,
-    LigandGeometryReport, PlanarityError, PlanarityFlag, PlanarityOptions, QualityFlag,
-    ValenceError, altloc_occupancy_sums, bond_length_deviations, ccd_missing_atoms, cis_peptides,
-    clashes, completeness, ligand_geometry, nonplanar_aromatic_rings, overvalent_atoms,
-    quality_flags,
+    CcdCompletenessReport, ChainCompleteness, CisPeptide, ClashOptions, ClashTable,
+    CompletenessError, LigandGeometryReport, PlanarityError, PlanarityFlag, PlanarityOptions,
+    QualityFlag, ValenceError, altloc_occupancy_sums, bond_length_deviations, ccd_missing_atoms,
+    cis_peptides, clashes_with, completeness, ligand_geometry, nonplanar_aromatic_rings,
+    overvalent_atoms, quality_flags,
 };
 use molframe_analysis::{AnalysisDescriptor, FrameKernelResult, StructureKernel, structure_kernel};
 use molframe_chem::RadiusSet;
@@ -68,27 +68,42 @@ impl From<Diagnostic> for CcdCompletenessKernelError {
     }
 }
 
-/// Governed steric-clash validation.
+/// Governed steric-clash validation under the default exclusion policy.
 #[must_use]
 pub fn clashes_kernel(
     tolerance: f32,
     radii: RadiusSet,
     spatial: SpatialBackend,
 ) -> impl StructureKernel<Output = ClashTable, Error = SpatialError> {
+    clashes_with_kernel(ClashOptions::new(tolerance, radii, spatial))
+}
+
+/// Governed steric-clash validation with an explicit exclusion policy.
+#[must_use]
+pub fn clashes_with_kernel(
+    options: ClashOptions,
+) -> impl StructureKernel<Output = ClashTable, Error = SpatialError> {
     structure_kernel(
         descriptor("steric-clashes")
-            .with_parameter("tolerance", float(tolerance))
+            .with_parameter("tolerance", float(options.tolerance))
             .with_parameter(
                 "radius_set",
-                ParameterValue::Text(format!("{radii:?}").into()),
+                ParameterValue::Text(format!("{:?}", options.radius_set).into()),
             )
             .with_parameter(
                 "spatial_backend",
-                ParameterValue::Text(format!("{spatial:?}").into()),
+                ParameterValue::Text(format!("{:?}", options.backend).into()),
+            )
+            .with_parameter(
+                "exclude_one_four",
+                ParameterValue::Text(options.exclude_one_four.to_string().into()),
+            )
+            .with_parameter(
+                "perceive_bonds",
+                ParameterValue::Text(options.perceive_bonds.to_string().into()),
             ),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
-            clashes(structure, tolerance, radii, spatial, context)
-                .map(|value| complete(structure, value))
+            clashes_with(structure, options, context).map(|value| complete(structure, value))
         },
     )
 }

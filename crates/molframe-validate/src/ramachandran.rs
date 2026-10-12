@@ -280,6 +280,56 @@ pub fn ramachandran_outliers(
         .collect())
 }
 
+/// One residue's backbone torsions, in degrees.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BackboneTorsions {
+    /// The residue.
+    pub residue: ResidueIndex,
+    /// φ, C(i-1)-N-CA-C, in degrees in (-180, 180].
+    pub phi: f64,
+    /// ψ, N-CA-C-N(i+1), in degrees in (-180, 180].
+    pub psi: f64,
+}
+
+/// φ and ψ of every residue that has both, with no classification: no reference
+/// grid is consulted, so nothing here says whether a conformation is allowed.
+///
+/// Chain ends and residues across breaks are omitted, as in [`ramachandran`].
+/// Records are ordered by residue index.
+///
+/// # Errors
+///
+/// Returns the polymer-role error when the structure carries no backbone roles.
+pub fn backbone_torsions(
+    structure: &Structure,
+) -> Result<Vec<BackboneTorsions>, RamachandranError> {
+    crate::backbone::require_polymer_roles(structure).map_err(RamachandranError::Roles)?;
+    let mut out = Vec::new();
+    for chain in structure.data().chains() {
+        let residues: Vec<ResidueRef<'_>> = chain.residues().collect();
+        for position in 1..residues.len().saturating_sub(1) {
+            let (previous, current, next) = (
+                residues[position - 1],
+                residues[position],
+                residues[position + 1],
+            );
+            let (Some(phi), Some(psi)) = (
+                phi(structure, previous, current)?,
+                psi(structure, current, next)?,
+            ) else {
+                continue;
+            };
+            out.push(BackboneTorsions {
+                residue: current.index(),
+                phi: molframe_geom::degrees(phi),
+                psi: molframe_geom::degrees(psi),
+            });
+        }
+    }
+    out.sort_by_key(|t| t.residue.get());
+    Ok(out)
+}
+
 fn phi(
     structure: &Structure,
     previous: ResidueRef<'_>,
@@ -368,3 +418,7 @@ fn psi(
 #[cfg(test)]
 #[path = "ramachandran_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "backbone_torsions_tests.rs"]
+mod torsion_tests;

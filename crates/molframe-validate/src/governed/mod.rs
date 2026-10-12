@@ -9,8 +9,8 @@ mod planes;
 pub use basic::{
     AltlocOccupancyKernelError, CcdCompletenessKernelError, LigandGeometryKernelError,
     altloc_occupancy_sums_kernel, bond_length_deviations_kernel, ccd_missing_atoms_kernel,
-    cis_peptides_kernel, clashes_kernel, completeness_kernel, ligand_geometry_kernel,
-    planarity_kernel, quality_flags_kernel, valence_kernel,
+    cis_peptides_kernel, clashes_kernel, clashes_with_kernel, completeness_kernel,
+    ligand_geometry_kernel, planarity_kernel, quality_flags_kernel, valence_kernel,
 };
 pub use bfactor::{
     BFactorKernelError, b_factor_distribution_kernel, tls_b_factor_consistency_kernel,

@@ -1,5 +1,6 @@
 use super::nonplanar_aromatic_rings;
 use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::Structure;
 
 const HEADER: &str = "data_s\n\
@@ -44,6 +45,7 @@ fn bonded_structure(source: &str, bonds: &[(u32, u32)]) -> Structure {
             atom_b: molframe_core::AtomIndex::new(b),
             order: molframe_core::BondOrder::Single,
             provenance: molframe_core::BondProvenance::ChemicalComponentDictionary,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = table.finish();

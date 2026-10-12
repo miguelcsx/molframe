@@ -4,7 +4,8 @@ use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::index::AtomIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
-use molframe_core::{BondOrder, ExecutionContext};
+use molframe_core::{BondOrder, ExecutionContext, OptionalSymbol};
+
 use molframe_spatial::SpatialBackend;
 use std::fmt::Write;
 
@@ -159,6 +160,7 @@ fn bonded(source: &str, pairs: &[(u32, u32)]) -> Structure {
             atom_b: AtomIndex::new(b),
             order: BondOrder::Single,
             provenance: BondProvenance::User,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();
@@ -193,21 +195,130 @@ ATOM 3 C C3 LIG A 1 2.0539 1.4516 0\n"
 }
 
 #[test]
-fn one_four_pairs_are_reported_unless_excluded_explicitly() {
+fn one_four_pairs_are_excluded_by_default_and_reported_on_request() {
     let source = format!(
         "{HEADER}\
 ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 1 1.54 0 0\n\
-ATOM 3 C C3 LIG A 1 1.54 1.54 0\n\
-ATOM 4 C C4 LIG A 1 0 1.54 0\n"
+ATOM 3 C C3 LIG A 1 2.054 1.452 0\n\
+ATOM 4 C C4 LIG A 1 0.857 2.421 0\n"
     );
+    // A planar cis chain: bond lengths 1.54 Å and angles 109.5°, so the 1-4
+    // distance is 2.57 Å, too long to be perceived as a bond yet overlapping.
     let structure = bonded(&source, &[(0, 1), (1, 2), (2, 3)]);
-    assert_eq!(pairs(&structure, defaults()), vec![(0, 3)]);
-    let excluded = ClashOptions {
-        exclude_one_four: true,
+    assert!(pairs(&structure, defaults()).is_empty());
+    let reported = ClashOptions {
+        exclude_one_four: false,
         ..defaults()
     };
-    assert!(pairs(&structure, excluded).is_empty());
+    assert_eq!(pairs(&structure, reported), vec![(0, 3)]);
+}
+
+/// Heavy atoms of residues 1-4 of 1UBQ (Met-Gln-Ile-Phe) exactly as deposited,
+/// with no bond table: what a coordinate file gives the reader. The deposited
+/// coordinates are the independent reference, since a crystal structure of a
+/// well-refined protein has no real overlap between covalent neighbours.
+const UBIQUITIN_N_TERMINUS: &str = "\
+ATOM 1 N N MET A 1 27.340 24.430 2.614\n\
+ATOM 2 C CA MET A 1 26.266 25.413 2.842\n\
+ATOM 3 C C MET A 1 26.913 26.639 3.531\n\
+ATOM 4 O O MET A 1 27.886 26.463 4.263\n\
+ATOM 5 C CB MET A 1 25.112 24.880 3.649\n\
+ATOM 6 C CG MET A 1 25.353 24.860 5.134\n\
+ATOM 7 S SD MET A 1 23.930 23.959 5.904\n\
+ATOM 8 C CE MET A 1 24.447 23.984 7.620\n\
+ATOM 9 N N GLN A 2 26.335 27.770 3.258\n\
+ATOM 10 C CA GLN A 2 26.850 29.021 3.898\n\
+ATOM 11 C C GLN A 2 26.100 29.253 5.202\n\
+ATOM 12 O O GLN A 2 24.865 29.024 5.330\n\
+ATOM 13 C CB GLN A 2 26.733 30.148 2.905\n\
+ATOM 14 C CG GLN A 2 26.882 31.546 3.409\n\
+ATOM 15 C CD GLN A 2 26.786 32.562 2.270\n\
+ATOM 16 O OE1 GLN A 2 27.783 33.160 1.870\n\
+ATOM 17 N NE2 GLN A 2 25.562 32.733 1.806\n\
+ATOM 18 N N ILE A 3 26.849 29.656 6.217\n\
+ATOM 19 C CA ILE A 3 26.235 30.058 7.497\n\
+ATOM 20 C C ILE A 3 26.882 31.428 7.862\n\
+ATOM 21 O O ILE A 3 27.906 31.711 7.264\n\
+ATOM 22 C CB ILE A 3 26.344 29.050 8.645\n\
+ATOM 23 C CG1 ILE A 3 27.810 28.748 8.999\n\
+ATOM 24 C CG2 ILE A 3 25.491 27.771 8.287\n\
+ATOM 25 C CD1 ILE A 3 27.967 28.087 10.417\n\
+ATOM 26 N N PHE A 4 26.214 32.097 8.771\n\
+ATOM 27 C CA PHE A 4 26.772 33.436 9.197\n\
+ATOM 28 C C PHE A 4 27.151 33.362 10.650\n\
+ATOM 29 O O PHE A 4 26.350 32.778 11.395\n\
+ATOM 30 C CB PHE A 4 25.695 34.498 8.946\n\
+ATOM 31 C CG PHE A 4 25.288 34.609 7.499\n\
+ATOM 32 C CD1 PHE A 4 24.147 33.966 7.038\n\
+ATOM 33 C CD2 PHE A 4 26.136 35.346 6.640\n\
+ATOM 34 C CE1 PHE A 4 23.812 34.031 5.677\n\
+ATOM 35 C CE2 PHE A 4 25.810 35.392 5.267\n\
+ATOM 36 C CZ PHE A 4 24.620 34.778 4.853\n";
+
+#[test]
+fn a_crystal_peptide_without_a_bond_table_has_no_clashes() {
+    // Without bond information, 1-2, 1-3 and 1-4 neighbours inside residues, the
+    // peptide links between them and the ring carbons of the phenylalanine all
+    // sit well inside their summed van der Waals radii.
+    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
+    assert!(pairs(&structure, defaults()).is_empty());
+}
+
+#[test]
+fn without_perceived_bonds_the_same_peptide_is_flooded_with_covalent_pairs() {
+    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
+    let raw = ClashOptions {
+        perceive_bonds: false,
+        ..defaults()
+    };
+    let found = pairs(&structure, raw);
+    // 1-2 pairs such as N-CA (1.46 Å) and the peptide C-N link are in the list.
+    assert!(found.contains(&(0, 1)), "{found:?}");
+    assert!(found.contains(&(2, 8)), "{found:?}");
+    assert!(found.len() > 30, "{}", found.len());
+}
+
+#[test]
+fn a_phenylalanine_ring_needs_the_one_four_exclusion() {
+    // CD1 and CE2 (atoms 32 and 35, zero-based 31 and 34) are 1-4 across the
+    // ring and 2.4 Å apart, far inside the 3.4 Å carbon contact distance.
+    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
+    let keeps_one_four = ClashOptions {
+        exclude_one_four: false,
+        ..defaults()
+    };
+    let found = pairs(&structure, keeps_one_four);
+    assert!(found.contains(&(31, 34)), "{found:?}");
+    assert!(pairs(&structure, defaults()).is_empty());
+}
+
+#[test]
+fn a_real_overlap_between_non_neighbours_is_still_reported() {
+    // A water oxygen placed 2.0 Å from the Met1 CB, which is 1.4 Å inside the
+    // 3.22 Å C...O contact distance, with nothing bonded to it.
+    let intruder = "ATOM 37 O O HOH B 5 25.112 24.880 5.649\n";
+    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}{intruder}"));
+    let found = pairs(&structure, defaults());
+    assert!(found.contains(&(4, 36)), "{found:?}");
+    assert!(
+        found
+            .iter()
+            .all(|&(first, second)| first == 36 || second == 36)
+    );
+}
+
+#[test]
+fn a_close_contact_between_unbonded_residues_is_not_mistaken_for_a_bond() {
+    // Two residues whose carbons are 1.6 Å apart sit inside the distance window
+    // a bond would, but nothing joins them: perception must not erase the very
+    // contact this check exists to find.
+    let source = format!(
+        "{HEADER}\
+ATOM 1 C CA ALA A 1 0 0 0\n\
+ATOM 2 C CA ALA A 2 1.6 0 0\n"
+    );
+    assert_eq!(pairs(&structure(&source), defaults()), vec![(0, 1)]);
 }
 
 #[test]

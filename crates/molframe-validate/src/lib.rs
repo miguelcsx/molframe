@@ -56,8 +56,9 @@ pub use aromatic_planarity::{
     PlanarityError, PlanarityFlag, PlanarityOptions, nonplanar_aromatic_rings,
 };
 pub use backbone_conformation::{
-    RamachandranBasin, RamachandranError, RamachandranOptions, RamachandranRecord,
-    RamachandranRegion, classify, ramachandran, ramachandran_outliers,
+    BackboneTorsions, RamachandranBasin, RamachandranError, RamachandranOptions,
+    RamachandranRecord, RamachandranRegion, backbone_torsions, classify, ramachandran,
+    ramachandran_outliers,
 };
 pub use chain_integrity::{ChainCompleteness, CompletenessError, completeness};
 pub use component_completeness::{
@@ -94,10 +95,11 @@ pub use policy_execution::{
     AltlocOccupancyKernelError, BFactorKernelError, CcdCompletenessKernelError, GovernedMapError,
     LigandGeometryKernelError, PlaneRestraintKernelError, altloc_occupancy_sums_kernel,
     b_factor_distribution_kernel, bond_length_deviations_kernel, ccd_missing_atoms_kernel,
-    chirality_kernel, cis_peptides_kernel, clashes_kernel, completeness_kernel,
-    governed_masked_real_space_correlation, governed_real_space_map_correlation,
-    governed_sampled_real_space_correlation, ligand_geometry_kernel, nucleic_geometry_kernel,
-    planarity_kernel, plane_restraint_outliers_kernel, quality_flags_kernel, ramachandran_kernel,
+    chirality_kernel, cis_peptides_kernel, clashes_kernel, clashes_with_kernel,
+    completeness_kernel, governed_masked_real_space_correlation,
+    governed_real_space_map_correlation, governed_sampled_real_space_correlation,
+    ligand_geometry_kernel, nucleic_geometry_kernel, planarity_kernel,
+    plane_restraint_outliers_kernel, quality_flags_kernel, ramachandran_kernel,
     ramachandran_outliers_kernel, reference_geometry_kernel, rotamer_kernel,
     tls_b_factor_consistency_kernel, valence_kernel,
 };

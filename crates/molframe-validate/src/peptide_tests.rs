@@ -4,7 +4,7 @@ use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::index::AtomIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
-use molframe_core::{AnnotationColumn, AtomAnnotation, BondOrder};
+use molframe_core::{AnnotationColumn, AtomAnnotation, BondOrder, OptionalSymbol};
 
 const HEADER: &str = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -40,6 +40,7 @@ fn annotated(structure: &Structure) -> Structure {
         atom_b: AtomIndex::new(2),
         order: BondOrder::Single,
         provenance: BondProvenance::User,
+        kind: OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     Structure::new(data)

@@ -9,7 +9,7 @@ use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::index::AtomIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
-use molframe_core::{AnnotationColumn, AtomAnnotation};
+use molframe_core::{AnnotationColumn, AtomAnnotation, OptionalSymbol};
 
 fn library() -> ReferenceLibrary {
     let alpha = ReferenceDistribution::grid(
@@ -129,6 +129,7 @@ fn structure_records_retain_reference_provenance() {
             atom_b: AtomIndex::new(nitrogen),
             order: BondOrder::Single,
             provenance: BondProvenance::User,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();
