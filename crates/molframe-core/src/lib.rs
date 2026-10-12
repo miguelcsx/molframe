@@ -59,7 +59,9 @@ pub use chunk::{
 };
 pub use column::{BitVec, EncodedColumn, Presence, ValidityMask};
 pub use contract::{Analysis, AnalysisPolicy, Coverage, Provenance, Status};
-pub use coords::{Aabb, CoordinateBlock, CoordinateGeneration};
+pub use coords::{
+    Aabb, CoordinateBlock, CoordinateGeneration, CoordinateSample, CoordinateSampleError,
+};
 pub use diagnostic::{
     Class, Code, ContextItem, Diagnostic, Diagnostics, Findings, Kind, Rendered, Severity,
     Strictness,
@@ -77,10 +79,10 @@ pub use index::{
 };
 pub use io::{
     AmbiguousResidueBoundaryPolicy, BatchContinuity, ByteWindow, CategoryFilter, ContinuityLevel,
-    Format, InputBuffer, InputKind, MissingElementPolicy, ParseMode, ReadOptions, ReadResult,
-    SourceBytes, SpillWindowedFile, StructureAtomRecord, StructureBatch, StructureBatchBuffer,
-    StructureBatchBuilder, StructureBatchError, StructureBatchPool, WindowedFile,
-    WindowedSourceFile, collect_structure, write_output,
+    Format, InputBuffer, InputKind, MissingElementPolicy, OccupancyPolicy, ParseMode, ReadOptions,
+    ReadResult, SourceBytes, SpillWindowedFile, StructureAtomRecord, StructureBatch,
+    StructureBatchBuffer, StructureBatchBuilder, StructureBatchError, StructureBatchPool,
+    WindowedFile, WindowedSourceFile, collect_structure, write_output,
 };
 pub use limits::{CapacityError, TableError};
 pub use optional::{OptionalI32, OptionalSymbol};
