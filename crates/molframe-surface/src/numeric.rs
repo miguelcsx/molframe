@@ -63,3 +63,50 @@ pub(crate) fn i128_to_i64(value: i128) -> i64 {
         Err(_) => i64::MAX,
     }
 }
+
+pub(crate) fn usize_to_f32(value: usize) -> f32 {
+    let Some(converted) = value.to_f32() else {
+        return f32::INFINITY;
+    };
+    converted
+}
+
+pub(crate) fn usize_to_i32(value: usize) -> i32 {
+    let Ok(converted) = i32::try_from(value) else {
+        return i32::MAX;
+    };
+    converted
+}
+
+pub(crate) fn i32_to_usize(value: i32) -> usize {
+    let Ok(converted) = usize::try_from(value) else {
+        return 0;
+    };
+    converted
+}
+
+pub(crate) fn f32_to_i32(value: f32) -> i32 {
+    match value.to_i32() {
+        Some(converted) => converted,
+        None if value.is_nan() => 0,
+        None if value.is_sign_negative() => i32::MIN,
+        None => i32::MAX,
+    }
+}
+
+pub(crate) fn f32_to_i64(value: f32) -> i64 {
+    match value.to_i64() {
+        Some(converted) => converted,
+        None if value.is_nan() => 0,
+        None if value.is_sign_negative() => i64::MIN,
+        None => i64::MAX,
+    }
+}
+
+pub(crate) fn f32_to_usize(value: f32) -> usize {
+    match value.to_usize() {
+        Some(converted) => converted,
+        None if value.is_nan() || value.is_sign_negative() => 0,
+        None => usize::MAX,
+    }
+}

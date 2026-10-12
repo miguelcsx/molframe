@@ -70,6 +70,7 @@ impl SasaSampler<'_> {
         if positions.is_empty() {
             return Ok(());
         }
+        crate::neighbourhood::validate_positions(positions)?;
         let sample_count = self.directions.len();
         let cutoff = self.cutoff;
         let index = CellList::build_in(

@@ -7,6 +7,10 @@ fn surface_failures_name_their_kind() {
         Code::E5101
     );
     assert_eq!(
+        Diagnostic::from(SasaError::NonFinitePosition { atom: 4 }).code(),
+        Code::E5101
+    );
+    assert_eq!(
         Diagnostic::from(SasaError::LengthMismatch {
             positions: 3,
             radii: 2

@@ -14,8 +14,9 @@
 use core::f64::consts::PI;
 
 use crate::accessible_area::SasaError;
-use crate::neighbourhood::{self, Neighbourhood};
+use crate::neighbourhood;
 use molframe_core::ExecutionContext;
+use molframe_spatial::{CellGridOptions, CellList, SpatialError};
 
 /// A full turn, the span of a slice circle.
 const TWO_PI: f64 = 2.0 * PI;
@@ -76,56 +77,130 @@ pub fn lee_richards(
         return Err(SasaError::NoPoints);
     }
 
-    let Some(hood) = neighbourhood::build(positions, radii, probe, context)? else {
+    neighbourhood::validate_input(positions, radii, probe)?;
+
+    if positions.is_empty() {
         return Ok(Vec::new());
+    }
+
+    let probe = f64::from(probe);
+    let expanded: Vec<f64> = radii
+        .iter()
+        .map(|&radius| f64::from(radius) + probe)
+        .collect();
+    let widest = expanded.iter().copied().fold(0.0_f64, f64::max);
+
+    if widest <= 0.0 {
+        return Ok(vec![0.0; positions.len()]);
+    }
+
+    // Neighbours are gathered per atom from the shared cell index instead of a
+    // resident adjacency list, so retained storage is the index plus the
+    // result rather than a row per atom: ~500 B/atom shrinks to tens of bytes.
+    let atoms = u32::try_from(positions.len()).map_err(|_| SpatialError::NumericRangeExceeded)?;
+    let targets: Vec<u32> = (0..atoms).collect();
+    let cutoff = neighbourhood::conservative_f32(2.0 * widest);
+    let index = CellList::build_in(
+        positions,
+        &targets,
+        cutoff,
+        None,
+        CellGridOptions::default(),
+        context,
+    )?;
+    let cloud = Cloud {
+        positions,
+        expanded: &expanded,
+        index: &index,
+        cutoff,
     };
 
-    // Each block owns one pair of scratch buffers for all of its atoms, so the
+    // Each block owns one set of scratch buffers for all of its atoms, so the
     // per-atom kernel never allocates. Blocks are fixed and merged in order,
     // so the result is identical at any worker count.
-    crate::accessible_area::mapped_ranges(positions.len(), size_of::<f64>(), context, |range| {
+    crate::accessible_area::try_mapped_ranges(positions.len(), size_of::<f64>(), context, |range| {
         let mut neighbours: Vec<SliceNeighbour> = Vec::new();
         let mut segments: Vec<(f64, f64)> = Vec::new();
-        range
-            .map(|atom| atom_area(atom, &hood, slices, &mut neighbours, &mut segments))
-            .collect()
+        let mut areas = Vec::with_capacity(range.len());
+        for atom in range {
+            let centre = cloud.gather(atom, &mut neighbours)?;
+            areas.push(atom_area(
+                cloud.expanded[atom],
+                centre,
+                slices,
+                &neighbours,
+                &mut segments,
+            ));
+        }
+        Ok(areas)
     })
+}
+
+/// Borrowed geometry shared by every worker block.
+struct Cloud<'a> {
+    positions: &'a [[f32; 3]],
+    expanded: &'a [f64],
+    index: &'a CellList<'a>,
+    cutoff: f32,
+}
+
+impl Cloud<'_> {
+    /// Fills `neighbours` with the spheres that overlap `atom`'s and returns
+    /// the atom's centre.
+    ///
+    /// The overlap test is the exact double-precision one the resident
+    /// adjacency used, so the same neighbours are found.
+    fn gather(
+        &self,
+        atom: usize,
+        neighbours: &mut Vec<SliceNeighbour>,
+    ) -> Result<[f64; 3], SasaError> {
+        neighbours.clear();
+        let centre = self.positions[atom].map(f64::from);
+        let radius = self.expanded[atom];
+        if radius <= 0.0 {
+            return Ok(centre);
+        }
+        let query =
+            u32::try_from(atom).map_err(|_| SasaError::from(SpatialError::NumericRangeExceeded))?;
+        self.index
+            .for_each_candidate(&[query], self.cutoff, |_, target, _| {
+                let target = target as usize;
+                let other = self.positions[target].map(f64::from);
+                let other_radius = self.expanded[target];
+                let reach = radius + other_radius;
+                if neighbourhood::squared_distance(centre, other) < reach * reach {
+                    neighbours.push(slice_neighbour(other_radius, other, centre));
+                }
+            })?;
+        Ok(centre)
+    }
 }
 
 /// The accessible area of one atom, integrated over its slices.
 ///
-/// The neighbour list and angular-segment buffer arrive reused from the caller
-/// and are cleared here, so repeated calls retain one allocation each.
+/// The segment buffer arrives reused from the caller and is cleared here, so
+/// repeated calls retain one allocation.
 fn atom_area(
-    atom: usize,
-    hood: &Neighbourhood,
+    radius: f64,
+    centre: [f64; 3],
     slices: u16,
-    neighbours: &mut Vec<SliceNeighbour>,
+    neighbours: &[SliceNeighbour],
     segments: &mut Vec<(f64, f64)>,
 ) -> f64 {
-    let radius = hood.expanded[atom];
-
     if radius <= 0.0 {
         return 0.0;
     }
 
-    if hood.adjacency.row(atom).is_empty() {
+    if neighbours.is_empty() {
         return sphere_area(radius);
     }
 
-    let centre = hood.centre(atom);
     let thickness = 2.0 * radius / f64::from(slices);
 
     // Archimedes: the sphere's lateral area over a slice of this thickness is the
     // same at every height, so the exposed fraction is all that varies.
     let ring_area = TWO_PI * radius * thickness;
-    neighbours.clear();
-    neighbours.extend(
-        hood.adjacency
-            .row(atom)
-            .iter()
-            .map(|&neighbour| slice_neighbour(hood, neighbour as usize, centre)),
-    );
 
     let mut area = 0.0;
     segments.clear();
@@ -245,8 +320,7 @@ fn add_neighbour_coverage(
     false
 }
 
-fn slice_neighbour(hood: &Neighbourhood, neighbour: usize, centre: [f64; 3]) -> SliceNeighbour {
-    let neighbour_centre = hood.centre(neighbour);
+fn slice_neighbour(radius: f64, neighbour_centre: [f64; 3], centre: [f64; 3]) -> SliceNeighbour {
     let dx = neighbour_centre[0] - centre[0];
     let dy = neighbour_centre[1] - centre[1];
     let separation_squared = dx * dx + dy * dy;
@@ -257,7 +331,7 @@ fn slice_neighbour(hood: &Neighbourhood, neighbour: usize, centre: [f64; 3]) -> 
         bearing
     };
     SliceNeighbour {
-        radius: hood.expanded[neighbour],
+        radius,
         centre_z: neighbour_centre[2],
         separation_squared,
         separation: separation_squared.sqrt(),

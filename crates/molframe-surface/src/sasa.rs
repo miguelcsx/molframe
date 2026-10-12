@@ -44,6 +44,12 @@ pub enum SasaError {
     /// A radius is negative or not finite.
     #[error("every radius must be finite and non-negative")]
     InvalidRadius,
+    /// An atom coordinate is NaN or infinite, so no area can be measured.
+    #[error("atom {atom} has a non-finite coordinate")]
+    NonFinitePosition {
+        /// Index of the first atom with a non-finite coordinate.
+        atom: usize,
+    },
     /// Surface sampling density is not finite and positive.
     #[error("surface density must be finite and positive")]
     InvalidDensity,
@@ -96,10 +102,23 @@ pub enum SasaError {
 ///
 /// Runs in `O(atoms · points · local density)` time.
 ///
+/// # Parallelism
+///
+/// Atoms are processed in fixed blocks of 64 on the shared worker pool, and the
+/// areas are returned in atom order, so the result is bit-identical at any
+/// worker count. The number of workers is the context's worker budget: by
+/// default the host's available parallelism (the pool's size), or the value set
+/// with `ExecutionContext::builder().worker_budget(n)`, which is clamped to the
+/// pool size. A budget of one runs serially on the calling thread. Work started
+/// from inside a pool worker also runs inline rather than nesting. Time and
+/// scaling are only meaningful for an optimised build: an unoptimised build is
+/// two orders of magnitude slower.
+///
 /// # Errors
 ///
 /// Returns [`SasaError`] for mismatched lengths, a non-finite or negative probe
-/// or radius, a zero point count, or a neighbour-search failure.
+/// or radius, a NaN or infinite coordinate ([`SasaError::NonFinitePosition`],
+/// diagnostic `E5101`), a zero point count, or a neighbour-search failure.
 ///
 /// # Examples
 ///
@@ -149,6 +168,17 @@ pub(crate) fn mapped_ranges<T: Send>(
     context: &ExecutionContext,
     worker: impl Fn(core::ops::Range<usize>) -> Vec<T> + Sync,
 ) -> Result<Vec<T>, SasaError> {
+    try_mapped_ranges(count, bytes_per_item, context, |range| Ok(worker(range)))
+}
+
+/// [`mapped_ranges`] for a worker that can fail; the first error in block
+/// order is returned.
+pub(crate) fn try_mapped_ranges<T: Send>(
+    count: usize,
+    bytes_per_item: usize,
+    context: &ExecutionContext,
+    worker: impl Fn(core::ops::Range<usize>) -> Result<Vec<T>, SasaError> + Sync,
+) -> Result<Vec<T>, SasaError> {
     /// Atoms per block. Small enough to even out the spread in per-atom cost.
     const BLOCK_ATOMS: usize = 512;
 
@@ -166,7 +196,7 @@ pub(crate) fn mapped_ranges<T: Send>(
         BlockPlan::new(count, BLOCK_ATOMS),
         context,
         bytes_per_block,
-        |_, range| Ok::<_, SasaError>(worker(range)),
+        |_, range| worker(range),
         |mut block| {
             output.append(&mut block);
             Ok(())
@@ -270,40 +300,63 @@ pub fn surface_points_at_density(
         return Ok(Vec::new());
     };
 
-    let mut directions = BTreeMap::new();
-    let mut points = Vec::new();
-
-    for atom in 0..positions.len() {
-        append_density_surface_points(&hood, atom, density, &mut directions, &mut points)?;
+    // Sample counts are validated and their lattices built once, in atom order,
+    // so the first offending atom is the one reported and the parallel blocks
+    // below only read the shared tables.
+    let mut directions: BTreeMap<u16, Vec<[f64; 3]>> = BTreeMap::new();
+    let mut widest_samples = 1_u16;
+    for &radius in &hood.expanded {
+        if radius <= 0.0 {
+            continue;
+        }
+        let samples = samples_for_density(radius, density)?;
+        widest_samples = widest_samples.max(samples);
+        directions
+            .entry(samples)
+            .or_insert_with(|| fibonacci_sphere(samples));
     }
 
-    Ok(points)
+    mapped_ranges(
+        positions.len(),
+        usize::from(widest_samples) * size_of::<SurfacePoint>(),
+        context,
+        |range| {
+            let mut points = Vec::new();
+            for atom in range {
+                append_density_surface_points(&hood, atom, density, &directions, &mut points);
+            }
+            points
+        },
+    )
 }
 
 /// Samples one atom at area-proportional Fibonacci density.
 ///
-/// Directions are cached by sample count so atoms with the same area density
-/// reuse the same deterministic lattice instead of recalculating it.
+/// Directions come from a table keyed by sample count, so atoms with the same
+/// area density share one deterministic lattice. An atom whose count has no
+/// table entry is skipped; the caller builds the table for every atom first.
 fn append_density_surface_points(
     hood: &Neighbourhood,
     atom: usize,
     density: f32,
-    directions: &mut BTreeMap<u16, Vec<[f64; 3]>>,
+    directions: &BTreeMap<u16, Vec<[f64; 3]>>,
     output: &mut Vec<SurfacePoint>,
-) -> Result<(), SasaError> {
+) {
     let radius = hood.expanded[atom];
 
     if radius <= 0.0 {
-        return Ok(());
+        return;
     }
 
-    let samples = samples_for_density(radius, density)?;
+    let Ok(samples) = samples_for_density(radius, density) else {
+        return;
+    };
+    let Some(directions) = directions.get(&samples) else {
+        return;
+    };
     let centre = hood.centre(atom);
 
-    let directions = directions
-        .entry(samples)
-        .or_insert_with(|| fibonacci_sphere(samples));
-    for &direction in directions.iter() {
+    for &direction in directions {
         let point = point_on_sphere(centre, radius, direction);
 
         if hood.point_is_clear(point, atom) {
@@ -314,8 +367,6 @@ fn append_density_surface_points(
             });
         }
     }
-
-    Ok(())
 }
 
 /// Converts area density to a bounded Fibonacci sample count.

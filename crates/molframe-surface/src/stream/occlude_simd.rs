@@ -65,13 +65,23 @@ impl<const N: usize> NeighbourTile<N> {
     }
 
     /// Marks every uncovered sample the tile hides and returns how many it hid.
+    ///
+    /// Consecutive Fibonacci samples are neighbours on the sphere, so the
+    /// neighbour that hid one sample very likely hides the next. Each test
+    /// starts at the lane group of the previous blocker and wraps round, which
+    /// only changes where the scan begins: a sample is hidden exactly when some
+    /// neighbour hides it, so the result is order independent.
     pub(super) fn occlude(&self, points: &[[f64; 3]], covered: &mut [u64]) -> u16 {
-        let padded = self.len.div_ceil(LANES) * LANES;
+        let groups = self.len.div_ceil(LANES);
         let mut hidden = 0;
+        let mut last_blocker = 0;
         for (sample, point) in points.iter().enumerate() {
             let mask = 1_u64 << (sample % 64);
             let word = &mut covered[sample / 64];
-            if *word & mask == 0 && self.hides(*point, padded) {
+            if *word & mask == 0
+                && let Some(group) = self.hiding_group(*point, groups, last_blocker)
+            {
+                last_blocker = group;
                 *word |= mask;
                 hidden += 1;
             }
@@ -79,27 +89,27 @@ impl<const N: usize> NeighbourTile<N> {
         hidden
     }
 
-    fn hides(&self, point: [f64; 3], padded: usize) -> bool {
+    /// The first lane group, scanning from `first`, that hides `point`.
+    fn hiding_group(&self, point: [f64; 3], groups: usize, first: usize) -> Option<usize> {
         let px = F64xN::splat(point[0]);
         let py = F64xN::splat(point[1]);
         let pz = F64xN::splat(point[2]);
-        let mut start = 0;
-        while start < padded {
-            let lanes = |values: &[f64; N]| {
-                F64xN::from(core::array::from_fn::<f64, LANES, _>(|lane| {
-                    values[start + lane]
-                }))
-            };
-            let dx = px - lanes(&self.x);
-            let dy = py - lanes(&self.y);
-            let dz = pz - lanes(&self.z);
+        let lanes = |values: &[f64; N], start: usize| {
+            let chunk: [f64; LANES] = values[start..start + LANES]
+                .try_into()
+                .unwrap_or([0.0; LANES]);
+            F64xN::from(chunk)
+        };
+        (first..groups).chain(0..first.min(groups)).find(|&group| {
+            let start = group * LANES;
+            let dx = px - lanes(&self.x, start);
+            let dy = py - lanes(&self.y, start);
+            let dz = pz - lanes(&self.z, start);
             let distance_squared = dx * dx + dy * dy + dz * dz;
-            if distance_squared.simd_lt(lanes(&self.radius_squared)).any() {
-                return true;
-            }
-            start += LANES;
-        }
-        false
+            distance_squared
+                .simd_lt(lanes(&self.radius_squared, start))
+                .any()
+        })
     }
 }
 

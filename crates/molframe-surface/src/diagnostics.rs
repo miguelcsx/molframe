@@ -10,6 +10,7 @@ diagnostic_from!(SasaError, |error| match error {
     SasaError::LengthMismatch { .. } => Code::E5102,
     SasaError::InvalidProbe
     | SasaError::InvalidRadius
+    | SasaError::NonFinitePosition { .. }
     | SasaError::InvalidDensity
     | SasaError::NoPoints
     | SasaError::InvalidGridOptions => Code::E5101,

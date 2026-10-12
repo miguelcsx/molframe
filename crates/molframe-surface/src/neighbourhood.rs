@@ -97,7 +97,8 @@ impl Neighbourhood<'_> {
 ///
 /// Returns [`SasaError::LengthMismatch`] when the counts disagree,
 /// [`SasaError::InvalidProbe`] for a non-finite or negative probe,
-/// [`SasaError::InvalidRadius`] for a non-finite or negative radius, and
+/// [`SasaError::InvalidRadius`] for a non-finite or negative radius,
+/// [`SasaError::NonFinitePosition`] for a NaN or infinite coordinate, and
 /// [`SasaError::Spatial`] when the neighbour search rejects the input.
 pub(crate) fn build<'a>(
     positions: &'a [[f32; 3]],
@@ -139,7 +140,25 @@ pub(crate) fn validate_input(
         });
     }
 
-    validate_radii(radii, probe)
+    validate_radii(radii, probe)?;
+    validate_positions(positions)
+}
+
+/// Rejects NaN and infinite coordinates.
+///
+/// Every comparison against NaN is false, so a non-finite atom would read as
+/// clear of all neighbours and be reported fully exposed; refusing it up front
+/// keeps that silent wrong answer out of every surface kernel.
+///
+/// Runtime is `O(A)` and requires no allocation.
+pub(crate) fn validate_positions(positions: &[[f32; 3]]) -> Result<(), SasaError> {
+    match positions
+        .iter()
+        .position(|position| !position.iter().all(|value| value.is_finite()))
+    {
+        Some(atom) => Err(SasaError::NonFinitePosition { atom }),
+        None => Ok(()),
+    }
 }
 
 pub(crate) fn validate_radii(radii: &[f32], probe: f32) -> Result<(), SasaError> {

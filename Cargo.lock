@@ -2481,6 +2481,7 @@ dependencies = [
  "molframe-core",
  "molframe-spatial",
  "num-traits",
+ "rayon",
  "tempfile",
  "thiserror 2.0.21",
  "wide",

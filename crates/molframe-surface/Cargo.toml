@@ -11,6 +11,7 @@ description = "Solvent-accessible and molecular surfaces for molframe"
 num-traits.workspace = true
 molframe-core.workspace = true
 molframe-spatial.workspace = true
+rayon.workspace = true
 thiserror.workspace = true
 wide.workspace = true
 

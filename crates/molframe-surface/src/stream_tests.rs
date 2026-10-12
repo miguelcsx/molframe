@@ -111,8 +111,8 @@ fn refusal_cancellation_and_sink_failure_release_the_complete_workspace() {
 }
 
 #[test]
-fn tangent_zero_radius_and_nonfinite_positions_preserve_the_reference() {
-    let positions = [[0.0; 3], [2.0, 0.0, 0.0], [f32::NAN; 3], [4.0, 0.0, 0.0]];
+fn tangent_and_zero_radius_atoms_preserve_the_reference() {
+    let positions = [[0.0; 3], [2.0, 0.0, 0.0], [3.0, 5.0, 0.0], [4.0, 0.0, 0.0]];
     let radii = [1.0, 1.0, 1.0, 0.0];
     let context = ExecutionContext::default();
     let reference = crate::shrake_rupley(&positions, &radii, 0.0, 65, &context).expect("reference");
@@ -123,6 +123,20 @@ fn tangent_zero_radius_and_nonfinite_positions_preserve_the_reference() {
     })
     .expect("stream");
     assert_eq!(result, reference);
+}
+
+#[test]
+fn nonfinite_positions_are_refused_rather_than_reported_exposed() {
+    let positions = [[0.0; 3], [2.0, 0.0, 0.0], [f32::NAN; 3]];
+    let radii = [1.0; 3];
+    let context = ExecutionContext::default();
+    let result = visit_shrake_rupley(&positions, &radii, 0.0, 65, None, &context, |_, _| {
+        panic!("no area may be emitted for refused input")
+    });
+    assert!(matches!(
+        result,
+        Err(SasaError::NonFinitePosition { atom: 2 })
+    ));
 }
 
 #[test]

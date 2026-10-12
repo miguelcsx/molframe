@@ -241,3 +241,105 @@ fn a_budget_below_one_block_is_refused_instead_of_overcommitted() {
         )))
     ));
 }
+
+mod non_finite_and_parallel {
+    use super::{SasaError, context, shrake_rupley, surface_points};
+    use crate::lee_richards::lee_richards;
+    use crate::surface_points_at_density;
+    use molframe_core::ExecutionContext;
+
+    const BAD: [f32; 3] = [f32::NAN, 0.0, 0.0];
+
+    fn cloud() -> (Vec<[f32; 3]>, Vec<f32>) {
+        let positions: Vec<[f32; 3]> = (0..300_u16)
+            .map(|index| {
+                let step = f32::from(index);
+                [
+                    (step * 0.37).sin() * 9.0,
+                    (step * 0.91).cos() * 9.0,
+                    (step * 0.13).sin() * 9.0,
+                ]
+            })
+            .collect();
+        let radii = (0..300_u16).map(|i| 1.2 + f32::from(i % 5) * 0.2).collect();
+        (positions, radii)
+    }
+
+    fn rejected(error: &SasaError, atom: usize) {
+        assert!(
+            matches!(error, SasaError::NonFinitePosition { atom: found } if *found == atom),
+            "unexpected error {error:?}"
+        );
+    }
+
+    #[test]
+    fn every_kernel_refuses_non_finite_coordinates() {
+        let ctx = context();
+        for bad in [
+            BAD,
+            [0.0, f32::INFINITY, 0.0],
+            [0.0, 0.0, f32::NEG_INFINITY],
+        ] {
+            let positions = [[0.0, 0.0, 0.0], bad];
+            let radii = [1.7, 1.7];
+            rejected(
+                &shrake_rupley(&positions, &radii, 1.4, 100, &ctx).unwrap_err(),
+                1,
+            );
+            rejected(
+                &lee_richards(&positions, &radii, 1.4, 20, &ctx).unwrap_err(),
+                1,
+            );
+            rejected(
+                &surface_points(&positions, &radii, 1.4, 50, &ctx).unwrap_err(),
+                1,
+            );
+            rejected(
+                &surface_points_at_density(&positions, &radii, 1.4, 1.0, &ctx).unwrap_err(),
+                1,
+            );
+        }
+    }
+
+    #[test]
+    fn a_lone_non_finite_atom_is_not_reported_exposed() {
+        let result = shrake_rupley(&[BAD], &[1.7], 1.4, 100, &context());
+        assert!(matches!(
+            result,
+            Err(SasaError::NonFinitePosition { atom: 0 })
+        ));
+    }
+
+    #[test]
+    fn density_sampling_is_identical_at_any_worker_count() {
+        let (positions, radii) = cloud();
+        let run = |workers| {
+            let ctx = ExecutionContext::builder()
+                .worker_budget(workers)
+                .build()
+                .unwrap();
+            surface_points_at_density(&positions, &radii, 1.4, 1.5, &ctx).unwrap()
+        };
+        let serial = run(1);
+        assert!(!serial.is_empty());
+        assert_eq!(serial, run(8));
+        assert!(serial.windows(2).all(|pair| pair[0].atom <= pair[1].atom));
+    }
+
+    #[test]
+    fn lee_richards_is_identical_at_any_worker_count_and_tracks_shrake_rupley() {
+        let (positions, radii) = cloud();
+        let run = |workers| {
+            let ctx = ExecutionContext::builder()
+                .worker_budget(workers)
+                .build()
+                .unwrap();
+            lee_richards(&positions, &radii, 1.4, 60, &ctx).unwrap()
+        };
+        let areas = run(1);
+        assert_eq!(areas, run(8));
+        let reference = shrake_rupley(&positions, &radii, 1.4, 4000, &context()).unwrap();
+        let (lee, sphere): (f64, f64) = (areas.iter().sum(), reference.iter().sum());
+        assert!((lee - sphere).abs() / sphere < 0.02, "{lee} vs {sphere}");
+    }
+}
