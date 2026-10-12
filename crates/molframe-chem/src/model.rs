@@ -203,6 +203,18 @@ pub enum StereoConfiguration {
     Mixed,
 }
 
+/// Declared double-bond geometry of a component bond.
+///
+/// Distinct from [`StereoConfiguration`], which describes a tetrahedral centre:
+/// reading `E`/`Z` as `R`/`S` would misreport the geometry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BondStereo {
+    /// Higher-priority substituents on opposite sides of the bond.
+    E,
+    /// Higher-priority substituents on the same side of the bond.
+    Z,
+}
+
 /// One expected atom in a chemical component.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComponentAtom {
@@ -233,8 +245,8 @@ pub struct ComponentBond {
     pub order: BondOrder,
     /// Aromatic annotation from the dictionary.
     pub aromatic: bool,
-    /// Declared stereochemical configuration.
-    pub stereo: Option<StereoConfiguration>,
+    /// Declared double-bond geometry; `None` when the dictionary gives none.
+    pub stereo: Option<BondStereo>,
 }
 
 /// A complete deposited-component definition.

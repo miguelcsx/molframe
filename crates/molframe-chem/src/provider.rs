@@ -1,9 +1,16 @@
 //! Pluggable deterministic component providers and CCD lowering.
 
+mod items;
 mod validation;
 
-use crate::model::{Component, ComponentAtom, ComponentBond, ComponentKind, StereoConfiguration};
-use molframe_cif::{CifValue, DataBlock, Document};
+use crate::model::{
+    BondStereo, Component, ComponentAtom, ComponentBond, ComponentKind, StereoConfiguration,
+};
+use items::{
+    collect_rows, formal_charge, invalid_value, one_finding, required_flag, required_identifier,
+    required_number, required_text, unknown_marker,
+};
+use molframe_cif::{DataBlock, Document};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::io::InputBuffer;
@@ -198,12 +205,10 @@ fn one_letter_code(value: &str) -> Option<u8> {
 }
 
 fn atoms(block: &DataBlock) -> LoweringResult<Vec<ComponentAtom>> {
+    // A component with no atom category is a legitimate entry with no atoms,
+    // such as the unknown-ligand placeholder; an empty category is not.
     let Some(category) = block.category("chem_comp_atom") else {
-        return Err(vec![
-            Diagnostic::new(Code::E2001)
-                .with_context("block", block.name())
-                .in_category("chem_comp_atom"),
-        ]);
+        return Ok(Vec::new());
     };
     if category.row_count() == 0 {
         return Err(vec![
@@ -214,12 +219,8 @@ fn atoms(block: &DataBlock) -> LoweringResult<Vec<ComponentAtom>> {
         ]);
     }
     collect_rows(category, |row| {
-        let symbol = required_text(category, "type_symbol", row)?;
-        let element = Element::from_symbol(&symbol)
-            .ok_or_else(|| invalid_value(category, "type_symbol", row))?;
-        let charge_value = required_integer(category, "charge", row)?;
-        let charge =
-            i8::try_from(charge_value).map_err(|_| invalid_value(category, "charge", row))?;
+        let element = element(category, row)?;
+        let charge = formal_charge(category, row)?;
         Ok(ComponentAtom {
             name: required_identifier(category, "atom_id", row)?,
             alternate_name: category
@@ -234,6 +235,19 @@ fn atoms(block: &DataBlock) -> LoweringResult<Vec<ComponentAtom>> {
     })
 }
 
+/// The element of a component atom.
+///
+/// The archive writes `X` for an atom whose element is deliberately
+/// unspecified, as in the ambiguous residues ASX and GLX. That is reported as
+/// [`Element::UNKNOWN`] rather than guessed or rejected.
+fn element(category: &molframe_cif::Category, row: usize) -> Result<Element, Diagnostic> {
+    let symbol = required_text(category, "type_symbol", row)?;
+    if symbol.trim().eq_ignore_ascii_case("X") {
+        return Ok(Element::UNKNOWN);
+    }
+    Element::from_symbol(&symbol).ok_or_else(|| invalid_value(category, "type_symbol", row))
+}
+
 fn bonds(block: &DataBlock) -> LoweringResult<Vec<ComponentBond>> {
     let Some(category) = block.category("chem_comp_bond") else {
         return Ok(Vec::new());
@@ -245,11 +259,20 @@ fn bonds(block: &DataBlock) -> LoweringResult<Vec<ComponentBond>> {
             atom_b: required_identifier(category, "atom_id_2", row)?,
             order: bond_order(category, row, aromatic)?,
             aromatic,
-            stereo: optional_stereo(category, row)?,
+            stereo: bond_stereo(category, row)?,
         })
     })
 }
 
+/// One coordinate set (ideal or model) for every atom of a component.
+///
+/// The archive writes `?` for a coordinate it does not have, and the two sets
+/// are curated independently: a component can carry ideal coordinates and no
+/// model coordinates, or the reverse. A set with any unknown or inapplicable
+/// coordinate is reported as absent as a whole, because a partial set cannot be
+/// indexed by atom and substituting zeros would place atoms at the origin. The
+/// caller chooses between the sets; nothing here falls back from one to the
+/// other.
 fn coordinates(
     block: &DataBlock,
     ideal: bool,
@@ -274,6 +297,9 @@ fn coordinates(
     for row in 0..category.row_count() {
         let mut position = [0.0; 3];
         for (axis, item) in items.iter().enumerate() {
+            if unknown_marker(category, item, row) {
+                return Ok(None);
+            }
             let value = required_number(category, item, row).map_err(one_finding)?;
             if value < f64::from(f32::MIN) || value > f64::from(f32::MAX) {
                 return Err(vec![invalid_value(category, item, row)]);
@@ -352,6 +378,24 @@ fn bond_order(
     }
 }
 
+/// Bond stereo: `N` is none, and `E`/`Z` are double-bond geometry.
+///
+/// Anything else is rejected rather than reinterpreted: the tetrahedral values
+/// belong to atoms, and a bond carrying one is a malformed dictionary entry.
+fn bond_stereo(
+    category: &molframe_cif::Category,
+    row: usize,
+) -> Result<Option<BondStereo>, Diagnostic> {
+    let item = "pdbx_stereo_config";
+    match category.text(item, row) {
+        None => Ok(None),
+        Some(value) if value.eq_ignore_ascii_case("N") => Ok(None),
+        Some(value) if value.eq_ignore_ascii_case("E") => Ok(Some(BondStereo::E)),
+        Some(value) if value.eq_ignore_ascii_case("Z") => Ok(Some(BondStereo::Z)),
+        Some(_) => Err(invalid_value(category, item, row)),
+    }
+}
+
 fn optional_stereo(
     category: &molframe_cif::Category,
     row: usize,
@@ -365,118 +409,6 @@ fn optional_stereo(
         Some(value) if value.eq_ignore_ascii_case("MIXED") => Ok(Some(StereoConfiguration::Mixed)),
         Some(_) => Err(invalid_value(category, item, row)),
     }
-}
-
-fn collect_rows<T>(
-    category: &molframe_cif::Category,
-    parse: impl Fn(usize) -> Result<T, Diagnostic>,
-) -> LoweringResult<Vec<T>> {
-    let mut values = Vec::with_capacity(category.row_count());
-    let mut findings = Vec::new();
-    for row in 0..category.row_count() {
-        match parse(row) {
-            Ok(value) => values.push(value),
-            Err(finding) => findings.push(finding),
-        }
-    }
-    if findings.is_empty() {
-        Ok(values)
-    } else {
-        Err(findings)
-    }
-}
-
-fn required_identifier(
-    category: &molframe_cif::Category,
-    item: &str,
-    row: usize,
-) -> Result<Box<str>, Diagnostic> {
-    category
-        .identifier(item, row)
-        .map(|value| value.into_owned().into())
-        .ok_or_else(|| missing_item(category, item, row))
-}
-
-fn required_text(
-    category: &molframe_cif::Category,
-    item: &str,
-    row: usize,
-) -> Result<Box<str>, Diagnostic> {
-    category
-        .text(item, row)
-        .map(Into::into)
-        .ok_or_else(|| missing_item(category, item, row))
-}
-
-fn required_integer(
-    category: &molframe_cif::Category,
-    item: &str,
-    row: usize,
-) -> Result<i64, Diagnostic> {
-    let value = category
-        .value(item, row)
-        .ok_or_else(|| missing_item(category, item, row))?;
-    if matches!(value, CifValue::Unknown | CifValue::Inapplicable) {
-        return Err(missing_item(category, item, row));
-    }
-    value
-        .as_integer()
-        .ok_or_else(|| wrong_type(category, item, row))
-}
-
-fn required_number(
-    category: &molframe_cif::Category,
-    item: &str,
-    row: usize,
-) -> Result<f64, Diagnostic> {
-    let value = category
-        .value(item, row)
-        .ok_or_else(|| missing_item(category, item, row))?;
-    if matches!(value, CifValue::Unknown | CifValue::Inapplicable) {
-        return Err(missing_item(category, item, row));
-    }
-    value
-        .as_float()
-        .filter(|number| number.is_finite())
-        .ok_or_else(|| wrong_type(category, item, row))
-}
-
-fn one_finding(finding: Diagnostic) -> Vec<Diagnostic> {
-    vec![finding]
-}
-
-fn required_flag(
-    category: &molframe_cif::Category,
-    item: &str,
-    row: usize,
-) -> Result<bool, Diagnostic> {
-    match category.text(item, row) {
-        Some(value) if value.eq_ignore_ascii_case("Y") => Ok(true),
-        Some(value) if value.eq_ignore_ascii_case("N") => Ok(false),
-        Some(_) => Err(invalid_value(category, item, row)),
-        None => Err(missing_item(category, item, row)),
-    }
-}
-
-fn missing_item(category: &molframe_cif::Category, item: &str, row: usize) -> Diagnostic {
-    Diagnostic::new(Code::E2002)
-        .in_category(category.name())
-        .with_context("item", item)
-        .with_context("row", row.to_string())
-}
-
-fn wrong_type(category: &molframe_cif::Category, item: &str, row: usize) -> Diagnostic {
-    Diagnostic::new(Code::E2004)
-        .in_category(category.name())
-        .with_context("item", item)
-        .with_context("row", row.to_string())
-}
-
-fn invalid_value(category: &molframe_cif::Category, item: &str, row: usize) -> Diagnostic {
-    Diagnostic::new(Code::E2003)
-        .in_category(category.name())
-        .with_context("item", item)
-        .with_context("row", row.to_string())
 }
 
 #[cfg(test)]
