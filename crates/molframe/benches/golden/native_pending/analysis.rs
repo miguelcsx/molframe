@@ -1,3 +1,4 @@
+use molframe_core::optional::OptionalSymbol;
 use std::fmt::Debug;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};
@@ -273,6 +274,7 @@ fn annotated_hbond_structure() -> Structure {
         atom_b: AtomIndex::new(1),
         order: BondOrder::Single,
         provenance: BondProvenance::ChemicalComponentDictionary,
+        kind: OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     CoreStructure::new(data).into()
@@ -327,6 +329,7 @@ fn rama_structure() -> Structure {
             atom_b: AtomIndex::new(nitrogen),
             order: BondOrder::Single,
             provenance: BondProvenance::User,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();

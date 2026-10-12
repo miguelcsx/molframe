@@ -107,6 +107,8 @@ pub fn read_with_options(
 
 /// Reads a structure from bytes already in hand.
 ///
+/// Gzip and Zstandard containers are decoded by magic bytes under `options.limits`.
+/// Plain input keeps its original payload allocation.
 /// `name` is only used to settle the format when the content does not.
 ///
 /// # Errors
@@ -117,7 +119,7 @@ pub fn read_bytes(
     name: Option<&str>,
     options: &ReadOptions,
 ) -> Result<(Structure, Vec<Diagnostic>), Findings> {
-    let input = InputBuffer::from_bytes(bytes);
+    let input = InputBuffer::from_encoded_bytes(bytes, options.limits).map_err(Findings::from)?;
     read_buffer(&input, name, options)
 }
 
@@ -177,7 +179,13 @@ pub fn write_as(
 ) -> Result<(), Findings> {
     let path = path.as_ref();
     let mut output = OutputSink::create(path, options.output).map_err(Findings::from)?;
-    write_stream(&mut output, structure, format, options)?;
+    if let Err(findings) = write_stream(&mut output, structure, format, options) {
+        // The destination exists by now. A refused or failed write must not
+        // leave behind an empty or truncated file that looks like a result.
+        drop(output);
+        let _ = std::fs::remove_file(path);
+        return Err(findings);
+    }
     output.finish().map_err(Findings::from)
 }
 
@@ -275,14 +283,18 @@ fn write_stream<W: Write>(
         #[cfg(feature = "bcif")]
         Format::BinaryCif => molframe_bcif::write_structure_to_with_memory_limit(
             structure.engine(),
-            options.cif(),
+            &formats::complete_cif_options(structure.engine(), options.cif()),
             options.output().memory_limit_bytes,
             output,
         )
         .map_err(Findings::from),
         #[cfg(feature = "pdb")]
-        Format::Pdb => molframe_pdb::write_to(structure.engine(), options.pdb(), output)
-            .map_err(Findings::from),
+        Format::Pdb => molframe_pdb::write_to(
+            structure.engine(),
+            &formats::complete_pdb_options(structure.engine(), options.pdb()),
+            output,
+        )
+        .map_err(Findings::from),
         #[cfg(feature = "pdb")]
         Format::Mmtf => {
             molframe_pdb::write_mmtf_to(structure.engine(), output).map_err(Findings::from)
@@ -356,15 +368,11 @@ pub fn perceive_in(
 }
 
 #[cfg(all(feature = "chemistry", feature = "spatial"))]
-fn enrich_read(
-    result: Result<(CoreStructure, Vec<Diagnostic>), Findings>,
-    options: &ReadOptions,
+fn enrich_model(
+    structure: CoreStructure,
+    findings: &mut Vec<Diagnostic>,
     context: &ExecutionContext,
-) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
-    let (structure, mut findings) = result?;
-    if options.only_atomic_coords {
-        return Ok((structure, findings));
-    }
+) -> Result<CoreStructure, Findings> {
     let structure = match molframe_chem::perceive_bonds_in(&structure, context) {
         Ok(structure) => structure,
         // A cancellation or an exhausted budget is the caller's own limit
@@ -386,12 +394,12 @@ fn enrich_read(
     };
     let (states, sources) = merge_secondary(
         structure.data(),
-        molframe_chem::assign_secondary_structure(&structure),
+        molframe_chem::assign_secondary_structure_in(&structure, context),
     );
     let mut data = structure.data().clone();
     data.secondary_structure = states.into();
     data.secondary_source = sources.into();
-    Ok((CoreStructure::new(data), findings))
+    Ok(CoreStructure::new(data))
 }
 
 /// Keeps, per residue, whichever assignment has the higher source rank, so a
@@ -429,6 +437,9 @@ fn merge_secondary(
         .unzip()
 }
 
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+use enrich::enrich_read;
+
 #[cfg(not(all(feature = "chemistry", feature = "spatial")))]
 fn enrich_read(
     result: Result<(CoreStructure, Vec<Diagnostic>), Findings>,
@@ -438,6 +449,8 @@ fn enrich_read(
     result
 }
 
+#[cfg(all(feature = "chemistry", feature = "spatial"))]
+mod enrich;
 #[cfg(all(test, feature = "pdb"))]
 #[path = "facade/input_digest_tests.rs"]
 mod input_digest_tests;
@@ -453,3 +466,7 @@ mod tests;
 #[cfg(all(test, feature = "pdb"))]
 #[path = "facade/write_as_tests.rs"]
 mod write_as_tests;
+
+#[cfg(all(test, feature = "pdb", feature = "gzip"))]
+#[path = "facade/compressed_tests.rs"]
+mod compressed_tests;

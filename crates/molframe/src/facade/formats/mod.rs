@@ -11,9 +11,13 @@ mod bcif;
 #[cfg(feature = "chemistry")]
 mod chem;
 #[cfg(feature = "mmcif")]
+mod cif_metadata;
+#[cfg(feature = "mmcif")]
 mod mmcif;
 #[cfg(feature = "pdb")]
 mod pdb;
+#[cfg(feature = "pdb")]
+mod pdb_metadata;
 #[cfg(feature = "geometry")]
 mod transform;
 
@@ -22,10 +26,14 @@ pub use bcif::{write_bcif, write_bcif_with_options};
 #[cfg(feature = "chemistry")]
 pub use chem::read_component_dictionary;
 #[cfg(feature = "mmcif")]
+pub(crate) use cif_metadata::complete as complete_cif_options;
+#[cfg(feature = "mmcif")]
 pub(crate) use mmcif::{cif_write_findings, write_mmcif_to_with_options};
 #[cfg(feature = "mmcif")]
 pub use mmcif::{read_document, write_mmcif, write_mmcif_with_options};
 #[cfg(feature = "pdb")]
 pub use pdb::write_pdb;
+#[cfg(feature = "pdb")]
+pub(crate) use pdb_metadata::complete as complete_pdb_options;
 #[cfg(feature = "geometry")]
 pub use transform::transform;

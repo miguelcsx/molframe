@@ -77,6 +77,7 @@ pub(crate) fn write_mmcif_to_with_options<W: Write>(
     options: &molframe_cif::CifWriteOptions,
     output: &mut W,
 ) -> Result<(), molframe_cif::CifWriteToError> {
+    let options = &super::cif_metadata::complete(structure.engine(), options);
     #[cfg(feature = "modelcif")]
     if let Some(model) = structure
         .engine()

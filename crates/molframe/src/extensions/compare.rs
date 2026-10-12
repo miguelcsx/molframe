@@ -33,7 +33,7 @@ use molframe_seq::Scoring;
 /// # ";
 /// let (model, _) = read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;
 /// let (native, _) = read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;
-/// let score = model.qs_score(&native, "A", "A", QsOptions::standard(5.0));
+/// let score = model.qs_score(&native, "A", "A", QsOptions::published());
 /// assert!(score.is_ok());
 /// # }
 /// # Ok::<(), Box<dyn std::error::Error>>(())

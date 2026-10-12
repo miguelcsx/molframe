@@ -103,7 +103,7 @@ pub use molframe_core::contract::{
     PolicyParseError, Precision, ProfileId, Provenance, Quality, RadiiSet, SourceRef, Status,
     SymmetryPolicy, Tolerance,
 };
-pub use molframe_core::coords::Aabb;
+pub use molframe_core::coords::{Aabb, CoordinateSample, CoordinateSampleError};
 pub use molframe_core::diagnostic::{
     Class, Code, ContextItem, Diagnostic, Diagnostics, Findings, Kind, Rendered, Severity,
     Strictness,
@@ -119,9 +119,10 @@ pub use molframe_core::index::{
 };
 pub use molframe_core::io::{
     AmbiguousResidueBoundaryPolicy, BatchContinuity, CategoryFilter, Compression, ContinuityLevel,
-    Format, InputBuffer, InputDigest, InputKind, Limits, MissingElementPolicy, OutputOptions,
-    ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll, StructureAtomRecord,
-    StructureBatch, StructureBatchBuilder, StructureBatchError, collect_structure,
+    Format, InputBuffer, InputDigest, InputKind, Limits, MissingElementPolicy, OccupancyPolicy,
+    OutputOptions, ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll,
+    StructureAtomRecord, StructureBatch, StructureBatchBuilder, StructureBatchError,
+    collect_structure,
 };
 pub use molframe_core::span::{ByteSpan, Position};
 pub use molframe_core::structure::{
@@ -129,7 +130,7 @@ pub use molframe_core::structure::{
     EntryMetadata, ExtensionStore, MetadataDifference, MissingResidue, ModelRef,
     ReferenceAlignment, ReferenceSequence, ResidueRef, SEQUENCE_REFERENCES_EXTENSION,
     SequenceMapping, SequenceReferences, StructureDifference, StructureDifferenceOptions, UnitCell,
-    ValueDifference,
+    ValueDifference, altloc_compatible,
 };
 pub use molframe_core::symbol::{AltId, SymbolId};
 pub use molframe_core::topology::{EntityKind, PolymerKind, Topology};
@@ -187,6 +188,8 @@ pub use molframe_xtal as crystal;
 pub use molframe_analysis as analysis;
 #[cfg(feature = "compare")]
 pub use molframe_compare as compare;
+#[cfg(feature = "compare")]
+pub mod ligand;
 #[cfg(feature = "sequence")]
 pub use molframe_seq as sequence;
 #[cfg(feature = "surface")]

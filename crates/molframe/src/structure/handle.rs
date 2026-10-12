@@ -197,6 +197,30 @@ impl Structure {
         self.0.atom_count()
     }
 
+    /// The independent structures of a ragged ensemble, if this is one.
+    ///
+    /// Returns `None` for an ordinary structure, whose single topology is this
+    /// object. When it returns models, this object's own counts are empty: the
+    /// atoms live in the returned structures, one per deposited model.
+    #[must_use]
+    pub fn ragged_models(&self) -> Option<Vec<Self>> {
+        self.0
+            .ragged_models()
+            .map(|models| models.iter().cloned().map(Self::from).collect())
+    }
+
+    /// Whether this is the outer shell of a ragged ensemble.
+    ///
+    /// Such a shell carries the models and their shared metadata but no topology
+    /// of its own, so every atom, residue and chain count on it is zero. Anything
+    /// walking its atoms sees nothing, which is indistinguishable from an empty
+    /// molecule unless it asks this first and iterates
+    /// [`ragged_models`](Self::ragged_models) instead.
+    #[must_use]
+    pub fn is_ragged_ensemble(&self) -> bool {
+        self.0.is_ragged_ensemble()
+    }
+
     /// Starts a transactional structural edit.
     #[must_use]
     pub fn edit(&self) -> StructureEditor {
@@ -210,7 +234,22 @@ impl Structure {
     /// Returns syntax, semantic or evaluation diagnostics.
     #[cfg(feature = "query")]
     pub fn select(&self, source: &str, policy: &AnalysisPolicy) -> Result<Selection, Findings> {
-        let evaluation = QueryStructure::select_text(&self.0, source, policy)?;
+        self.select_with_context(source, policy, &molframe_core::ExecutionContext::default())
+    }
+
+    /// Selects atoms with caller-governed spatial budgets and cancellation.
+    /// The selected view shares its original molecular storage.
+    /// # Errors
+    /// Returns query, spatial resource or cancellation diagnostics.
+    #[cfg(feature = "query")]
+    pub fn select_with_context(
+        &self,
+        source: &str,
+        policy: &AnalysisPolicy,
+        context: &molframe_core::ExecutionContext,
+    ) -> Result<Selection, Findings> {
+        let evaluation =
+            QueryStructure::select_text_with_context(&self.0, source, policy, context)?;
         Ok(Selection::from(self.0.view_of(evaluation.selection)))
     }
 

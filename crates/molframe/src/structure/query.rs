@@ -2,7 +2,7 @@
 
 use molframe_core::ExecutionContext;
 use molframe_core::contract::AnalysisPolicy;
-use molframe_core::diagnostic::Findings;
+use molframe_core::diagnostic::{Code, Diagnostic, Findings};
 use molframe_core::structure::Structure as CoreStructure;
 use molframe_query::{Evaluation, Groups, Query};
 
@@ -30,8 +30,20 @@ pub trait QueryStructure {
     ///
     /// Returns syntax, semantic or evaluation diagnostics.
     fn select_text(&self, source: &str, policy: &AnalysisPolicy) -> Result<Evaluation, Findings> {
+        self.select_text_with_context(source, policy, &ExecutionContext::default())
+    }
+
+    /// Compiles text and evaluates spatial predicates with the caller's resource context.
+    /// # Errors
+    /// Returns query diagnostics, resource failures or cancellation diagnostics.
+    fn select_text_with_context(
+        &self,
+        source: &str,
+        policy: &AnalysisPolicy,
+        context: &ExecutionContext,
+    ) -> Result<Evaluation, Findings> {
         let query = Query::compile(source)?;
-        self.select_query(&query, policy)
+        self.select_with_options(&query, policy, &Groups::new(), context)
     }
 
     /// Evaluates a precompiled query with explicit named groups and
@@ -57,8 +69,12 @@ impl QueryStructure for CoreStructure {
         groups: &Groups,
         context: &ExecutionContext,
     ) -> Result<Evaluation, Findings> {
+        context
+            .cancellation()
+            .check()
+            .map_err(|_| Findings::from(Diagnostic::new(Code::E1904)))?;
         #[cfg(feature = "spatial")]
-        {
+        let result = {
             let resolver = molframe_spatial::StructureSpatial::new(
                 self,
                 policy,
@@ -69,14 +85,18 @@ impl QueryStructure for CoreStructure {
             query
                 .evaluate(self, policy, groups, Some(&resolver))
                 .map_err(Findings::from)
-        }
+        };
         #[cfg(not(feature = "spatial"))]
-        {
-            let _ = context;
+        let result = {
             query
                 .evaluate(self, policy, groups, None)
                 .map_err(Findings::from)
-        }
+        };
+        context
+            .cancellation()
+            .check()
+            .map_err(|_| Findings::from(Diagnostic::new(Code::E1904)))?;
+        result
     }
 }
 

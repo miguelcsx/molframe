@@ -4,6 +4,7 @@ use crate::{
     AtomIndex, BondOrder, BondProvenance, BondRecord, Code, Diagnostic, Findings, Structure,
 };
 use molframe_core::bond::BondTableBuilder;
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::selection::AtomSelection;
 use molframe_core::structure::Structure as CoreStructure;
 use molframe_spatial::SpatialBackend;
@@ -141,6 +142,7 @@ pub fn infer_bonds(
                 atom_b: AtomIndex::new(pair.second),
                 order: BondOrder::Single,
                 provenance: BondProvenance::InferredDistance,
+                kind: OptionalSymbol::NONE,
             });
         },
     )

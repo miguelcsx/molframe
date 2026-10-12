@@ -54,6 +54,10 @@ required-features = ["full"]
 name = "assembly_query"
 required-features = ["full"]
 
+[[test]]
+name = "writer_metadata"
+required-features = ["full"]
+
 [[bench]]
 name = "facade"
 harness = false

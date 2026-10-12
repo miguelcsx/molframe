@@ -14,5 +14,9 @@ pub fn write_pdb(
     structure: &Structure,
     options: &molframe_pdb::PdbOptions,
 ) -> Result<String, Findings> {
-    molframe_pdb::write(structure.engine(), options).map_err(Findings::from)
+    molframe_pdb::write(
+        structure.engine(),
+        &super::complete_pdb_options(structure.engine(), options),
+    )
+    .map_err(Findings::from)
 }

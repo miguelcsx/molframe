@@ -39,7 +39,8 @@ pub fn read_bytes_in(
     options: &ReadOptions,
     context: &ExecutionContext,
 ) -> Result<(Structure, Vec<Diagnostic>), Findings> {
-    read_buffer_in(&InputBuffer::from_bytes(bytes), name, options, context)
+    let input = InputBuffer::from_encoded_bytes(bytes, options.limits).map_err(Findings::from)?;
+    read_buffer_in(&input, name, options, context)
 }
 
 /// [`read_buffer`](super::read_buffer) on the budgets of `context`.
