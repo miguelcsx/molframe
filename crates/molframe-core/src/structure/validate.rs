@@ -34,7 +34,6 @@ pub fn validate(data: &StructureData) -> Vec<Diagnostic> {
     check_secondary_sources(data, &mut findings);
     check_coordinate_counts(data, atoms, &mut findings);
     check_coordinates(data, &mut findings);
-    check_occupancies(data, &mut findings);
 
     findings.finish()
 }
@@ -447,34 +446,6 @@ fn check_coordinate_counts(data: &StructureData, atoms: u32, findings: &mut Diag
             }
         }
         CoordinateStore::Ragged { .. } => {}
-    }
-}
-
-/// Occupancy, where it was recorded, must lie between zero and one.
-fn check_occupancies(data: &StructureData, findings: &mut Diagnostics) {
-    for chunk in data.chunks.iter() {
-        let start = chunk.atoms().start;
-
-        for local in 0..chunk.len() {
-            let Some((occupancy, presence)) = chunk.occupancy(local) else {
-                continue;
-            };
-
-            if !presence.is_present() || (0.0..=1.0).contains(&occupancy) {
-                continue;
-            }
-
-            let Some(atom) = start.checked_add(local) else {
-                findings.push(Diagnostic::new(Code::E3001).with_context("atom", "index overflow"));
-                continue;
-            };
-
-            findings.push(
-                Diagnostic::new(Code::E3009)
-                    .with_context("atom", atom.to_string())
-                    .with_context("occupancy", occupancy.to_string()),
-            );
-        }
     }
 }
 

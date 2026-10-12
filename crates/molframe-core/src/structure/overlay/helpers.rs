@@ -254,6 +254,7 @@ fn remap_bonds(table: &crate::bond::BondTable, remap: &[u32]) -> crate::bond::Bo
             atom_b,
             order: bond.order,
             provenance: bond.provenance,
+            kind: bond.kind,
         });
     }
     builder.finish()

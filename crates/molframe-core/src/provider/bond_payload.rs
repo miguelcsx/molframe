@@ -6,6 +6,7 @@
 //! after locating the corresponding resident atom pages.
 
 use super::{ChunkDescriptor, DatasetId, LocalRow, LogicalRow, ProviderError};
+use crate::optional::OptionalSymbol;
 use crate::{BondIndex, BondOrder, BondProvenance, BondRecord, Structure};
 use std::ops::Range;
 
@@ -47,6 +48,14 @@ pub struct BondChunkRecord {
     pub order: BondOrder,
     /// Provenance retained from the source.
     pub provenance: BondProvenance,
+    /// The connection's own classification, interned in the source dictionary.
+    ///
+    /// A consumer that reads a bond across a chunk boundary must not lose the
+    /// distinction between coordination and covalent connectivity, so the class
+    /// travels with the record. Resolve it against
+    /// [`BondChunk::structure`] before comparing it to a class from another
+    /// structure, exactly as for the other interned fields.
+    pub kind: OptionalSymbol,
 }
 
 /// One independently requestable range of an immutable bond table.
@@ -181,6 +190,7 @@ impl BondChunk {
             atom_b: self.endpoint(record.atom_b.get())?,
             order: record.order,
             provenance: record.provenance,
+            kind: record.kind,
         })
     }
 

@@ -1,6 +1,7 @@
 use crate::bond::{BondRecord, BondTableBuilder};
 use crate::diagnostic::Code;
 use crate::index::{AtomIndex, ModelIndex, ResidueIndex};
+use crate::optional::OptionalSymbol;
 use crate::selection::AtomSelection;
 use crate::structure::{CoordinateStore, Structure, StructureData, fixture, validate};
 use crate::topology::ModelTable;
@@ -310,6 +311,7 @@ fn materialization_remaps_retained_bond_endpoints_order_and_provenance() {
             atom_b: AtomIndex::new(atom_b),
             order,
             provenance,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();

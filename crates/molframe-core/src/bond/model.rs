@@ -5,6 +5,7 @@
 //! adjacency allocation on structures whose analyses never traverse bonds.
 
 use crate::index::{AtomIndex, BondIndex};
+use crate::optional::OptionalSymbol;
 use std::ops::Range;
 use std::sync::{Arc, OnceLock};
 
@@ -52,6 +53,57 @@ pub struct BondRecord {
     pub order: BondOrder,
     /// Source of this assignment.
     pub provenance: BondProvenance,
+    /// The connection's own classification, as the source recorded it, interned
+    /// in the dictionary that owns this record.
+    ///
+    /// This is the deposited connectivity kind — `covale`, `disulf`, `metalc`,
+    /// `modres`, or a source-defined refinement — and it is independent of
+    /// [`order`](Self::order) and of [`provenance`](Self::provenance). A metal
+    /// coordination bond and a covalent one can share an order and still mean
+    /// different chemistry, so a consumer that must not treat coordination as an
+    /// ordinary covalent edge reads this field rather than inferring from the
+    /// atom names.
+    ///
+    /// An identifier means something only against the structure whose dictionary
+    /// issued it. Copying one into a structure with an independent dictionary is
+    /// invalid; the merge and transfer paths remap it, and
+    /// [`NONE`](OptionalSymbol::NONE) means the source recorded no classification
+    /// at all, which is not the same as any particular class.
+    pub kind: OptionalSymbol,
+}
+
+impl BondRecord {
+    /// Whether the source explicitly classifies this edge as metal coordination.
+    /// An absent or unknown class is not evidence of coordination; elements,
+    /// bond order and provenance never substitute for the deposited class.
+    #[must_use]
+    pub fn is_metal_coordination(&self, dictionary: &crate::symbol::Interner) -> bool {
+        self.kind
+            .get()
+            .and_then(|symbol| dictionary.resolve(symbol))
+            .is_some_and(|kind| kind.eq_ignore_ascii_case("metalc"))
+    }
+
+    /// A record whose source recorded no connection classification.
+    ///
+    /// Most producers infer connectivity from chemistry or from distances and
+    /// have no deposited `conn_type_id` to carry; this states that absence rather
+    /// than picking a class.
+    #[must_use]
+    pub const fn unclassified(
+        atom_a: AtomIndex,
+        atom_b: AtomIndex,
+        order: BondOrder,
+        provenance: BondProvenance,
+    ) -> Self {
+        Self {
+            atom_a,
+            atom_b,
+            order,
+            provenance,
+            kind: OptionalSymbol::NONE,
+        }
+    }
 }
 
 /// A compact, immutable edge table.
@@ -61,6 +113,7 @@ pub struct BondTable {
     atom_b: Arc<Vec<AtomIndex>>,
     order: Arc<Vec<BondOrder>>,
     provenance: Arc<Vec<BondProvenance>>,
+    kind: Arc<Vec<OptionalSymbol>>,
     adjacency: Arc<OnceLock<BondAdjacency>>,
     available: bool,
 }
@@ -72,6 +125,7 @@ impl Default for BondTable {
             atom_b: Arc::new(Vec::new()),
             order: Arc::new(Vec::new()),
             provenance: Arc::new(Vec::new()),
+            kind: Arc::new(Vec::new()),
             adjacency: Arc::new(OnceLock::new()),
             available: false,
         }
@@ -106,6 +160,7 @@ impl BondTable {
             atom_b: *self.atom_b.get(position)?,
             order: *self.order.get(position)?,
             provenance: *self.provenance.get(position)?,
+            kind: *self.kind.get(position)?,
         })
     }
 
@@ -117,12 +172,26 @@ impl BondTable {
             .zip(self.atom_b.iter())
             .zip(self.order.iter())
             .zip(self.provenance.iter())
-            .map(|(((atom_a, atom_b), order), provenance)| BondRecord {
-                atom_a: *atom_a,
-                atom_b: *atom_b,
-                order: *order,
-                provenance: *provenance,
-            })
+            .zip(self.kind.iter())
+            .map(
+                |((((atom_a, atom_b), order), provenance), kind)| BondRecord {
+                    atom_a: *atom_a,
+                    atom_b: *atom_b,
+                    order: *order,
+                    provenance: *provenance,
+                    kind: *kind,
+                },
+            )
+    }
+
+    /// The interned connection classification of each edge, position for
+    /// position with [`iter`](Self::iter).
+    ///
+    /// The identifiers belong to the dictionary of the structure that owns this
+    /// table; resolving one requires that structure.
+    #[must_use]
+    pub fn kinds(&self) -> &[OptionalSymbol] {
+        &self.kind
     }
 
     /// Returns a cached compact adjacency index for graph traversal.
@@ -188,17 +257,20 @@ impl BondTableBuilder {
         let mut atom_b = Vec::with_capacity(self.records.len());
         let mut order = Vec::with_capacity(self.records.len());
         let mut provenance = Vec::with_capacity(self.records.len());
+        let mut kind = Vec::with_capacity(self.records.len());
         for record in self.records {
             atom_a.push(record.atom_a);
             atom_b.push(record.atom_b);
             order.push(record.order);
             provenance.push(record.provenance);
+            kind.push(record.kind);
         }
         BondTable {
             atom_a: Arc::new(atom_a),
             atom_b: Arc::new(atom_b),
             order: Arc::new(order),
             provenance: Arc::new(provenance),
+            kind: Arc::new(kind),
             adjacency: Arc::new(OnceLock::new()),
             available,
         }

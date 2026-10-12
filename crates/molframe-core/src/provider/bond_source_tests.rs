@@ -33,6 +33,7 @@ fn bonded_structure() -> Structure {
             atom_b: AtomIndex::new(atom_b),
             order: BondOrder::Single,
             provenance: BondProvenance::File,
+            kind: OptionalSymbol::NONE,
         });
     }
     let mut data = StructureData::empty();

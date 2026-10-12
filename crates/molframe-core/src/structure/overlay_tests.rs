@@ -1,6 +1,7 @@
 use super::*;
 use crate::annotation::{AnnotationColumn, AtomAnnotation};
 use crate::column::Presence;
+use crate::optional::OptionalSymbol;
 use crate::structure::fixture;
 
 #[test]
@@ -240,6 +241,7 @@ fn with_bonds(structure: &Structure) -> Structure {
             atom_b: AtomIndex::new(atom_b),
             order: crate::BondOrder::Single,
             provenance: crate::BondProvenance::User,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();

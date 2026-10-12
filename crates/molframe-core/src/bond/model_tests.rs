@@ -8,18 +8,21 @@ fn edges_are_normalised_deduplicated_and_sorted() {
         atom_b: AtomIndex::new(0),
         order: BondOrder::Double,
         provenance: BondProvenance::File,
+        kind: OptionalSymbol::NONE,
     });
     builder.push(BondRecord {
         atom_a: AtomIndex::new(0),
         atom_b: AtomIndex::new(2),
         order: BondOrder::Single,
         provenance: BondProvenance::InferredDistance,
+        kind: OptionalSymbol::NONE,
     });
     builder.push(BondRecord {
         atom_a: AtomIndex::new(1),
         atom_b: AtomIndex::new(0),
         order: BondOrder::Single,
         provenance: BondProvenance::User,
+        kind: OptionalSymbol::NONE,
     });
     let table = builder.finish();
     let records: Vec<_> = table.iter().collect();
@@ -38,6 +41,7 @@ fn adjacency_is_compact_bidirectional_and_stably_sorted() {
             atom_b: AtomIndex::new(endpoint),
             order: BondOrder::Single,
             provenance: BondProvenance::File,
+            kind: OptionalSymbol::NONE,
         });
     }
     let table = builder.finish();
@@ -49,4 +53,27 @@ fn adjacency_is_compact_bidirectional_and_stably_sorted() {
         table.adjacency(4).neighbours(AtomIndex::new(2)),
         &[AtomIndex::new(0)]
     );
+}
+
+#[test]
+fn coordination_requires_its_deposited_class_independently_of_order_and_provenance() {
+    let mut dictionary = crate::symbol::Interner::default();
+    let mut bond = BondRecord::unclassified(
+        AtomIndex::new(0),
+        AtomIndex::new(1),
+        BondOrder::Single,
+        BondProvenance::File,
+    );
+    assert!(!bond.is_metal_coordination(&dictionary));
+    for (kind, coordinated) in [
+        ("covale", false),
+        ("metalc", true),
+        ("METALC", true),
+        ("disulf", false),
+        ("source-specific", false),
+    ] {
+        let symbol = dictionary.intern(kind).expect("connection class");
+        bond.kind = OptionalSymbol::some(symbol);
+        assert_eq!(bond.is_metal_coordination(&dictionary), coordinated);
+    }
 }

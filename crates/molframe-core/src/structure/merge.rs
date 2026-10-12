@@ -235,10 +235,20 @@ impl<'a> Merger<'a> {
 
     fn append_bonds(&mut self, source: &Structure) -> Result<(), Diagnostic> {
         for bond in source.data().bonds.iter() {
+            // The kind is a dictionary identifier, and this merger builds its own
+            // dictionary: copying the numeric value across would make it name
+            // whatever string happens to sit at that index here. So the text is
+            // resolved against the source and interned into the destination.
+            let kind = match bond.kind.get() {
+                Some(symbol) => remap_optional(source, Some(symbol), &mut self.data.dictionary)?,
+                None => OptionalSymbol::NONE,
+            };
             self.bonds.push(BondRecord {
                 atom_a: AtomIndex::new(checked_add(bond.atom_a.get(), self.atom_offset)?),
                 atom_b: AtomIndex::new(checked_add(bond.atom_b.get(), self.atom_offset)?),
-                ..bond
+                order: bond.order,
+                provenance: bond.provenance,
+                kind,
             });
         }
         Ok(())

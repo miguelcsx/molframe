@@ -143,7 +143,19 @@ pub fn structure_difference(
             .bonds
             .iter()
             .zip(right.data().bonds.iter())
-            .filter(|(left, right)| left != right)
+            .filter(|(left_bond, right_bond)| {
+                // The connection class is an interned identifier, so two
+                // independently built structures number the same string
+                // differently. Resolve it before comparing, as every other
+                // interned field here does; a raw comparison would call two
+                // identical files different and two different files identical.
+                left_bond.atom_a != right_bond.atom_a
+                    || left_bond.atom_b != right_bond.atom_b
+                    || left_bond.order != right_bond.order
+                    || left_bond.provenance != right_bond.provenance
+                    || resolved(left, left_bond.kind.into())
+                        != resolved(right, right_bond.kind.into())
+            })
             .count(),
         changed_positions,
         maximum_displacement,

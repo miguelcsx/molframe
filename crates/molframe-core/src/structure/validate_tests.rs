@@ -106,7 +106,7 @@ fn models_with_different_atom_counts_cannot_share_a_coordinate_set() {
 }
 
 #[test]
-fn an_occupancy_outside_the_permitted_range_is_reported() {
+fn an_occupancy_outside_the_permitted_range_is_a_read_policy_not_an_edit_failure() {
     let mut data = StructureData::empty();
     let mut builder = ChunkBuilder::new();
     data.topology
@@ -140,7 +140,9 @@ fn an_occupancy_outside_the_permitted_range_is_reported() {
     data.chunks = chunks.into();
     data.coords = CoordinateStore::Single(coords);
 
-    assert!(codes(&data).contains(&Code::E3009));
+    // The condition is decided once, at read time, by `OccupancyPolicy`; a kept
+    // value must not make later edits and analyses fail.
+    assert!(!codes(&data).contains(&Code::E3009));
 }
 
 #[test]

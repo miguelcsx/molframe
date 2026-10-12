@@ -20,6 +20,52 @@ fn annotated(label: &str) -> Structure {
     Structure::new(data)
 }
 
+/// Two structures whose dictionaries give the same numeric identifier different
+/// strings, each with one classified bond.
+fn classified(label: &str) -> Structure {
+    let source = fixture::sample();
+    let mut data = source.data().clone();
+    let kind = match data.dictionary.intern(label) {
+        Ok(kind) => kind,
+        Err(error) => panic!("fixture dictionary failed: {error}"),
+    };
+    let mut bonds = crate::bond::BondTableBuilder::new();
+    bonds.push(crate::bond::BondRecord {
+        atom_a: crate::index::AtomIndex::new(0),
+        atom_b: crate::index::AtomIndex::new(1),
+        order: crate::BondOrder::Single,
+        provenance: crate::BondProvenance::File,
+        kind: crate::optional::OptionalSymbol::some(kind),
+    });
+    data.bonds = bonds.finish();
+    Structure::new(data)
+}
+
+#[test]
+fn merging_across_dictionaries_rebinds_each_bonds_connection_class() {
+    // The two structures intern different strings, so the same numeric identifier
+    // means different things in each. Carrying the identifier across would relabel
+    // one structure's metal coordination as the other's disulfide.
+    let left = classified("metalc");
+    let right = classified("disulf");
+    let merged = match Structure::merge(&[left, right]) {
+        Ok(merged) => merged,
+        Err(findings) => panic!("merge failed: {findings:?}"),
+    };
+    let kinds: Vec<_> = merged
+        .data()
+        .bonds
+        .iter()
+        .map(|bond| {
+            bond.kind
+                .get()
+                .and_then(|kind| merged.resolve(kind))
+                .unwrap_or("<unclassified>")
+        })
+        .collect();
+    assert_eq!(kinds, ["metalc", "disulf"]);
+}
+
 #[test]
 fn merge_remaps_hierarchy_coordinates_dictionary_and_annotations() {
     let left = annotated("left-system");
