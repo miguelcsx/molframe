@@ -7,7 +7,7 @@ use molframe_cif::{
     CifEventSink, Document, lower_atom_site_with, lower_ragged_atom_site_with,
     lower_single_atom_site_with,
 };
-use molframe_core::diagnostic::Diagnostic;
+use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::io::{InputBuffer, ReadOptions, ReadResult};
 use molframe_core::structure::Structure;
 
@@ -112,6 +112,9 @@ fn finish_projection(
     } else {
         Some(classify(&atoms, extra_atom_columns).map_err(|finding| vec![finding])?)
     };
+    let values_differ = layout
+        .as_ref()
+        .is_some_and(|layout| layout.values_differ && !layout.ragged);
     atoms.compact_floats_for_lowering();
     let lowered = match layout {
         Some(layout) if layout.ragged => lower_ragged_atom_site_with(
@@ -141,6 +144,15 @@ fn finish_projection(
             Ok(())
         }),
     };
-    let (structure, findings) = lowered?;
+    let (structure, mut findings) = lowered?;
+    if values_differ {
+        findings.push(
+            Diagnostic::new(Code::W3015)
+                .with_message(
+                    "occupancies or B-factors differ between models; model 1's values are kept",
+                )
+                .in_category("atom_site"),
+        );
+    }
     Ok((metadata, structure, findings))
 }

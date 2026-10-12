@@ -21,11 +21,6 @@ pub(super) fn encode(
     if rows == 0 {
         return Ok(None);
     }
-    let Some(connection_type) = projection.connection_type_id() else {
-        return Err(super::structure::projection_diagnostic(
-            &molframe_cif::CifWriteError::MissingConnectionTypeId,
-        ));
-    };
     let mut ids = IntegerColumnBuilder::new("id", rows);
     let mut types = TextColumnBuilder::new("conn_type_id", rows);
     let mut a = EndpointColumns::new(1, rows);
@@ -42,7 +37,16 @@ pub(super) fn encode(
         let number =
             i64::try_from(position + 1).map_or(CanonicalValue::Unknown, CanonicalValue::Present);
         ids.push(number);
-        types.push(CanonicalValue::Present(connection_type));
+        // The bond's own classification, as deposited. A bond whose source
+        // recorded none is written as unknown rather than asserted to be
+        // covalent, which would silently reclassify metal coordination and
+        // disulfides on the round trip.
+        types.push(
+            match bond.kind.get().and_then(|symbol| structure.resolve(symbol)) {
+                Some(text) if !text.is_empty() => CanonicalValue::Present(text),
+                Some(_) | None => CanonicalValue::Unknown,
+            },
+        );
         let endpoint_a = endpoint(structure, bond.atom_a.get(), position, 1)
             .map_err(|error| super::structure::projection_diagnostic(&error))?;
         let endpoint_b = endpoint(structure, bond.atom_b.get(), position, 2)

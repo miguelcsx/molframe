@@ -2,7 +2,7 @@
 
 use crate::container::{EncodedBlock, EncodedCategory, EncodedColumn, EncodedFile};
 use crate::{EncodedData, encode_floats, encode_integers, encode_strings};
-use molframe_cif::{CifValue, Document};
+use molframe_cif::{Category, CifValue, Document};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use num_traits::ToPrimitive;
 
@@ -20,23 +20,7 @@ pub fn write_document(document: &Document) -> Result<Vec<u8>, Diagnostic> {
     for block in document.blocks() {
         let mut categories = Vec::with_capacity(block.len());
         for category in block.categories() {
-            let mut columns = Vec::with_capacity(category.len());
-            for item in category.items() {
-                let Some(column) = category.column(item) else {
-                    continue;
-                };
-                let (data, mask) = encode_column(column.iter())?;
-                columns.push(EncodedColumn {
-                    name: item.to_owned(),
-                    data,
-                    mask,
-                });
-            }
-            categories.push(EncodedCategory {
-                name: format!("_{}", category.name()),
-                row_count: category.row_count(),
-                columns,
-            });
+            categories.push(encode_category(category)?);
         }
         data_blocks.push(EncodedBlock {
             header: block.name().to_owned(),
@@ -49,6 +33,27 @@ pub fn write_document(document: &Document) -> Result<Vec<u8>, Diagnostic> {
         data_blocks,
     };
     crate::messagepack::consume_to_vec_named(file).map_err(|error| encode_error(&error))
+}
+
+/// Encodes one parsed category with the smallest lossless column codecs.
+pub(super) fn encode_category(category: &Category) -> Result<EncodedCategory, Diagnostic> {
+    let mut columns = Vec::with_capacity(category.len());
+    for item in category.items() {
+        let Some(column) = category.column(item) else {
+            continue;
+        };
+        let (data, mask) = encode_column(column.iter())?;
+        columns.push(EncodedColumn {
+            name: item.to_owned(),
+            data,
+            mask,
+        });
+    }
+    Ok(EncodedCategory {
+        name: format!("_{}", category.name()),
+        row_count: category.row_count(),
+        columns,
+    })
 }
 
 fn encode_column<'a>(
@@ -105,16 +110,18 @@ fn column_kind(values: &[&CifValue]) -> Result<ColumnKind, Diagnostic> {
             CifValue::Text(_) => ColumnKind::String,
             CifValue::Inapplicable | CifValue::Unknown => continue,
         };
-        kind = match (kind, candidate) {
-            (None, candidate) => Some(candidate),
-            (Some(ColumnKind::Integer), ColumnKind::Integer) => Some(ColumnKind::Integer),
+        kind = Some(match (kind, candidate) {
+            (None, candidate) => candidate,
+            (Some(ColumnKind::Integer), ColumnKind::Integer) => ColumnKind::Integer,
             (Some(ColumnKind::Integer), ColumnKind::Float)
             | (Some(ColumnKind::Float), ColumnKind::Integer | ColumnKind::Float) => {
-                Some(ColumnKind::Float)
+                ColumnKind::Float
             }
-            (Some(ColumnKind::String), ColumnKind::String) => Some(ColumnKind::String),
-            _ => return Err(type_error()),
-        };
+            // CIF values are text first. A column that holds both numbers and
+            // text (an operator expression such as `1` beside `(1-60)`) is a
+            // string column; its numbers are written as their own digits.
+            _ => ColumnKind::String,
+        });
     }
     Ok(match kind {
         Some(kind) => kind,
@@ -174,7 +181,14 @@ fn string_value(value: &CifValue, mask: &mut Vec<i64>) -> Result<String, Diagnos
             mask.push(2);
             Ok(String::new())
         }
-        CifValue::Integer(_) | CifValue::Float(_) => Err(type_error()),
+        CifValue::Integer(value) => {
+            mask.push(0);
+            Ok(value.to_string())
+        }
+        CifValue::Float(value) => {
+            mask.push(0);
+            Ok(value.to_string())
+        }
     }
 }
 

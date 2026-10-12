@@ -96,8 +96,9 @@ fn text_and_binary_cif_of_the_same_entry_lower_to_the_same_structure() {
 
     for sample in [Sample::Tiny, Sample::Small, Sample::Medium] {
         let from_text = structure_from_cif(sample).expect("sample ships mmCIF text");
+        let bytes = sample.bcif().expect("sample ships BinaryCIF");
         let (from_binary, _) = read(
-            &InputBuffer::from_bytes(sample.bcif().to_vec()),
+            &InputBuffer::from_bytes(bytes.to_vec()),
             &ReadOptions::new(),
         )
         .expect("binary sample reads");
@@ -141,6 +142,39 @@ fn an_unconsumed_atom_annotation_still_selects_ragged_storage() {
     assert!(direct.ragged_models().is_some());
     assert!(difference.is_empty(), "difference: {difference:?}");
     assert_eq!(direct_findings, lossless_findings);
+}
+
+#[test]
+fn per_model_occupancy_and_b_factor_stay_dense_and_are_reported() {
+    let text = "\
+data_demo
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.pdbx_PDB_model_num
+1 N N GLY A 1 0 0 0 1.00 10.00 1
+1 N N GLY A 1 1 1 1 0.50 20.00 2
+";
+    let (structure, findings) =
+        read(&binary_input(text), &ReadOptions::new()).expect("direct read succeeds");
+    assert!(structure.ragged_models().is_none());
+    assert_eq!(structure.model_count(), 2);
+    let atom = structure.data().atoms().next().expect("one atom");
+    assert_eq!(atom.b_factor(), Some(10.0));
+    let noted = findings
+        .iter()
+        .filter(|finding| finding.code() == molframe_core::diagnostic::Code::W3015)
+        .count();
+    assert_eq!(noted, 1);
 }
 
 #[test]

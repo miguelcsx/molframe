@@ -14,6 +14,7 @@ pub(super) fn encode(
     encode_cell(projection, &mut categories)?;
     encode_entities(projection, &mut categories)?;
     encode_references(projection, &mut categories)?;
+    encode_supplement(projection, &mut categories)?;
     Ok(categories)
 }
 
@@ -30,15 +31,6 @@ fn encode_entry(
         if let Some(value) = value {
             target.push(single_text(category, item, value)?);
         }
-    }
-    if let Some(value) = entry.resolution {
-        let mut column = FloatColumnBuilder::new("ls_d_res_high", 1);
-        column.push(CanonicalValue::Present(round(f64::from(value))));
-        target.push(EncodedCategory {
-            name: "_refine".to_owned(),
-            row_count: 1,
-            columns: vec![column.finish()?],
-        });
     }
     Ok(())
 }
@@ -309,4 +301,31 @@ fn unknown(value: Option<&str>) -> CanonicalValue<&str> {
 
 fn round(value: f64) -> f64 {
     (value * 10_000.0).round() / 10_000.0
+}
+
+/// Resolution, space group, secondary structure and caller-rendered categories.
+///
+/// They come from the same renderer the text writer uses, so the two formats
+/// carry the same metadata; the text is parsed back and encoded by column.
+fn encode_supplement(
+    projection: CanonicalProjection<'_>,
+    target: &mut Vec<EncodedCategory>,
+) -> Result<(), Diagnostic> {
+    let text = molframe_cif::supplement_text(projection.structure(), projection.options());
+    if text.is_empty() {
+        return Ok(());
+    }
+    let input = molframe_core::io::InputBuffer::from_bytes(format!("data_x\n{text}").into_bytes());
+    let (document, _) = molframe_cif::parse(&input).map_err(|findings| {
+        findings.into_iter().next().unwrap_or_else(|| {
+            Diagnostic::new(molframe_core::diagnostic::Code::E1401)
+                .with_message("supplementary categories did not parse")
+        })
+    })?;
+    for block in document.blocks() {
+        for category in block.categories() {
+            target.push(super::document::encode_category(category)?);
+        }
+    }
+    Ok(())
 }

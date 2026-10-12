@@ -14,8 +14,11 @@ use molframe_core::io::{Limits, ReadOptions};
 fn bench_read(c: &mut Criterion) {
     let mut group = c.benchmark_group("bcif_read");
     for sample in Sample::MODELS {
-        let buffer = input(sample.bcif());
-        group.throughput(Throughput::Bytes(sample.bcif().len() as u64));
+        let Some(bytes) = sample.bcif() else {
+            panic!("{} ships no BinaryCIF fixture", sample.label())
+        };
+        let buffer = input(bytes);
+        group.throughput(Throughput::Bytes(bytes.len() as u64));
         group.bench_function(sample.label(), |b| {
             b.iter(|| {
                 let _ = black_box(read(&buffer, &ReadOptions::new()));
@@ -28,7 +31,9 @@ fn bench_read(c: &mut Criterion) {
 fn bench_container_parse(c: &mut Criterion) {
     let mut group = c.benchmark_group("bcif_parse_container");
     for sample in Sample::MODELS {
-        let bytes = sample.bcif();
+        let Some(bytes) = sample.bcif() else {
+            panic!("{} ships no BinaryCIF fixture", sample.label())
+        };
         group.throughput(Throughput::Bytes(bytes.len() as u64));
         group.bench_function(sample.label(), |b| {
             b.iter(|| {
@@ -121,9 +126,12 @@ fn bench_encoders(c: &mut Criterion) {
 fn bench_decode_columns(c: &mut Criterion) {
     let mut group = c.benchmark_group("bcif_decode_columns");
     for sample in Sample::MODELS {
-        let buffer = input(sample.bcif());
         let options = ReadOptions::new();
-        group.throughput(Throughput::Bytes(sample.bcif().len() as u64));
+        let Some(bytes) = sample.bcif() else {
+            panic!("{} ships no BinaryCIF fixture", sample.label())
+        };
+        let buffer = input(bytes);
+        group.throughput(Throughput::Bytes(bytes.len() as u64));
         group.bench_function(sample.label(), |b| {
             b.iter(|| black_box(decode_columns(&buffer, &options).is_ok()));
         });
@@ -135,9 +143,12 @@ fn bench_decode_columns(c: &mut Criterion) {
 fn bench_lower(c: &mut Criterion) {
     let mut group = c.benchmark_group("bcif_lower");
     for sample in Sample::MODELS {
-        let buffer = input(sample.bcif());
         let options = ReadOptions::new();
-        group.throughput(Throughput::Bytes(sample.bcif().len() as u64));
+        let Some(bytes) = sample.bcif() else {
+            panic!("{} ships no BinaryCIF fixture", sample.label())
+        };
+        let buffer = input(bytes);
+        group.throughput(Throughput::Bytes(bytes.len() as u64));
         group.bench_function(sample.label(), |b| {
             b.iter_batched(
                 || match decode_columns(&buffer, &options) {

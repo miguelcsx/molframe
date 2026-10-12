@@ -10,8 +10,7 @@ fn canonical_write_keeps_modelcif_categories_and_metrics() {
     assert!(findings.is_empty());
     let options = molframe_cif::CifWriteOptions::new()
         .with_block_id("model")
-        .with_generated_connection_ids()
-        .with_connection_type_id("covale");
+        .with_generated_connection_ids();
     let text = super::write_canonical_with_options(&structure, &model, &options)
         .unwrap_or_else(|error| panic!("write failed: {error}"));
     let mut streamed = Vec::new();

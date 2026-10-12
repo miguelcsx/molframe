@@ -136,5 +136,11 @@ fn keep_lowering_category(category: &str) -> bool {
             | "struct_ref"
             | "struct_ref_seq"
             | "atom_site_anisotrop"
+            // `struct_conn` may place a partner through a symmetry operator, and
+            // an operator that this read filtered away cannot be shown to be the
+            // identity. Keeping the tables is what lets the lowering tell a local
+            // connection from one it must refuse.
+            | "space_group_symop"
+            | "symmetry_equiv"
     )
 }
