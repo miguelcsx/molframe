@@ -3,6 +3,7 @@ use molframe::{
     BondTableBuilder, ReadOptions, Structure,
 };
 use molframe_core::column::Presence;
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::Structure as CoreStructure;
 
 const HBOND_CIF: &str = r"data_hbond
@@ -187,6 +188,7 @@ fn annotated_hbond_structure() -> Structure {
         atom_b: AtomIndex::new(1),
         order: BondOrder::Single,
         provenance: BondProvenance::ChemicalComponentDictionary,
+        kind: OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     CoreStructure::new(data).into()

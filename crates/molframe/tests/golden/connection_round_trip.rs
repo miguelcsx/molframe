@@ -12,7 +12,6 @@ fn options() -> CifWriteOptions {
     CifWriteOptions::new()
         .with_block_id("molframe")
         .with_generated_connection_ids()
-        .with_connection_type_id("covale")
 }
 
 /// RCSB's own `BinaryCIF` of 4HHB, the benchmark fixture.
@@ -28,11 +27,59 @@ fn bonds(structure: &molframe::Structure) -> Vec<(u32, u32)> {
         .collect()
 }
 
+/// The connection classifications the deposited `struct_conn` rows carry.
+fn deposited_kinds(structure: &molframe::Structure) -> Vec<String> {
+    let data = structure.engine().data();
+    data.bonds
+        .iter()
+        .filter(|bond| bond.provenance == molframe::BondProvenance::File)
+        .map(|bond| {
+            match bond
+                .kind
+                .get()
+                .and_then(|kind| data.dictionary.resolve(kind))
+            {
+                Some(text) => text.to_owned(),
+                None => "<unclassified>".to_owned(),
+            }
+        })
+        .collect()
+}
+
 fn read(bytes: Vec<u8>, name: &str) -> molframe::Structure {
     match molframe::read_bytes(bytes, Some(name), &molframe::ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("{name} must read: {findings:?}"),
     }
+}
+
+#[test]
+fn the_four_deposited_metal_sites_keep_their_own_connection_class() {
+    // 4HHB deposits four `metalc` connections, one per haem iron. Writing them as
+    // `covale` would tell every downstream reader that a coordination bond is an
+    // ordinary covalent one, and the round trip must not do that.
+    let original = read(FOUR_HHB.to_vec(), "4hhb.bcif");
+    let classes = deposited_kinds(&original);
+    assert_eq!(
+        classes.len(),
+        4,
+        "4HHB deposits four connections: {classes:?}"
+    );
+    assert_eq!(classes, ["metalc", "metalc", "metalc", "metalc"]);
+
+    let text = match molframe::write_mmcif_with_options(&original, &options()) {
+        Ok(text) => text,
+        Err(findings) => panic!("4HHB must write: {findings:?}"),
+    };
+    let copy = read(text.into_bytes(), "copy.cif");
+    assert_eq!(deposited_kinds(&copy), classes);
+
+    let binary = match molframe::write_bcif_with_options(&original, &options()) {
+        Ok(binary) => binary,
+        Err(findings) => panic!("4HHB must write BinaryCIF: {findings:?}"),
+    };
+    let copy = read(binary, "copy.bcif");
+    assert_eq!(deposited_kinds(&copy), classes);
 }
 
 #[test]

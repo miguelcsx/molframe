@@ -1,5 +1,6 @@
 //! Executable golden fixtures for the native analysis and interoperability rows.
 
+use molframe_core::optional::OptionalSymbol;
 use std::collections::BTreeMap;
 
 use molframe::formats::modelcif::ModelCifExt;
@@ -455,3 +456,4 @@ fn rama_structure() -> molframe::Structure {
     data.bonds = bonds.finish();
     molframe_core::structure::Structure::new(data).into()
 }
+            kind: OptionalSymbol::NONE,
