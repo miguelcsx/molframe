@@ -34,7 +34,6 @@ pub(crate) fn execute(command: Command, context: Context) -> Exit {
             preserve,
             cif_block_id,
             generate_cif_connection_ids,
-            cif_connection_type,
         } => {
             let mut cif_options = molframe::formats::cif::CifWriteOptions::new();
             if let Some(block_id) = cif_block_id {
@@ -42,9 +41,6 @@ pub(crate) fn execute(command: Command, context: Context) -> Exit {
             }
             if generate_cif_connection_ids {
                 cif_options = cif_options.with_generated_connection_ids();
-            }
-            if let Some(connection_type) = cif_connection_type {
-                cif_options = cif_options.with_connection_type_id(connection_type);
             }
             crate::commands::convert(
                 &input,

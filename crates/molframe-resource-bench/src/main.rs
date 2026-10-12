@@ -216,7 +216,9 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
             Ok(black_box(u64::from(structure.atom_count())))
         }),
         "bcif_read_medium" => measure_case("bcif_read_medium", || {
-            let bytes = molframe_bench::Sample::Medium.bcif();
+            let bytes = molframe_bench::Sample::Medium
+                .bcif()
+                .ok_or_else(|| "medium BinaryCIF fixture is missing".to_owned())?;
             let structure = read_mmcif(bytes, "medium.bcif")?;
             Ok(black_box(u64::from(structure.atom_count())))
         }),
@@ -381,9 +383,7 @@ fn write_bcif_file(path: &Path) -> Result<ResourceRecord, String> {
     let atom_count = u64::from(structure.atom_count());
     let model_count =
         u64::try_from(structure.model_count()).map_err(|_| "model count exceeds u64".to_owned())?;
-    let options = molframe::formats::cif::CifWriteOptions::new()
-        .with_generated_connection_ids()
-        .with_connection_type_id("covale");
+    let options = molframe::formats::cif::CifWriteOptions::new().with_generated_connection_ids();
     measure_retained_case("file_write_bcif", || {
         let bytes = molframe::write_bcif_with_options(&structure, &options)
             .map_err(|findings| format!("BinaryCIF write failed: {findings:?}"))?;

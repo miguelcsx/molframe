@@ -72,6 +72,12 @@ pub struct TopologyBatch {
     pub bond_atom_b: Vec<u32>,
     /// Bond orders aligned with endpoints.
     pub bond_orders: Vec<BondOrder>,
+    /// The bond's own connection classification as a batch-local dictionary ID,
+    /// or [`MISSING_STRING`] when the source recorded none.
+    ///
+    /// This is the deposited `conn_type_id`, not a property of the bond's order:
+    /// a metal coordination and a covalent bond share an order and differ here.
+    pub bond_kinds: Vec<u32>,
 }
 
 /// Why a topology batch cannot be produced without inventing data.
@@ -154,7 +160,7 @@ impl TopologyBatch {
         )?;
         let mut dictionary = HashMap::new();
         output.project_hierarchy(&snapshot, positions, namespace, &mut dictionary)?;
-        output.project_bonds(&snapshot)?;
+        output.project_bonds(&snapshot, &mut dictionary)?;
         Ok(output)
     }
 
@@ -203,6 +209,7 @@ impl TopologyBatch {
             bond_atom_a: Vec::with_capacity(bonds),
             bond_atom_b: Vec::with_capacity(bonds),
             bond_orders: Vec::with_capacity(bonds),
+            bond_kinds: Vec::with_capacity(bonds),
         })
     }
 
@@ -332,7 +339,11 @@ impl TopologyBatch {
         Ok(())
     }
 
-    fn project_bonds(&mut self, structure: &Structure) -> Result<(), TopologyBatchError> {
+    fn project_bonds(
+        &mut self,
+        structure: &Structure,
+        dictionary: &mut HashMap<String, u32>,
+    ) -> Result<(), TopologyBatchError> {
         for bond in structure.data().bonds.iter() {
             let atom_a = bond.atom_a.get();
             let atom_b = bond.atom_b.get();
@@ -347,6 +358,16 @@ impl TopologyBatch {
             self.bond_atom_a.push(atom_a);
             self.bond_atom_b.push(atom_b);
             self.bond_orders.push(bond.order);
+            // The classification is a structure-local identifier, so it is
+            // resolved against the source structure and re-interned into the
+            // batch's own dictionary; copying the numeric value would name a
+            // different string here.
+            self.bond_kinds.push(
+                match bond.kind.get().and_then(|kind| structure.resolve(kind)) {
+                    Some(text) => intern(&mut self.strings, dictionary, text)?,
+                    None => MISSING_STRING,
+                },
+            );
         }
         Ok(())
     }

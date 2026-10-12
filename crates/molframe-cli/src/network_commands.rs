@@ -37,7 +37,7 @@ pub(crate) fn fetch(
     };
     let name = output.file_name().and_then(std::ffi::OsStr::to_str);
     let options = context.read_options();
-    match molframe::read_bytes(download.bytes.clone(), name, &options) {
+    match molframe::read_bytes_in(download.bytes.clone(), name, &options, context.execution) {
         Ok((_, findings)) => context.findings(&findings, &url),
         Err(findings) => {
             context.findings(&findings, &url);

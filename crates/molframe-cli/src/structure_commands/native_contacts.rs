@@ -1,6 +1,6 @@
 //! Native contact fraction (Q) between two structures.
 
-use crate::args::NativeContactArguments;
+use crate::args::{AtomMatch, NativeContactArguments};
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, emit_rows};
@@ -15,14 +15,26 @@ pub(crate) fn native_contacts(args: &NativeContactArguments, context: Context) -
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let result = match molframe::analysis::native_contact_fraction(
-        reference.engine(),
-        target.engine(),
-        args.cutoff,
-        args.retention,
-        SpatialBackend::Auto,
-        context.execution,
-    ) {
+    let scored = match args.atom_match {
+        AtomMatch::Index => molframe::analysis::native_contact_fraction(
+            reference.engine(),
+            target.engine(),
+            args.cutoff,
+            args.tolerance,
+            SpatialBackend::Auto,
+            context.execution,
+        ),
+        AtomMatch::Names => molframe::analysis::native_contact_fraction_matched(
+            reference.engine(),
+            target.engine().positions(),
+            &molframe::analysis::match_atoms_by_name(reference.engine(), target.engine()),
+            args.cutoff,
+            args.tolerance,
+            SpatialBackend::Auto,
+            context.execution,
+        ),
+    };
+    let result = match scored {
         Ok(result) => result,
         Err(error) => {
             eprintln!("native contacts failed: {error}");

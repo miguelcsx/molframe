@@ -21,14 +21,26 @@ pub(crate) struct ContactMapArguments {
 pub(crate) struct NativeContactArguments {
     /// The structure whose contacts are native.
     pub(crate) reference: PathBuf,
-    /// The structure that shares its atom numbering and is scored.
+    /// The structure that is scored.
     pub(crate) target: PathBuf,
     /// Distance defining a reference contact, in Angstrom.
     #[arg(long)]
     pub(crate) cutoff: f32,
-    /// A contact is kept when the target distance is at most this multiple of the cutoff (1.0 demands it be within the cutoff again).
-    #[arg(long)]
-    pub(crate) retention: f32,
+    /// A contact is kept when the target distance is at most the cutoff plus this many Angstrom (0 demands it be within the cutoff again).
+    #[arg(long, default_value_t = 0.0)]
+    pub(crate) tolerance: f32,
+    /// How target atoms are paired with reference atoms.
+    #[arg(long = "match", value_enum, default_value_t = AtomMatch::Index)]
+    pub(crate) atom_match: AtomMatch,
+}
+
+/// How the atoms of two structures are paired.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum AtomMatch {
+    /// Atom `i` of the reference is atom `i` of the target.
+    Index,
+    /// Atoms with the same chain, residue number, residue name and atom name.
+    Names,
 }
 
 /// The elastic network model.

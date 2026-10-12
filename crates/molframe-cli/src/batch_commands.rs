@@ -19,7 +19,7 @@ fn info(patterns: &[String], context: Context) -> Exit {
         Err(error) => return batch_error(&error),
     };
     let results = run(&paths, context.execution, |path| {
-        molframe::read_with_options(path, &context.read_options())
+        molframe::read_with_options_in(path, &context.read_options(), context.execution)
             .map(|(structure, _findings)| {
                 vec![
                     path.display().to_string(),
@@ -60,7 +60,7 @@ fn convert(patterns: &[String], format: &str, outdir: &Path, context: Context) -
         if output.exists() {
             return Err(format!("destination exists: {}", output.display()));
         }
-        let (structure, _findings) = molframe::read_with_options(input, &context.read_options())
+        let (structure, _findings) = molframe::read_with_options_in(input, &context.read_options(), context.execution)
             .map_err(|findings| findings_message(&findings))?;
         molframe::write(output, &structure).map_err(|findings| findings_message(&findings))?;
         Ok(vec![

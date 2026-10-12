@@ -32,7 +32,7 @@ pub(super) fn select_text(
 pub(super) fn open(path: &Path, context: Context) -> Result<Structure, Exit> {
     let options = context.read_options();
     let origin = path.display().to_string();
-    match molframe::read_with_options(path, &options) {
+    match molframe::read_with_options_in(path, &options, context.execution) {
         Ok((structure, findings)) => {
             context.findings(&findings, &origin);
             Ok(structure)

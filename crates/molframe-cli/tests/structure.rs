@@ -53,8 +53,8 @@ fn a_rigid_motion_keeps_every_native_contact() {
             moved.to_str().expect("path"),
             "--cutoff",
             "4.5",
-            "--retention",
-            "1.001",
+            "--tolerance",
+            "0.0",
         ],
     );
     assert_eq!(table[0], ["native", "kept", "fraction"]);
@@ -77,8 +77,8 @@ fn moving_a_chain_away_breaks_its_native_contacts() {
             apart.to_str().expect("path"),
             "--cutoff",
             "4.5",
-            "--retention",
-            "1.0",
+            "--tolerance",
+            "0.0",
         ],
     );
     let fraction: f64 = table[1][2].parse().expect("fraction");

@@ -62,6 +62,8 @@ pub struct Context {
     pub missing_element_policy: molframe::MissingElementPolicy,
     /// Explicit behavior for identifiers that cannot delimit adjacent residues.
     pub residue_boundary_policy: molframe::AmbiguousResidueBoundaryPolicy,
+    /// Behavior for occupancies outside zero to one.
+    pub occupancy_policy: molframe::OccupancyPolicy,
     /// Optional categories or records every structural reader skips.
     pub categories: &'static molframe::CategoryFilter,
 }
@@ -74,7 +76,16 @@ impl Context {
             .mode(self.mode)
             .missing_element_policy(self.missing_element_policy)
             .ambiguous_residue_boundary_policy(self.residue_boundary_policy)
+            .occupancy_policy(self.occupancy_policy)
             .categories(self.categories.clone())
+    }
+
+    const fn occupancy_name(self) -> &'static str {
+        match self.occupancy_policy {
+            molframe::OccupancyPolicy::Keep => "keep",
+            molframe::OccupancyPolicy::Clamp => "clamp",
+            molframe::OccupancyPolicy::Reject => "reject",
+        }
     }
 
     /// The categories a read was told to skip, comma-separated.
@@ -236,6 +247,7 @@ impl Context {
                 }
             },
         );
+        record.text("occupancy_policy", self.occupancy_name());
         if let Some(skipped) = self.skipped_categories() {
             record.text("skipped_categories", &skipped);
         }
@@ -280,6 +292,10 @@ impl Context {
                 .to_owned(),
             ),
         ]);
+        metadata.insert(
+            "molframe.occupancy_policy".to_owned(),
+            self.occupancy_name().to_owned(),
+        );
         if let Some(skipped) = self.skipped_categories() {
             metadata.insert("molframe.skipped_categories".to_owned(), skipped);
         }

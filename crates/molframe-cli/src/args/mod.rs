@@ -16,7 +16,8 @@ pub(crate) use advanced::{AuditArguments, BatchCommand, FxCommand};
 pub(crate) use chem::{ChemCommand, PeoeArguments, SmartsArguments};
 pub(crate) use comparison::{AlignmentChoice, ExtraMetricArguments};
 pub(crate) use contacts::{
-    ContactMapArguments, ModeTable, NativeContactArguments, NetworkModel, NormalModeArguments,
+    AtomMatch, ContactMapArguments, ModeTable, NativeContactArguments, NetworkModel,
+    NormalModeArguments,
 };
 pub(crate) use crystal::{CrystalCommand, HistogramArguments, MatesArguments, MtzTable};
 pub(crate) use interactions::{

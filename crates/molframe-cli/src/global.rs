@@ -58,6 +58,27 @@ pub(crate) struct GlobalOptions {
     pub verbose: u8,
 }
 
+/// Occupancy handling chosen on the command line.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum OccupancyArgument {
+    /// Keep the deposited values and report them.
+    Keep,
+    /// Clamp occupancies into zero to one.
+    Clamp,
+    /// Fail the read.
+    Reject,
+}
+
+impl From<OccupancyArgument> for molframe::OccupancyPolicy {
+    fn from(value: OccupancyArgument) -> Self {
+        match value {
+            OccupancyArgument::Keep => Self::Keep,
+            OccupancyArgument::Clamp => Self::Clamp,
+            OccupancyArgument::Reject => Self::Reject,
+        }
+    }
+}
+
 #[derive(Args, Debug)]
 struct ReadBehavior {
     /// Infer missing element symbols from atom names and record the choice.
@@ -66,6 +87,9 @@ struct ReadBehavior {
     /// Infer otherwise ambiguous residue boundaries from file order and record it.
     #[arg(long, global = true)]
     infer_residue_boundaries: bool,
+    /// What to do with atoms whose occupancy lies outside zero to one.
+    #[arg(long, global = true, value_enum, default_value = "keep")]
+    occupancy: OccupancyArgument,
     /// Skip an optional mmCIF/BinaryCIF category or PDB record while reading.
     /// Names the structure cannot be built without are still read.
     #[arg(long, global = true, value_name = "NAME")]
@@ -191,6 +215,7 @@ impl GlobalOptions {
             } else {
                 molframe::AmbiguousResidueBoundaryPolicy::Reject
             },
+            occupancy_policy: self.read_behavior.occupancy.into(),
             categories: Box::leak(Box::new(self.read_behavior.category_filter())),
         })
     }

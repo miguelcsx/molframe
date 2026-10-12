@@ -107,6 +107,9 @@ const fn superpose_error(error: molframe::geometry::SuperposeError) -> &'static 
         molframe::geometry::SuperposeError::TooFewPoints => "selection has fewer than three atoms",
         molframe::geometry::SuperposeError::Degenerate => "selected coordinates are collinear",
         molframe::geometry::SuperposeError::InvalidOptions => "superposition options are invalid",
+        molframe::geometry::SuperposeError::InvalidWeights => {
+            "superposition weights are negative, non-finite, or all zero"
+        }
         molframe::geometry::SuperposeError::TooManyPoints => {
             "selection exceeds the supported atom count"
         }

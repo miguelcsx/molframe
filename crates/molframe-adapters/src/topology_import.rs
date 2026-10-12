@@ -3,11 +3,12 @@
 use crate::{MISSING_STRING, TopologyBatch};
 use molframe_core::chunk::{AtomRecord, ChunkBuilder};
 use molframe_core::column::Presence;
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::{CoordinateStore, Structure, StructureData};
 use molframe_core::topology::{ChainRecord, EntityKind, PolymerKind, ResidueRecord};
 use molframe_core::{
     AltId, AtomIndex, BondProvenance, BondRecord, BondTableBuilder, CapacityError, DictionaryFull,
-    Element, OptionalI32, OptionalSymbol, ResidueIndex, TableError,
+    Element, OptionalI32, ResidueIndex, TableError,
 };
 use thiserror::Error;
 
@@ -141,6 +142,7 @@ fn validate_columns(batch: &TopologyBatch) -> Result<(), TopologyImportError> {
     }
     check_len("bond_atom_b", batch.bond_atom_b.len(), bonds)?;
     check_len("bond_orders", batch.bond_orders.len(), bonds)?;
+    check_len("bond_kinds", batch.bond_kinds.len(), bonds)?;
     validate_offsets("chain", &batch.chain_residue_offsets, residues)?;
     validate_offsets("residue", &batch.residue_atom_offsets, atoms)?;
     validate_parents(batch)?;
@@ -292,17 +294,30 @@ fn build_structure(batch: &TopologyBatch) -> Result<Structure, TopologyImportErr
         })?,
     )?;
     let mut bonds = BondTableBuilder::new();
-    for ((atom_a, atom_b), order) in batch
+    for (((atom_a, atom_b), order), kind) in batch
         .bond_atom_a
         .iter()
         .zip(&batch.bond_atom_b)
         .zip(&batch.bond_orders)
+        .zip(&batch.bond_kinds)
     {
+        // A `MISSING_STRING` stays absent; anything else is resolved against the
+        // batch's own dictionary and interned into this structure's, so the
+        // classification survives the transfer rather than naming whichever
+        // string happens to sit at that index here.
+        let kind = match *kind {
+            MISSING_STRING => OptionalSymbol::NONE,
+            id => {
+                let text = string_at(batch, id, "bond kind")?;
+                OptionalSymbol::some(data.dictionary.intern(text)?)
+            }
+        };
         bonds.push(BondRecord {
             atom_a: AtomIndex::new(*atom_a),
             atom_b: AtomIndex::new(*atom_b),
             order: *order,
             provenance: BondProvenance::File,
+            kind,
         });
     }
     let (chunks, coordinates) = builder.finish();
