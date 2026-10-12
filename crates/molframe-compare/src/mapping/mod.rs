@@ -8,7 +8,7 @@ mod sequence;
 
 pub use assignment::{ChainAlternative, ChainAssignment, ChainMapping, assign_chains, map_chains};
 pub use atom::{AtomCorrespondence, AtomMappingAlternative, map_atoms};
-pub use chain::{ChainSequence, chain_sequences};
+pub use chain::{ChainSequence, chain_sequences, pair_chains};
 pub use residue::{ResiduePair, map_residues};
 pub use sequence::{ResidueMatch, map_sequence_to_structure};
 

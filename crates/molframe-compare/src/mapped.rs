@@ -8,16 +8,16 @@
 
 use crate::CompareError;
 use crate::correspondence::{
-    ChainAssignment, ChainMapping, assign_chains, map_atoms, map_residues,
+    ChainAssignment, ChainMapping, assign_chains, map_atoms, map_residues, pair_chains,
 };
 use crate::docking_quality::{DockQ, DockQOptions, dockq_on_positions};
 use crate::interface::{AtomInfo, UNANNOTATED, atom_infos, chain_atoms};
 use crate::quaternary::{QsOptions, qs_on_positions};
 use crate::workflow::PointMapping;
 use molframe_chem::ComponentProvider;
-use molframe_core::Diagnostic;
 use molframe_core::contract::{Namespace, Status};
 use molframe_core::structure::Structure;
+use molframe_core::{Code, Diagnostic};
 use molframe_seq::Scoring;
 use std::collections::BTreeSet;
 
@@ -98,7 +98,7 @@ fn tied_targets(assignment: &ChainAssignment, label: &str) -> Vec<ChainMapping> 
         .iter()
         .find(|mapping| mapping.reference == label)
     else {
-        return Vec::new();
+        return unassigned_targets(assignment, label);
     };
     let mut targets = vec![primary.clone()];
     targets.extend(
@@ -116,6 +116,33 @@ fn tied_targets(assignment: &ChainAssignment, label: &str) -> Vec<ChainMapping> 
             }),
     );
     targets
+}
+
+/// Targets for a native chain the one-to-one assignment left out, which happens
+/// when the native holds more identical chains than the model. Every model
+/// chain of the best identity this chain reached is a candidate; the scores
+/// then say which one the native chain really answers to.
+fn unassigned_targets(assignment: &ChainAssignment, label: &str) -> Vec<ChainMapping> {
+    let own = || {
+        assignment
+            .alternatives
+            .iter()
+            .filter(|alternative| alternative.reference == label)
+    };
+    let Some(best) = own()
+        .map(|alternative| alternative.identity)
+        .max_by(f64::total_cmp)
+    else {
+        return Vec::new();
+    };
+    own()
+        .filter(|alternative| alternative.identity.total_cmp(&best).is_eq())
+        .map(|alternative| ChainMapping {
+            reference: alternative.reference.clone(),
+            target: alternative.target.clone(),
+            identity: alternative.identity,
+        })
+        .collect()
 }
 
 /// Every assignment of the two native chains to distinct tied model chains,
@@ -309,6 +336,68 @@ pub fn mapped_dockq(
     )
 }
 
+/// Scores a docking model with the model chains named by the caller.
+///
+/// `receptor` and `ligand` are `(native chain, model chain)` pairs. No chain
+/// assignment is searched: the pairing is taken as given, so a pairing the
+/// sequences would not have chosen is scored rather than refused, and each
+/// pair's [`ChainMapping::identity`] reports how well its sequences agree.
+/// Pairs below [`MappingOptions::min_identity`] are refused. Because nothing is
+/// assigned one to one, this also works when the native holds more identical
+/// chains than the model.
+///
+/// # Errors
+///
+/// As [`mapped_dockq`], and a mapping failure when a named chain is missing or a
+/// pair is below the identity threshold.
+pub fn mapped_dockq_for_chains(
+    model: &Structure,
+    native: &Structure,
+    receptor: (&str, &str),
+    ligand: (&str, &str),
+    mapping: &MappingOptions<'_>,
+    options: DockQOptions,
+) -> Result<(DockQ, MappedComparison), MappedCompareError> {
+    let pair = |labels: (&str, &str)| {
+        let found = pair_chains(
+            native,
+            model,
+            labels,
+            mapping.provider,
+            mapping.namespace,
+            mapping.scoring,
+        )
+        .map_err(MappedCompareError::Mapping)?;
+        if found.identity < mapping.min_identity {
+            return Err(MappedCompareError::Mapping(
+                Diagnostic::new(Code::E4003)
+                    .with_context("chain", labels.0)
+                    .with_context("identity", found.identity.to_string())
+                    .with_context("min_identity", mapping.min_identity.to_string()),
+            ));
+        }
+        Ok(found)
+    };
+    let chains = vec![pair(receptor)?, pair(ligand)?];
+    let comparison = correspond(model, native, mapping, chains, 1)?;
+    let rows = rows(
+        model,
+        native,
+        &comparison,
+        &[receptor.0, ligand.0],
+        mapping.namespace,
+    )?;
+    let scored = dockq_on_positions(
+        &rows.model,
+        &rows.native,
+        &rows.chains[0],
+        &rows.chains[1],
+        &rows.info,
+        options,
+    )?;
+    Ok((scored, comparison))
+}
+
 /// Scores the contact overlap of one chain pair across renamed and
 /// renumbered chains.
 ///
@@ -349,3 +438,7 @@ pub fn mapped_qs_score(
 #[cfg(test)]
 #[path = "mapped_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mapped_pairing_tests.rs"]
+mod pairing_tests;

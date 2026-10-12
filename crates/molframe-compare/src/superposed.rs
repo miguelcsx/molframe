@@ -1,5 +1,8 @@
 //! Scores measured after fitting one structure onto the other.
 //!
+//! GDT lives in its own module because it is a search over superpositions, not
+//! one fit; it is re-exported here.
+//!
 //! TM-score and GDT both quantify how close corresponding atoms come once the
 //! model is optimally superposed on the reference. They differ in shape: GDT is
 //! the mean fraction of atoms under a few fixed distance cutoffs, while TM-score
@@ -13,13 +16,9 @@
 use molframe_geom::{Superposition, superpose};
 
 use crate::failure::CompareError;
-use crate::numeric::{u64_to_f64, usize_to_f64};
+use crate::numeric::usize_to_f64;
 
-/// The four distance cutoffs GDT-TS (total score) averages over, in ångström.
-const GDT_TS_CUTOFFS: [f64; 4] = [1.0, 2.0, 4.0, 8.0];
-
-/// The tighter cutoffs of GDT-HA (high accuracy), each half of the GDT-TS set.
-const GDT_HA_CUTOFFS: [f64; 4] = [0.5, 1.0, 2.0, 4.0];
+pub use crate::gdt::{gdt_ha, gdt_ts, gdt_with_cutoffs};
 
 /// Computes the TM-score of a model against a reference.
 ///
@@ -33,83 +32,101 @@ const GDT_HA_CUTOFFS: [f64; 4] = [0.5, 1.0, 2.0, 4.0];
 /// [`CompareError::Superpose`] when no fit exists (fewer than three points, or a
 /// degenerate arrangement).
 pub fn tm_score(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, CompareError> {
-    let fit = fit(model, reference)?;
+    if model.len() != reference.len() {
+        return Err(CompareError::LengthMismatch {
+            model: model.len(),
+            reference: reference.len(),
+        });
+    }
     let length = reference.len();
     let scale = tm_scale(length);
+    let mut best_score = tm_sum(fit(model, reference)?.transform, model, reference, scale);
+
+    // Reweighted fits. The gradient of `sum 1/(1 + (d/d0)^2)` with respect to a
+    // point's displacement points along `-d` with magnitude `1/(1+(d/d0)^2)^2`,
+    // so a weighted least-squares fit with those weights moves the fit toward
+    // the TM optimum. Reweighting changes the objective, so the loop keeps the
+    // best score rather than trusting the last fit, and stops as soon as a step
+    // fails to improve it.
+    //
+    // This is a local search, while the published score is a maximum over
+    // superpositions. TM-align reaches that maximum with a residue-level dynamic
+    // program that can re-pair residues as well as move them, which a
+    // correspondence-preserving kernel cannot do, so on a structure whose parts
+    // have swung past each other it reports a little more than this does — about
+    // 0.04 for a 1UBQ half-and-half hinge, and about 0.015 for a displaced tail.
+    // The value here is the best of the superpositions this kernel can reach, it
+    // is never below the plain least-squares fit, and it is exact for a rigid
+    // displacement.
+    let mut candidate = fit(model, reference)?.transform;
+    for _ in 0..TM_REWEIGHT_STEPS {
+        let Some(weights) = tm_weights(candidate, model, reference, scale) else {
+            break;
+        };
+        let Ok(step) = molframe_geom::superpose_weighted(model, reference, &weights) else {
+            break;
+        };
+        let score = tm_sum(step.transform, model, reference, scale);
+        if score <= best_score {
+            break;
+        }
+        candidate = step.transform;
+        best_score = score;
+    }
+    Ok(best_score / usize_to_f64(length))
+}
+
+/// How many reweighted fits the TM search takes before it stops improving.
+///
+/// Each step is one quaternion decomposition, so the whole search costs a small
+/// constant number of them; the loop leaves as soon as a step stops improving.
+const TM_REWEIGHT_STEPS: usize = 32;
+
+/// The TM sum for one transform, before normalisation.
+fn tm_sum(
+    transform: molframe_geom::Rigid,
+    model: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    scale: f64,
+) -> f64 {
     let mut total = 0.0f64;
     for (moved, &target) in model
         .iter()
-        .map(|&point| fit.transform.apply(point))
+        .map(|&point| transform.apply(point))
         .zip(reference)
     {
-        let distance = molframe_geom::distance(moved, target);
-        let ratio = distance / scale;
+        let ratio = molframe_geom::distance(moved, target) / scale;
         total += 1.0 / (1.0 + ratio * ratio);
     }
-    Ok(total / usize_to_f64(length))
+    total
 }
 
-/// Computes GDT-TS: the mean over the 1/2/4/8 Å cutoffs of the fraction within.
+/// The per-point weights of one reweighted fit, or `None` when they carry no
+/// information.
 ///
-/// A perfect match scores `1.0`. The model is fitted onto the reference first.
-///
-/// # Errors
-///
-/// Returns the same errors as [`tm_score`].
-pub fn gdt_ts(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, CompareError> {
-    gdt_with_cutoffs(model, reference, &GDT_TS_CUTOFFS)
-}
-
-/// Computes GDT-HA, the high-accuracy variant over the tighter 0.5/1/2/4 Å set.
-///
-/// A perfect match scores `1.0`. The model is fitted onto the reference first.
-///
-/// # Errors
-///
-/// Returns the same errors as [`tm_score`].
-pub fn gdt_ha(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, CompareError> {
-    gdt_with_cutoffs(model, reference, &GDT_HA_CUTOFFS)
-}
-
-/// Averages, over the given cutoffs, the fraction of fitted atoms within each.
-///
-/// # Errors
-///
-/// Returns an error for empty, non-finite, non-positive or unordered cutoffs,
-/// unequal coordinate lengths, or a failed superposition.
-pub fn gdt_with_cutoffs(
+/// A weight is the squared TM kernel, so a point already close to its target
+/// pulls hardest. All-zero weights leave the fit undetermined, which is the
+/// signal to stop rather than to fit noise.
+fn tm_weights(
+    transform: molframe_geom::Rigid,
     model: &[[f32; 3]],
     reference: &[[f32; 3]],
-    cutoffs: &[f64],
-) -> Result<f64, CompareError> {
-    if cutoffs.is_empty()
-        || cutoffs
-            .iter()
-            .any(|value| !value.is_finite() || *value <= 0.0)
-        || cutoffs.windows(2).any(|pair| pair[0] >= pair[1])
-    {
-        return Err(CompareError::InvalidDistanceCutoff);
-    }
-    let fit = fit(model, reference)?;
-    let length = reference.len();
-    let mut within = vec![0u64; cutoffs.len()];
+    scale: f64,
+) -> Option<Vec<f64>> {
+    let mut weights = Vec::with_capacity(model.len());
+    let mut total = 0.0f64;
     for (moved, &target) in model
         .iter()
-        .map(|&point| fit.transform.apply(point))
+        .map(|&point| transform.apply(point))
         .zip(reference)
     {
-        let distance = molframe_geom::distance(moved, target);
-        for (cutoff, count) in cutoffs.iter().zip(&mut within) {
-            if distance <= *cutoff {
-                *count += 1;
-            }
-        }
+        let ratio = molframe_geom::distance(moved, target) / scale;
+        let kernel = 1.0 / (1.0 + ratio * ratio);
+        let weight = kernel * kernel;
+        total += weight;
+        weights.push(weight);
     }
-    let fractions: f64 = within
-        .iter()
-        .map(|count| u64_to_f64(*count) / usize_to_f64(length))
-        .sum();
-    Ok(fractions / usize_to_f64(cutoffs.len()))
+    (total > 0.0 && total.is_finite()).then_some(weights)
 }
 
 /// Computes weighted RMSD for coordinates already in the chosen frame.

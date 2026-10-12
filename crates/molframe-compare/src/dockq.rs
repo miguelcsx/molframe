@@ -7,6 +7,8 @@
 //!   residues of different chains are in contact when any heavy atom of one lies
 //!   closer than the contact distance (5 Å) to any heavy atom of the other. Each
 //!   residue pair counts once however many atom pairs touch.
+//! - `fnonnat`, the fraction of the model's residue contacts absent from the
+//!   native. It is reported beside the score and does not enter it.
 //! - `LRMSD`, the backbone (N, CA, C, O) RMSD of the ligand after the model's
 //!   receptor backbone is superposed on the native receptor.
 //! - `iRMSD`, the backbone RMSD over the interface residues after superposing on
@@ -98,6 +100,11 @@ impl DockQOptions {
 pub struct DockQ {
     /// Fraction of native residue-residue contacts kept by the model.
     pub fnat: f64,
+    /// Fraction of the model's residue-residue contacts that the native does not
+    /// have, `(model contacts - kept) / model contacts`. A model with no
+    /// contact at all has nothing non-native and reports `0.0`; read it
+    /// together with `fnat`.
+    pub fnonnat: f64,
     /// Backbone RMSD of the ligand after superposing the receptor backbone.
     pub ligand_rmsd: f64,
     /// Backbone RMSD over the interface residues.
@@ -189,6 +196,11 @@ pub(crate) fn dockq_on_positions(
     let model_contacts = sides.residue_pairs(model, options.contact_distance);
     let kept = native_contacts.intersection(&model_contacts).count();
     let fnat = usize_to_f64(kept) / usize_to_f64(native_contacts.len());
+    let fnonnat = if model_contacts.is_empty() {
+        0.0
+    } else {
+        usize_to_f64(model_contacts.len() - kept) / usize_to_f64(model_contacts.len())
+    };
 
     let ligand_rmsd = sides.ligand_rmsd(model, native)?;
     let interface = sides.interface_residues(native, options.interface_distance);
@@ -200,6 +212,7 @@ pub(crate) fn dockq_on_positions(
         / 3.0;
     Ok(DockQ {
         fnat,
+        fnonnat,
         ligand_rmsd,
         interface_rmsd,
         score,

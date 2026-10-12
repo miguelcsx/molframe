@@ -43,6 +43,64 @@ fn a_translated_copy_is_fitted_back_to_a_perfect_score() {
 }
 
 #[test]
+fn the_fit_maximises_the_tm_sum_rather_than_the_squared_deviation() {
+    // Sixty points along a line, then forty more standing 12 Å off it. The
+    // least-squares fit splits the difference between the two groups, because
+    // it weights a large deviation by its square; the TM kernel weights a point
+    // by `1/(1+(d/d0)^2)`, so it prefers a fit that keeps the long group and
+    // abandons the short one. The published score is the maximum over
+    // superpositions, so it takes the larger of the two.
+    let mut reference = Vec::new();
+    let mut model = Vec::new();
+    for index in 0..60_u16 {
+        let x = f32::from(index);
+        reference.push([x, 0.0, 0.0]);
+        model.push([x, 0.0, 0.0]);
+    }
+    for index in 0..40_u16 {
+        let x = f32::from(index);
+        reference.push([x, 5.0, 0.0]);
+        model.push([x, 5.0, 12.0]);
+    }
+
+    let score = match tm_score(&model, &reference) {
+        Ok(score) => score,
+        Err(error) => panic!("valid: {error}"),
+    };
+    let plain = plain_fit_tm(&model, &reference);
+    assert!(
+        score > plain,
+        "the maximising fit ({score}) must beat the least-squares one ({plain})"
+    );
+    // Keeping the stationary sixty of a hundred points is worth 0.6 on its own,
+    // so a fit that has not found that is still on the compromise solution.
+    assert!(score > 0.6, "the stationary group should be kept: {score}");
+}
+
+/// The score at the plain least-squares fit, for comparison.
+fn plain_fit_tm(model: &[[f32; 3]], reference: &[[f32; 3]]) -> f64 {
+    let fit = match molframe_geom::superpose(model, reference) {
+        Ok(fit) => fit,
+        Err(error) => panic!("valid: {error}"),
+    };
+    let d0 = 0.5f64;
+    let mut total = 0.0f64;
+    for (moved, &target) in model
+        .iter()
+        .map(|&point| fit.transform.apply(point))
+        .zip(reference)
+    {
+        let ratio = molframe_geom::distance(moved, target) / d0;
+        total += 1.0 / (1.0 + ratio * ratio);
+    }
+    let count = match u32::try_from(reference.len()) {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
+    };
+    total / f64::from(count)
+}
+
+#[test]
 fn unequal_lengths_are_rejected() {
     let short = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
     assert!(matches!(

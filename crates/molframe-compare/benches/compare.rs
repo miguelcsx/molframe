@@ -124,7 +124,7 @@ fn bench_extended_scores(c: &mut Criterion) {
                 &structure,
                 "A",
                 "B",
-                QsOptions::standard(5.0),
+                QsOptions::published(),
             ))
         });
     });

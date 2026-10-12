@@ -15,21 +15,35 @@
 //! `d_ref`, with the model set `M`, with distances `d_mod`:
 //!
 //! ```text
-//!                 sum over shared (i,j) of  w(d_ref) * w(d_mod)
-//! QS = ------------------------------------------------------------------
-//!      (sum over R of w(d_ref)^2  +  sum over M of w(d_mod)^2) / 2
+//!                                  QS
+//!   = sum over shared pairs of w(min(d_ref, d_mod)) * (1 - |d_ref - d_mod| / 12)
+//!     ------------------------------------------------------------------------
+//!     sum over shared pairs of w(min(d_ref, d_mod))
+//!       + sum over non-shared pairs of w(d)
 //! ```
 //!
-//! A contact is shared when the same residue pair is in contact in both. An
-//! identical interface scores 1 (numerator and denominator are both the sum of
-//! squared weights), one with no shared contact scores 0, and moving a shared
-//! contact away lowers its weight product and so the score, even when it is the
-//! only contact. Contacts present on one side only enter the denominator alone.
+//! A contact is shared when the same residue pair is in contact in both. Its
+//! numerator weighs the closer of the two distances and penalises the distance
+//! difference; its denominator weighs that same closer distance. A contact
+//! present on one side only contributes its own weight to the denominator and
+//! nothing to the numerator. An identical interface scores 1, one with no shared
+//! contact scores 0, and moving a shared contact away lowers the score even when
+//! it is the only contact.
 //!
 //! The contact definition and the weight function are those of the published
-//! score. The normalisation is the point to treat with care: it is chosen here as
-//! the mean of the two squared-weight masses, which has the properties above, and
-//! it has not been checked numerically against `OpenStructure` output.
+//! score, and the normalisation is the published one.
+//!
+//! Every residue pair this entry point considers is mapped by construction —
+//! the two chains are the whole domain — so the published `weight_extra_mapped`
+//! and `weight_extra_all` terms coincide and one non-shared sum serves both. A
+//! score over a partially mapped assembly, where the same residue pair can be in
+//! contact in the model while one of its residues is unmapped, is a different
+//! quantity and is not what this function returns.
+//!
+//! The penalty is always the published 12 Å. A caller who changes
+//! `contact_distance` changes which pairs are contacts — a nonpublished variant
+//! that no longer reproduces the published number — but does not change the
+//! penalty, which stays tied to the definition.
 //!
 //! Model and native share atom numbering, so a residue is the same in both. The
 //! atom-contact Jaccard overlap this crate used to call the QS-score lives in
@@ -54,6 +68,10 @@ pub use atom_contact::{
 const WEIGHT_PLATEAU: f64 = 5.0;
 /// Width of the Gaussian fall-off of the contact weight, in ångström.
 const WEIGHT_WIDTH: f64 = 4.28;
+/// Distance difference at which a shared contact's contribution reaches zero,
+/// in ångström. This is the published penalty and is independent of the
+/// caller's contact cutoff.
+const PENALTY_DISTANCE: f64 = 12.0;
 
 /// Result policy when neither structure has an interface contact.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -195,19 +213,40 @@ pub(crate) fn qs_on_positions(
             EmptyQsPolicy::Error => Err(CompareError::NoComparablePairs),
         };
     }
-    let reference_mass: f64 = reference.values().map(|&d| contact_weight(d).powi(2)).sum();
-    let model_mass: f64 = modelled.values().map(|&d| contact_weight(d).powi(2)).sum();
-    let shared: f64 = reference
-        .iter()
-        .filter_map(|(pair, &d_ref)| {
-            modelled
-                .get(pair)
-                .map(|&d_mod| contact_weight(d_ref) * contact_weight(d_mod))
-        })
-        .sum();
-    let denominator = f64::midpoint(reference_mass, model_mass);
+    // Published normalisation, accumulated in one pass over each contact map.
+    //
+    //   weighted_scores = sum w(min(d_ref, d_mod)) * (1 - |d_ref - d_mod| / 12)
+    //   weight_sum      = sum w(min(d_ref, d_mod))                 over shared
+    //   weight_extra    = sum w(d)                          over non-shared
+    //   QS              = weighted_scores / (weight_sum + weight_extra)
+    //
+    // Every residue pair this function considers is one the caller mapped, so
+    // the published `weight_extra_mapped` and `weight_extra_all` coincide here
+    // and one denominator serves both. A whole-complex score, where a pair can
+    // be in contact while its residues are outside the mapping, is not what
+    // this pair-of-chains entry point computes.
+    let mut weighted_scores = 0.0f64;
+    let mut weight_sum = 0.0f64;
+    let mut weight_extra = 0.0f64;
+    for (pair, &d_reference) in &reference {
+        match modelled.get(pair) {
+            Some(&d_model) => {
+                let weight = contact_weight(d_reference.min(d_model));
+                weight_sum += weight;
+                weighted_scores +=
+                    weight * (1.0 - (d_reference - d_model).abs() / PENALTY_DISTANCE);
+            }
+            None => weight_extra += contact_weight(d_reference),
+        }
+    }
+    for (pair, &d_model) in &modelled {
+        if !reference.contains_key(pair) {
+            weight_extra += contact_weight(d_model);
+        }
+    }
+    let denominator = weight_sum + weight_extra;
     if denominator > 0.0 {
-        Ok(shared / denominator)
+        Ok(weighted_scores / denominator)
     } else {
         Ok(0.0)
     }
@@ -246,7 +285,9 @@ fn contact_distances(
                 continue;
             };
             let squared = molframe_geom::distance_squared(point_a, point_b);
-            if a != b && squared < limit {
+            // The published contact test is inclusive: a pair exactly at the
+            // cutoff is in contact.
+            if a != b && squared <= limit {
                 pairs.insert((a.min(b), a.max(b)), squared.sqrt());
             }
         }

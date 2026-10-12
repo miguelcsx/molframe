@@ -56,7 +56,7 @@ pub use contact_overlap::{ContactSimilarity, contact_map_similarity};
 pub use correspondence::{
     AtomCorrespondence, AtomMappingAlternative, ChainAlternative, ChainAssignment, ChainMapping,
     ChainSequence, ResidueMatch, ResiduePair, assign_chains, chain_sequences, map_atoms,
-    map_chains, map_residues, map_sequence_to_structure,
+    map_chains, map_residues, map_sequence_to_structure, pair_chains,
 };
 pub use docking_quality::{
     AtomContactDockingOptions, AtomContactDockingScore, DockQ, DockQOptions,
@@ -65,7 +65,8 @@ pub use docking_quality::{
 pub use failure::CompareError;
 pub use local_distance::{EmptyLddtPolicy, LddtOptions, lddt, lddt_with_options};
 pub use mapped::{
-    MappedCompareError, MappedComparison, MappingOptions, mapped_dockq, mapped_qs_score,
+    MappedCompareError, MappedComparison, MappingOptions, mapped_dockq, mapped_dockq_for_chains,
+    mapped_qs_score,
 };
 pub use policy_execution::{
     GovernedCompareError, governed_assign_chains, governed_cad_contact_areas, governed_cad_score,

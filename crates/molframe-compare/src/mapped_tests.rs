@@ -15,7 +15,7 @@ loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
 
-fn structure(body: &str) -> Structure {
+pub(super) fn structure(body: &str) -> Structure {
     let input = InputBuffer::from_bytes(format!("{HEADER}{body}").into_bytes());
     match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
@@ -64,7 +64,7 @@ fn component(id: &str, code: u8, atoms: &[&str], bonds: &[(&str, &str)]) -> Comp
     }
 }
 
-fn provider() -> MemoryProvider {
+pub(super) fn provider() -> MemoryProvider {
     MemoryProvider::new(
         DictionaryVersion::new("test-ccd"),
         [
@@ -89,7 +89,7 @@ fn provider() -> MemoryProvider {
     .expect("component fixtures are unique")
 }
 
-fn mapping(provider: &MemoryProvider) -> MappingOptions<'_> {
+pub(super) fn mapping(provider: &MemoryProvider) -> MappingOptions<'_> {
     MappingOptions {
         provider,
         namespace: Namespace::Label,
@@ -100,7 +100,7 @@ fn mapping(provider: &MemoryProvider) -> MappingOptions<'_> {
 }
 
 // Receptor A (Ala-Gly-Ser) and ligand B (Trp-Ser-Gly) at an interface.
-const NATIVE: &str = "\
+pub(super) const NATIVE: &str = "\
 ATOM 1 C CA ALA A 1 0 0 0\n\
 ATOM 2 C CA GLY A 2 2 0 0\n\
 ATOM 3 C CA SER A 3 0 2 0\n\
@@ -110,7 +110,7 @@ ATOM 6 C CA GLY B 3 1 3 3\n";
 
 // The same complex with chains renamed, listed in the other order, and an
 // extra leading serine on the ligand that the native does not have.
-const RENAMED: &str = "\
+pub(super) const RENAMED: &str = "\
 ATOM 1 C CA SER X 1 9 9 9\n\
 ATOM 2 C CA TRP X 2 1 1 3\n\
 ATOM 3 C CA SER X 3 3 1 3\n\
@@ -119,7 +119,7 @@ ATOM 5 C CA ALA Y 1 0 0 0\n\
 ATOM 6 C CA GLY Y 2 2 0 0\n\
 ATOM 7 C CA SER Y 3 0 2 0\n";
 
-fn dockq_options() -> DockQOptions {
+pub(super) fn dockq_options() -> DockQOptions {
     DockQOptions {
         contact_distance: 5.0,
         interface_distance: 10.0,
@@ -332,7 +332,7 @@ ATOM 3 C CG2 FRK A 1 0 1 0\n",
 
 // A homodimer: both chains read ALA-GLY-SER, so sequence cannot say which model
 // chain is which native chain.
-const HOMODIMER_NATIVE: &str = "\
+pub(super) const HOMODIMER_NATIVE: &str = "\
 ATOM 1 C CA ALA A 1 0 0 0\n\
 ATOM 2 C CA GLY A 2 2 0 0\n\
 ATOM 3 C CA SER A 3 0 2 0\n\
@@ -342,7 +342,7 @@ ATOM 6 C CA SER B 3 1 3 3\n";
 
 // The same dimer with the two chains exchanged: X sits where B was, Y where A
 // was, and X is listed first.
-const HOMODIMER_SWAPPED: &str = "\
+pub(super) const HOMODIMER_SWAPPED: &str = "\
 ATOM 1 C CA ALA X 1 1 1 3\n\
 ATOM 2 C CA GLY X 2 3 1 3\n\
 ATOM 3 C CA SER X 3 1 3 3\n\

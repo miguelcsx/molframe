@@ -49,6 +49,44 @@ pub fn chain_sequences(
     Ok(chains)
 }
 
+/// Pairs two named chains and measures how identical their sequences are.
+///
+/// This is the single-pair counterpart of [`super::assign_chains`] for callers
+/// who decide the pairing themselves. The identity is the one the assignment
+/// would have used for the same two chains.
+///
+/// # Errors
+///
+/// Returns a diagnostic when a CCD component is missing, the namespace is not
+/// supported, or either chain is not a polymer chain of the structure.
+pub fn pair_chains(
+    reference: &Structure,
+    target: &Structure,
+    labels: (&str, &str),
+    provider: &dyn ComponentProvider,
+    namespace: Namespace,
+    scoring: Scoring,
+) -> Result<super::ChainMapping, Diagnostic> {
+    let find = |structure: &Structure, label: &str| -> Result<Vec<u8>, Diagnostic> {
+        chain_sequences(structure, provider, namespace)?
+            .into_iter()
+            .find(|chain| chain.label == label)
+            .map(|chain| chain.sequence)
+            .ok_or_else(|| {
+                Diagnostic::new(Code::E4003)
+                    .with_context("required", "polymer chain with standard residues")
+                    .with_context("chain", label)
+            })
+    };
+    let left = find(reference, labels.0)?;
+    let right = find(target, labels.1)?;
+    Ok(super::ChainMapping {
+        reference: labels.0.to_owned(),
+        target: labels.1.to_owned(),
+        identity: identity(&left, &right, scoring)?,
+    })
+}
+
 pub(super) fn chain_identifier(
     chain: molframe_core::structure::ChainRef<'_>,
     namespace: Namespace,

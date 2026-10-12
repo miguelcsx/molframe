@@ -116,6 +116,20 @@ fn fnat_counts_each_residue_pair_once() {
 }
 
 #[test]
+fn fnonnat_is_the_share_of_model_contacts_the_native_lacks() {
+    // The model touches at both sites, the native only at the first: one of the
+    // model's two residue contacts is non-native.
+    let result = score(&two_sites(3.0), &two_sites(33.0), options());
+    assert!((result.fnonnat - 0.5).abs() < 1e-12, "{}", result.fnonnat);
+    assert!((result.fnat - 1.0).abs() < 1e-12);
+    // Losing a contact is not inventing one.
+    let lost = score(&two_sites(33.0), &two_sites(3.0), options());
+    assert!(lost.fnonnat.abs() < 1e-12, "{}", lost.fnonnat);
+    let same = score(&two_sites(3.0), &two_sites(3.0), options());
+    assert!(same.fnonnat.abs() < 1e-12);
+}
+
+#[test]
 fn the_score_combines_the_components_as_published() {
     let result = score(&two_sites(33.0), &two_sites(3.0), options());
     let squash = |value: f64, scale: f64| 1.0 / (1.0 + (value / scale).powi(2));
