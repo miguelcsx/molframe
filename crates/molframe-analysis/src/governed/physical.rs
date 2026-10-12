@@ -30,21 +30,47 @@ pub enum PhysicalKernelError<E> {
     SideInputLength,
 }
 
+fn cell_box<E>(structure: &Structure) -> Result<PeriodicBox, PhysicalKernelError<E>> {
+    structure
+        .data()
+        .cell
+        .ok_or(PhysicalKernelError::MissingCell)
+        .and_then(|cell| PeriodicBox::from_cell(cell).map_err(|_| PhysicalKernelError::MissingCell))
+}
+
 fn periodic<E>(
     structure: &Structure,
     policy: &AnalysisPolicy,
 ) -> Result<Option<PeriodicBox>, PhysicalKernelError<E>> {
     match policy.periodic {
         PeriodicPolicy::None => Ok(None),
-        PeriodicPolicy::MinimumImage => structure
-            .data()
-            .cell
-            .ok_or(PhysicalKernelError::MissingCell)
-            .and_then(|cell| {
-                PeriodicBox::from_cell(cell)
-                    .map(Some)
-                    .map_err(|_| PhysicalKernelError::MissingCell)
-            }),
+        PeriodicPolicy::MinimumImage => cell_box(structure).map(Some),
+        _ => Err(PhysicalKernelError::AllImagesUnsupported),
+    }
+}
+
+/// The periodic box a pairwise kernel should search under, for a given cutoff.
+///
+/// Minimum-image periodicity applies at any cutoff. All-image periodicity is
+/// served by the same search only while the cutoff stays inside half the cell,
+/// where each pair has one image in range; past that the pair would count once
+/// per image, so this refuses rather than report one.
+pub(super) fn periodic_within<E>(
+    structure: &Structure,
+    policy: &AnalysisPolicy,
+    cutoff: f32,
+) -> Result<Option<PeriodicBox>, PhysicalKernelError<E>> {
+    match policy.periodic {
+        PeriodicPolicy::None => Ok(None),
+        PeriodicPolicy::MinimumImage => cell_box(structure).map(Some),
+        PeriodicPolicy::Pbc => {
+            let found = cell_box(structure)?;
+            if found.contains_cutoff_sphere(cutoff) {
+                Ok(Some(found))
+            } else {
+                Err(PhysicalKernelError::AllImagesUnsupported)
+            }
+        }
         _ => Err(PhysicalKernelError::AllImagesUnsupported),
     }
 }

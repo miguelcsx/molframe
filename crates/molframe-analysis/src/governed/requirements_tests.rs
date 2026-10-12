@@ -125,3 +125,19 @@ fn an_analysis_that_states_nothing_forbids_nothing() {
     assert_eq!(result.value().copied(), Some(1));
     assert_eq!(result.provenance.estimand(), None);
 }
+
+#[test]
+fn a_structure_without_titratable_groups_or_charges_lacks_charged_groups() {
+    assert!(!Requirement::ChargedGroups.satisfied_by(&structure(false)));
+    assert!(Requirement::ChargedGroups.reason().contains("annotate"));
+}
+
+#[test]
+fn a_protein_with_titratable_groups_has_charged_groups_without_an_annotation() {
+    let source = format!("{HEADER}ATOM 1 N NZ LYS A 1 0 0 0\n");
+    let input = InputBuffer::from_bytes(source.into_bytes());
+    let Ok((protein, _)) = molframe_cif::read(&input, &ReadOptions::new()) else {
+        panic!("fixture failed");
+    };
+    assert!(Requirement::ChargedGroups.satisfied_by(&protein));
+}

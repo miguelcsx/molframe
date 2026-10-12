@@ -1,17 +1,21 @@
 //! Ready-to-run governed kernels for intermolecular interactions.
 
 use super::common::{backend, complete, descriptor, float, integer, needing_hydrogens};
+use super::physical::{PhysicalKernelError, periodic_within};
 use super::{StructureKernel, structure_kernel};
 use crate::{
     BasePair, BasePairError, BasePairOptions, CationPiError, CationPiOptions, CationPiTable,
     Contact, ContactMap, ContactTable, HydrogenBondError, HydrogenBondOptions, HydrogenBondTable,
     PiStackingError, PiStackingOptions, PiStackingTable, SaltBridgeTable, SurfaceContactOptions,
-    WaterBridgeOptions, WaterBridgeTable, atom_contacts, base_pairs, cation_pi, hydrogen_bonds,
-    pi_stacking, residue_contact_map, salt_bridges, surface_contacts, water_bridges,
+    WaterBridgeOptions, WaterBridgeTable, atom_contacts_periodic, base_pairs, cation_pi,
+    hydrogen_bonds, pi_stacking, residue_contact_map_periodic, salt_bridges, surface_contacts,
+    water_bridges,
 };
 use molframe_chem::ComponentProvider;
 use molframe_core::ExecutionContext;
-use molframe_core::contract::{AnalysisPolicy, ParameterValue};
+use molframe_core::contract::{
+    AnalysisPolicy, Assumption, AssumptionSource, Impact, ParameterValue, PolicyField,
+};
 use molframe_core::structure::Structure;
 use molframe_spatial::{SpatialBackend, SpatialError};
 use molframe_surface::SasaError;
@@ -50,15 +54,18 @@ fn with_plane_fit(
 pub fn contacts_kernel(
     cutoff: f32,
     spatial: SpatialBackend,
-) -> impl StructureKernel<Output = ContactTable, Error = SpatialError> {
+) -> impl StructureKernel<Output = ContactTable, Error = PhysicalKernelError<SpatialError>> {
     structure_kernel(
         descriptor("atom-contacts")
+            .reading(&[PolicyField::Periodic])
             .estimating("the atom pairs within the cutoff, whatever their chemistry")
             .with_parameter("cutoff", float(cutoff))
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
-            atom_contacts(structure, cutoff, spatial, context)
+        move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
+            let periodic = periodic_within(structure, policy, cutoff)?;
+            atom_contacts_periodic(structure, cutoff, spatial, periodic.as_ref(), context)
                 .map(|value| complete(structure, value))
+                .map_err(PhysicalKernelError::Kernel)
         },
     )
 }
@@ -69,9 +76,10 @@ pub fn contact_map_kernel(
     cutoff: f32,
     minimum_separation: u32,
     spatial: SpatialBackend,
-) -> impl StructureKernel<Output = ContactMap, Error = SpatialError> {
+) -> impl StructureKernel<Output = ContactMap, Error = PhysicalKernelError<SpatialError>> {
     structure_kernel(
         descriptor("residue-contact-map")
+            .reading(&[PolicyField::Periodic])
             .estimating("which residue pairs, at least the minimum apart in sequence, have an atom pair within the cutoff")
             .with_parameter("cutoff", float(cutoff))
             .with_parameter(
@@ -79,9 +87,18 @@ pub fn contact_map_kernel(
                 ParameterValue::Integer(i64::from(minimum_separation)),
             )
             .with_parameter("spatial_backend", backend(spatial)),
-        move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
-            residue_contact_map(structure, cutoff, minimum_separation, spatial, context)
-                .map(|value| complete(structure, value))
+        move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
+            let periodic = periodic_within(structure, policy, cutoff)?;
+            residue_contact_map_periodic(
+                structure,
+                cutoff,
+                minimum_separation,
+                spatial,
+                periodic.as_ref(),
+                context,
+            )
+            .map(|value| complete(structure, value))
+            .map_err(PhysicalKernelError::Kernel)
         },
     )
 }
@@ -104,7 +121,8 @@ pub fn hydrogen_bonds_kernel(
     )
 }
 
-/// Governed salt-bridge kernel using CCD formal charges.
+/// Governed salt-bridge kernel over titratable amino-acid groups and annotated
+/// formal charges.
 #[must_use]
 pub fn salt_bridges_kernel(
     maximum_distance: f32,
@@ -112,12 +130,20 @@ pub fn salt_bridges_kernel(
 ) -> impl StructureKernel<Output = SaltBridgeTable, Error = SpatialError> {
     structure_kernel(
         descriptor("salt-bridges")
-            .estimating("the oppositely charged groups, by formal charge, within the distance")
+            .estimating("the oppositely charged groups (titratable amino-acid groups and annotated formal charges) within the distance")
+            .requiring(super::Requirement::ChargedGroups)
             .with_parameter("maximum_distance", float(maximum_distance))
             .with_parameter("spatial_backend", backend(spatial)),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
-            salt_bridges(structure, maximum_distance, spatial, context)
-                .map(|value| complete(structure, value))
+            salt_bridges(structure, maximum_distance, spatial, context).map(|value| {
+                complete(structure, value).with_assumption(Assumption::new(
+                    PolicyField::ContactDef,
+                    "charged groups: Asp/Glu carboxylate O, Lys NZ, Arg NE/NH1/NH2, chain termini, \
+                     plus annotated formal charges; histidine not treated as charged",
+                    AssumptionSource::ProfileDefault,
+                    Impact::Unmeasured,
+                ))
+            })
         },
     )
 }

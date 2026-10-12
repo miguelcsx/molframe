@@ -1,14 +1,16 @@
 //! Ready-to-run governed kernels for structure-level descriptors.
 
 use super::common::{backend, complete, descriptor, float, integer};
+use super::kernel::FrameKernelResult;
 use super::{StructureKernel, structure_kernel};
 use crate::{
     DsspError, DsspOptions, GaussianNetworkModel, GnmError, GnmOptions, HalfSphereExposure,
     HseError, NucleicTorsionError, NucleicTorsions, SseTable, chain_interface,
-    gaussian_network_model, half_sphere_exposure, nucleic_torsions, secondary_structure,
+    gaussian_network_model, half_sphere_exposure, nucleic_torsions, protein_domain,
+    secondary_structure,
 };
 use molframe_core::ExecutionContext;
-use molframe_core::contract::{AnalysisPolicy, ParameterValue};
+use molframe_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Quality};
 use molframe_core::index::ResidueIndex;
 use molframe_core::selection::AtomSelection;
 use molframe_core::structure::Structure;
@@ -74,6 +76,13 @@ pub fn secondary_structure_kernel(
 }
 
 /// Governed half-sphere-exposure kernel.
+///
+/// A residue needs both an alpha and a beta carbon role — the beta carbon defines
+/// the outward direction — so a residue without one takes no part. Those residues
+/// are reported as missing coverage rather than silently dropped, which is what
+/// lets `missing_atoms` decide whether a partial answer is acceptable: an input
+/// whose profile supplies only backbone roles would otherwise return an empty
+/// table with no indication that nothing was measured.
 #[must_use]
 pub fn half_sphere_exposure_kernel(
     radius: f32,
@@ -82,11 +91,37 @@ pub fn half_sphere_exposure_kernel(
     structure_kernel(
         descriptor("half-sphere-exposure")
             .estimating("the neighbours of each residue in the half-sphere towards and away from its side chain")
+            .requiring(super::Requirement::PolymerSideChainDirection)
             .with_parameter("radius", float(radius))
             .with_parameter("spatial_backend", backend(spatial)),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
-            half_sphere_exposure(structure, radius, spatial, context)
-                .map(|value| complete(structure, value))
+            let measured = half_sphere_exposure(structure, radius, spatial, context)?;
+            // The analysis describes protein burial, so its domain is the
+            // residues the profile identified as protein. Counting a bound water
+            // or a ligand as an intended protein residue would report an analysis
+            // that covered every measurable residue as mostly incomplete, and the
+            // caller has no way to tell that from a genuinely truncated run.
+            let intended = protein_domain(structure);
+            // A structure cannot hold more residues than `u32`, so both counts fit.
+            let measured_count = match u32::try_from(measured.len()) {
+                Ok(count) => count,
+                Err(_) => u32::MAX,
+            };
+            let used = measured_count.min(intended);
+            Ok(FrameKernelResult::governed(
+                measured,
+                if used < intended {
+                    Quality::Partial
+                } else {
+                    Quality::Complete
+                },
+                Coverage {
+                    intended,
+                    used,
+                    missing: intended - used,
+                    ambiguous: 0,
+                },
+            ))
         },
     )
 }

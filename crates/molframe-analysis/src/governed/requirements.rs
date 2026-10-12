@@ -57,6 +57,15 @@ impl ForbiddenResolution {
 pub enum Requirement {
     /// At least one hydrogen atom is modelled.
     ExplicitHydrogens,
+    /// At least one residue carries both an alpha and a beta carbon role, which
+    /// is what fixes a side-chain direction.
+    PolymerSideChainDirection,
+    /// Charged groups can be identified: the input carries a formal-charge
+    /// annotation, or a titratable amino-acid group (Asp, Glu, Lys, Arg or a
+    /// chain terminus). Without either no atom is charged as far as the
+    /// analysis can tell, which would read as "no charged groups" rather than
+    /// "charges were never assigned".
+    ChargedGroups,
 }
 
 impl Requirement {
@@ -67,6 +76,12 @@ impl Requirement {
             Self::ExplicitHydrogens => {
                 "the input models no hydrogen atoms, which this analysis measures"
             }
+            Self::ChargedGroups => {
+                "the input has no titratable amino-acid group and no formal-charge annotation, so charged groups are unknown; annotate it with a chemical component dictionary first (molframe.chemistry.annotate)"
+            }
+            Self::PolymerSideChainDirection => {
+                "no residue carries both an alpha and a beta carbon role, so no side-chain direction is defined"
+            }
         }
     }
 
@@ -75,6 +90,26 @@ impl Requirement {
     pub fn satisfied_by(self, structure: &Structure) -> bool {
         match self {
             Self::ExplicitHydrogens => structure.data().atoms().any(is_hydrogen),
+            Self::ChargedGroups => {
+                structure
+                    .annotations()
+                    .get(molframe_core::FORMAL_CHARGE_ANNOTATION)
+                    .is_some()
+                    || crate::salt_bridge_groups::has_titratable_groups(structure)
+            }
+            Self::PolymerSideChainDirection => structure.data().residues().any(|residue| {
+                let mut alpha = false;
+                let mut beta = false;
+                for atom in residue.atoms() {
+                    let Some(role) = crate::chemistry::polymer_role(structure, atom.index().get())
+                    else {
+                        continue;
+                    };
+                    alpha |= role.intersects(molframe_chem::PolymerAtomRole::PROTEIN_ALPHA_CARBON);
+                    beta |= role.intersects(molframe_chem::PolymerAtomRole::PROTEIN_BETA_CARBON);
+                }
+                alpha && beta
+            }),
         }
     }
 }

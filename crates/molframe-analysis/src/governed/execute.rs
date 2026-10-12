@@ -7,7 +7,7 @@ use super::{FrameKernelResult, GovernedAnalysisError, StructureKernel};
 use molframe_core::contract::{
     Analysis, AnalysisPolicy, Assumption, AssumptionSource, ContentDigest, Coverage,
     HydrogenPolicy, Impact, Indeterminacy, MissingPolicy, MissingPolicyError, ModelChoice, Outcome,
-    ParameterValue, PolicyField, Provenance, Quality, SourceRef, resolve_missing,
+    ParameterValue, PeriodicPolicy, PolicyField, Provenance, Quality, SourceRef, resolve_missing,
 };
 use molframe_core::index::ModelIndex;
 use molframe_core::structure::Structure;
@@ -97,6 +97,20 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
                 reason: refused.reason(),
             });
         }
+        if !matches!(policy.periodic, PeriodicPolicy::None)
+            && !kernel
+                .descriptor()
+                .policy_reads()
+                .contains(&PolicyField::Periodic)
+        {
+            // A periodic policy the kernel never applies would be reported as
+            // honoured while the result stayed non-periodic.
+            return Err(GovernedAnalysisError::ForbiddenResolution {
+                analysis: kernel.descriptor().name().into(),
+                field: PolicyField::Periodic.name(),
+                reason: "this analysis does not apply a periodic cell, so the result would silently ignore the policy",
+            });
+        }
         let system = AnalysisSystem::build(template, policy, context)
             .map_err(GovernedAnalysisError::System)?;
         if system.is_replicated() && !kernel.descriptor().allows_replicated_systems() {
@@ -158,6 +172,14 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
                 }
             };
         assumptions.extend(resolution.assumptions);
+        if input_quality == Quality::Ambiguous {
+            assumptions.push(super::altloc_note::ambiguity_assumption(
+                policy,
+                selected.atom_count(),
+                template.atom_count(),
+                resolution.coverage.ambiguous,
+            ));
+        }
         let input_indeterminacy = input_indeterminacy.or_else(|| {
             kernel
                 .descriptor()

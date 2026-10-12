@@ -1,5 +1,6 @@
 //! Governed adapters from structure kernels to deterministic frame execution.
 
+mod altloc_note;
 mod common;
 mod definition;
 mod descriptor;
@@ -33,7 +34,10 @@ pub use kernel::{
     FrameKernelResult, MappedClosureStructureKernel, StructureKernel, mapped_structure_kernel,
     structure_kernel,
 };
-pub use native::{GovernedNativeError, native_contact_fraction_kernel};
+pub use native::{
+    GovernedNativeError, NativeCorrespondence, native_contact_fraction_kernel,
+    native_contact_fraction_kernel_with,
+};
 pub use physical::{
     PhysicalKernelError, centre_of_mass_radial_distribution_kernel, coordination_numbers_kernel,
     density_map_kernel, leaflets_kernel, linear_density_kernel, pore_profile_kernel,
