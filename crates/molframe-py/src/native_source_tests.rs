@@ -166,3 +166,55 @@ _struct_conn.pdbx_value_order\n1 covale A 1 GLY CA A 1 GLY N SING\n";
         assert_eq!(bonds[0].aromatic, 0);
     });
 }
+
+const COORDINATION: &str = r"data_coordination
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+HETATM 1 Fe FE LIG A 1 0 0 0
+HETATM 2 C C1 LIG A 1 2 0 0
+loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_seq_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_seq_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_atom_id
+_struct_conn.pdbx_value_order
+1 CONNECTION_CLASS A 1 LIG FE A 1 LIG C1 SING
+";
+
+#[test]
+fn native_bond_metadata_preserves_coordination_without_classifying_covalent_metal_edges() {
+    assert_eq!(std::mem::size_of::<NativeBond>(), 12);
+    Python::initialize();
+    Python::attach(|py| {
+        for (class, coordinated) in [("covale", 0), ("metalc", 1)] {
+            let bytes = COORDINATION.replace("CONNECTION_CLASS", class).into_bytes();
+            let (structure, _) = molframe::read_bytes(
+                bytes,
+                Some("coordination.cif"),
+                &molframe::ReadOptions::new(),
+            )
+            .expect("connectivity fixture");
+            let object = Bound::new(py, PyStructure::new(structure)).expect("bound source");
+            let source = NativeStructureSource::from_python(object.as_any()).expect("capsule");
+            let topology = source.topology();
+            assert_eq!(topology.bonds.len(), 1);
+            assert_eq!(topology.bonds[0].metal_coordination, coordinated);
+            assert_eq!(topology.bonds[0].order, NativeBond::ORDER_SINGLE);
+        }
+    });
+}

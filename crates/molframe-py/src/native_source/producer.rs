@@ -53,14 +53,17 @@ pub(crate) fn capsule<'py>(
 /// The payload is a transport between two extensions, not a file anyone keeps,
 /// so it may invent what canonical output otherwise refuses to: a block
 /// identifier for a structure read from a format with no `_entry.id`, and
-/// `_struct_conn` identifiers and a generic connection type for the bond graph,
-/// which retains neither. Without them a structure that carries bonds, or no
-/// entry identifier, could not cross the boundary at all.
+/// `_struct_conn` identifiers for the bond graph, which does not retain them.
+/// Without those a structure that carries bonds, or no entry identifier, could
+/// not cross the boundary at all.
+///
+/// The connection classification is not invented here: each bond carries its
+/// own `conn_type_id` as deposited, and one whose source recorded none is
+/// written unknown.
 fn transport_options() -> molframe::formats::cif::CifWriteOptions {
     molframe::formats::cif::CifWriteOptions::new()
         .with_block_id("molframe")
         .with_generated_connection_ids()
-        .with_connection_type_id("covale")
 }
 
 unsafe extern "C" fn encode_bcif(
@@ -127,7 +130,8 @@ fn compact_topology(structure: &molframe::Structure) -> NativeTopology {
             second: bond.atom_b.get(),
             aromatic: u8::from(bond.order == molframe::BondOrder::Aromatic),
             order: bond_order_code(bond.order),
-            reserved: [0; 2],
+            metal_coordination: u8::from(bond.is_metal_coordination(&data.dictionary)),
+            reserved: [0; 1],
         })
         .collect();
     NativeTopology {

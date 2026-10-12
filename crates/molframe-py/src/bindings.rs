@@ -1,6 +1,6 @@
 //! Central facade handles and stateless namespace functions.
 
-use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidueSelection, PyResidues};
+use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidues};
 use numpy::ndarray::ArrayView2;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, ToPyArray};
 use pyo3::prelude::*;
@@ -101,6 +101,30 @@ impl PyStructure {
         self.inner.model_count()
     }
 
+    /// Whether this is the outer shell of a ragged ensemble.
+    ///
+    /// The models of a ragged ensemble hold different atoms, so there is no single
+    /// atom axis for them and every count on this object is zero. The atoms are
+    /// reachable through [`Self::ragged_models`], and a caller that sees this flag
+    /// must look there rather than read the empty counts as "no atoms".
+    #[getter]
+    fn is_ragged_ensemble(&self) -> bool {
+        self.inner.is_ragged_ensemble()
+    }
+
+    /// The independent structures of a ragged ensemble, or an empty list.
+    ///
+    /// Each is a structure in its own right, with its own atoms, residues and
+    /// bonds. A caller reading a multi-model file whose models differ in content
+    /// must iterate these instead of the flat accessors on the shell.
+    #[getter]
+    fn ragged_models(&self) -> Vec<Self> {
+        match self.inner.ragged_models() {
+            Some(models) => models.into_iter().map(Self::new).collect(),
+            None => Vec::new(),
+        }
+    }
+
     #[getter]
     fn atoms(&self) -> PyAtoms {
         PyAtoms::all(self.clone())
@@ -121,24 +145,26 @@ impl PyStructure {
         PyModels::new(self.clone())
     }
 
-    #[pyo3(signature = (query, *, policy=None))]
+    #[pyo3(signature = (query, *, policy=None, context=None))]
     fn select(
         &self,
         py: Python<'_>,
         query: &Bound<'_, PyAny>,
         policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
+        context: Option<&crate::execution::PyExecutionContext>,
     ) -> PyResult<PySelection> {
         let policy =
             policy.map_or_else(molframe::AnalysisPolicy::default, |policy| policy.0.clone());
         if let Ok(query) = query.extract::<PyRef<'_, PyQuery>>() {
-            return crate::policy::select_compiled(py, self, &query.compiled, &policy);
+            return crate::policy::select_compiled_in(py, self, query.native(), &policy, context);
         }
         let source = query.extract::<&str>()?;
         let compiled = molframe::Query::compile(source).map_err(|findings| {
             crate::query_messages::query_error(&molframe::Findings::from(findings), source)
         })?;
-        crate::policy::select_compiled(py, self, &compiled, &policy)
+        crate::policy::select_compiled_in(py, self, &compiled, &policy, context)
     }
+
     /// Resolves alternate conformations without changing stored atom rows.
     #[pyo3(signature = (*, policy=None))]
     fn resolve_altlocs(
@@ -150,7 +176,7 @@ impl PyStructure {
             Some(policy) => policy.0.clone(),
             None => molframe::AnalysisPolicy::default(),
         };
-        let analysis = self.inner.resolve_altlocs(&policy);
+        let analysis = py.detach(|| self.inner.resolve_altlocs(&policy));
         let value = match analysis.value() {
             Some(selection) => {
                 let view = self.inner.engine().view_of(selection.clone());
@@ -294,6 +320,18 @@ impl PyStructure {
             .map(|state| state.code())
             .collect()
     }
+    fn _molframe_altlocs<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u32>> {
+        let array = self
+            .inner
+            .engine()
+            .data()
+            .atoms()
+            .map(|atom| atom.alt_id().map_or(0, molframe::AltId::get))
+            .collect::<Vec<_>>()
+            .into_pyarray(py);
+        array.readwrite().make_nonwriteable();
+        array
+    }
     fn _molframe_secondary_source(&self) -> Vec<u8> {
         self.inner
             .secondary_source()
@@ -302,172 +340,6 @@ impl PyStructure {
             .collect()
     }
 }
-#[derive(Clone, Debug)]
-#[pyclass(name = "Selection", frozen, skip_from_py_object)]
-pub(crate) struct PySelection {
-    parent: PyStructure,
-    selection: molframe::Selection,
-    indices: Vec<u32>,
-}
-#[pymethods]
-impl PySelection {
-    fn __len__(&self) -> usize {
-        match usize::try_from(self.selection.len()) {
-            Ok(value) => value,
-            Err(_) => usize::MAX,
-        }
-    }
 
-    fn is_stale_for(&self, structure: &PyStructure) -> bool {
-        self.selection.is_stale_for(&structure.inner)
-    }
-
-    #[getter]
-    fn indices<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u32>> {
-        self.indices.clone().into_pyarray(py)
-    }
-
-    #[pyo3(signature = (*, model=0))]
-    fn to_coordinates<'py>(
-        &self,
-        py: Python<'py>,
-        model: u32,
-    ) -> PyResult<Bound<'py, PyArray2<f32>>> {
-        let coordinates = self
-            .selection
-            .to_coordinates(molframe::ModelIndex::new(model));
-        let rows = coordinates.len();
-        let flat = coordinates.into_iter().flatten().collect::<Vec<_>>();
-        let array = flat.into_pyarray(py);
-        array.reshape((rows, 3))
-    }
-    /// Return the residues covered by this selection.
-    ///
-    /// With no argument, the selection's retained parent snapshot is used.
-    /// Supplying a structure keeps the explicit stale-snapshot check available
-    /// for callers that apply a selection across structure versions.
-    #[pyo3(signature = (structure=None))]
-    fn residues(&self, structure: Option<&PyStructure>) -> PyResult<PyResidueSelection> {
-        let structure = structure.map_or(&self.parent, |value| value);
-        if self.selection.is_stale_for(&structure.inner) {
-            return Err(crate::error::value(
-                "selection is stale for the supplied structure",
-            ));
-        }
-        Ok(PyResidueSelection::from_selection(
-            structure.clone(),
-            &self.selection,
-        ))
-    }
-
-    fn __or__(&self, other: &Self) -> Self {
-        let combined = &self.selection | &other.selection;
-        Self::from_native(self.parent.clone(), combined)
-    }
-
-    fn __and__(&self, other: &Self) -> Self {
-        let combined = &self.selection & &other.selection;
-        Self::from_native(self.parent.clone(), combined)
-    }
-
-    fn __sub__(&self, other: &Self) -> Self {
-        let combined = &self.selection - &other.selection;
-        Self::from_native(self.parent.clone(), combined)
-    }
-}
-
-impl PySelection {
-    pub(crate) fn atom_indices(&self) -> &[u32] {
-        &self.indices
-    }
-
-    pub(crate) const fn native(&self) -> &molframe::Selection {
-        &self.selection
-    }
-
-    pub(crate) fn from_native(parent: PyStructure, selection: molframe::Selection) -> Self {
-        let indices = selection.atoms().map(|atom| atom.index().get()).collect();
-        Self {
-            parent,
-            selection,
-            indices,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-#[pyclass(name = "Query", frozen, skip_from_py_object)]
-pub(crate) struct PyQuery {
-    compiled: molframe::Query,
-}
-
-impl PyQuery {
-    pub(crate) fn from_native(compiled: molframe::Query) -> Self {
-        Self { compiled }
-    }
-
-    pub(crate) fn native(&self) -> &molframe::Query {
-        &self.compiled
-    }
-}
-
-#[pymethods]
-impl PyQuery {
-    #[new]
-    fn new(source: &str) -> PyResult<Self> {
-        let compiled = molframe::Query::compile(source).map_err(|findings| {
-            crate::query_messages::query_error(&molframe::Findings::from(findings), source)
-        })?;
-        Ok(Self { compiled })
-    }
-
-    #[pyo3(signature = (structure, *, policy=None))]
-    fn select(
-        &self,
-        py: Python<'_>,
-        structure: &PyStructure,
-        policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
-    ) -> PyResult<PySelection> {
-        let policy =
-            policy.map_or_else(molframe::AnalysisPolicy::default, |policy| policy.0.clone());
-        crate::policy::select_compiled(py, structure, &self.compiled, &policy)
-    }
-
-    /// Stable identity of the normalized typed query plan.
-    #[getter]
-    fn fingerprint(&self) -> String {
-        self.compiled.fingerprint().to_string()
-    }
-
-    /// Named queries this query refers to with `$name`, sorted.
-    #[getter]
-    fn references(&self) -> Vec<String> {
-        self.compiled
-            .references()
-            .into_iter()
-            .map(str::to_owned)
-            .collect()
-    }
-
-    /// Canonical text accepted by every `MolFrame` query consumer.
-    #[getter]
-    fn source(&self) -> &str {
-        self.compiled.source()
-    }
-
-    fn __and__(&self, other: &Self) -> Self {
-        Self::from_native(self.compiled.clone() & other.compiled.clone())
-    }
-
-    fn __or__(&self, other: &Self) -> Self {
-        Self::from_native(self.compiled.clone() | other.compiled.clone())
-    }
-
-    fn __invert__(&self) -> Self {
-        Self::from_native(!self.compiled.clone())
-    }
-}
-
-pub(crate) fn findings_error(findings: &molframe::Findings) -> PyErr {
-    crate::error::from_findings(findings.as_slice(), &findings.to_string())
-}
+mod selection;
+pub(crate) use selection::{PyQuery, PySelection, findings_error};

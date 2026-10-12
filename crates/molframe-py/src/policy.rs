@@ -217,18 +217,37 @@ impl PyAnalysisPolicy {
 
 /// Evaluates a compiled query, raising its warnings and rendering its errors
 /// against the query text.
+///
+/// Evaluation runs through [`crate::execution::run`]: the GIL is released for
+/// the native work, and Ctrl-C (or `cancel()` on `context`) stops it.
 pub(crate) fn select_compiled(
     py: Python<'_>,
     structure: &PyStructure,
     query: &molframe::Query,
     policy: &molframe::AnalysisPolicy,
 ) -> PyResult<PySelection> {
+    select_compiled_in(py, structure, query, policy, None)
+}
+
+/// [`select_compiled`] under an explicit execution context.
+pub(crate) fn select_compiled_in(
+    py: Python<'_>,
+    structure: &PyStructure,
+    query: &molframe::Query,
+    policy: &molframe::AnalysisPolicy,
+    context: Option<&crate::execution::PyExecutionContext>,
+) -> PyResult<PySelection> {
     use molframe::QueryStructure;
 
-    let evaluation = structure
-        .inner
-        .select_query(query, policy)
-        .map_err(|findings| crate::query_messages::query_error(&findings, query.source()))?;
+    let evaluation = crate::execution::run(py, context, |context| {
+        structure.inner.select_with_options(
+            query,
+            policy,
+            &molframe::prelude::Groups::new(),
+            context,
+        )
+    })?
+    .map_err(|findings| crate::query_messages::query_error(&findings, query.source()))?;
     crate::query_messages::warn(py, &evaluation.warnings, query.source())?;
     let view = structure.inner.engine().view_of(evaluation.selection);
     Ok(PySelection::from_native(

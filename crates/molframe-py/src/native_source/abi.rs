@@ -32,7 +32,10 @@ pub struct NativeBond {
     /// capsule layout remains compatible with consumers that only read
     /// endpoints and aromaticity.
     pub order: u8,
-    pub(super) reserved: [u8; 2],
+    /// One only when the source explicitly records metal coordination.
+    /// This occupies a formerly reserved byte without changing the C layout.
+    pub metal_coordination: u8,
+    pub(super) reserved: [u8; 1],
 }
 
 impl NativeBond {

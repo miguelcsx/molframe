@@ -25,8 +25,18 @@ fn render(findings: &[molframe::Diagnostic], source: &str) -> String {
 /// The error a failed query raises: a `QueryError` whose text quotes the query
 /// and which carries every finding.
 pub(crate) fn query_error(findings: &molframe::Findings, source: &str) -> PyErr {
+    // A cancelled or over-budget evaluation is an execution outcome, not a
+    // fault in the query: it raises the class the code names everywhere else.
+    let name = match findings
+        .as_slice()
+        .first()
+        .map(|first| crate::error::class_name(first.code()))
+    {
+        Some(execution @ ("Cancelled" | "MemoryBudgetError")) => execution,
+        _ => "QueryError",
+    };
     crate::error::from_findings_as(
-        "QueryError",
+        name,
         findings.as_slice(),
         &render(findings.as_slice(), source),
     )

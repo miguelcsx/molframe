@@ -2,6 +2,7 @@
 
 mod carbohydrates;
 mod charges;
+mod linkage;
 mod molecules;
 mod roles;
 use crate::bindings::{PyStructure, findings_error};
@@ -121,25 +122,27 @@ fn vdw_radii<'py>(
 /// hydrogen-bond donor and acceptor, aromaticity, component kind) that the
 /// interaction analyses need. File connectivity is kept. Components the
 /// dictionary lacks are reported as one warning, not an error.
+/// Inter-residue bonds are added only with an explicit `polymer_links` policy.
 #[pyfunction]
-#[pyo3(signature = (structure, components, *, version="unversioned"))]
+#[pyo3(signature = (structure, components, *, version="unversioned", polymer_links=None))]
 fn annotate(
     py: Python<'_>,
     structure: &PyStructure,
     components: PathBuf,
     version: &str,
+    polymer_links: Option<PyRef<'_, linkage::PyPolymerLinkPolicy>>,
 ) -> PyResult<PyStructure> {
     let source = structure.inner.clone();
+    let policy = match polymer_links {
+        Some(policy) => policy.inner.clone(),
+        None => chem::PolymerLinkPolicy::Disabled,
+    };
     let version = molframe::DictionaryVersion::new(version);
     let report = py.detach(move || {
         let (provider, _) = molframe::read_component_dictionary(&components, version)
             .map_err(|findings| findings_error(&findings))?;
-        chem::apply_component_chemistry(
-            source.engine(),
-            &provider,
-            chem::PolymerLinkPolicy::Disabled,
-        )
-        .map_err(crate::error::kernel)
+        chem::apply_component_chemistry(source.engine(), &provider, policy)
+            .map_err(crate::error::kernel)
     })?;
     if !report.findings.is_empty() {
         let first: Vec<String> = report
@@ -170,6 +173,7 @@ fn annotate(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     carbohydrates::register(module)?;
     charges::register(module)?;
+    linkage::register(module)?;
     molecules::register(module)?;
     roles::register(module)?;
     module.add_class::<PyElementProperties>()?;

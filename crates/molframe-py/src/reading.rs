@@ -4,7 +4,7 @@ use crate::bindings::{PyStructure, findings_error};
 use crate::execution::PyExecutionContext;
 use molframe::{
     AmbiguousResidueBoundaryPolicy, CategoryFilter, Diagnostic, Format, Limits,
-    MissingElementPolicy, ParseMode, ReadOptions,
+    MissingElementPolicy, OccupancyPolicy, ParseMode, ReadOptions,
 };
 use pyo3::prelude::*;
 use pyo3::pybacked::PyBackedBytes;
@@ -35,6 +35,11 @@ fn or_default<T>(value: Option<T>, default: T) -> T {
 /// limits. `only_categories` and `skip_categories` choose which optional
 /// mmCIF/BinaryCIF categories or PDB records are read; what a structure cannot
 /// be built without is always read.
+///
+/// The default input limits are bounded: 16 GiB after decompression, 2**28
+/// declared rows per category and 2**24 dictionary entries, besides the
+/// compression-ratio and nesting ceilings. Raise a `max_*` argument to read a
+/// larger trusted file, e.g. `max_decompressed_bytes=2**64 - 1` for no ceiling.
 #[derive(Clone, Debug)]
 #[pyclass(name = "ReadOptions", frozen, skip_from_py_object, module = "molframe")]
 pub(crate) struct PyReadOptions {
@@ -60,6 +65,7 @@ impl PyReadOptions {
         discard_hydrogens=false,
         missing_element="preserve_unknown",
         ambiguous_residue_boundary="reject",
+        occupancy_policy="keep",
         only_categories=None,
         skip_categories=None,
         max_decompressed_bytes=None,
@@ -79,6 +85,7 @@ impl PyReadOptions {
         discard_hydrogens: bool,
         missing_element: &str,
         ambiguous_residue_boundary: &str,
+        occupancy_policy: &str,
         only_categories: Option<Vec<String>>,
         skip_categories: Option<Vec<String>>,
         max_decompressed_bytes: Option<u64>,
@@ -117,6 +124,7 @@ impl PyReadOptions {
                 .ambiguous_residue_boundary_policy(parse::<AmbiguousResidueBoundaryPolicy>(
                     ambiguous_residue_boundary,
                 )?)
+                .occupancy_policy(occupancy(occupancy_policy)?)
                 .categories(categories)
                 .digest_input(digest_input)
                 .limits(limits),
@@ -161,6 +169,15 @@ impl PyReadOptions {
     #[getter]
     fn ambiguous_residue_boundary(&self) -> String {
         crate::policy::snake(self.inner.ambiguous_residue_boundary_policy.name())
+    }
+
+    #[getter]
+    fn occupancy_policy(&self) -> &'static str {
+        match self.inner.occupancy_policy {
+            OccupancyPolicy::Keep => "keep",
+            OccupancyPolicy::Clamp => "clamp",
+            OccupancyPolicy::Reject => "reject",
+        }
     }
 
     #[getter]
@@ -258,6 +275,17 @@ fn load(
     let bytes = source.extract::<PyBackedBytes>()?;
     let input = molframe::InputBuffer::from_owner(PythonBytes(bytes));
     load_buffer(py, &input, name, options, context)
+}
+
+fn occupancy(name: &str) -> PyResult<OccupancyPolicy> {
+    match name {
+        "keep" => Ok(OccupancyPolicy::Keep),
+        "clamp" => Ok(OccupancyPolicy::Clamp),
+        "reject" => Ok(OccupancyPolicy::Reject),
+        other => Err(crate::error::value(format!(
+            "unknown occupancy_policy {other:?}; expected keep, clamp or reject"
+        ))),
+    }
 }
 
 /// Named in-memory bytes, read without copying them.

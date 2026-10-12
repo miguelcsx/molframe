@@ -324,16 +324,27 @@ pub(crate) fn nucleic_torsions(
 /// The fraction of the reference's contacts that `target` keeps (Q).
 ///
 /// A reference contact is a pair within `cutoff` ångström; it is kept when the
-/// same pair is within `tolerance * cutoff` in `target`. The two structures must
-/// share atom numbering. The value is a dictionary with `native`, `kept` and
-/// `fraction`.
+/// same pair is within `cutoff + tolerance` ångström in `target`, so
+/// `tolerance=0.0` keeps exactly the pairs still within the cutoff and a
+/// structure compared with itself has Q = 1. The contact is a hard cutoff over
+/// all atom pairs, not the smoothed Best-Hummer-Eaton switching function.
+///
+/// `match` chooses how target atoms stand for reference atoms: `"index"` pairs
+/// equal atom indices and needs equal atom counts; `"names"` pairs atoms by
+/// chain, residue number, insertion code, residue name and atom name, counting
+/// only contacts between atoms present in both. `mapping` instead gives
+/// explicit `(reference_atom, target_atom)` index pairs and takes precedence.
+/// The value is a dictionary with `native`, `kept`, `fraction` and
+/// `matched_atoms`.
 #[pyfunction]
 #[pyo3(signature = (
     reference,
     target,
     *,
     cutoff,
-    tolerance,
+    tolerance=0.0,
+    r#match="index",
+    mapping=None,
     backend="auto",
     policy=None,
     context=None,
@@ -345,15 +356,28 @@ pub(crate) fn native_contacts(
     target: &PyStructure,
     cutoff: f32,
     tolerance: f32,
+    r#match: &str,
+    mapping: Option<Vec<(u32, u32)>>,
     backend: &str,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
+    let correspondence = match (mapping, r#match) {
+        (Some(pairs), _) => molframe::analysis::NativeCorrespondence::Explicit(pairs),
+        (None, "index") => molframe::analysis::NativeCorrespondence::Index,
+        (None, "names") => molframe::analysis::NativeCorrespondence::Names,
+        (None, other) => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "match must be 'index' or 'names', not '{other}'"
+            )));
+        }
+    };
     let target = target.inner.clone();
-    let kernel = molframe::analysis::native_contact_fraction_kernel(
+    let kernel = molframe::analysis::native_contact_fraction_kernel_with(
         target.engine(),
         cutoff,
         tolerance,
+        correspondence,
         crate::backend::parse(backend)?,
     );
     run(
@@ -366,6 +390,7 @@ pub(crate) fn native_contacts(
             value.set_item("native", found.native)?;
             value.set_item("kept", found.kept)?;
             value.set_item("fraction", found.fraction)?;
+            value.set_item("matched_atoms", found.matched_atoms)?;
             Ok(value.into_any().unbind())
         },
         context,
