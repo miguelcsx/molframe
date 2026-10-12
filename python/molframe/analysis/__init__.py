@@ -10,6 +10,8 @@ contact_potential = _native.contact_potential
 atom_contacts = _native.atom_contacts
 contacts = _native.contacts
 hydrogen_bonds = _native.hydrogen_bonds
+hydrogen_bond_candidates = _native.hydrogen_bond_candidates
+HydrogenBondCandidateOptions = _native.HydrogenBondCandidateOptions
 salt_bridges = _native.salt_bridges
 dssp = _native.dssp
 contact_map = _native.contact_map
@@ -34,6 +36,7 @@ __all__ = [
     "ContactTable",
     "DensityGrid",
     "GridSpec",
+    "HydrogenBondCandidateOptions",
     "ScalarGrid",
     "atom_contacts",
     "cation_pi",
@@ -46,6 +49,7 @@ __all__ = [
     "density_map",
     "dssp",
     "half_sphere_exposure",
+    "hydrogen_bond_candidates",
     "hydrogen_bonds",
     "leaflets",
     "linear_density",

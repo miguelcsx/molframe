@@ -13,6 +13,8 @@ ElementProperties = _native.ElementProperties
 PartialCharges = _native.PartialCharges
 partial_charges = _native.partial_charges
 PolymerRoleRule = _native.PolymerRoleRule
+PolymerLinkPolicy = _native.PolymerLinkPolicy
+PolymerLinkRule = _native.PolymerLinkRule
 PolymerRoleReport = _native.PolymerRoleReport
 apply_polymer_role_profile = _native.apply_polymer_role_profile
 polymer_atom_roles = _native.polymer_atom_roles
@@ -34,6 +36,8 @@ __all__ = [
     "Molecule",
     "Monosaccharide",
     "PartialCharges",
+    "PolymerLinkPolicy",
+    "PolymerLinkRule",
     "PolymerRoleReport",
     "PolymerRoleRule",
     "RingGeometry",

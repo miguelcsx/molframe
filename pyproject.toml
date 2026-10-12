@@ -151,6 +151,11 @@ combine-as-imports = true
 manifest-path = "crates/molframe-py/Cargo.toml"
 python-source = "python"
 module-name = "molframe._native"
+# `maturin develop` builds the unoptimised `dev` profile unless told otherwise,
+# and the unoptimised extension is 5-100x slower on the numerical kernels
+# (surface area, neighbour search). Pinning the profile here makes a bare
+# `maturin develop` produce the same optimised code as a published wheel.
+profile = "release"
 # The stable ABI. `pyo3/extension-module` is gone: it disabled linking libpython
 # for every target, which breaks `cargo test`, and pyo3 replaced it with the
 # `PYO3_BUILD_EXTENSION_MODULE` environment variable, which maturin >= 1.9.4

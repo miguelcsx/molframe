@@ -299,6 +299,7 @@ class ReadOptions:
         discard_hydrogens: bool = False,
         missing_element: Literal["preserve_unknown", "infer_from_atom_name"] = "preserve_unknown",
         ambiguous_residue_boundary: Literal["reject", "infer_from_file_order"] = "reject",
+        occupancy_policy: Literal["keep", "clamp", "reject"] = "keep",
         only_categories: Sequence[str] | None = None,
         skip_categories: Sequence[str] | None = None,
         max_decompressed_bytes: int | None = None,
@@ -324,6 +325,8 @@ class ReadOptions:
     def missing_element(self) -> str: ...
     @property
     def ambiguous_residue_boundary(self) -> str: ...
+    @property
+    def occupancy_policy(self) -> str: ...
     @property
     def only_categories(self) -> list[str] | None: ...
     @property

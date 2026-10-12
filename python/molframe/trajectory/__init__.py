@@ -28,11 +28,19 @@ pca = _native.pca
 population_similarity = _native.population_similarity
 read = _native.read
 rmsd = _native.rmsd
+FrameSeries = _native.FrameSeries
+TrajectoryChunks = _native.TrajectoryChunks
+contact_counts_stream = _native.contact_counts_stream
+read_chunks = _native.read_chunks
+rmsd_stream = _native.rmsd_stream
+rmsf_stream = _native.rmsf_stream
+run_analysis_stream = _native.run_analysis_stream
 
 __all__ = [
     "Clustering",
     "Convergence",
     "DiffusionMap",
+    "FrameSeries",
     "GroupVariance",
     "HarmonicSimilarity",
     "KMeans",
@@ -40,8 +48,10 @@ __all__ = [
     "PathSimilarity",
     "Pca",
     "Trajectory",
+    "TrajectoryChunks",
     "agglomerative_clustering",
     "block_convergence",
+    "contact_counts_stream",
     "dbscan",
     "diffusion_map",
     "group_variance",
@@ -55,5 +65,9 @@ __all__ = [
     "pca",
     "population_similarity",
     "read",
+    "read_chunks",
     "rmsd",
+    "rmsd_stream",
+    "rmsf_stream",
+    "run_analysis_stream",
 ]

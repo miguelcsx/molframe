@@ -69,7 +69,7 @@ def qs_score(
     *,
     first_chain: str,
     second_chain: str,
-    contact_distance: float = 5.0,
+    contact_distance: float = 12.0,
     chain_names: _Names = "label",
 ) -> float: ...
 def mapped_dockq(
@@ -99,7 +99,7 @@ def mapped_qs_score(
     scoring: Scoring,
     min_identity: float,
     automorphism_limit: int,
-    contact_distance: float = 5.0,
+    contact_distance: float = 12.0,
     chain_names: _Names = "label",
 ) -> tuple[float, MappedComparison]: ...
 

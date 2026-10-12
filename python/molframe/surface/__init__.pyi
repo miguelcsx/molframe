@@ -179,3 +179,43 @@ def buried_solvent_excluded_surface(
 
 def atom_depths(atoms: Array, surface: Array, *, cell_size: float = 3.0) -> Float32Array:
     """Return each atom's distance to the nearest surface point (infinity without any)."""
+
+class NativeSurfaceProvider:
+    def __init__(
+        self,
+        executable: str | PathLike[str],
+        method: Literal["surf", "msms"],
+        *,
+        probe: float = 1.4,
+        density: float = 3.0,
+        all_components: bool = True,
+    ) -> None: ...
+
+class MolecularSurface:
+    @property
+    def discarded_degenerate_faces(self) -> int: ...
+    @property
+    def vertices(self) -> Float32Array: ...
+    @property
+    def normals(self) -> Float32Array: ...
+    @property
+    def faces(self) -> UInt32Array: ...
+    @property
+    def atom_rows(self) -> UInt32Array: ...
+    @property
+    def method(self) -> Literal["surf", "msms"]: ...
+    @property
+    def probe_radius(self) -> float: ...
+    @property
+    def density(self) -> float: ...
+    @property
+    def all_components(self) -> bool: ...
+
+def native_surface(
+    coordinates: Array,
+    radii: Array,
+    rows: Array,
+    provider: NativeSurfaceProvider,
+    *,
+    context: ExecutionContext | None = None,
+) -> MolecularSurface: ...

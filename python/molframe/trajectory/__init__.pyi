@@ -1,8 +1,9 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from os import PathLike
 from typing import Literal, Protocol, final
 
-from .. import Analysis, AnalysisPolicy, Float32Array, Float64Array
+from .. import Analysis, AnalysisPolicy, ExecutionContext, Float32Array, Float64Array
+from ..crystal import UnitCell
 
 class Array(Protocol):
     @property
@@ -17,6 +18,13 @@ class Trajectory:
     @property
     def times(self) -> Array: ...
     @property
+    def cells(self) -> Array | None:
+        """`(frames, 6)` rows of a, b, c, alpha, beta, gamma; NaN where a frame has no cell."""
+    @property
+    def frame_indices(self) -> UInt64Array:
+        """Source frame of each row; sliced and strided reads keep the original numbering."""
+    def cell(self, frame: int) -> UnitCell | None: ...
+    @property
     def n_frames(self) -> int: ...
     @property
     def n_atoms(self) -> int: ...
@@ -27,7 +35,107 @@ def read(
     *,
     format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
     | None = None,
-) -> Trajectory: ...
+    frames: slice | None = None,
+    atoms: Sequence[int] | None = None,
+    memory_limit: int | None = None,
+) -> Trajectory:
+    """Read a trajectory, or a slice and atom subset of it, into one exactly sized buffer.
+
+    `frames` is a positive-stride `slice` of source frames and `atoms` the atom
+    indices to keep. XTC seeks; DCD and TRR decode and discard in between.
+    """
+
+@final
+class TrajectoryChunks:
+    """Blocks of frames from one trajectory; memory stays at one block."""
+
+    def __iter__(self) -> TrajectoryChunks: ...
+    def __next__(self) -> Trajectory: ...
+    def seek(self, frame: int) -> None:
+        """Move to the `frame`-th selected frame; DCD and TRR can only move forward."""
+    @property
+    def n_frames(self) -> int | None: ...
+    @property
+    def n_atoms(self) -> int: ...
+    @property
+    def chunk_frames(self) -> int: ...
+
+def read_chunks(
+    path: str | PathLike[str],
+    *,
+    chunk_frames: int = 256,
+    format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
+    | None = None,
+    frames: slice | None = None,
+    atoms: Sequence[int] | None = None,
+    memory_limit: int | None = None,
+) -> TrajectoryChunks: ...
+
+@final
+class FrameSeries:
+    """One value per streamed frame, with its source frame and time."""
+
+    @property
+    def frames(self) -> UInt64Array: ...
+    @property
+    def times(self) -> Float64Array: ...
+    @property
+    def values(self) -> Float64Array | UInt64Array: ...
+    def __len__(self) -> int: ...
+
+def rmsd_stream(
+    path: str | PathLike[str],
+    reference: int | Array,
+    *,
+    align: bool = True,
+    format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
+    | None = None,
+    frames: slice | None = None,
+    atoms: Sequence[int] | None = None,
+    memory_limit: int | None = None,
+    context: ExecutionContext | None = None,
+) -> FrameSeries:
+    """RMSD of every frame against a reference array or source frame, in constant memory."""
+
+def rmsf_stream(
+    path: str | PathLike[str],
+    *,
+    format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
+    | None = None,
+    frames: slice | None = None,
+    atoms: Sequence[int] | None = None,
+    memory_limit: int | None = None,
+    context: ExecutionContext | None = None,
+) -> Float64Array:
+    """Per-atom RMSF in constant memory; no alignment is applied."""
+
+def contact_counts_stream(
+    path: str | PathLike[str],
+    cutoff: float,
+    *,
+    backend: str = "auto",
+    format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
+    | None = None,
+    frames: slice | None = None,
+    atoms: Sequence[int] | None = None,
+    memory_limit: int | None = None,
+    context: ExecutionContext | None = None,
+) -> FrameSeries:
+    """Count unique atom pairs within `cutoff` in every frame, in constant memory."""
+
+def run_analysis_stream(
+    path: str | PathLike[str],
+    callback: Callable[[int, float | None, Float32Array], object],
+    *,
+    format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
+    | None = None,
+    frames: slice | None = None,
+    atoms: Sequence[int] | None = None,
+    memory_limit: int | None = None,
+    context: ExecutionContext | None = None,
+) -> int:
+    """Call `callback(frame, time, positions)` per frame; the GIL is free between calls."""
+
 def rmsd(
     positions: Array,
     *,

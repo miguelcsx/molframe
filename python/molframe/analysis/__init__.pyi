@@ -1,10 +1,38 @@
 from collections.abc import Sequence
-from typing import Literal, Protocol
+from typing import Literal, Protocol, Self
 
-from .. import Analysis, AnalysisPolicy, ExecutionContext, Float64Array, Query, Structure, Table
+from .. import (
+    Analysis,
+    AnalysisPolicy,
+    ExecutionContext,
+    Float32Array,
+    Float64Array,
+    Query,
+    Structure,
+    Table,
+)
 from .._structure import Selection
 
 type _RadiusSet = Literal["bondi", "amber_united", "charmm", "alvarez"]
+
+class HydrogenBondCandidateOptions:
+    def __new__(
+        cls,
+        *,
+        max_distance: float = 3.5,
+        maximum_candidates: int = 2_000_000,
+        backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    ) -> Self: ...
+
+def hydrogen_bond_candidates(
+    structure: Structure,
+    start: Float32Array,
+    end: Float32Array,
+    *,
+    options: HydrogenBondCandidateOptions | None = None,
+    context: ExecutionContext | None = None,
+) -> Table:
+    """Conservative original-row candidates; requires instantaneous geometric filtering."""
 
 class ArrayColumn(Protocol):
     @property
@@ -37,7 +65,9 @@ def contacts(
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
-) -> Analysis[ContactTable]: ...
+) -> Analysis[ContactTable]:
+    """Return atom pairs within ``cutoff``; indices refer to the analysed atoms (``atom_origin``)."""
+
 def hydrogen_bonds(
     structure: Structure,
     *,
@@ -54,7 +84,15 @@ def salt_bridges(
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
-) -> Analysis[Table]: ...
+) -> Analysis[Table]:
+    """Return oppositely charged group pairs within ``max_distance`` (N and O atoms).
+
+    Charged groups are the titratable amino-acid groups (Asp/Glu carboxylate O, Lys NZ, Arg
+    NE/NH1/NH2, chain termini) plus any atom with an annotated formal charge; histidine is
+    not treated as charged. Bonded and same-residue pairs are excluded. An input with
+    neither a titratable group nor an annotation is indeterminate, never an empty
+    ``complete`` table. Indices refer to the analysed atoms (see ``atom_origin``).
+    """
 
 class GridSpec:
     def __init__(
@@ -123,7 +161,11 @@ def chain_interface(
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[Table]:
-    """Residues of two chains within ``cutoff`` Å (a name matches a label or author label)."""
+    """Residues of two chains within ``cutoff`` Å.
+
+    A bare name matches a label or an author chain id and is refused when it means different
+    chains in the two; write ``"label:A"`` or ``"auth:A"`` to choose the namespace.
+    """
 
 def half_sphere_exposure(
     structure: Structure,
@@ -146,11 +188,30 @@ def native_contacts(
     target: Structure,
     *,
     cutoff: float,
-    tolerance: float,
+    tolerance: float = 0.0,
+    match: Literal["index", "names"] = "index",
+    mapping: Sequence[tuple[int, int]] | None = None,
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
-) -> Analysis[dict[str, float]]: ...
+) -> Analysis[dict[str, float]]:
+    """The fraction Q of the reference's contacts that ``target`` keeps.
+
+    A reference pair within ``cutoff`` ångström is native; it is kept when the
+    same pair is within ``cutoff + tolerance`` ångström in ``target``
+    (``tolerance`` is additive, in ångström, not a multiplier). With
+    ``tolerance=0.0`` a structure compared with itself has Q = 1. The contact is
+    a hard cutoff over all atom pairs, not the smoothed Best-Hummer-Eaton
+    switching function.
+
+    ``match="index"`` pairs equal atom indices and requires equal atom counts.
+    ``match="names"`` pairs atoms by chain, residue number, insertion code,
+    residue name and atom name and counts only contacts between atoms present in
+    both. ``mapping`` gives explicit ``(reference_atom, target_atom)`` index pairs
+    and takes precedence over ``match``.
+
+    The value holds ``native``, ``kept``, ``fraction`` and ``matched_atoms``.
+    """
 
 class DensityGrid:
     """A weighted density on a rectilinear grid."""
@@ -295,4 +356,10 @@ def sasa(
     Shrake-Rupley with ``points`` samples per atom. The radii are the policy's ``vdw_radii``,
     the hydrogens that count are its ``hydrogens``, and under ``crystal:<radius>`` the area is
     that of the atom among its symmetry mates. Use ``atom_origin`` to tie it to the input.
+
+    Waters and other heteroatoms of the analysed system occlude and receive areas; an
+    assumption records how many. A protein-only area needs an input without them: masking the
+    result by ``atom_origin`` drops their rows but not their occlusion of the polymer. An
+    element with no radius in the set (iron under ``bondi``) leaves its atoms ``NaN`` and
+    the result ``partial``, with a ``W6004`` warning naming the element and ``vdw_radii``.
     """

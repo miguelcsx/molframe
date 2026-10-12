@@ -41,7 +41,30 @@ def annotate(
     components: str | PathLike[str],
     *,
     version: str = "unversioned",
+    polymer_links: PolymerLinkPolicy | None = None,
 ) -> Structure: ...
+
+@final
+class PolymerLinkRule:
+    def __init__(
+        self, left_kind: int, left_atom: str, right_kind: int, right_atom: str
+    ) -> None: ...
+    @property
+    def left_kind(self) -> int: ...
+    @property
+    def left_atom(self) -> str: ...
+    @property
+    def right_kind(self) -> int: ...
+    @property
+    def right_atom(self) -> str: ...
+
+@final
+class PolymerLinkPolicy:
+    def __init__(self, angstrom: float, rules: list[PolymerLinkRule]) -> None: ...
+    @property
+    def angstrom(self) -> float | None: ...
+    @property
+    def rules(self) -> list[PolymerLinkRule]: ...
 
 @final
 class PolymerRoleRule:

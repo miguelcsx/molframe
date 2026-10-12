@@ -26,9 +26,19 @@ def clashes(
     tolerance: float = 0.4,
     radii: Literal["bondi", "amber_united", "charmm", "alvarez"] = "bondi",
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    exclude_one_four: bool = True,
+    perceive_bonds: bool = True,
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
-) -> Analysis[ClashTable]: ...
+) -> Analysis[ClashTable]:
+    """Pairs whose van der Waals spheres overlap by more than ``tolerance`` Å.
+
+    1-2, 1-3 and (unless ``exclude_one_four`` is false) 1-4 bonded pairs, and
+    pairs in different alternate locations, are never reported. ``perceive_bonds``
+    completes the bond table with intra-residue bonds, peptide/phosphodiester
+    links and disulfides before the exclusion, which a structure read from a
+    coordinate file needs because it carries no bonds.
+    """
 def bond_length_deviations(
     structure: Structure,
     *,

@@ -2,6 +2,9 @@
 
 from .._native import surface as _native
 
+NativeSurfaceProvider = _native.NativeSurfaceProvider
+MolecularSurface = _native.MolecularSurface
+native_surface = _native.native_surface
 Mesh = _native.Mesh
 Curvatures = _native.Curvatures
 SurfacePoints = _native.SurfacePoints
@@ -20,12 +23,15 @@ __all__ = [
     "BuriedSurface",
     "Curvatures",
     "Mesh",
+    "MolecularSurface",
+    "NativeSurfaceProvider",
     "SurfacePoints",
     "atom_depths",
     "buried_solvent_excluded_surface",
     "buried_surface",
     "cavities",
     "lee_richards",
+    "native_surface",
     "sasa",
     "solvent_excluded_surface",
     "surface_points",
