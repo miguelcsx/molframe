@@ -144,6 +144,29 @@ pub(crate) fn atom_local(expr: &PhysicalExpr) -> bool {
     }
 }
 
+/// Whether the expression removes atoms by negation, which fixes the
+/// universe later conjunction operands must read.
+pub(crate) fn excludes(expr: &PhysicalExpr) -> bool {
+    match expr {
+        PhysicalExpr::Not(_) => true,
+        PhysicalExpr::And(left, right) | PhysicalExpr::Or(left, right) => {
+            excludes(left) || excludes(right)
+        }
+        PhysicalExpr::Logical(logical) => logical_excludes(logical),
+        _ => false,
+    }
+}
+
+pub(crate) fn logical_excludes(expr: &Expr) -> bool {
+    match expr {
+        Expr::Not(_) => true,
+        Expr::And(left, right) | Expr::Or(left, right) => {
+            logical_excludes(left) || logical_excludes(right)
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn logical_atom_local(expr: &Expr) -> bool {
     match expr {
         Expr::All

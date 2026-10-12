@@ -110,12 +110,21 @@ impl PhysicalQuery {
 /// in the enclosing universe instead, so its targets and neighbours do not
 /// depend on which side of `and` it was written on; the final intersection
 /// still restricts it to the left result.
+///
+/// A negated left operand is an explicit exclusion, so the surroundings the
+/// right operand reads must not contain what it removed: `not X and within 4
+/// of X` keeps the written order and runs inside the left result.
 fn narrowed<'a>(
     atom_local: bool,
+    excludes: bool,
     universe: &'a AtomSelection,
     left: &'a AtomSelection,
 ) -> &'a AtomSelection {
-    if atom_local { left } else { universe }
+    if atom_local || excludes {
+        left
+    } else {
+        universe
+    }
 }
 
 /// Immutable evaluation dependencies plus evaluation-local warning state.
@@ -150,7 +159,12 @@ impl Context<'_> {
 
                 let second = self.eval_physical(
                     right,
-                    narrowed(crate::plan::atom_local(right), universe, &first),
+                    narrowed(
+                        crate::plan::atom_local(right),
+                        crate::plan::excludes(left),
+                        universe,
+                        &first,
+                    ),
                 )?;
                 Ok(first.intersect(&second))
             }
@@ -188,7 +202,12 @@ impl Context<'_> {
 
                 let second = self.eval(
                     right,
-                    narrowed(crate::plan::logical_atom_local(right), universe, &first),
+                    narrowed(
+                        crate::plan::logical_atom_local(right),
+                        crate::plan::logical_excludes(left),
+                        universe,
+                        &first,
+                    ),
                 )?;
                 Ok(first.intersect(&second))
             }
