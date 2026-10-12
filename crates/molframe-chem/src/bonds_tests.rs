@@ -67,6 +67,7 @@ fn pairwise(structure: &Structure) -> BTreeMap<Edge, String> {
                     atom_b: right.index(),
                     order: intra_residue_order(left, right),
                     provenance: BondProvenance::InferredDistance,
+                    kind: molframe_core::optional::OptionalSymbol::NONE,
                 });
             }
         }
@@ -288,6 +289,7 @@ fn perception_and_public_covalent_eligibility_share_chemical_boundaries() {
         (["C", "O"], ["A", "A"], 1.2, true, true),
         (["C", "O"], [".", "B"], 1.2, true, true),
         (["B", "C"], [".", "."], 1.2, false, false),
+        (["Si", "C"], [".", "."], 1.8, false, false),
         (["?", "C"], [".", "."], 1.2, false, false),
         (["Fe", "N"], [".", "."], 2.0, false, true),
         (["Fe", "N"], ["A", "B"], 2.0, false, false),
@@ -325,7 +327,7 @@ fn perception_and_public_covalent_eligibility_share_chemical_boundaries() {
 }
 
 #[test]
-fn a_budget_below_one_block_is_refused_not_overcommitted() {
+fn a_budget_below_one_block_falls_back_to_the_serial_walk_with_the_same_bonds() {
     let structure = structure(Sample::Large);
     let tiny = ExecutionContext::builder()
         .worker_budget(4)
@@ -333,5 +335,68 @@ fn a_budget_below_one_block_is_refused_not_overcommitted() {
         .scratch_policy(molframe_core::ScratchPolicy::new(0))
         .build()
         .expect("a valid context");
-    assert!(perceive_bonds_in(&structure, &tiny).is_err());
+    let found = perceive_bonds_in(&structure, &tiny).expect("a read never fails for scratch");
+    let reference = perceive_bonds_in(&structure, &ExecutionContext::default()).expect("dense");
+    assert_eq!(edges(&found), edges(&reference));
+    assert_eq!(tiny.reserved_bytes(), 0);
+}
+
+#[test]
+#[allow(clippy::cast_possible_wrap)]
+fn a_distant_outlier_does_not_make_the_grid_dense() {
+    use crate::grid::{CellGrid, CellKey};
+    let mut entries: Vec<(CellKey, u32)> = (0..500_u32)
+        .map(|atom| (CellKey([(atom % 8) as i32, (atom / 8 % 8) as i32, (atom / 64) as i32]), atom))
+        .collect();
+    let compact = CellGrid::build(entries.clone());
+    assert!(compact.is_dense());
+    entries.push((CellKey([1_500, 1_500, 1_500]), 500));
+    let spread = CellGrid::build(entries);
+    assert!(!spread.is_dense());
+    assert_eq!(spread.items().len(), 501);
+    assert!(spread.cell_count() <= 501);
+}
+
+/// Whether `metal` bonds to `donor` at `distance` ångström on the default window.
+fn bonds_at(metal: &str, donor: &str, distance: f32) -> bool {
+    let threshold = |symbol: &str| {
+        let element = molframe_core::Element::from_symbol(symbol).expect("a real element");
+        element_threshold(element).expect("the element has a bonding reach")
+    };
+    in_bonding_window(threshold(metal), threshold(donor), distance * distance)
+}
+
+#[test]
+fn coordination_distances_seen_in_real_sites_are_bonded() {
+    // Heme iron to pyrrole nitrogen in deoxyhaemoglobin spans 1.9 to 2.3 Å.
+    for distance in [1.91, 2.05, 2.16, 2.22, 2.23, 2.30] {
+        assert!(bonds_at("Fe", "N", distance), "Fe-N {distance}");
+    }
+    assert!(bonds_at("Fe", "S", 2.40), "iron-sulfur cluster Fe-S");
+    assert!(bonds_at("Fe", "Fe", 2.75), "Fe2S2 cluster Fe-Fe");
+    assert!(bonds_at("Zn", "S", 2.40), "zinc finger Zn-S");
+    assert!(bonds_at("Zn", "N", 2.25), "zinc finger Zn-N");
+    assert!(bonds_at("Mg", "O", 2.30), "Mg-O");
+    assert!(bonds_at("Ca", "O", 2.50), "Ca-O");
+}
+
+#[test]
+fn a_metal_does_not_bond_to_atoms_beyond_its_coordination_sphere() {
+    assert!(!bonds_at("Fe", "N", 2.60));
+    assert!(!bonds_at("Fe", "C", 3.30));
+    assert!(!bonds_at("Zn", "N", 2.80));
+    assert!(!bonds_at("Zn", "S", 2.80));
+    assert!(!bonds_at("Mg", "O", 2.70));
+    assert!(!bonds_at("Ca", "O", 3.00));
+}
+
+#[test]
+fn a_sparse_grid_is_not_charged_for_its_empty_cells() {
+    // 12 082 atoms in a bounding box of 900 000 slots: one block holds them all.
+    assert_eq!(expected_block_atoms(12_082, 900_000, 900_000), 12_082);
+    // A single block over fewer cells than atoms still holds every atom.
+    assert_eq!(expected_block_atoms(100, 10, 10), 100);
+    // Blocks cover their share of the cells, never more than the atoms.
+    assert_eq!(expected_block_atoms(12_082, 900_000, 4096), 55);
+    assert_eq!(expected_block_atoms(0, 0, 1), 0);
 }

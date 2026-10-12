@@ -176,6 +176,7 @@ fn build(
             atom_b: AtomIndex::new(second),
             order,
             provenance: BondProvenance::File,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = table.finish();
@@ -299,8 +300,7 @@ fn plain_bonds(bonds: &[MolBond]) -> Vec<(usize, usize, BondOrder)> {
 ///
 /// # Errors
 ///
-/// Returns a diagnostic when a bond names an absent atom or the molecule
-/// exceeds the structure index space.
+/// Returns a diagnostic when a bond names an absent atom or overflows.
 pub fn molecule_to_structure(name: &str, molecule: &Molecule) -> Result<Structure, Diagnostic> {
     build(name, &plain_sites(molecule), &plain_bonds(&molecule.bonds))
 }
@@ -479,8 +479,8 @@ pub fn small_cif_to_structure(model: &SmallCifStructure) -> Result<Structure, Di
                 .ok_or_else(|| consistency("the unit cell is degenerate"))?,
             _ => return Err(consistency("a site has no usable coordinates")),
         };
-        #[allow(clippy::cast_possible_truncation)]
-        let position = cartesian.map(|value| value as f32);
+        // A structure stores coordinates as f32, so an out-of-range value saturates.
+        let position = cartesian.map(crate::numeric::f64_to_f32);
         sites.push(Site {
             atom: MolAtom { element, position },
             name: atom.label.to_string(),

@@ -219,3 +219,51 @@ M  V30 1 O 0 0 0 0\nM  V30 END ATOM\nM  V30 END CTAB\nM  END\n";
         1
     );
 }
+
+/// A site whose Cartesian position exceeds the `f32` range saturates, so the
+/// structure keeps a finite coordinate instead of an infinity.
+///
+/// A structure stores positions as `f32`. A deposited cell can be large enough
+/// that a perfectly ordinary fractional coordinate orthogonalises beyond that
+/// range, and an unchecked narrowing would turn the value into an infinity: the
+/// atom would then be at an unrepresentable place, and every distance, angle and
+/// fit through it would be infinite too. Saturation keeps the position inside the
+/// type, which is a stated outcome rather than a silent one.
+#[test]
+fn a_position_beyond_the_f32_range_saturates_instead_of_becoming_an_infinity() {
+    let cell = UnitCell {
+        lengths: [1e40, 1e40, 1e40],
+        angles: [90.0, 90.0, 90.0],
+    };
+    let model = molframe_cif::SmallCifStructure {
+        name: "huge".into(),
+        cell: Some(cell),
+        space_group_name: None,
+        space_group_number: None,
+        symmetry_operations: Vec::new(),
+        atoms: vec![molframe_cif::SmallCifAtom {
+            label: "C1".into(),
+            type_symbol: "C".into(),
+            // Only a fractional coordinate, so the position comes from the cell.
+            fractional: Some([1.0, 0.0, 0.0]),
+            cartesian: None,
+            occupancy: None,
+            u_iso: None,
+            charge: None,
+        }],
+        bonds: Vec::new(),
+    };
+
+    let structure = small_cif_to_structure(&model).expect("a huge cell still lowers");
+    let position = structure.positions().first().copied().expect("one atom");
+    assert!(
+        position.iter().all(|axis| axis.is_finite()),
+        "a representable position must not become an infinity: {position:?}"
+    );
+    // Saturation picks one exact value, so the bits are the assertion: a
+    // tolerance would accept a merely nearby number, which is not the claim.
+    assert!(
+        position[0].to_bits() == f32::MAX.to_bits(),
+        "the oversized axis saturates at the range end: {position:?}"
+    );
+}

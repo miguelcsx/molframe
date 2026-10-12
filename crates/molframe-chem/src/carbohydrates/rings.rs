@@ -5,7 +5,7 @@ use super::snfg::UNKNOWN;
 use super::types::{Monosaccharide, SnfgSymbol};
 use crate::Component;
 use molframe_core::structure::ResidueRef;
-use molframe_core::{AtomIndex, BondAdjacency, Element, Structure};
+use molframe_core::{AtomIndex, BondAdjacency, Code, Diagnostic, Element, Structure};
 
 pub(super) fn residue_rings(
     structure: &Structure,
@@ -13,14 +13,16 @@ pub(super) fn residue_rings(
     residue: ResidueRef<'_>,
     component: Option<&Component>,
     symbol: Option<SnfgSymbol>,
+    remaining_steps: &mut usize,
     output: &mut Vec<Monosaccharide>,
-) {
-    let search = RingSearch {
+) -> Result<(), Diagnostic> {
+    let mut search = RingSearch {
         structure,
         graph,
         residue,
         component,
         symbol,
+        remaining_steps,
     };
     let mut path = [AtomIndex::new(0); 6];
     for atom in residue
@@ -28,8 +30,9 @@ pub(super) fn residue_rings(
         .filter(|atom| atom.element() == Some(Element::OXYGEN))
     {
         path[0] = atom.index();
-        search.extend(&mut path, 1, output);
+        search.extend(&mut path, 1, output)?;
     }
+    Ok(())
 }
 
 struct RingSearch<'a> {
@@ -38,13 +41,25 @@ struct RingSearch<'a> {
     residue: ResidueRef<'a>,
     component: Option<&'a Component>,
     symbol: Option<SnfgSymbol>,
+    remaining_steps: &'a mut usize,
 }
 
 impl RingSearch<'_> {
-    fn extend(&self, path: &mut [AtomIndex; 6], length: usize, output: &mut Vec<Monosaccharide>) {
+    fn extend(
+        &mut self,
+        path: &mut [AtomIndex; 6],
+        length: usize,
+        output: &mut Vec<Monosaccharide>,
+    ) -> Result<(), Diagnostic> {
         let current = path[length - 1];
         // The caller bounds malformed high-degree graphs before traversal.
         for next in self.graph.neighbours(current) {
+            if *self.remaining_steps == 0 {
+                return Err(Diagnostic::new(Code::E6008).with_message(
+                    "saccharide ring traversal exceeds its complete-inventory work budget",
+                ));
+            }
+            *self.remaining_steps -= 1;
             if *next == path[0] {
                 if length >= 5 && path[1] < path[length - 1] && self.chordless(&path[..length]) {
                     self.emit(&path[..length], output);
@@ -69,8 +84,9 @@ impl RingSearch<'_> {
                 continue;
             }
             path[length] = *next;
-            self.extend(path, length + 1, output);
+            self.extend(path, length + 1, output)?;
         }
+        Ok(())
     }
 
     fn chordless(&self, ring: &[AtomIndex]) -> bool {

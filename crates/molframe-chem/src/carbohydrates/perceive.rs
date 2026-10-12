@@ -8,6 +8,8 @@ use crate::{ComponentKind, ComponentProvider, PolymerLinkPolicy, apply_component
 use molframe_core::{BondOrder, BondTableBuilder, Code, Diagnostic, Structure};
 use std::collections::BTreeMap;
 
+const RING_TRAVERSAL_BUDGET: usize = 10_000_000;
+
 /// Perceives complete five/six-membered saccharide rings and their attachments.
 ///
 /// A provider adds internal CCD bonds through `apply_component_chemistry`, with
@@ -21,7 +23,8 @@ use std::collections::BTreeMap;
 ///
 /// # Errors
 ///
-/// Returns the existing diagnostic on provider storage failure.
+/// Returns a diagnostic on provider storage failure or when complete ring
+/// traversal exceeds its bounded work budget; no partial inventory is returned.
 ///
 /// ```
 /// use molframe_chem::{carbohydrates, CarbohydrateOptions};
@@ -63,6 +66,7 @@ pub fn carbohydrates(
     let ring_bonds = ring_bonds.finish();
     let graph = ring_bonds.adjacency(structure.atom_count());
     let mut components = BTreeMap::new();
+    let mut remaining_steps = RING_TRAVERSAL_BUDGET;
     for residue in structure.data().residues() {
         let Some(name) = residue.name() else {
             continue;
@@ -99,8 +103,9 @@ pub fn carbohydrates(
             residue,
             component,
             symbol,
+            &mut remaining_steps,
             &mut report.monosaccharides,
-        );
+        )?;
         if report.monosaccharides.len() == start {
             report.incomplete_residues.push(residue.index());
         }

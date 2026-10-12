@@ -136,6 +136,7 @@ _atom_site.Cartn_z
         atom_b: AtomIndex::new(count - 1),
         order: BondOrder::Single,
         provenance: BondProvenance::File,
+        kind: molframe_core::optional::OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     Structure::new(data)
@@ -145,6 +146,32 @@ fn perceive(structure: &Structure, size: usize) -> CarbohydrateReport {
     let provider = MemoryProvider::new(DictionaryVersion::new("test"), [component(size, "ZZZ")])
         .expect("provider");
     carbohydrates(structure, Some(&provider), CarbohydrateOptions::default()).expect("inventory")
+}
+
+#[test]
+fn an_exhausted_ring_walk_returns_a_diagnostic_instead_of_a_partial_inventory() {
+    let source = fixture(6, None, false, None, false);
+    let provider = MemoryProvider::new(DictionaryVersion::new("test"), [component(6, "ZZZ")])
+        .expect("provider");
+    let source =
+        crate::apply_component_chemistry(&source, &provider, crate::PolymerLinkPolicy::Disabled)
+            .expect("ring chemistry")
+            .structure;
+    let graph = source.data().bonds.adjacency(source.atom_count());
+    let residue = source.data().residues().next().expect("ring residue");
+    let mut output = Vec::new();
+    let error = super::super::rings::residue_rings(
+        &source,
+        graph,
+        residue,
+        None,
+        None,
+        &mut 0,
+        &mut output,
+    )
+    .expect_err("bounded traversal");
+    assert_eq!(error.code(), molframe_core::Code::E6008);
+    assert!(output.is_empty());
 }
 
 #[test]
@@ -239,6 +266,7 @@ fn declared_attachment_keeps_file_provenance_and_source_snapshot_unchanged() {
         atom_b: AtomIndex::new(6),
         order: BondOrder::Single,
         provenance: BondProvenance::File,
+        kind: molframe_core::optional::OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     let source = Structure::new(data);
@@ -268,6 +296,7 @@ fn competing_donors_and_saturated_or_unconnected_acceptors_are_refused() {
         atom_b: AtomIndex::new(3),
         order: BondOrder::Single,
         provenance: BondProvenance::File,
+        kind: molframe_core::optional::OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     assert!(perceive(&Structure::new(data), 6).terminal_links.is_empty());
@@ -287,6 +316,7 @@ fn existing_inferred_edges_obey_vacancy_and_distance_instead_of_becoming_declara
             atom_b: AtomIndex::new(if occupied { 7 } else { 6 }),
             order: BondOrder::Single,
             provenance: BondProvenance::InferredDistance,
+            kind: molframe_core::optional::OptionalSymbol::NONE,
         });
         data.bonds = bonds.finish();
         let report = perceive(&Structure::new(data), 6);

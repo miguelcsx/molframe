@@ -10,9 +10,13 @@ use crate::standard_bonds::standard_bond_order;
 use molframe_core::ExecutionContext;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic};
-use molframe_core::index::AtomIndex;
-use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
-use molframe_core::structure::{AtomRef, Structure};
+use molframe_core::index::{AtomIndex, ResidueIndex};
+use molframe_core::optional::OptionalSymbol;
+use molframe_core::parallel::{
+    BlockExecutionError, BlockPlan, map_blocks_in, try_for_each_block_in,
+};
+use molframe_core::structure::{AtomRef, ResidueRef, Structure};
+use molframe_core::{AltId, SymbolId};
 use std::ops::Range;
 
 /// Adds chemically plausible missing bonds to one immutable structure.
@@ -55,15 +59,14 @@ pub fn perceive_bonds_in(
     }
 
     add_polymer_links(structure, &mut output);
-    let thresholds: Vec<_> = structure
-        .data()
-        .atoms()
-        .map(|atom| atom.element().and_then(element_threshold))
-        .collect();
-    let largest = thresholds.iter().flatten().copied().fold(0.0_f32, f32::max);
+    let prepared = prepare_atoms(structure, context)?;
+    let largest = prepared
+        .iter()
+        .filter_map(|atom| atom.threshold)
+        .fold(0.0_f32, f32::max);
     let maximum = maximum_bonding_distance(largest, largest);
     if maximum > 0.0 && maximum.is_finite() {
-        add_grid_bonds(structure, &thresholds, maximum, &mut output, context)?;
+        add_grid_bonds(structure, &prepared, maximum, &mut output, context)?;
     }
 
     let mut data = structure.data().clone();
@@ -113,17 +116,71 @@ const EXPECTED_BONDS_PER_ATOM: usize = 8;
 /// Grid cells searched per block of the parallel pass.
 const CELLS_PER_BLOCK: usize = 4096;
 
+/// Atoms read per block while the per-atom facts are gathered.
+const PREPARE_ATOMS_PER_BLOCK: usize = 16_384;
+
+/// What the pair test needs from one atom, read once instead of once per pair.
+///
+/// Reading these through an atom handle costs a chunk lookup per field, which
+/// dominated the search when it was done for every candidate pair.
+#[derive(Clone, Copy, Default)]
+struct AtomFacts {
+    threshold: Option<f32>,
+    hydrogen: bool,
+    alt: AltId,
+    residue: Option<ResidueIndex>,
+    name: Option<SymbolId>,
+    component: Option<SymbolId>,
+}
+
+/// Reads [`AtomFacts`] for every atom, in atom order, on the worker budget.
+fn prepare_atoms(
+    structure: &Structure,
+    context: &ExecutionContext,
+) -> Result<Vec<AtomFacts>, Diagnostic> {
+    let count = structure.atom_count() as usize;
+    let plan = BlockPlan::new(count, PREPARE_ATOMS_PER_BLOCK);
+    let blocks = map_blocks_in(plan, context, |_, range: Range<usize>| {
+        range
+            .map(|index| {
+                u32::try_from(index)
+                    .ok()
+                    .and_then(|index| structure.atom(AtomIndex::new(index)))
+                    .map_or_else(AtomFacts::default, |atom| AtomFacts {
+                        threshold: atom.element().and_then(element_threshold),
+                        hydrogen: atom
+                            .element()
+                            .is_some_and(molframe_core::Element::is_hydrogen),
+                        alt: atom.alt_id().unwrap_or(AltId::BLANK),
+                        residue: atom.residue().map(ResidueRef::index),
+                        name: atom.name_symbol(),
+                        component: atom.component_id(),
+                    })
+            })
+            .collect::<Vec<_>>()
+    })
+    .map_err(|_| {
+        Diagnostic::new(Code::E1901)
+            .with_message("a worker thread panicked during bond perception")
+    })?;
+    let mut facts = Vec::with_capacity(count);
+    for block in blocks {
+        facts.extend(block);
+    }
+    Ok(facts)
+}
+
 fn add_grid_bonds(
     structure: &Structure,
-    thresholds: &[Option<f32>],
+    facts: &[AtomFacts],
     cutoff: f32,
     output: &mut BondTableBuilder,
     context: &ExecutionContext,
 ) -> Result<(), Diagnostic> {
-    let mut entries = Vec::with_capacity(thresholds.len());
-    for (atom, (position, threshold)) in structure.positions().iter().zip(thresholds).enumerate() {
+    let mut entries = Vec::with_capacity(facts.len());
+    for (atom, (position, fact)) in structure.positions().iter().zip(facts).enumerate() {
         let (Some(threshold), Some(cell), Ok(atom)) =
-            (*threshold, cell_for(*position, cutoff), u32::try_from(atom))
+            (fact.threshold, cell_for(*position, cutoff), u32::try_from(atom))
         else {
             continue;
         };
@@ -152,22 +209,18 @@ fn add_grid_bonds(
     } else {
         CELLS_PER_BLOCK
     };
-    let atoms_per_block = grid
-        .items()
-        .len()
-        .div_ceil(cells.max(1))
-        .saturating_mul(block_cells.min(cells.max(1)));
+    let atoms_per_block = expected_block_atoms(grid.items().len(), cells, block_cells);
     let bytes_per_block = atoms_per_block
         .saturating_mul(EXPECTED_BONDS_PER_ATOM)
         .saturating_mul(size_of::<BondRecord>());
-    try_for_each_block_in(
+    let searched = try_for_each_block_in(
         plan,
         context,
         bytes_per_block,
         |_, range| {
             let mut records = Vec::new();
             grid.visit_cells(range, |own, neighbourhood| {
-                search_cell(structure, &grid, own, neighbourhood, &mut records);
+                search_cell(structure, facts, &grid, own, neighbourhood, &mut records);
             });
             Ok::<_, Diagnostic>(records)
         },
@@ -177,61 +230,120 @@ fn add_grid_bonds(
             }
             Ok(())
         },
-    )
-    .map_err(|error| match error {
-        BlockExecutionError::Memory(error) => {
-            Diagnostic::new(Code::E1902).with_context("reason", error.to_string())
+    );
+    match searched {
+        Ok(()) => Ok(()),
+        // Parallel blocks are a speed-up, not a requirement: when the budget
+        // cannot hold their buffers the same cells are walked on this thread,
+        // in the same order, holding only one cell's bonds at a time. Bonds
+        // an earlier window already pushed repeat here; the builder keeps
+        // the first record of each pair. Reading
+        // a structure never fails for want of search scratch.
+        Err(BlockExecutionError::Memory(_)) => {
+            let mut records = Vec::new();
+            grid.visit_cells(0..cells, |own, neighbourhood| {
+                search_cell(structure, facts, &grid, own, neighbourhood, &mut records);
+                for record in records.drain(..) {
+                    output.push(record);
+                }
+            });
+            if context.cancellation().is_cancelled() {
+                return Err(Diagnostic::new(Code::E1904)
+                    .with_message("bond perception was cancelled"));
+            }
+            Ok(())
         }
-        BlockExecutionError::Cancelled => {
-            Diagnostic::new(Code::E1904).with_message("bond perception was cancelled")
+        Err(BlockExecutionError::Cancelled) => {
+            Err(Diagnostic::new(Code::E1904).with_message("bond perception was cancelled"))
         }
-        BlockExecutionError::Worker(_) => Diagnostic::new(Code::E1901)
-            .with_message("a worker thread panicked during bond perception"),
-        BlockExecutionError::Operation(error) => error,
-    })?;
-    Ok(())
+        Err(BlockExecutionError::Worker(_)) => Err(Diagnostic::new(Code::E1901)
+            .with_message("a worker thread panicked during bond perception")),
+        Err(BlockExecutionError::Operation(error)) => Err(error),
+    }
+}
+
+/// Atoms expected in one block: the block's share of the cells.
+///
+/// A dense grid counts the empty slots of its bounding box. Rounding atoms per
+/// cell up before scaling charged one atom for every empty cell and refused a
+/// sparse 12k-atom structure for 115 MB it never needed, so the share is
+/// scaled first and rounded once.
+fn expected_block_atoms(atoms: usize, cells: usize, block_cells: usize) -> usize {
+    let cells = cells.max(1);
+    atoms
+        .saturating_mul(block_cells.min(cells))
+        .div_ceil(cells)
 }
 
 /// Appends the bonds between one cell's atoms and everything in its neighbourhood.
 fn search_cell(
     structure: &Structure,
+    facts: &[AtomFacts],
     grid: &CellGrid<GridAtom>,
     own: Range<usize>,
     neighbourhood: &[Range<usize>],
     records: &mut Vec<BondRecord>,
 ) {
     for first in &grid.items()[own] {
+        let Some(left) = facts.get(first.atom as usize) else {
+            continue;
+        };
         for range in neighbourhood {
             for second in &grid.items()[range.clone()] {
                 if second.atom <= first.atom {
                     continue;
                 }
                 // Resolve thresholds once per atom and reject distant pairs
-                // before materialising handles. covalent_pair shares this window.
+                // before reading anything else. covalent_pair shares this window.
                 let distance_squared = squared_distance(first.position, second.position);
                 if !in_bonding_window(first.threshold, second.threshold, distance_squared) {
                     continue;
                 }
-                let (Some(left), Some(right)) = (
-                    structure.atom(AtomIndex::new(first.atom)),
-                    structure.atom(AtomIndex::new(second.atom)),
-                ) else {
+                let Some(right) = facts.get(second.atom as usize) else {
                     continue;
                 };
                 // Perception retains coordination; only covalent_pair excludes
                 // metals. Both share conformer and H–H eligibility.
-                if !pair_compatible(left, right) {
+                if !facts_compatible(left, right) {
                     continue;
                 }
                 records.push(BondRecord {
                     atom_a: AtomIndex::new(first.atom),
                     atom_b: AtomIndex::new(second.atom),
-                    order: intra_residue_order(left, right),
+                    order: facts_order(structure, left, right),
                     provenance: BondProvenance::InferredDistance,
+                    // Distance inference says two atoms are bonded; it says nothing
+                    // about a deposited connection class.
+                    kind: OptionalSymbol::NONE,
                 });
             }
         }
     }
+}
+
+/// [`pair_compatible`] on facts read ahead of the search.
+fn facts_compatible(left: &AtomFacts, right: &AtomFacts) -> bool {
+    !(left.hydrogen && right.hydrogen)
+        && (left.alt.is_blank() || right.alt.is_blank() || left.alt == right.alt)
+}
+
+/// [`intra_residue_order`] on facts read ahead of the search.
+fn facts_order(structure: &Structure, left: &AtomFacts, right: &AtomFacts) -> BondOrder {
+    let (Some(left_residue), Some(right_residue)) = (left.residue, right.residue) else {
+        return BondOrder::Single;
+    };
+    if left_residue != right_residue {
+        return BondOrder::Single;
+    }
+    let dictionary = &structure.data().dictionary;
+    let (Some(component), Some(left_name), Some(right_name)) = (
+        left.component.and_then(|symbol| dictionary.resolve(symbol)),
+        left.name.and_then(|symbol| dictionary.resolve(symbol)),
+        right.name.and_then(|symbol| dictionary.resolve(symbol)),
+    ) else {
+        return BondOrder::Single;
+    };
+    standard_bond_order(component, left_name, right_name)
 }
 
 fn add_polymer_links(structure: &Structure, output: &mut BondTableBuilder) {
@@ -264,6 +376,9 @@ fn add_link(left: AtomRef<'_>, right: AtomRef<'_>, output: &mut BondTableBuilder
         atom_b: right.index(),
         order: BondOrder::Polymeric,
         provenance: BondProvenance::InferredDistance,
+        // The linkage is a polymer connection the distance implies, not a
+        // deposited `struct_conn` row with a class of its own.
+        kind: OptionalSymbol::NONE,
     });
 }
 
@@ -290,6 +405,7 @@ fn pair_compatible(left: AtomRef<'_>, right: AtomRef<'_>) -> bool {
     !both_hydrogen && alt_compatible(left, right)
 }
 
+#[cfg(test)]
 fn intra_residue_order(left: AtomRef<'_>, right: AtomRef<'_>) -> BondOrder {
     let (Some(left_residue), Some(right_residue)) = (left.residue(), right.residue()) else {
         return BondOrder::Single;
@@ -323,6 +439,14 @@ fn squared_distance(left: [f32; 3], right: [f32; 3]) -> f32 {
     left.iter().zip(right).map(|(a, b)| (a - b) * (a - b)).sum()
 }
 
+/// The bonding reach of one element, in ångström, or `None` when this reader
+/// has no reference value for it.
+///
+/// An element with no entry takes part in no inferred bond at all: perception
+/// leaves it to deposited connectivity rather than guessing a radius. Selenium
+/// is the case that matters in practice — selenomethionine's `SE` is a real
+/// covalent substituent — but the same list governs every other element, and
+/// widening it is a data decision, not a code one.
 fn element_threshold(element: molframe_core::Element) -> Option<f32> {
     match element.symbol() {
         "H" => Some(1.42),
@@ -332,7 +456,32 @@ fn element_threshold(element: molframe_core::Element) -> Option<f32> {
         "P" => Some(2.00),
         "S" => Some(1.90),
         "F" | "Cl" | "Br" | "I" => Some(1.80),
-        symbol if is_metal(symbol) => Some(2.70),
+        symbol if is_metal(symbol) => metal_threshold(symbol),
+        _ => None,
+    }
+}
+
+/// The coordination reach of one metal, in ångström, on the same scale as the
+/// non-metal thresholds.
+///
+/// A metal–ligand bond is accepted up to `(metal + ligand) / 1.95`, so a metal's
+/// value is chosen so that the longest ordinary coordination distance of that
+/// metal to a nitrogen, oxygen or sulfur donor still falls inside the window. One
+/// shared value cannot do it: a heme iron sits 1.9–2.3 Å from its pyrrole
+/// nitrogens and a calcium 2.3–2.6 Å from its oxygens, so a single compromise
+/// either drops iron–nitrogen bonds that are really there or lets small metals
+/// reach through to neighbours that are not coordinated.
+fn metal_threshold(symbol: &str) -> Option<f32> {
+    match symbol {
+        "Li" => Some(2.80),
+        "Na" => Some(3.30),
+        "K" => Some(3.90),
+        "Mg" | "Mn" | "Fe" | "Co" | "Ni" | "Cu" | "Au" | "Cr" | "V" => Some(2.90),
+        "Ca" => Some(3.30),
+        "Zn" => Some(2.85),
+        "Cd" | "Mo" | "W" | "Ag" => Some(3.10),
+        "Hg" => Some(3.00),
+        "Al" => Some(2.80),
         _ => None,
     }
 }
@@ -356,7 +505,6 @@ fn is_metal(symbol: &str) -> bool {
             | "Hg"
             | "Au"
             | "Al"
-            | "Si"
             | "Cr"
             | "V"
             | "W"
