@@ -7,6 +7,7 @@
 mod anisotropy;
 mod atoms;
 mod bonds;
+mod bonds_symmetry;
 mod diagnostics;
 mod ensemble;
 mod entry;

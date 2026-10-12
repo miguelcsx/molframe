@@ -77,12 +77,6 @@ impl<'a> CanonicalProjection<'a> {
         self.options
     }
 
-    /// Connection type explicitly chosen for generated canonical bond rows.
-    #[must_use]
-    pub fn connection_type_id(self) -> Option<&'a str> {
-        self.options.connection_type_id()
-    }
-
     /// Database sequence references retained by the structure.
     #[must_use]
     pub fn sequence_references(self) -> Option<&'a SequenceReferences> {

@@ -77,22 +77,30 @@ pub(super) fn write(out: &mut impl fmt::Write, structure: &Structure) {
                     "loop_\n_struct_sheet_range.sheet_id\n_struct_sheet_range.id\n\
                      _struct_sheet_range.beg_label_comp_id\n_struct_sheet_range.beg_label_asym_id\n\
                      _struct_sheet_range.beg_label_seq_id\n_struct_sheet_range.end_label_comp_id\n\
-                     _struct_sheet_range.end_label_asym_id\n_struct_sheet_range.end_label_seq_id\n"
+                     _struct_sheet_range.end_label_asym_id\n_struct_sheet_range.end_label_seq_id\n\
+                     _struct_sheet_range.beg_auth_comp_id\n_struct_sheet_range.beg_auth_asym_id\n\
+                     _struct_sheet_range.beg_auth_seq_id\n_struct_sheet_range.end_auth_comp_id\n\
+                     _struct_sheet_range.end_auth_asym_id\n_struct_sheet_range.end_auth_seq_id\n"
                 } else {
                     "loop_\n_struct_conf.conf_type_id\n_struct_conf.id\n\
                      _struct_conf.pdbx_PDB_helix_class\n_struct_conf.beg_label_comp_id\n\
                      _struct_conf.beg_label_asym_id\n_struct_conf.beg_label_seq_id\n\
                      _struct_conf.end_label_comp_id\n_struct_conf.end_label_asym_id\n\
-                     _struct_conf.end_label_seq_id\n"
+                     _struct_conf.end_label_seq_id\n\
+                     _struct_conf.beg_auth_comp_id\n_struct_conf.beg_auth_asym_id\n\
+                     _struct_conf.beg_auth_seq_id\n_struct_conf.end_auth_comp_id\n\
+                     _struct_conf.end_auth_asym_id\n_struct_conf.end_auth_seq_id\n"
                 });
             }
             *id += 1;
             if sheet {
                 let _ = writeln!(
                     out,
-                    "S{id} 1 {} {}",
+                    "S{id} 1 {} {} {} {}",
                     Endpoint(first, chain),
-                    Endpoint(last, chain)
+                    Endpoint(last, chain),
+                    AuthEndpoint(first, chain),
+                    AuthEndpoint(last, chain)
                 );
             } else {
                 let (conf_type, class) = match kind {
@@ -106,9 +114,11 @@ pub(super) fn write(out: &mut impl fmt::Write, structure: &Structure) {
                 };
                 let _ = writeln!(
                     out,
-                    "{conf_type} C{id} {class} {} {}",
+                    "{conf_type} C{id} {class} {} {} {} {}",
                     Endpoint(first, chain),
-                    Endpoint(last, chain)
+                    Endpoint(last, chain),
+                    AuthEndpoint(first, chain),
+                    AuthEndpoint(last, chain)
                 );
             }
         });
@@ -122,11 +132,16 @@ const fn representable(kind: Ss) -> bool {
     kind.is_helix() || matches!(kind, Ss::Strand | Ss::Turn)
 }
 
+/// The residue's state when the file itself deposited it; states derived on
+/// read (DSSP, the Cα-only fallback) are analysis and are not written back.
 fn state(structure: &Structure, residue: ResidueRef<'_>) -> Ss {
-    match structure
-        .secondary_structure()
-        .get(residue.index().as_usize())
+    let index = residue.index().as_usize();
+    if let Some(molframe_core::SecondarySource::Dssp | molframe_core::SecondarySource::CaOnly) =
+        structure.secondary_source().get(index)
     {
+        return Ss::Unknown;
+    }
+    match structure.secondary_structure().get(index) {
         Some(kind) => *kind,
         None => Ss::Unknown,
     }
@@ -166,6 +181,28 @@ impl Display for Endpoint<'_> {
             return Err(fmt::Error);
         };
         write!(out, "{} {} {sequence}", quoted(component), quoted(chain))
+    }
+}
+
+/// The author-side identity of an endpoint, which readers that address residues
+/// by deposited numbering need; an absent part is the unknown marker.
+struct AuthEndpoint<'a>(ResidueRef<'a>, ChainRef<'a>);
+
+impl Display for AuthEndpoint<'_> {
+    fn fmt(&self, out: &mut Formatter<'_>) -> fmt::Result {
+        let residue = self.0;
+        match residue.auth_name().or(residue.name()) {
+            Some(component) => write!(out, "{} ", quoted(component))?,
+            None => out.write_str("? ")?,
+        }
+        match self.1.auth_label().or(self.1.label()) {
+            Some(chain) => write!(out, "{} ", quoted(chain))?,
+            None => out.write_str("? ")?,
+        }
+        match residue.auth_seq_id().or(residue.label_seq_id()) {
+            Some(sequence) => write!(out, "{sequence}"),
+            None => out.write_str("?"),
+        }
     }
 }
 

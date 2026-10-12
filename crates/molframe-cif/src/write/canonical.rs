@@ -71,9 +71,9 @@ fn render_canonical(
     write_cell(out, structure);
     write_entities(out, structure);
     super::references::write(out, structure);
-    super::secondary::write(out, structure);
+    super::supplement::write(out, structure, options);
     write_atoms(out, projection)?;
-    super::bonds::write(out, structure, options)?;
+    super::bonds::write(out, structure)?;
     write_anisotropy(out, structure);
     Ok(())
 }
@@ -88,9 +88,6 @@ fn write_entry_metadata(out: &mut impl fmt::Write, structure: &Structure) {
     }
     if let Some(method) = &entry.method {
         let _ = writeln!(out, "_exptl.method   {}\n#", quoted(method));
-    }
-    if let Some(resolution) = entry.resolution {
-        let _ = writeln!(out, "_refine.ls_d_res_high   {resolution:.4}\n#");
     }
 }
 

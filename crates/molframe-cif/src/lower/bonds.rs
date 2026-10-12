@@ -1,11 +1,13 @@
 //! Explicit connectivity lowering from `struct_conn`.
 
+use super::bonds_symmetry::{OperatorTable, Unrepresentable, unrepresentable};
 use crate::document::{Category, CifValue, DataBlock};
 use crate::lower::diagnostics::at_source_row;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use molframe_core::hashing::{IdentityBuildHasher, IdentityHashMap, IdentityHashSet};
 use molframe_core::index::AtomIndex;
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, StructureData};
 use molframe_core::symbol::SymbolId;
 
@@ -66,24 +68,49 @@ impl Endpoint {
     }
 }
 
-struct Connection {
+/// One `struct_conn` row, ready to become a bond or to be refused.
+struct Connection<'a> {
     row: usize,
     atom_a: Endpoint,
     atom_b: Endpoint,
     order: BondOrder,
     provenance: BondProvenance,
+    /// The deposited `conn_type_id`, interned in the owning structure's
+    /// dictionary, or absent when the row carried no classification at all.
+    kind: OptionalSymbol,
+    /// Set when a partner lies outside this asymmetric unit, which the bond graph
+    /// cannot express.
+    symmetry: Option<Unrepresentable<'a>>,
 }
 
 pub(super) fn read(block: &DataBlock, data: &mut StructureData, findings: &mut Diagnostics) {
     let Some(category) = block.category("struct_conn") else {
         return;
     };
-    let connections = connections(category, data);
+    let operators = OperatorTable::of(block);
+    let connections = connections(category, data, findings, &operators);
     let (mut label, mut auth) = requested_maps(&connections);
     match_atoms(data, &mut label, &mut auth);
 
     let mut bonds = BondTableBuilder::new();
     for connection in connections {
+        // A partner on a neighbouring crystal image has no atom in this
+        // asymmetric unit to point at. Lowering it to the atom that happens to
+        // share the identifiers would invent a local bond the deposition does
+        // not describe, so the connection is skipped and named instead. It is a
+        // warning rather than an error: the atoms are all intact, and failing
+        // the whole read would punish every deposition with a symmetry-mate
+        // link for a row that was never a bond of this asymmetric unit.
+        if let Some(found) = connection.symmetry {
+            findings.push(at_source_row(
+                Diagnostic::new(Code::W3013)
+                    .in_category("struct_conn")
+                    .with_context("partner", found.partner)
+                    .with_context("symmetry", found.value),
+                connection.row,
+            ));
+            continue;
+        }
         let atom_a = connection.atom_a.resolve(&label, &auth);
         let atom_b = connection.atom_b.resolve(&label, &auth);
         let (Some(atom_a), Some(atom_b)) = (atom_a, atom_b) else {
@@ -98,33 +125,77 @@ pub(super) fn read(block: &DataBlock, data: &mut StructureData, findings: &mut D
             atom_b,
             order: connection.order,
             provenance: connection.provenance,
+            kind: connection.kind,
         });
     }
     data.bonds = bonds.finish();
 }
 
-fn connections(category: &Category, data: &StructureData) -> Vec<Connection> {
+fn connections<'a>(
+    category: &'a Category,
+    data: &mut StructureData,
+    findings: &mut Diagnostics,
+    operators: &OperatorTable,
+) -> Vec<Connection<'a>> {
     let mut output = Vec::with_capacity(category.row_count());
     for row in 0..category.row_count() {
-        if !is_connectivity(category.text("conn_type_id", row)) {
+        let recorded = category.text("conn_type_id", row);
+        if !is_connectivity(recorded) {
             continue;
         }
+        // The classification is interned exactly as the deposition wrote it, so a
+        // writer can hand it back rather than inventing one.
+        let kind = match recorded {
+            Some(text) => {
+                if let Ok(symbol) = data.dictionary.intern(text) {
+                    OptionalSymbol::some(symbol)
+                } else {
+                    findings.push(
+                        Diagnostic::new(Code::E1901)
+                            .with_message("the dictionary is full")
+                            .in_category("struct_conn"),
+                    );
+                    OptionalSymbol::NONE
+                }
+            }
+            None => OptionalSymbol::NONE,
+        };
+        let symmetry = unrepresentable(
+            category.text("ptnr1_symmetry", row),
+            category.text("ptnr2_symmetry", row),
+            operators,
+        );
+        let (label_a, auth_a) = row_keys(category, row, 1, data);
+        let (label_b, auth_b) = row_keys(category, row, 2, data);
         output.push(Connection {
             row,
-            atom_a: endpoint(category, row, 1, data),
-            atom_b: endpoint(category, row, 2, data),
+            atom_a: Endpoint {
+                label: label_a,
+                auth: auth_a,
+            },
+            atom_b: Endpoint {
+                label: label_b,
+                auth: auth_b,
+            },
             order: order(category.text("pdbx_value_order", row)),
             provenance: provenance(category.text("details", row)),
+            kind,
+            symmetry,
         });
     }
     output
 }
 
-fn endpoint(category: &Category, row: usize, partner: u8, data: &StructureData) -> Endpoint {
-    Endpoint {
-        label: row_key(category, row, partner, Namespace::Label, data),
-        auth: row_key(category, row, partner, Namespace::Author, data),
-    }
+fn row_keys(
+    category: &Category,
+    row: usize,
+    partner: u8,
+    data: &StructureData,
+) -> (Option<AtomKey>, Option<AtomKey>) {
+    (
+        row_key(category, row, partner, Namespace::Label, data),
+        row_key(category, row, partner, Namespace::Author, data),
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -217,7 +288,7 @@ fn endpoint_items(partner: u8, namespace: Namespace) -> Option<EndpointItems> {
     }
 }
 
-fn requested_maps(connections: &[Connection]) -> (AtomMap, AtomMap) {
+fn requested_maps(connections: &[Connection<'_>]) -> (AtomMap, AtomMap) {
     let capacity = connections.len().saturating_mul(2);
     let mut label = AtomMap::with_capacity_and_hasher(capacity, IdentityBuildHasher::default());
     let mut auth = AtomMap::with_capacity_and_hasher(capacity, IdentityBuildHasher::default());
@@ -322,16 +393,18 @@ fn auth_key(chain: ChainRef<'_>, residue: ResidueRef<'_>, atom: AtomRef<'_>) -> 
     })
 }
 
+/// Whether a `conn_type_id` names connectivity the bond graph can carry, rather
+/// than one of the other interaction classes the dictionary defines.
+///
+/// A row with no type at all is connectivity: the class is recorded as absent and
+/// the endpoints decide what the row says.
 fn is_connectivity(kind: Option<&str>) -> bool {
-    match kind {
-        Some(kind) => {
-            starts_with_ignore_ascii_case(kind, "covale")
-                || starts_with_ignore_ascii_case(kind, "disulf")
-                || starts_with_ignore_ascii_case(kind, "metalc")
-                || starts_with_ignore_ascii_case(kind, "modres")
-        }
-        None => true,
-    }
+    let Some(kind) = kind else {
+        return true;
+    };
+    ["covale", "disulf", "metalc", "modres"]
+        .iter()
+        .any(|prefix| starts_with_ignore_ascii_case(kind, prefix))
 }
 
 fn starts_with_ignore_ascii_case(value: &str, prefix: &str) -> bool {

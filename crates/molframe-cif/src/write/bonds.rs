@@ -36,9 +36,6 @@ pub(super) fn preflight(
     if !options.generates_connection_ids() {
         return Err(CifWriteError::ConnectionIdsNotEnabled);
     }
-    if options.connection_type_id().is_none_or(str::is_empty) {
-        return Err(CifWriteError::MissingConnectionTypeId);
-    }
     for (position, bond) in bonds.enumerate() {
         let atom_a = atom(structure, position, bond.atom_a.get())?;
         let atom_b = atom(structure, position, bond.atom_b.get())?;
@@ -48,11 +45,7 @@ pub(super) fn preflight(
     Ok(())
 }
 
-pub(super) fn write(
-    out: &mut impl fmt::Write,
-    structure: &Structure,
-    options: &CifWriteOptions,
-) -> Result<(), CifWriteError> {
+pub(super) fn write(out: &mut impl fmt::Write, structure: &Structure) -> Result<(), CifWriteError> {
     let bonds = structure
         .data()
         .bonds
@@ -66,28 +59,50 @@ pub(super) fn write(
     {
         return Ok(());
     }
-    let Some(connection_type) = options.connection_type_id() else {
-        return Err(CifWriteError::MissingConnectionTypeId);
-    };
-    let connection_type = quoted(connection_type);
     let _ = out.write_str(HEADER);
     for (position, bond) in bonds.enumerate() {
         let atom_a = atom(structure, position, bond.atom_a.get())?;
         let atom_b = atom(structure, position, bond.atom_b.get())?;
         let a = endpoint(structure, atom_a, position, 1)?;
         let b = endpoint(structure, atom_b, position, 2)?;
+        // The bond's own classification, as deposited. A bond whose source
+        // recorded none is written as unknown: asserting a class the input never
+        // stated would turn a metal coordination or a disulfide into a covalent
+        // bond the moment the file is read back.
+        let kind = ConnectionKind {
+            structure,
+            kind: bond.kind,
+        };
+        // The trailing `?` is the `details` item the header declares; this writer
+        // does not record a provenance note there.
         let _ = writeln!(
             out,
-            "{} {} {} {} {} ?",
+            "{} {kind} {a} {b} {} ?",
             position + 1,
-            connection_type,
-            a,
-            b,
             order(bond.order),
         );
     }
     let _ = out.write_str("#\n");
     Ok(())
+}
+
+/// The `conn_type_id` of one bond, or the dictionary's unknown marker.
+struct ConnectionKind<'a> {
+    structure: &'a Structure,
+    kind: molframe_core::OptionalSymbol,
+}
+
+impl Display for ConnectionKind<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        match self.kind.get() {
+            Some(symbol) => match self.structure.resolve(symbol) {
+                Some(text) if !text.is_empty() => Display::fmt(&quoted(text), formatter),
+                Some(_) => formatter.write_str("?"),
+                None => Err(fmt::Error),
+            },
+            None => formatter.write_str("?"),
+        }
+    }
 }
 
 fn atom(structure: &Structure, bond: usize, atom: u32) -> Result<AtomRef<'_>, CifWriteError> {

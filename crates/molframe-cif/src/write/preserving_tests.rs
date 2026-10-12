@@ -55,8 +55,7 @@ fn document(text: &str) -> Document {
 fn write_canonical(structure: &Structure) -> String {
     let options = crate::CifWriteOptions::new()
         .with_block_id("TEST")
-        .with_generated_connection_ids()
-        .with_connection_type_id("covale");
+        .with_generated_connection_ids();
     match crate::write_canonical_with_options(structure, &options) {
         Ok(text) => text,
         Err(error) => panic!("canonical write failed: {error}"),

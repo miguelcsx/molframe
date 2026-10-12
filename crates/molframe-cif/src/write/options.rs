@@ -8,18 +8,48 @@ use std::io;
 pub struct CifWriteOptions {
     block_id: Option<Box<str>>,
     generate_connection_ids: bool,
-    connection_type_id: Option<Box<str>>,
+    extra_categories: Option<Box<str>>,
 }
 
 impl CifWriteOptions {
-    /// Starts with no invented identifiers.
+    /// Starts with deterministic connection identifiers and no explicit block id.
+    ///
+    /// A connection's identifier is not retained by the bond graph, so a
+    /// canonical file numbers its connections in order. The numbering carries no
+    /// meaning of its own; [`Self::without_generated_connection_ids`] refuses
+    /// instead for a caller that wants nothing invented.
     #[must_use]
     pub const fn new() -> Self {
         Self {
             block_id: None,
-            generate_connection_ids: false,
-            connection_type_id: None,
+            generate_connection_ids: true,
+            extra_categories: None,
         }
+    }
+
+    /// Refuses connectivity rather than numbering its connections.
+    #[must_use]
+    pub const fn without_generated_connection_ids(mut self) -> Self {
+        self.generate_connection_ids = false;
+        self
+    }
+
+    /// Appends already-rendered mmCIF categories to the output.
+    ///
+    /// For metadata the generic structure keeps in a typed extension (assemblies,
+    /// non-crystallographic operators, space group) that this crate cannot see.
+    /// The text must hold complete categories and no data-block header.
+    #[must_use]
+    pub fn with_extra_categories(mut self, text: impl Into<Box<str>>) -> Self {
+        let text = text.into();
+        self.extra_categories = (!text.is_empty()).then_some(text);
+        self
+    }
+
+    /// Rendered categories appended by the caller.
+    #[must_use]
+    pub fn extra_categories(&self) -> Option<&str> {
+        self.extra_categories.as_deref()
     }
 
     /// Uses this explicit data-block identifier instead of `_entry.id`.
@@ -31,34 +61,24 @@ impl CifWriteOptions {
 
     /// Allows deterministic `_struct_conn.id` values when connectivity exists.
     ///
-    /// The core bond graph does not retain a deposited connection identifier,
-    /// so canonical connectivity cannot be written unless this choice is made.
+    /// This is the default; it re-enables the choice after
+    /// [`Self::without_generated_connection_ids`].
+    /// The connection's own `conn_type_id` travels with the bond and is written
+    /// from it, so no class is chosen here.
     #[must_use]
     pub const fn with_generated_connection_ids(mut self) -> Self {
         self.generate_connection_ids = true;
         self
     }
 
-    /// Declares the `_struct_conn.conn_type_id` assigned to graph bonds.
-    ///
-    /// The generic bond graph retains order and provenance but not the source
-    /// dictionary's connection classification, so it must be supplied.
+    /// The explicit data-block identifier, when one was chosen.
     #[must_use]
-    pub fn with_connection_type_id(mut self, value: impl Into<Box<str>>) -> Self {
-        self.connection_type_id = Some(value.into());
-        self
-    }
-
-    pub(crate) fn block_id(&self) -> Option<&str> {
+    pub fn block_id(&self) -> Option<&str> {
         self.block_id.as_deref()
     }
 
     pub(crate) const fn generates_connection_ids(&self) -> bool {
         self.generate_connection_ids
-    }
-
-    pub(crate) fn connection_type_id(&self) -> Option<&str> {
-        self.connection_type_id.as_deref()
     }
 }
 
@@ -111,8 +131,6 @@ pub enum CifWriteError {
     },
     /// Connectivity needs identifiers that the lowered graph does not retain.
     ConnectionIdsNotEnabled,
-    /// Connectivity has no explicitly declared dictionary connection type.
-    MissingConnectionTypeId,
     /// A secondary range endpoint lacks a required label identifier.
     MissingSecondaryField {
         /// Zero-based residue position.
@@ -183,9 +201,6 @@ impl Display for CifWriteError {
             ),
             Self::ConnectionIdsNotEnabled => formatter.write_str(
                 "canonical connectivity requires explicit generated connection identifiers",
-            ),
-            Self::MissingConnectionTypeId => formatter.write_str(
-                "canonical connectivity requires an explicit `_struct_conn.conn_type_id`",
             ),
         }
     }

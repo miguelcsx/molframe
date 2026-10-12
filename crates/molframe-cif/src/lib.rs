@@ -39,6 +39,7 @@ pub use small_cif::{
     lower_small_cif, lower_small_cif_with_options,
 };
 #[doc(hidden)]
+pub use write::supplement_text;
 pub use write::{
     CanonicalAtomRow, CanonicalProjection, CanonicalValue, canonical_projection,
     declared_polymer_types,
