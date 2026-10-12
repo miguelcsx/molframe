@@ -102,6 +102,22 @@ impl PhysicalQuery {
     }
 }
 
+/// Picks the universe the right operand of a conjunction is evaluated in.
+///
+/// An operand whose answer for one atom depends only on that atom may run
+/// inside the left result, which is cheaper and cannot change the outcome. An
+/// operand that reads its surroundings (`within`, `byres`, `bonded`, ...) runs
+/// in the enclosing universe instead, so its targets and neighbours do not
+/// depend on which side of `and` it was written on; the final intersection
+/// still restricts it to the left result.
+fn narrowed<'a>(
+    atom_local: bool,
+    universe: &'a AtomSelection,
+    left: &'a AtomSelection,
+) -> &'a AtomSelection {
+    if atom_local { left } else { universe }
+}
+
 /// Immutable evaluation dependencies plus evaluation-local warning state.
 struct Context<'a> {
     structure: &'a Structure,
@@ -132,7 +148,10 @@ impl Context<'_> {
                     return Ok(first);
                 }
 
-                let second = self.eval_physical(right, &first)?;
+                let second = self.eval_physical(
+                    right,
+                    narrowed(crate::plan::atom_local(right), universe, &first),
+                )?;
                 Ok(first.intersect(&second))
             }
             PhysicalExpr::Or(left, right) => {
@@ -167,7 +186,10 @@ impl Context<'_> {
                     return Ok(first);
                 }
 
-                let second = self.eval(right, &first)?;
+                let second = self.eval(
+                    right,
+                    narrowed(crate::plan::logical_atom_local(right), universe, &first),
+                )?;
                 Ok(first.intersect(&second))
             }
             Expr::Or(left, right) => {

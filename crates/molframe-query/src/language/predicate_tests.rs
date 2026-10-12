@@ -73,3 +73,16 @@ fn an_element_matches_whatever_case_the_query_and_file_use() {
     assert_eq!(deposited_count("element C"), 1);
     assert_eq!(deposited_count("element N C"), 2);
 }
+
+#[test]
+fn single_symbol_predicates_agree_with_their_compound_forms() {
+    // The per-atom symbol fast path must answer exactly what the residue-level
+    // route answers.
+    assert_eq!(deposited_count("name CA and resname VAL"), 1);
+    assert_eq!(deposited_count("not name CA"), 2);
+    assert_eq!(deposited_count("name N or name FE"), 2);
+    assert_eq!(deposited_count("name CA and not name CA"), 0);
+    assert_eq!(deposited_count("name FE"), 1);
+    assert_eq!(deposited_count("name XX"), 0);
+    assert_eq!(deposited_count("name CA N and chain A"), 2);
+}

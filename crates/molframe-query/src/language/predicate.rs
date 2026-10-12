@@ -273,6 +273,9 @@ pub(crate) fn membership_symbols(
                 .is_some_and(|value| symbols.contains(&value))
         }));
     }
+    if atom_symbol_level(column) {
+        return Ok(atom_symbol_membership(structure, universe, column, symbols));
+    }
     let mut selected = Vec::new();
     let mut universe = SelectionCursor::new(universe.iter());
     for chunk in structure.data().chunks.iter() {
@@ -315,6 +318,71 @@ pub(crate) fn membership_symbols(
         }
     }
     Ok(selection_from_sorted(selected))
+}
+
+/// Whether `column` is stored per atom as an interned symbol, so a membership
+/// test needs neither the residue nor the chain of the atom.
+const fn atom_symbol_level(column: Column) -> bool {
+    matches!(
+        column,
+        Column::LabelAtomName | Column::AuthAtomName | Column::AlternateLocation
+    )
+}
+
+/// Selects atoms whose per-atom symbol column holds one of `symbols`.
+///
+/// Walks the chunks directly and compares symbol ids, so a single-predicate
+/// selection such as `name CA` costs one integer comparison per atom of the
+/// universe instead of a chunk search, residue and chain lookup per atom.
+fn atom_symbol_membership(
+    structure: &Structure,
+    universe: &AtomSelection,
+    column: Column,
+    symbols: &BTreeSet<molframe_core::symbol::SymbolId>,
+) -> AtomSelection {
+    // A handful of wanted symbols is the common case; a linear scan of a small
+    // slice beats a tree lookup per atom.
+    let wanted: Vec<_> = symbols.iter().copied().collect();
+    let small = wanted.len() <= 8;
+    let accepts = |value: molframe_core::symbol::SymbolId| {
+        if small {
+            wanted.contains(&value)
+        } else {
+            symbols.contains(&value)
+        }
+    };
+    let mut selected = Vec::new();
+    let mut cursor = SelectionCursor::new(universe.iter());
+    for chunk in structure.data().chunks.iter() {
+        if cursor.is_exhausted() {
+            break;
+        }
+        let atoms = chunk.atoms();
+        cursor.skip_before(atoms.start);
+        let plain_names = match column {
+            Column::LabelAtomName => chunk.atom_names_plain(),
+            _ => None,
+        };
+        while let Some(position) = cursor.next_before(atoms.end) {
+            let local = position - atoms.start;
+            let value = match column {
+                Column::LabelAtomName => match plain_names {
+                    Some(names) => names.get(local as usize).copied(),
+                    None => chunk.atom_name(local),
+                },
+                // Storage keeps an author atom name only where it differs from
+                // the label name, so an atom without one is named by its label.
+                Column::AuthAtomName => chunk
+                    .auth_atom_name(local)
+                    .or_else(|| chunk.atom_name(local)),
+                _ => chunk.alt_id(local).and_then(molframe_core::AltId::symbol),
+            };
+            if value.is_some_and(accepts) {
+                selected.push(position);
+            }
+        }
+    }
+    selection_from_sorted(selected)
 }
 
 #[cfg(test)]

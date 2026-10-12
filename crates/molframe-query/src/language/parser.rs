@@ -7,7 +7,7 @@ use molframe_core::diagnostic::{Code, Diagnostic};
 
 #[path = "parser_helpers.rs"]
 mod helpers;
-use helpers::{canonical_name, mixes_boolean_precedence, unescape};
+use helpers::{canonical_name, mixes_boolean_precedence, namespaced_membership, unescape};
 use molframe_core::span::ByteSpan;
 #[path = "parser_cursor.rs"]
 mod cursor;
@@ -287,7 +287,7 @@ impl Parser {
             return Err(self.error_here("selection column requires at least one value"));
         }
 
-        Ok(Expr::Membership { column, values })
+        Ok(namespaced_membership(column, values))
     }
 
     /// Parses a numeric column comparison.

@@ -2,7 +2,9 @@ use super::*;
 use crate::{Groups, Query, col};
 use molframe_core::contract::AnalysisPolicy;
 use molframe_core::io::{InputBuffer, ReadOptions};
-use molframe_core::{AtomIndex, BondOrder, BondProvenance, BondRecord, BondTableBuilder};
+use molframe_core::{
+    AtomIndex, BondOrder, BondProvenance, BondRecord, BondTableBuilder, OptionalSymbol,
+};
 
 const SOURCE: &str = "data_hydrogens
 loop_
@@ -49,6 +51,7 @@ fn with_edges(structure: &Structure, edges: &[(u32, u32)]) -> Structure {
             atom_b: AtomIndex::new(b),
             order: BondOrder::Single,
             provenance: BondProvenance::File,
+            kind: OptionalSymbol::NONE,
         });
     }
     let mut data = structure.data().clone();

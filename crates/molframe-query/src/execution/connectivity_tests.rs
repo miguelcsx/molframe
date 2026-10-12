@@ -1,6 +1,6 @@
 use super::*;
 use molframe_core::io::{InputBuffer, ReadOptions};
-use molframe_core::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
+use molframe_core::{BondOrder, BondProvenance, BondRecord, BondTableBuilder, OptionalSymbol};
 
 const SOURCE: &str = "data_bonds\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -20,6 +20,7 @@ fn structure() -> Structure {
             atom_b: AtomIndex::new(b),
             order: BondOrder::Single,
             provenance: BondProvenance::File,
+            kind: OptionalSymbol::NONE,
         });
     }
     let mut data = structure.data().clone();

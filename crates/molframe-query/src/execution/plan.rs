@@ -133,7 +133,7 @@ fn disjunction(left: PhysicalExpr, right: PhysicalExpr) -> PhysicalExpr {
 
 /// Whether the expression's answer for one atom is independent of the universe
 /// it is evaluated in, so its position in a conjunction cannot change results.
-fn atom_local(expr: &PhysicalExpr) -> bool {
+pub(crate) fn atom_local(expr: &PhysicalExpr) -> bool {
     match expr {
         PhysicalExpr::All | PhysicalExpr::None | PhysicalExpr::ResolvedMembership { .. } => true,
         PhysicalExpr::And(left, right) | PhysicalExpr::Or(left, right) => {
@@ -144,7 +144,7 @@ fn atom_local(expr: &PhysicalExpr) -> bool {
     }
 }
 
-fn logical_atom_local(expr: &Expr) -> bool {
+pub(crate) fn logical_atom_local(expr: &Expr) -> bool {
     match expr {
         Expr::All
         | Expr::None
@@ -162,12 +162,25 @@ fn logical_atom_local(expr: &Expr) -> bool {
 
 /// Returns a small relative execution-cost class for plan ordering.
 ///
+/// Compound expressions rank with the dearest atom-level membership.
+///
 /// Runtime and space are `O(1)`.
 #[inline]
 fn cost(expr: &PhysicalExpr) -> u8 {
     match expr {
         PhysicalExpr::None | PhysicalExpr::All => 0,
-        PhysicalExpr::ResolvedMembership { .. } => 1,
+        // A residue-level column is decided once per residue and returned as
+        // runs; an atom-level column compares every atom, so it runs second.
+        PhysicalExpr::ResolvedMembership { column, .. } => {
+            if matches!(
+                column,
+                Column::AlternateLocation | Column::LabelAtomName | Column::AuthAtomName
+            ) {
+                2
+            } else {
+                1
+            }
+        }
         PhysicalExpr::And(_, _) | PhysicalExpr::Or(_, _) | PhysicalExpr::Not(_) => 2,
         PhysicalExpr::Logical(Expr::Geometric(_)) => 5,
         PhysicalExpr::Logical(_) => 3,

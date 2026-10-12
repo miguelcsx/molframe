@@ -166,12 +166,12 @@ fn chemistry_numeric_columns_and_aromatic_edges_use_shared_rust_data() {
 
     let mut data = structure().data().clone();
     let mut bonds = molframe_core::BondTableBuilder::new();
-    bonds.push(molframe_core::BondRecord {
-        atom_a: molframe_core::AtomIndex::new(0),
-        atom_b: molframe_core::AtomIndex::new(1),
-        order: molframe_core::BondOrder::Aromatic,
-        provenance: molframe_core::BondProvenance::ChemicalComponentDictionary,
-    });
+    bonds.push(molframe_core::BondRecord::unclassified(
+        molframe_core::AtomIndex::new(0),
+        molframe_core::AtomIndex::new(1),
+        molframe_core::BondOrder::Aromatic,
+        molframe_core::BondProvenance::ChemicalComponentDictionary,
+    ));
     data.bonds = bonds.finish();
     let structure = Structure::new(data);
     let query = Query::compile("aromatic").expect("query compiles");

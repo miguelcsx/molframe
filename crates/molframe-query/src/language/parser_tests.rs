@@ -150,3 +150,24 @@ fn a_malformed_dollar_reference_is_a_located_syntax_error() {
 fn a_dollar_name_is_a_group_reference() {
     assert!(matches!(expression("$pocket"), Expr::Group(name) if &*name == "pocket"));
 }
+
+#[test]
+fn a_namespace_prefix_routes_a_chain_value_to_its_own_column() {
+    assert!(matches!(
+        expression("chain label:A"),
+        Expr::Membership { column: Column::LabelChain, ref values } if values.as_slice() == ["A".into()]
+    ));
+    assert!(matches!(
+        expression("chain auth:B"),
+        Expr::Membership {
+            column: Column::AuthChain,
+            ..
+        }
+    ));
+    assert!(matches!(
+        expression("chain C label:D"),
+        Expr::Or(left, right)
+            if matches!(*left, Expr::Membership { column: Column::Chain, .. })
+                && matches!(*right, Expr::Membership { column: Column::LabelChain, .. })
+    ));
+}
