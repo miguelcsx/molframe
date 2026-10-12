@@ -27,6 +27,7 @@ mod diagnostics;
 mod docking_quality;
 #[path = "error.rs"]
 mod failure;
+mod gdt;
 mod governed_parameters;
 mod interface;
 #[path = "lddt.rs"]
