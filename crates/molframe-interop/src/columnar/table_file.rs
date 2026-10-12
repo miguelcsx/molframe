@@ -29,10 +29,10 @@ pub(crate) fn schema_with_metadata(
     metadata: BTreeMap<String, String>,
 ) -> SchemaRef {
     let base = table.schema();
-    Arc::new(Schema::new_with_metadata(
-        base.fields().clone(),
-        metadata.into_iter().collect(),
-    ))
+    // Table provenance, units and schema version first; caller keys win.
+    let mut merged = base.metadata().clone();
+    merged.extend(metadata);
+    Arc::new(Schema::new_with_metadata(base.fields().clone(), merged))
 }
 
 /// Writes each table chunk before materialising the next one.
@@ -42,7 +42,10 @@ pub(crate) fn visit_batches(
     mut visit: impl FnMut(&RecordBatch) -> Result<(), TableFileError>,
 ) -> Result<(), TableFileError> {
     for index in 0..table.batch_count() {
-        let batch = table.batch(index)?.with_schema(schema.clone())?;
+        // Rebind rather than `with_schema`: the file schema may override a
+        // table metadata key, which `with_schema` rejects.
+        let batch = table.batch(index)?;
+        let batch = RecordBatch::try_new(schema.clone(), batch.columns().to_vec())?;
         visit(&batch)?;
     }
     Ok(())

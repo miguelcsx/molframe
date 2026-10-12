@@ -1,12 +1,12 @@
 //! Arrow view of the chemical bond table.
 //!
 //! One record batch per fixed table batch row count; each batch materialises
-//! its five columns in a single pass over the batch's bond range.
+//! its six columns in a single pass over the batch's bond range.
 
 use super::extension::{ExportCost, field};
 use super::table::{decoded, table_type};
 use crate::numeric::usize_to_u32;
-use arrow::array::{ArrayRef, UInt8Array, UInt32Array};
+use arrow::array::{ArrayRef, StringViewBuilder, UInt8Array, UInt32Array};
 use arrow::datatypes::{DataType, Schema, SchemaRef};
 use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
@@ -39,6 +39,7 @@ fn bond_batch(
     let mut atom_b = Vec::with_capacity(range.len());
     let mut order = Vec::with_capacity(range.len());
     let mut provenance = Vec::with_capacity(range.len());
+    let mut kind = StringViewBuilder::with_capacity(range.len());
     for raw in start..end {
         let Some(bond) = bonds.get(BondIndex::new(raw)) else {
             return Err(ArrowError::InvalidArgumentError(
@@ -50,6 +51,13 @@ fn bond_batch(
         atom_b.push(bond.atom_b.get());
         order.push(order_code(bond.order));
         provenance.push(provenance_code(bond.provenance));
+        // The deposited classification, resolved from the structure that owns the
+        // identifier, or null when the source recorded none. A null says the class
+        // is unknown, which is not the same as any particular class.
+        match bond.kind.get().and_then(|symbol| structure.resolve(symbol)) {
+            Some(text) => kind.append_value(text),
+            None => kind.append_null(),
+        }
     }
     RecordBatch::try_new(
         schema,
@@ -59,6 +67,7 @@ fn bond_batch(
             Arc::new(UInt32Array::from(atom_b)),
             Arc::new(UInt8Array::from(order)),
             Arc::new(UInt8Array::from(provenance)),
+            Arc::new(kind.finish()),
         ],
     )
 }
@@ -82,6 +91,7 @@ fn bond_schema() -> Schema {
             None,
             ExportCost::Decode,
         ),
+        field("kind", DataType::Utf8View, true, None, ExportCost::Decode),
     ])
 }
 

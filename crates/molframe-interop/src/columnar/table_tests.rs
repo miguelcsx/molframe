@@ -4,6 +4,7 @@ use arrow::error::Result;
 use arrow::record_batch::RecordBatch;
 use molframe_core::Structure;
 use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::optional::OptionalSymbol;
 
 const SOURCE: &str = "data_t\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\nATOM 1 C CA ALA A 1 1 2 3\nATOM 2 N N ALA A 1 4 5 6\n";
 
@@ -40,6 +41,7 @@ fn topology_exports_are_split_into_bounded_batches() {
             atom_b: molframe_core::AtomIndex::new(atom + 1),
             order: molframe_core::BondOrder::Single,
             provenance: molframe_core::BondProvenance::User,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();
@@ -61,6 +63,7 @@ fn a_row_window_over_derived_batches_slices_only_the_overlapping_ones() {
             atom_b: molframe_core::AtomIndex::new(atom + 1),
             order: molframe_core::BondOrder::Single,
             provenance: molframe_core::BondProvenance::User,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();

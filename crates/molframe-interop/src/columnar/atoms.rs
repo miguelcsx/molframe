@@ -1,8 +1,10 @@
 //! Arrow atom-table batches aligned to molframe chunk boundaries.
 
+use super::dictionary::{AtomDictionaries, dictionary_type, present};
 use super::extension::{ExportCost, field};
-use super::owner::{SnapshotOwner, f32_buffer, symbol_buffer};
+use super::owner::{SnapshotOwner, f32_buffer};
 use super::stream::{ArrowStream, ArrowTableExport};
+use crate::numeric::f64_to_f32;
 use arrow::array::{
     ArrayRef, BooleanArray, BooleanBuilder, FixedSizeListArray, Float32Array, UInt8Array,
     UInt32Array, builder::NullBufferBuilder,
@@ -11,10 +13,18 @@ use arrow::buffer::NullBuffer;
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
+use molframe_core::annotation::{AtomAnnotation, PLDDT_ANNOTATION};
 use molframe_core::topology::ResidueTable;
 use molframe_core::{AtomChunk, ResidueIndex, Structure};
+use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+/// Schema metadata key carrying the atom-table schema version.
+pub(crate) const SCHEMA_VERSION_KEY: &str = "molframe:schema_version";
+/// Current atom-table schema version.
+pub(crate) const SCHEMA_VERSION: &str = "2";
+const UNIT_KEY: &str = "molframe:unit";
 
 /// Arrow view of a structure's atom table.
 ///
@@ -26,6 +36,7 @@ pub struct AtomTable {
     structure: Arc<Structure>,
     schema: SchemaRef,
     owner: SnapshotOwner,
+    dictionaries: Arc<OnceLock<AtomDictionaries>>,
 }
 
 impl AtomTable {
@@ -35,9 +46,16 @@ impl AtomTable {
         let structure = Arc::new(structure.clone());
         Self {
             structure: structure.clone(),
-            schema: Arc::new(atom_schema()),
+            schema: Arc::new(atom_schema(&structure)),
             owner: SnapshotOwner::from_arc(structure),
+            dictionaries: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// Categorical dictionaries, built on first use and shared by every batch.
+    fn dictionaries(&self) -> &AtomDictionaries {
+        self.dictionaries
+            .get_or_init(|| AtomDictionaries::build(&self.structure))
     }
 
     /// Arrow schema with molframe extension and copy-cost metadata.
@@ -103,15 +121,49 @@ impl AtomTable {
                 .map(molframe_core::Element::atomic_number)
         }));
         let coordinates = coordinates_array(positions, chunk, &self.owner)?;
-        let names: ArrayRef = match chunk.atom_names_plain() {
-            Some(names) => Arc::new(UInt32Array::new(symbol_buffer(names, &self.owner)?, None)),
-            None => Arc::new(UInt32Array::from_iter_values((0..chunk.len()).filter_map(
-                |local| chunk.atom_name(local).map(molframe_core::SymbolId::get),
-            ))),
+        let dictionaries = self.dictionaries();
+        let residue_key = |keys: &[i32]| {
+            residue
+                .values()
+                .iter()
+                .map(|raw| keys.get(*raw as usize).copied().and_then(present))
+                .collect::<Vec<_>>()
         };
-        let altloc = UInt32Array::from_iter_values(
-            (0..chunk.len()).filter_map(|local| chunk.alt_id(local).map(molframe_core::AltId::get)),
-        );
+        let chain = dictionaries
+            .chain
+            .array(residue_key(&dictionaries.residue_chain))?;
+        let label_asym = dictionaries
+            .label_asym
+            .array(residue_key(&dictionaries.residue_label_asym))?;
+        let resname = dictionaries
+            .resname
+            .array(residue_key(&dictionaries.residue_resname))?;
+        let names = dictionaries
+            .atom_name
+            .array(match chunk.atom_names_plain() {
+                Some(names) => names
+                    .iter()
+                    .map(|symbol| dictionaries.atom_name.key(symbol.get()))
+                    .collect::<Vec<_>>(),
+                None => (0..chunk.len())
+                    .map(|local| {
+                        chunk
+                            .atom_name(local)
+                            .and_then(|symbol| dictionaries.atom_name.key(symbol.get()))
+                    })
+                    .collect(),
+            })?;
+        let element_symbol = dictionaries.element.array((0..chunk.len()).map(|local| {
+            chunk
+                .element(local)
+                .and_then(|element| dictionaries.element.key(u32::from(element.atomic_number())))
+        }))?;
+        let altloc = dictionaries.altloc.array((0..chunk.len()).map(|local| {
+            chunk
+                .alt_id(local)
+                .filter(|alt| !alt.is_blank())
+                .and_then(|alt| dictionaries.altloc.key(alt.get()))
+        }))?;
         let (occupancy_validity, occupancy_unknown) =
             presence_arrays(chunk.len(), |local| chunk.occupancy(local));
         let occupancy =
@@ -119,18 +171,31 @@ impl AtomTable {
         let (b_factor_validity, b_factor_unknown) =
             presence_arrays(chunk.len(), |local| chunk.b_factor(local));
         let b_factor = Float32Array::new(f32_buffer(b_factors, &self.owner)?, b_factor_validity);
-        let arrays: Vec<ArrayRef> = vec![
+        let mut arrays: Vec<ArrayRef> = vec![
             Arc::new(index),
             Arc::new(residue),
+            chain,
+            label_asym,
+            resname,
             Arc::new(coordinates),
             Arc::new(element),
+            element_symbol,
             names,
-            Arc::new(altloc),
+            altloc,
             Arc::new(occupancy),
             Arc::new(occupancy_unknown),
             Arc::new(b_factor),
             Arc::new(b_factor_unknown),
         ];
+        if let Some(column) = plddt_column(&self.structure) {
+            arrays.push(Arc::new(Float32Array::from_iter(
+                (range.start..range.end).map(|atom| {
+                    column
+                        .get(atom)
+                        .and_then(|(value, state)| state.is_present().then(|| f64_to_f32(value)))
+                }),
+            )));
+        }
         RecordBatch::try_new(self.schema.clone(), arrays)
     }
 }
@@ -263,10 +328,66 @@ fn presence_arrays<T>(
     (validity.finish(), unknown.finish())
 }
 
-fn atom_schema() -> Schema {
+/// The lowered pLDDT confidence column, when the structure carries one.
+fn plddt_column(
+    structure: &Structure,
+) -> Option<&molframe_core::annotation::AnnotationColumn<f64>> {
+    match structure.annotations().get(PLDDT_ANNOTATION) {
+        Some(AtomAnnotation::Real(column)) => Some(column),
+        _ => None,
+    }
+}
+
+/// Schema-level provenance, units and version; merged under caller metadata.
+fn schema_metadata(structure: &Structure) -> HashMap<String, String> {
+    let entry = &structure.data().entry;
+    let mut metadata = HashMap::from([
+        (SCHEMA_VERSION_KEY.to_owned(), SCHEMA_VERSION.to_owned()),
+        (
+            "molframe:producer".to_owned(),
+            format!("molframe-interop {}", env!("CARGO_PKG_VERSION")),
+        ),
+        ("molframe:table".to_owned(), "atoms".to_owned()),
+        (
+            "molframe:atom_count".to_owned(),
+            structure.atom_count().to_string(),
+        ),
+        (
+            "molframe:units".to_owned(),
+            concat!(
+                r#"{"coordinates":"angstrom","b_factor":"angstrom^2","#,
+                r#""occupancy":"fraction","plddt":"score_0_100"}"#
+            )
+            .to_owned(),
+        ),
+    ]);
+    let optional = [
+        ("molframe:entry_id", entry.id.as_deref()),
+        ("molframe:method", entry.method.as_deref()),
+        ("molframe:input_name", entry.input_name.as_deref()),
+    ];
+    for (key, value) in optional {
+        if let Some(value) = value {
+            metadata.insert(key.to_owned(), value.to_owned());
+        }
+    }
+    if let Some(digest) = &entry.input_sha256 {
+        metadata.insert("molframe:input_sha256".to_owned(), digest.to_string());
+    }
+    metadata
+}
+
+fn unit(field: Field, unit: &str) -> Field {
+    let mut metadata = field.metadata().clone();
+    metadata.insert(UNIT_KEY.to_owned(), unit.to_owned());
+    field.with_metadata(metadata)
+}
+
+fn atom_schema(structure: &Structure) -> Schema {
     let coordinates =
         DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, false)), 3);
-    Schema::new(vec![
+    let categorical = |name: &str| field(name, dictionary_type(), true, None, ExportCost::Decode);
+    let mut fields = vec![
         field(
             "atom_index",
             DataType::UInt32,
@@ -281,12 +402,18 @@ fn atom_schema() -> Schema {
             Some("molframe.residue_index"),
             ExportCost::Decode,
         ),
-        field(
-            "coordinates",
-            coordinates,
-            true,
-            Some("molframe.coordinates3f"),
-            ExportCost::ZeroCopy,
+        categorical("chain_id"),
+        categorical("label_asym_id"),
+        categorical("resname"),
+        unit(
+            field(
+                "coordinates",
+                coordinates,
+                true,
+                Some("molframe.coordinates3f"),
+                ExportCost::ZeroCopy,
+            ),
+            "angstrom",
         ),
         field(
             "element",
@@ -295,26 +422,18 @@ fn atom_schema() -> Schema {
             Some("molframe.element"),
             ExportCost::Decode,
         ),
-        field(
-            "atom_name",
-            DataType::UInt32,
-            false,
-            Some("molframe.symbol_id"),
-            ExportCost::Decode,
-        ),
-        field(
-            "altloc",
-            DataType::UInt32,
-            false,
-            Some("molframe.altloc"),
-            ExportCost::Decode,
-        ),
-        field(
-            "occupancy",
-            DataType::Float32,
-            true,
-            None,
-            ExportCost::ZeroCopy,
+        categorical("element_symbol"),
+        categorical("atom_name"),
+        categorical("altloc"),
+        unit(
+            field(
+                "occupancy",
+                DataType::Float32,
+                true,
+                None,
+                ExportCost::ZeroCopy,
+            ),
+            "fraction",
         ),
         field(
             "occupancy_unknown",
@@ -323,12 +442,15 @@ fn atom_schema() -> Schema {
             Some("molframe.validity"),
             ExportCost::Decode,
         ),
-        field(
-            "b_factor",
-            DataType::Float32,
-            true,
-            None,
-            ExportCost::ZeroCopy,
+        unit(
+            field(
+                "b_factor",
+                DataType::Float32,
+                true,
+                None,
+                ExportCost::ZeroCopy,
+            ),
+            "angstrom^2",
         ),
         field(
             "b_factor_unknown",
@@ -337,7 +459,14 @@ fn atom_schema() -> Schema {
             Some("molframe.validity"),
             ExportCost::Decode,
         ),
-    ])
+    ];
+    if plddt_column(structure).is_some() {
+        fields.push(unit(
+            field("plddt", DataType::Float32, true, None, ExportCost::Decode),
+            "score_0_100",
+        ));
+    }
+    Schema::new_with_metadata(fields, schema_metadata(structure))
 }
 
 #[cfg(test)]

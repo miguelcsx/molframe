@@ -3,7 +3,7 @@
 use arrow::buffer::{Buffer, ScalarBuffer};
 use arrow::datatypes::ArrowNativeType;
 use arrow::error::{ArrowError, Result};
-use molframe_core::{Structure, SymbolId};
+use molframe_core::Structure;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
@@ -34,18 +34,6 @@ impl SnapshotOwner {
 
 pub(crate) fn f32_buffer(values: &[f32], owner: &SnapshotOwner) -> Result<ScalarBuffer<f32>> {
     typed_buffer(values, owner)
-}
-
-pub(crate) fn symbol_buffer(
-    values: &[SymbolId],
-    owner: &SnapshotOwner,
-) -> Result<ScalarBuffer<u32>> {
-    let bytes = values
-        .len()
-        .checked_mul(std::mem::size_of::<u32>())
-        .ok_or_else(|| ArrowError::MemoryError("symbol buffer length overflow".to_owned()))?;
-    let buffer = custom_buffer(values.as_ptr().cast::<u8>(), bytes, owner)?;
-    Ok(ScalarBuffer::new(buffer, 0, values.len()))
 }
 
 fn typed_buffer<T: ArrowNativeType>(

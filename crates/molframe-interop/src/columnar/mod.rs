@@ -11,6 +11,7 @@ mod bond;
 mod chain;
 mod columns;
 mod contact;
+mod dictionary;
 mod extension;
 mod ipc;
 mod owner;
