@@ -3,7 +3,7 @@ use crate::view::tests::{ENTRY, attached};
 use molframe_core::INSTANCE_ID_ANNOTATION;
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::bond::{BondRecord, BondTableBuilder};
-use molframe_core::{AtomIndex, BondOrder, BondProvenance, Structure};
+use molframe_core::{AtomIndex, BondOrder, BondProvenance, OptionalSymbol, Structure};
 
 #[test]
 fn repeated_assembly_chains_preserve_exact_secondary_states_and_sources() {
@@ -104,6 +104,7 @@ fn with_bond_and_annotation(structure: &Structure) -> Structure {
         atom_b: AtomIndex::new(1),
         order: BondOrder::Single,
         provenance: BondProvenance::File,
+        kind: OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     let Ok(scores) = AnnotationColumn::from_values(vec![7, 8]) else {

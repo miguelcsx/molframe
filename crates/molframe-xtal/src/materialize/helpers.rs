@@ -161,6 +161,9 @@ fn atom_chain(source: &Structure, atom: AtomIndex) -> Result<ChainIndex, Diagnos
 }
 
 /// Remaps both endpoints of one source bond into materialized copies.
+///
+/// The assembly shares the source structure's dictionary, so the connection's
+/// own classification stays valid and is copied with the rest of the record.
 fn remap_bond(
     bond: BondRecord,
     left: &CopySpan,
