@@ -38,6 +38,26 @@ pub enum CifValue {
     Float(f64),
 }
 
+/// True when the text starts like a number, so `nan`, `inf` and `infinity`,
+/// which the float parser accepts, are never mistaken for one.
+fn numeric_lead(text: &str) -> bool {
+    let digits = match text.as_bytes() {
+        [b'+' | b'-', rest @ ..] => rest,
+        all => all,
+    };
+    matches!(digits.first(), Some(b'0'..=b'9' | b'.'))
+}
+
+/// True when `value` renders back to exactly `text`, decided without rendering.
+///
+/// `i64` parsing accepts a leading `+` and leading zeros; the canonical
+/// spelling has neither, and `-0` is not the spelling of zero.
+fn spells_integer(text: &str, value: i64) -> bool {
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    let canonical = !digits.starts_with('+') && (digits == "0" || !digits.starts_with('0'));
+    canonical && (value != 0 || text == "0")
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum CifValueRef<'a> {
     Inapplicable,
@@ -56,27 +76,23 @@ impl<'a> CifValueRef<'a> {
             "." => Self::Inapplicable,
             "?" => Self::Unknown,
             _ => {
-                let fractional = text
-                    .as_bytes()
-                    .iter()
-                    .any(|byte| matches!(byte, b'.' | b'e' | b'E'));
-                if fractional {
+                if text.as_bytes().contains(&b'.') {
                     if let Some(value) = fixed_point(text) {
                         return Self::Float(value);
                     }
-                    if let Ok(value) = text.parse::<f64>() {
+                    if numeric_lead(text)
+                        && let Ok(value) = text.parse::<f64>()
+                    {
                         return Self::Float(value);
                     }
-                    if let Ok(value) = text.parse::<i64>() {
-                        return Self::Integer(value);
-                    }
-                } else {
-                    if let Ok(value) = text.parse::<i64>() {
-                        return Self::Integer(value);
-                    }
-                    if let Ok(value) = text.parse::<f64>() {
-                        return Self::Float(value);
-                    }
+                } else if let Ok(value) = text.parse::<i64>()
+                    && spells_integer(text, value)
+                {
+                    // Only a numeral that its value spells back exactly is a
+                    // number. `098`, `+5` and `0E0` are names that happen to
+                    // look numeric, and re-rendering them would silently turn
+                    // one identifier into another.
+                    return Self::Integer(value);
                 }
                 Self::Text(text)
             }
@@ -99,9 +115,10 @@ impl<'a> CifValueRef<'a> {
         }
     }
 
-    pub(crate) const fn as_integer(self) -> Option<i64> {
+    pub(crate) fn as_integer(self) -> Option<i64> {
         match self {
             Self::Integer(value) => Some(value),
+            Self::Text(text) if numeric_lead(text) => text.parse().ok(),
             _ => None,
         }
     }
@@ -110,6 +127,7 @@ impl<'a> CifValueRef<'a> {
         match self {
             Self::Integer(value) => value.to_f64(),
             Self::Float(value) => Some(value),
+            Self::Text(text) if numeric_lead(text) => text.parse().ok(),
             _ => None,
         }
     }
@@ -169,10 +187,14 @@ impl CifValue {
     }
 
     /// The value as a whole number, where it is one.
+    ///
+    /// A numeral that is not its own canonical spelling (`+5`, `007`) is kept
+    /// as text so identifiers survive; it still reads as the number it denotes.
     #[must_use]
     pub fn as_integer(&self) -> Option<i64> {
         match self {
             Self::Integer(value) => Some(*value),
+            Self::Text(text) if numeric_lead(text) => text.parse().ok(),
             _ => None,
         }
     }
@@ -183,6 +205,7 @@ impl CifValue {
         match self {
             Self::Integer(value) => value.to_f64(),
             Self::Float(value) => Some(*value),
+            Self::Text(text) if numeric_lead(text) => text.parse().ok(),
             _ => None,
         }
     }

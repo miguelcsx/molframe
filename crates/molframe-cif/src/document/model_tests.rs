@@ -58,6 +58,39 @@ fn an_identifier_reads_whether_it_was_written_as_a_word_or_a_number() {
 }
 
 #[test]
+fn numeric_looking_names_keep_their_exact_text() {
+    for name in ["0E0", "098", "+5", "007", "-0", "1E10", "NAN", "inf", "1D3"] {
+        let value = CifValue::parse(name, Quoting::Bare);
+        assert_eq!(value, CifValue::Text(name.into()), "{name}");
+        assert_eq!(value.as_identifier().as_deref(), Some(name));
+    }
+}
+
+#[test]
+fn a_noncanonical_numeral_still_reads_as_the_number_it_denotes() {
+    let value = CifValue::parse("+007", Quoting::Bare);
+    assert_eq!(value.as_integer(), Some(7));
+    assert_eq!(
+        CifValue::parse("1E3", Quoting::Bare).as_float(),
+        Some(1000.0)
+    );
+    assert_eq!(CifValue::parse("NAN", Quoting::Bare).as_float(), None);
+}
+
+#[test]
+fn canonical_numbers_stay_numbers() {
+    assert_eq!(
+        CifValue::parse("-12", Quoting::Bare),
+        CifValue::Integer(-12)
+    );
+    assert_eq!(CifValue::parse("0", Quoting::Bare), CifValue::Integer(0));
+    assert_eq!(
+        CifValue::parse("1.50E2", Quoting::Bare),
+        CifValue::Float(150.0)
+    );
+}
+
+#[test]
 fn a_sentinel_is_not_a_recorded_value() {
     assert!(CifValue::parse("x", Quoting::Bare).is_recorded());
     assert!(!CifValue::parse(".", Quoting::Bare).is_recorded());
