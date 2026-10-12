@@ -26,6 +26,24 @@ use std::sync::Arc;
 /// Default ceiling for the dense matrices an ensemble analysis allocates: 1 GiB.
 pub(super) const MEMORY_LIMIT: usize = 1 << 30;
 
+/// Any array-like of shape `(frames, atoms, 3)` as C-contiguous `float32`.
+///
+/// Strided views and `float64` arrays are converted (a copy only when needed)
+/// instead of being refused; `float64` coordinates are narrowed to the `float32`
+/// the kernels compute in.
+pub(crate) fn positions_f32<'py>(
+    array: &Bound<'py, PyAny>,
+) -> PyResult<numpy::PyReadonlyArray3<'py, f32>> {
+    let py = array.py();
+    let converted = py
+        .import("numpy")?
+        .call_method1("ascontiguousarray", (array, "float32"))?;
+    converted
+        .cast_into::<PyArray3<f32>>()
+        .map(|array| array.readonly())
+        .map_err(|_| crate::error::value("positions must have shape (frames, atoms, 3)"))
+}
+
 pub(super) fn frames<'a>(array: &'a numpy::PyReadonlyArray3<'_, f32>) -> PyResult<FrameView<'a>> {
     let shape = array.shape();
     let flat = array.as_slice().map_err(|_| {
@@ -81,11 +99,11 @@ pub(super) fn rows_of(array: &Bound<'_, PyArray2<f64>>) -> Vec<Vec<f64>> {
 #[pyo3(signature = (positions, *, memory_limit=MEMORY_LIMIT, policy=None))]
 fn pairwise_rmsd(
     py: Python<'_>,
-    positions: &Bound<'_, PyArray3<f32>>,
+    positions: &Bound<'_, PyAny>,
     memory_limit: usize,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
 ) -> PyResult<PyAnalysis> {
-    let array = positions.readonly();
+    let array = positions_f32(positions)?;
     let view = frames(&array)?;
     let policy = policy_of(policy);
     let analysis = py
@@ -118,7 +136,7 @@ fn pairwise_rmsd(
 #[allow(clippy::too_many_arguments)]
 fn pca(
     py: Python<'_>,
-    positions: &Bound<'_, PyArray3<f32>>,
+    positions: &Bound<'_, PyAny>,
     components: usize,
     fit: &str,
     reference: Option<&Bound<'_, PyArray2<f32>>>,
@@ -127,7 +145,7 @@ fn pca(
     memory_limit: usize,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
 ) -> PyResult<PyAnalysis> {
-    let array = positions.readonly();
+    let array = positions_f32(positions)?;
     let view = frames(&array)?;
     let reference = reference.map(numpy::PyArrayMethods::readonly);
     let reference = match &reference {
@@ -167,12 +185,12 @@ fn pca(
 #[pyo3(signature = (positions, *, tolerance=1e-6, max_iterations=100, policy=None))]
 fn mean_structure(
     py: Python<'_>,
-    positions: &Bound<'_, PyArray3<f32>>,
+    positions: &Bound<'_, PyAny>,
     tolerance: f64,
     max_iterations: usize,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
 ) -> PyResult<PyAnalysis> {
-    let array = positions.readonly();
+    let array = positions_f32(positions)?;
     let view = frames(&array)?;
     let policy = policy_of(policy);
     let analysis = py

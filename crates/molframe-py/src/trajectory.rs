@@ -2,13 +2,9 @@
 
 use crate::analysis_result::PyAnalysis;
 use crate::policy::PyAnalysisPolicy;
-use molframe::trajectory::{
-    FrameAlignment, FrameView, TrajectoryReadOptions, analyse_rmsd_to_reference_view,
-    read_trajectory_materialized,
-};
-use numpy::{PyArray1, PyArray3, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
+use molframe::trajectory::{DenseChunk, FrameAlignment, FrameView, analyse_rmsd_to_reference_view};
+use numpy::{PyArray1, PyArray2, PyArray3, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
-use std::path::PathBuf;
 
 /// Frames of one trajectory as read-only arrays, in ångström and picoseconds.
 #[derive(Debug)]
@@ -18,10 +14,41 @@ use std::path::PathBuf;
     skip_from_py_object,
     module = "molframe.trajectory"
 )]
-struct PyTrajectory {
+pub(crate) struct PyTrajectory {
     format: String,
     positions: Py<PyArray3<f32>>,
     times: Py<PyArray1<f64>>,
+    cells: Option<Py<PyArray2<f64>>>,
+    frame_indices: Py<PyArray1<u64>>,
+}
+
+impl PyTrajectory {
+    /// Hands a filled chunk's buffers to NumPy without copying them.
+    pub(crate) fn from_chunk(py: Python<'_>, format: String, chunk: DenseChunk) -> PyResult<Self> {
+        let frames = chunk.frames();
+        let positions =
+            PyArray1::from_vec(py, chunk.coordinates).reshape([frames, chunk.atoms, 3])?;
+        positions.readwrite().make_nonwriteable();
+        let times = PyArray1::from_vec(py, chunk.times);
+        times.readwrite().make_nonwriteable();
+        let frame_indices = PyArray1::from_vec(py, chunk.indices);
+        frame_indices.readwrite().make_nonwriteable();
+        let cells = chunk
+            .cells
+            .map(|flat| -> PyResult<_> {
+                let array = PyArray1::from_vec(py, flat).reshape([frames, 6])?;
+                array.readwrite().make_nonwriteable();
+                Ok(array.unbind())
+            })
+            .transpose()?;
+        Ok(Self {
+            format,
+            positions: positions.unbind(),
+            times: times.unbind(),
+            cells,
+            frame_indices: frame_indices.unbind(),
+        })
+    }
 }
 
 #[pymethods]
@@ -42,6 +69,49 @@ impl PyTrajectory {
     #[getter]
     fn times(&self, py: Python<'_>) -> Py<PyArray1<f64>> {
         self.times.clone_ref(py)
+    }
+
+    /// Source frame ordinal of each row, as `uint64`; strided and sliced
+    /// reads keep the original numbering.
+    #[getter]
+    fn frame_indices(&self, py: Python<'_>) -> Py<PyArray1<u64>> {
+        self.frame_indices.clone_ref(py)
+    }
+
+    /// Unit cell of each frame as `(frames, 6)` rows of `a, b, c, alpha, beta,
+    /// gamma` (ångström, degrees); `nan` rows where a frame has no cell, and
+    /// `None` when no frame has one.
+    #[getter]
+    fn cells(&self, py: Python<'_>) -> Option<Py<PyArray2<f64>>> {
+        self.cells.as_ref().map(|cells| cells.clone_ref(py))
+    }
+
+    /// The cell of one frame as a `UnitCell`, or `None` when it has none.
+    fn cell(&self, py: Python<'_>, frame: isize) -> PyResult<Option<crate::crystal::PyUnitCell>> {
+        let Some(cells) = &self.cells else {
+            return Ok(None);
+        };
+        let frames = self.n_frames(py);
+        let index = if frame < 0 {
+            frame.checked_add_unsigned(frames)
+        } else {
+            Some(frame)
+        };
+        let row = index
+            .and_then(|index| usize::try_from(index).ok())
+            .filter(|index| *index < frames)
+            .ok_or_else(|| pyo3::exceptions::PyIndexError::new_err("frame index out of range"))?;
+        let array = cells.bind(py).readonly();
+        let values = array.as_array();
+        let at = |column: usize| values[[row, column]];
+        if (0..6).any(|column| at(column).is_nan()) {
+            return Ok(None);
+        }
+        crate::crystal::PyUnitCell::from_cell(&molframe::UnitCell {
+            lengths: [at(0), at(1), at(2)],
+            angles: [at(3), at(4), at(5)],
+        })
+        .map(Some)
     }
 
     #[getter]
@@ -68,47 +138,22 @@ impl PyTrajectory {
     }
 }
 
-/// Reads every frame of a self-describing trajectory file.
-#[pyfunction]
-#[pyo3(signature = (path, *, format=None))]
-fn read(py: Python<'_>, path: PathBuf, format: Option<&str>) -> PyResult<PyTrajectory> {
-    let options = TrajectoryReadOptions {
-        format: format
-            .map(|name| name.parse().map_err(crate::error::kernel))
-            .transpose()?,
-        ..TrajectoryReadOptions::default()
-    };
-    let data = py
-        .detach(move || read_trajectory_materialized(&path, &options))
-        .map_err(crate::error::failure)?;
-    let dense = data.dense_positions().map_err(crate::error::kernel)?;
-    let positions =
-        PyArray1::from_vec(py, dense.coordinates).reshape([dense.frames, dense.atoms, 3])?;
-    positions.readwrite().make_nonwriteable();
-    let times = PyArray1::from_vec(py, dense.times);
-    times.readwrite().make_nonwriteable();
-    Ok(PyTrajectory {
-        format: data.format.name().replace('-', "_"),
-        positions: positions.unbind(),
-        times: times.unbind(),
-    })
-}
-
 /// RMSD of every frame against one reference frame, with provenance.
 ///
-/// `positions` has shape `(frames, atoms, 3)`. With `align=True` each frame is
+/// `positions` is any array-like of shape `(frames, atoms, 3)`; strided views and
+/// `float64` are converted to contiguous `float32`. With `align=True` each frame is
 /// rigidly fitted onto the reference first, so the series measures shape change
 /// rather than drift and rotation.
 #[pyfunction]
 #[pyo3(signature = (positions, *, reference=0, align=true, policy=None))]
 fn rmsd(
     py: Python<'_>,
-    positions: &Bound<'_, PyArray3<f32>>,
+    positions: &Bound<'_, PyAny>,
     reference: usize,
     align: bool,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
 ) -> PyResult<PyAnalysis> {
-    let array = positions.readonly();
+    let array = crate::trajectory_ensemble::positions_f32(positions)?;
     let shape = array.shape();
     let flat = array.as_slice().map_err(|_| {
         crate::error::value("positions must be C-contiguous; call numpy.ascontiguousarray")
@@ -143,6 +188,7 @@ fn rmsd(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     crate::trajectory_ensemble::register(module)?;
     module.add_class::<PyTrajectory>()?;
-    module.add_function(wrap_pyfunction!(read, module)?)?;
+    module.add_function(wrap_pyfunction!(crate::trajectory_stream::read, module)?)?;
+    crate::trajectory_stream::register(module)?;
     module.add_function(wrap_pyfunction!(rmsd, module)?)
 }

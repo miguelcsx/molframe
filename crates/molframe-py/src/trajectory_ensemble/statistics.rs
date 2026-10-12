@@ -3,7 +3,7 @@
 use super::results::{
     PyConvergence, PyGroupVariance, PyHarmonicSimilarity, PyMsd, PyPathSimilarity,
 };
-use super::{MEMORY_LIMIT, frames, rows_of, wrap};
+use super::{MEMORY_LIMIT, frames, positions_f32, rows_of, wrap};
 use crate::analysis_result::PyAnalysis;
 use crate::policy::{PyAnalysisPolicy, policy_of};
 use molframe::trajectory::{
@@ -12,7 +12,7 @@ use molframe::trajectory::{
     analyse_harmonic_ensemble_similarity, analyse_mean_squared_displacement_view,
     path_similarity_view,
 };
-use numpy::{PyArray2, PyArray3, PyArrayMethods};
+use numpy::PyArray2;
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -24,12 +24,12 @@ use std::sync::Arc;
 #[pyo3(signature = (positions, *, maximum_lag, atoms=None, policy=None))]
 fn msd(
     py: Python<'_>,
-    positions: &Bound<'_, PyArray3<f32>>,
+    positions: &Bound<'_, PyAny>,
     maximum_lag: usize,
     atoms: Option<Vec<usize>>,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
 ) -> PyResult<PyAnalysis> {
-    let array = positions.readonly();
+    let array = positions_f32(positions)?;
     let view = frames(&array)?;
     let atoms: Vec<usize> = atoms.into_iter().flatten().collect();
     let policy = policy_of(policy);
@@ -55,11 +55,11 @@ fn msd(
 #[pyo3(signature = (positions, groups, *, policy=None))]
 fn group_variance(
     py: Python<'_>,
-    positions: &Bound<'_, PyArray3<f32>>,
+    positions: &Bound<'_, PyAny>,
     groups: Vec<Vec<usize>>,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
 ) -> PyResult<PyAnalysis> {
-    let array = positions.readonly();
+    let array = positions_f32(positions)?;
     let view = frames(&array)?;
     let policy = policy_of(policy);
     let analysis = py
@@ -165,13 +165,13 @@ fn population_similarity(
 #[pyo3(signature = (first, second, *, metric="fitted_rmsd", memory_limit=MEMORY_LIMIT))]
 fn path_similarity(
     py: Python<'_>,
-    first: &Bound<'_, PyArray3<f32>>,
-    second: &Bound<'_, PyArray3<f32>>,
+    first: &Bound<'_, PyAny>,
+    second: &Bound<'_, PyAny>,
     metric: &str,
     memory_limit: usize,
 ) -> PyResult<PyPathSimilarity> {
     let metric: PathFrameMetric = metric.parse().map_err(crate::error::kernel)?;
-    let (first, second) = (first.readonly(), second.readonly());
+    let (first, second) = (positions_f32(first)?, positions_f32(second)?);
     let (first, second) = (frames(&first)?, frames(&second)?);
     let inner = py
         .detach(|| path_similarity_view(first, second, metric, memory_limit))
