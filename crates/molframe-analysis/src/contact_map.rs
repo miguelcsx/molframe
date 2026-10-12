@@ -13,7 +13,8 @@ use molframe_core::index::ResidueIndex;
 use molframe_core::structure::Structure;
 use molframe_core::{ExecutionContext, hashing::IdentityHashMap};
 use molframe_spatial::{
-    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, reduce_pairs_within_unsorted,
+    PairQuery, PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions,
+    reduce_pairs_within_unsorted,
 };
 
 use crate::numeric::f64_to_f32;
@@ -86,6 +87,22 @@ pub fn residue_contact_map(
     backend: SpatialBackend,
     context: &ExecutionContext,
 ) -> Result<ContactMap, SpatialError> {
+    residue_contact_map_periodic(structure, cutoff, min_separation, backend, None, context)
+}
+
+/// [`residue_contact_map`] under optional minimum-image periodicity.
+///
+/// # Errors
+///
+/// Returns [`SpatialError`] propagated from the neighbour search.
+pub fn residue_contact_map_periodic(
+    structure: &Structure,
+    cutoff: f32,
+    min_separation: u32,
+    backend: SpatialBackend,
+    periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
+) -> Result<ContactMap, SpatialError> {
     let residue_of = atom_to_residue(structure);
     let all = molframe_core::selection::AtomSelection::All(structure.atom_count());
     // Each residue pair keeps only its minimum atom distance, so blocks reduce
@@ -98,7 +115,7 @@ pub fn residue_contact_map(
         right: &all,
         cutoff,
         options: SpatialSearchOptions::with_backend(backend),
-        periodic: None,
+        periodic,
         context,
     };
     let parts = reduce_pairs_within_unsorted(

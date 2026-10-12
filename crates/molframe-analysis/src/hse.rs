@@ -163,6 +163,38 @@ fn require_role_annotation(structure: &Structure) -> Result<(), HseError> {
         .ok_or(HseError::MissingRoleAnnotation)
 }
 
+/// Residues the profile identifies as protein, which is the domain this analysis
+/// reports coverage over.
+///
+/// The domain is read from the atom roles rather than from the chain's polymer
+/// classification, because a role profile is what the analysis already requires
+/// and a chain kind is not always resolved: a PDB read has no place to record one,
+/// so every chain stays unclassified even when its residues are plainly protein.
+/// Taking the kind as the domain would report an analysis that measured every
+/// residue as covering none of them.
+#[must_use]
+pub fn protein_domain(structure: &Structure) -> u32 {
+    // Every role that makes an atom part of a protein component: the backbone,
+    // the side chain, and the beta carbon. A residue carrying any of them is a
+    // protein residue, whether or not the profile also gave it the two carbons
+    // that fix a side-chain direction.
+    let protein = PolymerAtomRole::PROTEIN_BACKBONE
+        .union(PolymerAtomRole::PROTEIN_SIDECHAIN)
+        .union(PolymerAtomRole::PROTEIN_BETA_CARBON);
+
+    let mut total: u32 = 0;
+    for residue in structure.data().residues() {
+        let is_protein = residue.atoms().any(|atom| {
+            crate::chemistry::polymer_role(structure, atom.index().get())
+                .is_some_and(|role| role.intersects(protein))
+        });
+        if is_protein {
+            total = total.saturating_add(1);
+        }
+    }
+    total
+}
+
 fn role_atom(
     structure: &Structure,
     residue: ResidueRef<'_>,

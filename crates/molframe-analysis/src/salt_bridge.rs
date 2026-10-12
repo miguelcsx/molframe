@@ -1,9 +1,10 @@
 //! Salt bridges between oppositely charged side-chain groups.
 //!
 //! A salt bridge is a close approach between an atom of a negatively charged
-//! group and an atom of a positively charged group. Membership comes from the
-//! CCD-derived formal-charge annotation; residue and atom names are never used
-//! as a substitute for chemistry annotations.
+//! group and an atom of a positively charged group. Membership is the union of the
+//! CCD formal-charge annotation and the titratable groups of the standard amino
+//! acids (Asp/Glu carboxylates, Lys, Arg, chain termini); the CCD records neutral amino
+//! acids, so the annotation alone finds no protein charges.
 //!
 //! Only anion–cation pairs are searched, so two carboxylates or two amines are
 //! never reported. Results are sorted by `(anion, cation)`.
@@ -25,6 +26,7 @@ use molframe_spatial::PeriodicBox;
 
 use crate::hbond::altlocs_compatible;
 use crate::numeric::f64_to_f32;
+use crate::salt_bridge_groups::{Sign, titratable_atoms};
 
 /// Explicit policy for salt-bridge detection.
 #[allow(
@@ -171,8 +173,25 @@ pub fn salt_bridges_with_options(
             _ => {}
         }
     }
+    for (atom, sign) in titratable_atoms(structure) {
+        match sign {
+            Sign::Anion => anions.push(atom),
+            Sign::Cation => cations.push(atom),
+        }
+    }
     anions.sort_unstable();
+    anions.dedup();
     cations.sort_unstable();
+    cations.dedup();
+    // An atom claimed by both sides has contradictory chemistry; neither side
+    // may use it.
+    let contested: Vec<u32> = anions
+        .iter()
+        .copied()
+        .filter(|atom| cations.binary_search(atom).is_ok())
+        .collect();
+    anions.retain(|atom| contested.binary_search(atom).is_err());
+    cations.retain(|atom| contested.binary_search(atom).is_err());
 
     let anion_set = AtomSelection::from_sorted(anions);
     let cation_set = AtomSelection::from_sorted(cations);

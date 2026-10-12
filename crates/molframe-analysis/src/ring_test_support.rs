@@ -1,5 +1,6 @@
 //! Fixtures that build bonded aromatic structures from explicit coordinates.
 
+use molframe_core::optional::OptionalSymbol;
 use std::fmt::Write;
 
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
@@ -68,6 +69,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
             atom_b: AtomIndex::new(b),
             order: BondOrder::Single,
             provenance: BondProvenance::ChemicalComponentDictionary,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = table.finish();

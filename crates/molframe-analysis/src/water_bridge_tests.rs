@@ -4,6 +4,7 @@ use super::{
 };
 use crate::HydrogenBondOptions;
 use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::{
     AnnotationColumn, AtomAnnotation, BondOrder, BondProvenance, BondRecord, BondTableBuilder,
     ExecutionContext, Presence,
@@ -76,6 +77,7 @@ fn annotated_structure() -> molframe_core::Structure {
             atom_b: molframe_core::AtomIndex::new(second),
             order: BondOrder::Single,
             provenance: BondProvenance::ChemicalComponentDictionary,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();
@@ -155,6 +157,7 @@ fn custom(
             atom_b: molframe_core::AtomIndex::new(*second),
             order: BondOrder::Single,
             provenance: BondProvenance::ChemicalComponentDictionary,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = table.finish();

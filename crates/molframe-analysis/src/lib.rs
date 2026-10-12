@@ -49,6 +49,7 @@ mod membrane_layers;
 mod mode_interchange;
 #[path = "dynamics.rs"]
 mod motion_statistics;
+mod native_match;
 mod network;
 #[path = "nucleic.rs"]
 mod nucleic_torsion;
@@ -63,7 +64,9 @@ mod policy_execution;
 mod reference_contacts;
 #[path = "contact_map.rs"]
 mod residue_contacts;
+mod residue_sasa;
 pub mod salt_bridge;
+pub(crate) mod salt_bridge_groups;
 #[path = "dssp.rs"]
 mod secondary_structure_assignment;
 #[path = "density.rs"]
@@ -93,7 +96,8 @@ pub use aromatic_stacking::{
 };
 pub use atom_pairs::{
     Contact, ContactTable, atom_contacts, atom_contacts_between,
-    atom_contacts_between_with_spatial, visit_atom_contacts, visit_atom_contacts_between,
+    atom_contacts_between_with_spatial, atom_contacts_periodic, visit_atom_contacts,
+    visit_atom_contacts_between,
 };
 pub use cation_aromatic::{
     CationPi, CationPiError, CationPiOptions, CationPiTable, cation_pi, cation_pi_periodic,
@@ -112,10 +116,12 @@ pub use electrostatics::{
 };
 pub use external_secondary_structure::{DsspBinaryError, DsspSegment, parse_dssp_output, run_dssp};
 pub use fragment_mapping::{FragmentMappingError, FragmentMatch, FragmentReference, map_fragments};
-pub use half_sphere::{HalfSphereExposure, HseError, half_sphere_exposure};
+pub use half_sphere::{HalfSphereExposure, HseError, half_sphere_exposure, protein_domain};
 pub use hbond::{
-    HydrogenBond, HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
-    hydrogen_bonds, hydrogen_bonds_with_policy,
+    HydrogenBond, HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
+    HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
+    hydrogen_bond_candidates_over_segment, hydrogen_bonds, hydrogen_bonds_at_sample,
+    hydrogen_bonds_with_policy,
 };
 pub use helix_geometry::{
     BaseFrame, HelicalError, HelicalOptions, HelicalParameters, MiddleFrameStep,
@@ -127,6 +133,7 @@ pub use motion_statistics::{
     DielectricOptions, DielectricResult, DynamicsError, WaterDynamicsOptions, WaterLag,
     dielectric_from_dipoles, water_dynamics,
 };
+pub use native_match::match_atoms_by_name;
 pub use nucleic_torsion::{NucleicTorsionError, NucleicTorsions, nucleic_torsions};
 pub use pair_distribution::{
     CentreGroup, CoordinationOptions, RadialBin, RadialDistributionOptions, RadialError,
@@ -136,20 +143,30 @@ pub use paired_bases::{BasePair, BasePairError, BasePairOptions, WatsonCrickGeom
 pub use policy_execution::{
     AnalysisDescriptor, DefinitionError, FrameKernelResult, FrameRecord, GovernedAnalysisError,
     GovernedNativeError, GovernedStructureAnalysis, MappedClosureStructureKernel,
-    PhysicalKernelError, StandaloneAnalysisError, StructureKernel, SurfaceSampling,
-    analyse_structure, analyse_trajectory, base_pairs_kernel, cation_pi_kernel,
+    NativeCorrespondence, PhysicalKernelError, StandaloneAnalysisError, StructureKernel,
+    SurfaceSampling, analyse_structure, analyse_trajectory, base_pairs_kernel, cation_pi_kernel,
     centre_of_mass_radial_distribution_kernel, chain_interface_kernel, contact_map_kernel,
     contacts_kernel, coordination_numbers_kernel, definition_contacts_kernel, density_map_kernel,
     gnm_kernel, governed_dielectric_from_dipoles, governed_fragment_mapping,
     governed_helical_parameters, governed_helical_steps, governed_polymer_statistics,
     governed_sugar_pucker, governed_water_dynamics, half_sphere_exposure_kernel,
     hydrogen_bonds_kernel, leaflets_kernel, linear_density_kernel, mapped_structure_kernel,
-    native_contact_fraction_kernel, nucleic_torsions_kernel, pi_stacking_kernel,
-    pore_profile_kernel, radial_distribution_kernel, salt_bridges_kernel, sasa_kernel,
-    secondary_structure_kernel, structure_kernel, surface_contacts_kernel, water_bridges_kernel,
+    native_contact_fraction_kernel, native_contact_fraction_kernel_with, nucleic_torsions_kernel,
+    pi_stacking_kernel, pore_profile_kernel, radial_distribution_kernel, salt_bridges_kernel,
+    sasa_kernel, secondary_structure_kernel, structure_kernel, surface_contacts_kernel,
+    water_bridges_kernel,
 };
-pub use reference_contacts::{NativeContacts, NativeError, native_contact_fraction};
-pub use residue_contacts::{ContactMap, ResidueContact, ResidueContactTable, residue_contact_map};
+pub use reference_contacts::{
+    NativeContacts, NativeError, native_contact_fraction, native_contact_fraction_matched,
+};
+pub use residue_contacts::{
+    ContactMap, ResidueContact, ResidueContactTable, residue_contact_map,
+    residue_contact_map_periodic,
+};
+pub use residue_sasa::{
+    MAX_RESIDUE_AREA_CITATION, MAX_RESIDUE_AREA_REFERENCE, ResidueArea, ResidueAreas,
+    ResidueSasaError, max_residue_area, residue_areas,
+};
 pub use salt_bridge::{
     SaltBridge, SaltBridgeError, SaltBridgeOptions, SaltBridgeTable, salt_bridges,
     salt_bridges_with_options,

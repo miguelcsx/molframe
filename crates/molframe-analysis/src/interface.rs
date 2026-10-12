@@ -46,6 +46,22 @@ impl<'a> ChainSelector<'a> {
         }
     }
 
+    /// Reads `label:X` or `auth:X` as a name in that namespace and any other
+    /// text as a name matched in either namespace.
+    ///
+    /// This is the spelling the selection language uses for chain values, so
+    /// one chain reference means the same thing in a query and here.
+    #[must_use]
+    pub fn parse(text: &'a str) -> Self {
+        if let Some(name) = text.strip_prefix("label:") {
+            Self::label(name)
+        } else if let Some(name) = text.strip_prefix("auth:") {
+            Self::auth(name)
+        } else {
+            Self::any(text)
+        }
+    }
+
     /// A name matched only against label identifiers.
     #[must_use]
     pub const fn label(name: &'a str) -> Self {
@@ -89,7 +105,7 @@ pub enum InterfaceError {
     /// A name written without a namespace denotes different chains as a label
     /// and as an author identifier, so it cannot be resolved.
     #[error(
-        "chain name {0:?} is ambiguous: it names different chains as a label and as an author id; choose a namespace"
+        "chain name {0:?} is ambiguous: it names different chains as a label and as an author id; write it as \"label:{0}\" or \"auth:{0}\""
     )]
     AmbiguousChain(String),
     /// Both selectors resolve to the same chain, which has no interface with itself.
@@ -119,7 +135,8 @@ impl From<InterfaceError> for Diagnostic {
 ///
 /// A name is matched in either the label or the author namespace. When it
 /// denotes different chains in the two namespaces the call fails rather than
-/// guessing; use [`chain_interface_with_options`] to pick a namespace. When
+/// guessing; write `label:X` or `auth:X` to pick a namespace (see
+/// [`ChainSelector::parse`]), or use [`chain_interface_with_options`]. When
 /// either chain is absent or the two never approach within the cutoff, the
 /// result is empty. Residue indices are sorted and unique across both chains.
 ///
@@ -140,8 +157,8 @@ pub fn chain_interface(
     chain_interface_with_options(
         structure,
         &InterfaceOptions {
-            first: ChainSelector::any(first),
-            second: ChainSelector::any(second),
+            first: ChainSelector::parse(first),
+            second: ChainSelector::parse(second),
             cutoff,
             backend,
             periodic: false,
@@ -209,8 +226,8 @@ pub fn chain_interface_with_spatial(
     spatial: &StructureSpatial<'_>,
 ) -> Result<Vec<ResidueIndex>, Diagnostic> {
     let options = InterfaceOptions {
-        first: ChainSelector::any(first),
-        second: ChainSelector::any(second),
+        first: ChainSelector::parse(first),
+        second: ChainSelector::parse(second),
         cutoff,
         backend,
         periodic: false,

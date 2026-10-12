@@ -68,7 +68,7 @@ fn bench_contacts(c: &mut Criterion) {
                 &structure,
                 &structure,
                 4.0,
-                1.2,
+                0.8,
                 SpatialBackend::CellList,
                 &context(),
             ))

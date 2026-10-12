@@ -1,6 +1,7 @@
 use super::{SaltBridgeError, SaltBridgeOptions, salt_bridges, salt_bridges_with_options};
 use molframe_core::ExecutionContext;
 use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::Structure;
 use molframe_spatial::SpatialBackend;
 use std::fmt::Write;
@@ -198,6 +199,7 @@ fn bonded_pairs_are_excluded_unless_included() {
         atom_b: molframe_core::AtomIndex::new(1),
         order: BondOrder::Single,
         provenance: BondProvenance::ChemicalComponentDictionary,
+        kind: OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     let bonded = Structure::new(data);
@@ -241,4 +243,57 @@ _cell.angle_alpha 90\n_cell.angle_beta 90\n_cell.angle_gamma 90\n";
     assert_eq!(count(&cube, options), Err(SaltBridgeError::PlaceholderCell));
     options.allow_placeholder_cell = true;
     assert!(count(&cube, options).is_ok());
+}
+
+#[test]
+fn titratable_side_chain_groups_bridge_without_any_charge_annotation() {
+    let source = format!(
+        "{HEADER}\
+ATOM 1 O OD2 ASP A 1 0 0 0\n\
+ATOM 2 N NZ LYS A 2 3.0 0 0\n\
+ATOM 3 O OE1 GLU A 3 0 3.9 0\n\
+ATOM 4 N NH2 ARG A 4 0 9.5 0\n\
+ATOM 5 N NE2 HIS A 5 3.0 0 3.0\n\
+ATOM 6 C CA ALA A 6 9 9 9\n"
+    );
+    let Ok(bridges) = salt_bridges(
+        &structure(&source),
+        4.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
+        panic!("valid");
+    };
+    let pairs: Vec<(u32, u32)> = bridges
+        .iter()
+        .map(|bridge| (bridge.anion.get(), bridge.cation.get()))
+        .collect();
+    // Asp OD2-Lys NZ at 3.0 A; Glu OE1 and Arg NH2 are 5.6 A apart and Glu
+    // OE1 to Lys NZ is beyond 4 A; His is never a cation here.
+    assert_eq!(pairs, vec![(0, 1)]);
+}
+
+#[test]
+fn a_chain_start_amine_and_terminal_oxygen_are_charged_groups() {
+    let source = format!(
+        "{HEADER}\
+ATOM 1 N N GLY A 1 0 0 0\n\
+ATOM 2 O OE2 GLU A 2 3.0 0 0\n\
+ATOM 3 O OXT ALA A 3 0 3.0 0\n\
+ATOM 4 N NZ LYS A 4 0 9.0 0\n"
+    );
+    let Ok(bridges) = salt_bridges(
+        &structure(&source),
+        4.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    ) else {
+        panic!("valid");
+    };
+    let pairs: Vec<(u32, u32)> = bridges
+        .iter()
+        .map(|bridge| (bridge.anion.get(), bridge.cation.get()))
+        .collect();
+    // N-terminal N (0) pairs with Glu OE2 (1) and the terminal OXT (2).
+    assert_eq!(pairs, vec![(1, 0), (2, 0)]);
 }

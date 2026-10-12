@@ -271,3 +271,48 @@ fn periodic_interface_requires_a_cell() {
         Err(InterfaceError::MissingCell)
     ));
 }
+
+#[test]
+fn a_prefixed_chain_name_picks_its_namespace_in_the_plain_entry_point() {
+    let structure = read(SWAPPED);
+    let context = ExecutionContext::default();
+    let by_label = chain_interface(
+        &structure,
+        "label:A",
+        "label:B",
+        4.0,
+        SpatialBackend::BruteForce,
+        &context,
+    );
+    assert!(matches!(by_label, Ok(ref found) if found.len() == 2));
+    let by_auth = chain_interface(
+        &structure,
+        "auth:A",
+        "auth:B",
+        4.0,
+        SpatialBackend::BruteForce,
+        &context,
+    );
+    assert!(matches!(by_auth, Ok(ref found) if found.len() == 2));
+}
+
+#[test]
+fn the_ambiguity_message_names_the_prefixes_that_resolve_it() {
+    let structure = read(SWAPPED);
+    let result = chain_interface(
+        &structure,
+        "A",
+        "B",
+        4.0,
+        SpatialBackend::BruteForce,
+        &ExecutionContext::default(),
+    );
+    let Err(error) = result else {
+        panic!("ambiguous name must be rejected");
+    };
+    let text = error.to_string();
+    assert!(
+        text.contains("label:A") && text.contains("auth:A"),
+        "{text}"
+    );
+}

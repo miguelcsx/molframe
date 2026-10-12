@@ -12,7 +12,7 @@ use molframe_core::selection::AtomSelection;
 use molframe_core::structure::Structure;
 use molframe_core::{ExecutionContext, index::AtomIndex};
 use molframe_spatial::{
-    PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, StructureSpatial,
+    PairQuery, PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions, StructureSpatial,
     for_each_pairs_within_unsorted,
 };
 
@@ -149,8 +149,28 @@ pub fn atom_contacts(
     backend: SpatialBackend,
     context: &ExecutionContext,
 ) -> Result<ContactTable, SpatialError> {
+    atom_contacts_periodic(structure, cutoff, backend, None, context)
+}
+
+/// [`atom_contacts`] under optional minimum-image periodicity.
+///
+/// With a box, each pair is reported once at its shortest periodic separation,
+/// which is exact while `cutoff` stays within half the shortest perpendicular
+/// cell width.
+///
+/// # Errors
+///
+/// Returns [`SpatialError`] for a non-finite or negative cutoff, propagated from
+/// the neighbour search.
+pub fn atom_contacts_periodic(
+    structure: &Structure,
+    cutoff: f32,
+    backend: SpatialBackend,
+    periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
+) -> Result<ContactTable, SpatialError> {
     let all = AtomSelection::All(structure.atom_count());
-    collect_contacts(structure, &all, &all, cutoff, backend, context)
+    collect_contacts(structure, &all, &all, cutoff, backend, periodic, context)
 }
 
 /// Finds contacts between two arbitrary atom selections.
@@ -171,7 +191,7 @@ pub fn atom_contacts_between(
     backend: SpatialBackend,
     context: &ExecutionContext,
 ) -> Result<ContactTable, SpatialError> {
-    collect_contacts(structure, left, right, cutoff, backend, context)
+    collect_contacts(structure, left, right, cutoff, backend, None, context)
 }
 
 /// Visits every unique contact without retaining an output vector.
@@ -208,6 +228,20 @@ pub fn visit_atom_contacts_between(
     cutoff: f32,
     backend: SpatialBackend,
     context: &ExecutionContext,
+    emit: impl FnMut(Contact),
+) -> Result<(), SpatialError> {
+    visit_contacts(structure, left, right, cutoff, backend, None, context, emit)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn visit_contacts(
+    structure: &Structure,
+    left: &AtomSelection,
+    right: &AtomSelection,
+    cutoff: f32,
+    backend: SpatialBackend,
+    periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
     mut emit: impl FnMut(Contact),
 ) -> Result<(), SpatialError> {
     let positions = structure.positions();
@@ -218,11 +252,11 @@ pub fn visit_atom_contacts_between(
             right,
             cutoff,
             options: SpatialSearchOptions::with_backend(backend),
-            periodic: None,
+            periodic,
             context,
         },
         |pair| {
-            if let Some(contact) = contact_from_pair(positions, pair) {
+            if let Some(contact) = contact_from_pair(positions, periodic, pair) {
                 emit(contact);
             }
         },
@@ -252,7 +286,7 @@ pub fn atom_contacts_between_with_spatial(
     let positions = structure.positions();
     Ok(pairs
         .into_iter()
-        .filter_map(|pair| contact_from_pair(positions, pair))
+        .filter_map(|pair| contact_from_pair(positions, None, pair))
         .collect())
 }
 
@@ -262,16 +296,18 @@ fn collect_contacts(
     right: &AtomSelection,
     cutoff: f32,
     backend: SpatialBackend,
+    periodic: Option<&PeriodicBox>,
     context: &ExecutionContext,
 ) -> Result<ContactTable, SpatialError> {
     let positions = structure.positions();
     let mut contacts = Vec::new();
-    visit_atom_contacts_between(
+    visit_contacts(
         structure,
         left,
         right,
         cutoff,
         backend,
+        periodic,
         context,
         |contact| contacts.push(contact),
     )?;
@@ -285,15 +321,20 @@ fn collect_contacts(
 
 fn contact_from_pair(
     positions: &[[f32; 3]],
+    periodic: Option<&PeriodicBox>,
     pair: molframe_spatial::NeighborPair,
 ) -> Option<Contact> {
     let first = pair.first as usize;
     let second = pair.second as usize;
     let (&a, &b) = (positions.get(first)?, positions.get(second)?);
+    let distance = match periodic {
+        Some(cell) => cell.distance_squared(a, b).sqrt(),
+        None => f64_to_f32(molframe_geom::distance(a, b)),
+    };
     Some(Contact {
         first: AtomIndex::new(pair.first),
         second: AtomIndex::new(pair.second),
-        distance: f64_to_f32(molframe_geom::distance(a, b)),
+        distance,
     })
 }
 

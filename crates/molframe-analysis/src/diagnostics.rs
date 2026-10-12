@@ -22,7 +22,9 @@ diagnostic_from!(HelicalError, |error| match error {
     HelicalError::InvalidFrame => Code::E5104,
 });
 diagnostic_from!(NativeError, |error| match error {
-    NativeError::AtomCountMismatch { .. } => Code::E5102,
+    NativeError::AtomCountMismatch { .. }
+    | NativeError::CorrespondenceLength { .. }
+    | NativeError::TargetAtomAbsent { .. } => Code::E5102,
     NativeError::Spatial(inner) => Diagnostic::from(inner).code(),
 });
 diagnostic_from!(PiStackingError, |error| match error {
@@ -62,7 +64,8 @@ diagnostic_from!(NmdError, |error| match error {
     NmdError::UnalignedVectors { .. } | NmdError::SiteMismatch { .. } => Code::E5102,
 });
 diagnostic_from!(HydrogenBondError, |error| match error {
-    HydrogenBondError::InvalidOptions => Code::E5101,
+    HydrogenBondError::InvalidOptions | HydrogenBondError::CandidateBudget { .. } => Code::E5101,
+    HydrogenBondError::InvalidSample => Code::E5102,
     HydrogenBondError::MissingChemistry => Code::E6103,
     HydrogenBondError::MissingCell => Code::E5004,
     HydrogenBondError::Spatial(inner) => Diagnostic::from(inner).code(),
@@ -208,7 +211,9 @@ impl From<&GovernedNativeError> for Diagnostic {
                 None => Code::E9001,
             },
             GovernedNativeError::SourceIndexOverflow(_) => Code::E1903,
-            GovernedNativeError::TargetAtomOutOfRange { .. } => Code::E5102,
+            GovernedNativeError::TargetAtomOutOfRange { .. }
+            | GovernedNativeError::ReferenceAtomAbsent(_)
+            | GovernedNativeError::CorrespondenceTargetAbsent { .. } => Code::E5102,
             GovernedNativeError::MissingTargetModel(_) => Code::E6009,
             GovernedNativeError::MultipleModelsRequested
             | GovernedNativeError::PeriodicUnsupported

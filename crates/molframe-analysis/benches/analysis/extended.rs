@@ -10,7 +10,8 @@ use molframe_analysis::{
 };
 use molframe_bench::{Sample, structure};
 use molframe_core::selection::AtomSelection;
-use molframe_core::{ExecutionContext, Structure, contract::AnalysisPolicy};
+use molframe_core::{ExecutionContext, OptionalSymbol, Structure, contract::AnalysisPolicy};
+
 use molframe_spatial::{SpatialBackend, StructureSpatial};
 
 fn context() -> ExecutionContext {
@@ -327,6 +328,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
             atom_b: molframe_core::AtomIndex::new(oxygen + 1),
             order: BondOrder::Single,
             provenance: BondProvenance::ChemicalComponentDictionary,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();
