@@ -16,13 +16,13 @@
 
 use super::qcp;
 use crate::eigen;
-use crate::numeric::exact_count;
+pub(super) use crate::numeric::exact_count;
 use crate::transform::Rigid;
 
 #[path = "fit_statistics.rs"]
 mod statistics;
 
-use statistics::{FitStatistics, fit_statistics};
+use statistics::{FitStatistics, fit_statistics, fit_statistics_weighted};
 
 /// Numerical controls for quaternion rigid superposition.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -72,6 +72,8 @@ pub enum SuperposeError {
     Degenerate,
     /// A numerical tolerance was invalid.
     InvalidOptions,
+    /// Per-pair weights are absent, negative, non-finite, or sum to nothing.
+    InvalidWeights,
     /// The quaternion eigensolver refused the matrix or did not converge.
     Eigen(eigen::EigenError),
     /// The point count cannot be represented exactly by the numeric kernel.
@@ -89,6 +91,8 @@ impl std::fmt::Display for SuperposeError {
             }
             Self::Degenerate => formatter.write_str("the positions are collinear"),
             Self::InvalidOptions => formatter.write_str("a numerical tolerance was invalid"),
+            Self::InvalidWeights => formatter
+                .write_str("per-pair weights must be finite, non-negative, and not all zero"),
             Self::Eigen(error) => write!(formatter, "the quaternion eigensolver failed: {error}"),
             Self::TooManyPoints => {
                 formatter.write_str("the point count cannot be represented exactly")
@@ -103,69 +107,9 @@ molframe_core::diagnostic_from!(SuperposeError, |error| match error {
     SuperposeError::LengthMismatch => molframe_core::Code::E5102,
     SuperposeError::TooFewPoints => molframe_core::Code::E5001,
     SuperposeError::Degenerate | SuperposeError::Eigen(_) => molframe_core::Code::E5104,
-    SuperposeError::InvalidOptions => molframe_core::Code::E5101,
+    SuperposeError::InvalidOptions | SuperposeError::InvalidWeights => molframe_core::Code::E5101,
     SuperposeError::TooManyPoints => molframe_core::Code::E1903,
 });
-
-/// The deviation between two sets already in correspondence.
-///
-/// No fitting happens: this measures the sets where they are. Use
-/// [`superpose`] first if the sets need aligning.
-///
-/// Runs in `O(n)` time and `O(1)` auxiliary space.
-///
-/// # Errors
-///
-/// Returns [`SuperposeError::LengthMismatch`] when the sets differ in size.
-pub fn rmsd(mobile: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, SuperposeError> {
-    if mobile.len() != reference.len() {
-        return Err(SuperposeError::LengthMismatch);
-    }
-
-    if mobile.is_empty() {
-        return Ok(0.0);
-    }
-
-    let total = crate::simd::squared_deviation_sum(mobile, reference);
-
-    let count = exact_count(mobile.len()).ok_or(SuperposeError::TooManyPoints)?;
-    Ok((total / count).sqrt())
-}
-
-/// Measures paired coordinates stored as contiguous `(x, y, z)` scalars.
-///
-/// This is the ABI-friendly form used by zero-copy array bindings. It keeps
-/// the same `O(n)` kernel and does not materialise an intermediate vector of
-/// points. Callers must provide complete triples; malformed buffers are
-/// reported as a length mismatch rather than silently truncated.
-///
-/// # Errors
-///
-/// Returns [`SuperposeError::LengthMismatch`] when the slices have different
-/// lengths or do not contain complete coordinate triples. Returns
-/// [`SuperposeError::TooManyPoints`] when the point count cannot be represented
-/// exactly by the accumulator.
-pub fn rmsd_flat(mobile: &[f32], reference: &[f32]) -> Result<f64, SuperposeError> {
-    if mobile.len() != reference.len() || !mobile.len().is_multiple_of(3) {
-        return Err(SuperposeError::LengthMismatch);
-    }
-    if mobile.is_empty() {
-        return Ok(0.0);
-    }
-
-    let (mobile_blocks, _) = mobile.as_chunks::<3>();
-    let (reference_blocks, _) = reference.as_chunks::<3>();
-    let mut total = 0.0;
-    for (left, right) in mobile_blocks.iter().zip(reference_blocks) {
-        let dx = f64::from(left[0]) - f64::from(right[0]);
-        let dy = f64::from(left[1]) - f64::from(right[1]);
-        let dz = f64::from(left[2]) - f64::from(right[2]);
-        total += dx.mul_add(dx, dy.mul_add(dy, dz * dz));
-    }
-
-    let count = exact_count(mobile.len() / 3).ok_or(SuperposeError::TooManyPoints)?;
-    Ok((total / count).sqrt())
-}
 
 /// A fit, and what it achieved.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -218,7 +162,108 @@ pub fn superpose_with_options(
     reference: &[[f32; 3]],
     options: SuperposeOptions,
 ) -> Result<Superposition, SuperposeError> {
-    let (statistics, count) = prepared_statistics(mobile, reference, options)?;
+    superpose_weighted_with_options(mobile, reference, &[], options)
+}
+
+/// Validates the inputs and accumulates weighted fit statistics.
+fn prepared_statistics_weighted(
+    mobile: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    weights: &[f64],
+    options: SuperposeOptions,
+) -> Result<(FitStatistics, f64), SuperposeError> {
+    let options = options.validate()?;
+    if mobile.len() != reference.len() {
+        return Err(SuperposeError::LengthMismatch);
+    }
+    if !weights.is_empty() && weights.len() != mobile.len() {
+        return Err(SuperposeError::InvalidWeights);
+    }
+
+    if mobile.len() < 3 {
+        return Err(SuperposeError::TooFewPoints);
+    }
+
+    // A weight is a multiplicity: the weighted fit is the unweighted fit of a
+    // set in which each point appears `w_i` times. Total weight plays the role of
+    // the count, and it has to be a real, positive mass or there is nothing to
+    // minimise.
+    let total_weight: f64 = if weights.is_empty() {
+        exact_count(mobile.len()).ok_or(SuperposeError::TooManyPoints)?
+    } else {
+        if weights
+            .iter()
+            .any(|weight| !weight.is_finite() || *weight < 0.0)
+        {
+            return Err(SuperposeError::InvalidWeights);
+        }
+        weights.iter().sum()
+    };
+    let count = exact_count(mobile.len()).ok_or(SuperposeError::TooManyPoints)?;
+    if !total_weight.is_finite() || total_weight <= 0.0 {
+        return Err(SuperposeError::InvalidWeights);
+    }
+    let statistics = fit_statistics_weighted(mobile, reference, weights);
+    if !statistics
+        .mobile_centre
+        .iter()
+        .all(|value| value.is_finite())
+        || !statistics
+            .reference_centre
+            .iter()
+            .all(|value| value.is_finite())
+    {
+        return Err(SuperposeError::InvalidWeights);
+    }
+
+    if is_collinear(
+        &statistics.mobile_scatter,
+        options.collinear_relative_tolerance,
+    ) || is_collinear(
+        &statistics.reference_scatter,
+        options.collinear_relative_tolerance,
+    ) {
+        return Err(SuperposeError::Degenerate);
+    }
+
+    Ok((statistics, count))
+}
+
+/// Finds the rigid transform minimising the weighted sum of squared deviations.
+///
+/// An empty `weights` means every pair weighs one, which is exactly
+/// [`superpose`]. A pair with weight zero does not enter the fit at all, so a
+/// caller whose weights single out one part of the structure gets a transform
+/// fitted to that part instead of a compromise over all of it.
+///
+/// Weights are read as non-negative and finite, and at least one must be
+/// positive; anything else has no minimiser to return.
+///
+/// # Errors
+///
+/// Returns [`SuperposeError::InvalidWeights`] for weights outside that contract,
+/// and otherwise the failures of [`superpose`].
+pub fn superpose_weighted(
+    mobile: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    weights: &[f64],
+) -> Result<Superposition, SuperposeError> {
+    superpose_weighted_with_options(mobile, reference, weights, SuperposeOptions::standard())
+}
+
+/// [`superpose_weighted`] with explicit numerical controls.
+///
+/// # Errors
+///
+/// Returns why no single converged transform exists, or why the weights cannot
+/// define a minimiser.
+pub fn superpose_weighted_with_options(
+    mobile: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    weights: &[f64],
+    options: SuperposeOptions,
+) -> Result<Superposition, SuperposeError> {
+    let (statistics, count) = prepared_statistics_weighted(mobile, reference, weights, options)?;
     let key = key_matrix(&statistics.covariance);
     let initial = initial_correlation(&statistics);
     check_eigen_options(options.eigen)?;
@@ -261,12 +306,10 @@ fn check_eigen_options(options: eigen::EigenOptions) -> Result<(), SuperposeErro
 
 /// The minimum RMSD after optimal rigid superposition, without the rotation.
 ///
-/// Only the dominant eigenvalue of the key matrix is needed, so no quaternion
-/// or transform is built. Validation matches [`superpose`], and the value
-/// equals `superpose(..).rmsd`.
-///
-/// Runs in one `O(n)` pass plus a fixed-size solve and allocates no heap
-/// memory.
+/// Only the dominant eigenvalue of the key matrix is needed, so no quaternion or
+/// transform is built. Validation matches [`superpose`], and the value equals
+/// `superpose(..).rmsd`. Runs in one `O(n)` pass plus a fixed-size solve and
+/// allocates no heap memory.
 ///
 /// # Errors
 ///

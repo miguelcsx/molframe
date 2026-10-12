@@ -32,6 +32,8 @@ pub mod polymer;
 pub mod rotation;
 mod simd;
 mod simd_measure;
+/// Three-vector arithmetic in single precision.
+pub mod single;
 /// Rigid least-squares superposition.
 pub mod superpose;
 pub mod transform;
@@ -50,14 +52,15 @@ pub use measure::{
     angle, cross, degrees, dihedral, displacement, distance, distance_squared, dot, norm, normalise,
 };
 pub use moments::{
-    asphericity, asphericity_with_options, centre_of_mass, centroid, gyration_axes,
+    SpreadFrame, asphericity, asphericity_with_options, centre_of_mass, centroid, gyration_axes,
     gyration_axes_with_options, inertia_tensor, principal_axes, principal_axes_with_options,
-    radius_of_gyration, shape_parameter, shape_parameter_with_options,
+    radius_of_gyration, shape_parameter, shape_parameter_with_options, spread_frame,
 };
 pub use path::path_torsions;
 pub use periodic_angle::{
     CircularSummary, PeriodicAngle, PeriodicError, TorusMetric, circular_summary, torus_summary,
 };
+pub use single::{cross_f32, dot_f32, normalise_f32, sub_f32};
 pub use planar::{
     Plane, best_fit_plane, best_fit_plane_with_options, plane_deviation,
     plane_deviation_with_options,
@@ -69,6 +72,6 @@ pub use rotation::{
 };
 pub use superpose::{
     SuperposeError, SuperposeOptions, Superposition, rmsd, rmsd_after_fit, rmsd_flat, superpose,
-    superpose_with_options,
+    superpose_weighted, superpose_weighted_with_options, superpose_with_options,
 };
 pub use transform::Rigid;

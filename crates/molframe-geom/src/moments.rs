@@ -370,6 +370,63 @@ pub fn gyration_axes_with_options(
     eigen::symmetric_with_options(tensor, options).map(Some)
 }
 
+/// A set of positions' centre and three orthogonal axes, the one they spread
+/// along most first.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SpreadFrame {
+    /// The geometric centre.
+    pub centre: [f64; 3],
+    /// Unit axes, right-handed: the third is the first crossed with the second.
+    pub axes: [[f64; 3]; 3],
+}
+
+/// The spread frame of a point cloud, for orienting a view or a box to it.
+///
+/// At most `sample_limit` evenly strided positions are used, so a
+/// million-atom structure costs a few thousand points; the axes of a
+/// molecule do not need every atom. Returns `None` for fewer than three
+/// positions, or positions on a line (no second axis to speak of: the second
+/// eigenvalue is below `1e-9`).
+///
+/// Runs in `O(min(n, sample_limit))` time plus a fixed-cost decomposition.
+///
+/// # Errors
+///
+/// Returns [`eigen::EigenError`] when the gyration tensor cannot be decomposed.
+pub fn spread_frame(
+    positions: &[[f32; 3]],
+    sample_limit: usize,
+) -> Result<Option<SpreadFrame>, eigen::EigenError> {
+    if positions.len() < 3 {
+        return Ok(None);
+    }
+    let stride = (positions.len() / sample_limit.max(1)).max(1);
+    let sample: Vec<[f32; 3]> = positions.iter().step_by(stride).copied().collect();
+    let Some(centre) = centroid(&sample) else {
+        return Ok(None);
+    };
+    let Some(decomposition) = gyration_axes(&sample)? else {
+        return Ok(None);
+    };
+    let [_, second, _] = decomposition.values;
+    let (Some(first), Some(second_axis)) = (decomposition.vector(0), decomposition.vector(1))
+    else {
+        return Ok(None);
+    };
+    if second < 1e-9 {
+        return Ok(None);
+    }
+    let third = [
+        first[1] * second_axis[2] - first[2] * second_axis[1],
+        first[2] * second_axis[0] - first[0] * second_axis[2],
+        first[0] * second_axis[1] - first[1] * second_axis[0],
+    ];
+    Ok(Some(SpreadFrame {
+        centre,
+        axes: [first, second_axis, third],
+    }))
+}
+
 /// The offset of a position from a centre.
 ///
 /// Runs in `O(1)` time and allocates no heap memory.

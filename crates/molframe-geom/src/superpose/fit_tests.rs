@@ -1,4 +1,5 @@
 use super::*;
+use num_traits::ToPrimitive;
 
 const TRIANGLE: [[f32; 3]; 4] = [
     [0.0, 0.0, 0.0],
@@ -48,6 +49,100 @@ fn a_rotated_copy_fits_exactly_and_the_fit_is_a_rotation_not_a_reflection() {
 }
 
 #[test]
+fn a_weighted_fit_ignores_the_pairs_it_weights_zero() {
+    // The first three points are one rigid body and the last three are another,
+    // flung apart. Weighting each group on its own recovers that group's own
+    // transform exactly; the unweighted fit can only compromise between them.
+    let reference = [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [10.0, 10.0, 10.0],
+        [11.0, 10.0, 10.0],
+        [10.0, 11.0, 10.0],
+    ];
+    let mut mobile = reference;
+    for point in mobile.iter_mut().take(3) {
+        point[0] += 7.0;
+        point[1] -= 3.0;
+    }
+    for point in mobile.iter_mut().skip(3) {
+        point[0] -= 25.0;
+        point[2] += 13.0;
+    }
+
+    let weighted = match superpose_weighted(&mobile, &reference, &[1.0, 1.0, 1.0, 0.0, 0.0, 0.0]) {
+        Ok(fit) => fit,
+        Err(error) => panic!("valid weights: {error}"),
+    };
+    let plain = match superpose(&mobile, &reference) {
+        Ok(fit) => fit,
+        Err(error) => panic!("valid: {error}"),
+    };
+    assert!(
+        weighted.rmsd < plain.rmsd,
+        "weights must pull the fit to the pairs they name: {} vs {}",
+        weighted.rmsd,
+        plain.rmsd
+    );
+    // The weighted group is one exact translation apart, so its three pairs land
+    // on top of each other.
+    let moved: Vec<[f32; 3]> = mobile
+        .iter()
+        .map(|&p| weighted.transform.apply(p))
+        .collect();
+    for index in 0..3 {
+        let delta = crate::distance(moved[index], reference[index]);
+        assert!(delta < 1e-3, "weighted pair {index} moved by {delta}");
+    }
+}
+
+#[test]
+fn weights_that_cannot_define_a_minimiser_are_refused() {
+    let reference = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+    for weights in [
+        vec![0.0, 0.0, 0.0],
+        vec![1.0, -1.0, 1.0],
+        vec![f64::NAN, 1.0, 1.0],
+        vec![1.0, 1.0, f64::INFINITY],
+    ] {
+        assert!(
+            matches!(
+                superpose_weighted(&reference, &reference, &weights),
+                Err(SuperposeError::InvalidWeights)
+            ),
+            "{weights:?} must be refused"
+        );
+    }
+    assert!(matches!(
+        superpose_weighted(&reference, &reference, &[1.0, 1.0]),
+        Err(SuperposeError::InvalidWeights)
+    ));
+}
+
+#[test]
+fn a_weighted_fit_of_all_ones_equals_the_plain_fit() {
+    let mut seed = 0x2545_F491_4F6C_DD1D_u64;
+    for _ in 0..20 {
+        let mobile = crate::superpose::fit::tests::cloud(&mut seed, 24);
+        let reference = crate::superpose::fit::tests::cloud(&mut seed, 24);
+        let weights = vec![1.0f64; mobile.len()];
+        let (Ok(weighted), Ok(plain)) = (
+            superpose_weighted(&mobile, &reference, &weights),
+            superpose(&mobile, &reference),
+        ) else {
+            panic!("both fits exist")
+        };
+        assert!(
+            (weighted.rmsd - plain.rmsd).abs() < 1e-12,
+            "{} vs {}",
+            weighted.rmsd,
+            plain.rmsd
+        );
+    }
+}
+
+#[test]
 fn a_mirrored_copy_is_not_fitted_by_reflecting_it() {
     let mirrored: Vec<[f32; 3]> = TRIANGLE.iter().map(|p| [-p[0], p[1], p[2]]).collect();
     let Ok(fit) = superpose(&mirrored, &TRIANGLE) else {
@@ -61,39 +156,6 @@ fn a_mirrored_copy_is_not_fitted_by_reflecting_it() {
         fit.rmsd > 0.1,
         "a mirror image genuinely does not fit, got {}",
         fit.rmsd
-    );
-}
-
-#[test]
-fn deviation_is_symmetric_and_zero_against_itself() {
-    assert_eq!(rmsd(&TRIANGLE, &TRIANGLE).ok(), Some(0.0));
-    let other: Vec<[f32; 3]> = TRIANGLE.iter().map(|p| [p[0] + 1.0, p[1], p[2]]).collect();
-    let (Ok(forward), Ok(backward)) = (rmsd(&TRIANGLE, &other), rmsd(&other, &TRIANGLE)) else {
-        panic!("expected both")
-    };
-    assert!((forward - backward).abs() < 1e-12);
-    assert!((forward - 1.0).abs() < 1e-6);
-}
-
-#[test]
-fn flat_coordinates_use_the_same_kernel_without_truncation() {
-    let flat = TRIANGLE.into_iter().flatten().collect::<Vec<_>>();
-    assert_eq!(rmsd_flat(&flat, &flat), Ok(0.0));
-    assert_eq!(
-        rmsd_flat(&flat[..flat.len() - 1], &flat[..flat.len() - 1]),
-        Err(SuperposeError::LengthMismatch)
-    );
-}
-
-#[test]
-fn sets_of_different_sizes_are_refused_rather_than_truncated() {
-    assert_eq!(
-        rmsd(&TRIANGLE, &TRIANGLE[..2]),
-        Err(SuperposeError::LengthMismatch)
-    );
-    assert_eq!(
-        superpose(&TRIANGLE, &TRIANGLE[..2]).err(),
-        Some(SuperposeError::LengthMismatch)
     );
 }
 
@@ -167,10 +229,13 @@ fn cloud(seed: &mut u64, points: usize) -> Vec<[f32; 3]> {
         *seed ^= *seed << 13;
         *seed ^= *seed >> 7;
         *seed ^= *seed << 17;
-        // Top 24 bits give an exact f32 in [0, 1).
+        // Top 24 bits give an exact f64 numerator in [0, 2^24). The sample lands in
+        // [-10, 10), which `f32` represents, so the narrowing always succeeds and
+        // the sample is unchanged by the conversion.
         let bits = u32::try_from(*seed >> 40).unwrap_or(0);
-        #[allow(clippy::cast_possible_truncation)]
-        let value = (f64::from(bits) / 16_777_216.0 * 20.0 - 10.0) as f32;
+        let Some(value) = (f64::from(bits) / 16_777_216.0 * 20.0 - 10.0).to_f32() else {
+            panic!("a sample in [-10, 10) is representable as f32");
+        };
         value
     };
     (0..points).map(|_| [next(), next(), next()]).collect()

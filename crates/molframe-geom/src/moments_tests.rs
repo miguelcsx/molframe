@@ -176,3 +176,29 @@ fn principal_axes_come_back_ordered_by_their_moments() {
     assert!(axes.values[0] >= axes.values[1]);
     assert!(axes.values[1] >= axes.values[2]);
 }
+
+#[test]
+fn a_slab_has_its_long_axis_first_and_right_handed_axes() {
+    let mut points = Vec::new();
+    for i in -20..=20 {
+        for j in -6..=6 {
+            for k in -2..=2 {
+                points.push([k as f32, i as f32, j as f32]);
+            }
+        }
+    }
+    let Ok(Some(frame)) = spread_frame(&points, 20_000) else {
+        panic!("a slab has a frame");
+    };
+    assert!(frame.centre.iter().all(|c| c.abs() < 1e-9));
+    assert!(frame.axes[0][1].abs() > 0.999);
+    assert!(frame.axes[1][2].abs() > 0.999);
+    assert!(frame.axes[2][0].abs() > 0.999);
+}
+
+#[test]
+fn points_on_a_line_have_no_spread_frame() {
+    let line: Vec<[f32; 3]> = (0..10).map(|i| [i as f32, 0.0, 0.0]).collect();
+    assert_eq!(spread_frame(&line, 20_000), Ok(None));
+    assert_eq!(spread_frame(&line[..2], 20_000), Ok(None));
+}
