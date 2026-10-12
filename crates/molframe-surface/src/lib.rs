@@ -23,12 +23,17 @@ mod io;
 pub mod lee_richards;
 #[path = "curvature.rs"]
 mod local_shape;
+mod mesh_diagnostics;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native_solver;
 mod neighbourhood;
 mod numeric;
+pub mod pocket;
 #[path = "sphere.rs"]
 mod sampling;
 mod sampling_plan;
 pub mod ses;
+mod solver_output;
 mod stream;
 #[path = "mesh.rs"]
 mod triangulation;
@@ -57,12 +62,17 @@ pub use geodesic::{
 pub use grid_options::SurfaceGridOptions;
 pub use io::write_obj;
 pub use lee_richards::lee_richards;
+pub use pocket::{GridPocket, PocketScanError, PocketScanOptions, PointProximity, scan_pockets};
 pub use local_shape::{CurvatureQuality, SurfaceCurvature, surface_curvatures};
 pub use sampling::fibonacci_sphere;
 pub use sampling_plan::SasaSampler;
 pub use ses::{
     SolventExcludedSurface, SurfaceTriangle, solvent_excluded_surface,
     solvent_excluded_surface_with_options,
+};
+pub use solver_output::{
+    MolecularSurfaceMesh, SurfaceOutputError, SurfaceOutputLimits, read_msms_surface,
+    read_surf_surface,
 };
 pub use stream::visit_shrake_rupley;
 pub use triangulation::{IndexedSurfaceMesh, MeshReport, SurfaceFace};
