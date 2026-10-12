@@ -12,7 +12,7 @@
 //! binary search.
 
 use crate::{Component, ComponentAtom};
-use molframe_core::{BondOrder, Element};
+use molframe_core::Element;
 use std::sync::Arc;
 
 /// A component with its name index and per-atom hydrogen-bonding roles.
@@ -28,6 +28,8 @@ pub(crate) struct ComponentIndex {
     acceptor: Box<[bool]>,
     /// Whether the atom at each position is only a weak acceptor.
     weak_acceptor: Box<[bool]>,
+    /// Carbonyl centres remain known even when their oxygen is absent in the model.
+    carbonyl: Box<[bool]>,
 }
 
 impl ComponentIndex {
@@ -41,12 +43,13 @@ impl ComponentIndex {
             name_at(&component, *left).cmp(name_at(&component, *right))
         });
         let order = order.into_boxed_slice();
+        let carbonyl = carbonyl_centres(&component, &order);
 
         let donor: Vec<bool> = (0..count)
             .map(|position| evaluate_donor(&component, &order, position))
             .collect();
         let acceptor: Vec<bool> = (0..count)
-            .map(|position| evaluate_acceptor(&component, &order, position))
+            .map(|position| evaluate_acceptor(&component, &order, &carbonyl, position))
             .collect();
 
         let weak_acceptor: Vec<bool> = (0..count)
@@ -59,6 +62,7 @@ impl ComponentIndex {
             donor: donor.into_boxed_slice(),
             acceptor: acceptor.into_boxed_slice(),
             weak_acceptor: weak_acceptor.into_boxed_slice(),
+            carbonyl,
         }
     }
 
@@ -83,6 +87,12 @@ impl ComponentIndex {
             Some(donor) => *donor,
             None => false,
         }
+    }
+
+    pub(crate) fn is_carbonyl(&self, name: &str) -> bool {
+        self.position(name)
+            .and_then(|slot| self.carbonyl.get(slot))
+            .is_some_and(|value| *value)
     }
 
     /// Whether the named atom is a conventional hydrogen-bond acceptor.
@@ -126,25 +136,23 @@ fn position_in(component: &Component, order: &[u32], name: &str) -> Option<usize
 }
 
 /// The positions bonded to `position`, resolved through the name index.
-fn bonded_positions(component: &Component, order: &[u32], position: usize) -> Vec<usize> {
-    let Some(atom) = component.atoms.get(position) else {
-        return Vec::new();
-    };
-    let name = atom.name.as_ref();
+fn bonded_positions<'a>(
+    component: &'a Component,
+    order: &'a [u32],
+    position: usize,
+) -> impl Iterator<Item = usize> + 'a {
+    let name = component.atoms.get(position).map(|atom| atom.name.as_ref());
 
-    component
-        .bonds
-        .iter()
-        .filter_map(|bond| {
-            if bond.atom_a.as_ref() == name {
-                position_in(component, order, &bond.atom_b)
-            } else if bond.atom_b.as_ref() == name {
-                position_in(component, order, &bond.atom_a)
-            } else {
-                None
-            }
-        })
-        .collect()
+    component.bonds.iter().filter_map(move |bond| {
+        let name = name?;
+        if bond.atom_a.as_ref() == name {
+            position_in(component, order, &bond.atom_b)
+        } else if bond.atom_b.as_ref() == name {
+            position_in(component, order, &bond.atom_a)
+        } else {
+            None
+        }
+    })
 }
 
 /// Whether the atom at `position` can donate a hydrogen bond.
@@ -160,13 +168,17 @@ fn evaluate_donor(component: &Component, order: &[u32], position: usize) -> bool
     }
 
     bonded_positions(component, order, position)
-        .into_iter()
         .filter_map(|neighbour| component.atoms.get(neighbour))
         .any(|neighbour| neighbour.element.is_hydrogen())
 }
 
 /// Whether the atom at `position` can accept a hydrogen bond.
-fn evaluate_acceptor(component: &Component, order: &[u32], position: usize) -> bool {
+fn evaluate_acceptor(
+    component: &Component,
+    order: &[u32],
+    carbonyl: &[bool],
+    position: usize,
+) -> bool {
     let Some(atom) = component.atoms.get(position) else {
         return false;
     };
@@ -178,10 +190,10 @@ fn evaluate_acceptor(component: &Component, order: &[u32], position: usize) -> b
         Element::SULFUR | Element::FLUORINE | Element::CHLORINE => atom.charge < 0,
         Element::NITROGEN => {
             atom.charge <= 0
-                && !is_amide(component, order, position)
+                && !bonded_positions(component, order, position)
+                    .any(|neighbour| carbonyl[neighbour])
                 && !(atom.aromatic
                     && bonded_positions(component, order, position)
-                        .into_iter()
                         .filter_map(|neighbour| component.atoms.get(neighbour))
                         .any(|neighbour| neighbour.element.is_hydrogen()))
         }
@@ -201,35 +213,27 @@ fn evaluate_weak_acceptor(component: &Component, position: usize) -> bool {
     ) && atom.charge == 0
 }
 
-/// Whether the nitrogen at `position` is bonded to a carbonyl or thiocarbonyl.
-fn is_amide(component: &Component, order: &[u32], position: usize) -> bool {
-    bonded_positions(component, order, position)
-        .into_iter()
-        .any(|neighbour| {
-            let Some(carbon) = component.atoms.get(neighbour) else {
-                return false;
-            };
-            if carbon.element != Element::CARBON {
-                return false;
+/// Marks carbonyl and thiocarbonyl carbons once per component.
+fn carbonyl_centres(component: &Component, order: &[u32]) -> Box<[bool]> {
+    let mut carbonyl = vec![false; component.atoms.len()];
+    for bond in component.bonds.iter() {
+        let (Some(a), Some(b)) = (
+            position_in(component, order, &bond.atom_a),
+            position_in(component, order, &bond.atom_b),
+        ) else {
+            continue;
+        };
+        for (carbon, other) in [(a, b), (b, a)] {
+            if super::hbond_roles::carbonyl_pair(
+                component.atoms[carbon].element,
+                component.atoms[other].element,
+                bond.order,
+            ) {
+                carbonyl[carbon] = true;
             }
-            let carbon_name = carbon.name.as_ref();
-
-            component.bonds.iter().any(|bond| {
-                if bond.order != BondOrder::Double {
-                    return false;
-                }
-                let other = if bond.atom_a.as_ref() == carbon_name {
-                    position_in(component, order, &bond.atom_b)
-                } else if bond.atom_b.as_ref() == carbon_name {
-                    position_in(component, order, &bond.atom_a)
-                } else {
-                    None
-                };
-                other
-                    .and_then(|slot| component.atoms.get(slot))
-                    .is_some_and(|atom| matches!(atom.element, Element::OXYGEN | Element::SULFUR))
-            })
-        })
+        }
+    }
+    carbonyl.into_boxed_slice()
 }
 
 #[cfg(test)]

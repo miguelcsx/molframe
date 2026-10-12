@@ -2,6 +2,7 @@
 
 mod atom_chemistry;
 mod component_index;
+mod hbond_roles;
 mod linkage;
 
 use component_index::ComponentIndex;
@@ -14,6 +15,7 @@ use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use molframe_core::index::ChainIndex;
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
 use molframe_core::topology::PolymerKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -163,8 +165,9 @@ pub fn apply_component_chemistry(
             .findings
             .push(Diagnostic::new(Code::W3201).with_context("component", component.to_string()));
     }
-    attach_annotations(&mut data, &state.chemistry)?;
     data.bonds = state.bonds.finish();
+    hbond_roles::refine_linked_acceptors(&data, &mut state.chemistry);
+    attach_annotations(&mut data, &state.chemistry)?;
     for finding in molframe_core::structure::validate(&data) {
         state.findings.push(finding);
     }
@@ -270,6 +273,8 @@ impl Annotator<'_> {
                 continue;
             };
             *slot = Some(AtomChemistry {
+                element: expected.element,
+                carbonyl: index.is_carbonyl(name),
                 kind: component.kind,
                 aromatic: expected.aromatic,
                 charge: expected.charge,
@@ -340,6 +345,10 @@ fn add_component_bonds(
                         atom_b: atom_b.index(),
                         order: bond.order,
                         provenance: BondProvenance::ChemicalComponentDictionary,
+                        // The dictionary states this bond exists inside a
+                        // component; it is not a `struct_conn` classification of
+                        // the assembly.
+                        kind: OptionalSymbol::NONE,
                     });
                 }
             }

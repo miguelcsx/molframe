@@ -1,5 +1,6 @@
 use super::*;
 use crate::{ComponentBond, ComponentKind};
+use molframe_core::BondOrder;
 
 fn atom(name: &str, element: Element, charge: i8, aromatic: bool) -> ComponentAtom {
     ComponentAtom {

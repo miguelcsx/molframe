@@ -13,6 +13,7 @@ use molframe_core::BondOrder;
 use molframe_core::Element;
 use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::{AtomRef, ResidueRef};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -213,6 +214,8 @@ fn link_pair(
             atom_b: candidate.right.index(),
             order: BondOrder::Polymeric,
             provenance: BondProvenance::ChemicalComponentDictionary,
+            // The CCD states a polymeric linkage, not a `struct_conn` class.
+            kind: OptionalSymbol::NONE,
         });
     }
     if ambiguous {

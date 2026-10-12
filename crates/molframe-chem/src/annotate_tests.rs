@@ -57,6 +57,116 @@ fn component() -> Component {
     }
 }
 
+fn carbonyl_component() -> Component {
+    let mut component = component();
+    let mut atoms = component.atoms.to_vec();
+    atoms[0].charge = 0;
+    atoms[0].aromatic = false;
+    for (name, element) in [("O", Element::OXYGEN), ("H", Element::HYDROGEN)] {
+        atoms.push(ComponentAtom {
+            name: name.into(),
+            alternate_name: None,
+            element,
+            charge: 0,
+            aromatic: false,
+            leaving: false,
+            stereo: None,
+        });
+    }
+    component.atoms = atoms.into();
+    let mut bonds = component.bonds.to_vec();
+    for (first, second, order) in [("C", "O", BondOrder::Double), ("N", "H", BondOrder::Single)] {
+        bonds.push(ComponentBond {
+            atom_a: first.into(),
+            atom_b: second.into(),
+            order,
+            aromatic: false,
+            stereo: None,
+        });
+    }
+    component.bonds = bonds.into();
+    component
+}
+
+#[test]
+fn linked_amide_nitrogens_stop_accepting_without_changing_terminal_roles_or_coordinates() {
+    let (structure, _) = molframe_cif::read(
+        &InputBuffer::from_bytes(STRUCTURE.as_bytes().to_vec()),
+        &ReadOptions::new(),
+    )
+    .expect("fixture");
+    let provider = MemoryProvider::new(DictionaryVersion::new("test"), [carbonyl_component()])
+        .expect("dictionary");
+    let policy = PolymerLinkPolicy::explicit(
+        2.1,
+        vec![PolymerLinkRule::new(
+            ComponentKind::AminoAcid,
+            "C",
+            ComponentKind::AminoAcid,
+            "N",
+        )],
+    );
+    for (policy, second_accepts) in [(PolymerLinkPolicy::Disabled, true), (policy, false)] {
+        let report = apply_component_chemistry(&structure, &provider, policy).expect("annotation");
+        let annotation = |name| match report.structure.annotations().get(name) {
+            Some(molframe_core::AtomAnnotation::Boolean(column)) => column,
+            _ => panic!("boolean role column"),
+        };
+        assert_eq!(
+            annotation(molframe_core::HBOND_ACCEPTOR_ANNOTATION).get(0),
+            Some((true, molframe_core::Presence::Present))
+        );
+        assert_eq!(
+            annotation(molframe_core::HBOND_ACCEPTOR_ANNOTATION).get(3),
+            Some((second_accepts, molframe_core::Presence::Present))
+        );
+        assert_eq!(
+            annotation(molframe_core::HBOND_DONOR_ANNOTATION).get(3),
+            Some((true, molframe_core::Presence::Present))
+        );
+        assert_eq!(
+            report.structure.positions().as_ptr(),
+            structure.positions().as_ptr(),
+            "chemistry never copies atom coordinates"
+        );
+    }
+}
+
+#[test]
+fn deposited_covalent_links_refine_roles_even_when_polymer_inference_is_disabled() {
+    let (structure, _) = molframe_cif::read(
+        &InputBuffer::from_bytes(STRUCTURE.as_bytes().to_vec()),
+        &ReadOptions::new(),
+    )
+    .expect("fixture");
+    let mut data = structure.data().clone();
+    let mut bonds = BondTableBuilder::new();
+    bonds.push(BondRecord {
+        atom_a: molframe_core::AtomIndex::new(2),
+        atom_b: molframe_core::AtomIndex::new(3),
+        order: BondOrder::Single,
+        provenance: BondProvenance::File,
+        kind: molframe_core::optional::OptionalSymbol::NONE,
+    });
+    data.bonds = bonds.finish();
+    let structure = Structure::new(data);
+    let provider = MemoryProvider::new(DictionaryVersion::new("test"), [carbonyl_component()])
+        .expect("dictionary");
+    let report = apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled)
+        .expect("annotation");
+    let Some(molframe_core::AtomAnnotation::Boolean(column)) = report
+        .structure
+        .annotations()
+        .get(molframe_core::HBOND_ACCEPTOR_ANNOTATION)
+    else {
+        panic!("acceptors");
+    };
+    assert_eq!(
+        column.get(3),
+        Some((false, molframe_core::Presence::Present))
+    );
+}
+
 #[test]
 fn unmatched_hydrogen_names_do_not_discard_matched_heavy_atom_chemistry() {
     let text = STRUCTURE.replace(

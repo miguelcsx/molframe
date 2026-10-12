@@ -15,6 +15,8 @@ pub const HBOND_WEAK_ACCEPTOR_ANNOTATION: &str = "hbond_weak_acceptor";
 #[derive(Clone, Copy)]
 #[allow(clippy::struct_excessive_bools)] // one flag per independent boolean atom annotation column
 pub(super) struct AtomChemistry {
+    pub(super) element: molframe_core::Element,
+    pub(super) carbonyl: bool,
     pub(super) kind: crate::ComponentKind,
     pub(super) aromatic: bool,
     pub(super) charge: i8,
