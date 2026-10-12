@@ -23,6 +23,9 @@ flate2 = { workspace = true, optional = true }
 molframe-mmap = { workspace = true, optional = true }
 zstd = { workspace = true, optional = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tempfile.workspace = true
+
 [features]
 default = []
 mmap = ["dep:molframe-mmap"]

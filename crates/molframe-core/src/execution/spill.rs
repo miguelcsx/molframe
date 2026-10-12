@@ -18,7 +18,7 @@ const HASH_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 #[derive(Debug)]
 pub(crate) struct DiskAccount {
-    root: PathBuf,
+    pub(super) root: PathBuf,
     maximum: u64,
     used: AtomicU64,
     spilled: AtomicU64,
@@ -37,7 +37,7 @@ impl DiskAccount {
         }
     }
 
-    fn try_charge(&self, bytes: u64) -> Result<(), SpillError> {
+    pub(super) fn try_charge(&self, bytes: u64) -> Result<(), SpillError> {
         let mut current = self.used.load(Ordering::Acquire);
         loop {
             let Some(next) = current.checked_add(bytes) else {
@@ -65,7 +65,7 @@ impl DiskAccount {
         }
     }
 
-    fn release(&self, bytes: u64) {
+    pub(super) fn release(&self, bytes: u64) {
         self.used.fetch_sub(bytes, Ordering::AcqRel);
     }
 

@@ -2300,6 +2300,7 @@ dependencies = [
  "rayon",
  "sha2",
  "smallvec",
+ "tempfile",
  "thiserror 2.0.21",
  "zstd",
 ]

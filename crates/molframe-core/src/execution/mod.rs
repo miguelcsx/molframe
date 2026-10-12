@@ -14,6 +14,8 @@ mod memory;
 mod retained;
 pub(crate) mod spill;
 mod storage;
+#[cfg(not(target_arch = "wasm32"))]
+mod workspace;
 pub use retained::Retained;
 
 pub use batch::BatchBufferPool;
@@ -23,3 +25,5 @@ pub use context::{ContextError, ExecutionContext, ExecutionContextBuilder};
 pub use memory::{DEFAULT_MEMORY_BUDGET_BYTES, MemoryBudget, MemoryBudgetError, MemoryReservation};
 pub use spill::{SpillArtifact, SpillError, SpillFile, SpillReader};
 pub use storage::{ScratchPolicy, TempStoragePolicy};
+#[cfg(not(target_arch = "wasm32"))]
+pub use workspace::TemporaryWorkspace;

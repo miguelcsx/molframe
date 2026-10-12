@@ -21,7 +21,7 @@ pub struct ExecutionContext {
     cancellation: CancellationToken,
     scratch: ScratchPolicy,
     temp_storage: TempStoragePolicy,
-    disk: Option<Arc<DiskAccount>>,
+    pub(super) disk: Option<Arc<DiskAccount>>,
     executor: Arc<SharedPool>,
     worker_budget: usize,
     image_search_limit: usize,
@@ -33,6 +33,16 @@ impl ExecutionContext {
     #[must_use]
     pub fn builder() -> ExecutionContextBuilder {
         ExecutionContextBuilder::default()
+    }
+
+    /// Shares resource accounts and the executor while assigning task-local cancellation.
+    /// Cancelling this task does not cancel independent tasks using the same budgets.
+    #[must_use]
+    pub fn with_cancellation(&self, cancellation: CancellationToken) -> Self {
+        Self {
+            cancellation,
+            ..self.clone()
+        }
     }
 
     /// The most candidate symmetry images a crystal search may examine.

@@ -56,3 +56,21 @@ fn cloned_contexts_share_memory_accounting_and_cancellation() {
     drop(reservation);
     assert!(clone.try_reserve(10).is_ok());
 }
+
+#[test]
+fn task_local_cancellation_preserves_shared_memory_accounts() {
+    let root = ExecutionContext::builder()
+        .memory_budget(MemoryBudget::new(16).expect("budget"))
+        .scratch_policy(ScratchPolicy::new(1))
+        .build()
+        .expect("context");
+    let token = CancellationToken::new();
+    let task = root.with_cancellation(token.clone());
+    let reservation = task.try_reserve(16).expect("shared capacity");
+    assert!(root.try_reserve(1).is_err());
+    token.cancel();
+    assert!(task.cancellation().is_cancelled());
+    assert!(!root.cancellation().is_cancelled());
+    drop(reservation);
+    assert!(root.try_reserve(16).is_ok());
+}
