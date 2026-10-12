@@ -26,11 +26,25 @@ impl ReadState<'_> {
     pub(in crate::reader) fn finish(mut self) -> ReadResult {
         self.close_chain();
         self.verify_frame_len();
+        if self.model_values_differ {
+            self.findings
+                .push(Diagnostic::new(Code::W3015).with_message(
+                    "occupancies or B-factors differ between models; model 1's values are kept",
+                ));
+        }
         if !self.saw_atoms {
-            self.findings.push(
-                Diagnostic::new(Code::E1001)
-                    .with_message("the file contains no coordinate records"),
-            );
+            // A row that looks like a coordinate record but whose field layout
+            // does not parse is a different failure from a file that holds no
+            // coordinates, and saying which is the difference between a fixable
+            // report and a baffling one.
+            let finding = if self.malformed_atom > 0 {
+                Diagnostic::new(Code::E1201)
+                    .with_message("coordinate records are present but their fields do not parse")
+                    .with_context("rows", self.malformed_atom.to_string())
+            } else {
+                Diagnostic::new(Code::E1001).with_message("the file contains no coordinate records")
+            };
+            self.findings.push(finding);
             return Err(self.findings.finish());
         }
 

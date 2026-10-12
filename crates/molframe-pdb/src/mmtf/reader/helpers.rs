@@ -277,6 +277,9 @@ fn add_group_bonds(
                 bond_index,
             ),
             provenance: BondProvenance::File,
+            // MMTF carries no `_struct_conn.conn_type_id`; the bond's own order
+            // and endpoints are all it says.
+            kind: OptionalSymbol::NONE,
         });
     }
 
@@ -308,6 +311,8 @@ fn add_global_bonds(
             atom_b,
             order: bond.order,
             provenance: BondProvenance::File,
+            // MMTF carries no `_struct_conn.conn_type_id`.
+            kind: OptionalSymbol::NONE,
         });
     }
 

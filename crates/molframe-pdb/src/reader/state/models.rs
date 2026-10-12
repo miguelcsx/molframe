@@ -194,17 +194,23 @@ impl ReadState<'_> {
         };
         let sequence = i32::try_from(signature.seq).ok();
 
-        chunk.element(local) == Some(signature.element)
+        // Occupancy and B-factor describe the atom in one model, not which atom it
+        // is. Ensembles from NMR and refinement runs routinely carry different
+        // values per model while sharing one topology, so a difference is
+        // noted rather than treated as a topology change.
+        let same_values =
+            chunk.occupancy(local) == Some(occupancy) && chunk.b_factor(local) == Some(b_factor);
+        let same_identity = chunk.element(local) == Some(signature.element)
             && chunk.atom_name(local) == Some(signature.atom_name)
             && chunk.alt_id(local) == Some(signature.alt_id)
             && chunk.atom_site_id(local) == Some(serial)
-            && chunk.occupancy(local) == Some(occupancy)
-            && chunk.b_factor(local) == Some(b_factor)
             && expected_component == Some(signature.component_id)
             && self.data.topology.residues.auth_seq_id(residue) == sequence
             && self.data.topology.residues.ins_code(residue) == signature.ins_code.get()
             && self.data.topology.residues.is_het(residue) == signature.het
-            && self.data.topology.chains.label_asym_id(chain) == Some(signature.chain)
+            && self.data.topology.chains.label_asym_id(chain) == Some(signature.chain);
+        self.model_values_differ |= !same_values;
+        same_identity
     }
 
     pub(super) fn verify_frame_len(&mut self) {

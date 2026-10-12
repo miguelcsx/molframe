@@ -478,3 +478,55 @@ fn walking_the_hierarchy_reaches_a_named_atom_of_a_named_residue() {
         Some(2)
     );
 }
+
+fn two_chain_model(number: u32, y: &str) -> String {
+    let rows = [
+        ("A", 1, "0.000"),
+        ("A", 2, "3.800"),
+        ("B", 1, "20.000"),
+        ("B", 2, "23.800"),
+    ];
+    let mut text = format!("MODEL     {number:>4}\n");
+    for (index, (chain, residue, x)) in rows.iter().enumerate() {
+        let serial = index + 1;
+        text.push_str(&format!(
+            "ATOM  {serial:>5}  CA  ALA {chain}{residue:>4}    {x:>8}{y:>8}   0.000  1.00  0.00           C\n"
+        ));
+        if *residue == 2 {
+            text.push_str("TER\n");
+        }
+    }
+    text.push_str("ENDMDL\n");
+    text
+}
+
+/// Later models only add coordinates. Their `TER` and `ENDMDL` records must not
+/// touch the residue ranges the first model fixed, which used to fail with a
+/// reversed-range consistency error as soon as a file had two chains.
+#[test]
+fn multi_model_files_with_several_chains_keep_the_first_model_hierarchy() {
+    let text = format!(
+        "{}{}{}END\n",
+        two_chain_model(1, "1.000"),
+        two_chain_model(2, "2.000"),
+        two_chain_model(3, "3.000")
+    );
+    let (structure, _) = parse(&text);
+    assert_eq!(structure.model_count(), 3);
+    assert_eq!(structure.chain_count(), 2);
+    assert_eq!(structure.residue_count(), 4);
+    assert_eq!(structure.atom_count(), 4);
+    let residues: Vec<_> = (0..4)
+        .map(|index| {
+            structure
+                .data()
+                .topology
+                .residues
+                .atoms(molframe_core::index::ResidueIndex::new(index))
+        })
+        .collect();
+    assert_eq!(
+        residues,
+        vec![Some(0..1), Some(1..2), Some(2..3), Some(3..4)]
+    );
+}

@@ -64,6 +64,7 @@ pub(super) fn read_ragged(
     let mut numbers = Vec::new();
     let mut findings = Vec::new();
     let mut current = None;
+    let mut malformed = 0_u64;
 
     for line in Lines::new(text) {
         let line = line.map_err(|finding| vec![finding])?;
@@ -93,10 +94,24 @@ pub(super) fn read_ragged(
                     state.line(&line);
                 }
             }
+            // A coordinate row whose field layout does not parse names no record
+            // here either. Dropping it would lose atoms from a multi-model file
+            // without a word, so the row is counted and reported the same way the
+            // single-model path reports it.
+            _ if super::state::starts_with_coordinate_keyword(line.text) => {
+                malformed += 1;
+            }
             _ => {}
         }
     }
     finish_model(&mut current, &mut models, &mut numbers, &mut findings)?;
+    if malformed > 0 && models.is_empty() {
+        findings.push(
+            Diagnostic::new(Code::E1201)
+                .with_message("coordinate records are present but their fields do not parse")
+                .with_context("rows", malformed.to_string()),
+        );
+    }
     finish_ensemble(models, numbers, findings, options)
 }
 

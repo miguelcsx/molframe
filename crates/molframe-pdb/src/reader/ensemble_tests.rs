@@ -43,13 +43,31 @@ fn many_ragged_models_are_materialised_in_deposition_order() {
 }
 
 #[test]
-fn a_non_coordinate_atom_change_selects_independent_annotations() {
-    let text = "MODEL        1\nATOM      1  N   GLY A   1      1.000   1.000   1.000  1.00 10.00           N\nENDMDL\nMODEL        2\nATOM      1  N   GLY A   1      2.000   2.000   2.000  0.50 20.00           N\nENDMDL\n";
+fn per_model_occupancy_and_b_factor_stay_dense_and_are_reported_once() {
+    let text = "MODEL        1\nATOM      1  N   GLY A   1      1.000   1.000   1.000  1.00 10.00           N\nENDMDL\nMODEL        2\nATOM      1  N   GLY A   1      2.000   2.000   2.000  0.50 20.00           N\nENDMDL\nMODEL        3\nATOM      1  N   GLY A   1      3.000   3.000   3.000  0.25 30.00           N\nENDMDL\n";
+    let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
+    let (structure, findings) = crate::read(&input, &ReadOptions::new())
+        .unwrap_or_else(|findings| panic!("read failed: {findings:?}"));
+    assert!(structure.ragged_models().is_none());
+    assert_eq!(structure.model_count(), 3);
+    let atom = structure.data().atoms().next().expect("one atom");
+    assert_eq!(atom.occupancy(), Some(1.0));
+    assert_eq!(atom.b_factor(), Some(10.0));
+    let noted = findings
+        .iter()
+        .filter(|finding| finding.code() == molframe_core::diagnostic::Code::W3015)
+        .count();
+    assert_eq!(noted, 1);
+}
+
+#[test]
+fn a_non_coordinate_identity_change_selects_independent_annotations() {
+    let text = "MODEL        1\nATOM      1  N   GLY A   1      1.000   1.000   1.000  1.00 10.00           N\nENDMDL\nMODEL        2\nATOM      1  O   GLY A   1      2.000   2.000   2.000  0.50 20.00           O\nENDMDL\n";
     let input = InputBuffer::from_bytes(text.as_bytes().to_vec());
     let (structure, _) = crate::read(&input, &ReadOptions::new())
         .unwrap_or_else(|findings| panic!("read failed: {findings:?}"));
     let Some(models) = structure.ragged_models() else {
-        panic!("per-atom annotation changes must be ragged");
+        panic!("an atom identity change must be ragged");
     };
     let occupancies: Vec<_> = models
         .iter()

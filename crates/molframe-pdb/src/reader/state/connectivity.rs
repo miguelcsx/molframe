@@ -6,6 +6,7 @@ use crate::hybrid36;
 use crate::reader::lines::Line;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::span::ByteSpan;
 
 impl ReadState<'_> {
@@ -57,6 +58,9 @@ impl ReadState<'_> {
                 atom_b: *atom_b,
                 order: BondOrder::Unknown,
                 provenance: BondProvenance::File,
+                // A CONECT record states that two atoms are bonded and nothing
+                // about what kind of connection it is.
+                kind: OptionalSymbol::NONE,
             });
         }
         self.data.bonds = bonds.finish();

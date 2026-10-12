@@ -8,8 +8,11 @@ mod connectivity;
 mod finalize;
 mod metadata;
 mod models;
+mod rows;
 mod secondary;
 mod variants;
+
+pub(super) use rows::{sequence_identifier, serial_of, starts_with_coordinate_keyword};
 
 use models::{AtomIdentity, ModelRead};
 
@@ -24,7 +27,7 @@ use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use molframe_core::element::Element;
 use molframe_core::index::{AtomIndex, EntityIndex, ResidueIndex};
 use molframe_core::io::{Format, MissingElementPolicy, ReadOptions};
-use molframe_core::optional::{OptionalI32, OptionalSymbol};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::span::{ByteSpan, Position};
 use molframe_core::structure::StructureData;
 use molframe_core::symbol::SymbolId;
@@ -41,6 +44,7 @@ struct ResidueKey {
 }
 
 /// Everything carried between lines while reading.
+#[allow(clippy::struct_excessive_bools)] // independent per-read facts: atoms seen, topology fixed, ragged needed, values differ
 pub(super) struct ReadState<'a> {
     options: &'a ReadOptions,
     data: StructureData,
@@ -58,9 +62,13 @@ pub(super) struct ReadState<'a> {
     atom_position: u32,
     entity: Option<EntityIndex>,
     saw_atoms: bool,
+    /// Coordinate-looking rows whose record name could not be read.
+    malformed_atom: u64,
     topology_locked: bool,
     expected_chunk: usize,
     requires_ragged: bool,
+    /// A later model repeated the topology with other occupancies or B-factors.
+    model_values_differ: bool,
     serial_to_atom: BTreeMap<u32, AtomIndex>,
     conect: Vec<(u32, u32, Position)>,
     /// Ellipsoid rows awaiting their atom, joined by deposited serial.
@@ -93,9 +101,11 @@ impl<'a> ReadState<'a> {
             atom_position: 0,
             entity: None,
             saw_atoms: false,
+            malformed_atom: 0,
             topology_locked: false,
             expected_chunk: 0,
             requires_ragged: false,
+            model_values_differ: false,
             serial_to_atom: BTreeMap::new(),
             conect: Vec::new(),
             anisou: Vec::new(),
@@ -111,6 +121,12 @@ impl<'a> ReadState<'a> {
     pub(super) fn line(&mut self, line: &Line<'_>) {
         let record = fixed::record(line.text);
         if !self.options.categories.keeps_record(record) {
+            // A malformed coordinate row is filtered out here too, because its
+            // broken record name matches no filter entry. Counting it before the
+            // filter keeps the diagnostic honest about what the file held.
+            if starts_with_coordinate_keyword(line.text) {
+                self.malformed_atom += 1;
+            }
             return;
         }
         self.observe_metadata(record, line);
@@ -125,6 +141,15 @@ impl<'a> ReadState<'a> {
             "EXPDTA" => self.method(line),
             "CONECT" => self.conect(line),
             "ANISOU" => self.anisou(line),
+            // A coordinate record whose serial outgrew its five columns pushes a
+            // digit into column 6, so the record name reads `ATOM 1` and the line
+            // matches nothing here. It is a real malformed row rather than a line
+            // this reader has no interest in, and saying so is the difference
+            // between a caller fixing their file and a caller being told the file
+            // holds no coordinates at all.
+            _ if starts_with_coordinate_keyword(line.text) => {
+                self.malformed_atom += 1;
+            }
             _ => {}
         }
     }
@@ -379,7 +404,15 @@ impl<'a> ReadState<'a> {
     }
 
     /// Closes the residue and chain being built, fixing their atom ranges.
+    ///
+    /// Once the topology is locked, later models only contribute coordinates.
+    /// Their `TER` and `ENDMDL` records must leave the first model's ranges
+    /// alone: `atom_position` then counts atoms of the current frame, not of
+    /// the topology, and would rewrite a residue's extent backwards.
     fn close_chain(&mut self) {
+        if self.topology_locked {
+            return;
+        }
         self.close_residue();
         let Some(label_asym_id) = self.chain_label.take() else {
             return;
@@ -470,21 +503,4 @@ impl<'a> ReadState<'a> {
             None => "".into(),
         }
     }
-}
-
-fn sequence_identifier(sequence: i64) -> OptionalI32 {
-    match i32::try_from(sequence) {
-        Ok(sequence) => OptionalI32::some(sequence),
-        Err(_) => OptionalI32::NONE,
-    }
-}
-
-/// The file-local atom label, or the reserved unlabeled value.
-fn serial_of(line: &Line<'_>) -> u32 {
-    let Some(serial) = hybrid36::decode(fixed::raw(line.text, 7, 11), 5)
-        .and_then(|serial| u32::try_from(serial).ok())
-    else {
-        return 0;
-    };
-    serial
 }
