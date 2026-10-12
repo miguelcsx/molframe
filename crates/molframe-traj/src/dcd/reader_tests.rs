@@ -188,3 +188,18 @@ fn floats(values: &[f32]) -> Vec<u8> {
         .flat_map(|value| value.to_le_bytes())
         .collect()
 }
+
+#[test]
+fn file_reader_follows_the_data_when_the_header_overstates_frames() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let path = directory.path().join("short.dcd");
+    std::fs::write(&path, super::super::tests::overstated_charmm_bytes()).expect("write fixture");
+    let mut reader = open(&path);
+    assert_eq!(reader.n_frames(), Some(2));
+    let mut frame = Timestep::default();
+    assert!(reader.read_next_frame(&mut frame).expect("frame 0"));
+    assert!(frame.cell.is_none());
+    assert!(reader.read_next_frame(&mut frame).expect("frame 1"));
+    assert!(frame.cell.is_some());
+    assert!(!reader.read_next_frame(&mut frame).expect("end"));
+}

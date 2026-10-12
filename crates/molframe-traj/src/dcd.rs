@@ -112,7 +112,10 @@ pub enum DcdError {
 pub fn parse_dcd(bytes: &[u8]) -> Result<DcdTrajectory, DcdError> {
     let endian = detect_endian(bytes)?;
     let mut records = Records::new(bytes, endian);
-    let (header, free_indices) = parse_header(&mut records, endian)?;
+    let (mut header, free_indices) = parse_header(&mut records, endian)?;
+    if let Some(count) = stored_frame_count(&header, bytes.len() - records.cursor) {
+        header.frame_count = count;
+    }
     let frames = parse_frames(&mut records, &header, &free_indices)?;
     if records.next()?.is_some() {
         return Err(DcdError::InvalidRecord {
@@ -192,10 +195,10 @@ fn parse_frames(
     let mut previous: Option<Vec<[f32; 3]>> = None;
     for frame in 0..header.frame_count {
         let cell = if header.has_unit_cell {
-            Some(parse_cell(
+            parse_cell(
                 records.next()?.ok_or(DcdError::CoordinateCount)?,
                 header.endian,
-            )?)
+            )?
         } else {
             None
         };
@@ -372,7 +375,38 @@ fn assemble_positions(
         .collect())
 }
 
-fn parse_cell(record: &[u8], endian: DcdEndian) -> Result<UnitCell, DcdError> {
+/// Frame count implied by the bytes that follow the header.
+///
+/// Writers that stream (CHARMM, NAMD) record the planned frame count in the
+/// header and never rewrite it when a run ends early, so the declared count
+/// cannot be trusted over the data itself. The count is derived from the payload
+/// size only when the payload is an exact whole number of frames; a ragged
+/// payload yields `None` so a truncated frame still surfaces as an error.
+pub(crate) fn stored_frame_count(header: &DcdHeader, payload_bytes: usize) -> Option<usize> {
+    const MARKERS: usize = 8;
+    let block = |atoms: usize| atoms * 4 + MARKERS;
+    let extra = usize::from(header.has_fourth_dimension);
+    let cell = if header.has_unit_cell {
+        6 * 8 + MARKERS
+    } else {
+        0
+    };
+    let frame = |atoms: usize| cell + (3 + extra) * block(atoms);
+    let first = frame(header.atom_count);
+    let rest = frame(header.atom_count - header.fixed_atom_count);
+    if payload_bytes < first {
+        return (payload_bytes == 0).then_some(0);
+    }
+    let remainder = payload_bytes - first;
+    if remainder % rest != 0 {
+        return None;
+    }
+    Some(1 + remainder / rest)
+}
+
+/// Decodes a unit-cell record; an all-zero record means the writer had no cell
+/// for that frame and yields `None`.
+fn parse_cell(record: &[u8], endian: DcdEndian) -> Result<Option<UnitCell>, DcdError> {
     let values: Vec<f64> = match record.len() {
         48 => (0..6)
             .map(|index| f64_at(record, index * 8, endian))
@@ -382,6 +416,9 @@ fn parse_cell(record: &[u8], endian: DcdEndian) -> Result<UnitCell, DcdError> {
             .collect::<Result<_, _>>()?,
         _ => return Err(DcdError::InvalidCell),
     };
+    if values.iter().all(|value| *value == 0.0) {
+        return Ok(None);
+    }
     let mut angles = [values[4], values[3], values[1]];
     if angles.iter().all(|angle| angle.abs() <= 1.0) {
         angles = angles.map(|cosine| cosine.clamp(-1.0, 1.0).acos().to_degrees());
@@ -399,7 +436,7 @@ fn parse_cell(record: &[u8], endian: DcdEndian) -> Result<UnitCell, DcdError> {
     {
         return Err(DcdError::InvalidCell);
     }
-    Ok(cell)
+    Ok(Some(cell))
 }
 
 fn nonnegative(value: i32) -> Result<usize, DcdError> {

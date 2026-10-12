@@ -123,6 +123,36 @@ impl EnsembleDistanceMatrix {
             .and_then(|offset| offset.checked_add(column))
             .and_then(|index| self.values.get(index).copied())
     }
+
+    /// Mean and maximum of the distances between distinct observations (the upper triangle).
+    /// Fewer than two observations give `(0.0, 0.0)`.
+    #[must_use]
+    pub fn mean_and_max(&self) -> (f64, f64) {
+        let (mut sum, mut max, mut pairs) = (0.0_f64, 0.0_f64, 0_usize);
+        for row in 0..self.size {
+            for column in row + 1..self.size {
+                let distance = self.get(row, column).unwrap_or(0.0);
+                sum += distance;
+                max = max.max(distance);
+                pairs += 1;
+            }
+        }
+        let mean = f64_from_usize(pairs).map_or(0.0, |count| sum / count.max(1.0));
+        (mean, max)
+    }
+
+    /// Largest distance between any two of `members` (zero for fewer than two); entries outside
+    /// the matrix count as zero.
+    #[must_use]
+    pub fn diameter(&self, members: &[usize]) -> f64 {
+        let mut max = 0.0_f64;
+        for (position, &left) in members.iter().enumerate() {
+            for &right in &members[position + 1..] {
+                max = max.max(self.get(left, right).unwrap_or(0.0));
+            }
+        }
+        max
+    }
 }
 
 /// Computes all fitted RMSD pairs after validating the allocation ceiling.

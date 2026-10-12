@@ -89,6 +89,61 @@ fn xplor_lammps_style_header_without_cell_is_supported() {
     assert_eq!(parsed.frames[0].positions, [[1.0, 2.0, 3.0]]);
 }
 
+/// A CHARMM DCD with an extra cell block whose header promises five frames
+/// while the data holds two, the first with an all-zero (absent) cell.
+pub(crate) fn overstated_charmm_bytes() -> Vec<u8> {
+    let endian = DcdEndian::Little;
+    let mut bytes = Vec::new();
+    let mut header = vec![0u8; 84];
+    header[0..4].copy_from_slice(b"CORD");
+    put(&mut header, 4, 5, endian);
+    put(&mut header, 12, 1, endian);
+    header[40..44].copy_from_slice(&1.0f32.to_le_bytes());
+    put(&mut header, 44, 1, endian);
+    put(&mut header, 80, 24, endian);
+    add_record(&mut bytes, &header, endian);
+    let mut title = vec![b' '; 84];
+    put(&mut title, 0, 1, endian);
+    add_record(&mut bytes, &title, endian);
+    add_record(&mut bytes, &1i32.to_le_bytes(), endian);
+    let cells: [[f64; 6]; 2] = [[0.0; 6], [10.0, 0.0, 20.0, 0.0, 0.0, 30.0]];
+    for (frame, cell) in cells.iter().enumerate() {
+        let payload: Vec<u8> = cell.iter().flat_map(|value| value.to_le_bytes()).collect();
+        add_record(&mut bytes, &payload, endian);
+        let base = f32::from(u8::try_from(frame).unwrap_or(0));
+        for axis in 0..3_u8 {
+            add_record(
+                &mut bytes,
+                &floats(&[base + f32::from(axis)], endian),
+                endian,
+            );
+        }
+    }
+    bytes
+}
+
+#[test]
+fn header_frame_count_larger_than_the_data_and_zero_cells_are_accepted() {
+    let parsed = parse_dcd(&overstated_charmm_bytes())
+        .unwrap_or_else(|error| panic!("overstated DCD failed: {error}"));
+    assert_eq!(parsed.header.frame_count, 2);
+    assert_eq!(parsed.frames.len(), 2);
+    assert!(parsed.frames[0].cell.is_none());
+    let cell = parsed.frames[1]
+        .cell
+        .unwrap_or_else(|| panic!("second frame lost its cell"));
+    assert_eq!(cell.lengths, [10.0, 20.0, 30.0]);
+    assert_eq!(cell.angles, [90.0; 3]);
+    assert_position(parsed.frames[1].positions[0], [1.0, 2.0, 3.0]);
+}
+
+#[test]
+fn a_ragged_payload_is_still_rejected() {
+    let mut bytes = overstated_charmm_bytes();
+    bytes.truncate(bytes.len() - 5);
+    assert!(parse_dcd(&bytes).is_err());
+}
+
 fn put(bytes: &mut [u8], offset: usize, value: i32, endian: DcdEndian) {
     let value = match endian {
         DcdEndian::Little => value.to_le_bytes(),

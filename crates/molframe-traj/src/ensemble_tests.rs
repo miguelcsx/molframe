@@ -101,3 +101,22 @@ fn borrowed_frame_views_match_owned_ensemble_kernels() {
         generalized_procrustes_mean(&owned, 1.0e-6, 20)
     );
 }
+
+#[test]
+fn mean_and_max_and_diameter_summarise_the_off_diagonal_distances() {
+    let matrix = EnsembleDistanceMatrix {
+        size: 3,
+        values: vec![0.0, 1.0, 4.0, 1.0, 0.0, 2.0, 4.0, 2.0, 0.0].into_boxed_slice(),
+    };
+    let (mean, max) = matrix.mean_and_max();
+    assert!((mean - 7.0 / 3.0).abs() < 1.0e-12);
+    assert!((max - 4.0).abs() < 1.0e-12);
+    assert!((matrix.diameter(&[0, 1]) - 1.0).abs() < 1.0e-12);
+    assert!((matrix.diameter(&[1, 2]) - 2.0).abs() < 1.0e-12);
+    assert!(matrix.diameter(&[2]).abs() < 1.0e-12);
+    let single = EnsembleDistanceMatrix {
+        size: 1,
+        values: vec![0.0].into_boxed_slice(),
+    };
+    assert_eq!(single.mean_and_max(), (0.0, 0.0));
+}

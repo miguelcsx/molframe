@@ -71,8 +71,15 @@ impl DcdReader {
             });
         }
         let file = File::open(path).map_err(|error| io_error(&error))?;
+        let file_bytes = file.metadata().map_err(|error| io_error(&error))?.len();
         let mut records = FileRecords::new(file, memory_limit_bytes)?;
-        let (header, free_indices) = read_header(&mut records)?;
+        let (mut header, free_indices) = read_header(&mut records)?;
+        let payload = usize::try_from(file_bytes)
+            .ok()
+            .and_then(|total| total.checked_sub(records.offset()));
+        if let Some(count) = payload.and_then(|bytes| super::stored_frame_count(&header, bytes)) {
+            header.frame_count = count;
+        }
         let fixed_count = header.fixed_atom_count;
         let atom_count = header.atom_count;
         let axis_bytes = atom_count
@@ -146,7 +153,7 @@ impl DcdReader {
         self.prepare_decode(timestep.positions.capacity())?;
         let cell = if self.header.has_unit_cell {
             let record = self.records.next()?.ok_or(DcdError::CoordinateCount)?;
-            Some(parse_cell(record, self.header.endian)?)
+            parse_cell(record, self.header.endian)?
         } else {
             None
         };
