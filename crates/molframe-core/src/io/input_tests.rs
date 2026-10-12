@@ -61,11 +61,15 @@ fn a_buffer_that_expands_faster_than_the_ratio_allows_is_refused() {
 }
 
 #[test]
-fn standard_limits_do_not_impose_historical_dataset_caps() {
+fn standard_limits_are_bounded_and_unbounded_is_opt_in() {
     let limits = Limits::default();
-    assert_eq!(limits.decompressed_bytes, u64::MAX);
-    assert_eq!(limits.rows_per_category, u64::MAX);
-    assert_eq!(limits.dictionary_entries, u32::MAX - 1);
+    assert_eq!(limits.decompressed_bytes, 16 << 30);
+    assert_eq!(limits.rows_per_category, 1 << 28);
+    assert_eq!(limits.dictionary_entries, 1 << 24);
+    let unbounded = Limits::unbounded();
+    assert_eq!(unbounded.decompressed_bytes, u64::MAX);
+    assert_eq!(unbounded.rows_per_category, u64::MAX);
+    assert_eq!(unbounded.compression_ratio, limits.compression_ratio);
 }
 
 #[test]

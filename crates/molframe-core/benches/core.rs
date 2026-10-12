@@ -111,6 +111,40 @@ fn bench_input_open(c: &mut Criterion) {
             ));
         });
     });
+    group.bench_function("gzip_owned_stream", |b| {
+        b.iter_batched(
+            || large_cif_gz().to_vec(),
+            |bytes| {
+                black_box(InputBuffer::from_reader(
+                    std::io::Cursor::new(bytes),
+                    Limits::default(),
+                ))
+            },
+            criterion::BatchSize::LargeInput,
+        );
+    });
+    group.bench_function("gzip_owned_direct", |b| {
+        b.iter_batched(
+            || large_cif_gz().to_vec(),
+            |bytes| black_box(InputBuffer::from_encoded_bytes(bytes, Limits::default())),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+    group.throughput(Throughput::Bytes(uncompressed.len() as u64));
+    group.bench_function("plain_owned_adopt", |b| {
+        b.iter_batched(
+            || medium_cif.to_vec(),
+            |bytes| black_box(InputBuffer::from_bytes(bytes)),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+    group.bench_function("plain_owned_direct", |b| {
+        b.iter_batched(
+            || medium_cif.to_vec(),
+            |bytes| black_box(InputBuffer::from_encoded_bytes(bytes, Limits::default())),
+            criterion::BatchSize::LargeInput,
+        );
+    });
     black_box((uncompressed.len(), compressed.len()));
     group.finish();
 }
@@ -124,7 +158,10 @@ fn bench_format_detect(c: &mut Criterion) {
     };
     let cif_input = input(small_cif);
     let pdb_input = input(small_pdb);
-    let bcif_input = input(Sample::Small.bcif());
+    let bcif_input = match Sample::Small.bcif() {
+        Some(bytes) => input(bytes),
+        None => panic!("the small sample ships BinaryCIF"),
+    };
 
     let mut group = c.benchmark_group("core_format_detect");
     group.bench_function("cif", |b| {

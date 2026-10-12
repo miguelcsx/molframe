@@ -4,6 +4,7 @@ mod buffer;
 mod collect;
 mod compression;
 mod decode;
+mod encoded;
 mod limits;
 mod source;
 mod source_file;
