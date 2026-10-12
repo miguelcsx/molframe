@@ -123,7 +123,7 @@ pub(crate) fn atom_contacts(
         })?
     } else if let Ok(selection) = value.extract::<PyRef<'_, PySelection>>() {
         let structure = selection.parent.inner.clone();
-        let indices = selection.indices.clone();
+        let indices = selection.atom_indices().to_vec();
         crate::execution::run(py, context, move |context| {
             let selected = molframe::engine::core::AtomSelection::from_sorted(indices);
             molframe::analysis::atom_contacts_between(

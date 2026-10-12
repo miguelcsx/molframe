@@ -1,5 +1,6 @@
 //! Mechanical adapters for fixed-radius neighbour search over coordinates.
 
+use crate::crystal::PyUnitCell;
 use numpy::{PyArray1, PyArray2, PyArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 
@@ -9,19 +10,29 @@ type Pairs<'py> = (
     Bound<'py, PyArray1<f32>>,
 );
 
+fn periodic_box(cell: Option<&PyUnitCell>) -> PyResult<Option<molframe::spatial::PeriodicBox>> {
+    cell.map(|cell| {
+        molframe::spatial::PeriodicBox::from_cell(cell.parameters()).map_err(crate::error::kernel)
+    })
+    .transpose()
+}
+
 /// Unique unordered pairs no further apart than `cutoff`, sorted by index.
 ///
-/// Returns `(first, second, distance)` arrays with `first < second`.
+/// Returns `(first, second, distance)` arrays with `first < second`. With a
+/// `cell` distances are minimum-image; without one they are plain Euclidean.
 #[pyfunction]
-#[pyo3(signature = (coordinates, cutoff, *, backend="auto", context=None))]
+#[pyo3(signature = (coordinates, cutoff, *, cell=None, backend="auto", context=None))]
 fn neighbor_pairs<'py>(
     py: Python<'py>,
     coordinates: &Bound<'py, PyArray2<f32>>,
     cutoff: f32,
+    cell: Option<&PyUnitCell>,
     backend: &str,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Pairs<'py>> {
     let backend = crate::backend::parse(backend)?;
+    let periodic = periodic_box(cell)?;
     let array = coordinates.readonly();
     let positions = crate::bindings::coordinates(&array)?;
     let everything = molframe::engine::core::AtomSelection::All(
@@ -35,7 +46,7 @@ fn neighbor_pairs<'py>(
             &everything,
             cutoff,
             backend,
-            None,
+            periodic.as_ref(),
             context,
         )
     })?
@@ -54,23 +65,33 @@ fn neighbor_pairs<'py>(
 }
 
 /// Cross-set pairs only, avoiding the quadratic within-set output of dense clouds.
+/// With a `cell` distances are minimum-image.
 #[pyfunction]
-#[pyo3(signature = (first, second, cutoff, *, backend="auto", context=None))]
+#[pyo3(signature = (first, second, cutoff, *, cell=None, backend="auto", context=None))]
 fn cross_pairs<'py>(
     py: Python<'py>,
     first: &Bound<'py, PyArray2<f32>>,
     second: &Bound<'py, PyArray2<f32>>,
     cutoff: f32,
+    cell: Option<&PyUnitCell>,
     backend: &str,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Pairs<'py>> {
     let backend = crate::backend::parse(backend)?;
+    let periodic = periodic_box(cell)?;
     let first = first.readonly();
     let second = second.readonly();
     let first = crate::bindings::coordinates(&first)?;
     let second = crate::bindings::coordinates(&second)?;
     let pairs = crate::execution::run(py, context, |context| {
-        molframe::spatial::cross_pairs(first, second, cutoff, backend, context)
+        molframe::spatial::cross_pairs_periodic(
+            first,
+            second,
+            cutoff,
+            backend,
+            periodic.as_ref(),
+            context,
+        )
     })?
     .map_err(crate::error::kernel)?;
     let first: Vec<u32> = pairs.iter().map(|pair| pair.first).collect();

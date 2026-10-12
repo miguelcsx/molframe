@@ -53,6 +53,8 @@ mod governed;
 mod governed_field;
 mod governed_physical;
 mod governed_structure;
+#[cfg(feature = "analysis")]
+mod hbond_candidates;
 mod hierarchy;
 #[cfg(feature = "geometry")]
 mod internal_coordinates;
@@ -80,11 +82,17 @@ mod structure_data;
 mod surface;
 #[cfg(feature = "surface")]
 mod surface_mesh;
+#[cfg(feature = "surface")]
+mod surface_native;
 mod table;
 #[cfg(feature = "trajectory")]
 mod trajectory;
 #[cfg(feature = "trajectory")]
+mod trajectory_analyses;
+#[cfg(feature = "trajectory")]
 mod trajectory_ensemble;
+#[cfg(feature = "trajectory")]
+mod trajectory_stream;
 #[cfg(feature = "validation")]
 mod validation;
 #[cfg(feature = "validation")]

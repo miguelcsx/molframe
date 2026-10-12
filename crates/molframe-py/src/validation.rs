@@ -57,14 +57,23 @@ impl PyClashTable {
 
 /// Steric clashes under an explicit policy: pairs overlapping by more than
 /// `tolerance` ångström, with status, coverage and provenance.
+///
+/// Bonded (1-2), 1-3 and, unless `exclude_one_four=False`, 1-4 pairs are never
+/// reported. With `perceive_bonds=True` the structure's bond table is completed
+/// with intra-residue bonds, peptide and phosphodiester links and disulfides
+/// first, so a structure read from a coordinate file is not flooded with its own
+/// covalent neighbours.
 #[pyfunction]
-#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", backend="auto", policy=None, context=None))]
+#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", backend="auto", exclude_one_four=true, perceive_bonds=true, policy=None, context=None))]
+#[allow(clippy::too_many_arguments)]
 fn clashes(
     py: Python<'_>,
     structure: &PyStructure,
     tolerance: f32,
     radii: &str,
     backend: &str,
+    exclude_one_four: bool,
+    perceive_bonds: bool,
     policy: Option<PyRef<'_, crate::policy::PyAnalysisPolicy>>,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<crate::analysis_result::PyAnalysis> {
@@ -75,7 +84,10 @@ fn clashes(
     }
     let set = crate::chemistry::radius_set(radii)?;
     let backend = crate::backend::parse(backend)?;
-    let kernel = molframe::validation::clashes_kernel(tolerance, set, backend);
+    let mut options = molframe::validation::ClashOptions::new(tolerance, set, backend);
+    options.exclude_one_four = exclude_one_four;
+    options.perceive_bonds = perceive_bonds;
+    let kernel = molframe::validation::clashes_with_kernel(options);
     crate::governed::run(
         py,
         structure,

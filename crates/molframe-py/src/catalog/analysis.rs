@@ -4,6 +4,18 @@ use super::Capability;
 
 pub(super) const ROWS: &[Capability] = &[
     Capability {
+        name: "hydrogen_bond_candidates",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure,start,end,options",
+        result: "Table",
+        policy: false,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,spatial,memory",
+        cost: molframe::Cost::Materialize,
+    },
+    Capability {
         name: "dssp",
         domain: "analysis",
         feature: "analysis",
@@ -163,7 +175,7 @@ pub(super) const ROWS: &[Capability] = &[
         name: "native_contacts",
         domain: "analysis",
         feature: "analysis",
-        inputs: "reference,target,cutoff,tolerance,backend",
+        inputs: "reference,target,cutoff,tolerance,match,mapping,backend",
         result: "Analysis<dict>",
         policy: true,
         eager: true,

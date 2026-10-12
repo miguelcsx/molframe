@@ -79,6 +79,12 @@ impl PyDockQ {
         self.inner.fnat
     }
 
+    /// Fraction of the model's contacts that the native does not have.
+    #[getter]
+    const fn fnonnat(&self) -> f64 {
+        self.inner.fnonnat
+    }
+
     /// Ligand RMSD after superposing the receptor, in ångström.
     #[getter]
     const fn ligand_rmsd(&self) -> f64 {
@@ -227,8 +233,10 @@ pub(crate) fn dockq(
         .map_err(crate::error::kernel)
 }
 
-/// Residue-level, distance-weighted QS score between two chains (CB, or CA for glycine; a
-/// `contact_distance` of 12 reproduces the published cutoff).
+/// Residue-level, distance-weighted QS score between two chains (CB, or CA for glycine).
+///
+/// The published metric uses a 12 Å contact cutoff, which is the default here; a
+/// different `contact_distance` selects a nonpublished variant.
 #[pyfunction]
 #[pyo3(signature = (
     model,
@@ -236,7 +244,7 @@ pub(crate) fn dockq(
     *,
     first_chain,
     second_chain,
-    contact_distance=5.0,
+    contact_distance=12.0,
     chain_names="label",
 ))]
 pub(crate) fn qs_score(
@@ -383,7 +391,7 @@ pub(crate) fn mapped_dockq(
     scoring,
     min_identity,
     automorphism_limit,
-    contact_distance=5.0,
+    contact_distance=12.0,
     chain_names="label",
 ))]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]

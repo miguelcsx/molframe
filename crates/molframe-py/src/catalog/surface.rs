@@ -4,6 +4,18 @@ use super::Capability;
 
 pub(super) const ROWS: &[Capability] = &[
     Capability {
+        name: "native_surface",
+        domain: "surface",
+        feature: "surface",
+        inputs: "coordinates, radii, rows, provider",
+        result: "MolecularSurface",
+        policy: false,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,memory,temp",
+        cost: molframe::Cost::Materialize,
+    },
+    Capability {
         name: "sasa",
         domain: "surface",
         feature: "surface",

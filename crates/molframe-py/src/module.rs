@@ -109,6 +109,7 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     #[cfg(feature = "analysis")]
     {
         crate::electrostatics::register(&analysis)?;
+        crate::hbond_candidates::register(&analysis)?;
         analysis.add_function(wrap_pyfunction!(crate::secondary::dssp, &analysis)?)?;
         analysis.add_function(wrap_pyfunction!(atom_contacts, &analysis)?)?;
         analysis.add_function(wrap_pyfunction!(bindings::contacts, &analysis)?)?;
