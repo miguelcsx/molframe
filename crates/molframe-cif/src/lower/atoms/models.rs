@@ -34,6 +34,7 @@ pub(super) struct ExpectedAtoms {
     chunks: Arc<Vec<AtomChunk>>,
     chunk: usize,
     matches: bool,
+    values_differ: bool,
 }
 
 impl ExpectedAtoms {
@@ -43,6 +44,7 @@ impl ExpectedAtoms {
             chunks: Arc::clone(&reference.chunks),
             chunk: 0,
             matches: true,
+            values_differ: false,
         }
     }
 
@@ -69,8 +71,9 @@ impl ExpectedAtoms {
             return false;
         };
         let same = self.signature(chunk, local) == Some(signature)
-            && same_record(chunk, local, &self.topology, record);
+            && same_identity(chunk, local, &self.topology, record);
         self.matches &= same;
+        self.values_differ |= same && !same_values(chunk, local, record);
         same
     }
 
@@ -101,17 +104,30 @@ impl ExpectedAtoms {
     }
 }
 
-fn same_record(chunk: &AtomChunk, local: u32, topology: &Topology, candidate: &AtomRecord) -> bool {
+/// Whether the atom is the same atom: what topology means.
+///
+/// The `atom_site.id` serial is numbering, not identity (mmCIF continues it across
+/// models), and occupancy and B-factor are per-frame values; they are compared
+/// by [`same_values`] and reported, so an ensemble whose models carry their own
+/// B-factors (NMR, per-model refinement) stays one dense topology.
+fn same_identity(
+    chunk: &AtomChunk,
+    local: u32,
+    topology: &Topology,
+    candidate: &AtomRecord,
+) -> bool {
     chunk.element(local) == Some(candidate.element)
         && chunk.atom_name(local) == Some(candidate.atom_name)
         && chunk.auth_atom_name(local) == candidate.auth_atom_name.get()
         && chunk.alternate_component_id(local) == candidate.alternate_component_id.get()
         && chunk.alt_id(local) == Some(candidate.alt_id)
         && chunk.residue(local, &topology.residues) == Some(candidate.residue)
-        && chunk.occupancy(local) == Some(candidate.occupancy)
-        && chunk.b_factor(local) == Some(candidate.b_factor)
         && chunk.formal_charge(local) == Some(candidate.formal_charge)
-        && chunk.atom_site_id(local) == Some(candidate.atom_site_id)
+}
+
+fn same_values(chunk: &AtomChunk, local: u32, candidate: &AtomRecord) -> bool {
+    chunk.occupancy(local) == Some(candidate.occupancy)
+        && chunk.b_factor(local) == Some(candidate.b_factor)
 }
 
 impl AtomBuilder<'_> {
@@ -135,6 +151,13 @@ impl AtomBuilder<'_> {
         self.expected
             .as_ref()
             .is_none_or(|expected| expected.is_match(self.atom_position as usize))
+    }
+
+    /// Whether a matching model carried occupancies or B-factors the first lacks.
+    pub(crate) fn values_differ(&self) -> bool {
+        self.expected
+            .as_ref()
+            .is_some_and(|expected| expected.values_differ)
     }
 
     /// Reserves the only atom-sized buffers whose extent is known by readers.

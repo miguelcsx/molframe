@@ -207,3 +207,74 @@ _atom_site.pdbx_PDB_model_num
     .expect("zero is a valid coordinate tolerance");
     assert!(difference.is_empty(), "difference: {difference:?}");
 }
+
+const PER_MODEL_VALUES: &str = "\
+data_x
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.pdbx_PDB_model_num
+1 N N GLY A 1 0 0 0 1.00 10.00 1
+1 N N GLY A 1 1 1 1 0.50 20.00 2
+1 N N GLY A 1 2 2 2 0.25 30.00 3
+#
+";
+
+#[test]
+fn per_model_occupancy_and_b_factor_stay_dense_and_are_reported_once() {
+    let (structure, findings) = parse_structure(PER_MODEL_VALUES);
+    assert!(structure.ragged_models().is_none());
+    assert_eq!(structure.model_count(), 3);
+    let atom = structure.data().atoms().next().expect("one atom");
+    assert_eq!(atom.occupancy(), Some(1.0));
+    assert_eq!(atom.b_factor(), Some(10.0));
+    let noted = findings
+        .iter()
+        .filter(|finding| finding.code() == molframe_core::diagnostic::Code::W3015)
+        .count();
+    assert_eq!(noted, 1);
+}
+
+#[test]
+fn the_lossless_read_reports_per_model_values_as_the_direct_read_does() {
+    let count_w3015 = |findings: &[molframe_core::diagnostic::Diagnostic]| {
+        findings
+            .iter()
+            .filter(|finding| finding.code() == molframe_core::diagnostic::Code::W3015)
+            .count()
+    };
+    let (direct, direct_findings) = parse_structure(PER_MODEL_VALUES);
+    let input = InputBuffer::from_bytes(PER_MODEL_VALUES.as_bytes().to_vec());
+    let (_, lossless, lossless_findings) = read_with_document(&input, &ReadOptions::new())
+        .expect("lossless read of per-model values succeeds");
+    assert_eq!(count_w3015(&direct_findings), 1);
+    assert_eq!(count_w3015(&lossless_findings), 1);
+    assert!(lossless.ragged_models().is_none());
+    assert_eq!(lossless.model_count(), direct.model_count());
+    let atom = lossless.data().atoms().next().expect("one atom");
+    assert_eq!(atom.occupancy(), Some(1.0));
+    assert_eq!(atom.b_factor(), Some(10.0));
+}
+
+#[test]
+fn models_with_the_same_values_report_nothing_on_the_lossless_read() {
+    let same = PER_MODEL_VALUES
+        .replace("0.50 20.00", "1.00 10.00")
+        .replace("0.25 30.00", "1.00 10.00");
+    let input = InputBuffer::from_bytes(same.into_bytes());
+    let (_, _, findings) = read_with_document(&input, &ReadOptions::new()).expect("reads");
+    assert!(
+        findings
+            .iter()
+            .all(|finding| finding.code() != molframe_core::diagnostic::Code::W3015)
+    );
+}

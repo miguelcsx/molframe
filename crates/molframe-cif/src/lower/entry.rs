@@ -6,11 +6,12 @@
 //! being invented.
 
 use super::atoms::AtomBuilder;
-use super::ensemble::ragged_model_numbers;
+use super::ensemble::{per_model_values_differ, ragged_model_numbers};
 use super::feeder::RowFeeder;
 use super::ragged::{RaggedBuilder, RaggedParts};
 use crate::document::{CifValue, Document};
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
+use molframe_core::hashing::IdentityHashMap;
 use molframe_core::index::EntityIndex;
 use molframe_core::io::{ReadOptions, ReadResult};
 use molframe_core::optional::OptionalSymbol;
@@ -18,6 +19,7 @@ use molframe_core::structure::{CoordinateStore, Structure, StructureData, UnitCe
 use molframe_core::symbol::SymbolId;
 use molframe_core::topology::EntityKind;
 use num_traits::ToPrimitive;
+use std::borrow::Cow;
 
 /// The category coordinates live in.
 const ATOM_SITE: &str = "atom_site";
@@ -45,7 +47,11 @@ pub fn lower(document: &Document, options: &ReadOptions) -> ReadResult {
         return Ok(lower_ragged(block, atom_site, options, &ragged));
     }
 
-    let (structure, findings) = lower_model(block, atom_site, options, None);
+    let (structure, mut findings) = lower_model(block, atom_site, options, None);
+    if per_model_values_differ(atom_site, options.only_first_model) {
+        // as the streaming reader does: one finding, however many models differ
+        findings.push(super::stream::values_differ_finding());
+    }
     Ok((structure, findings))
 }
 
@@ -400,6 +406,7 @@ pub(super) fn read_entities(
     let Some(entities) = block.category("entity") else {
         return;
     };
+    let sequences = canonical_sequences(block);
     for row in 0..entities.row_count() {
         let Some(id) = entities.identifier("id", row) else {
             continue;
@@ -411,6 +418,7 @@ pub(super) fn read_entities(
             Some("branched") => EntityKind::Branched,
             _ => EntityKind::Unknown,
         };
+        let names = sequences.get(&id);
         let Ok(id) = data.dictionary.intern(&id) else {
             continue;
         };
@@ -421,7 +429,14 @@ pub(super) fn read_entities(
             },
             None => OptionalSymbol::NONE,
         };
-        let sequence = canonical_sequence(block, data, entities.identifier("id", row).as_deref());
+        let mut sequence = Vec::new();
+        if let Some(names) = names {
+            for name in names {
+                if let Ok(symbol) = data.dictionary.intern(name) {
+                    sequence.push(symbol);
+                }
+            }
+        }
         if data
             .topology
             .entities
@@ -434,30 +449,36 @@ pub(super) fn read_entities(
     }
 }
 
-/// The sequence an entity should have, from the category that lists it.
-fn canonical_sequence(
+/// Every entity's declared monomer sequence, gathered in one pass.
+///
+/// Scanning the whole sequence category once per entity is quadratic in
+/// entities times rows, which on a large assembly dwarfs reading the
+/// coordinates. One pass keyed by entity keeps the cost linear in the rows, and
+/// each entity's monomers stay in row order. Names are kept as text and
+/// interned later, in the entity's turn, so symbol numbering matches the
+/// per-entity scan this replaces.
+fn canonical_sequences(
     block: &crate::document::DataBlock,
-    data: &mut StructureData,
-    entity_id: Option<&str>,
-) -> Vec<molframe_core::symbol::SymbolId> {
-    let Some(entity_id) = entity_id else {
-        return Vec::new();
-    };
+) -> IdentityHashMap<Cow<'_, str>, Vec<Cow<'_, str>>> {
+    let mut sequences = IdentityHashMap::default();
     let Some(sequence) = block.category("entity_poly_seq") else {
-        return Vec::new();
+        return sequences;
     };
-
-    let mut components = Vec::new();
+    let (Some(entity_ids), Some(names)) = (sequence.column("entity_id"), sequence.column("mon_id"))
+    else {
+        return sequences;
+    };
     for row in 0..sequence.row_count() {
-        if sequence.identifier("entity_id", row).as_deref() != Some(entity_id) {
-            continue;
-        }
-        let Some(name) = sequence.identifier("mon_id", row) else {
+        let Some(entity_id) = entity_ids.get(row).and_then(CifValue::as_identifier) else {
             continue;
         };
-        if let Ok(symbol) = data.dictionary.intern(&name) {
-            components.push(symbol);
-        }
+        let Some(name) = names.get(row).and_then(CifValue::as_identifier) else {
+            continue;
+        };
+        sequences
+            .entry(entity_id)
+            .or_insert_with(Vec::new)
+            .push(name);
     }
-    components
+    sequences
 }

@@ -95,7 +95,11 @@ impl<'a> StreamModelBuilder<'a> {
         let builder = self.current.take()?;
         let number = self.current_number.take()?;
         let matches_reference = builder.matches_expected();
-        let (data, findings, coordinates) = builder.finish();
+        let values_differ = matches_reference && builder.values_differ();
+        let (data, mut findings, coordinates) = builder.finish();
+        if values_differ {
+            findings.push(values_differ_finding());
+        }
         let coordinates = match coordinates {
             CoordinateStore::Single(block) => block,
             CoordinateStore::Dense { mut frames } => match frames.pop() {
@@ -114,6 +118,12 @@ impl<'a> StreamModelBuilder<'a> {
             matches_reference,
         ))
     }
+}
+
+pub(super) fn values_differ_finding() -> Diagnostic {
+    Diagnostic::new(Code::W3015)
+        .with_message("occupancies or B-factors differ between models; model 1's values are kept")
+        .in_category("atom_site")
 }
 
 pub(crate) fn share_model_topology(
@@ -178,10 +188,17 @@ fn finish_dense(
     let mut frames = Vec::with_capacity(additional.len() + 1);
     numbers.push(first.number);
     frames.push(first.coordinates);
+    let mut noted_values = false;
     for frame in additional {
         numbers.push(frame.number);
         frames.push(frame.coordinates);
-        findings.extend(frame.findings.finish());
+        for finding in frame.findings.finish() {
+            let repeated = finding.code() == Code::W3015 && noted_values;
+            noted_values |= finding.code() == Code::W3015;
+            if !repeated {
+                findings.push(finding);
+            }
+        }
     }
     replace_dense_models(&mut data, &numbers, &mut findings);
     let coordinates = if frames.len() == 1 {

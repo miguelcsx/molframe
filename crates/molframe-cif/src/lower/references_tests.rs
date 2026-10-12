@@ -92,3 +92,49 @@ fn canonical_writing_preserves_reference_sequences_and_alignments() {
     );
     assert_eq!(chain.sequence_mapping()[0].reference_position, Some(10));
 }
+
+#[test]
+fn each_entity_keeps_its_own_declared_sequence_in_row_order() {
+    let source = "data_multi
+loop_
+_entity.id
+_entity.type
+1 polymer
+2 polymer
+3 water
+loop_
+_entity_poly_seq.entity_id
+_entity_poly_seq.num
+_entity_poly_seq.mon_id
+2 1 DA
+1 1 ALA
+2 2 DC
+1 2 GLY
+1 3 SER
+2 3 DG
+loop_
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+1 C CA ALA A 0 0 0
+";
+    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
+    let (structure, _) = crate::read(&input, &ReadOptions::new()).expect("fixture reads");
+    let data = structure.data();
+    let entities = &data.topology.entities;
+    let spelled = |index: u32| -> Vec<String> {
+        entities
+            .canonical_sequence(molframe_core::index::EntityIndex::new(index))
+            .iter()
+            .filter_map(|symbol| data.dictionary.resolve(*symbol).map(str::to_owned))
+            .collect()
+    };
+    assert_eq!(spelled(0), ["ALA", "GLY", "SER"]);
+    assert_eq!(spelled(1), ["DA", "DC", "DG"]);
+    assert!(spelled(2).is_empty());
+}

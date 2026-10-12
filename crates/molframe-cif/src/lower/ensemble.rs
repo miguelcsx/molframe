@@ -3,6 +3,11 @@
 //! Dense storage is used only when every non-coordinate atom-site value agrees
 //! row for row. Any difference in identity or annotation requires independent
 //! structures so no model's data is silently replaced by the first model's.
+//! The `id` serial is the exception: mmCIF files continue it across models
+//! (NMR ensembles number atoms 1..N*M), so it is a row counter rather than
+//! topology and is not compared. Occupancy and B-factor are per-model values rather than
+//! identity, so a difference in them alone stays dense and is reported by
+//! [`per_model_values_differ`]; the streaming reader makes the same choice.
 
 use crate::document::Category;
 
@@ -69,7 +74,7 @@ fn same_atoms(category: &Category, left: ModelRange, right: ModelRange) -> bool 
     let rows = (left.start..left.end).zip(right.start..right.end);
     for (left_row, right_row) in rows {
         for item in category.items() {
-            if is_frame_coordinate(item) {
+            if is_frame_coordinate(item) || item == "id" || is_per_model_value(item) {
                 continue;
             }
             if category.value(item, left_row) != category.value(item, right_row) {
@@ -78,6 +83,31 @@ fn same_atoms(category: &Category, left: ModelRange, right: ModelRange) -> bool 
         }
     }
     true
+}
+
+/// Whether the models of a dense category carry different occupancies or B-factors, so the
+/// reader must say that model 1's values were kept.
+pub(super) fn per_model_values_differ(category: &Category, only_first: bool) -> bool {
+    if only_first {
+        return false;
+    }
+    let ranges = ranges(category);
+    let Some(first) = ranges.first().copied() else {
+        return false;
+    };
+    ranges.iter().skip(1).any(|candidate| {
+        let mut rows = (first.start..first.end).zip(candidate.start..candidate.end);
+        rows.any(|(left, right)| {
+            category
+                .items()
+                .filter(|item| is_per_model_value(item))
+                .any(|item| category.value(item, left) != category.value(item, right))
+        })
+    })
+}
+
+fn is_per_model_value(item: &str) -> bool {
+    matches!(item, "occupancy" | "B_iso_or_equiv")
 }
 
 fn is_frame_coordinate(item: &str) -> bool {
