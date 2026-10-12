@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn every_sample_parses_from_binary_cif_with_atoms() {
+fn every_sample_parses_from_its_own_format_with_atoms() {
     for sample in Sample::ALL {
         let structure = structure(sample);
         assert!(
@@ -12,6 +12,40 @@ fn every_sample_parses_from_binary_cif_with_atoms() {
             sample.label()
         );
     }
+}
+
+#[test]
+fn the_binary_cif_accessor_is_present_exactly_for_the_samples_that_ship_one() {
+    // A caller sweeping formats must be able to tell which samples carry genuine
+    // BinaryCIF; the ensemble ships a PDB file, and handing those bytes back as
+    // BinaryCIF would make a decoder sweep quietly measure PDB parsing.
+    for sample in Sample::MODELS {
+        let bytes = sample
+            .bcif()
+            .unwrap_or_else(|| panic!("{} ships BinaryCIF", sample.label()));
+        let (decoded, _) =
+            molframe_bcif::read(&input(bytes), &molframe_core::io::ReadOptions::new())
+                .unwrap_or_else(|findings| {
+                    panic!(
+                        "{} does not decode as BinaryCIF: {findings:?}",
+                        sample.label()
+                    )
+                });
+        assert_eq!(
+            decoded.atom_count(),
+            crate::structure(sample).atom_count(),
+            "{} decodes to a different atom count",
+            sample.label()
+        );
+    }
+    assert!(
+        Sample::Ensemble.bcif().is_none(),
+        "the ensemble has no BinaryCIF fixture"
+    );
+    assert!(
+        Sample::Ensemble.pdb().is_some(),
+        "the ensemble ships PDB instead"
+    );
 }
 
 #[test]

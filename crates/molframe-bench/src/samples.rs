@@ -40,15 +40,19 @@ impl Sample {
         }
     }
 
-    /// The `BinaryCIF` bytes for this sample. Present for every size class.
+    /// The `BinaryCIF` bytes for this sample, where the fixture ships one.
+    ///
+    /// [`Sample::Ensemble`] ships a PDB file and has no `BinaryCIF`; a caller
+    /// sweeping formats must take the absence rather than decode PDB bytes as
+    /// binary CIF.
     #[must_use]
-    pub const fn bcif(self) -> &'static [u8] {
+    pub const fn bcif(self) -> Option<&'static [u8]> {
         match self {
-            Sample::Tiny => include_bytes!("../data/1crn.bcif"),
-            Sample::Small => include_bytes!("../data/1ubq.bcif"),
-            Sample::Medium => include_bytes!("../data/4hhb.bcif"),
-            Sample::Large => include_bytes!("../data/1aon.bcif"),
-            Sample::Ensemble => include_bytes!("../data/2m7c.pdb"),
+            Sample::Tiny => Some(include_bytes!("../data/1crn.bcif")),
+            Sample::Small => Some(include_bytes!("../data/1ubq.bcif")),
+            Sample::Medium => Some(include_bytes!("../data/4hhb.bcif")),
+            Sample::Large => Some(include_bytes!("../data/1aon.bcif")),
+            Sample::Ensemble => None,
         }
     }
 

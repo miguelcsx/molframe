@@ -74,7 +74,10 @@ fn cached_bcif(cache: &OnceLock<Structure>, sample: Sample) -> Structure {
 }
 
 fn parse_bcif(sample: Sample) -> Structure {
-    let buffer = input(sample.bcif());
+    let Some(bytes) = sample.bcif() else {
+        panic!("sample {} has no BinaryCIF fixture", sample.label())
+    };
+    let buffer = input(bytes);
     match molframe_bcif::read(&buffer, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!(
