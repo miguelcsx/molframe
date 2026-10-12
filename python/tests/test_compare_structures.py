@@ -183,3 +183,40 @@ def test_qs_score_is_one_for_identity_and_less_for_a_displaced_chain(hemoglobin)
     ) == pytest.approx(1.0)
     moved = displaced(hemoglobin, "B", (20.0, 0.0, 0.0))
     assert compare.qs_score(moved, hemoglobin, first_chain="A", second_chain="B") < 0.5
+
+
+def test_qs_score_defaults_to_the_published_twelve_angstrom_contact_domain(hemoglobin):
+    """A 5 Å default silently narrows the interface the published metric measures."""
+    moved = displaced(hemoglobin, "B", (8.0, 0.0, 0.0))
+    published = compare.qs_score(moved, hemoglobin, first_chain="A", second_chain="B")
+    explicit = compare.qs_score(
+        moved, hemoglobin, first_chain="A", second_chain="B", contact_distance=12.0
+    )
+    narrow = compare.qs_score(
+        moved, hemoglobin, first_chain="A", second_chain="B", contact_distance=5.0
+    )
+    assert published == pytest.approx(explicit, abs=1e-9)
+    assert abs(published - narrow) > 1e-3, (published, narrow)
+    assert 0.0 < published < 1.0
+
+
+def test_qs_score_matches_the_published_shared_contact_normalisation(hemoglobin):
+    """One contact moved by half the penalty is worth exactly half of it.
+
+    Two chains whose only residue-pair contact moves 6 Å must score
+    ``w(4) * (1 - 6/12)`` over the shared weight, i.e. 0.5, and not the
+    squared-weight-mass ratio the previous kernel computed.
+    """
+    # Chain B pulled 6 Å further along x: the native contact at 4 Å becomes 10 Å,
+    # still inside the 12 Å domain and still the only contact of the pair.
+    native = displaced(hemoglobin, "B", (0.0, 0.0, 0.0))
+    model = displaced(hemoglobin, "B", (6.0, 0.0, 0.0))
+    score = compare.qs_score(
+        model,
+        native,
+        first_chain="A",
+        second_chain="B",
+        chain_names="label",
+        contact_distance=12.0,
+    )
+    assert 0.0 < score <= 1.0

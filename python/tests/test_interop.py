@@ -29,13 +29,36 @@ def test_the_hierarchy_streams_whole_tables_to_arrow(hemoglobin):
     assert pa.table(hemoglobin.residues).num_rows == hemoglobin.residue_count
     assert pa.table(hemoglobin.chains).num_rows == hemoglobin.chain_count
     assert pa.table(hemoglobin.bonds).num_rows == hemoglobin.bond_count == len(hemoglobin.bonds)
+    # `kind` is the deposited `_struct_conn.conn_type_id`, null where the source
+    # recorded none. Without it a reader cannot tell a metal coordination from a
+    # covalent bond, since both carry a single bond order.
     assert pa.table(hemoglobin.bonds).schema.names == [
         "bond_index",
         "atom_a",
         "atom_b",
         "order",
         "provenance",
+        "kind",
     ]
+
+
+def test_a_deposited_connection_class_survives_the_arrow_export():
+    """4HHB's four haem irons are `metalc`, and the export must not drop that."""
+    structure = molframe.read(FOUR_HHB)
+    table = pa.table(structure.bonds)
+    assert table.num_rows == structure.bond_count
+    classes = [value for value in table.column("kind").to_pylist() if value is not None]
+    assert classes == ["metalc"] * 4, classes
+
+
+def test_a_bond_without_a_deposited_class_exports_a_null_kind():
+    """An inferred edge has no deposited class, and null says exactly that."""
+    # Crambin ships no CONECT records, so every bond here is distance-inferred.
+    structure = molframe.read(DATA / "basic.pdb")
+    table = pa.table(structure.bonds)
+    assert table.num_rows > 0
+    kinds = table.column("kind").to_pylist()
+    assert all(value is None for value in kinds), kinds
 
 
 def test_a_view_streams_only_its_own_rows(hemoglobin):

@@ -91,7 +91,7 @@ def test_a_chain_name_that_is_a_label_and_a_different_author_id_is_refused():
 
 def test_native_contacts_equal_a_brute_force_pair_count(crambin):
     cutoff, scale = 6.0, 1.6
-    same = analysis.native_contacts(crambin, crambin, cutoff=cutoff, tolerance=1.0)
+    same = analysis.native_contacts(crambin, crambin, cutoff=cutoff, tolerance=0.0)
     assert same.value["fraction"] == pytest.approx(1.0)
     xyz = np.asarray(crambin.coordinates, dtype=np.float64)
     distances = np.sqrt(((xyz[:, None] - xyz[None]) ** 2).sum(axis=2))
@@ -100,7 +100,7 @@ def test_native_contacts_equal_a_brute_force_pair_count(crambin):
     assert same.value["native"] == same.value["kept"] == native
     scoped = crambin.edit().coordinates()
     scoped.positions()[:] *= np.float32(scale)
-    expanded = analysis.native_contacts(crambin, scoped.commit(), cutoff=cutoff, tolerance=1.0)
+    expanded = analysis.native_contacts(crambin, scoped.commit(), cutoff=cutoff, tolerance=0.0)
     kept = int(((distances <= cutoff) & (distances * scale <= cutoff) & upper).sum())
     assert expanded.value["native"] == native
     assert expanded.value["kept"] == kept
@@ -221,3 +221,32 @@ def test_analysis_failures_carry_the_code_of_their_kind(crambin):
             context=molframe.ExecutionContext(memory_budget=64),
         )
     assert budget.value.code in {"MOLFRAME-E7001", "MOLFRAME-E1902"}
+
+
+def test_native_contacts_of_a_structure_with_itself_is_one_at_zero_tolerance(crambin):
+    for kwargs in ({}, {"match": "names"}):
+        same = analysis.native_contacts(crambin, crambin, cutoff=4.5, tolerance=0.0, **kwargs)
+        assert same.value["native"] > 0
+        assert same.value["fraction"] == pytest.approx(1.0)
+        assert same.value["matched_atoms"] == crambin.atom_count
+
+
+def test_native_contacts_tolerance_is_additive_angstroms(crambin):
+    xyz = np.asarray(crambin.coordinates, dtype=np.float64)
+    distances = np.sqrt(((xyz[:, None] - xyz[None]) ** 2).sum(axis=2))
+    upper = np.triu(np.ones_like(distances, dtype=bool), k=1)
+    cutoff, scale = 4.5, 1.1
+    scoped = crambin.edit().coordinates()
+    scoped.positions()[:] *= np.float32(scale)
+    stretched = scoped.commit()
+    for tolerance in (0.0, 0.5):
+        got = analysis.native_contacts(crambin, stretched, cutoff=cutoff, tolerance=tolerance)
+        within = (distances <= cutoff) & upper & (distances * scale <= cutoff + tolerance)
+        assert got.value["kept"] == int(within.sum())
+
+
+def test_native_contacts_explicit_mapping_selects_the_corresponding_atoms(crambin):
+    pairs = [(i, i) for i in range(0, crambin.atom_count, 2)]
+    mapped = analysis.native_contacts(crambin, crambin, cutoff=4.5, mapping=pairs)
+    assert mapped.value["fraction"] == pytest.approx(1.0)
+    assert mapped.value["matched_atoms"] == len(pairs)

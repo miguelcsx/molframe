@@ -108,9 +108,12 @@ def test_a_salt_bridge_is_found_between_the_charged_atoms(annotated):
     _, chemical = annotated
     result = molframe.analysis.salt_bridges(chemical, max_distance=4.0)
     table = result.value
-    assert len(table) == 1
-    assert (int(table["anion"][0]), int(table["cation"][0])) == (2, 3)
-    assert table["distance"][0] == pytest.approx(np.hypot(1.8, 0.1), abs=1e-3)
+    # Both carboxylate oxygens are titratable anions; OD2 is also annotated as charged.
+    assert [(int(a), int(c)) for a, c in zip(table["anion"], table["cation"], strict=True)] == [
+        (1, 3),
+        (2, 3),
+    ]
+    assert table["distance"][1] == pytest.approx(np.hypot(1.8, 0.1), abs=1e-3)
     assert not table["distance"].flags.writeable
     assert set(table.names) == {"anion", "cation", "distance"}
     assert "anion" in table

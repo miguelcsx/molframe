@@ -73,3 +73,16 @@ def test_explicit_transport_identifiers_keep_author_chain_insertion_and_coordina
         (residue.auth_number, residue.insertion_code) for residue in structure.residues
     ]
     assert len({chain.label for chain in restored.chains}) == restored.chain_count
+
+
+def test_default_pdb_write_works_for_a_cif_structure_with_ligands(tmp_path, structure):
+    target = tmp_path / "out.pdb"
+    molframe.formats.write(structure, str(target))
+    assert target.stat().st_size > 0
+
+
+def test_mmcif_write_exposes_block_id_and_namespace_options(structure):
+    text = molframe.formats.to_mmcif(structure, block_id="chosen")
+    assert text.startswith("data_chosen")
+    with pytest.raises(ValueError, match="namespace"):
+        molframe.formats.to_pdb(structure, namespace="bogus")
