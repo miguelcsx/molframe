@@ -2452,6 +2452,8 @@ version = "0.6.0"
 dependencies = [
  "criterion",
  "molframe-core",
+ "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

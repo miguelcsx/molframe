@@ -34,6 +34,9 @@ pub mod seed;
 pub mod stockholm;
 pub mod tree;
 pub mod upgma;
+pub mod variant_effects;
+pub mod variants;
+mod residue_letters;
 
 pub use a2m::{A2mError, a2m_match_columns, parse_a2m, write_a2m};
 pub use a3m::{a3m_match_columns, parse_a3m, write_a3m};
@@ -69,3 +72,13 @@ pub use seed::seed_and_extend;
 pub use stockholm::{parse_stockholm, write_stockholm};
 pub use tree::{LadderDirection, NewickError, RerootError, TraversalOrder, Tree};
 pub use upgma::upgma;
+
+pub use residue_letters::one_letter;
+pub use variant_effects::{
+    Cutoff, Mapping, PositionEffect, best_offset, map_positions, median_of_sorted, per_position,
+    per_position_at,
+};
+pub use variants::{
+    Substitution, Variant, VariantTable, VariantTableError, parse_substitution, parse_variants,
+    split_delimited_row,
+};

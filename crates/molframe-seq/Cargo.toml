@@ -9,6 +9,12 @@ description = "Sequence alignment and comparison for molframe"
 
 [dependencies]
 molframe-core.workspace = true
+serde = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[features]
+# Derives `Serialize` and `Deserialize` on the variant-table types.
+serde = ["dep:serde"]
 
 [dev-dependencies]
 criterion.workspace = true
