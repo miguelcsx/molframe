@@ -3,6 +3,7 @@ use super::{
     hydrogen_bonds as hydrogen_bonds_native, hydrogen_bonds_with_policy,
 };
 use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::optional::OptionalSymbol;
 use molframe_core::{
     AnnotationColumn, AtomAnnotation, BondOrder, BondProvenance, BondRecord, BondTableBuilder,
     ExecutionContext, Presence,
@@ -16,7 +17,7 @@ fn hydrogen_bonds(
     hydrogen_bonds_native(structure, options, &ExecutionContext::default())
 }
 
-const SOURCE: &str = "data_s\n\
+pub(super) const SOURCE: &str = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
@@ -70,7 +71,7 @@ fn options(minimum_angle_degrees: f64) -> HydrogenBondOptions {
     }
 }
 
-fn annotated_structure(source: &str) -> molframe_core::Structure {
+pub(super) fn annotated_structure(source: &str) -> molframe_core::Structure {
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
     let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
         Ok((structure, _)) => structure,
@@ -101,6 +102,7 @@ fn annotated_structure(source: &str) -> molframe_core::Structure {
         atom_b: molframe_core::AtomIndex::new(1),
         order: BondOrder::Single,
         provenance: BondProvenance::ChemicalComponentDictionary,
+        kind: OptionalSymbol::NONE,
     });
     data.bonds = bonds.finish();
     molframe_core::Structure::new(data)
@@ -110,7 +112,7 @@ fn annotated_structure(source: &str) -> molframe_core::Structure {
 ///
 /// Large enough to span several query blocks, so a parallel search genuinely
 /// divides the work rather than collapsing to one accumulator.
-fn water_lattice(side: i16) -> molframe_core::Structure {
+pub(super) fn water_lattice(side: i16) -> molframe_core::Structure {
     use std::fmt::Write;
 
     let mut source = String::from(
@@ -177,6 +179,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
             atom_b: molframe_core::AtomIndex::new(oxygen + 1),
             order: BondOrder::Single,
             provenance: BondProvenance::ChemicalComponentDictionary,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();
@@ -229,8 +232,29 @@ fn count(structure: &molframe_core::Structure) -> usize {
 fn incompatible_alternate_locations_are_never_paired() {
     assert_eq!(count(&annotated_structure(&alt_source("A", "A", "B"))), 0);
     assert_eq!(count(&annotated_structure(&alt_source("A", "A", "A"))), 1);
-    assert_eq!(count(&annotated_structure(&alt_source(".", "A", "B"))), 1);
+    assert_eq!(count(&annotated_structure(&alt_source(".", "A", "B"))), 0);
     assert_eq!(count(&annotated_structure(&alt_source("A", "A", "."))), 1);
+}
+
+#[test]
+fn all_three_hydrogen_bond_atoms_must_share_a_compatible_conformation() {
+    let compatible = |first: &str, second: &str| first == "." || second == "." || first == second;
+    for donor in [".", "A", "B"] {
+        for hydrogen in [".", "A", "B"] {
+            for acceptor in [".", "A", "B"] {
+                let expected = usize::from(
+                    compatible(donor, hydrogen)
+                        && compatible(donor, acceptor)
+                        && compatible(hydrogen, acceptor),
+                );
+                assert_eq!(
+                    count(&annotated_structure(&alt_source(donor, hydrogen, acceptor))),
+                    expected,
+                    "donor {donor}, hydrogen {hydrogen}, acceptor {acceptor}",
+                );
+            }
+        }
+    }
 }
 
 /// Donor at x=1, hydrogen at 0.04, acceptor at 8.2 in a 10 Å cell: the acceptor

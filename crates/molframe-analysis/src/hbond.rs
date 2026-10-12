@@ -12,6 +12,14 @@ use molframe_spatial::{
 
 use crate::numeric::f64_to_f32;
 
+mod candidates;
+mod sample;
+pub use candidates::{
+    HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
+    hydrogen_bond_candidates_over_segment,
+};
+pub use sample::hydrogen_bonds_at_sample;
+
 /// Explicit geometric and spatial policy for hydrogen-bond detection.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HydrogenBondOptions {
@@ -91,11 +99,22 @@ pub enum HydrogenBondError {
     /// CCD donor/acceptor annotations or resolved bonds are absent.
     #[error("hydrogen bonds require CCD donor/acceptor annotations and connectivity")]
     MissingChemistry,
+    /// Supplied coordinates or candidate addresses contradict the molecular input.
+    #[error(
+        "hydrogen-bond sample requires finite aligned coordinates and valid chemical candidates"
+    )]
+    InvalidSample,
     /// Periodic geometry was requested without a usable unit cell: the cell is
     /// absent, or it is the placeholder some files write when they have none
     /// and the policy does not allow it.
     #[error("periodic hydrogen bonds require a real unit cell (absent or placeholder cell)")]
     MissingCell,
+    /// A conservative motion query exceeded its explicitly bounded output.
+    #[error("hydrogen-bond candidates exceed the maximum of {maximum}")]
+    CandidateBudget {
+        /// Caller-supplied maximum number of oriented candidate rows.
+        maximum: usize,
+    },
     /// Spatial indexing rejected the request.
     #[error(transparent)]
     Spatial(#[from] SpatialError),
@@ -156,16 +175,13 @@ pub fn hydrogen_bonds_with_policy(
     let parts =
         reduce_pairs_within_unsorted(&query, Vec::new, |output: &mut Vec<HydrogenBond>, pair| {
             for (donor, acceptor) in orientations(pair.first, pair.second, &donors, &acceptors) {
-                if donor == acceptor
-                    || !altlocs_compatible(structure, donor, acceptor)
-                    || adjacency
-                        .neighbours(AtomIndex::new(donor))
-                        .binary_search(&AtomIndex::new(acceptor))
-                        .is_ok()
-                {
+                if !eligible_pair(structure, adjacency, donor, acceptor) {
                     continue;
                 }
                 for hydrogen in donor_hydrogens(structure, adjacency, donor) {
+                    if !eligible_hydrogen(structure, donor, hydrogen, acceptor) {
+                        continue;
+                    }
                     if let Some(bond) =
                         measure(structure, donor, hydrogen, acceptor, periodic_box.as_ref())
                         && bond.angle_degrees >= options.minimum_angle_degrees
@@ -236,7 +252,8 @@ pub(crate) fn altlocs_compatible(structure: &Structure, first: u32, second: u32)
         structure
             .data()
             .atom(AtomIndex::new(atom))
-            .and_then(AtomRef::alt_label)
+            .and_then(AtomRef::alt_id)
+            .and_then(molframe_core::AltId::symbol)
     };
     match (label(first), label(second)) {
         (Some(a), Some(b)) => a == b,
@@ -336,6 +353,25 @@ fn donor_hydrogens<'a>(
         })
 }
 
+fn eligible_pair(
+    structure: &Structure,
+    adjacency: &molframe_core::BondAdjacency,
+    donor: u32,
+    acceptor: u32,
+) -> bool {
+    donor != acceptor
+        && altlocs_compatible(structure, donor, acceptor)
+        && adjacency
+            .neighbours(AtomIndex::new(donor))
+            .binary_search(&AtomIndex::new(acceptor))
+            .is_err()
+}
+
+fn eligible_hydrogen(structure: &Structure, donor: u32, hydrogen: u32, acceptor: u32) -> bool {
+    altlocs_compatible(structure, donor, hydrogen)
+        && altlocs_compatible(structure, hydrogen, acceptor)
+}
+
 fn measure(
     structure: &Structure,
     donor: u32,
@@ -347,6 +383,18 @@ fn measure(
     let donor_position = *positions.get(donor as usize)?;
     let hydrogen_position = *positions.get(hydrogen as usize)?;
     let acceptor_position = *positions.get(acceptor as usize)?;
+    measure_positions(
+        [donor, hydrogen, acceptor],
+        [donor_position, hydrogen_position, acceptor_position],
+        periodic,
+    )
+}
+
+fn measure_positions(
+    [donor, hydrogen, acceptor]: [u32; 3],
+    [donor_position, hydrogen_position, acceptor_position]: [[f32; 3]; 3],
+    periodic: Option<&PeriodicBox>,
+) -> Option<HydrogenBond> {
     let (hydrogen_image, acceptor_image) = match periodic {
         Some(periodic) => (
             translated(
