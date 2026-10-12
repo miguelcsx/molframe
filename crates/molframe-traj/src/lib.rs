@@ -96,10 +96,12 @@ mod frame_view;
 #[path = "ensemble.rs"]
 pub mod geometry_ensemble;
 mod interpolation;
+mod selected;
 mod stream_consume;
 mod stream_contacts;
 mod stream_metrics;
 pub use format_trr::TrrReader;
+pub use selected::{DenseChunk, FrameSlice, SelectedReader, count_frames, read_dense_chunk};
 pub use stream_consume::run_analysis_stream;
 pub use stream_contacts::contact_counts_stream;
 pub use stream_metrics::{rmsd_stream, rmsf_stream};
