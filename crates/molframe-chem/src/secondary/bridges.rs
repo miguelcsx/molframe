@@ -2,7 +2,9 @@
 
 use super::geometry::continuous;
 use super::{Bonds, DsspBackbone as Backbone};
+use molframe_core::ExecutionContext;
 use molframe_core::SecondaryStructure as Ss;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
 use molframe_core::hashing::IdentityHashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -21,30 +23,60 @@ struct Ladder {
     orientation: Orientation,
 }
 
+const PAIRS_PER_BLOCK: usize = 65_536;
+
+/// The pairs that form a bridge, with their orientation, in pair order.
+///
+/// The test reads only the backbones and the hydrogen bonds, so it runs in
+/// blocks; the ladder fold that follows is order dependent and stays serial.
+fn bridge_candidates(
+    backbones: &[Backbone],
+    bonds: &Bonds,
+    pairs: &[(usize, usize)],
+    context: &ExecutionContext,
+) -> Vec<(usize, usize, Orientation)> {
+    let has = |a, b| bonds.contains(&(a, b));
+    let scan = |range: std::ops::Range<usize>| {
+        let mut found = Vec::new();
+        for &(i, j) in &pairs[range] {
+            if i == 0
+                || j == 0
+                || !continuous(backbones, i - 1, i + 1)
+                || !continuous(backbones, j - 1, j + 1)
+            {
+                continue;
+            }
+            let orientation = if (has(i - 1, j) && has(j, i + 1))
+                || (has(j - 1, i) && has(i, j + 1))
+            {
+                Orientation::Parallel
+            } else if (has(i, j) && has(j, i)) || (has(i - 1, j + 1) && has(j - 1, i + 1)) {
+                Orientation::Antiparallel
+            } else {
+                continue;
+            };
+            found.push((i, j, orientation));
+        }
+        found
+    };
+    let plan = BlockPlan::new(pairs.len(), PAIRS_PER_BLOCK);
+    map_blocks_in(plan, context, |_, range| scan(range))
+        .unwrap_or_else(|_| vec![scan(0..pairs.len())])
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
 pub(super) fn assign(
     backbones: &[Backbone],
     bonds: &Bonds,
     pairs: &[(usize, usize)],
     states: &mut [Ss],
+    context: &ExecutionContext,
 ) {
-    let has = |a, b| bonds.contains(&(a, b));
     let mut ladders: Vec<Ladder> = Vec::new();
     let mut ends = IdentityHashMap::default();
-    for &(i, j) in pairs {
-        if i == 0
-            || j == 0
-            || !continuous(backbones, i - 1, i + 1)
-            || !continuous(backbones, j - 1, j + 1)
-        {
-            continue;
-        }
-        let orientation = if (has(i - 1, j) && has(j, i + 1)) || (has(j - 1, i) && has(i, j + 1)) {
-            Orientation::Parallel
-        } else if (has(i, j) && has(j, i)) || (has(i - 1, j + 1) && has(j - 1, i + 1)) {
-            Orientation::Antiparallel
-        } else {
-            continue;
-        };
+    for (i, j, orientation) in bridge_candidates(backbones, bonds, pairs, context) {
         let prior_j = match orientation {
             Orientation::Parallel => j.checked_sub(1),
             Orientation::Antiparallel => j.checked_add(1),

@@ -6,7 +6,10 @@
 //! No external executable is required. File precedence remains the caller's policy.
 
 use crate::grid::{CellGrid, cell_for};
+use molframe_core::ExecutionContext;
 use molframe_core::hashing::IdentityHashSet;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use molframe_core::structure::ResidueRef;
 use molframe_core::structure::Structure;
 use molframe_core::{SecondaryAssignment, SecondarySource, SecondaryStructure as Ss};
 
@@ -29,30 +32,21 @@ const CA_CUTOFF: f32 = 9.0;
 /// chains containing only C-alpha coordinates use a coarse trace fallback.
 #[must_use]
 pub fn assign_secondary_structure(structure: &Structure) -> Vec<SecondaryAssignment> {
-    let mut backbones = vec![DsspBackbone::default(); structure.residue_count()];
-    for model in structure.data().models() {
-        for chain in model.chains() {
-            for residue in chain.residues() {
-                let slot = &mut backbones[residue.index().as_usize()];
-                slot.model = model.index().get();
-                slot.chain = chain.index().get();
-                slot.proline = residue.name() == Some("PRO");
-                for atom in residue.atoms() {
-                    let target = match atom.name() {
-                        Some("CA") => &mut slot.ca,
-                        Some("N") => &mut slot.nitrogen,
-                        Some("C") => &mut slot.carbon,
-                        Some("O") => &mut slot.oxygen,
-                        _ => continue,
-                    };
-                    if target.is_none() {
-                        *target = atom.position();
-                    }
-                }
-            }
-        }
-    }
-    let mut states = classify_backbones(&backbones, &DsspOptions::default());
+    assign_secondary_structure_in(structure, &ExecutionContext::default())
+}
+
+/// [`assign_secondary_structure`] on the worker budget of `context`.
+///
+/// Backbone extraction, hydrogen-bond candidates, energies and the bridge
+/// pre-filter run in fixed blocks merged in block order, so the result is
+/// identical at every worker count.
+#[must_use]
+pub fn assign_secondary_structure_in(
+    structure: &Structure,
+    context: &ExecutionContext,
+) -> Vec<SecondaryAssignment> {
+    let backbones = gather_backbones(structure, context);
+    let mut states = classify_backbones(&backbones, &DsspOptions::default(), context);
     let mut sources: Vec<_> = states
         .iter()
         .map(|s| {
@@ -107,10 +101,18 @@ pub fn dssp_from_backbones(
     if !options.is_valid() {
         return Err(InvalidDsspOptions);
     }
-    Ok(classify_backbones(backbones, options))
+    Ok(classify_backbones(
+        backbones,
+        options,
+        &ExecutionContext::default(),
+    ))
 }
 
-fn classify_backbones(backbones: &[DsspBackbone], options: &DsspOptions) -> Vec<Ss> {
+fn classify_backbones(
+    backbones: &[DsspBackbone],
+    options: &DsspOptions,
+    context: &ExecutionContext,
+) -> Vec<Ss> {
     let mut states = backbones
         .iter()
         .map(|b| {
@@ -121,8 +123,8 @@ fn classify_backbones(backbones: &[DsspBackbone], options: &DsspOptions) -> Vec<
             }
         })
         .collect::<Vec<_>>();
-    let (pairs, bonds) = hydrogen_bonds(backbones, options);
-    classify::classify(backbones, &bonds, &pairs, &mut states, options);
+    let (pairs, bonds) = hydrogen_bonds(backbones, options, context);
+    classify::classify(backbones, &bonds, &pairs, &mut states, options, context);
     for (backbone, state) in backbones.iter().zip(&mut states) {
         if !backbone.is_evaluable() {
             *state = Ss::Unknown;
@@ -131,9 +133,68 @@ fn classify_backbones(backbones: &[DsspBackbone], options: &DsspOptions) -> Vec<
     states
 }
 
+const CHAINS_PER_BLOCK: usize = 4;
+const RESIDUES_PER_BLOCK: usize = 8_192;
+const PAIRS_PER_BLOCK: usize = 32_768;
+const CELLS_PER_BLOCK: usize = 4096;
+
+fn gather_backbones(structure: &Structure, context: &ExecutionContext) -> Vec<DsspBackbone> {
+    let mut backbones = vec![DsspBackbone::default(); structure.residue_count()];
+    let mut layout = Vec::new();
+    for model in structure.data().models() {
+        for chain in model.chains() {
+            layout.push((model.index().get(), chain.index()));
+        }
+    }
+    let plan = BlockPlan::new(layout.len(), CHAINS_PER_BLOCK);
+    let run = |_: usize, range: std::ops::Range<usize>| {
+        let mut out = Vec::new();
+        for &(model, chain) in &layout[range] {
+            let Some(chain) = structure.data().chain(chain) else {
+                continue;
+            };
+            for residue in chain.residues() {
+                out.push((residue.index().as_usize(), residue_backbone(model, chain.index().get(), residue)));
+            }
+        }
+        out
+    };
+    let blocks = map_blocks_in(plan, context, run).unwrap_or_else(|_| {
+        // A worker failure falls back to the serial walk rather than guessing.
+        vec![run(0, 0..layout.len())]
+    });
+    for (index, backbone) in blocks.into_iter().flatten() {
+        backbones[index] = backbone;
+    }
+    backbones
+}
+
+fn residue_backbone(model: u32, chain: u32, residue: ResidueRef<'_>) -> DsspBackbone {
+    let mut slot = DsspBackbone {
+        model,
+        chain,
+        proline: residue.name() == Some("PRO"),
+        ..DsspBackbone::default()
+    };
+    for atom in residue.atoms() {
+        let target = match atom.name() {
+            Some("CA") => &mut slot.ca,
+            Some("N") => &mut slot.nitrogen,
+            Some("C") => &mut slot.carbon,
+            Some("O") => &mut slot.oxygen,
+            _ => continue,
+        };
+        if target.is_none() {
+            *target = atom.position();
+        }
+    }
+    slot
+}
+
 fn hydrogen_bonds(
     backbones: &[DsspBackbone],
     options: &DsspOptions,
+    context: &ExecutionContext,
 ) -> (Vec<(usize, usize)>, Bonds) {
     let mut entries = Vec::with_capacity(backbones.len());
     for (residue, backbone) in backbones.iter().enumerate() {
@@ -148,46 +209,73 @@ fn hydrogen_bonds(
         }
     }
     let grid = CellGrid::build(entries);
-    let mut pairs = Vec::new();
-    grid.for_each_cell(|own, neighbourhood| {
-        for &left in &grid.items()[own] {
-            for range in neighbourhood {
-                for &right in &grid.items()[range.clone()] {
-                    if right <= left {
-                        continue;
-                    }
-                    let (i, j) = (left as usize, right as usize);
-                    if backbones[i].model == backbones[j].model
-                        && squared_distance(backbones[i].ca, backbones[j].ca)
-                            <= CA_CUTOFF * CA_CUTOFF
-                    {
-                        pairs.push((i, j));
+    let search = |cells: std::ops::Range<usize>| {
+        let mut found = Vec::new();
+        grid.visit_cells(cells, |own, neighbourhood| {
+            for &left in &grid.items()[own] {
+                for range in neighbourhood {
+                    for &right in &grid.items()[range.clone()] {
+                        if right <= left {
+                            continue;
+                        }
+                        let (i, j) = (left as usize, right as usize);
+                        if backbones[i].model == backbones[j].model
+                            && squared_distance(backbones[i].ca, backbones[j].ca)
+                                <= CA_CUTOFF * CA_CUTOFF
+                        {
+                            found.push((i, j));
+                        }
                     }
                 }
             }
-        }
-    });
-    pairs.sort_unstable();
-    pairs.dedup();
+        });
+        found
+    };
+    let cells = BlockPlan::new(grid.cell_count(), CELLS_PER_BLOCK);
+    let blocks = map_blocks_in(cells, context, |_, range| search(range))
+        .unwrap_or_else(|_| vec![search(0..grid.cell_count())]);
+    let pairs = sorted_pairs(blocks, backbones.len(), context);
     // Only the two strongest acceptors of each donor define DSSP TestBond.
     // Sorted residue pairs also make energy ties independent of grid traversal.
-    let mut strongest = vec![[(usize::MAX, 0.0); 2]; backbones.len()];
-    for &(i, j) in &pairs {
-        if j - i < options.minimum_sequence_separation {
-            continue;
-        }
-        let directions = [(j, i), (i, j)];
-        for (acceptor, donor) in directions {
-            if donor == j && j == i + 1 {
-                continue;
-            }
-            let energy = bond_energy(backbones, acceptor, donor, options);
-            let slots = &mut strongest[donor];
-            if energy < slots[0].1 {
-                slots[1] = slots[0];
-                slots[0] = (acceptor, energy);
-            } else if energy < slots[1].1 {
-                slots[1] = (acceptor, energy);
+    // The energies are pure, so they are computed in blocks; the strongest-two
+    // update then folds them serially in sorted pair order.
+    let energy_of = |range: std::ops::Range<usize>| {
+        pairs[range]
+            .iter()
+            .map(|&(i, j)| {
+                if j - i < options.minimum_sequence_separation {
+                    return [f64::INFINITY; 2];
+                }
+                [
+                    // Acceptor j, donor i.
+                    bond_energy(backbones, j, i, options),
+                    // Acceptor i, donor j; adjacent residues have no such bond.
+                    if j == i + 1 {
+                        f64::INFINITY
+                    } else {
+                        bond_energy(backbones, i, j, options)
+                    },
+                ]
+            })
+            .collect::<Vec<_>>()
+    };
+    let plan = BlockPlan::new(pairs.len(), PAIRS_PER_BLOCK);
+    let energies = map_blocks_in(plan, context, |_, range| energy_of(range))
+        .unwrap_or_else(|_| vec![energy_of(0..pairs.len())]);
+    let mut strongest = vec![[(usize::MAX, 0.0_f64); 2]; backbones.len()];
+    let mut position = 0;
+    for block in &energies {
+        for &[to_i, to_j] in block {
+            let (i, j) = pairs[position];
+            position += 1;
+            for (acceptor, donor, energy) in [(j, i, to_i), (i, j, to_j)] {
+                let slots = &mut strongest[donor];
+                if energy < slots[0].1 {
+                    slots[1] = slots[0];
+                    slots[0] = (acceptor, energy);
+                } else if energy < slots[1].1 {
+                    slots[1] = (acceptor, energy);
+                }
             }
         }
     }
@@ -200,6 +288,43 @@ fn hydrogen_bonds(
         }
     }
     (pairs, bonds)
+}
+
+/// Merges per-block candidate pairs into one list sorted by `(i, j)` without
+/// duplicates: a counting pass by `i`, then each `i` row sorted in blocks.
+fn sorted_pairs(
+    blocks: Vec<Vec<(usize, usize)>>,
+    residues: usize,
+    context: &ExecutionContext,
+) -> Vec<(usize, usize)> {
+    let mut starts = vec![0_usize; residues + 1];
+    for &(i, _) in blocks.iter().flatten() {
+        starts[i + 1] += 1;
+    }
+    for i in 0..residues {
+        starts[i + 1] += starts[i];
+    }
+    let mut fill = starts.clone();
+    let mut partners = vec![0_usize; starts[residues]];
+    for &(i, j) in blocks.iter().flatten() {
+        partners[fill[i]] = j;
+        fill[i] += 1;
+    }
+    drop(blocks);
+    let rows = BlockPlan::new(residues, RESIDUES_PER_BLOCK);
+    let sort_rows = |range: std::ops::Range<usize>| {
+        let mut out = Vec::with_capacity(starts[range.end] - starts[range.start]);
+        for i in range {
+            let mut row = partners[starts[i]..starts[i + 1]].to_vec();
+            row.sort_unstable();
+            row.dedup();
+            out.extend(row.into_iter().map(|j| (i, j)));
+        }
+        out
+    };
+    let sorted = map_blocks_in(rows, context, |_, range| sort_rows(range))
+        .unwrap_or_else(|_| vec![sort_rows(0..residues)]);
+    sorted.into_iter().flatten().collect()
 }
 
 fn assign_ca_trace(backbones: &[DsspBackbone], states: &mut [Ss]) {

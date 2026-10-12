@@ -2,6 +2,7 @@
 
 use super::geometry::{bends, continuous, pp_conformation};
 use super::{Bonds, DsspBackbone as Backbone, DsspOptions, bridges};
+use molframe_core::ExecutionContext;
 use molframe_core::SecondaryStructure as Ss;
 
 pub(super) fn classify(
@@ -10,8 +11,9 @@ pub(super) fn classify(
     pairs: &[(usize, usize)],
     states: &mut [Ss],
     options: &DsspOptions,
+    context: &ExecutionContext,
 ) {
-    bridges::assign(backbones, bonds, pairs, states);
+    bridges::assign(backbones, bonds, pairs, states, context);
     let turn = |i: usize, size: usize| {
         i.checked_add(size)
             .is_some_and(|j| bonds.contains(&(i, j)) && continuous(backbones, i, j))

@@ -1,9 +1,19 @@
-use super::classify::classify;
+use super::classify::classify as classify_in;
 use super::geometry::{amide_hydrogen, bends, bond_energy};
 use super::*;
 use DsspBackbone as Backbone;
 use molframe_bench::{Sample, structure};
 use num_traits::ToPrimitive;
+
+fn classify(
+    backbones: &[Backbone],
+    bonds: &Bonds,
+    pairs: &[(usize, usize)],
+    states: &mut [Ss],
+    options: &DsspOptions,
+) {
+    classify_in(backbones, bonds, pairs, states, options, &ExecutionContext::default());
+}
 
 fn continuous_backbones(count: usize) -> Vec<Backbone> {
     (0..count)
@@ -307,4 +317,91 @@ fn every_1aon_exact_state_and_author_identity_matches_mkdssp_4_5() {
         digest, 0xb127_15e8_a8e2_14fd,
         "mkdssp 4.5.0 exact-state and identity digest"
     );
+}
+
+fn walk_backbones(count: usize) -> Vec<Backbone> {
+    let mut seed = 0x9e37_79b9_u32;
+    let mut next = move || {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        f32::from(u16::try_from(seed >> 16).expect("sixteen bits")) / 65_536.0 - 0.5
+    };
+    let mut at = [0.0_f32; 3];
+    (0..count)
+        .map(|_| {
+            for axis in &mut at {
+                *axis += next() * 7.0;
+            }
+            let [x, y, z] = at;
+            Backbone {
+                ca: Some(at),
+                nitrogen: Some([x - 1.0, y, z]),
+                carbon: Some([x + 1.0, y, z]),
+                oxygen: Some([x + 1.0, y + 1.2, z]),
+                ..Backbone::default()
+            }
+        })
+        .collect()
+}
+
+fn with_workers(workers: usize) -> ExecutionContext {
+    ExecutionContext::builder()
+        .worker_budget(workers)
+        .build()
+        .expect("a positive worker budget")
+}
+
+#[test]
+fn hydrogen_bond_search_is_identical_at_every_worker_count() {
+    let backbones = walk_backbones(9_000);
+    let options = DsspOptions::default();
+    let (pairs, bonds) = hydrogen_bonds(&backbones, &options, &with_workers(1));
+    assert!(pairs.len() > PAIRS_PER_BLOCK * 2, "several blocks are used");
+    assert!(pairs.windows(2).all(|w| w[0] < w[1]));
+    for workers in [2, 3, 8, 16] {
+        let (found, hydrogen) = hydrogen_bonds(&backbones, &options, &with_workers(workers));
+        assert_eq!(found, pairs);
+        let mut left: Vec<_> = hydrogen.iter().copied().collect();
+        let mut right: Vec<_> = bonds.iter().copied().collect();
+        left.sort_unstable();
+        right.sort_unstable();
+        assert_eq!(left, right);
+    }
+    let direct: Vec<_> = (0..backbones.len())
+        .flat_map(|i| (i + 1..backbones.len()).map(move |j| (i, j)))
+        .filter(|&(i, j)| squared_distance(backbones[i].ca, backbones[j].ca) <= CA_CUTOFF * CA_CUTOFF)
+        .collect();
+    assert_eq!(pairs, direct, "the grid finds exactly the brute-force pairs");
+}
+
+#[test]
+fn classification_is_identical_at_every_worker_count() {
+    let backbones = walk_backbones(9_000);
+    let options = DsspOptions::default();
+    let serial = classify_backbones(&backbones, &options, &with_workers(1));
+    for workers in [2, 8, 16] {
+        assert_eq!(
+            classify_backbones(&backbones, &options, &with_workers(workers)),
+            serial
+        );
+    }
+}
+
+#[test]
+fn assignment_on_a_structure_is_identical_at_every_worker_count() {
+    let structure = structure(Sample::Small);
+    let serial = assign_secondary_structure_in(&structure, &with_workers(1));
+    assert_eq!(serial, assign_secondary_structure(&structure));
+    for workers in [2, 8] {
+        assert_eq!(
+            assign_secondary_structure_in(&structure, &with_workers(workers)),
+            serial
+        );
+    }
+}
+
+#[test]
+fn sorted_pairs_orders_and_deduplicates_blocks() {
+    let blocks = vec![vec![(3, 5), (0, 9), (3, 4)], vec![(0, 2), (3, 5), (1, 2)], vec![]];
+    let merged = sorted_pairs(blocks, 10, &with_workers(4));
+    assert_eq!(merged, vec![(0, 2), (0, 9), (1, 2), (3, 4), (3, 5)]);
 }
