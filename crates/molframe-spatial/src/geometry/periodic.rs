@@ -226,6 +226,20 @@ impl PeriodicBox {
             .map(|row| squared(row).sqrt() * f64::from(cutoff))
     }
 
+    /// Whether a sphere of radius `cutoff` around any point reaches no periodic
+    /// image of that same point.
+    ///
+    /// When it holds, every pair within `cutoff` has exactly one image inside the
+    /// cutoff, so the minimum-image distance and the all-image neighbourhood
+    /// coincide. It fails once the cutoff exceeds half the shortest perpendicular
+    /// width of the cell.
+    #[must_use]
+    pub fn contains_cutoff_sphere(&self, cutoff: f32) -> bool {
+        self.fractional_cutoff_bounds(cutoff)
+            .iter()
+            .all(|bound| *bound * 2.0 <= 1.0)
+    }
+
     /// Translates a Cartesian point by an exact lattice shift.
     pub(crate) fn translated(
         &self,

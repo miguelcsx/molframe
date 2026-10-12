@@ -2,7 +2,7 @@
 
 use molframe_core::{AtomSelection, ExecutionContext};
 
-use crate::{SpatialBackend, SpatialError, pairs_within};
+use crate::{PeriodicBox, SpatialBackend, SpatialError, pairs_within};
 
 /// A neighbour relation with indices local to each input coordinate set.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -30,6 +30,21 @@ pub fn cross_pairs(
     backend: SpatialBackend,
     context: &ExecutionContext,
 ) -> Result<Vec<CrossPair>, SpatialError> {
+    cross_pairs_periodic(first, second, cutoff, backend, None, context)
+}
+
+/// Cross-set pairs within `cutoff`, measured through the periodic box when one is given.
+///
+/// # Errors
+/// As [`cross_pairs`], plus the periodic search's own refusals.
+pub fn cross_pairs_periodic(
+    first: &[[f32; 3]],
+    second: &[[f32; 3]],
+    cutoff: f32,
+    backend: SpatialBackend,
+    periodic: Option<&PeriodicBox>,
+    context: &ExecutionContext,
+) -> Result<Vec<CrossPair>, SpatialError> {
     let left_count = u32::try_from(first.len()).map_err(|_| SpatialError::NumericRangeExceeded)?;
     let count = first
         .len()
@@ -49,7 +64,7 @@ pub fn cross_pairs(
         &AtomSelection::range(left_count..total),
         cutoff,
         backend,
-        None,
+        periodic,
         context,
     )?;
     Ok(pairs

@@ -1,6 +1,6 @@
 //! Reserve construction peak before allocating a cell index.
 
-use super::{CellGrid, CellList, finite_bounds, grid_geometry, periodic_grid};
+use super::{CellGrid, CellId, CellList, Layout, choose_layout, finite_bounds, periodic_grid};
 use crate::{CellGridOptions, PeriodicBox, SpatialError};
 use molframe_core::ExecutionContext;
 
@@ -51,22 +51,39 @@ fn workspace_bytes(
         let dims = periodic_grid::periodic_dimensions(periodic, cutoff, options)?;
         (periodic_grid::cell_count(dims)?, targets.len(), 0)
     } else if let Some(bounds) = finite_bounds(positions, targets) {
-        let cells = if cutoff == 0.0 {
-            1
-        } else {
-            grid_geometry(bounds.min, bounds.max, cutoff, options)?.2
-        };
-        (cells, bounds.finite_count, cells.min(bounds.finite_count))
+        match choose_layout(&bounds, cutoff, options)? {
+            Layout::Dense { cells, .. } => {
+                (cells, bounds.finite_count, cells.min(bounds.finite_count))
+            }
+            // Sorted (cell, target) entries coexist with members, compact
+            // offsets and occupied-cell ids, each bounded by the atom count.
+            Layout::Sparse { .. } => {
+                return bounds
+                    .finite_count
+                    .checked_mul(
+                        size_of::<(CellId, u32)>()
+                            + size_of::<u32>()
+                            + size_of::<usize>()
+                            + size_of::<CellId>(),
+                    )
+                    .and_then(|bytes| bytes.checked_add(size_of::<usize>()))
+                    .ok_or(SpatialError::NumericRangeExceeded);
+            }
+        }
     } else {
         return Ok(0);
     };
-    // Counts and prefix offsets coexist with members and occupied-cell indices.
+    // Counts and prefix offsets coexist with members and occupied-cell ids.
     // Each vector reserves its final capacity, so construction never doubles it.
     cells
         .checked_mul(2)
         .and_then(|count| count.checked_add(1))
-        .and_then(|count| count.checked_add(occupied))
         .and_then(|count| count.checked_mul(size_of::<usize>()))
+        .and_then(|bytes| {
+            occupied
+                .checked_mul(size_of::<CellId>())
+                .and_then(|ids| bytes.checked_add(ids))
+        })
         .and_then(|bytes| {
             atoms
                 .checked_mul(size_of::<u32>())
@@ -81,7 +98,8 @@ mod tests;
 
 impl super::Grid {
     fn retained_bytes(&self) -> usize {
-        (self.offsets.capacity() + self.non_empty_cells.capacity()) * size_of::<usize>()
+        self.offsets.capacity() * size_of::<usize>()
+            + self.non_empty_cells.capacity() * size_of::<super::CellId>()
             + self.members.capacity() * size_of::<u32>()
     }
 }

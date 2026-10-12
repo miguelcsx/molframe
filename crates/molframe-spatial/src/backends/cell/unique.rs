@@ -123,7 +123,7 @@ where
 pub(super) fn emit_cell_pairs<F>(
     positions: &[[f32; 3]],
     grid: &Grid,
-    cell: usize,
+    cell: super::CellId,
     cutoff_squared: f32,
     emit: &mut F,
 ) -> Result<(), SpatialError>
@@ -289,7 +289,7 @@ where
 fn collect_cells(
     positions: &[[f32; 3]],
     grid: &Grid,
-    cells: &[usize],
+    cells: &[super::CellId],
     cutoff_squared: f32,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     let mut found = Vec::new();
@@ -303,13 +303,14 @@ fn collect_cells(
 
 /// Converts a linear cell index back to three-dimensional coordinates.
 #[inline]
-fn cell_coordinates(dims: [usize; 3], cell: usize) -> Option<[usize; 3]> {
-    let plane = dims[1].checked_mul(dims[2])?;
-    if plane == 0 || cell >= dims[0].checked_mul(plane)? {
+fn cell_coordinates(dims: [usize; 3], cell: super::CellId) -> Option<[usize; 3]> {
+    let wide = |value: usize| value as super::CellId;
+    let plane = wide(dims[1]).checked_mul(wide(dims[2]))?;
+    if plane == 0 || cell >= wide(dims[0]).checked_mul(plane)? {
         return None;
     }
-    let first = cell / plane;
-    let remainder = cell % plane;
+    let first = usize::try_from(cell / plane).ok()?;
+    let remainder = usize::try_from(cell % plane).ok()?;
     Some([first, remainder / dims[2], remainder % dims[2]])
 }
 

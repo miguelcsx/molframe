@@ -9,7 +9,7 @@ mod budget;
 mod geometry;
 #[path = "cell/owned.rs"]
 mod owned;
-use geometry::{finite_bounds, grid_geometry};
+use geometry::{Layout, choose_layout, finite_bounds};
 #[path = "cell/periodic.rs"]
 mod periodic_grid;
 use periodic_grid::PeriodicGrid;
@@ -53,6 +53,10 @@ const NEIGHBOUR_OFFSETS: [[isize; 3]; 27] = [
     [1, 1, 1],
 ];
 
+/// Linear id of a cell. Wide enough for three axes of any single-precision
+/// extent, so a sparse grid never has to coarsen its cells for a far outlier.
+type CellId = u128;
+
 #[derive(Debug)]
 struct Grid {
     origin: [f32; 3],
@@ -60,8 +64,12 @@ struct Grid {
     dims: [usize; 3],
     offsets: Vec<usize>,
     members: Vec<u32>,
-    non_empty_cells: Vec<usize>,
+    /// Linear ids of occupied cells in ascending order.
+    non_empty_cells: Vec<CellId>,
     largest_cell: usize,
+    /// When set, `offsets` is indexed by position in `non_empty_cells` rather
+    /// than by linear cell id, so memory is proportional to the atom count.
+    sparse: bool,
 }
 
 #[derive(Debug)]
@@ -244,10 +252,19 @@ fn build_grid(
     let Some(bounds) = finite_bounds(positions, targets) else {
         return Ok(None);
     };
-    let (edge, dims, count) = if cutoff == 0.0 {
-        (1.0, [1; 3], 1)
-    } else {
-        grid_geometry(bounds.min, bounds.max, cutoff, options)?
+    let (edge, dims, count) = match choose_layout(&bounds, cutoff, options)? {
+        Layout::Dense { edge, dims, cells } => (edge, dims, cells),
+        Layout::Sparse { edge, dims } => {
+            return build_sparse_grid(
+                positions,
+                targets,
+                bounds.min,
+                edge,
+                dims,
+                bounds.finite_count,
+            )
+            .map(Some);
+        }
     };
 
     let mut counts = count_members(positions, targets, bounds.min, edge, dims, count)?;
@@ -256,7 +273,7 @@ fn build_grid(
     for (cell, &count) in counts.iter().enumerate() {
         largest_cell = largest_cell.max(count);
         if count != 0 {
-            non_empty_cells.push(cell);
+            non_empty_cells.push(CellId::try_from(cell).unwrap_or(CellId::MAX));
         }
     }
     let offsets = prefix_offsets(&counts)?;
@@ -280,7 +297,70 @@ fn build_grid(
         members,
         non_empty_cells,
         largest_cell,
+        sparse: false,
     }))
+}
+
+/// Builds a grid that stores only its occupied cells.
+///
+/// Runtime is `O(T log T)` and memory is `O(T)` however large the bounding
+/// box: members are sorted by linear cell id, stably so each cell keeps target
+/// order exactly as the dense layout does.
+fn build_sparse_grid(
+    positions: &[[f32; 3]],
+    targets: &[u32],
+    origin: [f32; 3],
+    edge: f32,
+    dims: [usize; 3],
+    finite_count: usize,
+) -> Result<Grid, SpatialError> {
+    let mut entries: Vec<(CellId, u32)> = Vec::with_capacity(finite_count);
+    for &target in targets {
+        let Ok(index) = usize::try_from(target) else {
+            return Err(SpatialError::NumericRangeExceeded);
+        };
+        let Some(position) = positions.get(index).copied() else {
+            continue;
+        };
+        if !finite(position) {
+            continue;
+        }
+        entries.push((
+            linear(dims, raw_cell(origin, edge, dims, position)?),
+            target,
+        ));
+    }
+    entries.sort_by_key(|&(cell, _)| cell);
+
+    let mut non_empty_cells: Vec<CellId> = Vec::with_capacity(entries.len());
+    let mut offsets: Vec<usize> = Vec::with_capacity(entries.len() + 1);
+    let mut members: Vec<u32> = Vec::with_capacity(entries.len());
+    let mut largest_cell = 0;
+    for (position, &(cell, target)) in entries.iter().enumerate() {
+        if non_empty_cells.last() != Some(&cell) {
+            non_empty_cells.push(CellId::try_from(cell).unwrap_or(CellId::MAX));
+            offsets.push(position);
+        }
+        members.push(target);
+    }
+    offsets.push(members.len());
+    for pair in offsets.windows(2) {
+        largest_cell = largest_cell.max(pair[1] - pair[0]);
+    }
+    drop(entries);
+    non_empty_cells.shrink_to_fit();
+    offsets.shrink_to_fit();
+
+    Ok(Grid {
+        origin,
+        edge,
+        dims,
+        offsets,
+        members,
+        non_empty_cells,
+        largest_cell,
+        sparse: true,
+    })
 }
 
 /// Computes one count per grid cell.
@@ -308,7 +388,7 @@ fn count_members(
             continue;
         }
 
-        let cell = linear(dims, raw_cell(origin, edge, dims, position)?);
+        let cell = linear_index(dims, raw_cell(origin, edge, dims, position)?)?;
 
         if let Some(slot) = counts.get_mut(cell) {
             *slot += 1;
@@ -368,7 +448,7 @@ fn fill_members(
             continue;
         }
 
-        let cell = linear(dims, raw_cell(origin, edge, dims, position)?);
+        let cell = linear_index(dims, raw_cell(origin, edge, dims, position)?)?;
 
         let Some(cursor) = cursors.get_mut(cell) else {
             continue;
@@ -395,7 +475,9 @@ fn raw_cell(
     point: [f32; 3],
 ) -> Result<[usize; 3], SpatialError> {
     let convert = |axis: usize| {
-        let scaled = f64::from((point[axis] - origin[axis]) / edge);
+        // Differences are formed in double precision: at a large extent the
+        // single-precision subtraction would round cluster atoms into wrong cells.
+        let scaled = (f64::from(point[axis]) - f64::from(origin[axis])) / f64::from(edge);
         if scaled.is_finite() && scaled <= 0.0 {
             return Ok(0);
         }
@@ -421,14 +503,21 @@ fn cell_of(grid: &Grid, point: [f32; 3]) -> Result<[usize; 3], SpatialError> {
 ///
 /// Runtime and auxiliary space are `O(1)`.
 #[inline]
-fn linear(dims: [usize; 3], cell: [usize; 3]) -> usize {
-    (cell[0] * dims[1] + cell[1]) * dims[2] + cell[2]
+fn linear(dims: [usize; 3], cell: [usize; 3]) -> CellId {
+    let wide = |value: usize| value as CellId;
+    (wide(cell[0]) * wide(dims[1]) + wide(cell[1])) * wide(dims[2]) + wide(cell[2])
+}
+
+/// [`linear`] as a position in a dense table, which `choose_layout` bounded.
+#[inline]
+fn linear_index(dims: [usize; 3], cell: [usize; 3]) -> Result<usize, SpatialError> {
+    usize::try_from(linear(dims, cell)).map_err(|_| SpatialError::NumericRangeExceeded)
 }
 
 /// Returns a neighbouring linear cell index when it remains in bounds.
 ///
 /// Runtime and auxiliary space are `O(1)`.
-fn neighbour_cell(dims: [usize; 3], centre: [usize; 3], delta: [isize; 3]) -> Option<usize> {
+fn neighbour_cell(dims: [usize; 3], centre: [usize; 3], delta: [isize; 3]) -> Option<CellId> {
     let mut cell = [0usize; 3];
 
     for axis in 0..3 {
@@ -447,7 +536,16 @@ fn neighbour_cell(dims: [usize; 3], centre: [usize; 3], delta: [isize; 3]) -> Op
 /// Returns the contiguous target-member slice belonging to `cell`.
 ///
 /// Invalid internal offsets defensively produce an empty slice.
-fn members_of_cell(grid: &Grid, cell: usize) -> Option<&[u32]> {
+fn members_of_cell(grid: &Grid, cell: CellId) -> Option<&[u32]> {
+    if grid.sparse {
+        let Ok(slot) = grid.non_empty_cells.binary_search(&cell) else {
+            return Some(&[]);
+        };
+        let &start = grid.offsets.get(slot)?;
+        let &end = grid.offsets.get(slot + 1)?;
+        return grid.members.get(start..end);
+    }
+    let cell = usize::try_from(cell).ok()?;
     let &start = grid.offsets.get(cell)?;
     let next = cell.checked_add(1)?;
     let &end = grid.offsets.get(next)?;
