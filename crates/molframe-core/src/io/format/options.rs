@@ -52,6 +52,22 @@ pub enum MissingElementPolicy {
     InferFromAtomName,
 }
 
+/// Policy for atoms whose recorded occupancy lies outside zero to one.
+///
+/// Every policy reports the condition once per read as `E3009` (or `W3014`
+/// when clamped), with the atom count, the first atom and the first value. A
+/// `Strict` parse mode rejects the default policy's finding.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum OccupancyPolicy {
+    /// Keep the deposited values and report the condition.
+    #[default]
+    Keep,
+    /// Clamp recorded occupancies into zero to one and report the change.
+    Clamp,
+    /// Fail the read, in any parse mode.
+    Reject,
+}
+
 /// Policy for adjacent mmCIF atom groups whose residue identifiers are identical.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum AmbiguousResidueBoundaryPolicy {
@@ -73,6 +89,14 @@ pub const REQUIRED_CIF_CATEGORIES: [&str; 5] = [
 
 /// PDB records every structure read needs, whatever the filter.
 pub const REQUIRED_PDB_RECORDS: [&str; 6] = ["ATOM", "HETATM", "MODEL", "ENDMDL", "TER", "END"];
+
+/// Categories a retained `struct_conn` needs to be interpreted rather than guessed.
+///
+/// A connection may name a partner on a neighbouring crystal image. Without the
+/// operator table there is nothing to check the named operator against, so the
+/// reader would have to assume the local identity — the guess this list exists to
+/// make unnecessary.
+pub const SYMMETRY_DEPENDENCIES: [&str; 2] = ["space_group_symop", "symmetry_equiv"];
 
 /// Which optional categories (mmCIF/BinaryCIF) or records (PDB) a read keeps.
 ///
@@ -123,13 +147,29 @@ impl CategoryFilter {
         }
     }
 
-    /// Whether a CIF category must be read: required, or admitted.
+    /// Whether a CIF category must be read: required, admitted, or a dependency
+    /// of one that is.
     #[must_use]
     pub fn keeps_category(&self, name: &str) -> bool {
         self.admits(name)
             || REQUIRED_CIF_CATEGORIES
                 .iter()
                 .any(|required| required.eq_ignore_ascii_case(name))
+            || self.dependency_admitted(name)
+    }
+
+    /// Whether a retained category depends on this one.
+    ///
+    /// A retained `struct_conn` names its partners through symmetry operators, and
+    /// an operator table the filter dropped cannot be shown to be the identity.
+    /// Keeping the connections therefore keeps the tables with them: otherwise a
+    /// filter would silently turn an explicit nonidentity operator into an implicit
+    /// local bond.
+    fn dependency_admitted(&self, name: &str) -> bool {
+        self.admits("struct_conn")
+            && SYMMETRY_DEPENDENCIES
+                .iter()
+                .any(|dependency| dependency.eq_ignore_ascii_case(name))
     }
 
     /// Whether a PDB record must be read: required, or admitted.
@@ -157,6 +197,8 @@ pub struct ReadOptions {
     pub discard_hydrogens: bool,
     /// What to do when a row does not declare a valid element.
     pub missing_element_policy: MissingElementPolicy,
+    /// What to do when a recorded occupancy lies outside zero to one.
+    pub occupancy_policy: OccupancyPolicy,
     /// What to do when mmCIF residue identifiers do not define a boundary.
     pub ambiguous_residue_boundary_policy: AmbiguousResidueBoundaryPolicy,
     /// Ceilings that apply while reading.
@@ -207,6 +249,13 @@ impl ReadOptions {
     #[must_use]
     pub const fn missing_element_policy(mut self, policy: MissingElementPolicy) -> Self {
         self.missing_element_policy = policy;
+        self
+    }
+
+    /// Selects the policy for occupancies outside zero to one.
+    #[must_use]
+    pub const fn occupancy_policy(mut self, policy: OccupancyPolicy) -> Self {
+        self.occupancy_policy = policy;
         self
     }
 
@@ -266,7 +315,9 @@ impl ReadOptions {
     ) -> ReadResult {
         let mut ordered = Diagnostics::new();
         ordered.extend(findings);
-        let is_error = ordered.has_error(self.mode.strictness());
+        let (structure, reject) =
+            super::occupancy::apply(structure, self.occupancy_policy, &mut ordered);
+        let is_error = reject || ordered.has_error(self.mode.strictness());
         let findings = ordered.finish();
         if is_error {
             Err(findings)

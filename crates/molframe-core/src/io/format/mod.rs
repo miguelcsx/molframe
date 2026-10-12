@@ -2,6 +2,7 @@
 
 mod detect;
 mod names;
+mod occupancy;
 mod options;
 
 #[cfg(test)]
@@ -11,9 +12,9 @@ use crate::diagnostic::{Code, Strictness};
 
 pub use detect::Format;
 pub use options::{
-    AmbiguousResidueBoundaryPolicy, CategoryFilter, InputDigest, MissingElementPolicy, ParseMode,
-    REQUIRED_CIF_CATEGORIES, REQUIRED_PDB_RECORDS, ReadOptions, ReadResult, Reader, Select,
-    SelectAll,
+    AmbiguousResidueBoundaryPolicy, CategoryFilter, InputDigest, MissingElementPolicy,
+    OccupancyPolicy, ParseMode, REQUIRED_CIF_CATEGORIES, REQUIRED_PDB_RECORDS, ReadOptions,
+    ReadResult, Reader, Select, SelectAll,
 };
 
 #[cfg(test)]

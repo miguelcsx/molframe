@@ -322,6 +322,15 @@ registry! {
     W3012 = Warning 3012, Loose,
         "an alternate location carries a different component identity",
         "no action needed; this is one residue modelled with two chemical identities, and both are retained";
+    W3013 = Warning 3013, Loose,
+        "connection partner lies on a symmetry image outside the asymmetric unit and was not lowered to a bond",
+        "no action needed; the connection joins this molecule to a crystal neighbour, so the bond graph of one asymmetric unit has no atom to point at. The deposited row stays in the retained source document; analyse the crystallographic images to use it";
+    W3014 = Warning 3014, Loose,
+        "occupancy outside the zero-to-one range was clamped by explicit policy",
+        "no action needed if clamping is intended; the deposited values are outside the range and the original file still holds them";
+    W3015 = Warning 3015, Loose,
+        "occupancies or B-factors differ between models of one ensemble; the first model's values are kept",
+        "no action needed for coordinates, which are kept for every model; read per-model B-factors from the source file if they matter";
     W3201 = Warning 3201, Loose,
         "component not found in any chemical component provider",
         "supply a provider that knows this component if its expected atoms or bonds matter";

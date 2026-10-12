@@ -22,3 +22,21 @@ fn required_names_survive_every_filter() {
     assert!(!none.keeps_category("struct_conf"));
     assert!(CategoryFilter::All.keeps_record("CONECT"));
 }
+
+#[test]
+fn a_filter_that_keeps_connections_keeps_the_operators_that_explain_them() {
+    // An operator table dropped by the filter would leave a nonidentity symmetry
+    // code with nothing to check against, and the reader would have to assume the
+    // local identity. Keeping `struct_conn` therefore keeps its dependencies.
+    let connections = CategoryFilter::only(["struct_conn"]);
+    for name in SYMMETRY_DEPENDENCIES {
+        assert!(!connections.admits(name));
+        assert!(connections.keeps_category(name), "{name}");
+    }
+    // Without the connections, the tables are the caller's business again.
+    let unrelated = CategoryFilter::only(["entry"]);
+    assert!(!unrelated.keeps_category("struct_conn"));
+    for name in SYMMETRY_DEPENDENCIES {
+        assert!(!unrelated.keeps_category(name), "{name}");
+    }
+}
