@@ -2,6 +2,8 @@
 
 mod aniso;
 mod capacity;
+mod connections;
+mod models;
 mod pdb;
 mod secondary;
 mod stream;

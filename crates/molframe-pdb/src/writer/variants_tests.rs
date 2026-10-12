@@ -68,3 +68,23 @@ fn assert_real(structure: &molframe_core::Structure, name: &str, expected: f64) 
     };
     assert!((value - expected).abs() < 1.0e-8);
 }
+
+#[test]
+fn pqr_and_pdbqt_refuse_a_multi_model_structure() {
+    let models = "MODEL        1\n\
+ATOM      1  N   GLY A   1      11.104  13.207   9.124 -0.3000 1.5500\n\
+ENDMDL\nMODEL        2\n\
+ATOM      1  N   GLY A   1      12.104  13.207   9.124 -0.3000 1.5500\n\
+ENDMDL\nEND\n";
+    let structure = read_variant(models, Format::Pqr);
+    assert_eq!(structure.model_count(), 2);
+    for result in [
+        write_pqr(&structure, &PdbOptions::new()),
+        write_pdbqt(&structure, &PdbOptions::new()),
+    ] {
+        let Err(findings) = result else {
+            panic!("a single-model format must not silently drop models")
+        };
+        assert!(findings.iter().any(|d| d.code() == Code::E4105));
+    }
+}

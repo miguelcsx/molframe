@@ -68,13 +68,7 @@ pub(super) fn preflight(
             if let Some(sequence) = residue_sequence(residue, namespace) {
                 identities.push((label, sequence, insertion_code(residue)));
             }
-            let kind = match structure
-                .secondary_structure()
-                .get(residue.index().as_usize())
-            {
-                Some(kind) => *kind,
-                None => Ss::Unknown,
-            };
+            let kind = deposited_state(structure, residue);
             if !kind.is_helix() && !kind.is_strand() {
                 continue;
             }
@@ -165,6 +159,24 @@ pub(super) fn write(
     });
 }
 
+/// The residue's state when the file itself deposited it.
+///
+/// States a program derived on read (DSSP, the Cα-only fallback) are analysis,
+/// not part of the deposited record, so they are not written back as if the
+/// file had said them. A structure with no recorded source is taken as written.
+fn deposited_state(structure: &Structure, residue: ResidueRef<'_>) -> Ss {
+    let index = residue.index().as_usize();
+    if let Some(molframe_core::SecondarySource::Dssp | molframe_core::SecondarySource::CaOnly) =
+        structure.secondary_source().get(index)
+    {
+        return Ss::Unknown;
+    }
+    match structure.secondary_structure().get(index) {
+        Some(state) => *state,
+        None => Ss::Unknown,
+    }
+}
+
 fn ranges<'a>(
     structure: &'a Structure,
     select: &impl Select,
@@ -176,13 +188,7 @@ fn ranges<'a>(
         }
         let mut pending: Option<(ResidueRef<'_>, ResidueRef<'_>, Ss)> = None;
         for residue in chain.residues() {
-            let kind = match structure
-                .secondary_structure()
-                .get(residue.index().as_usize())
-            {
-                Some(state) => *state,
-                None => Ss::Unknown,
-            };
+            let kind = deposited_state(structure, residue);
             let accepted = select.accept_residue(residue.index())
                 && residue.atoms().any(|atom| select.accept_atom(atom.index()))
                 && (kind.is_helix() || kind.is_strand());

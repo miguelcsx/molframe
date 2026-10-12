@@ -270,3 +270,19 @@ fn unrepresentable_secondary_states_are_not_relabelled_as_helix_or_strand() {
             .any(|line| line.starts_with("HELIX") || line.starts_with("SHEET"))
     );
 }
+
+#[test]
+fn states_a_reader_derived_are_not_written_as_deposited_records() {
+    let mut data = identity_fixture(
+        &[("A", "1", ""), ("A", "2", ""), ("A", "3", "")],
+        &[Ss::AlphaHelix; 3],
+    )
+    .data()
+    .clone();
+    data.secondary_source = std::sync::Arc::new(vec![molframe_core::SecondarySource::Dssp; 3]);
+    let text = write(&Structure::new(data), &PdbOptions::new()).expect("write atoms");
+    assert!(
+        !text.lines().any(|line| line.starts_with("HELIX")),
+        "a DSSP assignment is not a deposited HELIX record"
+    );
+}

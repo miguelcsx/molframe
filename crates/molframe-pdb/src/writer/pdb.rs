@@ -37,6 +37,12 @@ pub struct PdbOptions {
     hybrid36: bool,
     /// Identifier namespace used consistently for every deposited identity.
     namespace: PdbIdentifierNamespace,
+    /// Space group to name on `CRYST1` when the entry records none, for
+    /// structures whose symbol lives in a typed extension rather than the entry.
+    space_group: Option<Box<str>>,
+    /// Whole records written after the generated header, such as the `MTRIX`
+    /// lines of a non-crystallographic operator set the format crate cannot see.
+    extra_records: Option<Box<str>>,
 }
 
 impl Default for PdbOptions {
@@ -45,6 +51,8 @@ impl Default for PdbOptions {
             chain_map: HashMap::new(),
             hybrid36: false,
             namespace: PdbIdentifierNamespace::Label,
+            space_group: None,
+            extra_records: None,
         }
     }
 }
@@ -75,6 +83,26 @@ impl PdbOptions {
     pub const fn namespace(mut self, namespace: PdbIdentifierNamespace) -> Self {
         self.namespace = namespace;
         self
+    }
+
+    /// Names the space group `CRYST1` carries when the entry records none.
+    #[must_use]
+    pub fn with_space_group(mut self, symbol: impl Into<Box<str>>) -> Self {
+        self.space_group = Some(symbol.into());
+        self
+    }
+
+    /// Adds whole records after the generated header, one per line.
+    #[must_use]
+    pub fn with_extra_records(mut self, records: impl Into<Box<str>>) -> Self {
+        self.extra_records = Some(records.into());
+        self
+    }
+
+    /// The extra records, when the caller supplied any.
+    #[must_use]
+    pub fn extra_records(&self) -> Option<&str> {
+        self.extra_records.as_deref()
     }
 
     pub(crate) const fn identifier_namespace(&self) -> PdbIdentifierNamespace {
@@ -133,7 +161,17 @@ pub(super) fn render_selected(
 
     let data = structure.data();
 
+    let mut has_ssbond = false;
+    let mut has_link = false;
     if let Some(headers) = data.extensions.get::<PdbHeaders>(PDB_HEADERS_EXTENSION) {
+        has_ssbond = headers
+            .records()
+            .iter()
+            .any(|record| record.name() == "SSBOND");
+        has_link = headers
+            .records()
+            .iter()
+            .any(|record| record.name() == "LINK");
         for record in headers.records() {
             if matches!(record.name(), "HELIX" | "SHEET")
                 && structure
@@ -146,12 +184,80 @@ pub(super) fn render_selected(
             let _ = writeln!(out, "{}", record.line());
         }
     } else {
-        write_generated_metadata(out, structure);
+        write_generated_metadata(out, structure, options);
     }
     super::secondary::write(out, structure, options, select);
+    super::connections::write_links(out, structure, options, select, has_ssbond, has_link);
 
+    let track = super::connections::has_connect(structure);
+    let mut serials: HashMap<u32, i64> = HashMap::new();
+    let count = structure.model_count();
+    if count <= 1 {
+        write_model(
+            out,
+            structure,
+            None,
+            options,
+            select,
+            track.then_some(&mut serials),
+        )?;
+    } else {
+        let mut written = 0usize;
+        for number in 0..count {
+            let Ok(index) = u32::try_from(number) else {
+                break;
+            };
+            let model = molframe_core::index::ModelIndex::new(index);
+            if !select.accept_model(model) {
+                continue;
+            }
+            let Some((snapshot, local)) = structure.model_snapshot(model) else {
+                continue;
+            };
+            // Indices in a filter are those of the first model. Ragged models
+            // are independent topologies, so applying them to a later model
+            // would select unrelated atoms; refuse rather than guess.
+            if structure.is_ragged_ensemble() && written > 0 {
+                super::models::refuse_foreign_filter(structure, select)?;
+            }
+            written += 1;
+            // Dense models share the topology and differ only in positions;
+            // ragged ones are structures of their own and are checked as such.
+            let frame = if structure.is_ragged_ensemble() {
+                let refusals = check_capacity(&snapshot, options, select, RequiredAtomFields::Pdb);
+                if !refusals.is_empty() {
+                    return Err(refusals);
+                }
+                None
+            } else {
+                let frame = structure.model_positions(local);
+                if let Some(frame) = frame {
+                    super::models::check_frame(&snapshot, frame, number, select)?;
+                }
+                frame
+            };
+            let _ = writeln!(out, "MODEL     {:>4}", number + 1);
+            let tracked = (number == 0 && track).then_some(&mut serials);
+            write_model(out, &snapshot, frame, options, select, tracked)?;
+            let _ = writeln!(out, "ENDMDL");
+        }
+    }
+    super::connections::write_connect(out, structure, options, select, &serials);
+    let _ = out.write_str("END\n");
+    Ok(())
+}
+
+/// One model's atoms with their `TER` records.
+fn write_model(
+    out: &mut impl fmt::Write,
+    structure: &Structure,
+    frame: Option<&[[f32; 3]]>,
+    options: &PdbOptions,
+    select: &impl Select,
+    mut serials: Option<&mut HashMap<u32, i64>>,
+) -> Result<(), Vec<Diagnostic>> {
     let mut serial = 1i64;
-    for chain in data.chains() {
+    for chain in structure.data().chains() {
         if !select.accept_chain(chain.index()) {
             continue;
         }
@@ -166,10 +272,19 @@ pub(super) fn render_selected(
                 if !select.accept_atom(atom.index()) {
                     continue;
                 }
-                if let Err(finding) =
-                    write_atom(out, structure, &atom, &residue, label, serial, options)
-                {
+                let position = match frame {
+                    Some(frame) => atom
+                        .position()
+                        .and(frame.get(atom.index().as_usize()).copied()),
+                    None => atom.position(),
+                };
+                if let Err(finding) = write_atom(
+                    out, structure, &atom, &residue, label, serial, position, options,
+                ) {
                     return Err(vec![finding]);
+                }
+                if let Some(serials) = serials.as_deref_mut() {
+                    serials.insert(atom.index().get(), serial);
                 }
                 serial += 1;
             }
@@ -177,11 +292,14 @@ pub(super) fn render_selected(
         let _ = writeln!(out, "TER   {:>5}", serial_field(serial, options));
         serial += 1;
     }
-    let _ = out.write_str("END\n");
     Ok(())
 }
 
-fn write_generated_metadata(out: &mut impl fmt::Write, structure: &Structure) {
+fn write_generated_metadata(
+    out: &mut impl fmt::Write,
+    structure: &Structure,
+    options: &PdbOptions,
+) {
     let data = structure.data();
     if let Some(id) = &data.entry.id {
         let _ = writeln!(out, "HEADER    {:<40}{:<9}   {:>4}", "", "", id);
@@ -191,6 +309,10 @@ fn write_generated_metadata(out: &mut impl fmt::Write, structure: &Structure) {
     }
     if let Some(method) = &data.entry.method {
         let _ = writeln!(out, "EXPDTA    {method}");
+    }
+    if let Some(resolution) = data.entry.resolution {
+        let _ = writeln!(out, "REMARK   2");
+        let _ = writeln!(out, "REMARK   2 RESOLUTION. {resolution:>7.2} ANGSTROMS.");
     }
     if let Some(cell) = data.cell {
         let _ = writeln!(
@@ -203,11 +325,22 @@ fn write_generated_metadata(out: &mut impl fmt::Write, structure: &Structure) {
             cell.angles[1],
             cell.angles[2],
             // CRYST1 names P 1 when the entry records no space group.
-            match data.entry.space_group.as_deref() {
+            match data
+                .entry
+                .space_group
+                .as_deref()
+                .or(options.space_group.as_deref())
+            {
                 Some(symbol) => symbol,
                 None => "P 1",
             },
         );
+        super::connections::write_scale(out, &cell);
+    }
+    if let Some(extra) = options.extra_records() {
+        for line in extra.lines() {
+            let _ = writeln!(out, "{line}");
+        }
     }
 }
 
@@ -218,6 +351,7 @@ fn write_atom(
     residue: &ResidueRef<'_>,
     chain: &str,
     serial: i64,
+    position: Option<[f32; 3]>,
     options: &PdbOptions,
 ) -> Result<(), Diagnostic> {
     let record = if residue.is_het() { "HETATM" } else { "ATOM  " };
@@ -234,7 +368,7 @@ fn write_atom(
     // An atom whose position was never recorded still has a row here, but the
     // format has no way to say "unrecorded" — so it is left out of the file
     // rather than written as an origin the experiment never observed.
-    let position = required_value(atom.position(), "coordinates", *atom, options)?;
+    let position = required_value(position, "coordinates", *atom, options)?;
     let seq = i64::from(required_value(
         residue_sequence(*residue, options.namespace),
         "residue sequence identifier",

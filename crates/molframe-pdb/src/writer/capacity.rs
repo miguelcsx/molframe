@@ -60,6 +60,11 @@ pub(crate) fn check_capacity(
     refusals
 }
 
+/// True when a coordinate fits the eight-column field.
+pub(super) fn coordinate_fits(value: f64) -> bool {
+    value.is_finite() && (MIN_COORDINATE..MAX_COORDINATE).contains(&value)
+}
+
 fn check_residue(
     residue: &ResidueRef<'_>,
     options: &PdbOptions,

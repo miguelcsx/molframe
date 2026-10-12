@@ -114,6 +114,16 @@ fn render_variant(
         Variant::Pqr => RequiredAtomFields::Pqr,
         Variant::Pdbqt => RequiredAtomFields::Pdbqt,
     };
+    // These variants carry one model. Writing the first and exiting cleanly
+    // would hand back a file that describes a single conformer of an ensemble.
+    if structure.model_count() > 1 {
+        return Err(vec![
+            Diagnostic::new(Code::E4105)
+                .with_context("category", "multiple models")
+                .with_context("models", structure.model_count().to_string())
+                .with_context("format", "pqr/pdbqt"),
+        ]);
+    }
     let refusals = check_capacity(structure, options, &SelectAll, required);
     if !refusals.is_empty() {
         return Err(refusals);
