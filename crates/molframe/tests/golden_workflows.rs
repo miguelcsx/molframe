@@ -451,9 +451,9 @@ fn rama_structure() -> molframe::Structure {
             atom_b: AtomIndex::new(nitrogen),
             order: BondOrder::Single,
             provenance: BondProvenance::User,
+            kind: OptionalSymbol::NONE,
         });
     }
     data.bonds = bonds.finish();
     molframe_core::structure::Structure::new(data).into()
 }
-            kind: OptionalSymbol::NONE,
