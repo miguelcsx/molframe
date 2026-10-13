@@ -142,6 +142,7 @@ enum Stage<'a> {
 /// Returns `E1401` for inconsistent lengths and `E1403` when adjacent codecs
 /// disagree on their value type.
 pub fn decode(encoded: &EncodedData) -> Result<Decoded, Diagnostic> {
+    super::bounds::check_declared_sizes(&encoded.encoding, super::bounds::DEFAULT_ELEMENT_CEILING)?;
     decode_borrowed(&encoded.encoding, &encoded.data)
 }
 
@@ -301,7 +302,7 @@ fn run_length(stage: Stage<'_>, src_type: DataType, size: usize) -> Result<Stage
     if values.len() % 2 != 0 || !is_integer(src_type) {
         return Err(length_error(values.len(), 2));
     }
-    let mut output = Vec::with_capacity(size);
+    let mut output = Vec::with_capacity(size.min(values.len()));
     for pair in values.as_chunks::<2>().0 {
         let Ok(count) = usize::try_from(pair[1]) else {
             return Err(length_error(values.len(), size));
@@ -360,7 +361,7 @@ fn integer_packing(
         _ => return Err(type_error("IntegerPacking byteCount must be one or two")),
     };
     let lower = if unsigned { i64::MIN } else { -upper - 1 };
-    let mut output = Vec::with_capacity(size);
+    let mut output = Vec::with_capacity(size.min(values.len()));
     let mut total = 0i64;
     for value in values {
         total = total

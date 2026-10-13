@@ -1,6 +1,6 @@
 //! `MessagePack` container and lazy category decoding.
 
-use crate::codec::{Decoded, EncodedData, decode};
+use crate::codec::{Decoded, EncodedData, check_declared_sizes, decode};
 use molframe_cif::lexer::Quoting;
 use molframe_cif::{Category, CifValue, DataBlock, Document};
 use molframe_core::diagnostic::{Code, Diagnostic};
@@ -65,6 +65,12 @@ impl BinaryDocument {
                 .map_err(|_| Limits::exceeded("rows per category", category.row_count))?;
             if row_count > limits.rows_per_category {
                 return Err(Limits::exceeded("rows per category", category.row_count));
+            }
+            for column in &category.columns {
+                check_declared_sizes(&column.data.encoding, category.row_count)?;
+                if let Some(mask) = &column.mask {
+                    check_declared_sizes(&mask.encoding, category.row_count)?;
+                }
             }
         }
         Ok(Self { file, limits })

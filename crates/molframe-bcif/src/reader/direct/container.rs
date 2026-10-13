@@ -4,7 +4,7 @@
 //! document remains fully owning, while a structure read avoids copying the
 //! complete encoded file before column decoding begins.
 
-use crate::codec::{Decoded, Encoding, decode_borrowed};
+use crate::codec::{Decoded, Encoding, check_declared_sizes, decode_borrowed};
 use molframe_cif::lexer::Quoting;
 use molframe_cif::{Category, CifValue};
 use molframe_core::diagnostic::{Code, Diagnostic};
@@ -64,6 +64,12 @@ pub(super) fn parse(bytes: &[u8], limits: Limits) -> Result<DirectFile<'_>, Diag
             .map_err(|_| Limits::exceeded("rows per category", category.row_count))?;
         if row_count > limits.rows_per_category {
             return Err(Limits::exceeded("rows per category", category.row_count));
+        }
+        for column in &category.columns {
+            check_declared_sizes(&column.data.encoding, category.row_count)?;
+            if let Some(mask) = &column.mask {
+                check_declared_sizes(&mask.encoding, category.row_count)?;
+            }
         }
     }
     Ok(file)
