@@ -16,6 +16,18 @@ pub(super) const ROWS: &[Capability] = &[
         cost: molframe::Cost::Materialize,
     },
     Capability {
+        name: "heavy_atom_hydrogen_bonds",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure,max_distance,min_distance,min_acceptor_angle,backend",
+        result: "Table",
+        policy: false,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,spatial,memory",
+        cost: molframe::Cost::Materialize,
+    },
+    Capability {
         name: "dssp",
         domain: "analysis",
         feature: "analysis",

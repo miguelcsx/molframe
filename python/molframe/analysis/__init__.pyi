@@ -34,6 +34,29 @@ def hydrogen_bond_candidates(
 ) -> Table:
     """Conservative original-row candidates; requires instantaneous geometric filtering."""
 
+def heavy_atom_hydrogen_bonds(
+    structure: Structure,
+    *,
+    max_distance: float = 3.5,
+    min_distance: float = 2.2,
+    min_acceptor_angle: float | None = 90.0,
+    covalent_distance: float = 1.9,
+    include_same_residue: bool = False,
+    include_sulfur: bool = False,
+    backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
+    context: ExecutionContext | None = None,
+) -> Table:
+    """Hydrogen bonds for structures without hydrogens, from heavy-atom geometry.
+
+    Donors and acceptors are typed from residue and atom names (protein, water, nucleic
+    acids; other groups use N/O or the CCD roles when annotated). A pair is kept when the
+    donor-acceptor distance is within ``[min_distance, max_distance]``, the atoms are not
+    1-2 or 1-3 covalent neighbours, and the donor-acceptor-antecedent angle is at least
+    ``min_acceptor_angle`` (``None`` records it without filtering). Columns: ``donor``,
+    ``acceptor``, ``distance`` and ``acceptor_angle`` (NaN without an antecedent), sorted
+    by ``(donor, acceptor)``. No hydrogen is implied. Periodic images are not supported.
+    """
+
 class ArrayColumn(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...

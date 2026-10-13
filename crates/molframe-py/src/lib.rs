@@ -56,6 +56,8 @@ mod governed_physical;
 mod governed_structure;
 #[cfg(feature = "analysis")]
 mod hbond_candidates;
+#[cfg(feature = "analysis")]
+mod hbond_heavy;
 mod hierarchy;
 #[cfg(feature = "geometry")]
 mod internal_coordinates;
