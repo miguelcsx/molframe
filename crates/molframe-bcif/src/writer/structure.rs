@@ -72,6 +72,17 @@ pub fn write_structure_to_with_memory_limit<W: Write>(
     memory_limit_bytes: usize,
     output: &mut W,
 ) -> Result<(), Vec<Diagnostic>> {
+    write_with_extra(structure, options, memory_limit_bytes, Vec::new(), output)
+}
+
+/// Streams `BinaryCIF` and appends caller-encoded categories after the coordinates.
+pub(super) fn write_with_extra<W: Write>(
+    structure: &Structure,
+    options: &CifWriteOptions,
+    memory_limit_bytes: usize,
+    extra: Vec<EncodedCategory>,
+    output: &mut W,
+) -> Result<(), Vec<Diagnostic>> {
     let distinct = structure.with_distinct_chain_labels();
     let structure = distinct.as_ref().unwrap_or(structure);
     let projection = canonical_projection(structure, options)
@@ -88,6 +99,7 @@ pub fn write_structure_to_with_memory_limit<W: Write>(
         encoder: format!("molframe {}", env!("CARGO_PKG_VERSION")),
         metadata: RefCell::new(Some(metadata)),
         connections: RefCell::new(connections),
+        extra: RefCell::new(extra),
     };
     rmp_serde::encode::write_named(output, &file)
         .map_err(|error| vec![Diagnostic::new(Code::E1401).with_message(error.to_string())])
@@ -116,6 +128,7 @@ struct StreamingFile<'a> {
     encoder: String,
     metadata: RefCell<Option<Vec<EncodedCategory>>>,
     connections: RefCell<Option<EncodedCategory>>,
+    extra: RefCell<Vec<EncodedCategory>>,
 }
 
 impl Serialize for StreamingFile<'_> {
@@ -172,7 +185,8 @@ impl Serialize for Categories<'_, '_> {
             .take()
             .ok_or_else(|| S::Error::custom("BinaryCIF metadata was already serialized"))?;
         let connection = self.0.connections.borrow_mut().take();
-        let length = metadata.len() + 1 + usize::from(connection.is_some());
+        let extra = std::mem::take(&mut *self.0.extra.borrow_mut());
+        let length = metadata.len() + 1 + usize::from(connection.is_some()) + extra.len();
         let mut sequence = serializer.serialize_seq(Some(length))?;
         for category in metadata {
             sequence.serialize_element(&Consuming::new(category))?;
@@ -182,6 +196,9 @@ impl Serialize for Categories<'_, '_> {
             rows: self.0.rows,
         })?;
         if let Some(category) = connection {
+            sequence.serialize_element(&Consuming::new(category))?;
+        }
+        for category in extra {
             sequence.serialize_element(&Consuming::new(category))?;
         }
         sequence.end()

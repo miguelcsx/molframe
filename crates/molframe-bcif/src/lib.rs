@@ -22,5 +22,5 @@ pub use reader::{
 };
 pub use writer::{
     write_document, write_structure, write_structure_to, write_structure_to_with_memory_limit,
-    write_structure_with_options,
+    write_structure_with_extension, write_structure_with_options,
 };

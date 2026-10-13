@@ -52,13 +52,25 @@ pub fn write_canonical_to<W: IoWrite>(
     output: &mut W,
 ) -> Result<(), CifWriteToError> {
     molframe_cif::write_canonical_to(structure, options, output)?;
+    write_extension_to(model_cif, output).map_err(CifWriteToError::Output)
+}
+
+/// Streams only the retained `ModelCIF` categories, without a coordinate block.
+///
+/// The text is a sequence of category tables suitable for a container that
+/// supplies its own coordinates, such as a binary writer.
+///
+/// # Errors
+///
+/// Returns the destination I/O error.
+pub fn write_extension_to<W: IoWrite>(model_cif: &ModelCif, output: &mut W) -> io::Result<()> {
     let mut output = TextOutput::new(output);
     for (index, category) in model_cif.categories.iter().enumerate() {
         write_dense_at(&mut output, model_cif, index);
         write_category(&mut output, category);
     }
     write_dense_at(&mut output, model_cif, model_cif.categories.len());
-    output.finish().map_err(CifWriteToError::Output)
+    output.finish()
 }
 
 /// Writes the dense PAE matrix where its compact table used to sit.

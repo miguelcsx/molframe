@@ -62,6 +62,10 @@ required-features = ["full"]
 name = "ncs_real"
 required-features = ["full"]
 
+[[test]]
+name = "modelcif_real"
+required-features = ["full"]
+
 [[bench]]
 name = "facade"
 harness = false
