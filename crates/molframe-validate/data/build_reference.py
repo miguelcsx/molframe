@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Builds the reference tables embedded by molframe-validate.
 
 Reads two downloaded sources and writes four small files next to this
@@ -8,12 +7,13 @@ script. Pure standard library; see README.md for provenance and licences.
         --top8000 DIR   checkout of rlabduke/reference_data
         --ost FILE      OpenStructure stereo_chemical_props.txt
         --out DIR       destination (default: this directory)
-"""
+"""  # noqa: INP001
+
 import argparse
 import math
-import os
 import struct
 from itertools import groupby
+from pathlib import Path
 
 RAMA_GRIDS = [
     ("general", "rama8000-general-noGPIVpreP.data"),
@@ -23,11 +23,32 @@ RAMA_GRIDS = [
     ("prepro", "rama8000-prepro-noGP.data"),
     ("ileval", "rama8000-ileval-nopreP.data"),
 ]
-ROTA_TABLES = ["arg", "asn", "asp", "cys", "gln", "glu", "his", "ile", "leu",
-               "lys", "met", "phetyr", "pro", "ser", "thr", "trp", "val"]
+ROTA_TABLES = [
+    "arg",
+    "asn",
+    "asp",
+    "cys",
+    "gln",
+    "glu",
+    "his",
+    "ile",
+    "leu",
+    "lys",
+    "met",
+    "phetyr",
+    "pro",
+    "ser",
+    "thr",
+    "trp",
+    "val",
+]
 ROTA_FAVOURED = 0.02
 ROTA_ALLOWED = 0.003
 LOG_FLOOR = -6.0
+RAMA_BINS = 180
+GRID_HEADER_FIELDS = 6
+VARINT_MORE = 0x80
+FULL_CIRCLE = 359.0
 CHI_ATOMS = """\
 ARG ARG N CA CB CG | CA CB CG CD | CB CG CD NE | CG CD NE CZ
 ASN ASN N CA CB CG | CA CB CG OD1
@@ -50,63 +71,77 @@ VAL VAL N CA CB CG1
 """
 
 
-def read_grid(path):
-    dims, cells = [], []
-    for line in open(path):
-        if line.startswith("#"):
-            parts = line.split()
-            if len(parts) == 6 and parts[1].startswith("x") and parts[1].endswith(":"):
-                dims.append((float(parts[2]), float(parts[3]), int(parts[4])))
-            continue
+Grid = tuple[list[tuple[float, float, int]], list[tuple[list[float], float]]]
+
+
+def read_grid(path: Path) -> Grid:
+    """Parse one contour grid into its axis (low, high, bins) and its cells."""
+    dims: list[tuple[float, float, int]] = []
+    cells: list[tuple[list[float], float]] = []
+    for line in path.read_text().splitlines():
         parts = line.split()
-        if parts:
+        if line.startswith("#"):
+            if (
+                len(parts) == GRID_HEADER_FIELDS
+                and parts[1].startswith("x")
+                and parts[1].endswith(":")
+            ):
+                dims.append((float(parts[2]), float(parts[3]), int(parts[4])))
+        elif parts:
             cells.append(([float(x) for x in parts[:-1]], float(parts[-1])))
     return dims, cells
 
 
-def cell_index(dims, coords):
+def cell_index(dims: list[tuple[float, float, int]], coords: list[float]) -> int:
+    """Row-major index of the grid cell holding `coords`, clamped to the grid."""
     index = 0
-    for (lo, hi, bins), x in zip(dims, coords):
+    for (lo, hi, bins), x in zip(dims, coords, strict=True):
         width = (hi - lo) / bins
-        i = int(math.floor((x - lo) / width))
+        i = math.floor((x - lo) / width)
         index = index * bins + min(max(i, 0), bins - 1)
     return index
 
 
-def quantise(value):
+def quantise(value: float) -> int:
+    """Map a density to one byte on a log scale; zero stays zero."""
     if value <= 0.0:
         return 0
     q = 1 + round(254 * (math.log10(value) - LOG_FLOOR) / -LOG_FLOOR)
     return min(max(q, 1), 255)
 
 
-def build_rama(top, out):
+def build_rama(top: Path, out: Path) -> None:
+    """Write `rama.bin`: one quantised 180 x 180 grid per category."""
     blob = bytearray(b"MFRM" + bytes([len(RAMA_GRIDS)]))
-    folder = os.path.join(top, "Top8000", "Top8000_ramachandran_pct_contour_grids")
+    folder = top / "Top8000" / "Top8000_ramachandran_pct_contour_grids"
     for name, filename in RAMA_GRIDS:
-        dims, cells = read_grid(os.path.join(folder, filename))
-        assert [d[2] for d in dims] == [180, 180], dims
-        grid = bytearray(180 * 180)
+        dims, cells = read_grid(folder / filename)
+        if [d[2] for d in dims] != [RAMA_BINS, RAMA_BINS]:
+            message = f"unexpected Ramachandran grid shape {dims}"
+            raise ValueError(message)
+        grid = bytearray(RAMA_BINS * RAMA_BINS)
         for coords, value in cells:
             grid[cell_index(dims, coords)] = quantise(value)
         blob += name.encode().ljust(8, b"\0") + grid
-    open(os.path.join(out, "rama.bin"), "wb").write(blob)
+    (out / "rama.bin").write_bytes(blob)
 
 
-def varint(n):
+def varint(n: int) -> bytearray:
+    """LEB128 encoding of a non-negative integer."""
     out = bytearray()
-    while n >= 0x80:
-        out.append(n & 0x7F | 0x80)
+    while n >= VARINT_MORE:
+        out.append(n & 0x7F | VARINT_MORE)
         n >>= 7
     out.append(n)
     return out
 
 
-def build_rota(top, out):
-    folder = os.path.join(top, "Top8000", "Top8000_rotamer_pct_contour_grids")
+def build_rota(top: Path, out: Path) -> None:
+    """Write `rotamer.bin`: run-length coded class grids per rotamer table."""
+    folder = top / "Top8000" / "Top8000_rotamer_pct_contour_grids"
     blob = bytearray(b"MFRT" + bytes([len(ROTA_TABLES)]))
     for name in ROTA_TABLES:
-        dims, cells = read_grid(os.path.join(folder, f"rota8000-{name}.data"))
+        dims, cells = read_grid(folder / f"rota8000-{name}.data")
         total = 1
         for _, _, bins in dims:
             total *= bins
@@ -121,18 +156,19 @@ def build_rota(top, out):
         label = name.encode()
         blob += bytes([len(label)]) + label + bytes([len(dims)])
         for lo, hi, bins in dims:
-            blob += struct.pack("<HB", bins, 1 if hi - lo < 359.0 else 0)
+            blob += struct.pack("<HB", bins, 1 if hi - lo < FULL_CIRCLE else 0)
         blob += struct.pack("<I", len(payload)) + payload
-    open(os.path.join(out, "rotamer.bin"), "wb").write(blob)
+    (out / "rotamer.bin").write_bytes(blob)
 
 
-def build_chi(out):
+def build_chi(out: Path) -> None:
+    """Write `chi_atoms.tsv` from the embedded chi-atom listing."""
     rows = ["# residue\ttable\tchi1 | chi2 ... (atom names)"]
     for line in CHI_ATOMS.strip().splitlines():
         head, _, tail = line.partition(" ")
         table, _, chis = tail.partition(" ")
         rows.append(f"{head}\t{table.lower().replace('phe', 'phetyr')}\t{chis}")
-    open(os.path.join(out, "chi_atoms.tsv"), "w").write("\n".join(rows) + "\n")
+    (out / "chi_atoms.tsv").write_text("\n".join(rows) + "\n")
 
 
 # Peptide-link terms, which the OpenStructure table does not carry. C-N and the
@@ -149,7 +185,8 @@ LINK_ROWS = [
 ]
 
 
-def build_geometry(ost, out):
+def build_geometry(ost: Path, out: Path) -> None:
+    """Write `geometry.tsv` from the OpenStructure table and the link rows."""
     lines = [
         "# kind\tresidue\tatoms\tmean\tsd\tsource",
         "# EH = Engh and Huber 1991 via OpenStructure; AF = AlphaFold",
@@ -159,8 +196,7 @@ def build_geometry(ost, out):
         "# every residue.",
     ]
     section = None
-    for raw in open(ost):
-        raw = raw.rstrip("\n")
+    for raw in ost.read_text().splitlines():
         if raw.startswith("Bond"):
             section = "bond"
         elif raw.startswith("Angle"):
@@ -172,15 +208,16 @@ def build_geometry(ost, out):
             lines.append(f"{section}\t{residue}\t{atoms}\t{mean}\t{sd}\tEH")
     for kind, residue, atoms, mean, sd, source in LINK_ROWS:
         lines.append(f"{kind}\t{residue}\t{atoms}\t{mean}\t{sd}\t{source}")
-    open(os.path.join(out, "geometry.tsv"), "w").write("\n".join(lines) + "\n")
+    (out / "geometry.tsv").write_text("\n".join(lines) + "\n")
 
 
-def main():
-    here = os.path.dirname(os.path.abspath(__file__))
+def main() -> None:
+    """Parse the command line and write all four tables."""
+    here = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser()
-    parser.add_argument("--top8000", required=True)
-    parser.add_argument("--ost", required=True)
-    parser.add_argument("--out", default=here)
+    parser.add_argument("--top8000", required=True, type=Path)
+    parser.add_argument("--ost", required=True, type=Path)
+    parser.add_argument("--out", default=here, type=Path)
     args = parser.parse_args()
     build_rama(args.top8000, args.out)
     build_rota(args.top8000, args.out)
