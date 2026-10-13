@@ -33,6 +33,9 @@ pub fn projection_loss(structure: &Structure, options: &PdbOptions) -> Vec<Diagn
     }
     renamed_identifiers(structure, options, &mut findings);
     rounded_values(structure, &mut findings);
+    rounded_header(structure, &mut findings);
+    renumbered_serials(structure, &mut findings);
+    unsigned_zero_charges(structure, &mut findings);
     unrecorded_bonds(structure, &mut findings);
     findings
 }
@@ -104,6 +107,82 @@ fn rounded_values(structure: &Structure, findings: &mut Vec<Diagnostic>) {
                  rounded in the PDB columns"
             )));
         }
+    }
+}
+
+/// The resolution and cell are written to fixed decimals.
+fn rounded_header(structure: &Structure, findings: &mut Vec<Diagnostic>) {
+    let data = structure.data();
+    if data
+        .entry
+        .resolution
+        .is_some_and(|value| rounded(value, 1e2))
+    {
+        findings.push(loss(
+            "the resolution has more than 2 decimals and is rounded in REMARK 2".to_owned(),
+        ));
+    }
+    if let Some(cell) = data.cell {
+        let lengths = cell.lengths.iter().any(|&v| rounded_f64(v, 1e3));
+        let angles = cell.angles.iter().any(|&v| rounded_f64(v, 1e2));
+        if lengths || angles {
+            findings.push(loss(
+                "the cell has more decimals than CRYST1 holds (3 for edges, 2 for angles) \
+                 and is rounded"
+                    .to_owned(),
+            ));
+        }
+    }
+}
+
+fn rounded_f64(value: f64, scale: f64) -> bool {
+    ((value * scale).round() / scale).to_bits() != value.to_bits()
+}
+
+/// The writer numbers atoms from one, and a `TER` takes a number of its own.
+fn renumbered_serials(structure: &Structure, findings: &mut Vec<Diagnostic>) {
+    let mut written = 1i64;
+    let mut changed = 0usize;
+    let mut example = None;
+    for chain in structure.data().chains() {
+        let mut polymer = false;
+        for residue in chain.residues() {
+            polymer |= !residue.is_het();
+            for atom in residue.atoms() {
+                let moved = atom
+                    .atom_site_id()
+                    .filter(|&id| id != 0 && i64::from(id) != written);
+                if let Some(id) = moved {
+                    changed += 1;
+                    example.get_or_insert((id, written));
+                }
+                written += 1;
+            }
+        }
+        if polymer {
+            written += 1;
+        }
+    }
+    if let Some((was, now)) = example {
+        findings.push(loss(format!(
+            "{changed} atom serial(s) are renumbered (for example {was} becomes {now}); \
+             records that cite a serial are rewritten to match"
+        )));
+    }
+}
+
+/// Columns 79-80 are blank for both a neutral and an unrecorded atom.
+fn unsigned_zero_charges(structure: &Structure, findings: &mut Vec<Diagnostic>) {
+    let count = structure
+        .data()
+        .atoms()
+        .filter(|atom| atom.formal_charge() == Some(0))
+        .count();
+    if count > 0 {
+        findings.push(loss(format!(
+            "{count} atom(s) carry an explicit zero charge that PDB cannot tell from an \
+             unrecorded one; they read back as unknown"
+        )));
     }
 }
 
