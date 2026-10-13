@@ -181,7 +181,7 @@ fn curated_symbols_preserve_molstar_shapes_colors_and_aliases() {
     assert_eq!(snfg_symbol("FUC").unwrap().color, 0xed_1c_24);
     assert_eq!(
         snfg_symbol("GalN").unwrap().secondary_color,
-        Some(0xf1_ec_e1)
+        Some(0xff_ff_ff)
     );
     assert_eq!(snfg_symbol("GCU").unwrap().shape, SnfgShape::DividedDiamond);
     assert!(snfg_symbol("0GA").is_none());

@@ -15,6 +15,8 @@ const LIGHT_BLUE: u32 = 0x8f_cc_e9;
 const BROWN: u32 = 0xa1_7a_4d;
 const RED: u32 = 0xed_1c_24;
 const SECONDARY: u32 = 0xf1_ec_e1;
+/// The SNFG standard's second half of a divided or crossed symbol.
+const WHITE: u32 = 0xff_ff_ff;
 
 pub(super) const UNKNOWN: SnfgSymbol = SnfgSymbol {
     abbreviation: "Unk",
@@ -211,7 +213,7 @@ fn symbol_for_abbreviation(value: &str) -> Option<SnfgSymbol> {
         .iter()
         .find(|(abbreviation, _, _, _)| *abbreviation == value)?;
     let secondary_color = match shape {
-        CrossedCube | DividedDiamond | DividedCone => Some(SECONDARY),
+        CrossedCube | DividedDiamond | DividedCone => Some(WHITE),
         _ => None,
     };
     Some(SnfgSymbol {
