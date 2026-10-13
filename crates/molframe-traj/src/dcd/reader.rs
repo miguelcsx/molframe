@@ -17,10 +17,10 @@ use super::{
     AKMA_TO_PS, DcdEndian, DcdError, DcdHeader, f32_at, i32_at, nonnegative, parse_cell,
     parse_free_indices, parse_titles,
 };
-
+#[path = "reader_seek.rs"]
+mod seek;
 #[path = "reader_support.rs"]
 mod support;
-
 use support::{
     build_fixed_indices, estimated_bytes, header_heap_bytes, io_error, marker_length, memory_error,
     read_marker, reserve_exact, trajectory_error,
@@ -41,6 +41,7 @@ pub struct DcdReader {
     next_frame: usize,
     memory_limit_bytes: usize,
     eof_checked: bool,
+    data_start: u64,
 }
 
 impl DcdReader {
@@ -103,6 +104,7 @@ impl DcdReader {
         let mut decoded = Vec::new();
         reserve_exact(&mut decoded, atom_count, memory_limit_bytes)?;
         let reader = Self {
+            data_start: records.offset() as u64,
             records,
             header,
             free_indices,
@@ -292,7 +294,7 @@ impl TrajectoryReader for DcdReader {
     }
 
     fn random_access(&self) -> RandomAccess {
-        RandomAccess::None
+        RandomAccess::Full
     }
 
     fn read_next(&mut self, timestep: &mut Timestep) -> Result<bool, TrajectoryError> {
@@ -312,8 +314,8 @@ impl TrajectoryReader for DcdReader {
         result
     }
 
-    fn seek(&mut self, _frame: usize) -> Result<(), TrajectoryError> {
-        Err(TrajectoryError::RandomAccessUnavailable)
+    fn seek(&mut self, frame: usize) -> Result<(), TrajectoryError> {
+        self.seek_frame(frame)
     }
 }
 

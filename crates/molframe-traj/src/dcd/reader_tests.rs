@@ -84,7 +84,7 @@ fn pull_dispatch_reads_dcd_without_materialising_all_frames() {
         .expect("dispatch DCD pull reader");
     assert_eq!(reader.format(), "dcd");
     assert_eq!(reader.n_frames(), Some(32));
-    assert_eq!(reader.random_access(), RandomAccess::None);
+    assert_eq!(reader.random_access(), RandomAccess::Full);
     let mut frame = Timestep::default();
     assert!(reader.read_next(&mut frame).expect("read dispatched DCD"));
     assert_eq!(frame.frame, 0);
