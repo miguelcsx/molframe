@@ -39,6 +39,9 @@ mod standard_bonds;
 mod standard_components;
 mod standard_roles;
 mod table_identity;
+mod table_provider;
+mod table_store;
+mod table_text;
 
 pub use annotate::{
     ChemistryProvenance, ChemistryReport, FormalChargeSource, HBOND_WEAK_ACCEPTOR_ANNOTATION,
@@ -118,3 +121,8 @@ pub use standard_roles::{
     STANDARD_PROTEIN_ROLE_PROFILE, annotate_standard_protein_roles, standard_protein_atom_role,
 };
 pub use table_identity::TableIdentity;
+pub use table_provider::{
+    Cache, InMemory, Provided, Source, TableError, TableKind, TableProvider, UserFile,
+};
+pub use table_store::{Selected, TableStore};
+pub use table_text::{TABLE_FORMAT_VERSION, TableLines, TableTextError, read_table, text_of};

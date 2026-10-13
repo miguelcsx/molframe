@@ -103,6 +103,9 @@ registry! {
     E2101 = Error 2101, Invalidating,
         "sequence, alphabet, tree or substitution data is invalid",
         "check the residue symbols against the alphabet, the tree text against its grammar and the scoring profile against its alphabet";
+    E2201 = Error 2201, Invalidating,
+        "reference table is malformed",
+        "fix the line the message names; a table is accepted whole or not at all, and its header must give name, version, source and licence";
     E3001 = Error 3001, Invalidating,
         "column length disagrees with the chunk length",
         "report this as a molframe bug; a structure cannot be built this way from valid input";
@@ -292,6 +295,9 @@ registry! {
     E7101 = Error 7101, Invalidating,
         "input could not be read",
         "check the path, permissions and that the file is complete and in the expected format";
+    E7102 = Error 7102, Invalidating,
+        "no reference table is available for the computation",
+        "pass a table file, select a cache entry by name, or store one with `molframe data fetch <entry> --manifest <file>`; the library compiles in no table and never fetches during a computation";
     E7901 = Error 7901, Invalidating,
         "output could not be written",
         "check the destination, permissions and available storage, then retry";
