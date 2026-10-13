@@ -43,7 +43,7 @@ pub use backbone::{
 };
 pub use batch_measure::{BatchGeometryError, angles_into, distances_into, torsions_into};
 pub use eigen::{Decomposition, EigenError, EigenOptions, symmetric, symmetric_with_options};
-pub use fluctuation::{FluctuationError, rmsf};
+pub use fluctuation::{FluctuationError, RmsfAccumulator, rmsf};
 pub use matrix::{
     DistanceMatrix, MatrixError, condensed_distances_f32_with_context,
     condensed_distances_with_context, distance_block_rows, distance_matrix,

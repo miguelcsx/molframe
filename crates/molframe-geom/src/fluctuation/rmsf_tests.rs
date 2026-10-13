@@ -1,4 +1,4 @@
-use super::{FluctuationError, rmsf};
+use super::{FluctuationError, RmsfAccumulator, rmsf};
 
 #[test]
 fn an_empty_ensemble_has_no_mean_to_measure_against() {
@@ -94,4 +94,40 @@ fn vector_blocks_and_tail_match_the_scalar_welford_order_bit_for_bit() {
         let expected = (square / 4.0).sqrt();
         assert_eq!(actual.to_bits(), expected.to_bits());
     }
+}
+
+#[test]
+fn the_accumulator_reproduces_the_batch_result_bit_for_bit() {
+    let frames: Vec<Vec<[f32; 3]>> = (0..7_u8)
+        .map(|frame| {
+            (0..11_u8)
+                .map(|atom| {
+                    let f = f32::from(frame);
+                    let a = f32::from(atom);
+                    [a * 0.7 + f * 0.13, (a * f).sin(), f * f * 0.01 - a]
+                })
+                .collect()
+        })
+        .collect();
+    let views: Vec<&[[f32; 3]]> = frames.iter().map(Vec::as_slice).collect();
+    let batch = rmsf(&views).expect("a rectangular ensemble");
+
+    let mut accumulator = RmsfAccumulator::new(11);
+    for frame in &frames {
+        accumulator.push(frame).expect("matching atom count");
+    }
+    assert_eq!(accumulator.frames(), 7);
+    let streamed = accumulator.finish().expect("frames were pushed");
+    let bits = |values: &[f64]| values.iter().map(|v| v.to_bits()).collect::<Vec<_>>();
+    assert_eq!(bits(&batch), bits(&streamed));
+}
+
+#[test]
+fn the_accumulator_rejects_a_wrong_sized_frame_and_an_empty_finish() {
+    let mut accumulator = RmsfAccumulator::new(2);
+    assert_eq!(
+        accumulator.push(&[[0.0; 3]]),
+        Err(FluctuationError::RaggedFrames)
+    );
+    assert_eq!(accumulator.finish(), Err(FluctuationError::NoFrames));
 }

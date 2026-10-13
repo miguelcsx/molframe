@@ -63,31 +63,98 @@ pub fn rmsf(frames: &[&[[f32; 3]]]) -> Result<Vec<f64>, FluctuationError> {
         return Err(FluctuationError::RaggedFrames);
     }
 
-    let mut mean = vec![[0.0f64; 3]; atom_count];
-    let mut summed_square = vec![0.0f64; atom_count];
-    let mut seen = 0u64;
-
+    let mut accumulator = RmsfAccumulator::new(atom_count);
     for frame in frames {
-        seen += 1;
+        accumulator.push(frame)?;
+    }
+    accumulator.finish()
+}
+
+/// Incremental per-atom RMSF over frames supplied one at a time.
+///
+/// Holds a mean and a summed squared deviation per atom, so memory is
+/// `O(atoms)` for any number of frames. Frames are folded with the same
+/// vectorised Welford kernel as [`rmsf`], so both give identical results.
+///
+/// # Examples
+///
+/// ```
+/// use molframe_geom::RmsfAccumulator;
+///
+/// let mut accumulator = RmsfAccumulator::new(1);
+/// accumulator.push(&[[0.0, 0.0, 0.0]])?;
+/// accumulator.push(&[[2.0, 0.0, 0.0]])?;
+/// let values = accumulator.finish()?;
+/// assert!((values[0] - 1.0).abs() < 1e-9);
+/// # Ok::<(), molframe_geom::FluctuationError>(())
+/// ```
+#[derive(Clone, Debug)]
+pub struct RmsfAccumulator {
+    mean: Vec<[f64; 3]>,
+    summed_square: Vec<f64>,
+    seen: u64,
+}
+
+impl RmsfAccumulator {
+    /// Starts an empty accumulator for `atoms` atoms.
+    #[must_use]
+    pub fn new(atoms: usize) -> Self {
+        Self {
+            mean: vec![[0.0; 3]; atoms],
+            summed_square: vec![0.0; atoms],
+            seen: 0,
+        }
+    }
+
+    /// Folds one frame into the running mean and deviation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FluctuationError::RaggedFrames`] when the frame length differs
+    /// from the atom count and [`FluctuationError::TooManyFrames`] when the
+    /// frame count leaves the exactly representable range.
+    pub fn push(&mut self, frame: &[[f32; 3]]) -> Result<(), FluctuationError> {
+        if frame.len() != self.mean.len() {
+            return Err(FluctuationError::RaggedFrames);
+        }
+        let seen = self.seen + 1;
         let inverse_seen = exact_u64(seen)
             .ok_or(FluctuationError::TooManyFrames)?
             .recip();
-        crate::simd::rmsf_update(frame, &mut mean, &mut summed_square, inverse_seen);
+        self.seen = seen;
+        crate::simd::rmsf_update(frame, &mut self.mean, &mut self.summed_square, inverse_seen);
+        Ok(())
     }
 
-    let inverse_frames = exact_u64(seen)
-        .ok_or(FluctuationError::TooManyFrames)?
-        .recip();
-    for value in &mut summed_square {
-        let mean_square = *value * inverse_frames;
-        *value = if mean_square <= 0.0 {
-            0.0
-        } else {
-            mean_square.sqrt()
-        };
+    /// Frames folded so far.
+    #[must_use]
+    pub const fn frames(&self) -> u64 {
+        self.seen
     }
 
-    Ok(summed_square)
+    /// Returns the RMSF of every atom.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FluctuationError::NoFrames`] when no frame was pushed.
+    pub fn finish(self) -> Result<Vec<f64>, FluctuationError> {
+        if self.seen == 0 {
+            return Err(FluctuationError::NoFrames);
+        }
+        let inverse_frames = exact_u64(self.seen)
+            .ok_or(FluctuationError::TooManyFrames)?
+            .recip();
+        let mut values = self.summed_square;
+        for value in &mut values {
+            let mean_square = *value * inverse_frames;
+            *value = if mean_square <= 0.0 {
+                0.0
+            } else {
+                mean_square.sqrt()
+            };
+        }
+        Ok(values)
+    }
 }
 
 #[cfg(test)]
