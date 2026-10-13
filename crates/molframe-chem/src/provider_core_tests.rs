@@ -3,6 +3,7 @@ use crate::{ComponentKind, PolymerLinkPolicy, apply_component_chemistry};
 use molframe_bench::{Sample, structure};
 use molframe_core::diagnostic::Code;
 use molframe_core::io::InputBuffer;
+use std::fmt::Write as _;
 
 fn get(provider: &dyn ComponentProvider, id: &str) -> Arc<Component> {
     provider
@@ -133,4 +134,46 @@ fn a_file_without_embedded_atoms_defines_nothing() {
     let provider =
         EmbeddedProvider::from_document(&document, DictionaryVersion::new("v")).expect("lowers");
     assert!(provider.is_empty());
+}
+
+fn nucleic_chain(components: &[&str]) -> molframe_core::Structure {
+    let mut text = String::from(
+        "data_na\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n",
+    );
+    for (index, component) in components.iter().enumerate() {
+        let number = index + 1;
+        let x = number * 6;
+        writeln!(text, "ATOM {number} C C1' {component} A {number} {x} 0 0").expect("string write");
+    }
+    let buffer = InputBuffer::from_bytes(text.into_bytes());
+    molframe_cif::read(&buffer, &molframe_core::io::ReadOptions::new())
+        .expect("reads")
+        .0
+}
+
+fn first_chain_kind(components: &[&str]) -> molframe_core::PolymerKind {
+    let structure = nucleic_chain(components);
+    let report = apply_component_chemistry(&structure, &CoreProvider, PolymerLinkPolicy::Disabled)
+        .expect("provider works");
+    let chain = report.structure.data().chains().next().expect("one chain");
+    chain.polymer_kind()
+}
+
+#[test]
+fn nucleic_chains_are_told_apart_by_their_two_prime_oxygen() {
+    use molframe_core::PolymerKind;
+    assert_eq!(
+        first_chain_kind(&["A", "G", "U", "C", "PSU"]),
+        PolymerKind::Rna
+    );
+    assert_eq!(
+        first_chain_kind(&["DA", "DG", "DT", "DC"]),
+        PolymerKind::Dna
+    );
+    assert_eq!(
+        first_chain_kind(&["DA", "DG", "A", "U"]),
+        PolymerKind::NucleicHybrid
+    );
 }

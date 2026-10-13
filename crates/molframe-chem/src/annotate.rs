@@ -14,7 +14,7 @@ use linkage::link_polymer;
 use rayon::prelude::*;
 use resolver::Resolver;
 use tally::Tally;
-use worker::{UnitOutput, Worker};
+use worker::{SugarCounts, UnitOutput, Worker};
 
 use crate::{ComponentKind, ComponentProvider};
 pub use atom_chemistry::HBOND_WEAK_ACCEPTOR_ANNOTATION;
@@ -186,11 +186,13 @@ pub fn apply_component_chemistry(
     };
     for ((chain, residues), range) in chains.iter().zip(&chain_units) {
         let mut kinds = BTreeMap::new();
+        let mut sugars = SugarCounts::default();
         for output in outputs.by_ref().take(range.len()) {
             let output = output?;
             for (kind, count) in output.kinds {
                 *kinds.entry(kind).or_insert(0) += count;
             }
+            sugars.merge(output.sugars);
             for (atom, value) in output.chemistry {
                 if let Some(slot) = chemistry.get_mut(atom) {
                     *slot = Some(value);
@@ -203,7 +205,7 @@ pub fn apply_component_chemistry(
             missing_atoms.merge(output.missing_atoms);
             missing.extend(output.missing);
         }
-        classify_chain(&mut data, *chain, &kinds)?;
+        classify_chain(&mut data, *chain, &kinds, sugars)?;
         link_polymer(
             residues,
             &components,
@@ -267,6 +269,7 @@ fn classify_chain(
     data: &mut molframe_core::StructureData,
     chain: ChainIndex,
     kinds: &BTreeMap<ComponentKind, usize>,
+    sugars: SugarCounts,
 ) -> Result<(), Diagnostic> {
     let polymer = |kind: ComponentKind| match kinds.get(&kind) {
         Some(count) => *count,
@@ -279,7 +282,13 @@ fn classify_chain(
     let kind = if amino * 2 > total {
         PolymerKind::Protein
     } else if nucleic * 2 > total {
-        PolymerKind::NucleicHybrid
+        match (sugars.ribo, sugars.deoxy) {
+            // No sugar evidence: keep whatever the source declared.
+            (0, 0) => return Ok(()),
+            (_, 0) => PolymerKind::Rna,
+            (0, _) => PolymerKind::Dna,
+            _ => PolymerKind::NucleicHybrid,
+        }
     } else if sugar * 2 > total {
         PolymerKind::Saccharide
     } else {

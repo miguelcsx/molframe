@@ -20,11 +20,27 @@ use std::sync::Arc;
 #[derive(Default)]
 pub(super) struct UnitOutput {
     pub(super) kinds: BTreeMap<ComponentKind, usize>,
+    /// Nucleotide residues carrying a 2'-oxygen (ribo) and those without (deoxy).
+    pub(super) sugars: SugarCounts,
     pub(super) chemistry: Vec<(usize, AtomChemistry)>,
     pub(super) bonds: Vec<BondRecord>,
     pub(super) inconsistent: Tally,
     pub(super) missing_atoms: Tally,
     pub(super) missing: BTreeSet<Box<str>>,
+}
+
+/// Ribo- and deoxyribonucleotide residue counts of a unit.
+#[derive(Clone, Copy, Default)]
+pub(super) struct SugarCounts {
+    pub(super) ribo: usize,
+    pub(super) deoxy: usize,
+}
+
+impl SugarCounts {
+    pub(super) fn merge(&mut self, other: Self) {
+        self.ribo += other.ribo;
+        self.deoxy += other.deoxy;
+    }
 }
 
 /// Per-thread caches and scratch buffers, reused across units.
@@ -113,6 +129,16 @@ impl Worker {
         };
         let component = &*entry.component;
         *output.kinds.entry(component.kind).or_insert(0) += 1;
+        if component.kind == ComponentKind::Nucleotide {
+            // The 2'-hydroxyl is what makes a nucleotide ribo; a definition
+            // without ring atoms at all says nothing either way.
+            let has = |name: &str| component.atom(name).is_some();
+            if has("O2'") || has("O2*") {
+                output.sugars.ribo += 1;
+            } else if has("C2'") || has("C2*") {
+                output.sugars.deoxy += 1;
+            }
+        }
         if inconsistent(&entry.index, atoms) {
             output.inconsistent.record(component_id, residue.index(), 0);
             return Ok(());
