@@ -27,7 +27,7 @@
 //! skipped. The candidate pairs come from the shared spatial search bounded by
 //! the widest radius in play.
 
-use molframe_chem::{RadiusSet, perceive_bonds_in, vdw_radius};
+use molframe_chem::{MetalFallback, RadiusSet, perceive_bonds_in, radius_with_fallback};
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder};
 use molframe_core::optional::OptionalSymbol;
 use molframe_core::selection::AtomSelection;
@@ -144,6 +144,11 @@ pub struct ClashOptions {
     pub tolerance: f32,
     /// Van der Waals radius set.
     pub radius_set: RadiusSet,
+    /// Where a metal the radius set has no value for takes its radius. The
+    /// default is the ionic radius: a coordinated cation is a steric contact of
+    /// its crystal size, not of its van der Waals sphere, which would call every
+    /// ordinary coordination distance a clash.
+    pub metals: MetalFallback,
     /// Neighbour-search backend.
     pub backend: SpatialBackend,
     /// Exclude atoms exactly three bonds apart. On by default: torsions fix
@@ -165,6 +170,7 @@ impl ClashOptions {
         Self {
             tolerance,
             radius_set,
+            metals: MetalFallback::Ionic,
             backend,
             exclude_one_four: true,
             perceive_bonds: true,
@@ -176,7 +182,7 @@ impl ClashOptions {
 ///
 /// `tolerance` is the overlap tolerated before a pair counts as a clash; a
 /// common choice is about 0.4 Å. Atoms whose element has no radius in the set
-/// take no part. Bonded (1-2), angle-related (1-3) and torsion-related (1-4)
+/// and no metal fallback take no part. Bonded (1-2), angle-related (1-3) and torsion-related (1-4)
 /// pairs and pairs from incompatible alternate locations are skipped (see
 /// [`ClashOptions`]). Results are sorted by `(first, second)`.
 ///
@@ -212,6 +218,7 @@ pub fn clashes_with(
     let ClashOptions {
         tolerance,
         radius_set,
+        metals,
         backend,
         exclude_one_four,
         perceive_bonds,
@@ -223,7 +230,7 @@ pub fn clashes_with(
         let Some(element) = atom.element() else {
             continue;
         };
-        if let Some(radius) = vdw_radius(element, radius_set) {
+        if let Some(radius) = radius_with_fallback(element, radius_set, metals) {
             if let Some(slot) = radii.get_mut(atom.index().as_usize()) {
                 *slot = radius;
             }

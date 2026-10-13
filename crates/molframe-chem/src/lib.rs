@@ -83,6 +83,7 @@ pub use provider::{
 };
 pub use radius_policy::{
     HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, policy_radii,
+    radius_with_fallback,
 };
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,

@@ -1,5 +1,5 @@
 use super::{ClashOptions, clashes, clashes_with};
-use molframe_chem::RadiusSet;
+use molframe_chem::{MetalFallback, RadiusSet};
 use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::index::AtomIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
@@ -336,4 +336,27 @@ _atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
     assert!(run("A", "B").is_empty());
     assert_eq!(run("A", "A"), vec![(0, 1)]);
     assert_eq!(run(".", "B"), vec![(0, 1)]);
+}
+
+#[test]
+fn a_coordinated_metal_clashes_by_its_ionic_radius_unless_told_otherwise() {
+    // Zn-S at 2.33 Å is an ordinary tetrahedral thiolate contact. Zn2+ (IV) is
+    // 0.60 Å and sulfur 1.80 Å, so the overlap is 0.07 Å: not a clash. The
+    // Alvarez sphere of 2.39 Å would call the same distance a 1.86 Å overlap.
+    let at = |distance: f32| {
+        structure(&format!(
+            "{HEADER}\
+ATOM 1 S SG CYS A 1 0 0 0\n\
+HETATM 2 ZN ZN ZN B 1 {distance} 0 0\n"
+        ))
+    };
+    let with = |metals| ClashOptions {
+        metals,
+        ..defaults()
+    };
+    let contact = at(2.33);
+    assert!(pairs(&contact, defaults()).is_empty());
+    assert_eq!(pairs(&contact, with(MetalFallback::Vdw)), vec![(0, 1)]);
+    assert!(pairs(&contact, with(MetalFallback::None)).is_empty());
+    assert_eq!(pairs(&at(1.5), defaults()), vec![(0, 1)]);
 }

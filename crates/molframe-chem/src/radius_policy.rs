@@ -111,6 +111,21 @@ impl Default for RadiusPolicy {
     }
 }
 
+/// The radius of one element from `set`, drawing on the metal table under
+/// `metals` when the set has no value for it.
+#[must_use]
+pub fn radius_with_fallback(
+    element: molframe_core::Element,
+    set: RadiusSet,
+    metals: MetalFallback,
+) -> Option<f32> {
+    vdw_radius(element, set).or_else(|| match metals {
+        MetalFallback::None => None,
+        MetalFallback::Vdw => metal_radius(element, MetalRadiusKind::Vdw),
+        MetalFallback::Ionic => metal_radius(element, MetalRadiusKind::Ionic),
+    })
+}
+
 /// The class of one residue.
 ///
 /// A component-kind column, when present, decides; otherwise the residue name
@@ -168,13 +183,9 @@ pub fn policy_radii(structure: &Structure, policy: &RadiusPolicy) -> Vec<f32> {
                 continue;
             }
             for atom in residue.atoms() {
-                let radius = atom.element().and_then(|element| {
-                    vdw_radius(element, policy.set).or_else(|| match policy.metals {
-                        MetalFallback::None => None,
-                        MetalFallback::Vdw => metal_radius(element, MetalRadiusKind::Vdw),
-                        MetalFallback::Ionic => metal_radius(element, MetalRadiusKind::Ionic),
-                    })
-                });
+                let radius = atom
+                    .element()
+                    .and_then(|element| radius_with_fallback(element, policy.set, policy.metals));
                 if let (Some(radius), Some(slot)) = (radius, radii.get_mut(atom.index().as_usize()))
                 {
                     *slot = radius;
