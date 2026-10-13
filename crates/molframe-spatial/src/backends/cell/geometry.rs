@@ -70,8 +70,8 @@ fn dimensions(min: [f32; 3], max: [f32; 3], edge: f32) -> Result<[usize; 3], Spa
 }
 
 fn dimension(min: f32, max: f32, edge: f32) -> Result<usize, SpatialError> {
-    let cells =
-        floor_usize((f64::from(max) - f64::from(min)) / f64::from(edge)).ok_or(SpatialError::NumericRangeExceeded)?;
+    let cells = floor_usize((f64::from(max) - f64::from(min)) / f64::from(edge))
+        .ok_or(SpatialError::NumericRangeExceeded)?;
     cells
         .checked_add(1)
         .map(|dimension| dimension.max(1))

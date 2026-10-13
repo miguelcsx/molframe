@@ -1,34 +1,72 @@
-//! Balanced three-dimensional k-d tree.
+//! Implicit, bucketed, cache-friendly three-dimensional k-d tree.
+//!
+//! # Layout
+//!
+//! The tree is a perfect binary tree over *index medians*: a node covering the
+//! slot range `lo..hi` splits at `lo + (hi - lo) / 2` on the axis of widest
+//! extent, after `select_nth_unstable` has placed the median there. Both the
+//! shape and every child range therefore follow from the point count alone, so
+//! no child pointers are stored. Per node the tree keeps one split value and
+//! one axis (heap order, children `2i + 1` and `2i + 2`); per slot it keeps
+//! structure-of-arrays coordinates and the atom index. Leaves are buckets of
+//! `LEAF_MAX / 2 ..= LEAF_MAX` points scanned linearly, which the compiler
+//! vectorises. Splitting by count rather than by value keeps the depth at
+//! `ceil(log2(n / LEAF_MAX))` for duplicates, collinear layouts and outliers.
+//!
+//! Left subtrees hold coordinates `<=` the split value and right subtrees
+//! `>=` it, so equal coordinates may sit on either side; searches treat a
+//! plane at distance zero as intersecting both.
+//!
+//! # Concurrency
+//!
+//! Construction splits the top levels serially and the independent subtrees on
+//! the context's workers. Queries are independent and run in blocks on the
+//! same workers; no query allocates (scratch is owned per block).
 
-use crate::brute::{canonicalise, distance_squared, finite};
+use crate::brute::finite;
 use crate::{KdPeriodicOptions, NeighborPair, PeriodicBox, SpatialError};
-use std::cmp::Ordering;
-use std::collections::{BTreeMap, BinaryHeap};
+use molframe_core::ExecutionContext;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
+use std::sync::Mutex;
 
+#[path = "kd_batch.rs"]
+mod batch;
+#[path = "kd_heap.rs"]
+mod heap;
 #[path = "kd_periodic.rs"]
 mod periodic_helpers;
+#[path = "kd_search.rs"]
+mod search;
 #[path = "kd_stream.rs"]
 mod stream;
+
+pub use batch::{KnnOptions, KnnResult, NO_NEIGHBOR};
 use periodic_helpers::{for_each_shift, periodic_image_limits, validate_image_budget};
 
+/// Largest leaf bucket. Leaves hold `LEAF_MAX / 2 ..= LEAF_MAX` points.
+pub(super) const LEAF_MAX: usize = 32;
+
 #[derive(Clone, Copy, Debug)]
-struct Node {
-    atom: u32,
+struct Entry {
     position: [f32; 3],
-    axis: usize,
-    left: Option<usize>,
-    right: Option<usize>,
+    atom: u32,
 }
 
 /// A balanced static k-dimensional tree over selected atoms.
 ///
 /// Construction uses linear-time median partitioning at each level, for
-/// O(n log n) total work and one flat node allocation.
+/// O(n log n) total work with `n / LEAF_MAX` split nodes and four flat
+/// per-point arrays.
 #[derive(Debug)]
 pub struct KdTree<'a> {
     positions: &'a [[f32; 3]],
-    nodes: Vec<Node>,
-    root: Option<usize>,
+    xs: Vec<f32>,
+    ys: Vec<f32>,
+    zs: Vec<f32>,
+    ids: Vec<u32>,
+    split_value: Vec<f32>,
+    split_axis: Vec<u8>,
+    bounds: Option<([f32; 3], [f32; 3])>,
     periodic: Option<PeriodicBox>,
     periodic_options: KdPeriodicOptions,
     reservation: Option<molframe_core::MemoryReservation>,
@@ -59,21 +97,79 @@ impl<'a> KdTree<'a> {
         periodic: Option<PeriodicBox>,
         periodic_options: KdPeriodicOptions,
     ) -> Result<Self, SpatialError> {
+        Self::build_parallel(positions, targets, periodic, periodic_options, None)
+    }
+
+    pub(super) fn build_parallel(
+        positions: &'a [[f32; 3]],
+        targets: &[u32],
+        periodic: Option<PeriodicBox>,
+        periodic_options: KdPeriodicOptions,
+        context: Option<&ExecutionContext>,
+    ) -> Result<Self, SpatialError> {
         validate_indices(targets, positions.len())?;
         periodic_options.validate()?;
 
         let mut entries = finite_entries(positions, targets, periodic.as_ref());
-        let mut nodes = Vec::with_capacity(entries.len());
-        let root = build_nodes(&mut entries, 0, &mut nodes);
+        let bounds = bounds_of(&entries);
+        let depth = depth_for(entries.len());
+        let node_count = (1_usize << depth) - 1;
+        let mut split_value = vec![0.0_f32; node_count];
+        let mut split_axis = vec![0_u8; node_count];
+        for (node, axis, value) in build_splits(&mut entries, depth, context)? {
+            split_value[node] = value;
+            split_axis[node] = axis;
+        }
+        let mut xs = Vec::with_capacity(entries.len());
+        let mut ys = Vec::with_capacity(entries.len());
+        let mut zs = Vec::with_capacity(entries.len());
+        let mut ids = Vec::with_capacity(entries.len());
+        for entry in &entries {
+            xs.push(entry.position[0]);
+            ys.push(entry.position[1]);
+            zs.push(entry.position[2]);
+            ids.push(entry.atom);
+        }
 
         Ok(Self {
             positions,
-            nodes,
-            root,
+            xs,
+            ys,
+            zs,
+            ids,
+            split_value,
+            split_axis,
+            bounds,
             periodic,
             periodic_options,
             reservation: None,
         })
+    }
+
+    /// Number of finite indexed points.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.ids.len()
+    }
+
+    /// Whether the tree indexes no finite point.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+
+    /// Bytes retained by the finished tree.
+    pub(crate) fn retained_bytes(&self) -> usize {
+        self.ids.capacity() * (3 * size_of::<f32>() + size_of::<u32>())
+            + self.split_value.capacity() * (size_of::<f32>() + size_of::<u8>())
+    }
+
+    /// Bytes a build over `targets` may hold at its peak (entries plus result).
+    pub(crate) fn build_bytes(targets: usize) -> Option<usize> {
+        let depth = depth_for(targets);
+        targets
+            .checked_mul(size_of::<Entry>() + 3 * size_of::<f32>() + size_of::<u32>())?
+            .checked_add(((1_usize << depth) - 1) * (size_of::<f32>() + size_of::<u8>()))
     }
 
     /// Finds all indexed pairs within `cutoff`.
@@ -84,28 +180,20 @@ impl<'a> KdTree<'a> {
     pub fn pairs(&self, query: &[u32], cutoff: f32) -> Result<Vec<NeighborPair>, SpatialError> {
         validate_cutoff(cutoff)?;
         validate_indices(query, self.positions.len())?;
-
-        let cutoff_squared = cutoff * cutoff;
         let mut found = Vec::new();
-
+        let mut collector = self.radius_collector(cutoff)?;
         for &atom in query {
-            let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-            let Some(position) = self.positions.get(index).copied() else {
-                continue;
-            };
-
-            if !finite(position) {
-                continue;
-            }
-
-            self.append_radius_pairs(atom, position, cutoff, cutoff_squared, &mut found)?;
+            collector.collect(self, atom, |target, squared| {
+                found.push(NeighborPair::new(atom, target, squared));
+            })?;
         }
-
-        canonicalise(&mut found);
+        crate::brute::canonicalise(&mut found);
         Ok(found)
     }
 
     /// Returns the nearest `count` targets in increasing distance order.
+    ///
+    /// Distances are squared. Equal distances order by atom index.
     ///
     /// # Errors
     ///
@@ -115,200 +203,17 @@ impl<'a> KdTree<'a> {
         let Some(point) = self.positions.get(index).copied() else {
             return Err(SpatialError::AtomOutOfBounds(query));
         };
-
         if count == 0 || !finite(point) {
             return Ok(Vec::new());
         }
-
-        let Some(root) = self.root else {
-            return Ok(Vec::new());
-        };
-
-        if let Some(periodic) = self.periodic {
-            return self.periodic_nearest(root, query, point, count, &periodic);
-        }
-
-        let capacity = count
-            .checked_add(1)
-            .ok_or(SpatialError::NumericRangeExceeded)?;
-        let mut heap = BinaryHeap::with_capacity(capacity);
-
-        self.nearest_search(root, query, point, count, &mut heap);
-
-        Ok(sorted_candidates(heap))
+        let mut heap = heap::KnnHeap::new(count);
+        self.knn_into(&mut heap, point, Some(query), f32::INFINITY)?;
+        Ok(heap
+            .sorted()
+            .into_iter()
+            .map(|(squared, atom)| (atom, squared))
+            .collect())
     }
-
-    fn append_radius_pairs(
-        &self,
-        atom: u32,
-        position: [f32; 3],
-        cutoff: f32,
-        cutoff_squared: f32,
-        found: &mut Vec<NeighborPair>,
-    ) -> Result<(), SpatialError> {
-        let Some(root) = self.root else {
-            return Ok(());
-        };
-        let Some(periodic) = self.periodic else {
-            self.radius_search(root, position, cutoff_squared, &mut |_, target, squared| {
-                if atom != target {
-                    found.push(NeighborPair::new(atom, target, squared));
-                }
-            });
-            return Ok(());
-        };
-
-        let limits = periodic_image_limits(&periodic, cutoff)?;
-        validate_image_budget(limits, self.periodic_options)?;
-        let wrapped = periodic.wrap(position);
-        for_each_shift(limits, |shift| {
-            let image = periodic.translated(wrapped, shift)?;
-            self.radius_search(root, image, cutoff_squared, &mut |_, target, _| {
-                if atom == target {
-                    return;
-                }
-                let Ok(index) = usize::try_from(target) else {
-                    return;
-                };
-                let Some(target_position) = self.positions.get(index).copied() else {
-                    return;
-                };
-                let squared = periodic.distance_squared(position, target_position);
-                if squared <= cutoff_squared {
-                    found.push(NeighborPair::new(atom, target, squared));
-                }
-            });
-            Ok(())
-        })?;
-        Ok(())
-    }
-
-    /// Recursively visits k-d nodes that can intersect a query sphere.
-    ///
-    /// The tree is structurally balanced, so recursion depth is `O(log N)`.
-    /// No per-query traversal vector is allocated.
-    fn radius_search(
-        &self,
-        node_index: usize,
-        point: [f32; 3],
-        cutoff_squared: f32,
-        visit: &mut impl FnMut(usize, u32, f32),
-    ) {
-        let Some(node) = self.nodes.get(node_index).copied() else {
-            return;
-        };
-
-        let position = node.position;
-
-        let squared = distance_squared(point, position, None);
-
-        if squared <= cutoff_squared {
-            visit(node_index, node.atom, squared);
-        }
-
-        let delta = point[node.axis] - position[node.axis];
-        let (near, far) = ordered_children(node, delta);
-
-        if let Some(near) = near {
-            self.radius_search(near, point, cutoff_squared, visit);
-        }
-
-        if delta * delta <= cutoff_squared
-            && let Some(far) = far
-        {
-            self.radius_search(far, point, cutoff_squared, visit);
-        }
-    }
-
-    /// Recursively performs branch-and-bound nearest-neighbour search.
-    ///
-    /// The near child is processed before the far-child pruning decision,
-    /// tightening the heap radius as early as possible.
-    fn nearest_search(
-        &self,
-        node_index: usize,
-        query: u32,
-        point: [f32; 3],
-        count: usize,
-        heap: &mut BinaryHeap<Candidate>,
-    ) {
-        let Some(node) = self.nodes.get(node_index).copied() else {
-            return;
-        };
-
-        let position = node.position;
-
-        let squared = distance_squared(point, position, None);
-
-        if node.atom != query {
-            push_candidate(heap, Candidate::new(node.atom, squared), count);
-        }
-
-        let axis = node.axis;
-        let delta = point[axis] - position[axis];
-        let (near, far) = ordered_children(node, delta);
-
-        if let Some(near) = near {
-            self.nearest_search(near, query, point, count, heap);
-        }
-
-        if should_visit_far(heap, count, delta)
-            && let Some(far) = far
-        {
-            self.nearest_search(far, query, point, count, heap);
-        }
-    }
-
-    fn periodic_nearest(
-        &self,
-        root: usize,
-        query: u32,
-        point: [f32; 3],
-        count: usize,
-        periodic: &PeriodicBox,
-    ) -> Result<Vec<(u32, f32)>, SpatialError> {
-        const NEAREST_IMAGE_LIMITS: [i64; 3] = [2; 3];
-        validate_image_budget(NEAREST_IMAGE_LIMITS, self.periodic_options)?;
-        let wrapped = periodic.wrap(point);
-        let mut best_by_atom = BTreeMap::new();
-
-        for_each_shift(NEAREST_IMAGE_LIMITS, |shift| {
-            let image = periodic.translated(wrapped, shift)?;
-            let capacity = count
-                .checked_add(1)
-                .ok_or(SpatialError::NumericRangeExceeded)?;
-            let mut image_heap = BinaryHeap::with_capacity(capacity);
-            self.nearest_search(root, query, image, count, &mut image_heap);
-            for (atom, _) in sorted_candidates(image_heap) {
-                let index =
-                    usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-                let Some(target) = self.positions.get(index).copied() else {
-                    continue;
-                };
-                let squared = periodic.distance_squared(point, target);
-                best_by_atom
-                    .entry(atom)
-                    .and_modify(|best: &mut f32| *best = best.min(squared))
-                    .or_insert(squared);
-            }
-            Ok(())
-        })?;
-
-        let capacity = count
-            .checked_add(1)
-            .ok_or(SpatialError::NumericRangeExceeded)?;
-        let mut heap = BinaryHeap::with_capacity(capacity);
-        for (atom, squared) in best_by_atom {
-            push_candidate(&mut heap, Candidate::new(atom, squared), count);
-        }
-        Ok(sorted_candidates(heap))
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Entry {
-    atom: u32,
-    position: [f32; 3],
 }
 
 /// Returns finite target entries in the tree coordinate system.
@@ -330,137 +235,122 @@ fn finite_entries(
             Some(periodic) => periodic.wrap(position),
             None => position,
         };
-        Some(Entry { atom, position })
+        Some(Entry { position, atom })
     }));
     entries
 }
 
-/// Builds one balanced k-d subtree by median partitioning.
-///
-/// Construction satisfies `O(N log N)` total expected/average partition work
-/// and `O(log N)` recursion depth because each call splits by index median.
-fn build_nodes(entries: &mut [Entry], depth: usize, nodes: &mut Vec<Node>) -> Option<usize> {
-    if entries.is_empty() {
-        return None;
+fn bounds_of(entries: &[Entry]) -> Option<([f32; 3], [f32; 3])> {
+    let first = entries.first()?;
+    let mut low = first.position;
+    let mut high = first.position;
+    for entry in entries {
+        for axis in 0..3 {
+            low[axis] = low[axis].min(entry.position[axis]);
+            high[axis] = high[axis].max(entry.position[axis]);
+        }
     }
+    Some((low, high))
+}
 
-    let axis = depth % 3;
-    let middle = entries.len() / 2;
+/// Smallest depth whose leaves all hold at most `LEAF_MAX` points.
+fn depth_for(count: usize) -> usize {
+    let mut depth = 0;
+    while count.div_ceil(1 << depth) > LEAF_MAX {
+        depth += 1;
+    }
+    depth
+}
 
-    entries.select_nth_unstable_by(middle, |left, right| {
-        left.position[axis]
-            .total_cmp(&right.position[axis])
-            .then_with(|| left.atom.cmp(&right.atom))
+type Split = (usize, u8, f32);
+
+/// Splits one node's slice at its count median on the widest axis.
+fn split_slice(slice: &mut [Entry]) -> (u8, f32, usize) {
+    let mut low = [f32::INFINITY; 3];
+    let mut high = [f32::NEG_INFINITY; 3];
+    for entry in slice.iter() {
+        for axis in 0..3 {
+            low[axis] = low[axis].min(entry.position[axis]);
+            high[axis] = high[axis].max(entry.position[axis]);
+        }
+    }
+    let mut axis = 0;
+    for candidate in 1..3 {
+        if high[candidate] - low[candidate] > high[axis] - low[axis] {
+            axis = candidate;
+        }
+    }
+    let middle = slice.len() / 2;
+    slice.select_nth_unstable_by(middle, |left, right| {
+        left.position[axis].total_cmp(&right.position[axis])
     });
+    #[allow(clippy::cast_possible_truncation)]
+    let axis_id = axis as u8;
+    (axis_id, slice[middle].position[axis], middle)
+}
 
-    let (left, rest) = entries.split_at_mut(middle);
-    let (median, right) = rest.split_first_mut()?;
-    let entry = *median;
+type Task<'s> = Mutex<Option<(usize, &'s mut [Entry])>>;
 
-    let node_index = nodes.len();
-    nodes.push(Node {
-        atom: entry.atom,
-        position: entry.position,
-        axis,
-        left: None,
-        right: None,
-    });
-
-    let left_node = build_nodes(left, depth + 1, nodes);
-    let right_node = build_nodes(right, depth + 1, nodes);
-
-    if let Some(node) = nodes.get_mut(node_index) {
-        node.left = left_node;
-        node.right = right_node;
+fn build_subtree(slice: &mut [Entry], node: usize, remaining: usize, out: &mut Vec<Split>) {
+    if remaining == 0 {
+        return;
     }
-
-    Some(node_index)
+    let (axis, value, middle) = split_slice(slice);
+    out.push((node, axis, value));
+    let (left, right) = slice.split_at_mut(middle);
+    build_subtree(left, 2 * node + 1, remaining - 1, out);
+    build_subtree(right, 2 * node + 2, remaining - 1, out);
 }
 
-/// Orders a node's children by the query's position relative to its split.
-///
-/// Runtime and auxiliary space are `O(1)`.
-#[inline]
-fn ordered_children(node: Node, delta: f32) -> (Option<usize>, Option<usize>) {
-    if delta <= 0.0 {
-        (node.left, node.right)
-    } else {
-        (node.right, node.left)
+/// Computes every split node, parallelising the independent subtrees.
+fn build_splits(
+    entries: &mut [Entry],
+    depth: usize,
+    context: Option<&ExecutionContext>,
+) -> Result<Vec<Split>, SpatialError> {
+    let workers = context.map_or(1, ExecutionContext::worker_budget);
+    let parallel = workers > 1 && entries.len() >= 16_384 && depth > 0;
+    let mut splits = Vec::new();
+    if !parallel {
+        build_subtree(entries, 0, depth, &mut splits);
+        return Ok(splits);
     }
-}
-
-/// Returns whether branch-and-bound search must inspect the far subtree.
-///
-/// Runtime and auxiliary space are `O(1)`.
-#[inline]
-fn should_visit_far(heap: &BinaryHeap<Candidate>, count: usize, delta: f32) -> bool {
-    if heap.len() < count {
-        return true;
+    // Enough subtrees to balance dynamic scheduling, few enough that the
+    // serial top levels stay a small fraction of the work.
+    let top = depth.min((workers * 4).next_power_of_two().trailing_zeros() as usize);
+    let mut frontier = vec![(0_usize, entries)];
+    for _ in 0..top {
+        let mut next = Vec::with_capacity(frontier.len() * 2);
+        for (node, slice) in frontier {
+            let (axis, value, middle) = split_slice(slice);
+            splits.push((node, axis, value));
+            let (left, right) = slice.split_at_mut(middle);
+            next.push((2 * node + 1, left));
+            next.push((2 * node + 2, right));
+        }
+        frontier = next;
     }
-
-    heap.peek()
-        .is_some_and(|candidate| delta * delta <= candidate.squared)
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Candidate {
-    atom: u32,
-    squared: f32,
-}
-
-impl Candidate {
-    /// Creates a nearest-neighbour heap candidate.
-    ///
-    /// Runtime and auxiliary space are `O(1)`.
-    const fn new(atom: u32, squared: f32) -> Self {
-        Self { atom, squared }
-    }
-}
-
-impl PartialEq for Candidate {
-    /// Tests exact candidate identity using the floating-point bit pattern.
-    fn eq(&self, other: &Self) -> bool {
-        self.atom == other.atom && self.squared.to_bits() == other.squared.to_bits()
-    }
-}
-
-impl Eq for Candidate {}
-
-impl PartialOrd for Candidate {
-    /// Delegates candidate ordering to its total ordering.
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Candidate {
-    /// Orders the heap by distance and then atom index.
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.squared
-            .total_cmp(&other.squared)
-            .then_with(|| self.atom.cmp(&other.atom))
-    }
-}
-
-/// Inserts a candidate into a fixed-size max heap.
-///
-/// Runtime is `O(log K)` and heap space remains `O(K)`.
-fn push_candidate(heap: &mut BinaryHeap<Candidate>, candidate: Candidate, count: usize) {
-    heap.push(candidate);
-
-    if heap.len() > count {
-        let _discarded = heap.pop();
-    }
-}
-
-/// Converts the bounded heap to increasing distance order.
-///
-/// Runtime is `O(K log K)` as provided by `BinaryHeap::into_sorted_vec`.
-fn sorted_candidates(heap: BinaryHeap<Candidate>) -> Vec<(u32, f32)> {
-    heap.into_sorted_vec()
+    let remaining = depth - top;
+    let tasks: Vec<Task> = frontier
         .into_iter()
-        .map(|candidate| (candidate.atom, candidate.squared))
-        .collect()
+        .map(|task| Mutex::new(Some(task)))
+        .collect();
+    let Some(context) = context else {
+        return Err(SpatialError::WorkerPanicked);
+    };
+    let produced = map_blocks_in(BlockPlan::new(tasks.len(), 1), context, |index, _| {
+        let mut out = Vec::new();
+        let task = tasks.get(index).and_then(|slot| slot.lock().ok()?.take());
+        if let Some((node, slice)) = task {
+            build_subtree(slice, node, remaining, &mut out);
+        }
+        out
+    })
+    .map_err(|_| SpatialError::WorkerPanicked)?;
+    for mut block in produced {
+        splits.append(&mut block);
+    }
+    Ok(splits)
 }
 
 /// Validates a finite non-negative cutoff.
@@ -491,3 +381,12 @@ fn validate_indices(atoms: &[u32], position_count: usize) -> Result<(), SpatialE
 #[cfg(test)]
 #[path = "kd_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "kd_adversarial_tests.rs"]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::float_cmp
+)]
+mod adversarial_tests;

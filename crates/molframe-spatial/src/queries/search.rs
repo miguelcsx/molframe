@@ -198,40 +198,66 @@ fn dispatch_pairs(
     context: &ExecutionContext,
 ) -> Result<Vec<NeighborPair>, SpatialError> {
     let same_selection = left == right;
-
-    match dispatch.plan.backend {
-        SpatialBackend::CellList => {
-            let index = CellList::build_in(
-                positions,
-                right,
-                cutoff,
-                periodic.copied(),
-                dispatch.options.cell_grid,
-                context,
-            )?;
-            if same_selection {
-                let sorted = matches!(dispatch.order, PairOrder::Sorted);
-                if context.worker_budget() > 1 {
-                    crate::backends::cell::pairs_same_selection_parallel(
-                        &index, left, cutoff, context, sorted,
-                    )
-                } else if sorted {
-                    crate::backends::cell::pairs_same_selection(&index, left, cutoff)
-                } else {
-                    crate::backends::cell::pairs_same_selection_unordered(&index, left, cutoff)
-                }
-            } else {
-                index.pairs(left, cutoff)
-            }
-        }
-        SpatialBackend::KdTree => KdTree::build_in(
+    let mut backend = dispatch.plan.backend;
+    // `auto` is distribution-aware: cutoff-sized cells holding many points make
+    // a cell list quadratic in the crowd, so a tree takes over.
+    let switched = backend == SpatialBackend::CellList
+        && dispatch.plan.requested_backend == SpatialBackend::Auto
+        && super::crowding::is_crowded(positions, right, cutoff);
+    if switched {
+        backend = SpatialBackend::KdTree;
+    }
+    let cell_pairs = || {
+        let index = CellList::build_in(
             positions,
             right,
+            cutoff,
             periodic.copied(),
-            dispatch.options.kd_periodic,
+            dispatch.options.cell_grid,
             context,
-        )?
-        .pairs(left, cutoff),
+        )?;
+        if same_selection {
+            let sorted = matches!(dispatch.order, PairOrder::Sorted);
+            if context.worker_budget() > 1 {
+                crate::backends::cell::pairs_same_selection_parallel(
+                    &index, left, cutoff, context, sorted,
+                )
+            } else if sorted {
+                crate::backends::cell::pairs_same_selection(&index, left, cutoff)
+            } else {
+                crate::backends::cell::pairs_same_selection_unordered(&index, left, cutoff)
+            }
+        } else {
+            index.pairs(left, cutoff)
+        }
+    };
+
+    match backend {
+        SpatialBackend::CellList => cell_pairs(),
+        SpatialBackend::KdTree => {
+            let found = KdTree::build_in(
+                positions,
+                right,
+                periodic.copied(),
+                dispatch.options.kd_periodic,
+                context,
+            )
+            .and_then(|tree| {
+                tree.pairs_in(
+                    left,
+                    cutoff,
+                    same_selection,
+                    matches!(dispatch.order, PairOrder::Sorted),
+                    context,
+                )
+            });
+            // A cutoff whose periodic images exceed the tree's budget is still
+            // served by the cell list when the tree was only `auto`'s choice.
+            match found {
+                Err(SpatialError::PeriodicImageLimitExceeded { .. }) if switched => cell_pairs(),
+                other => other,
+            }
+        }
         SpatialBackend::NeighborList => neighbor_list_pairs(
             positions,
             left,

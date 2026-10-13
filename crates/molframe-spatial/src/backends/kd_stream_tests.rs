@@ -13,11 +13,8 @@ fn construction_scratch_is_released_but_nodes_stay_charged() {
         &context,
     )
     .expect("tree");
-    assert_eq!(context.reserved_bytes(), 2 * size_of::<Node>());
-    assert_eq!(
-        context.peak_reserved_bytes(),
-        3 * (size_of::<Entry>() + size_of::<Node>())
-    );
+    assert_eq!(context.reserved_bytes(), tree.retained_bytes());
+    assert_eq!(Some(context.peak_reserved_bytes()), KdTree::build_bytes(3));
     drop(tree);
     assert_eq!(context.reserved_bytes(), 0);
 }
@@ -48,10 +45,7 @@ fn periodic_streaming_emits_a_target_once_even_when_many_images_match() {
     })
     .expect("visit");
     assert_eq!(count, 2);
-    assert_eq!(
-        context.reserved_bytes(),
-        tree.nodes.capacity() * size_of::<Node>()
-    );
+    assert_eq!(context.reserved_bytes(), tree.retained_bytes());
 }
 
 #[test]
