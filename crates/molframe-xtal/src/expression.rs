@@ -49,15 +49,15 @@ impl OperExpression {
         let mut factors = Vec::with_capacity(raw_factors.len());
         let mut combinations = 1usize;
         for factor in raw_factors {
-            let identifiers = parse_factor(factor).ok_or_else(|| malformed(expression))?;
+            let identifiers = match parse_factor(factor, limit) {
+                Factor::Identifiers(identifiers) => identifiers,
+                Factor::Malformed => return Err(malformed(expression)),
+                Factor::TooLarge => return Err(too_large(expression, limit)),
+            };
             combinations = combinations
                 .checked_mul(identifiers.len())
                 .filter(|count| *count <= limit)
-                .ok_or_else(|| {
-                    Diagnostic::new(Code::E6011)
-                        .with_context("expression", expression)
-                        .with_context("limit", limit.to_string())
-                })?;
+                .ok_or_else(|| too_large(expression, limit))?;
             factors.push(Arc::from(identifiers));
         }
         Ok(Self {
@@ -127,22 +127,43 @@ fn parenthesised_factors(text: &str) -> Option<Vec<&str>> {
     (!factors.is_empty()).then_some(factors)
 }
 
-fn parse_factor(text: &str) -> Option<Vec<Box<str>>> {
-    let mut identifiers = Vec::new();
+enum Factor {
+    Identifiers(Vec<Box<str>>),
+    Malformed,
+    TooLarge,
+}
+
+/// Expands one factor, refusing a range before it is materialised when it
+/// would already exceed `limit` identifiers.
+fn parse_factor(text: &str, limit: usize) -> Factor {
+    let mut identifiers: Vec<Box<str>> = Vec::new();
     for part in text.split(',') {
         let item = part.trim();
         if item.is_empty() || item.contains(['(', ')']) {
-            return None;
+            return Factor::Malformed;
         }
         match numeric_range(item) {
             RangeParse::Valid(start, end) => {
+                let span = usize::try_from(end - start).map_or(usize::MAX, |span| span + 1);
+                if identifiers.len().saturating_add(span) > limit {
+                    return Factor::TooLarge;
+                }
                 identifiers.extend((start..=end).map(|value| value.to_string().into_boxed_str()));
             }
-            RangeParse::NotRange if valid_identifier(item) => identifiers.push(item.into()),
-            RangeParse::NotRange | RangeParse::Invalid => return None,
+            RangeParse::NotRange if valid_identifier(item) => {
+                if identifiers.len() >= limit {
+                    return Factor::TooLarge;
+                }
+                identifiers.push(item.into());
+            }
+            RangeParse::NotRange | RangeParse::Invalid => return Factor::Malformed,
         }
     }
-    (!identifiers.is_empty()).then_some(identifiers)
+    if identifiers.is_empty() {
+        Factor::Malformed
+    } else {
+        Factor::Identifiers(identifiers)
+    }
 }
 
 enum RangeParse {
@@ -171,6 +192,12 @@ fn numeric_range(text: &str) -> RangeParse {
 fn valid_identifier(text: &str) -> bool {
     text.bytes()
         .all(|byte| byte.is_ascii_graphic() && !matches!(byte, b'(' | b')' | b',' | b'\'' | b'"'))
+}
+
+fn too_large(expression: &str, limit: usize) -> Diagnostic {
+    Diagnostic::new(Code::E6011)
+        .with_context("expression", expression)
+        .with_context("limit", limit.to_string())
 }
 
 fn malformed(expression: &str) -> Diagnostic {
