@@ -146,7 +146,7 @@ fn execute_data(command: Command, context: Context) -> Exit {
                     |ccd, version, context| {
                         crate::analysis_commands::sse(
                             &input,
-                            crate::analysis_commands::SseOptions {
+                            &crate::analysis_commands::SseOptions {
                                 ccd,
                                 ccd_version: version,
                                 role_profile: &role_profile,

@@ -167,7 +167,7 @@ pub(crate) fn sse_standard(
     emit_sse(structure.engine(), dssp, context)
 }
 
-pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Exit {
+pub(crate) fn sse(input: &Path, options: &SseOptions<'_>, context: Context) -> Exit {
     let profile = match crate::role_profile::read(options.role_profile) {
         Ok(profile) => profile,
         Err(error) => {
