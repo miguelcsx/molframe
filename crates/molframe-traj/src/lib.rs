@@ -97,6 +97,7 @@ mod frame_view;
 #[path = "ensemble.rs"]
 pub mod geometry_ensemble;
 mod interpolation;
+mod ordered_blocks;
 mod pca_linalg;
 mod selected;
 mod stream_consume;

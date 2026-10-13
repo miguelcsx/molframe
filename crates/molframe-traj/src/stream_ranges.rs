@@ -1,25 +1,21 @@
-//! Parallel decode of disjoint frame ranges from seekable sources.
+//! Parallel decode of a frame range from seekable sources.
 //!
 //! Serial decode bounds sources whose frames are expensive to unpack, such as
-//! compressed XTC. Here each worker owns a private reader positioned at the
-//! start of one contiguous range and streams it, so decode and per-frame work
-//! both scale with workers. Results reach the sink in frame order, identical
-//! at every worker count, and memory is bounded by a fixed number of result
-//! batches per worker rather than by the trajectory length.
+//! compressed XTC. Each worker owns a private reader and repeatedly claims the
+//! next block of frames, so decode and per-frame work scale with workers while
+//! the consumer still receives results in frame order, identical at every
+//! worker count. Memory is bounded by a fixed window of result blocks rather
+//! than by the trajectory length.
 
+use crate::ordered_blocks::{Ordered, plan, work};
 use crate::{RandomAccess, Timestep, TrajectoryError, TrajectoryReader};
 use molframe_core::ExecutionContext;
 use std::ops::Range;
-use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 
-/// Results per hand-off between a worker and the consumer.
-const BATCH: usize = 64;
-/// Batches a worker may run ahead of the consumer.
-const AHEAD: usize = 2;
+/// Frames per scheduled block.
+const BLOCK: usize = 64;
 /// Ranges shorter than this per worker stay on one reader.
 const MIN_FRAMES_PER_WORKER: usize = 256;
-
-type Batch<T, E> = Result<Vec<T>, E>;
 
 /// Applies `compute` to the frames in `range` and feeds results to `emit` in order.
 ///
@@ -78,46 +74,45 @@ where
                 .bytes()
                 .saturating_sub(context.reserved_bytes()),
         })?;
-    let share = range.len().div_ceil(workers);
+    let mut readers = Vec::with_capacity(workers);
+    readers.push(first);
+    for _ in 1..workers {
+        let mut reader = open()?;
+        reader.seek(range.start)?;
+        readers.push(reader);
+    }
+    let (blocks, window) = plan(range.len(), BLOCK, workers);
+    let shared = Ordered::<Vec<T>, E>::new(blocks, window, workers);
     let mut total = 0_u64;
-    let outcome = std::thread::scope(|scope| {
-        let mut receivers = Vec::with_capacity(workers);
-        let mut handles = Vec::with_capacity(workers);
-        let mut first = Some(first);
-        for index in 0..workers {
-            let begin = range.start + index * share;
-            let end = (begin + share).min(range.end);
-            let (sender, receiver) = sync_channel::<Batch<T, E>>(AHEAD);
-            receivers.push(receiver);
-            let seeded = first.take();
-            let (open, compute) = (&open, &compute);
-            handles.push(scope.spawn(move || {
-                let outcome = stream_range(open, seeded, begin..end, context, compute, &sender);
-                if let Err(error) = outcome {
-                    let _ = sender.send(Err(error));
-                }
-            }));
-        }
-        let drained = drain(&receivers, range.start, share, &mut total, &mut emit);
-        drop(receivers);
+    let (drained, panicked) = std::thread::scope(|scope| {
+        let handles: Vec<_> = readers
+            .into_iter()
+            .map(|reader| {
+                let (shared, compute, range) = (&shared, &compute, &range);
+                scope.spawn(move || {
+                    let mut frame = Timestep::default();
+                    work(shared, reader, range, BLOCK, |reader, frames| {
+                        decode_block(reader, &mut frame, frames, context, compute)
+                    });
+                })
+            })
+            .collect();
+        let drained = drain(&shared, range.start, &mut total, &mut emit);
+        shared.stop();
         let panicked = handles.into_iter().any(|handle| handle.join().is_err());
-        if panicked {
-            return Err(TrajectoryError::WorkerPanicked.into());
-        }
-        drained
+        (drained, panicked)
     });
-    outcome?;
-    if total != range.len() as u64 {
+    if panicked {
         return Err(TrajectoryError::WorkerPanicked.into());
     }
+    drained?;
     Ok(total)
 }
 
-/// Emits batches range by range; the first error stops all later ranges.
+/// Emits blocks in order; the first error stops the pipeline.
 fn drain<T, E, S>(
-    receivers: &[Receiver<Batch<T, E>>],
+    shared: &Ordered<Vec<T>, E>,
     start: usize,
-    share: usize,
     total: &mut u64,
     emit: &mut S,
 ) -> Result<(), E>
@@ -125,58 +120,40 @@ where
     E: From<TrajectoryError>,
     S: FnMut(usize, T) -> Result<(), E>,
 {
-    for (index, receiver) in receivers.iter().enumerate() {
-        let mut ordinal = start + index * share;
-        while let Ok(batch) = receiver.recv() {
-            for value in batch? {
-                emit(ordinal, value)?;
-                ordinal += 1;
-                *total += 1;
-            }
+    let mut ordinal = start;
+    while let Some(block) = shared.next() {
+        for value in block? {
+            emit(ordinal, value)?;
+            ordinal += 1;
+            *total += 1;
         }
     }
     Ok(())
 }
 
-fn stream_range<R, T, E, O, C>(
-    open: &O,
-    seeded: Option<R>,
-    range: Range<usize>,
+fn decode_block<R, T, E, C>(
+    reader: &mut R,
+    frame: &mut Timestep,
+    frames: Range<usize>,
     context: &ExecutionContext,
     compute: &C,
-    sender: &SyncSender<Batch<T, E>>,
-) -> Result<(), E>
+) -> Result<Vec<T>, E>
 where
     R: TrajectoryReader,
     E: From<TrajectoryError>,
-    O: Fn() -> Result<R, TrajectoryError>,
     C: Fn(&Timestep, &ExecutionContext) -> Result<T, E>,
 {
-    let mut reader = if let Some(reader) = seeded {
-        reader
-    } else {
-        let mut reader = open()?;
-        reader.seek(range.start)?;
-        reader
-    };
-    let mut frame = Timestep::default();
-    let mut batch = Vec::with_capacity(BATCH);
-    for _ in range.clone() {
+    let mut out = Vec::with_capacity(frames.len());
+    for _ in frames {
         if context.cancellation().is_cancelled() {
             return Err(TrajectoryError::Cancelled.into());
         }
-        if !reader.read_next(&mut frame)? {
+        if !reader.read_next(frame)? {
             return Err(short_range().into());
         }
-        batch.push(compute(&frame, context)?);
-        if batch.len() == BATCH && sender.send(Ok(std::mem::take(&mut batch))).is_err() {
-            return Ok(());
-        }
+        out.push(compute(frame, context)?);
     }
-    if !batch.is_empty() {
-        let _ = sender.send(Ok(batch));
-    }
-    Ok(())
+    Ok(out)
 }
 
 fn serial<R, T, E, C, S>(
@@ -218,7 +195,7 @@ where
     Ok(count)
 }
 
-const fn short_range() -> TrajectoryError {
+pub(crate) const fn short_range() -> TrajectoryError {
     TrajectoryError::InvalidSource {
         format: "source ended inside the requested frame range",
     }
