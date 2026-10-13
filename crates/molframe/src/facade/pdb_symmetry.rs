@@ -76,10 +76,16 @@ fn attach_space_group(
         return (structure, findings);
     };
     match molframe_xtal::space_group_by_hermann_mauguin(&symbol) {
-        Ok(setting) => (
-            structure.with_extension(molframe_xtal::SYMMETRY_EXTENSION, setting.symmetry_set()),
-            findings,
-        ),
+        Ok(setting) => {
+            // The file's own spelling stays the name; the catalogue only
+            // supplies the operations and the numbers.
+            let mut set = setting.symmetry_set();
+            set.hermann_mauguin = Some(symbol);
+            (
+                structure.with_extension(molframe_xtal::SYMMETRY_EXTENSION, set),
+                findings,
+            )
+        }
         Err(_) => (structure, findings),
     }
 }
