@@ -155,6 +155,16 @@ impl AssemblyView {
         }
     }
 
+    /// The same assembly restricted to a contiguous run of its instances.
+    pub(crate) fn slice(&self, range: Range<usize>) -> Self {
+        Self {
+            structure: self.structure.clone(),
+            assembly_id: self.assembly_id.clone(),
+            instances: Arc::from(&self.instances[range]),
+            transforms: Arc::clone(&self.transforms),
+        }
+    }
+
     /// Source assembly identifier.
     #[must_use]
     pub fn id(&self) -> &str {

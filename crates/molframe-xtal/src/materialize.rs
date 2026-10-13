@@ -6,7 +6,7 @@ use molframe_core::annotation::{
 };
 use molframe_core::bond::{BondRecord, BondTableBuilder};
 use molframe_core::chunk::{AtomRecord, ChunkBuilder};
-use molframe_core::hashing::{IdentityHashMap, IdentityHashSet};
+use molframe_core::hashing::IdentityHashMap;
 use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::CoordinateStore;
 use molframe_core::symbol::SymbolId;
@@ -34,9 +34,18 @@ type CopyGroup = BTreeMap<u32, Vec<usize>>;
 /// Exact bit representation of a rigid transform used for deterministic grouping.
 type TransformKey = [u64; 12];
 
+mod stream;
+
+pub use stream::AssemblyChunks;
+
+include!("materialize/labels.rs");
 include!("materialize/impl.rs");
 include!("materialize/helpers.rs");
 
 #[cfg(test)]
 #[path = "materialize_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "materialize_stream_tests.rs"]
+mod stream_tests;

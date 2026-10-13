@@ -16,8 +16,8 @@ impl AssemblyView {
             return Err(single(Diagnostic::new(Code::E6003)));
         }
 
-        let materializer = Materializer::new(self).map_err(single)?;
-        materializer.build()
+        let materializer = Materializer::new(self, LabelLedger::default(), 0).map_err(single)?;
+        materializer.build().map(|(structure, _)| structure)
     }
 }
 
@@ -31,8 +31,8 @@ struct Materializer<'a> {
     instance_ids: Vec<i64>,
     secondary_states: Vec<molframe_core::SecondaryStructure>,
     secondary_sources: Vec<molframe_core::SecondarySource>,
-    used_labels: IdentityHashSet<SymbolId>,
-    label_counts: IdentityHashMap<SymbolId, u32>,
+    labels: LabelLedger,
+    atom_base: u32,
 }
 
 struct ResidueAppend<'a> {
@@ -49,7 +49,11 @@ impl<'a> Materializer<'a> {
     ///
     /// Source metadata that remains valid after expansion is shared or cloned
     /// into the independent output snapshot.
-    fn new(view: &'a AssemblyView) -> Result<Self, Diagnostic> {
+    fn new(
+        view: &'a AssemblyView,
+        labels: LabelLedger,
+        atom_base: u32,
+    ) -> Result<Self, Diagnostic> {
         let source = view.source().data();
         let total_atoms = expanded_atom_count(view)?;
         let total_residues = expanded_residue_count(view)?;
@@ -79,16 +83,6 @@ impl<'a> Materializer<'a> {
             .try_reserve_exact(total_atoms)
             .map_err(|_| capacity("atoms"))?;
 
-        let mut used_labels = IdentityHashSet::default();
-        used_labels
-            .try_reserve(view.instance_count())
-            .map_err(|_| capacity("chain identifiers"))?;
-
-        let mut label_counts = IdentityHashMap::default();
-        label_counts
-            .try_reserve(view.instance_count())
-            .map_err(|_| capacity("chain identifiers"))?;
-
         Ok(Self {
             view,
             data,
@@ -98,13 +92,13 @@ impl<'a> Materializer<'a> {
             instance_ids,
             secondary_states,
             secondary_sources,
-            used_labels,
-            label_counts,
+            labels,
+            atom_base,
         })
     }
 
     /// Builds and validates the fully independent assembly structure.
-    fn build(mut self) -> Result<Structure, Vec<Diagnostic>> {
+    fn build(mut self) -> Result<(Structure, LabelLedger), Vec<Diagnostic>> {
         self.chunks.start_model(0);
 
         for instance in self.view.instances.as_ref() {
@@ -130,7 +124,7 @@ impl<'a> Materializer<'a> {
         let findings = molframe_core::structure::validate(&self.data);
 
         if findings.is_empty() {
-            Ok(Structure::new(self.data))
+            Ok((Structure::new(self.data), self.labels))
         } else {
             Err(findings)
         }
@@ -206,7 +200,9 @@ impl<'a> Materializer<'a> {
             .label_asym_id(instance.source_chain)
             .ok_or_else(invariant)?;
         let source_label = source.resolve(source_symbol).ok_or_else(invariant)?;
-        let generated_symbol = self.unique_label(source_symbol, source_label)?;
+        let generated_symbol =
+            self.labels
+                .assign(&mut self.data.dictionary, source_symbol, source_label)?;
 
         let entity = source_chains
             .entity(instance.source_chain)
@@ -274,7 +270,9 @@ impl<'a> Materializer<'a> {
                 .output_atom
                 .checked_add(1)
                 .ok_or_else(|| capacity("atoms"))?;
-            record.atom_site_id = atom_site_id;
+            record.atom_site_id = atom_site_id
+                .checked_add(self.atom_base)
+                .ok_or_else(|| capacity("atoms"))?;
 
             self.chunks.push(record);
             self.source_atoms.push(source_atom);
@@ -304,42 +302,6 @@ impl<'a> Materializer<'a> {
         self.append_secondary(append.source, source_residue)?;
 
         Ok(())
-    }
-
-    /// Generates a stable collision-free label and returns its dictionary symbol.
-    ///
-    /// Existing source symbols are reused for the first available label.
-    /// Generated suffixes are interned only when collisions require them.
-    fn unique_label(
-        &mut self,
-        source_symbol: SymbolId,
-        source: &str,
-    ) -> Result<SymbolId, Diagnostic> {
-        let mut count = match self.label_counts.get(&source_symbol) {
-            Some(count) => *count,
-            None => 0,
-        };
-
-        loop {
-            count = count
-                .checked_add(1)
-                .ok_or_else(|| capacity("chain identifiers"))?;
-
-            let symbol = if count == 1 {
-                source_symbol
-            } else {
-                let candidate = format!("{source}-{count}");
-                self.data
-                    .dictionary
-                    .intern(&candidate)
-                    .map_err(|_| capacity("dictionary entries"))?
-            };
-
-            if self.used_labels.insert(symbol) {
-                self.label_counts.insert(source_symbol, count);
-                return Ok(symbol);
-            }
-        }
     }
 
     /// Materializes transformed coordinates for every source model.
