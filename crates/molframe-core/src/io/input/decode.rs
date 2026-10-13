@@ -223,3 +223,7 @@ pub(super) fn unsupported(container: &'static str) -> Diagnostic {
         .with_message("input is compressed with a container this build does not include")
         .with_context("container", container)
 }
+
+#[cfg(all(test, feature = "gzip"))]
+#[path = "decode_tests.rs"]
+mod tests;
