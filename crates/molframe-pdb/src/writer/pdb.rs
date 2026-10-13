@@ -21,6 +21,8 @@ use std::fmt;
 
 #[path = "identity.rs"]
 mod identity;
+use super::columns::terminus_fields;
+pub(crate) use super::columns::{atom_name_field, element_column};
 pub use identity::PdbIdentifierNamespace;
 pub(crate) use identity::{atom_name, chain_name, component_name, residue_sequence};
 
@@ -267,10 +269,16 @@ fn write_model(
         }
         let label = chain_label(&chain, options.namespace);
         let label = options.label_for(label);
+        let mut polymer = false;
+        let mut terminus: Option<String> = None;
 
         for residue in chain.residues() {
             if !select.accept_residue(residue.index()) {
                 continue;
+            }
+            if !residue.is_het() {
+                terminus = terminus_fields(&residue, label, options);
+                polymer = true;
             }
             for atom in residue.atoms() {
                 if !select.accept_atom(atom.index()) {
@@ -298,8 +306,16 @@ fn write_model(
                 serial += 1;
             }
         }
-        let _ = writeln!(out, "TER   {:>5}", serial_field(serial, options));
-        serial += 1;
+        // Only a polymer chain is terminated; waters and ligands follow without.
+        if polymer {
+            let _ = writeln!(
+                out,
+                "TER   {}{}",
+                serial_field(serial, options),
+                terminus.as_deref().unwrap_or("")
+            );
+            serial += 1;
+        }
     }
     Ok(())
 }
@@ -339,10 +355,7 @@ fn write_atom(
         *atom,
         options,
     )?;
-    let element = match atom.element() {
-        Some(element) => element.symbol(),
-        None => "",
-    };
+    let element = element_column(atom);
     // An atom whose position was never recorded still has a row here, but the
     // format has no way to say "unrecorded" — so it is left out of the file
     // rather than written as an origin the experiment never observed.
@@ -367,7 +380,7 @@ fn write_atom(
         "{record}{serial:>5} {name:<4}{alt:1}{comp:>3} {chain:>1}{seq}{ins:1}   \
          {x:8.3}{y:8.3}{z:8.3}{occ:6.2}{b:6.2}          {element:>2}{charge}",
         serial = serial_field(serial, options),
-        name = atom_name_field(name),
+        name = atom_name_field(name, &element),
         alt = alt_field(structure, atom),
         comp = component,
         seq = residue_field(seq, options),
@@ -396,18 +409,6 @@ fn write_atom(
         .write(out);
     }
     Ok(())
-}
-
-/// The four-column name field.
-///
-/// A name shorter than four characters starts in the second column, which is the
-/// convention that lets a reader tell a one-letter element from a two-letter one.
-pub(crate) fn atom_name_field(name: &str) -> String {
-    if name.len() >= 4 {
-        name.to_owned()
-    } else {
-        format!(" {name:<3}")
-    }
 }
 
 /// The one-column alternate-location field.

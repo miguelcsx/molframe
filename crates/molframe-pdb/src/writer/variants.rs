@@ -2,7 +2,8 @@
 
 use crate::writer::{
     PdbOptions, RequiredAtomFields, alt_field, atom_name, atom_name_field, chain_label,
-    check_capacity, component_name, insertion_code, residue_field, residue_sequence, serial_field,
+    check_capacity, component_name, element_column, insertion_code, residue_field,
+    residue_sequence, serial_field,
 };
 use molframe_core::annotation::{
     ATOM_RADIUS_ANNOTATION, AUTODOCK_TYPE_ANNOTATION, AnnotationColumn, AtomAnnotation,
@@ -192,7 +193,7 @@ fn write_atom(
     let record = if residue.is_het() { "HETATM" } else { "ATOM  " };
     let name = atom_name(*atom, context.options.identifier_namespace())
         .ok_or_else(|| missing_field("atom identifier", *atom))?;
-    let name = atom_name_field(name);
+    let name = atom_name_field(name, &element_column(atom));
     let component = component_name(*atom, *residue, context.options.identifier_namespace())
         .ok_or_else(|| missing_field("component identifier", *atom))?;
     let sequence = i64::from(

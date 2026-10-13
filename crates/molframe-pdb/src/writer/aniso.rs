@@ -1,6 +1,6 @@
 //! The anisotropic displacement record that follows an atom row.
 
-use super::pdb::{alt_field, atom_name_field, insertion_code};
+use super::pdb::{alt_field, atom_name_field, element_column, insertion_code};
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
 use num_traits::ToPrimitive;
 use std::fmt;
@@ -31,7 +31,8 @@ impl Record<'_> {
     /// Writes the record under the identity columns it copied.
     pub(super) fn write(&self, out: &mut impl fmt::Write) {
         let units = self.u.map(field);
-        let name = atom_name_field(self.name);
+        let element = element_column(self.atom);
+        let name = atom_name_field(self.name, &element);
         let _ = writeln!(
             out,
             "ANISOU{serial}{name:<4}{alt:1}{comp:>3} {chain:>1}{seq}{ins:1} \
@@ -42,10 +43,6 @@ impl Record<'_> {
             chain = self.chain,
             seq = self.seq,
             ins = insertion_code(*self.residue),
-            element = match self.atom.element() {
-                Some(element) => element.symbol(),
-                None => "",
-            },
             u0 = units[0],
             u1 = units[1],
             u2 = units[2],

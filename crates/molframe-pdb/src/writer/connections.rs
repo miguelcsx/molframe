@@ -7,7 +7,8 @@
 //! unless the structure's own raw headers already carry them.
 
 use super::pdb::{
-    PdbOptions, alt_field, atom_name_field, insertion_code, residue_field, serial_field,
+    PdbOptions, alt_field, atom_name_field, element_column, insertion_code, residue_field,
+    serial_field,
 };
 use super::pdb::{atom_name, chain_label, component_name, residue_sequence};
 use molframe_core::bond::BondProvenance;
@@ -48,6 +49,7 @@ fn is_connect(bond: molframe_core::bond::BondRecord) -> bool {
 
 struct Endpoint<'a> {
     name: &'a str,
+    element: String,
     alt: &'a str,
     component: &'a str,
     chain: String,
@@ -73,6 +75,7 @@ fn endpoint<'a>(
     let seq = residue_sequence(residue, namespace)?;
     Some(Endpoint {
         name: atom_name(atom, namespace)?,
+        element: element_column(&atom),
         alt: alt_field(structure, &atom),
         component: component_name(atom, residue, namespace)?,
         chain: label,
@@ -144,13 +147,13 @@ pub(super) fn write_links(
                     out,
                     "LINK        {}{:1}{:>3} {:1}{}{:1}               {}{:1}{:>3} {:1}{}{:1}  \
                      {:>6} {:>6} {length:5.2}",
-                    atom_name_field(first.name),
+                    atom_name_field(first.name, &first.element),
                     first.alt,
                     first.component,
                     first.chain,
                     first.seq,
                     first.ins,
-                    atom_name_field(second.name),
+                    atom_name_field(second.name, &second.element),
                     second.alt,
                     second.component,
                     second.chain,

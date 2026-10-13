@@ -28,6 +28,6 @@ pub use mmtf::{
 };
 pub use reader::{PdbReader, read, read_pdbqt, read_pqr};
 pub use writer::{
-    PdbIdentifierNamespace, PdbOptions, write, write_pdbqt, write_pdbqt_to, write_pqr,
-    write_pqr_to, write_selected, write_selected_to, write_to,
+    PdbIdentifierNamespace, PdbOptions, projection_loss, write, write_pdbqt, write_pdbqt_to,
+    write_pqr, write_pqr_to, write_selected, write_selected_to, write_to,
 };
