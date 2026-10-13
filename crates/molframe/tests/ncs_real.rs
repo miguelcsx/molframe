@@ -14,7 +14,10 @@ fn read(bytes: &[u8], name: &str) -> molframe::Structure {
     }
 }
 
-fn operators(set: &NcsSet) -> Vec<(String, NcsCode, [[f64; 3]; 3], [f64; 3])> {
+/// One operator flattened to `(id, code, rotation, translation)`.
+type Operator = (String, NcsCode, [[f64; 3]; 3], [f64; 3]);
+
+fn operators(set: &NcsSet) -> Vec<Operator> {
     set.operators()
         .map(|operator| {
             (
