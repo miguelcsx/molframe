@@ -1,13 +1,12 @@
 //! Complete `BinaryCIF` column codec chains.
 
 use super::DecodedStringColumn;
-use indexmap::IndexMap;
+use super::interner::Interner;
 use molframe_core::diagnostic::{Code, Diagnostic};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::borrow::Cow;
-use std::sync::Arc;
 
 /// `BinaryCIF` typed-array code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
@@ -147,12 +146,26 @@ pub fn decode(encoded: &EncodedData) -> Result<Decoded, Diagnostic> {
 }
 
 pub(crate) fn decode_borrowed(encoding: &[Encoding], data: &[u8]) -> Result<Decoded, Diagnostic> {
-    decode_stage(Stage::Bytes(Cow::Borrowed(data)), encoding)
+    decode_stage(Stage::Bytes(Cow::Borrowed(data)), encoding, None)
 }
 
-fn decode_stage(mut stage: Stage<'_>, encoding: &[Encoding]) -> Result<Decoded, Diagnostic> {
+/// Like [`decode_borrowed`], sharing equal strings with every other column
+/// decoded through the same `interner`.
+pub(crate) fn decode_shared(
+    encoding: &[Encoding],
+    data: &[u8],
+    interner: &mut Interner,
+) -> Result<Decoded, Diagnostic> {
+    decode_stage(Stage::Bytes(Cow::Borrowed(data)), encoding, Some(interner))
+}
+
+fn decode_stage(
+    mut stage: Stage<'_>,
+    encoding: &[Encoding],
+    mut interner: Option<&mut Interner>,
+) -> Result<Decoded, Diagnostic> {
     for encoding in encoding.iter().rev() {
-        stage = decode_step(stage, encoding)?;
+        stage = decode_step(stage, encoding, interner.as_deref_mut())?;
     }
     match stage {
         Stage::Integers(values) => Ok(Decoded::Integers(values)),
@@ -162,7 +175,11 @@ fn decode_stage(mut stage: Stage<'_>, encoding: &[Encoding]) -> Result<Decoded, 
     }
 }
 
-fn decode_step<'a>(stage: Stage<'a>, encoding: &Encoding) -> Result<Stage<'a>, Diagnostic> {
+fn decode_step<'a>(
+    stage: Stage<'a>,
+    encoding: &Encoding,
+    interner: Option<&mut Interner>,
+) -> Result<Stage<'a>, Diagnostic> {
     match encoding {
         Encoding::ByteArray { r#type } => byte_array(stage, *r#type),
         Encoding::FixedPoint { factor, src_type } => fixed_point(stage, *factor, *src_type),
@@ -184,7 +201,14 @@ fn decode_step<'a>(stage: Stage<'a>, encoding: &Encoding) -> Result<Stage<'a>, D
             string_data,
             offset_encoding,
             offsets,
-        } => string_array(stage, data_encoding, string_data, offset_encoding, offsets),
+        } => string_array(
+            stage,
+            data_encoding,
+            string_data,
+            offset_encoding,
+            offsets,
+            interner,
+        ),
     }
 }
 
@@ -387,67 +411,20 @@ fn string_array<'a>(
     string_data: &str,
     offset_encoding: &[Encoding],
     offsets: &[u8],
+    interner: Option<&mut Interner>,
 ) -> Result<Stage<'a>, Diagnostic> {
     let Stage::Bytes(data) = stage else {
         return Err(type_error("StringArray requires bytes"));
     };
-    let Decoded::Integers(indices) = decode_stage(Stage::Bytes(data), data_encoding)? else {
+    let Decoded::Integers(indices) = decode_stage(Stage::Bytes(data), data_encoding, None)? else {
         return Err(type_error("StringArray indices are not integers"));
     };
     let Decoded::Integers(offsets) =
-        decode_stage(Stage::Bytes(Cow::Borrowed(offsets)), offset_encoding)?
+        decode_stage(Stage::Bytes(Cow::Borrowed(offsets)), offset_encoding, None)?
     else {
         return Err(type_error("StringArray offsets are not integers"));
     };
-    let source_capacity = offsets.len().saturating_sub(1);
-    let mut lookup = IndexMap::<&str, u32>::with_capacity(source_capacity);
-    let mut dictionary = Vec::with_capacity(source_capacity);
-    let mut source_to_compact = Vec::with_capacity(source_capacity);
-    for pair in offsets.windows(2) {
-        let (Ok(start), Ok(end)) = (usize::try_from(pair[0]), usize::try_from(pair[1])) else {
-            return Err(length_error(offsets.len(), string_data.len()));
-        };
-        let Some(value) = string_data.get(start..end) else {
-            return Err(length_error(end, string_data.len()));
-        };
-        let compact = intern_string(value, &mut lookup, &mut dictionary)?;
-        source_to_compact.push(compact);
-    }
-    let mut output = Vec::with_capacity(indices.len());
-    for index in indices {
-        if index == -1 {
-            output.push(intern_string("", &mut lookup, &mut dictionary)?);
-            continue;
-        }
-        let Ok(index) = usize::try_from(index) else {
-            return Err(length_error(output.len(), source_to_compact.len()));
-        };
-        let Some(compact) = source_to_compact.get(index) else {
-            return Err(length_error(index, source_to_compact.len()));
-        };
-        output.push(*compact);
-    }
-    Ok(Stage::Strings(DecodedStringColumn::from_validated_parts(
-        dictionary, output,
-    )))
-}
-
-fn intern_string<'a>(
-    value: &'a str,
-    lookup: &mut IndexMap<&'a str, u32>,
-    dictionary: &mut Vec<Arc<str>>,
-) -> Result<u32, Diagnostic> {
-    if let Some(index) = lookup.get(value) {
-        return Ok(*index);
-    }
-    let Ok(index) = u32::try_from(dictionary.len()) else {
-        return Err(
-            Diagnostic::new(Code::E1401).with_message("string dictionary exceeds u32 indices")
-        );
-    };
-    lookup.insert(value, index);
-    dictionary.push(Arc::from(value));
-    Ok(index)
+    super::strings::build(&indices, &offsets, string_data, interner).map(Stage::Strings)
 }
 
 const fn is_integer(data_type: DataType) -> bool {
@@ -458,13 +435,13 @@ const fn is_float(data_type: DataType) -> bool {
     matches!(data_type, DataType::Float32 | DataType::Float64)
 }
 
-fn length_error(actual: usize, declared: usize) -> Diagnostic {
+pub(super) fn length_error(actual: usize, declared: usize) -> Diagnostic {
     Diagnostic::new(Code::E1401)
         .with_context("actual", actual.to_string())
         .with_context("declared", declared.to_string())
 }
 
-fn type_error(message: &'static str) -> Diagnostic {
+pub(super) fn type_error(message: &'static str) -> Diagnostic {
     Diagnostic::new(Code::E1403).with_message(message)
 }
 

@@ -4,7 +4,9 @@
 //! document remains fully owning, while a structure read avoids copying the
 //! complete encoded file before column decoding begins.
 
-use crate::codec::{Decoded, Encoding, check_declared_sizes, decode_borrowed};
+use crate::codec::{
+    Decoded, Encoding, Interner, check_declared_sizes, decode_borrowed, decode_shared,
+};
 use molframe_cif::lexer::Quoting;
 use molframe_cif::{Category, CifValue};
 use molframe_core::diagnostic::{Code, Diagnostic};
@@ -77,8 +79,9 @@ pub(super) fn parse(bytes: &[u8], limits: Limits) -> Result<DirectFile<'_>, Diag
 
 pub(super) fn decode_category(encoded: DirectCategory<'_>) -> Result<Category, Diagnostic> {
     let mut category = Category::new(encoded.name.trim_start_matches('_'), ByteSpan::default());
+    let mut interner = Interner::default();
     for column in encoded.columns {
-        let values = decode_borrowed(&column.data.encoding, column.data.data)?;
+        let values = decode_shared(&column.data.encoding, column.data.data, &mut interner)?;
         if decoded_len(&values) != encoded.row_count {
             return Err(length_error(decoded_len(&values), encoded.row_count));
         }
