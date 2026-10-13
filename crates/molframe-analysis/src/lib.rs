@@ -118,10 +118,11 @@ pub use external_secondary_structure::{DsspBinaryError, DsspSegment, parse_dssp_
 pub use fragment_mapping::{FragmentMappingError, FragmentMatch, FragmentReference, map_fragments};
 pub use half_sphere::{HalfSphereExposure, HseError, half_sphere_exposure, protein_domain};
 pub use hbond::{
-    HydrogenBond, HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
+    HeavyAtomHydrogenBond, HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable, HydrogenBond,
+    HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
     HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
-    hydrogen_bond_candidates_over_segment, hydrogen_bonds, hydrogen_bonds_at_sample,
-    hydrogen_bonds_with_policy,
+    heavy_atom_hydrogen_bonds, hydrogen_bond_candidates_over_segment, hydrogen_bonds,
+    hydrogen_bonds_at_sample, hydrogen_bonds_with_policy,
 };
 pub use helix_geometry::{
     BaseFrame, HelicalError, HelicalOptions, HelicalParameters, MiddleFrameStep,

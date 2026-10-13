@@ -13,10 +13,16 @@ use molframe_spatial::{
 use crate::numeric::f64_to_f32;
 
 mod candidates;
+mod heavy;
+mod heavy_roles;
 mod sample;
 pub use candidates::{
     HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
     hydrogen_bond_candidates_over_segment,
+};
+pub use heavy::{
+    HeavyAtomHydrogenBond, HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable,
+    heavy_atom_hydrogen_bonds,
 };
 pub use sample::hydrogen_bonds_at_sample;
 
