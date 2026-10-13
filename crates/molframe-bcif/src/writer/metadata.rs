@@ -316,12 +316,12 @@ fn encode_supplement(
         return Ok(());
     }
     let input = molframe_core::io::InputBuffer::from_bytes(format!("data_x\n{text}").into_bytes());
-    let (document, _) = molframe_cif::parse(&input).map_err(|findings| {
-        findings.into_iter().next().unwrap_or_else(|| {
-            Diagnostic::new(molframe_core::diagnostic::Code::E1401)
-                .with_message("supplementary categories did not parse")
-        })
-    })?;
+    let (document, _) =
+        molframe_cif::parse(&input).map_err(|findings| match findings.into_iter().next() {
+            Some(first) => first,
+            None => Diagnostic::new(molframe_core::diagnostic::Code::E1401)
+                .with_message("supplementary categories did not parse"),
+        })?;
     for block in document.blocks() {
         for category in block.categories() {
             target.push(super::document::encode_category(category)?);

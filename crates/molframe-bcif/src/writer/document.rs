@@ -60,7 +60,7 @@ fn encode_column<'a>(
     values: impl Iterator<Item = &'a CifValue>,
 ) -> Result<(EncodedData, Option<EncodedData>), Diagnostic> {
     let values: Vec<&CifValue> = values.collect();
-    let kind = column_kind(&values)?;
+    let kind = column_kind(&values);
     let mut mask = Vec::with_capacity(values.len());
     let data = match kind {
         ColumnKind::Integer => {
@@ -80,7 +80,7 @@ fn encode_column<'a>(
         ColumnKind::String => {
             let mut output = Vec::with_capacity(values.len());
             for value in &values {
-                output.push(string_value(value, &mut mask)?);
+                output.push(string_value(value, &mut mask));
             }
             encode_strings(&output)?
         }
@@ -101,7 +101,7 @@ enum ColumnKind {
     String,
 }
 
-fn column_kind(values: &[&CifValue]) -> Result<ColumnKind, Diagnostic> {
+fn column_kind(values: &[&CifValue]) -> ColumnKind {
     let mut kind = None;
     for value in values {
         let candidate = match value {
@@ -123,10 +123,10 @@ fn column_kind(values: &[&CifValue]) -> Result<ColumnKind, Diagnostic> {
             _ => ColumnKind::String,
         });
     }
-    Ok(match kind {
+    match kind {
         Some(kind) => kind,
         None => ColumnKind::String,
-    })
+    }
 }
 
 fn integer_value(value: &CifValue, mask: &mut Vec<i64>) -> i64 {
@@ -167,27 +167,27 @@ fn float_value(value: &CifValue, mask: &mut Vec<i64>) -> Result<f64, Diagnostic>
     }
 }
 
-fn string_value(value: &CifValue, mask: &mut Vec<i64>) -> Result<String, Diagnostic> {
+fn string_value(value: &CifValue, mask: &mut Vec<i64>) -> String {
     match value {
         CifValue::Text(value) => {
             mask.push(0);
-            Ok(value.to_string())
+            value.to_string()
         }
         CifValue::Inapplicable => {
             mask.push(1);
-            Ok(String::new())
+            String::new()
         }
         CifValue::Unknown => {
             mask.push(2);
-            Ok(String::new())
+            String::new()
         }
         CifValue::Integer(value) => {
             mask.push(0);
-            Ok(value.to_string())
+            value.to_string()
         }
         CifValue::Float(value) => {
             mask.push(0);
-            Ok(value.to_string())
+            value.to_string()
         }
     }
 }
