@@ -34,6 +34,16 @@ impl XtcReader {
     /// index describes another file, format or atom count, or a memory error
     /// when the index does not fit the ceiling.
     pub fn with_frame_index(mut self, index: &FrameIndex) -> Result<Self, XtcError> {
+        self.adopt_frame_index(index)?;
+        Ok(self)
+    }
+
+    /// In-place form of [`Self::with_frame_index`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::with_frame_index`].
+    pub fn adopt_frame_index(&mut self, index: &FrameIndex) -> Result<(), XtcError> {
         if !index.describes(FrameIndex::XTC, self.atom_count, self.stamp) {
             return Err(FrameIndexError::Mismatch.into());
         }
@@ -43,7 +53,7 @@ impl XtcReader {
         }
         self.frame_count = Some(index.len());
         self.offsets = Some(index.shared());
-        Ok(self)
+        Ok(())
     }
 
     /// Opens a file with its index loaded from `cache` when that still matches.

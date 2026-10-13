@@ -232,6 +232,15 @@ pub trait TrajectoryReader: Send {
     fn rewind(&mut self) -> Result<(), TrajectoryError> {
         self.seek(0)
     }
+    /// The frame-offset index, built if need be, for other readers of the same
+    /// file to adopt; `None` for sources that need no index.
+    fn share_index(&mut self) -> Option<crate::FrameIndex> {
+        None
+    }
+    /// Adopts an index from another reader of the same file; whether it did.
+    fn adopt_index(&mut self, _index: &crate::FrameIndex) -> bool {
+        false
+    }
 }
 
 impl<R: TrajectoryReader + ?Sized> TrajectoryReader for Box<R> {
@@ -269,6 +278,14 @@ impl<R: TrajectoryReader + ?Sized> TrajectoryReader for Box<R> {
 
     fn seek(&mut self, frame: usize) -> Result<(), TrajectoryError> {
         (**self).seek(frame)
+    }
+
+    fn share_index(&mut self) -> Option<crate::FrameIndex> {
+        (**self).share_index()
+    }
+
+    fn adopt_index(&mut self, index: &crate::FrameIndex) -> bool {
+        (**self).adopt_index(index)
     }
 }
 

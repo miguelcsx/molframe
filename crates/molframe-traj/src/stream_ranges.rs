@@ -69,9 +69,13 @@ where
                 .saturating_sub(context.reserved_bytes()),
         })?;
     let mut readers = Vec::with_capacity(workers);
+    let index = first.share_index();
     readers.push(first);
     for _ in 1..workers {
         let mut reader = open()?;
+        if let Some(index) = &index {
+            reader.adopt_index(index);
+        }
         reader.seek(range.start)?;
         readers.push(reader);
     }

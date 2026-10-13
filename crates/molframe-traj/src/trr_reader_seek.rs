@@ -35,6 +35,16 @@ impl TrrReader {
     /// Returns an invalid-source error when the index describes another file,
     /// format or atom count, or a memory error when it exceeds the ceiling.
     pub fn with_frame_index(mut self, index: &FrameIndex) -> Result<Self, TrajectoryError> {
+        self.adopt_frame_index(index)?;
+        Ok(self)
+    }
+
+    /// In-place form of [`Self::with_frame_index`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::with_frame_index`].
+    pub fn adopt_frame_index(&mut self, index: &FrameIndex) -> Result<(), TrajectoryError> {
         if !index.describes(FrameIndex::TRR, self.atoms, self.stamp) {
             return Err(crate::FrameIndexError::Mismatch.into());
         }
@@ -43,7 +53,7 @@ impl TrrReader {
             return Err(memory(required, self.limit));
         }
         self.offsets = Some(index.shared());
-        Ok(self)
+        Ok(())
     }
 
     pub(super) fn seek_indexed(&mut self, frame: usize) -> Result<(), TrajectoryError> {

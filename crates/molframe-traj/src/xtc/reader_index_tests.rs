@@ -112,3 +112,15 @@ fn cached_index_is_written_reused_and_rebuilt_when_stale() {
     let stale = XtcReader::open_cached(&path, 1 << 26, &cache).expect("open");
     assert_eq!(stale.n_frames(), Some(30));
 }
+
+#[test]
+fn trait_sharing_adopts_only_a_matching_index() {
+    let (_directory, path) = fixture("a.xtc", 20);
+    let mut first = XtcReader::open(&path).expect("open");
+    let index = first.share_index().expect("index");
+    let mut second = XtcReader::open(&path).expect("open");
+    assert!(second.adopt_index(&index));
+    assert_eq!(second.n_frames(), Some(20));
+    let (_other_dir, other) = fixture("b.xtc", 21);
+    assert!(!XtcReader::open(&other).expect("open").adopt_index(&index));
+}

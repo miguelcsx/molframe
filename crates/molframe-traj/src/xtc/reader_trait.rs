@@ -92,4 +92,12 @@ impl TrajectoryReader for XtcReader {
         self.last_precision = None;
         Ok(())
     }
+
+    fn share_index(&mut self) -> Option<crate::FrameIndex> {
+        self.frame_index().ok()
+    }
+
+    fn adopt_index(&mut self, index: &crate::FrameIndex) -> bool {
+        self.adopt_frame_index(index).is_ok()
+    }
 }

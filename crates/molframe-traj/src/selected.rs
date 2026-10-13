@@ -236,6 +236,14 @@ impl<R: TrajectoryReader> TrajectoryReader for SelectedReader<R> {
         self.emitted = frame;
         Ok(())
     }
+
+    fn share_index(&mut self) -> Option<crate::FrameIndex> {
+        self.inner.share_index()
+    }
+
+    fn adopt_index(&mut self, index: &crate::FrameIndex) -> bool {
+        self.inner.adopt_index(index)
+    }
 }
 
 /// A rectangular block of frames filled directly into single buffers.
