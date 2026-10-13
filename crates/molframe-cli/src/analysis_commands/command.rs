@@ -310,7 +310,16 @@ pub(crate) fn sasa(
         context,
         &["atom", "area_angstrom_squared"],
         areas.into_iter().enumerate(),
-        |(atom, area)| vec![atom.to_string(), area.to_string()],
+        |(atom, area)| {
+            // An atom outside the radius policy has no area: leave the cell empty
+            // rather than print a sentinel that is not a number.
+            let cell = if area.is_finite() {
+                area.to_string()
+            } else {
+                String::new()
+            };
+            vec![atom.to_string(), cell]
+        },
     )
 }
 
