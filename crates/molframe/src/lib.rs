@@ -274,7 +274,9 @@ pub use facade::{read_document, write_mmcif, write_mmcif_with_findings, write_mm
 pub use facade::{write_bcif, write_bcif_with_findings, write_bcif_with_options};
 
 #[cfg(feature = "pdb")]
-pub use facade::{write_pdb, write_pdb_with_findings};
+pub use facade::{
+    write_pdb, write_pdb_with_findings, write_pdbqt_with_findings, write_pqr_with_findings,
+};
 
 #[cfg(all(feature = "geometry", feature = "chemistry"))]
 pub use structure::{

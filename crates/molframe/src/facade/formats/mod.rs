@@ -20,6 +20,8 @@ mod mmcif;
 mod pdb;
 #[cfg(feature = "pdb")]
 mod pdb_metadata;
+#[cfg(feature = "pdb")]
+mod pdb_variants;
 #[cfg(feature = "geometry")]
 mod transform;
 
@@ -39,5 +41,7 @@ pub use mmcif::{read_document, write_mmcif, write_mmcif_with_findings, write_mmc
 pub use pdb::{write_pdb, write_pdb_with_findings};
 #[cfg(feature = "pdb")]
 pub(crate) use pdb_metadata::complete as complete_pdb_options;
+#[cfg(feature = "pdb")]
+pub use pdb_variants::{write_pdbqt_with_findings, write_pqr_with_findings};
 #[cfg(feature = "geometry")]
 pub use transform::transform;

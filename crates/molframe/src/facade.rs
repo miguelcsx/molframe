@@ -30,7 +30,9 @@ pub use formats::{
 #[cfg(feature = "bcif")]
 pub use formats::{write_bcif, write_bcif_with_findings, write_bcif_with_options};
 #[cfg(feature = "pdb")]
-pub use formats::{write_pdb, write_pdb_with_findings};
+pub use formats::{
+    write_pdb, write_pdb_with_findings, write_pdbqt_with_findings, write_pqr_with_findings,
+};
 
 #[cfg(feature = "mmcif")]
 mod cif_family;
