@@ -401,12 +401,12 @@ fn directions(first: Row, second: Row, options: HeavyAtomHydrogenBondOptions) ->
 
 #[test]
 fn histidine_tautomers_donate_from_the_protonated_nitrogen_only() {
-    let water = |_: ()| ("O", "O", ".", "HOH", 2, [2.9, 0.0, 0.0]);
+    let water = ("O", "O", ".", "HOH", 2, [2.9, 0.0, 0.0]);
     let options = HeavyAtomHydrogenBondOptions::default();
     let nitrogen = |residue: &'static str, name: &'static str| {
         directions(
             ("N", name, ".", residue, 1, [0.0, 0.0, 0.0]),
-            water(()),
+            water,
             options,
         )
     };
