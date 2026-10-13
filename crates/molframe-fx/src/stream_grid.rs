@@ -9,8 +9,41 @@ use std::collections::HashMap;
 pub(crate) type Point = [f32; 3];
 pub(crate) type Cell = [i64; 3];
 
-pub(crate) fn satisfied(distance: f64, target: f64, tolerance: f64) -> bool {
-    (distance - target).abs() <= tolerance
+/// The distances one pairwise constraint admits.
+///
+/// A distance is admitted when it is within `tolerance` of `target`, or, for a
+/// window built with a verdict profile, inside the closed range every profile
+/// rule on the constraint's metric accepts (unbounded when no rule names it). The second clause is what keeps a
+/// pruned evaluation from discarding a mapping the profile would pass.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Window {
+    pub(crate) target: f64,
+    pub(crate) tolerance: f64,
+    pub(crate) accepted: Option<(f64, f64)>,
+}
+
+impl Window {
+    pub(crate) fn admits(&self, distance: f64) -> bool {
+        (distance - self.target).abs() <= self.tolerance
+            || self
+                .accepted
+                .is_some_and(|(low, high)| distance >= low && distance <= high)
+    }
+
+    /// Whether no distance is rejected, so the constraint cannot prune.
+    pub(crate) fn admits_everything(&self) -> bool {
+        self.accepted
+            .is_some_and(|(low, high)| low == f64::NEG_INFINITY && high == f64::INFINITY)
+    }
+
+    /// The largest distance this window can admit.
+    pub(crate) fn reach(&self) -> f64 {
+        let declared = self.target + self.tolerance;
+        match self.accepted {
+            Some((_, high)) if high > declared => high,
+            _ => declared,
+        }
+    }
 }
 
 /// Positions of the alternatives of one site on one candidate.
@@ -41,8 +74,7 @@ pub(crate) struct Link {
     pub(crate) earlier: usize,
     /// Points of the earlier site, per earlier candidate.
     pub(crate) earlier_points: Vec<SitePoints>,
-    pub(crate) target: f64,
-    pub(crate) tolerance: f64,
+    pub(crate) window: Window,
     pub(crate) grid: Grid,
 }
 
@@ -80,11 +112,7 @@ impl Link {
                             continue;
                         };
                         for (index, other) in entries {
-                            if satisfied(
-                                molframe_geom::distance(*point, *other),
-                                self.target,
-                                self.tolerance,
-                            ) {
+                            if self.window.admits(molframe_geom::distance(*point, *other)) {
                                 found.push(*index);
                             }
                         }

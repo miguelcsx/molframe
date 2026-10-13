@@ -12,6 +12,7 @@ mod numeric;
 mod profile;
 mod specification;
 mod stream;
+mod stream_constrain;
 mod stream_grid;
 mod verdict;
 
@@ -35,7 +36,7 @@ pub use profile::{
 pub use specification::{
     AtomSite, ComponentRole, ComponentSpec, Constraint, Motif, MotifError, NamedConstraint,
 };
-pub use stream::{MappingPlan, MappingStream};
+pub use stream::{Admission, MappingPlan, MappingStream};
 pub use verdict::{
     Comparison, MissingVerdict, RuleOutcome, Verdict, VerdictProfile, VerdictRule, VerdictStatus,
 };

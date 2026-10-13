@@ -7,21 +7,23 @@
 //! materialising any. Enumeration order is identical to the exhaustive
 //! [`crate::map_motif`] order restricted to the admitted mappings.
 //!
-//! Constrained matching admits a mapping when every `Distance` constraint is
+//! [`Admission::Satisfied`] admits a mapping when every `Distance` constraint is
 //! intrinsically satisfied, using exactly the arithmetic of the measurement
 //! stage, so the admitted set equals the mappings whose measured `satisfied`
-//! is `Some(true)` for each distance constraint.
+//! is `Some(true)` for each distance constraint. [`Admission::Passable`] widens
+//! each window to what the verdict profile accepts, which makes the admitted set
+//! a superset of every mapping the profile passes.
 
 use crate::mapping::{Candidate, MappingError, component_candidates, referenced_sites};
 use crate::numeric::usize_to_u32;
-use crate::stream_grid::{Grid, Link, intersect, satisfied, site_points};
-use crate::{AtomSite, Constraint, MappedMotif, Motif};
+use crate::stream_grid::{Link, intersect};
+use crate::{MappedMotif, Motif, VerdictProfile};
 use molframe_chem::ComponentProvider;
 use molframe_core::contract::AnalysisPolicy;
 use molframe_core::execution::CancellationToken;
 use molframe_core::index::ResidueIndex;
 use molframe_core::structure::Structure;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// Nodes visited between cancellation checks.
@@ -30,13 +32,29 @@ const CHECK_INTERVAL: u64 = 2048;
 /// Mappings of one motif onto one structure, ready to stream or count.
 #[derive(Debug)]
 pub struct MappingPlan {
-    levels: Vec<Box<str>>,
-    candidates: Vec<Vec<Candidate>>,
-    links: Vec<Vec<Link>>,
+    pub(crate) levels: Vec<Box<str>>,
+    pub(crate) candidates: Vec<Vec<Candidate>>,
+    pub(crate) links: Vec<Vec<Link>>,
+}
+
+/// Which mappings a plan admits.
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub enum Admission<'a> {
+    /// Every structural mapping, however far apart its atoms lie.
+    All,
+    /// Mappings whose every distance constraint is within its tolerance.
+    Satisfied,
+    /// Mappings every distance constraint admits, either within its tolerance
+    /// or inside the range the profile's rules on that metric accept, so no
+    /// mapping the profile would pass is ever pruned. A constraint no rule
+    /// names cannot change a verdict and therefore prunes nothing.
+    Passable(&'a VerdictProfile),
 }
 
 impl MappingPlan {
-    /// Builds candidates and, when `constrained`, the spatial index.
+    /// Builds candidates and, when `constrained`, the spatial index over the
+    /// distance constraints' tolerances ([`Admission::Satisfied`]).
     ///
     /// # Errors
     ///
@@ -47,6 +65,26 @@ impl MappingPlan {
         provider: Option<&dyn ComponentProvider>,
         policy: &AnalysisPolicy,
         constrained: bool,
+    ) -> Result<Self, MappingError> {
+        let admission = if constrained {
+            Admission::Satisfied
+        } else {
+            Admission::All
+        };
+        Self::build_admitting(structure, motif, provider, policy, admission)
+    }
+
+    /// Builds candidates and the spatial index `admission` calls for.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MappingError::Chemistry`] when the provider fails.
+    pub fn build_admitting(
+        structure: &Structure,
+        motif: &Motif,
+        provider: Option<&dyn ComponentProvider>,
+        policy: &AnalysisPolicy,
+        admission: Admission<'_>,
     ) -> Result<Self, MappingError> {
         let sites = referenced_sites(motif);
         let levels: Vec<Box<str>> = motif.components().keys().cloned().collect();
@@ -61,138 +99,15 @@ impl MappingPlan {
             levels,
             candidates,
         };
-        if constrained {
-            plan.constrain(structure, motif);
+        let profile = match admission {
+            Admission::All => None,
+            Admission::Satisfied => Some(None),
+            Admission::Passable(profile) => Some(Some(profile)),
+        };
+        if let Some(profile) = profile {
+            plan.constrain(structure, motif, profile);
         }
         Ok(plan)
-    }
-
-    fn level_of(&self, name: &str) -> Option<usize> {
-        self.levels.iter().position(|level| level.as_ref() == name)
-    }
-
-    fn constrain(&mut self, structure: &Structure, motif: &Motif) {
-        for named in motif.constraints() {
-            let Constraint::Distance {
-                first,
-                second,
-                target,
-                tolerance,
-            } = &named.constraint
-            else {
-                continue;
-            };
-            let (Some(a), Some(b)) = (
-                self.level_of(&first.component),
-                self.level_of(&second.component),
-            ) else {
-                continue;
-            };
-            if a == b {
-                self.filter_internal(structure, a, first, second, *target, *tolerance);
-            }
-        }
-        for named in motif.constraints() {
-            let Constraint::Distance {
-                first,
-                second,
-                target,
-                tolerance,
-            } = &named.constraint
-            else {
-                continue;
-            };
-            let (Some(a), Some(b)) = (
-                self.level_of(&first.component),
-                self.level_of(&second.component),
-            ) else {
-                continue;
-            };
-            if a == b {
-                continue;
-            }
-            let (earlier, earlier_site, later, later_site) = if a < b {
-                (a, first, b, second)
-            } else {
-                (b, second, a, first)
-            };
-            self.add_link(
-                structure,
-                earlier,
-                earlier_site,
-                later,
-                later_site,
-                *target,
-                *tolerance,
-            );
-        }
-    }
-
-    fn filter_internal(
-        &mut self,
-        structure: &Structure,
-        level: usize,
-        first: &AtomSite,
-        second: &AtomSite,
-        target: f64,
-        tolerance: f64,
-    ) {
-        self.candidates[level].retain(|candidate| {
-            let left = site_points(structure, candidate, first);
-            let right = site_points(structure, candidate, second);
-            left.iter().any(|(atom_a, p)| {
-                right.iter().any(|(atom_b, q)| {
-                    (atom_a != atom_b || first == second)
-                        && satisfied(molframe_geom::distance(*p, *q), target, tolerance)
-                })
-            })
-        });
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn add_link(
-        &mut self,
-        structure: &Structure,
-        earlier: usize,
-        earlier_site: &AtomSite,
-        later: usize,
-        later_site: &AtomSite,
-        target: f64,
-        tolerance: f64,
-    ) {
-        let reach = target + tolerance;
-        let cell = if reach.is_finite() {
-            (reach.max(0.0) * (1.0 + 1e-6) + 1e-6).max(1e-6)
-        } else {
-            f64::INFINITY
-        };
-        let mut grid = Grid {
-            cell,
-            cells: HashMap::new(),
-        };
-        for (index, candidate) in self.candidates[later].iter().enumerate() {
-            for (_, point) in site_points(structure, candidate, later_site) {
-                let key = grid.key(point);
-                grid.cells.entry(key).or_default().push((
-                    match u32::try_from(index) {
-                        Ok(index) => index,
-                        Err(_) => u32::MAX,
-                    },
-                    point,
-                ));
-            }
-        }
-        let earlier_points = self.candidates[earlier]
-            .iter()
-            .map(|candidate| site_points(structure, candidate, earlier_site))
-            .collect();
-        self.links[later].push(Link {
-            earlier,
-            earlier_points,
-            target,
-            tolerance,
-            grid,
-        });
     }
 }
 

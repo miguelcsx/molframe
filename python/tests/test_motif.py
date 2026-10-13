@@ -98,11 +98,16 @@ values = [5.0, 11.0]
 """
 
 
+PAIR_WIDE_PROFILE = PAIR.replace("tolerance = 3.0", "tolerance = 1.0").replace(
+    "values = [5.0, 11.0]", "values = [4.0, 12.0]"
+)
+
+
 class TestLazyMatching:
     def test_default_limits_no_longer_reject_a_single_component_motif(self, tmp_path):
         structure = molframe.read(DATA / "1aon.bcif")
         spec = _write(tmp_path, SPECIFICATION)
-        report = motif.evaluate(structure, spec)
+        report = motif.evaluate(structure, spec, constrained=False)
         assert len(report) == motif.count(structure, spec, constrained=False)
         assert len(report) > 64
 
@@ -115,7 +120,7 @@ class TestLazyMatching:
     def test_count_matches_and_iteration_agree_with_evaluate(self, tmp_path):
         structure = molframe.read(DATA / "4hhb.pdb")
         spec = _write(tmp_path, PAIR)
-        report = motif.evaluate(structure, spec)
+        report = motif.evaluate(structure, spec, constrained=False)
         total = motif.count(structure, spec, constrained=False)
         assert total == len(report)
         everything = motif.matches(structure, spec, constrained=False)
@@ -130,14 +135,43 @@ class TestLazyMatching:
     def test_constrained_equals_the_satisfied_subset_of_the_full_enumeration(self, tmp_path):
         structure = molframe.read(DATA / "4hhb.pdb")
         spec = _write(tmp_path, PAIR)
-        report = motif.evaluate(structure, spec)
+        report = motif.evaluate(structure, spec, constrained=False)
         satisfied = [i for i, e in enumerate(report.evaluations) if e.constraints[0].satisfied]
         every = motif.matches(structure, spec, constrained=False).residues
         kept = motif.matches(structure, spec, constrained=True).residues
         assert kept.tolist() == every[satisfied].tolist()
         assert motif.count(structure, spec) == len(satisfied)
-        constrained = motif.evaluate(structure, spec, constrained=True)
-        assert len(constrained) == len(satisfied)
+        assert len(motif.evaluate(structure, spec)) == len(satisfied)
+
+    def test_pruning_is_the_default_for_every_entry_point(self, tmp_path):
+        structure = molframe.read(DATA / "4hhb.pdb")
+        spec = _write(tmp_path, PAIR)
+        pruned = motif.evaluate(structure, spec)
+        assert len(pruned) == motif.count(structure, spec)
+        assert len(pruned) == len(motif.matches(structure, spec))
+        assert len(pruned) < motif.count(structure, spec, constrained=False)
+        assert pruned.components == ["a", "b"]
+
+    def test_evaluate_pruning_never_changes_a_verdict_or_loses_a_pass(self, tmp_path):
+        structure = molframe.read(DATA / "4hhb.pdb")
+        spec = _write(tmp_path, PAIR_WIDE_PROFILE)
+        full = motif.evaluate(structure, spec, constrained=False)
+        pruned = motif.evaluate(structure, spec)
+        by_residues = {tuple(e.residues): e for e in full.evaluations}
+        assert len(pruned) < len(full)
+        for kept in pruned.evaluations:
+            twin = by_residues[tuple(kept.residues)]
+            assert kept.verdict == twin.verdict
+            assert [c.value for c in kept.constraints] == [c.value for c in twin.constraints]
+        passes = lambda report: {  # noqa: E731
+            tuple(e.residues) for e in report.evaluations if e.verdict == "pass"
+        }
+        assert passes(full)
+        assert passes(pruned) == passes(full)
+        # The profile accepts more than the tolerance does, so pruning by the
+        # tolerance alone would have dropped a passing mapping.
+        satisfied = {tuple(e.residues) for e in full.evaluations if e.constraints[0].satisfied}
+        assert not passes(full) <= satisfied
 
     def test_a_tiny_budget_is_refused_with_the_knob_named(self, tmp_path):
         structure = molframe.read(DATA / "4hhb.pdb")

@@ -13,6 +13,10 @@ use std::sync::Arc;
 pub struct Evaluation {
     /// Mapping ordinal in deterministic enumeration order.
     pub mapping_index: usize,
+    /// Residue indices of the mapping, one per motif component in sorted-name
+    /// order. Unlike `mapping_index`, this identifies the mapping whatever the
+    /// plan's [`crate::Admission`] pruned away.
+    pub residues: Box<[u32]>,
     /// Alignment decision used by the measurement stage.
     pub alignment: AlignmentKind,
     /// Per-constraint measurements without a collapsed score.
@@ -21,12 +25,12 @@ pub struct Evaluation {
     pub verdict: Verdict,
 }
 
-/// Evaluation of every defensible motif mapping.
+/// Evaluation of every mapping a plan admits.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EvaluationReport {
-    /// Whether chemistry and structure admitted multiple mappings.
+    /// Whether the plan admitted multiple mappings.
     pub mapping_ambiguous: bool,
-    /// One evaluation per complete mapping, in stable order.
+    /// One evaluation per admitted mapping, in stable order.
     pub evaluations: Vec<Evaluation>,
 }
 
@@ -76,7 +80,7 @@ pub fn evaluate_motif(
     )
 }
 
-/// Evaluates every mapping of a prepared [`MappingPlan`].
+/// Evaluates every mapping a prepared [`MappingPlan`] admits.
 ///
 /// The mappings are counted first, so a plan over the limit is refused before
 /// any evaluation is allocated.
@@ -114,6 +118,7 @@ pub fn evaluate_plan(
         let verdict = profile.decide(&measurements.metrics());
         evaluations.push(Evaluation {
             mapping_index: evaluations.len(),
+            residues: tuple.as_slice().into(),
             alignment: aligned.kind,
             measurements,
             verdict,

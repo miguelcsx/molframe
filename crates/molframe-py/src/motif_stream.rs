@@ -8,7 +8,7 @@ use crate::bindings::{PyStructure, findings_error};
 use crate::execution::{PyExecutionContext, run};
 use crate::policy::{PyAnalysisPolicy, policy_of};
 use molframe::motif::{
-    EvaluationSpecification, MappingError, MappingPlan, MappingStream,
+    Admission, EvaluationSpecification, MappingError, MappingPlan, MappingStream,
     read_evaluation_specification,
 };
 use molframe::{CancellationToken, ExecutionContext};
@@ -29,6 +29,28 @@ pub(crate) fn mapping_error(error: &MappingError) -> PyErr {
     }
 }
 
+/// How a plan prunes mappings the caller did not ask for.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Pruning {
+    /// Every structural mapping.
+    Off,
+    /// Mappings whose distance constraints are within tolerance.
+    Constraints,
+    /// Mappings within tolerance or inside what the verdict profile accepts.
+    Verdict,
+}
+
+impl Pruning {
+    /// The pruning a `constrained` flag selects for a call that has `verdict`.
+    pub(crate) const fn select(constrained: bool, verdict: bool) -> Self {
+        match (constrained, verdict) {
+            (false, _) => Self::Off,
+            (true, false) => Self::Constraints,
+            (true, true) => Self::Verdict,
+        }
+    }
+}
+
 /// Reads the specification and prepares the mapping plan for `source`.
 pub(crate) fn prepare(
     source: &molframe::Structure,
@@ -36,7 +58,7 @@ pub(crate) fn prepare(
     components: Option<PathBuf>,
     version: &str,
     policy: &molframe::AnalysisPolicy,
-    constrained: bool,
+    admission: Pruning,
 ) -> PyResult<(EvaluationSpecification, Arc<MappingPlan>)> {
     let specification =
         read_evaluation_specification(specification).map_err(crate::error::failure)?;
@@ -47,14 +69,19 @@ pub(crate) fn prepare(
                 .map_err(|findings| findings_error(&findings))
         })
         .transpose()?;
-    let plan = MappingPlan::build(
+    let admission = match admission {
+        Pruning::Off => Admission::All,
+        Pruning::Constraints => Admission::Satisfied,
+        Pruning::Verdict => Admission::Passable(&specification.profile),
+    };
+    let plan = MappingPlan::build_admitting(
         source.engine(),
         &specification.motif,
         provider
             .as_ref()
             .map(|provider| provider as &dyn molframe::chemistry::ComponentProvider),
         policy,
-        constrained,
+        admission,
     )
     .map_err(|error| mapping_error(&error))?;
     Ok((specification, Arc::new(plan)))
@@ -166,7 +193,7 @@ fn plan_of(
             components,
             &version,
             &policy,
-            constrained,
+            Pruning::select(constrained, true),
         )
         .map(|(_, plan)| plan)
     })?
@@ -174,9 +201,11 @@ fn plan_of(
 
 /// Counts the motif's mappings without materialising any.
 ///
-/// With `constrained=True` (the default) only mappings whose distance
-/// constraints are satisfied are counted, found with a spatial index instead
-/// of a Cartesian product. `constrained=False` counts every structural mapping.
+/// With `constrained=True` (the default) only mappings the specification
+/// admits are counted: every distance constraint within its tolerance or inside
+/// the range the verdict profile accepts, found with a spatial index instead of
+/// a Cartesian product. This is the same set `evaluate` reports.
+/// `constrained=False` counts every structural mapping.
 #[pyfunction]
 #[pyo3(signature = (structure, specification, *, components=None, version="unversioned", constrained=true, policy=None, context=None))]
 #[allow(clippy::too_many_arguments)]

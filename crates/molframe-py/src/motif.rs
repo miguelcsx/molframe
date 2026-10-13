@@ -2,7 +2,7 @@
 
 use crate::bindings::PyStructure;
 use crate::execution::{PyExecutionContext, run};
-use crate::motif_stream::{mapping_error, prepare};
+use crate::motif_stream::{Pruning, mapping_error, prepare};
 use crate::policy::{PyAnalysisPolicy, policy_of};
 use molframe::motif::{
     Evaluation, EvaluationReport, MeasurementOptions, VerdictStatus, evaluate_plan,
@@ -73,6 +73,7 @@ impl PyConstraintResult {
 )]
 struct PyMotifEvaluation {
     mapping_index: usize,
+    residues: Vec<u32>,
     profile: String,
     verdict: &'static str,
     constraints: Vec<PyConstraintResult>,
@@ -80,10 +81,17 @@ struct PyMotifEvaluation {
 
 #[pymethods]
 impl PyMotifEvaluation {
-    /// Position of this mapping in the deterministic enumeration.
+    /// Position of this evaluation in the report. It counts admitted mappings
+    /// only, so use `residues` to identify a mapping across runs.
     #[getter]
     const fn mapping_index(&self) -> usize {
         self.mapping_index
+    }
+
+    /// Residue indices of the mapping, one per component of `report.components`.
+    #[getter]
+    fn residues(&self) -> Vec<u32> {
+        self.residues.clone()
     }
 
     /// The verdict profile that decided: its exact identifier.
@@ -112,7 +120,7 @@ impl PyMotifEvaluation {
     }
 }
 
-/// Every defensible mapping of a motif, each evaluated.
+/// Every admitted mapping of a motif, each evaluated.
 #[derive(Clone, Debug)]
 #[pyclass(
     name = "MotifReport",
@@ -122,15 +130,22 @@ impl PyMotifEvaluation {
 )]
 struct PyMotifReport {
     mapping_ambiguous: bool,
+    components: Vec<String>,
     evaluations: Vec<PyMotifEvaluation>,
 }
 
 #[pymethods]
 impl PyMotifReport {
-    /// Whether chemistry and structure admitted more than one mapping.
+    /// Whether more than one mapping was admitted.
     #[getter]
     const fn mapping_ambiguous(&self) -> bool {
         self.mapping_ambiguous
+    }
+
+    /// Component names, one per entry of each evaluation's `residues`.
+    #[getter]
+    fn components(&self) -> Vec<String> {
+        self.components.clone()
     }
 
     #[getter]
@@ -162,6 +177,7 @@ const fn verdict_name(status: VerdictStatus) -> &'static str {
 fn evaluation(evaluation: &Evaluation) -> PyMotifEvaluation {
     PyMotifEvaluation {
         mapping_index: evaluation.mapping_index,
+        residues: evaluation.residues.to_vec(),
         profile: evaluation.verdict.profile.to_string(),
         verdict: verdict_name(evaluation.verdict.status),
         constraints: evaluation
@@ -180,9 +196,10 @@ fn evaluation(evaluation: &Evaluation) -> PyMotifEvaluation {
     }
 }
 
-fn report(report: &EvaluationReport) -> PyMotifReport {
+fn report(report: &EvaluationReport, components: Vec<String>) -> PyMotifReport {
     PyMotifReport {
         mapping_ambiguous: report.mapping_ambiguous,
+        components,
         evaluations: report.evaluations.iter().map(evaluation).collect(),
     }
 }
@@ -196,10 +213,19 @@ fn report(report: &EvaluationReport) -> PyMotifReport {
 /// `limits` is `(mappings, alternatives)`. `mappings=None` (the default) sets
 /// no mapping cap; the call is instead bounded by the context's memory budget,
 /// refused before anything is allocated. `alternatives` bounds the
-/// equivalent-atom alternatives measured. `constrained=True` keeps only
-/// mappings whose distance constraints are satisfied, found with a spatial
-/// index, so cost follows the output. To avoid materialising reports at all,
-/// use `count`, `matches` or `iter_matches`.
+/// equivalent-atom alternatives measured.
+///
+/// `constrained=True` (the default) finds mappings with a spatial index, so
+/// cost follows the output rather than the Cartesian product of candidates.
+/// A mapping is kept when every distance constraint is within its tolerance
+/// or inside the range the verdict profile accepts for that constraint, so
+/// pruning never discards a mapping the profile would pass: the passing
+/// mappings, and the verdict and measurements of every mapping kept, equal
+/// those of `constrained=False`. Mappings far from satisfying anything are the
+/// only ones omitted. Pass `constrained=False` to report every structural
+/// mapping, failures included. Identify mappings by `residues`, not by
+/// `mapping_index`. To avoid materialising reports at all, use `count`,
+/// `matches` or `iter_matches`.
 #[pyfunction]
 #[pyo3(signature = (
     structure,
@@ -208,7 +234,7 @@ fn report(report: &EvaluationReport) -> PyMotifReport {
     components=None,
     version="unversioned",
     limits=(None, 256),
-    constrained=false,
+    constrained=true,
     policy=None,
     context=None
 ))]
@@ -244,8 +270,9 @@ fn evaluate(
             components,
             &version,
             &policy,
-            constrained,
+            Pruning::select(constrained, true),
         )?;
+        let components: Vec<String> = plan.components().iter().map(ToString::to_string).collect();
         let total = plan
             .count(ctx.cancellation())
             .map_err(|error| mapping_error(&error))?;
@@ -285,7 +312,7 @@ fn evaluate(
             measurement,
             ctx.cancellation(),
         )
-        .map(|result| report(&result))
+        .map(|result| report(&result, components))
         .map_err(|error| match error {
             molframe::motif::EvaluationError::Mapping(inner) => mapping_error(&inner),
             other => crate::error::failure(other),

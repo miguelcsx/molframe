@@ -11,12 +11,17 @@ use std::sync::Arc;
 
 /// A deterministic scatter of SER, TRP and MET residues in a 30 angstrom box.
 fn structure(residues: u32) -> Structure {
+    seeded(residues, 12_345)
+}
+
+/// The same scatter as [`structure`], placed by `seed`.
+fn seeded(residues: u32, seed: u64) -> Structure {
     let mut source = String::from(
         "data_s\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n",
     );
-    let mut state = 12_345_u64;
+    let mut state = seed;
     let mut next = || {
         state = state
             .wrapping_mul(6_364_136_223_846_793_005)
@@ -230,3 +235,6 @@ fn the_limit_message_speaks_of_mappings() {
         .unwrap_or_default();
     assert!(error.contains("limit of 5 mappings"), "{error}");
 }
+
+#[path = "stream_property_tests.rs"]
+mod property;
