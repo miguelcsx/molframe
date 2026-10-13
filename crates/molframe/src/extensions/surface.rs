@@ -1,72 +1,19 @@
 //! Structure-first solvent-accessible surface area, as methods.
 //!
 //! Unlike the other extension traits, this one is not a pure forwarder: the
-//! surface kernels take positions and radii, so the method decides what to
-//! gather and what to do about an atom whose element has no radius in the
-//! chosen set. The decision is stated here once. Such an atom gets a `NaN`
-//! area and, because it has no radius, does not occlude its neighbours.
-//!
-//! The same rule covers heteroatoms. By default only the polymer is measured,
-//! as NACCESS and `FreeSASA` do: waters, ligands and ions get `NaN` and do not
-//! occlude. [`SasaOptions::hetero`] brings any of them in, and
-//! [`SasaOptions::metals`] says where a metal the radius set lacks takes its
-//! radius from. Both sampling methods read the one radius vector, so
-//! Shrake-Rupley and Lee-Richards always measure the same set of atoms.
+//! surface kernels take positions and radii, so the method gathers the model's
+//! coordinates and hands them to [`molframe_surface::structure_atom_areas`].
+//! That function owns the decisions every front end shares: the polymer alone
+//! is measured by default, waters, ligands and ions come in through
+//! [`SasaOptions::hetero`], and an atom with no positive radius gets a `NaN`
+//! area and does not occlude its neighbours.
 
 use crate::ExecutionContext;
 use crate::structure::Structure;
-use molframe_chem::{HeteroPolicy, MetalFallback, RadiusPolicy, RadiusSet, policy_radii};
 use molframe_core::diagnostic::Diagnostic;
 use molframe_core::index::ModelIndex;
 use molframe_surface::SasaError;
-
-/// The sampling method behind a SASA calculation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SasaMethod {
-    /// Shrake-Rupley with this many test points per atom.
-    ShrakeRupley {
-        /// Test points per atom sphere.
-        points: u16,
-    },
-    /// Lee-Richards with this many slices per atom sphere.
-    LeeRichards {
-        /// Slices per atom sphere.
-        slices: u16,
-    },
-}
-
-/// Options for [`SurfaceExt::sasa_with`].
-///
-/// The default is Shrake-Rupley with 960 points, a 1.4 Å probe, Bondi radii,
-/// the polymer alone (no waters, ligands or ions) and the first model.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SasaOptions {
-    /// The sampling method.
-    pub method: SasaMethod,
-    /// Probe radius in ångström.
-    pub probe: f32,
-    /// Which radius table to use.
-    pub radii: RadiusSet,
-    /// Which heteroatom classes are measured and occlude.
-    pub hetero: HeteroPolicy,
-    /// Where a metal the radius set has no value for takes its radius.
-    pub metals: MetalFallback,
-    /// Which model to measure.
-    pub model: ModelIndex,
-}
-
-impl Default for SasaOptions {
-    fn default() -> Self {
-        Self {
-            method: SasaMethod::ShrakeRupley { points: 960 },
-            probe: 1.4,
-            radii: RadiusSet::Bondi,
-            hetero: HeteroPolicy::POLYMER,
-            metals: MetalFallback::Vdw,
-            model: ModelIndex::new(0),
-        }
-    }
-}
+pub use molframe_surface::{SasaMethod, SasaOptions};
 
 /// Why a structure-level SASA call failed.
 #[derive(Debug, thiserror::Error)]
@@ -168,45 +115,9 @@ impl SurfaceExt for Structure {
         let positions = self
             .model_coordinates(options.model)
             .ok_or_else(|| missing_model(self, options.model))?;
-        let radii = policy_radii(
-            engine,
-            &RadiusPolicy {
-                set: options.radii,
-                metals: options.metals,
-                hetero: options.hetero,
-            },
-        );
-        // An atom without a radius is not an obstacle: even a zero-radius
-        // sphere would still block a probe, so such atoms are left out of the
-        // kernel entirely and their area is reported as NaN.
-        let kept: Vec<usize> = (0..radii.len())
-            .filter(|&atom| radii[atom].is_finite())
-            .collect();
-        let (points_in, radii_in): (Vec<[f32; 3]>, Vec<f32>) = kept
-            .iter()
-            .filter_map(|&atom| Some((*positions.get(atom)?, radii[atom])))
-            .unzip();
-        let measured = match options.method {
-            SasaMethod::ShrakeRupley { points } => molframe_surface::shrake_rupley(
-                &points_in,
-                &radii_in,
-                options.probe,
-                points,
-                context,
-            )?,
-            SasaMethod::LeeRichards { slices } => molframe_surface::lee_richards(
-                &points_in,
-                &radii_in,
-                options.probe,
-                slices,
-                context,
-            )?,
-        };
-        let mut areas = vec![f64::NAN; radii.len()];
-        for (&atom, area) in kept.iter().zip(measured) {
-            areas[atom] = area;
-        }
-        Ok(areas)
+        Ok(molframe_surface::structure_atom_areas(
+            engine, positions, options, context,
+        )?)
     }
 
     fn residue_sasa(&self) -> Result<Vec<f64>, SurfaceExtError> {
