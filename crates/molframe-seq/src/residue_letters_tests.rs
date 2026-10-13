@@ -36,3 +36,21 @@ fn modified_and_unknown_residues_are_not_guessed() {
     assert_eq!(one_letter("hoh"), 'X');
     assert_eq!(one_letter("dg"), 'G');
 }
+
+#[test]
+fn force_field_protonation_names_map_to_their_parent_residue() {
+    let pairs = [
+        ("CYX", 'C'),
+        ("CYM", 'C'),
+        ("ASH", 'D'),
+        ("GLH", 'E'),
+        ("LYN", 'K'),
+        ("HID", 'H'),
+        ("HIE", 'H'),
+        ("HIP", 'H'),
+        ("HSD", 'H'),
+    ];
+    for (name, letter) in pairs {
+        assert_eq!(one_letter(name), letter, "{name}");
+    }
+}

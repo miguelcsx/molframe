@@ -48,3 +48,13 @@ fn common_water_names_are_recognised() {
     assert!(is_water_component("WAT"));
     assert!(!is_water_component("HEM"));
 }
+
+#[test]
+fn protonation_variants_are_amino_acids_with_their_parent_carbonyls() {
+    for name in ["CYX", "CYM", "ASH", "GLH", "LYN"] {
+        assert!(is_amino_acid_component(name), "{name}");
+    }
+    assert_eq!(standard_bond_order("ASH", "CG", "OD1"), BondOrder::Double);
+    assert_eq!(standard_bond_order("GLH", "CD", "OE1"), BondOrder::Double);
+    assert_eq!(standard_bond_order("LYN", "C", "O"), BondOrder::Double);
+}

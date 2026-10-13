@@ -75,6 +75,11 @@ pub fn is_amino_acid_component(component: &str) -> bool {
             | "HSD"
             | "HSE"
             | "HSP"
+            | "CYX"
+            | "CYM"
+            | "ASH"
+            | "GLH"
+            | "LYN"
             | "UNK"
     )
 }
@@ -120,8 +125,8 @@ fn is_double(component: &str, low: &str, high: &str) -> bool {
     matches!(
         (component, low, high),
         ("ARG", "CZ", "NH2")
-            | ("ASN" | "ASP", "CG", "OD1")
-            | ("GLN" | "GLU", "CD", "OE1")
+            | ("ASN" | "ASP" | "ASH", "CG", "OD1")
+            | ("GLN" | "GLU" | "GLH", "CD", "OE1")
             | ("G" | "DG" | "I" | "DI", "C6", "O6")
             | ("C" | "DC" | "U" | "DU" | "DT", "C2", "O2")
             | ("U" | "DU" | "DT", "C4", "O4")
