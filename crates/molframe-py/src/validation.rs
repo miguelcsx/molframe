@@ -100,6 +100,7 @@ fn clashes(
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     crate::validation_checks::register(module)?;
+    crate::validation_builtin::register(module)?;
     module.add_class::<PyClashTable>()?;
     module.add_function(wrap_pyfunction!(clashes, module)?)
 }

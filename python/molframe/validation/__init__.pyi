@@ -1,4 +1,5 @@
-from typing import Literal, Protocol, final
+from os import PathLike
+from typing import Literal, Protocol, TypedDict, final
 
 from .. import Analysis, AnalysisPolicy, ExecutionContext, Selection, Structure, Table
 
@@ -116,3 +117,79 @@ def b_factor_distribution(
     context: ExecutionContext | None = None,
 ) -> Analysis[dict[str, object]]:
     """Summarise the recorded B factors and list the outliers."""
+
+class Float32Matrix(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
+class TableInfo(TypedDict):
+    name: str
+    version: str
+    source: str
+    licence: str
+
+@final
+class ValidationReport:
+    """Per-residue arrays, counts and applied-table provenance of one check.
+
+    ``arrays`` values are numpy arrays that share memory with the report.
+    ``tables`` lists the name, version, source and licence of every table or
+    policy that decided the result.
+    """
+
+    @property
+    def check(self) -> str: ...
+    @property
+    def arrays(self) -> dict[str, Float32Array | UInt32Array | Float32Matrix]: ...
+    @property
+    def summary(self) -> dict[str, float]: ...
+    @property
+    def tables(self) -> list[TableInfo]: ...
+    def __getitem__(self, name: str) -> Float32Array | UInt32Array | Float32Matrix: ...
+
+def protein_conformation(
+    structure: Structure,
+    *,
+    rama_table: str | PathLike[str] | None = None,
+    rotamer_table: str | PathLike[str] | None = None,
+    chi_table: str | PathLike[str] | None = None,
+    context: ExecutionContext | None = None,
+) -> ValidationReport:
+    """Ramachandran, rotamer and omega classes per residue.
+
+    Classes are 0 outlier, 1 allowed, 2 favoured and 255 not evaluated; omega
+    classes are 0 trans, 1 cis, 2 twisted. Bundled Top8000 tables (CC-BY-4.0)
+    apply unless a ``*_table`` file replaces one; Rust parses the file.
+    """
+
+def geometry_z(
+    structure: Structure,
+    *,
+    cutoff: float = 4.0,
+    geometry_table: str | PathLike[str] | None = None,
+    chi_table: str | PathLike[str] | None = None,
+    context: ExecutionContext | None = None,
+) -> ValidationReport:
+    """Bond and angle z-scores against Engh and Huber targets (or a user table)."""
+
+def nucleic_conformation(
+    structure: Structure,
+    *,
+    context: ExecutionContext | None = None,
+) -> ValidationReport:
+    """Sugar pucker and backbone suite sanity per nucleotide.
+
+    The sanity filter flags delta/pucker mismatch and gamma outside the
+    staggered windows; it does not assign named suites.
+    """
+
+def clashscore(
+    structure: Structure,
+    *,
+    tolerance: float = 0.4,
+    radii: Literal["bondi", "amber_united", "charmm", "alvarez"] = "bondi",
+    hydrogens: Literal["auto", "ignore"] = "auto",
+    polar_margin: float = 0.6,
+    context: ExecutionContext | None = None,
+) -> ValidationReport:
+    """Clashes per 1000 atoms; hydrogen-aware when the model has hydrogens."""

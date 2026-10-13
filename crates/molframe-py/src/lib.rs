@@ -108,6 +108,8 @@ mod trajectory_structure;
 #[cfg(feature = "validation")]
 mod validation;
 #[cfg(feature = "validation")]
+mod validation_builtin;
+#[cfg(feature = "validation")]
 mod validation_checks;
 #[cfg(feature = "analysis")]
 mod workflow;
