@@ -68,15 +68,15 @@ fn bytes_that_are_not_text_are_refused() {
 #[test]
 fn a_binary_table_round_trips_its_identity_and_refuses_damage() {
     let identity = TableIdentity::supplied("grid", "3", "lab", "CC0-1.0");
-    let Some(bytes) = join_binary(*b"MFRX", &identity, &[1, 2, 3]) else {
+    let Some(bytes) = join_binary(*b"MFRX", &identity, "", &[1, 2, 3]) else {
         panic!("the header fits");
     };
-    let Ok((read, payload)) = split_binary("grid", *b"MFRX", &bytes) else {
+    let Ok((read, payload)) = split_binary("grid", *b"MFRX", &bytes, &mut IdentityOnly) else {
         panic!("the table splits");
     };
     assert_eq!(read, identity);
     assert_eq!(payload, &[1, 2, 3]);
-    assert!(split_binary("grid", *b"MFRY", &bytes).is_err());
-    assert!(split_binary("grid", *b"MFRX", &bytes[..8]).is_err());
-    assert!(split_binary("grid", *b"MFRX", &bytes[..3]).is_err());
+    assert!(split_binary("grid", *b"MFRY", &bytes, &mut IdentityOnly).is_err());
+    assert!(split_binary("grid", *b"MFRX", &bytes[..8], &mut IdentityOnly).is_err());
+    assert!(split_binary("grid", *b"MFRX", &bytes[..3], &mut IdentityOnly).is_err());
 }

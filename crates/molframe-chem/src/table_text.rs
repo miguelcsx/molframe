@@ -184,31 +184,35 @@ pub fn text_of<'a>(what: &'static str, bytes: &'a [u8]) -> Result<&'a str, Table
     core::str::from_utf8(bytes).map_err(|error| TableTextError::at(what, 0, error.to_string()))
 }
 
-struct NoLines;
+/// A sink that accepts the identity headers and nothing else.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct IdentityOnly;
 
-impl TableLines for NoLines {
+impl TableLines for IdentityOnly {
     fn header(&mut self, _: usize, _: &str, _: &str) -> Result<bool, TableTextError> {
         Ok(false)
     }
 
     fn row(&mut self, line: usize, _: &str) -> Result<(), TableTextError> {
         Err(TableTextError::at(
-            "binary table header",
+            "table header",
             line,
-            "only identity headers are allowed here",
+            "only headers are allowed here",
         ))
     }
 }
 
-/// Splits a binary table into its declared identity and its payload.
+/// Splits a binary table into its declared identity and its payload, handing any
+/// other header of the kind to `lines`.
 ///
 /// # Errors
 ///
 /// [`TableTextError`] for a wrong magic, a truncated header or a bad identity.
-pub fn split_binary<'a>(
+pub fn split_binary<'a, L: TableLines>(
     what: &'static str,
     magic: [u8; 4],
     bytes: &'a [u8],
+    lines: &mut L,
 ) -> Result<(TableIdentity, &'a [u8]), TableTextError> {
     let whole = |message: &str| TableTextError::at(what, 0, message);
     if bytes.get(..4) != Some(&magic) {
@@ -221,17 +225,23 @@ pub fn split_binary<'a>(
     let Some(header) = bytes.get(6..6 + length) else {
         return Err(whole("truncated inside the header"));
     };
-    let identity = read_table(what, text_of(what, header)?, &mut NoLines)?;
+    let identity = read_table(what, text_of(what, header)?, lines)?;
     Ok((identity, bytes.get(6 + length..).unwrap_or_default()))
 }
 
-/// The inverse of [`split_binary`]: `payload` behind a header declaring `identity`.
+/// The inverse of [`split_binary`]: `payload` behind a header declaring `identity`
+/// followed by `extra` header lines.
 ///
 /// Returns `None` when the header text does not fit the `u16` length.
 #[must_use]
-pub fn join_binary(magic: [u8; 4], identity: &TableIdentity, payload: &[u8]) -> Option<Vec<u8>> {
+pub fn join_binary(
+    magic: [u8; 4],
+    identity: &TableIdentity,
+    extra: &str,
+    payload: &[u8],
+) -> Option<Vec<u8>> {
     let header = format!(
-        "name: {}\nversion: {}\nsource: {}\nlicence: {}\n",
+        "name: {}\nversion: {}\nsource: {}\nlicence: {}\n{extra}",
         identity.name, identity.version, identity.source, identity.licence
     );
     let length = u16::try_from(header.len()).ok()?;

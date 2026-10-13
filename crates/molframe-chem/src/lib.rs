@@ -128,6 +128,6 @@ pub use table_provider::{
 pub use table_request::TableRequest;
 pub use table_store::{Selected, TableStore};
 pub use table_text::{
-    TABLE_FORMAT_VERSION, TableLines, TableTextError, join_binary, read_table, split_binary,
-    text_of,
+    IdentityOnly, TABLE_FORMAT_VERSION, TableLines, TableTextError, join_binary, read_table,
+    split_binary, text_of,
 };
