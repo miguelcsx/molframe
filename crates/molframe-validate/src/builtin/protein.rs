@@ -147,7 +147,7 @@ impl Row {
     };
 }
 
-fn torsion(layout: &Layout<'_>, atoms: [(usize, &str); 4]) -> Option<f64> {
+pub(super) fn torsion(layout: &Layout<'_>, atoms: [(usize, &str); 4]) -> Option<f64> {
     let [a, b, c, d] = atoms;
     molframe_geom::dihedral(
         layout.position(a.0, a.1)?,
@@ -158,7 +158,7 @@ fn torsion(layout: &Layout<'_>, atoms: [(usize, &str); 4]) -> Option<f64> {
     .map(f64::to_degrees)
 }
 
-fn to_f32(value: Option<f64>) -> f32 {
+pub(super) fn to_f32(value: Option<f64>) -> f32 {
     match value {
         Some(angle) => f64_to_f32(angle),
         None => f32::NAN,

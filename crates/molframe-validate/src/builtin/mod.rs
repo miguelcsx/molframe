@@ -12,6 +12,8 @@ mod clash_scoring;
 mod failure;
 #[path = "geometry_z.rs"]
 mod geometry_scoring;
+#[path = "nucleic_conformation.rs"]
+mod nucleic_scoring;
 #[path = "protein.rs"]
 mod protein_conformation;
 #[path = "data.rs"]
@@ -29,6 +31,10 @@ pub use bundled_tables::bundled_reference;
 pub use clash_scoring::{ClashScore, ClashScoreOptions, HydrogenMode, clash_score};
 pub use failure::BuiltinError;
 pub use geometry_scoring::{GeometryOutlier, GeometryScores, NO_ATOM, geometry_scores};
+pub use nucleic_scoring::{
+    NUCLEIC_TORSIONS, NucleicPolicy, NucleicTable, PUCKER_C2_ENDO, PUCKER_C3_ENDO, PUCKER_OTHER,
+    SUITE_DELTA, SUITE_GAMMA, SUITE_PREVIOUS_DELTA, Window, nucleic_table,
+};
 pub use protein_conformation::{NOT_EVALUATED, OmegaClass, ProteinTable, protein_table};
 pub use reference_data::{
     RAMA_BINS, RAMA_FAVOURED, RamaCategory, RamaGrids, RamaThresholds, RotamerClass, RotamerTable,
