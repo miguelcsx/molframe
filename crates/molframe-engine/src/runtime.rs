@@ -130,18 +130,14 @@ pub(crate) fn execute(
     inputs: &WorkflowInputs,
     context: &ExecutionContext,
 ) -> Result<WorkflowResults, WorkflowError> {
-    if workflow.explanation.estimated_peak_bytes > context.memory_budget().bytes() {
+    // Admission only: kernels reserve their own scratch, so holding the whole
+    // estimate here would charge the same bytes twice and starve them.
+    if workflow.explanation.estimated_peak_bytes > context.available_bytes() {
         return Err(WorkflowError::MemoryRefused {
             estimated: workflow.explanation.estimated_peak_bytes,
             budget: context.memory_budget().bytes(),
         });
     }
-    let _reservation = context
-        .try_reserve(workflow.explanation.estimated_peak_bytes)
-        .map_err(|_| WorkflowError::MemoryRefused {
-            estimated: workflow.explanation.estimated_peak_bytes,
-            budget: context.memory_budget().bytes(),
-        })?;
     let output_nodes = workflow
         .outputs
         .iter()

@@ -401,7 +401,9 @@ pub enum WorkflowError {
     #[error("workflow execution cancelled")]
     Cancelled,
     /// Static output-lifetime planning exceeds the execution budget.
-    #[error("workflow needs an estimated {estimated} bytes but the context permits {budget}")]
+    #[error(
+        "workflow needs an estimated {estimated} bytes but the context permits {budget}; raise the memory budget: Python ExecutionContext(memory_budget=...), Rust ExecutionContext::builder().memory_budget(MemoryBudget::new(..)?), CLI --memory-budget, or env MOLFRAME_MEMORY_BUDGET"
+    )]
     MemoryRefused {
         /// Conservative workflow estimate.
         estimated: usize,
