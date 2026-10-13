@@ -1,5 +1,6 @@
-use super::{analyse_structure, analyse_trajectory};
+use super::analyse_trajectory;
 use crate::numeric::usize_to_f32;
+use crate::policy_execution::analyse_structure;
 use crate::policy_execution::{AnalysisDescriptor, FrameKernelResult, structure_kernel};
 use molframe_core::ExecutionContext;
 use molframe_core::contract::{

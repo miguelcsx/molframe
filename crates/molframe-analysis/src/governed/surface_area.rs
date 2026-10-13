@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 /// Every atom of the analysed system occludes and gets an area: crystallographic waters
 /// and heteroatoms included, which buries the protein atoms they touch. The result
 /// records how many of each were counted; the protein-only convention of DSSP and
-/// FreeSASA needs an input without them.
+/// `FreeSASA` needs an input without them.
 #[must_use]
 pub fn sasa_kernel(
     probe: f32,

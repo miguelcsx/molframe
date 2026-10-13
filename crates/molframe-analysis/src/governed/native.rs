@@ -125,13 +125,16 @@ fn explicit_map(
     Ok(map)
 }
 
+/// Target positions with the target atom matched to each reference atom.
+type Matched = (Vec<[f32; 3]>, Vec<Option<u32>>);
+
 fn matched(
     reference: &Structure,
     target: &Structure,
     source_atoms: &[usize],
     correspondence: &NativeCorrespondence,
     policy: &AnalysisPolicy,
-) -> Result<(Vec<[f32; 3]>, Vec<Option<u32>>), GovernedNativeError> {
+) -> Result<Matched, GovernedNativeError> {
     let model = target_model(policy)?;
     let positions = target
         .model_positions(ModelIndex::new(model))

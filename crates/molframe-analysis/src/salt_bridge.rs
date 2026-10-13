@@ -164,35 +164,7 @@ pub fn salt_bridges_with_options(
             .map(molframe_core::structure::ResidueRef::index)
     };
     let positions = structure.positions();
-    let mut anions = Vec::new();
-    let mut cations = Vec::new();
-    for atom in structure.data().atoms() {
-        match crate::chemistry::formal_charge(structure, atom.index().get()) {
-            Some(charge) if charge < 0 => anions.push(atom.index().get()),
-            Some(charge) if charge > 0 => cations.push(atom.index().get()),
-            _ => {}
-        }
-    }
-    for (atom, sign) in titratable_atoms(structure) {
-        match sign {
-            Sign::Anion => anions.push(atom),
-            Sign::Cation => cations.push(atom),
-        }
-    }
-    anions.sort_unstable();
-    anions.dedup();
-    cations.sort_unstable();
-    cations.dedup();
-    // An atom claimed by both sides has contradictory chemistry; neither side
-    // may use it.
-    let contested: Vec<u32> = anions
-        .iter()
-        .copied()
-        .filter(|atom| cations.binary_search(atom).is_ok())
-        .collect();
-    anions.retain(|atom| contested.binary_search(atom).is_err());
-    cations.retain(|atom| contested.binary_search(atom).is_err());
-
+    let (anions, cations) = charged_atoms(structure);
     let anion_set = AtomSelection::from_sorted(anions);
     let cation_set = AtomSelection::from_sorted(cations);
     // The reduction keeps only the bridges, so pairs are visited as they are
@@ -260,3 +232,35 @@ pub fn salt_bridges_with_options(
 #[cfg(test)]
 #[path = "salt_bridge_tests.rs"]
 mod tests;
+
+/// The sorted anionic and cationic atoms; an atom claimed by both sides has
+/// contradictory chemistry, so neither side keeps it.
+fn charged_atoms(structure: &Structure) -> (Vec<u32>, Vec<u32>) {
+    let mut anions = Vec::new();
+    let mut cations = Vec::new();
+    for atom in structure.data().atoms() {
+        match crate::chemistry::formal_charge(structure, atom.index().get()) {
+            Some(charge) if charge < 0 => anions.push(atom.index().get()),
+            Some(charge) if charge > 0 => cations.push(atom.index().get()),
+            _ => {}
+        }
+    }
+    for (atom, sign) in titratable_atoms(structure) {
+        match sign {
+            Sign::Anion => anions.push(atom),
+            Sign::Cation => cations.push(atom),
+        }
+    }
+    anions.sort_unstable();
+    anions.dedup();
+    cations.sort_unstable();
+    cations.dedup();
+    let contested: Vec<u32> = anions
+        .iter()
+        .copied()
+        .filter(|atom| cations.binary_search(atom).is_ok())
+        .collect();
+    anions.retain(|atom| contested.binary_search(atom).is_err());
+    cations.retain(|atom| contested.binary_search(atom).is_err());
+    (anions, cations)
+}

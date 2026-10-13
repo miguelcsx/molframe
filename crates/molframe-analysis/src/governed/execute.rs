@@ -6,14 +6,14 @@ use super::system::AnalysisSystem;
 use super::{FrameKernelResult, GovernedAnalysisError, StructureKernel};
 use molframe_core::contract::{
     Analysis, AnalysisPolicy, Assumption, AssumptionSource, ContentDigest, Coverage,
-    HydrogenPolicy, Impact, Indeterminacy, MissingPolicy, MissingPolicyError, ModelChoice, Outcome,
+    HydrogenPolicy, Impact, Indeterminacy, MissingPolicy, MissingPolicyError, Outcome,
     ParameterValue, PeriodicPolicy, PolicyField, Provenance, Quality, SourceRef, resolve_missing,
 };
 use molframe_core::index::ModelIndex;
 use molframe_core::structure::Structure;
 use molframe_core::{ExecutionContext, MemoryBudgetError};
 use molframe_geom::Rigid;
-use molframe_traj::{Frame, FrameAnalysis, Timestep, Trajectory, TrajectoryError, run_analysis};
+use molframe_traj::{FrameAnalysis, Timestep, Trajectory, TrajectoryError, run_analysis};
 
 /// The policy fields the executor itself applies to every kernel, before the kernel
 /// runs: which system, which model, which conformations, which hydrogens, and what
@@ -128,49 +128,13 @@ impl<'a, K: StructureKernel> GovernedStructureAnalysis<'a, K> {
             ));
         }
         let resolution = system.structure.resolve_altlocs(policy);
-        let (selected, selected_atoms, motions, input_quality, input_indeterminacy) =
-            match resolution.value() {
-                None => (
-                    template.clone(),
-                    Vec::new(),
-                    Vec::new(),
-                    Quality::Complete,
-                    resolution.indeterminacy().cloned(),
-                ),
-                Some(chosen) => {
-                    let chosen = match policy.hydrogens {
-                        HydrogenPolicy::Exclude => without_hydrogens(&system.structure, chosen),
-                        _ => chosen.clone(),
-                    };
-                    let kept: Vec<usize> = chosen.iter().map(|atom| atom as usize).collect();
-                    let selected_atoms: Vec<usize> = kept
-                        .iter()
-                        .map(|&atom| system.placements[atom].source)
-                        .collect();
-                    let motions: Vec<Option<Rigid>> = kept
-                        .iter()
-                        .map(|&atom| system.placements[atom].motion)
-                        .collect();
-                    let structure = if chosen.len() == u64::from(system.structure.atom_count()) {
-                        system.structure.clone()
-                    } else {
-                        system
-                            .structure
-                            .materialize(&chosen)
-                            .map_err(GovernedAnalysisError::InvalidStructure)?
-                    };
-                    let resolved = match resolution.quality() {
-                        Some(quality) => quality,
-                        None => Quality::Complete,
-                    };
-                    let quality = if resolution.coverage.ambiguous > 0 {
-                        resolved.worst(Quality::Ambiguous)
-                    } else {
-                        resolved
-                    };
-                    (structure, selected_atoms, motions, quality, None)
-                }
-            };
+        let Selection {
+            structure: selected,
+            atoms: selected_atoms,
+            motions,
+            quality: input_quality,
+            indeterminacy: input_indeterminacy,
+        } = select(template, policy, &system, &resolution)?;
         assumptions.extend(resolution.assumptions);
         if input_quality == Quality::Ambiguous {
             assumptions.push(super::altloc_note::ambiguity_assumption(
@@ -288,71 +252,13 @@ impl<K: StructureKernel> FrameAnalysis for GovernedStructureAnalysis<'_, K> {
 
 fn memory_limit(error: MemoryBudgetError, context: &ExecutionContext) -> TrajectoryError {
     let required = match error {
-        MemoryBudgetError::Zero => 1,
+        MemoryBudgetError::Zero | MemoryBudgetError::Unparsable => 1,
         MemoryBudgetError::Exhausted { requested, .. } => requested,
     };
     TrajectoryError::MemoryLimit {
         required,
         limit: context.memory_budget().bytes(),
     }
-}
-
-/// Runs one selected model through the same adapter used for trajectories.
-///
-/// # Errors
-///
-/// Returns typed setup, kernel, missing-data or execution errors. Policies that
-/// select all models must use [`analyse_trajectory`] so their output cardinality
-/// remains explicit.
-pub fn analyse_structure<K: StructureKernel>(
-    structure: &Structure,
-    policy: &AnalysisPolicy,
-    kernel: &K,
-    context: &ExecutionContext,
-) -> Result<Analysis<K::Output>, GovernedAnalysisError<K::Error>> {
-    let positions = match policy.model {
-        ModelChoice::First => structure.model_positions(ModelIndex::new(0)),
-        ModelChoice::Index(index) => structure.model_positions(ModelIndex::new(index)),
-        ModelChoice::All | ModelChoice::Ensemble => {
-            return Err(GovernedAnalysisError::MultipleModelsRequested);
-        }
-        _ => return Err(GovernedAnalysisError::UnsupportedPolicyValue("model")),
-    };
-    let Some(positions) = positions else {
-        return Err(TrajectoryError::AtomCountMismatch {
-            expected: structure.atom_count() as usize,
-            found: 0,
-        }
-        .into());
-    };
-    let trajectory = Trajectory::from_frames(vec![Frame {
-        positions: positions.to_vec(),
-    }])
-    .map_err(TrajectoryError::from)?;
-    let result = analyse_trajectory(structure, &trajectory, policy, kernel, context)?;
-    let origin = result.atom_origin().map(<[u32]>::to_vec);
-    let (outcome, quality, coverage, warnings, assumptions, provenance) = result.into_parts();
-    let outcome = match outcome {
-        Outcome::Determinate(mut values) => {
-            if values.len() != 1 {
-                return Err(GovernedAnalysisError::MissingFrameOutput);
-            }
-            Outcome::Determinate(values.remove(0))
-        }
-        Outcome::Indeterminate(reason) => Outcome::Indeterminate(reason),
-    };
-    let analysis = Analysis::from_parts(
-        outcome,
-        quality,
-        coverage,
-        warnings,
-        assumptions,
-        provenance,
-    );
-    Ok(match origin {
-        Some(origin) => analysis.with_atom_origin(origin),
-        None => analysis,
-    })
 }
 
 /// Runs a structure kernel over every trajectory frame with fixed block order.
@@ -507,3 +413,69 @@ fn add_coverage<E>(left: Coverage, right: Coverage) -> Result<Coverage, Governed
 #[cfg(test)]
 #[path = "execute_tests.rs"]
 mod tests;
+
+/// What altloc resolution kept of a system.
+struct Selection {
+    structure: Structure,
+    atoms: Vec<usize>,
+    motions: Vec<Option<Rigid>>,
+    quality: Quality,
+    indeterminacy: Option<Indeterminacy>,
+}
+
+/// Applies a resolved altloc choice and the hydrogen rule to the system.
+fn select<E>(
+    template: &Structure,
+    policy: &AnalysisPolicy,
+    system: &AnalysisSystem,
+    resolution: &Analysis<molframe_core::AtomSelection>,
+) -> Result<Selection, GovernedAnalysisError<E>> {
+    Ok(match resolution.value() {
+        None => Selection {
+            structure: template.clone(),
+            atoms: Vec::new(),
+            motions: Vec::new(),
+            quality: Quality::Complete,
+            indeterminacy: resolution.indeterminacy().cloned(),
+        },
+        Some(chosen) => {
+            let chosen = match policy.hydrogens {
+                HydrogenPolicy::Exclude => without_hydrogens(&system.structure, chosen),
+                _ => chosen.clone(),
+            };
+            let kept: Vec<usize> = chosen.iter().map(|atom| atom as usize).collect();
+            let atoms: Vec<usize> = kept
+                .iter()
+                .map(|&atom| system.placements[atom].source)
+                .collect();
+            let motions: Vec<Option<Rigid>> = kept
+                .iter()
+                .map(|&atom| system.placements[atom].motion)
+                .collect();
+            let structure = if chosen.len() == u64::from(system.structure.atom_count()) {
+                system.structure.clone()
+            } else {
+                system
+                    .structure
+                    .materialize(&chosen)
+                    .map_err(GovernedAnalysisError::InvalidStructure)?
+            };
+            let resolved = match resolution.quality() {
+                Some(quality) => quality,
+                None => Quality::Complete,
+            };
+            let quality = if resolution.coverage.ambiguous > 0 {
+                resolved.worst(Quality::Ambiguous)
+            } else {
+                resolved
+            };
+            Selection {
+                structure,
+                atoms,
+                motions,
+                quality,
+                indeterminacy: None,
+            }
+        }
+    })
+}

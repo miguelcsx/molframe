@@ -31,10 +31,10 @@ pub fn match_atoms_by_name(reference: &Structure, target: &Structure) -> Vec<Opt
         target_atoms.entry(key).or_insert(atom);
     }
 
-    let mut seen: HashMap<AtomKey<'_>, ()> = HashMap::new();
+    let mut seen: std::collections::HashSet<AtomKey<'_>> = std::collections::HashSet::new();
     let mut matches = vec![None; reference.atom_count() as usize];
     for (key, atom) in keyed_atoms(reference) {
-        if seen.insert(key, ()).is_some() {
+        if !seen.insert(key) {
             continue;
         }
         if let (Some(slot), Some(found)) = (matches.get_mut(atom as usize), target_atoms.get(&key))

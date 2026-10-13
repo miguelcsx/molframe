@@ -1,8 +1,8 @@
 use super::{ResidueSasaError, max_residue_area, residue_areas};
 use molframe_core::ExecutionContext;
-use std::fmt::Write;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
+use std::fmt::Write;
 
 const HEADER: &str = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\

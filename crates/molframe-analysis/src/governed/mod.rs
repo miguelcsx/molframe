@@ -10,6 +10,7 @@ mod execute;
 mod helical;
 mod interactions;
 mod kernel;
+mod models;
 mod native;
 mod physical;
 mod requirements;
@@ -23,7 +24,7 @@ pub use definition::{DefinitionError, SurfaceSampling, definition_contacts_kerne
 pub use descriptor::AnalysisDescriptor;
 pub use dynamics::{governed_dielectric_from_dipoles, governed_water_dynamics};
 pub use error::GovernedAnalysisError;
-pub use execute::{FrameRecord, GovernedStructureAnalysis, analyse_structure, analyse_trajectory};
+pub use execute::{FrameRecord, GovernedStructureAnalysis, analyse_trajectory};
 pub use helical::{governed_helical_parameters, governed_helical_steps};
 pub use interactions::{
     base_pairs_kernel, cation_pi_kernel, contact_map_kernel, contacts_kernel,
@@ -34,6 +35,7 @@ pub use kernel::{
     FrameKernelResult, MappedClosureStructureKernel, StructureKernel, mapped_structure_kernel,
     structure_kernel,
 };
+pub use models::{analyse_models, analyse_structure};
 pub use native::{
     GovernedNativeError, NativeCorrespondence, native_contact_fraction_kernel,
     native_contact_fraction_kernel_with,

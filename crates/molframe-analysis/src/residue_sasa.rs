@@ -114,20 +114,23 @@ pub fn residue_areas(
     let mut spans: Vec<(String, i32, String, usize, usize)> = Vec::new();
     let (mut excluded, mut skipped) = (0, 0);
     for chain in structure.data().chains() {
-        let label = chain
-            .auth_label()
-            .or_else(|| chain.label())
-            .unwrap_or_default();
+        let label = match chain.auth_label().or_else(|| chain.label()) {
+            Some(label) => label,
+            None => Default::default(),
+        };
         for residue in chain.residues() {
             if residue.is_het() {
                 excluded += 1;
                 continue;
             }
-            let number = residue
-                .auth_seq_id()
-                .or_else(|| residue.label_seq_id())
-                .unwrap_or_default();
-            let name = residue.name().unwrap_or("?");
+            let number = match residue.auth_seq_id().or_else(|| residue.label_seq_id()) {
+                Some(number) => number,
+                None => Default::default(),
+            };
+            let name = match residue.name() {
+                Some(name) => name,
+                None => "?",
+            };
             let start = coords.len();
             let mut conformer: Option<&str> = None;
             for atom in residue.atoms() {

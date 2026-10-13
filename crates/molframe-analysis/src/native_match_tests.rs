@@ -1,14 +1,28 @@
 use super::match_atoms_by_name;
-use molframe_core::io::{InputBuffer, ReadOptions};
+use molframe_core::io::{AmbiguousResidueBoundaryPolicy, InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 
 fn structure(rows: &str) -> Structure {
     let header = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.auth_asym_id\n\
-_atom_site.auth_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
+_atom_site.auth_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+_atom_site.label_asym_id\n";
+    // Chains are delimited by `label_asym_id`; repeat each row's chain there.
+    let mut doubled = String::new();
+    for row in rows.lines() {
+        let chain = row.split_whitespace().nth(5).unwrap_or(".");
+        doubled.push_str(row);
+        doubled.push(' ');
+        doubled.push_str(chain);
+        doubled.push('\n');
+    }
+    let rows = doubled;
     let input = InputBuffer::from_bytes(format!("{header}{rows}").into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
+    // A repeated atom name inside one residue is a deliberate fixture, not an error.
+    let options = ReadOptions::new()
+        .ambiguous_residue_boundary_policy(AmbiguousResidueBoundaryPolicy::InferFromFileOrder);
+    match molframe_cif::read(&input, &options) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("fixture failed: {findings:?}"),
     }
