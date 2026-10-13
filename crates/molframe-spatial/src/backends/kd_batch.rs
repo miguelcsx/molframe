@@ -34,7 +34,33 @@ pub struct KnnResult {
     pub distances_squared: Vec<f32>,
 }
 
+impl KnnOptions {
+    /// Options for a table query: `exclude_self` defaults to true when the
+    /// points query themselves and to false when separate queries are given.
+    #[must_use]
+    pub fn for_queries(
+        max_distance: Option<f32>,
+        exclude_self: Option<bool>,
+        separate_queries: bool,
+    ) -> Self {
+        Self {
+            max_distance,
+            exclude_self: exclude_self.unwrap_or(!separate_queries),
+        }
+    }
+}
+
 impl KnnResult {
+    /// Consumes the table into its indices and Euclidean distances.
+    #[must_use]
+    pub fn into_columns(self) -> (Vec<u32>, Vec<f32>) {
+        let mut distances = self.distances_squared;
+        for value in &mut distances {
+            *value = value.sqrt();
+        }
+        (self.indices, distances)
+    }
+
     /// Number of query rows.
     #[must_use]
     pub fn rows(&self) -> usize {

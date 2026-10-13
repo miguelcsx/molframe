@@ -1,7 +1,7 @@
 //! Mechanical adapters for fixed-radius neighbour search over coordinates.
 
 use crate::crystal::PyUnitCell;
-use molframe::spatial::{KnnOptions, NeighborPair};
+use molframe::spatial::{KnnOptions, NeighborPair, PairColumns};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
 
@@ -19,19 +19,11 @@ fn periodic_box(cell: Option<&PyUnitCell>) -> PyResult<Option<molframe::spatial:
 }
 
 /// Struct-of-arrays columns handed to `NumPy` without a further copy.
-fn columns(py: Python<'_>, pairs: impl ExactSizeIterator<Item = (u32, u32, f32)>) -> Pairs<'_> {
-    let mut first = Vec::with_capacity(pairs.len());
-    let mut second = Vec::with_capacity(pairs.len());
-    let mut distance = Vec::with_capacity(pairs.len());
-    for (a, b, squared) in pairs {
-        first.push(a);
-        second.push(b);
-        distance.push(squared.sqrt());
-    }
+fn columns(py: Python<'_>, columns: PairColumns) -> Pairs<'_> {
     (
-        first.into_pyarray(py),
-        second.into_pyarray(py),
-        distance.into_pyarray(py),
+        columns.first.into_pyarray(py),
+        columns.second.into_pyarray(py),
+        columns.distance.into_pyarray(py),
     )
 }
 
@@ -69,12 +61,7 @@ fn neighbor_pairs<'py>(
         )
     })?
     .map_err(crate::error::kernel)?;
-    Ok(columns(
-        py,
-        pairs
-            .iter()
-            .map(|pair| (pair.first, pair.second, pair.distance_squared)),
-    ))
+    Ok(columns(py, PairColumns::from_pairs(&pairs)))
 }
 
 /// Cross-set pairs only, avoiding the quadratic within-set output of dense clouds.
@@ -107,12 +94,7 @@ fn cross_pairs<'py>(
         )
     })?
     .map_err(crate::error::kernel)?;
-    Ok(columns(
-        py,
-        pairs
-            .iter()
-            .map(|pair| (pair.first, pair.second, pair.distance_squared)),
-    ))
+    Ok(columns(py, PairColumns::from_cross(&pairs)))
 }
 
 /// Iterator over `(first, second, distance)` chunks of a pair list.
@@ -136,12 +118,7 @@ impl PairChunks {
         }
         let end = self.pairs.len().min(self.cursor + self.size);
         let chunk = self.pairs.get(self.cursor..end)?;
-        let out = columns(
-            py,
-            chunk
-                .iter()
-                .map(|pair| (pair.first, pair.second, pair.distance_squared)),
-        );
+        let out = columns(py, PairColumns::from_pairs(chunk));
         self.cursor = end;
         Some(out)
     }
@@ -220,29 +197,14 @@ fn knn<'py>(
     let periodic = periodic_box(cell)?;
     let array = points.readonly();
     let targets = crate::bindings::coordinates(&array)?;
-    let too_many = || crate::error::value("too many atoms for a 32-bit index");
-    let count = u32::try_from(targets.len()).map_err(|_| too_many())?;
-    let options = KnnOptions {
-        max_distance,
-        exclude_self: match exclude_self {
-            Some(exclude) => exclude,
-            None => query.is_none(),
-        },
-    };
+    let options = KnnOptions::for_queries(max_distance, exclude_self, query.is_some());
     let result = if let Some(query) = query {
         let query = query.readonly();
         let query = crate::bindings::coordinates(&query)?;
-        let total = u32::try_from(targets.len() + query.len()).map_err(|_| too_many())?;
-        let mut joined = Vec::with_capacity(targets.len() + query.len());
-        joined.extend_from_slice(targets);
-        joined.extend_from_slice(query);
-        let rows = molframe::engine::core::AtomSelection::range(count..total);
-        let columns = molframe::engine::core::AtomSelection::range(0..count);
         crate::execution::run(py, context, |context| {
-            molframe::spatial::knn_within(
-                &joined,
-                &rows,
-                &columns,
+            molframe::spatial::knn_between(
+                targets,
+                query,
                 k,
                 options,
                 backend,
@@ -251,6 +213,8 @@ fn knn<'py>(
             )
         })?
     } else {
+        let count = u32::try_from(targets.len())
+            .map_err(|_| crate::error::value("too many atoms for a 32-bit index"))?;
         let all = molframe::engine::core::AtomSelection::All(count);
         crate::execution::run(py, context, |context| {
             molframe::spatial::knn_within(
@@ -267,13 +231,10 @@ fn knn<'py>(
     }
     .map_err(crate::error::kernel)?;
     let rows = result.rows();
-    let mut distances = result.distances_squared;
-    for value in &mut distances {
-        *value = value.sqrt();
-    }
+    let (indices, distances) = result.into_columns();
     let shape = [rows, k];
     Ok((
-        result.indices.into_pyarray(py).reshape(shape)?,
+        indices.into_pyarray(py).reshape(shape)?,
         distances.into_pyarray(py).reshape(shape)?,
     ))
 }
