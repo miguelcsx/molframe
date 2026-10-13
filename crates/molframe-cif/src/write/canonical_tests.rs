@@ -164,3 +164,41 @@ fn read(source: &str) -> molframe_core::Structure {
         Err(findings) => panic!("fixture failed: {findings:?}"),
     }
 }
+
+const PRECISE: &str = "data_source\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+_atom_site.occupancy\n_atom_site.B_iso_or_equiv\n_atom_site.pdbx_formal_charge\n\
+_atom_site.pdbx_PDB_model_num\n\
+ATOM 1 N N GLY A 1 1.12345 2.5 3 0.333 12.345 1 1\n\
+ATOM 2 O OXT GLY A 1 4 5 6 1 20 -1 1\n";
+
+#[test]
+fn charge_and_digits_beyond_canonical_text_precision_survive_a_rewrite() {
+    let first = read(PRECISE);
+    let options = CifWriteOptions::new();
+    let Ok(output) = write_canonical_with_options(&first, &options) else {
+        panic!("complete structure should write");
+    };
+    assert!(
+        output.contains("_atom_site.pdbx_formal_charge\n"),
+        "{output}"
+    );
+    assert!(output.contains(" 1.12345 2.500 3.000 0.333 12.345 "));
+    let second = read(&output);
+    for (index, expected) in [(0_u32, 1_i8), (1, -1)] {
+        let atom = second.atom(molframe_core::AtomIndex::new(index));
+        assert_eq!(
+            atom.and_then(molframe_core::structure::AtomRef::formal_charge),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn charge_column_is_omitted_when_no_atom_states_a_charge() {
+    let output =
+        write_canonical_with_options(&read(SOURCE), &CifWriteOptions::new().with_block_id("b"));
+    assert!(matches!(&output, Ok(text) if !text.contains("pdbx_formal_charge")));
+}

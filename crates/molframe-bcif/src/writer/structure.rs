@@ -220,7 +220,8 @@ impl Serialize for AtomColumns<'_> {
     where
         S: Serializer,
     {
-        let mut sequence = serializer.serialize_seq(Some(super::atoms::COLUMN_COUNT))?;
+        let mut sequence =
+            serializer.serialize_seq(Some(super::atoms::column_count(self.projection)))?;
         super::atoms::visit_columns(self.projection, self.rows, |column| {
             sequence
                 .serialize_element(&Consuming::new(column))

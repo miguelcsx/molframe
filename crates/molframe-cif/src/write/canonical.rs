@@ -173,29 +173,39 @@ _atom_site.label_asym_id\n_atom_site.label_entity_id\n_atom_site.label_seq_id\n\
 _atom_site.pdbx_PDB_ins_code\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n\
 _atom_site.Cartn_z\n_atom_site.occupancy\n_atom_site.B_iso_or_equiv\n\
 _atom_site.auth_seq_id\n_atom_site.auth_comp_id\n_atom_site.auth_asym_id\n\
-_atom_site.auth_atom_id\n_atom_site.pdbx_PDB_model_num\n";
+_atom_site.auth_atom_id\n";
+
+const MODEL_NUMBER_HEADER: &str = "_atom_site.pdbx_PDB_model_num\n";
+
+const FORMAL_CHARGE_HEADER: &str = "_atom_site.pdbx_formal_charge\n";
 
 fn write_atoms(
     out: &mut impl fmt::Write,
     projection: CanonicalProjection<'_>,
 ) -> Result<(), CifWriteError> {
+    let charged = projection.carries_formal_charge();
     let _ = out.write_str(ATOM_SITE_HEADER);
+    if charged {
+        let _ = out.write_str(FORMAL_CHARGE_HEADER);
+    }
+    let _ = out.write_str(MODEL_NUMBER_HEADER);
     projection.visit_atom_rows(|row| {
-        let _ = write_atom(out, row);
+        let _ = write_atom(out, row, charged);
     })?;
     let _ = out.write_str("#\n");
     Ok(())
 }
 
-fn write_atom(out: &mut impl fmt::Write, row: CanonicalAtomRow<'_>) -> fmt::Result {
+fn write_atom(out: &mut impl fmt::Write, row: CanonicalAtomRow<'_>, charged: bool) -> fmt::Result {
     let element = match row.element() {
         CanonicalValue::Present(item) => ElementValue::Present(item.symbol()),
         CanonicalValue::Inapplicable => ElementValue::Inapplicable,
         CanonicalValue::Unknown => ElementValue::Unknown,
     };
+    let charge = ChargeCell { row, charged };
     writeln!(
         out,
-        "{} {} {element} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
+        "{} {} {element} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {}{charge} {}",
         row.group(),
         row.atom_site_id(),
         quoted(row.label_atom_id()),
@@ -326,16 +336,73 @@ struct FloatValue {
 impl Display for FloatValue {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self.value {
-            CanonicalValue::Present(number) => {
-                write!(
-                    formatter,
-                    "{number:.precision$}",
-                    precision = self.precision
-                )
-            }
+            CanonicalValue::Present(number) => write_shortest(formatter, number, self.precision),
             CanonicalValue::Inapplicable => formatter.write_str("."),
             CanonicalValue::Unknown => formatter.write_str("?"),
         }
+    }
+}
+
+struct ChargeCell<'a> {
+    row: CanonicalAtomRow<'a>,
+    charged: bool,
+}
+
+impl Display for ChargeCell<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        if !self.charged {
+            return Ok(());
+        }
+        write!(formatter, " {}", integer_value(self.row.formal_charge()))
+    }
+}
+
+/// Writes the stored single-precision value with the fewest decimals that
+/// read back to the same value, never fewer than `minimum`.
+fn write_shortest(formatter: &mut Formatter<'_>, number: f64, minimum: usize) -> fmt::Result {
+    // The value was widened from single precision, so narrowing is exact.
+    #[allow(clippy::cast_possible_truncation)]
+    let stored = number as f32;
+    if !stored.is_finite() {
+        return write!(formatter, "{number:.minimum$}");
+    }
+    let mut decimals = minimum;
+    while decimals < 9 {
+        let mut probe = Probe {
+            bytes: [0; 48],
+            length: 0,
+        };
+        let _ = write!(probe, "{stored:.decimals$}");
+        if probe
+            .text()
+            .parse::<f32>()
+            .is_ok_and(|back| back.to_bits() == stored.to_bits())
+        {
+            break;
+        }
+        decimals += 1;
+    }
+    write!(formatter, "{stored:.decimals$}")
+}
+
+struct Probe {
+    bytes: [u8; 48],
+    length: usize,
+}
+
+impl Probe {
+    fn text(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..self.length]).unwrap_or("")
+    }
+}
+
+impl fmt::Write for Probe {
+    fn write_str(&mut self, text: &str) -> fmt::Result {
+        let end = self.length + text.len();
+        let slot = self.bytes.get_mut(self.length..end).ok_or(fmt::Error)?;
+        slot.copy_from_slice(text.as_bytes());
+        self.length = end;
+        Ok(())
     }
 }
 

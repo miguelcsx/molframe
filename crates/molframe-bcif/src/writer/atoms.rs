@@ -6,7 +6,13 @@ use crate::container::EncodedColumn;
 use molframe_cif::{CanonicalAtomRow, CanonicalProjection, CanonicalValue};
 use molframe_core::diagnostic::Diagnostic;
 
-pub(super) const COLUMN_COUNT: usize = 20;
+const BASE_COLUMN_COUNT: usize = 20;
+
+/// Columns written for a projection; the charge column appears only when some
+/// atom states a charge.
+pub(super) fn column_count(projection: CanonicalProjection<'_>) -> usize {
+    BASE_COLUMN_COUNT + usize::from(projection.carries_formal_charge())
+}
 
 pub(super) fn visit_columns(
     projection: CanonicalProjection<'_>,
@@ -63,6 +69,14 @@ pub(super) fn visit_columns(
     visit(text_column(projection, rows, "auth_comp_id", auth_comp_id)?)?;
     visit(text_column(projection, rows, "auth_asym_id", auth_asym_id)?)?;
     visit(text_column(projection, rows, "auth_atom_id", auth_atom_id)?)?;
+    if projection.carries_formal_charge() {
+        visit(integer_column(
+            projection,
+            rows,
+            "pdbx_formal_charge",
+            formal_charge,
+        )?)?;
+    }
     visit(integer_column(
         projection,
         rows,
@@ -105,6 +119,10 @@ fn label_seq_id(row: CanonicalAtomRow<'_>) -> CanonicalValue<i64> {
 
 fn auth_seq_id(row: CanonicalAtomRow<'_>) -> CanonicalValue<i64> {
     row.auth_seq_id()
+}
+
+fn formal_charge(row: CanonicalAtomRow<'_>) -> CanonicalValue<i64> {
+    row.formal_charge()
 }
 
 fn occupancy(row: CanonicalAtomRow<'_>) -> CanonicalValue<f64> {

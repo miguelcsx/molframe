@@ -108,6 +108,18 @@ impl<'a> CanonicalProjection<'a> {
             .ok_or(CifWriteError::AtomRowCountOverflow)
     }
 
+    /// Whether any atom carries a stated formal charge.
+    #[must_use]
+    pub fn carries_formal_charge(self) -> bool {
+        let mut found = false;
+        // A refusal here is reported again, with its cause, by the row pass
+        // that follows; absence of a charge is the safe answer meanwhile.
+        let _ = self.visit_atom_rows(|row| {
+            found |= matches!(row.formal_charge(), CanonicalValue::Present(_));
+        });
+        found
+    }
+
     /// Visits canonical atom-site rows in deposition and model order.
     ///
     /// The row borrows a model snapshot and is valid only for the synchronous
@@ -319,16 +331,25 @@ impl<'a> CanonicalAtomRow<'a> {
         }
     }
 
-    /// Occupancy rounded to canonical text precision.
+    /// Occupancy at stored precision.
     #[must_use]
     pub fn occupancy(self) -> CanonicalValue<f64> {
         optional_measurement(self.atom.occupancy())
     }
 
-    /// Isotropic temperature factor rounded to canonical text precision.
+    /// Isotropic temperature factor at stored precision.
     #[must_use]
     pub fn b_factor(self) -> CanonicalValue<f64> {
         optional_measurement(self.atom.b_factor())
+    }
+
+    /// Formal charge, unknown when the atom carries none.
+    #[must_use]
+    pub fn formal_charge(self) -> CanonicalValue<i64> {
+        match self.atom.formal_charge() {
+            Some(charge) => CanonicalValue::Present(i64::from(charge)),
+            None => CanonicalValue::Unknown,
+        }
     }
 
     /// Depositor sequence position.
@@ -388,11 +409,7 @@ fn inapplicable_integer(value: Option<i32>) -> CanonicalValue<i64> {
 
 fn optional_measurement(value: Option<f32>) -> CanonicalValue<f64> {
     match value {
-        Some(number) => CanonicalValue::Present(round_decimal(f64::from(number), 100.0)),
+        Some(number) => CanonicalValue::Present(f64::from(number)),
         None => CanonicalValue::Unknown,
     }
-}
-
-pub(crate) fn round_decimal(value: f64, factor: f64) -> f64 {
-    (value * factor).round() / factor
 }

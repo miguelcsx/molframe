@@ -74,6 +74,40 @@ fn numeric_and_text_identifiers_share_a_string_column_and_round_trip() {
     assert!(difference.is_empty(), "difference: {difference:?}");
 }
 
+#[test]
+fn charge_and_sub_canonical_digits_round_trip_bit_exactly() {
+    let source = SIMPLE
+        .replace(
+            "_atom_site.pdbx_PDB_model_num",
+            "_atom_site.pdbx_formal_charge\n_atom_site.pdbx_PDB_model_num",
+        )
+        .replace(
+            "1.125 2.25 3.5 1.0 12.5 7 GLY A N 1",
+            "1.12345 2.25 3.5 0.333 12.345 7 GLY A N 1 1",
+        )
+        .replace(
+            "2.125 3.25 4.5 1.0 13.5 7 GLY A CA 1",
+            "2.125 3.25 4.5 1.0 13.5 7 GLY A CA -1 1",
+        );
+    let structure = read_structure(&source);
+    let bytes = write_structure(&structure).expect("structure writes");
+    let input = InputBuffer::from_bytes(bytes);
+    let (decoded, _) = crate::read(&input, &ReadOptions::new()).expect("BCIF reads");
+    let difference = structure_difference(
+        &structure,
+        &decoded,
+        StructureDifferenceOptions {
+            coordinate_tolerance: 0.0,
+        },
+    )
+    .expect("tolerance is valid");
+    assert!(difference.is_empty(), "difference: {difference:?}");
+    let charge = decoded
+        .atom(molframe_core::AtomIndex::new(1))
+        .and_then(molframe_core::structure::AtomRef::formal_charge);
+    assert_eq!(charge, Some(-1));
+}
+
 #[derive(Default)]
 struct CountingWriter {
     bytes: usize,
