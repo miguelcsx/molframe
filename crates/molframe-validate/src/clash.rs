@@ -242,10 +242,11 @@ pub fn clashes_with(
     } else {
         None
     };
-    let bonds = topology
-        .as_ref()
-        .unwrap_or(&structure.data().bonds)
-        .adjacency(structure.atom_count());
+    let bonds = match topology.as_ref() {
+        Some(topology) => topology,
+        None => &structure.data().bonds,
+    }
+    .adjacency(structure.atom_count());
 
     // Clashes are rare relative to candidate pairs, so pairs are reduced as they
     // are produced rather than collected: retained bytes track the clash count,
@@ -367,7 +368,9 @@ fn add_stretched_residue_bonds(structure: &Structure, builder: &mut BondTableBui
     };
     let mut current = None;
     for atom in structure.data().atoms() {
-        let residue = atom.residue().map(|residue| residue.index());
+        let residue = atom
+            .residue()
+            .map(molframe_core::structure::ResidueRef::index);
         if residue != current || residue.is_none() {
             flush(&mut run);
             current = residue;
