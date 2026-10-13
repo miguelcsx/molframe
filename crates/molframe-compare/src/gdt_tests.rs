@@ -37,6 +37,7 @@ fn move_domain(points: &mut [[f32; 3]], degrees: f32, shift: [f32; 3]) {
     }
 }
 
+#[allow(clippy::cast_precision_loss)] // test-sized lengths
 fn plain_fit_gdt(model: &[[f32; 3]], reference: &[[f32; 3]], cutoffs: &[f64]) -> f64 {
     let fit = molframe_geom::superpose(model, reference).expect("valid fit");
     let mut total = 0.0;
@@ -111,4 +112,91 @@ fn a_rigid_motion_of_the_whole_model_scores_one() {
     move_domain(&mut model, 120.0, [5.0, -9.0, 14.0]);
     let ts = gdt_ts(&model, &reference).expect("valid");
     assert!((ts - 1.0).abs() < 1e-9, "{ts}");
+}
+
+/// Runs `work` on a rayon pool with exactly `workers` threads.
+fn with_workers<T: Send>(workers: usize, work: impl FnOnce() -> T + Send) -> T {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(workers)
+        .build()
+        .expect("pool")
+        .install(work)
+}
+
+#[test]
+fn the_score_does_not_depend_on_the_worker_count() {
+    // Past the sample cap so both the sampled search and the full-length polish
+    // run; every worker count must give the same bits.
+    let reference = trace(3_000);
+    let mut model = reference.clone();
+    move_domain(&mut model[1_400..], 25.0, [14.0, -9.0, 11.0]);
+    for (index, point) in model.iter_mut().enumerate() {
+        point[0] += 0.8 * (f32::from(u16::try_from(index).expect("small")) * 0.37).sin();
+    }
+    let baseline = with_workers(1, || gdt_ts(&model, &reference).expect("valid"));
+    for workers in [2, 3, 7] {
+        let other = with_workers(workers, || gdt_ts(&model, &reference).expect("valid"));
+        assert_eq!(baseline.to_bits(), other.to_bits(), "{workers} workers");
+    }
+}
+
+#[test]
+fn a_hinged_pair_keeps_its_larger_rigid_domain() {
+    // 55/45 split with the second part rotated and shifted well past 8 A: the
+    // best superposition holds the first 55 % within every cutoff.
+    let reference = trace(214);
+    let mut model = reference.clone();
+    move_domain(&mut model[118..], 40.0, [12.0, 12.0, 12.0]);
+    let ts = gdt_ts(&model, &reference).expect("valid");
+    assert!(ts >= 118.0 / 214.0 - 1e-9, "{ts}");
+    assert!(ts < 0.6, "no superposition can hold both parts: {ts}");
+}
+
+#[test]
+fn twenty_thousand_atoms_score_in_bounded_time() {
+    let reference = trace(20_000);
+    let mut model = reference.clone();
+    move_domain(&mut model[11_000..], 40.0, [30.0, 20.0, 25.0]);
+    let started = std::time::Instant::now();
+    let ts = gdt_ts(&model, &reference).expect("valid");
+    let elapsed = started.elapsed();
+    // The first 11 000 atoms are untouched, and no superposition holds both
+    // parts, so the maximum is 0.55 at every cutoff.
+    assert!((ts - 0.55).abs() < 1e-3, "{ts}");
+    // The serial search took tens of seconds here; this bound is deliberately
+    // loose enough for an unoptimised, loaded machine.
+    assert!(elapsed.as_secs() < 60, "took {elapsed:?}");
+}
+
+#[test]
+fn the_search_is_at_least_every_fixed_fragment_fit() {
+    // GDT is a maximum over superpositions, so it is never below the count of
+    // any particular fitted superposition: here the fit to each half and the
+    // fit to the whole.
+    let reference = trace(150);
+    let mut model = reference.clone();
+    move_domain(&mut model[90..], 30.0, [20.0, 5.0, -15.0]);
+    for (index, point) in model.iter_mut().enumerate() {
+        point[1] += 0.5 * (f32::from(u16::try_from(index).expect("small")) * 0.9).cos();
+    }
+    let cutoffs = [1.0, 2.0, 4.0, 8.0];
+    let searched = gdt_with_cutoffs(&model, &reference, &cutoffs).expect("valid");
+    for range in [0..75, 75..150, 0..90, 90..150, 0..150] {
+        let fit =
+            molframe_geom::superpose(&model[range.clone()], &reference[range]).expect("valid fit");
+        let mut total = 0.0;
+        for cutoff in cutoffs {
+            let inside = model
+                .iter()
+                .zip(&reference)
+                .filter(|&(&p, &q)| molframe_geom::distance(fit.transform.apply(p), q) <= cutoff)
+                .count();
+            total += f64::from(u32::try_from(inside).expect("small")) / 150.0;
+        }
+        assert!(
+            searched + 1e-12 >= total / 4.0,
+            "{searched} < {}",
+            total / 4.0
+        );
+    }
 }

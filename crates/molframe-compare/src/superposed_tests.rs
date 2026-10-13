@@ -167,3 +167,92 @@ fn weighted_rmsd_reports_unequal_coordinates_as_a_point_problem() {
         })
     ));
 }
+
+/// A deterministic extended C-alpha-like trace with 3.8 A steps.
+fn trace(length: usize) -> Vec<[f32; 3]> {
+    let mut state = 0x9e37_79b9_u32;
+    let mut next = move || {
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        f32::from(u16::try_from(state >> 16).expect("sixteen bits fit")) / 65_535.0 - 0.5
+    };
+    let mut points = Vec::with_capacity(length);
+    let mut at = [0.0f32; 3];
+    for _ in 0..length {
+        points.push(at);
+        let mut step = [next(), next(), next()];
+        let norm = (step[0] * step[0] + step[1] * step[1] + step[2] * step[2]).sqrt();
+        for axis in &mut step {
+            *axis *= 3.8 / norm;
+        }
+        at = [at[0] + step[0] + 1.5, at[1] + step[1], at[2] + step[2]];
+    }
+    points
+}
+
+/// Rotates the tail about z through the origin and shifts it.
+fn hinge(points: &mut [[f32; 3]], degrees: f32, shift: [f32; 3]) {
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    for point in points {
+        let [x, y, z] = *point;
+        *point = [
+            cos * x - sin * y + shift[0],
+            sin * x + cos * y + shift[1],
+            z + shift[2],
+        ];
+    }
+}
+
+#[test]
+fn a_hinged_pair_scores_its_best_domain_not_the_global_compromise() {
+    // 214 atoms split 55/45, the tail rotated and shifted about 12 A. One domain
+    // fits exactly, so the score is at least that domain's share; a single
+    // least-squares fit lands far below it.
+    let reference = trace(214);
+    let mut model = reference.clone();
+    hinge(&mut model[118..], 40.0, [12.0, 12.0, 12.0]);
+    let score = tm_score(&model, &reference).expect("valid");
+    let plain = plain_fit_tm(&model, &reference);
+    assert!(score >= 118.0 / 214.0 - 1e-9, "{score}");
+    assert!(score > plain + 0.05, "{score} vs plain {plain}");
+    assert!(score <= 1.0);
+}
+
+#[test]
+fn outliers_do_not_hide_a_perfect_core() {
+    let reference = trace(200);
+    let mut model = reference.clone();
+    for point in &mut model[..30] {
+        point[2] += 25.0;
+    }
+    let score = tm_score(&model, &reference).expect("valid");
+    assert!(score >= 170.0 / 200.0 - 1e-9, "{score}");
+}
+
+#[test]
+fn the_tm_score_does_not_depend_on_the_worker_count() {
+    let reference = trace(2_500);
+    let mut model = reference.clone();
+    hinge(&mut model[1_300..], 35.0, [10.0, -8.0, 9.0]);
+    let run = |workers: usize| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(workers)
+            .build()
+            .expect("pool")
+            .install(|| tm_score(&model, &reference).expect("valid"))
+    };
+    let baseline = run(1);
+    for workers in [2, 5] {
+        assert_eq!(baseline.to_bits(), run(workers).to_bits(), "{workers}");
+    }
+}
+
+#[test]
+fn twenty_thousand_atoms_score_in_bounded_time() {
+    let reference = trace(20_000);
+    let mut model = reference.clone();
+    hinge(&mut model[11_000..], 40.0, [30.0, 20.0, 25.0]);
+    let started = std::time::Instant::now();
+    let score = tm_score(&model, &reference).expect("valid");
+    assert!(started.elapsed().as_secs() < 60, "{:?}", started.elapsed());
+    assert!((0.55..=1.0).contains(&score), "{score}");
+}

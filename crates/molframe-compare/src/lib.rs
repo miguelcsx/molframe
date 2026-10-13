@@ -39,6 +39,8 @@ mod policy_execution;
 #[path = "qs.rs"]
 mod quaternary;
 pub mod region;
+mod seed_objective;
+mod seed_search;
 pub mod superposed;
 pub mod workflow;
 

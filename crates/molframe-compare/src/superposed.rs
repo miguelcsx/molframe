@@ -10,13 +10,17 @@
 //! disordered tails cannot drag a good core score down.
 //!
 //! Both use the shared quaternion superposition, which fits without ever
-//! producing a reflection. Cost is one superposition plus one pass over the
-//! atoms.
+//! producing a reflection, and both maximise over superpositions with the
+//! fragment-seeded search in `seed_search`. Its cost is bounded (seeds refine on
+//! at most 1024 atoms) plus a few `O(n)` passes, and it runs in parallel
+//! deterministically.
 
 use molframe_geom::{Superposition, superpose};
+use rayon::prelude::*;
 
 use crate::failure::CompareError;
 use crate::numeric::usize_to_f64;
+use crate::seed_search::{Objective, maximise};
 
 pub use crate::gdt::{gdt_ha, gdt_ts, gdt_with_cutoffs};
 
@@ -25,6 +29,17 @@ pub use crate::gdt::{gdt_ha, gdt_ts, gdt_with_cutoffs};
 /// The score runs from just above zero for unrelated structures to `1.0` for
 /// identical ones, normalised by the reference length so it does not depend on
 /// how long the structures are. The model is fitted onto the reference first.
+///
+/// The score is the maximum over rigid superpositions, searched from several
+/// fragment-seeded starting fits (see the module documentation), so a
+/// multi-domain or hinged pair is scored by its best-fitting domain arrangement
+/// rather than by one global least-squares compromise. The correspondence is
+/// the given one: residue `i` of the model answers to residue `i` of the
+/// reference and is never re-paired. TM-align additionally re-pairs residues by
+/// dynamic programming, so on pairs where that matters it can report more; this
+/// function, given the same correspondence, approaches the TM-score program's
+/// optimum. The value is always the score of an actual superposition, so it
+/// never exceeds the true maximum for the correspondence.
 ///
 /// # Errors
 ///
@@ -40,25 +55,44 @@ pub fn tm_score(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Compa
     }
     let length = reference.len();
     let scale = tm_scale(length);
-    let mut best_score = tm_sum(fit(model, reference)?.transform, model, reference, scale);
+    let whole = fit(model, reference)?.transform;
+    let mut best_score = tm_sum(whole, model, reference, scale);
 
-    // Reweighted fits. The gradient of `sum 1/(1 + (d/d0)^2)` with respect to a
-    // point's displacement points along `-d` with magnitude `1/(1+(d/d0)^2)^2`,
-    // so a weighted least-squares fit with those weights moves the fit toward
-    // the TM optimum. Reweighting changes the objective, so the loop keeps the
-    // best score rather than trusting the last fit, and stops as soon as a step
-    // fails to improve it.
-    //
-    // This is a local search, while the published score is a maximum over
-    // superpositions. TM-align reaches that maximum with a residue-level dynamic
-    // program that can re-pair residues as well as move them, which a
-    // correspondence-preserving kernel cannot do, so on a structure whose parts
-    // have swung past each other it reports a little more than this does — about
-    // 0.04 for a 1UBQ half-and-half hinge, and about 0.015 for a displaced tail.
-    // The value here is the best of the superpositions this kernel can reach, it
-    // is never below the plain least-squares fit, and it is exact for a rigid
-    // displacement.
-    let mut candidate = fit(model, reference)?.transform;
+    // Multi-seed search, as in TM-score and TM-align: superpositions seeded from
+    // fragments of several lengths, each refined by repeatedly keeping the atoms
+    // near their targets and refitting, scored by the TM sum. See
+    // `crate::seed_search` for the seed schedule, the bound on its cost and why
+    // the result does not depend on the number of workers.
+    let outcome = maximise(model, reference, &Objective::tm(scale), whole);
+    best_score = best_score.max(outcome.scores[0]);
+
+    // Reweighted polish of the leading transforms. The gradient of
+    // `sum 1/(1 + (d/d0)^2)` with respect to a point's displacement points along
+    // `-d` with magnitude `1/(1+(d/d0)^2)^2`, so a weighted least-squares fit
+    // with those weights moves a fit toward a local TM optimum. Each step is kept
+    // only if it improves the score, so this never lowers the result.
+    let starts: Vec<molframe_geom::Rigid> = std::iter::once(whole)
+        .chain(outcome.leaders.iter().copied())
+        .collect();
+    let polished: Vec<f64> = starts
+        .par_iter()
+        .map(|&start| reweighted_score(start, model, reference, scale))
+        .collect();
+    for score in polished {
+        best_score = best_score.max(score);
+    }
+    Ok(best_score / usize_to_f64(length))
+}
+
+/// The best TM sum reached by reweighted fits that start from `start`.
+fn reweighted_score(
+    start: molframe_geom::Rigid,
+    model: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    scale: f64,
+) -> f64 {
+    let mut candidate = start;
+    let mut best_score = tm_sum(candidate, model, reference, scale);
     for _ in 0..TM_REWEIGHT_STEPS {
         let Some(weights) = tm_weights(candidate, model, reference, scale) else {
             break;
@@ -73,13 +107,10 @@ pub fn tm_score(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Compa
         candidate = step.transform;
         best_score = score;
     }
-    Ok(best_score / usize_to_f64(length))
+    best_score
 }
 
-/// How many reweighted fits the TM search takes before it stops improving.
-///
-/// Each step is one quaternion decomposition, so the whole search costs a small
-/// constant number of them; the loop leaves as soon as a step stops improving.
+/// How many reweighted fits the polish takes before it stops improving.
 const TM_REWEIGHT_STEPS: usize = 32;
 
 /// The TM sum for one transform, before normalisation.

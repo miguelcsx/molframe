@@ -15,6 +15,7 @@ molframe-geom.workspace = true
 molframe-seq.workspace = true
 molframe-spatial.workspace = true
 molframe-surface.workspace = true
+rayon.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
