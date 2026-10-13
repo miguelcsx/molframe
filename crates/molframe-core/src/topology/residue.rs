@@ -149,6 +149,19 @@ impl ResidueTable {
             .and_then(OptionalI32::get)
     }
 
+    /// Replaces the sequence position of one residue.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] when the residue does not exist.
+    pub fn set_label_seq_id(&mut self, residue: ResidueIndex, seq: i32) -> Result<(), TableError> {
+        let slot = Arc::make_mut(&mut self.label_seq_id)
+            .get_mut(residue.as_usize())
+            .ok_or(TableError::MissingIndex { table: "residue" })?;
+        *slot = OptionalI32::some(seq);
+        Ok(())
+    }
+
     /// The depositor's residue number.
     #[must_use]
     pub fn auth_seq_id(&self, residue: ResidueIndex) -> Option<i32> {

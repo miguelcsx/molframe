@@ -126,19 +126,29 @@ fn canonical_secondary_preserves_label_namespace_chain_order_and_author_insertio
 }
 
 #[test]
-fn duplicate_secondary_label_identities_refuse_before_streaming() {
+fn repeated_label_numbers_under_insertion_codes_are_renumbered_not_refused() {
+    let states = [Ss::PolyProline, Ss::OtherHelix];
     let structure = identity_fixture(
         "ATOM 1 C CA GLY A A 1 10 A 0 0 0 1\nATOM 2 C CA GLY A A 1 10 B 1 0 0 1\n",
-        &[Ss::PolyProline, Ss::OtherHelix],
+        &states,
     );
     let mut output = Vec::new();
-    let result = crate::write_canonical_to(
+    crate::write_canonical_to(
         &structure,
         &crate::CifWriteOptions::new().with_block_id("identity"),
         &mut output,
-    );
-    assert!(result.is_err());
-    assert!(output.is_empty());
+    )
+    .expect("distinct label numbers make the identities unambiguous");
+    let (roundtrip, _) =
+        crate::read(&InputBuffer::from_bytes(output), &ReadOptions::new()).expect("readback");
+    assert_eq!(roundtrip.secondary_structure(), states);
+    let labels: Vec<_> = roundtrip
+        .data()
+        .residues()
+        .map(molframe_core::structure::ResidueRef::label_seq_id)
+        .collect();
+    assert_eq!(labels.len(), 2);
+    assert_ne!(labels[0], labels[1]);
 }
 
 #[test]

@@ -83,7 +83,7 @@ pub(super) fn write_with_extra<W: Write>(
     extra: Vec<EncodedCategory>,
     output: &mut W,
 ) -> Result<(), Vec<Diagnostic>> {
-    let distinct = structure.with_distinct_chain_labels();
+    let distinct = structure.with_distinct_labels();
     let structure = distinct.as_ref().unwrap_or(structure);
     let projection = canonical_projection(structure, options)
         .map_err(|error| vec![projection_diagnostic(&error)])?;

@@ -66,7 +66,7 @@ fn render_canonical(
 ) -> Result<(), CifWriteError> {
     // mmCIF keys a chain by its normalised label, so chains that repeat one
     // must be told apart or they merge when the file is read back.
-    let distinct = structure.with_distinct_chain_labels();
+    let distinct = structure.with_distinct_labels();
     let structure = distinct.as_ref().unwrap_or(structure);
     let projection = canonical_projection(structure, options)?;
     let _ = writeln!(out, "data_{}", projection.block_id());

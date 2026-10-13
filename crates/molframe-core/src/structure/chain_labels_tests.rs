@@ -3,7 +3,7 @@ use crate::index::ChainIndex;
 
 #[test]
 fn chains_with_their_own_labels_are_left_alone() {
-    assert!(sample().with_distinct_chain_labels().is_none());
+    assert!(sample().with_distinct_labels().is_none());
 }
 
 #[test]
@@ -20,7 +20,7 @@ fn a_repeated_label_gains_a_number_and_keeps_its_depositor_label() {
             .is_ok()
     );
     let repeated = super::Structure::new(data);
-    let Some(distinct) = repeated.with_distinct_chain_labels() else {
+    let Some(distinct) = repeated.with_distinct_labels() else {
         panic!("repeat not detected");
     };
     let labels: Vec<_> = distinct
