@@ -123,7 +123,7 @@ HETATM 3 O O HOH C . 0 3 0
 
 def test_sasa_names_the_policy_field_behind_a_partial_result():
     structure = molframe.read(_WATER_AND_IRON, name="fe.cif")
-    result = molframe.analysis.sasa(structure)
+    result = molframe.analysis.sasa(structure, hetero="all", metals="none")
     assert result.status == "partial"
     assert any("W6004" in str(warning) and "Fe" in str(warning) for warning in result.warnings)
     assert any(a.startswith("VdwRadii") for a in result.assumptions)

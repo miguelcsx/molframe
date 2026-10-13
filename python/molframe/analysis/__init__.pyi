@@ -375,20 +375,33 @@ def contacts_by_definition(
 def sasa(
     structure: Structure,
     *,
-    probe: float = 1.4,
-    points: int = 960,
+    probe: float | None = None,
+    method: str | None = None,
+    n_points: int | None = None,
+    hetero: str | None = None,
+    metals: str | None = None,
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[Float64Array]:
     """Return the solvent-accessible surface area of every analysed atom, in square angstroms.
 
-    Shrake-Rupley with ``points`` samples per atom. The radii are the policy's ``vdw_radii``,
-    the hydrogens that count are its ``hydrogens``, and under ``crystal:<radius>`` the area is
-    that of the atom among its symmetry mates. Use ``atom_origin`` to tie it to the input.
+    Every option left as ``None`` takes the Rust default shared with the Rust facade and the
+    ``molframe sasa`` command: Shrake-Rupley, 960 points, a 1.4 angstrom probe, the polymer
+    alone, and the van der Waals metal fallback.
 
-    Waters and other heteroatoms of the analysed system occlude and receive areas; an
-    assumption records how many. A protein-only area needs an input without them: masking the
-    result by ``atom_origin`` drops their rows but not their occlusion of the polymer. An
-    element with no radius in the set (iron under ``bondi``) leaves its atoms ``NaN`` and
-    the result ``partial``, with a ``W6004`` warning naming the element and ``vdw_radii``.
+    ``method`` is ``"shrake-rupley"`` or ``"lee-richards"``; ``n_points`` is the points per
+    atom for the first and the slices per atom for the second (960 and 20 when ``None``).
+    ``hetero`` chooses which heteroatoms are measured and occlude: ``"none"`` (the default,
+    as NACCESS and FreeSASA), ``"solute"`` (ligands and ions), ``"all"``, or a comma-separated
+    union of ``"waters"``, ``"ligands"`` and ``"ions"``. ``metals`` says where a metal the
+    radius set lacks takes its radius: ``"none"``, ``"vdw"`` or ``"ionic"``.
+
+    The radii are the policy's ``vdw_radii``, the hydrogens that count are its ``hydrogens``,
+    and under ``crystal:<radius>`` the area is that of the atom among its symmetry mates. Use
+    ``atom_origin`` to tie the result to the input.
+
+    Atoms the options leave out, and atoms with no positive radius, are ``NaN`` and do not
+    occlude their neighbours. An included atom whose element has no radius in the set (iron
+    under ``bondi`` with ``metals="none"``) makes the result ``partial`` with a ``W6004``
+    warning naming the element and ``vdw_radii``.
     """

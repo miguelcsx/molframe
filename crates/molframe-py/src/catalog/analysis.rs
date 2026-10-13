@@ -283,7 +283,7 @@ pub(super) const ROWS: &[Capability] = &[
         name: "sasa",
         domain: "analysis",
         feature: "analysis",
-        inputs: "structure,probe,points",
+        inputs: "structure,probe,method,n_points,hetero,metals",
         result: "Analysis<ndarray>",
         policy: true,
         eager: true,
