@@ -15,6 +15,7 @@ mod equivalence;
 mod grid;
 mod ionic;
 mod library;
+mod metal;
 mod model;
 mod mol;
 mod mol2;
@@ -22,6 +23,7 @@ mod molecule_structure;
 mod numeric;
 mod peoe;
 mod provider;
+mod radius_policy;
 mod roles;
 mod secondary;
 mod side_chain;
@@ -54,6 +56,7 @@ pub use library::{
     FINGERPRINT_BITS, Fingerprint, LigandDescriptors, RuleOfFive, cluster, describe, fingerprint,
     tanimoto,
 };
+pub use metal::{METAL_SITES, MetalRadiusKind, MetalSite, metal_radius, metal_site};
 pub use model::{
     BondStereo, Component, ComponentAtom, ComponentBond, ComponentKind, PolymerAtomRole,
     StereoConfiguration,
@@ -75,6 +78,9 @@ pub use peoe::{
     PeoeOptions, PeoeParameterProfile, component_peoe_charges, partial_charges, peoe_charges,
 };
 pub use provider::{CifProvider, ComponentProvider, LazyCifProvider, MemoryProvider, read_ccd};
+pub use radius_policy::{
+    HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, policy_radii,
+};
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };

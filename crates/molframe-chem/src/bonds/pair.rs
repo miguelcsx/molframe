@@ -74,50 +74,12 @@ pub(super) fn element_threshold(element: molframe_core::Element) -> Option<f32> 
 }
 
 /// The coordination reach of one metal, in ångström, on the same scale as the
-/// non-metal thresholds.
-///
-/// A metal–ligand bond is accepted up to `(metal + ligand) / 1.95`, so a metal's
-/// value is chosen so that the longest ordinary coordination distance of that
-/// metal to a nitrogen, oxygen or sulfur donor still falls inside the window. One
-/// shared value cannot do it: a heme iron sits 1.9–2.3 Å from its pyrrole
-/// nitrogens and a calcium 2.3–2.6 Å from its oxygens, so a single compromise
-/// either drops iron–nitrogen bonds that are really there or lets small metals
-/// reach through to neighbours that are not coordinated.
+/// non-metal thresholds; the table lives with the other metal radii so bonding,
+/// surface and clash code read one convention.
 fn metal_threshold(symbol: &str) -> Option<f32> {
-    match symbol {
-        "Li" | "Al" => Some(2.80),
-        "Na" => Some(3.30),
-        "K" => Some(3.90),
-        "Mn" | "Fe" | "Co" | "Ni" | "Cu" | "Au" | "Cr" | "V" => Some(2.90),
-        "Mg" | "Hg" => Some(3.00),
-        "Ca" => Some(3.40),
-        "Zn" => Some(2.85),
-        "Cd" | "Mo" | "W" | "Ag" => Some(3.10),
-        _ => None,
-    }
+    crate::metal::metal_site(symbol).map(|site| site.reach)
 }
 
 pub(super) fn is_metal(symbol: &str) -> bool {
-    matches!(
-        symbol,
-        "Li" | "Na"
-            | "K"
-            | "Mg"
-            | "Ca"
-            | "Mn"
-            | "Fe"
-            | "Co"
-            | "Ni"
-            | "Cu"
-            | "Zn"
-            | "Mo"
-            | "Ag"
-            | "Cd"
-            | "Hg"
-            | "Au"
-            | "Al"
-            | "Cr"
-            | "V"
-            | "W"
-    )
+    crate::metal::is_metal(symbol)
 }
