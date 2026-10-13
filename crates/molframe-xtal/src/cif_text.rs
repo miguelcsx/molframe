@@ -62,13 +62,11 @@ pub fn assemblies_cif(set: &AssemblySet) -> String {
                 let factors = generator.oper_expression.factors();
                 let expression = match factors {
                     [only] if only.len() == 1 => only[0].to_string(),
-                    _ => factors
-                        .iter()
-                        .map(|factor| {
-                            let ids: Vec<&str> = factor.iter().map(AsRef::as_ref).collect();
-                            format!("({})", ids.join(","))
-                        })
-                        .collect::<String>(),
+                    _ => factors.iter().fold(String::new(), |mut text, factor| {
+                        let ids: Vec<&str> = factor.iter().map(AsRef::as_ref).collect();
+                        let _ = write!(text, "({})", ids.join(","));
+                        text
+                    }),
                 };
                 let asyms: Vec<&str> = generator.asym_ids.iter().map(AsRef::as_ref).collect();
                 let _ = writeln!(
