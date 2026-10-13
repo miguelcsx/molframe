@@ -40,6 +40,7 @@ mod standard_components;
 mod standard_roles;
 mod table_identity;
 mod table_provider;
+mod table_request;
 mod table_store;
 mod table_text;
 
@@ -124,5 +125,9 @@ pub use table_identity::TableIdentity;
 pub use table_provider::{
     Cache, InMemory, Provided, Source, TableError, TableKind, TableProvider, UserFile,
 };
+pub use table_request::TableRequest;
 pub use table_store::{Selected, TableStore};
-pub use table_text::{TABLE_FORMAT_VERSION, TableLines, TableTextError, read_table, text_of};
+pub use table_text::{
+    TABLE_FORMAT_VERSION, TableLines, TableTextError, join_binary, read_table, split_binary,
+    text_of,
+};

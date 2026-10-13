@@ -22,6 +22,7 @@ use crate::{Provided, Source, TableError, TableKind, TableProvider};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -80,6 +81,13 @@ impl TableStore {
             profile,
             memo: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// The process-wide store over the environment's directory and profile.
+    #[must_use]
+    pub fn global() -> Arc<Self> {
+        static STORE: OnceLock<Arc<TableStore>> = OnceLock::new();
+        Arc::clone(STORE.get_or_init(|| Arc::new(Self::from_environment())))
     }
 
     /// A store over the directory the environment names, with its profile.

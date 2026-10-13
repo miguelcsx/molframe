@@ -20,6 +20,9 @@
 //! row. Blank lines and `#` comments are skipped. A problem is reported with its
 //! one-based line number and a table is accepted whole or not at all.
 //!
+//! A binary table carries the same header: its magic, a little-endian `u16`
+//! header length, the header text, then the payload.
+//!
 //! Cost: one pass over the text, no allocation beyond the four identity strings
 //! and whatever the kind keeps from its rows.
 
@@ -179,6 +182,65 @@ fn need<'a>(
 /// [`TableTextError`] when `bytes` are not UTF-8.
 pub fn text_of<'a>(what: &'static str, bytes: &'a [u8]) -> Result<&'a str, TableTextError> {
     core::str::from_utf8(bytes).map_err(|error| TableTextError::at(what, 0, error.to_string()))
+}
+
+struct NoLines;
+
+impl TableLines for NoLines {
+    fn header(&mut self, _: usize, _: &str, _: &str) -> Result<bool, TableTextError> {
+        Ok(false)
+    }
+
+    fn row(&mut self, line: usize, _: &str) -> Result<(), TableTextError> {
+        Err(TableTextError::at(
+            "binary table header",
+            line,
+            "only identity headers are allowed here",
+        ))
+    }
+}
+
+/// Splits a binary table into its declared identity and its payload.
+///
+/// # Errors
+///
+/// [`TableTextError`] for a wrong magic, a truncated header or a bad identity.
+pub fn split_binary<'a>(
+    what: &'static str,
+    magic: [u8; 4],
+    bytes: &'a [u8],
+) -> Result<(TableIdentity, &'a [u8]), TableTextError> {
+    let whole = |message: &str| TableTextError::at(what, 0, message);
+    if bytes.get(..4) != Some(&magic) {
+        return Err(whole("not a table of this kind"));
+    }
+    let (Some(&low), Some(&high)) = (bytes.get(4), bytes.get(5)) else {
+        return Err(whole("truncated before the header length"));
+    };
+    let length = usize::from(u16::from_le_bytes([low, high]));
+    let Some(header) = bytes.get(6..6 + length) else {
+        return Err(whole("truncated inside the header"));
+    };
+    let identity = read_table(what, text_of(what, header)?, &mut NoLines)?;
+    Ok((identity, bytes.get(6 + length..).unwrap_or_default()))
+}
+
+/// The inverse of [`split_binary`]: `payload` behind a header declaring `identity`.
+///
+/// Returns `None` when the header text does not fit the `u16` length.
+#[must_use]
+pub fn join_binary(magic: [u8; 4], identity: &TableIdentity, payload: &[u8]) -> Option<Vec<u8>> {
+    let header = format!(
+        "name: {}\nversion: {}\nsource: {}\nlicence: {}\n",
+        identity.name, identity.version, identity.source, identity.licence
+    );
+    let length = u16::try_from(header.len()).ok()?;
+    let mut out = Vec::with_capacity(6 + header.len() + payload.len());
+    out.extend_from_slice(&magic);
+    out.extend_from_slice(&length.to_le_bytes());
+    out.extend_from_slice(header.as_bytes());
+    out.extend_from_slice(payload);
+    Some(out)
 }
 
 #[cfg(test)]
