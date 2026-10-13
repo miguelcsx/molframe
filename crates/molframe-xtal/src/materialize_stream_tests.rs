@@ -48,12 +48,17 @@ fn chunks_concatenate_to_the_whole_expansion() {
         assert_eq!(ids, instance_ids(&whole), "bound {bound}");
         let sites: Vec<Option<u32>> = pieces
             .iter()
-            .flat_map(|piece| piece.data().atoms().map(|atom| atom.atom_site_id()))
+            .flat_map(|piece| {
+                piece
+                    .data()
+                    .atoms()
+                    .map(molframe_core::structure::AtomRef::atom_site_id)
+            })
             .collect();
         let expected: Vec<Option<u32>> = whole
             .data()
             .atoms()
-            .map(|atom| atom.atom_site_id())
+            .map(molframe_core::structure::AtomRef::atom_site_id)
             .collect();
         assert_eq!(sites, expected, "bound {bound}");
     }

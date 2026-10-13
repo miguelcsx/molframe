@@ -2,6 +2,7 @@
 
 use crate::AffineTransform;
 use crate::category_transform::{malformed, read_affine};
+use crate::ncs_domain::{NcsDomains, lower_domains};
 use molframe_cif::{Category, Document};
 use molframe_core::{AtomIndex, Code, Diagnostic, ModelIndex, Structure};
 use std::collections::BTreeMap;
@@ -35,9 +36,62 @@ pub struct NcsOperator {
 #[derive(Clone, Debug, Default)]
 pub struct NcsSet {
     operators: BTreeMap<Box<str>, NcsOperator>,
+    domains: NcsDomains,
 }
 
 impl NcsSet {
+    /// A set from operators alone, for sources without domain records.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Code::E6014`] for an empty or repeated identifier or a
+    /// non-finite transform.
+    pub fn from_operators(
+        operators: impl IntoIterator<Item = NcsOperator>,
+    ) -> Result<Self, Diagnostic> {
+        let mut map = BTreeMap::new();
+        for operator in operators {
+            let id = operator.id.clone();
+            if id.trim().is_empty()
+                || !operator.transform.is_finite()
+                || map.insert(id.clone(), operator).is_some()
+            {
+                return Err(Diagnostic::new(Code::E6014).with_context("value", id));
+            }
+        }
+        Ok(Self {
+            operators: map,
+            domains: NcsDomains::default(),
+        })
+    }
+
+    /// The set with its ensembles, domains and pairings replaced.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Code::E6014`] for a pairing naming an operator or domain the
+    /// set does not hold.
+    pub fn with_domains(mut self, domains: NcsDomains) -> Result<Self, Diagnostic> {
+        for pairing in &domains.pairings {
+            let known = self.operators.contains_key(&pairing.operator)
+                && domains.domain(&pairing.domain_1).is_some()
+                && domains.domain(&pairing.domain_2).is_some();
+            if !known {
+                return Err(Diagnostic::new(Code::E6014)
+                    .with_context("category", "struct_ncs_ens_gen")
+                    .with_context("value", pairing.operator.to_string()));
+            }
+        }
+        self.domains = domains;
+        Ok(self)
+    }
+
+    /// Ensembles, domains and operator pairings recorded beside the operators.
+    #[must_use]
+    pub const fn domains(&self) -> &NcsDomains {
+        &self.domains
+    }
+
     /// One operator by its source identifier.
     #[must_use]
     pub fn get(&self, id: &str) -> Option<&NcsOperator> {
@@ -62,10 +116,10 @@ impl NcsSet {
         self.operators.len()
     }
 
-    /// Whether no NCS operator was recorded.
+    /// Whether neither an NCS operator nor a domain record was recorded.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.operators.is_empty()
+        self.operators.is_empty() && self.domains.is_empty()
     }
 }
 
@@ -76,13 +130,15 @@ impl NcsSet {
 /// Returns diagnostics for missing identifiers, invalid controlled codes,
 /// duplicate identifiers, or incomplete/non-finite matrices.
 pub fn lower_ncs(document: &Document) -> Result<NcsSet, Vec<Diagnostic>> {
-    let Some(category) = document
+    let set = match document
         .first_block()
         .and_then(|block| block.category("struct_ncs_oper"))
-    else {
-        return Ok(NcsSet::default());
+    {
+        Some(category) => lower_category(category)?,
+        None => NcsSet::default(),
     };
-    lower_category(category)
+    let domains = lower_domains(document)?;
+    set.with_domains(domains).map_err(|finding| vec![finding])
 }
 
 fn lower_category(category: &Category) -> Result<NcsSet, Vec<Diagnostic>> {
@@ -114,7 +170,10 @@ fn lower_category(category: &Category) -> Result<NcsSet, Vec<Diagnostic>> {
         }
     }
     if findings.is_empty() {
-        Ok(NcsSet { operators })
+        Ok(NcsSet {
+            operators,
+            domains: NcsDomains::default(),
+        })
     } else {
         Err(findings)
     }

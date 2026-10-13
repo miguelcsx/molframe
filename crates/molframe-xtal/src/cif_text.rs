@@ -14,7 +14,7 @@ fn number(value: f64) -> String {
     format!("{value}")
 }
 
-fn optional(value: Option<&str>) -> String {
+pub(crate) fn optional(value: Option<&str>) -> String {
     match value {
         Some(text) if !text.is_empty() => quote_text(text),
         _ => "?".to_owned(),
@@ -123,8 +123,16 @@ pub fn ncs_cif(set: &NcsSet) -> String {
     if set.is_empty() {
         return out;
     }
+    if set.operators().next().is_some() {
+        ncs_operators(&mut out, set);
+    }
+    crate::ncs_domain_cif::domains_cif(&mut out, set.domains());
+    out
+}
+
+fn ncs_operators(out: &mut String, set: &NcsSet) {
     out.push_str("loop_\n_struct_ncs_oper.id\n_struct_ncs_oper.code\n_struct_ncs_oper.details\n");
-    matrix_header(&mut out, "struct_ncs_oper");
+    matrix_header(out, "struct_ncs_oper");
     for operator in set.operators() {
         let code = match operator.code {
             NcsCode::Given => "given",
@@ -137,13 +145,12 @@ pub fn ncs_cif(set: &NcsSet) -> String {
             optional(operator.details.as_deref()),
         );
         matrix_row(
-            &mut out,
+            out,
             &operator.transform.matrix,
             &operator.transform.translation,
         );
     }
     out.push_str("#\n");
-    out
 }
 
 /// Space-group identity as `_symmetry` and `_space_group`; empty when unknown.

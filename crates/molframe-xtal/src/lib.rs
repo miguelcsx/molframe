@@ -24,6 +24,9 @@ mod materialize;
 mod mrc;
 mod mtz;
 mod ncs;
+mod ncs_bind;
+mod ncs_domain;
+mod ncs_domain_cif;
 mod numeric;
 mod reflection;
 mod reflection_binning;
@@ -70,6 +73,8 @@ pub use mtz::{read_mtz, write_mtz};
 pub use ncs::{
     NCS_EXTENSION, NcsAtomInstance, NcsCode, NcsExt, NcsOperator, NcsSet, NcsView, lower_ncs,
 };
+pub use ncs_bind::{DEFAULT_NCS_PAIR_LIMIT, NcsBindOptions, NcsChainPair, bind_ncs, expand_ncs};
+pub use ncs_domain::{NcsDomain, NcsDomainLimit, NcsDomains, NcsEnsemble, NcsPairing, NcsResidue};
 pub use reflection::{
     ReflectionColumn, ReflectionColumnType, ReflectionDataset, ReflectionError, ReflectionTable,
     ReflectionValue, UnknownColumnType,
