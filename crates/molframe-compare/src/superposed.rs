@@ -97,6 +97,25 @@ pub(crate) fn tm_score_scheduled(
     Ok(best_score / usize_to_f64(length))
 }
 
+/// The TM-score of the single full-length least-squares fit.
+///
+/// One fit and one kernel sum: a cheap lower bound on [`tm_score`] used to
+/// screen pairs before a full seed search.
+pub(crate) fn tm_single_fit(
+    model: &[[f32; 3]],
+    reference: &[[f32; 3]],
+) -> Result<f64, CompareError> {
+    if model.len() != reference.len() {
+        return Err(CompareError::LengthMismatch {
+            model: model.len(),
+            reference: reference.len(),
+        });
+    }
+    let transform = fit(model, reference)?.transform;
+    let scale = tm_scale(reference.len());
+    Ok(tm_sum(transform, model, reference, scale) / usize_to_f64(reference.len()))
+}
+
 /// The best TM sum reached by reweighted fits that start from `start`.
 fn reweighted_score(
     start: molframe_geom::Rigid,
@@ -225,7 +244,7 @@ fn fit(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<Superposition, Comp
 }
 
 /// The length-dependent distance scale d0 used by the TM-score.
-fn tm_scale(length: usize) -> f64 {
+pub(crate) fn tm_scale(length: usize) -> f64 {
     if length > 21 {
         let cube_root = (usize_to_f64(length) - 15.0).cbrt();
         (1.24 * cube_root - 1.8).max(0.5)

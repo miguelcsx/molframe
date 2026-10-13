@@ -9,6 +9,7 @@
 use crate::failure::CompareError;
 use crate::seed_search::Schedule;
 use crate::superposed::tm_score_scheduled;
+use crate::tm_screen::{Stage, Tally};
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
 use molframe_spatial::SpatialError;
@@ -41,9 +42,18 @@ pub fn tm_score_pairs(
     {
         return Err(CompareError::InvalidMapping);
     }
-    run(structures, pairs.len(), context, |index| {
-        pairs.get(index).copied()
-    })
+    run(
+        structures,
+        pairs.len(),
+        context,
+        |index| pairs.get(index).copied(),
+        0,
+        |&(a, b), (): &mut ()| {
+            tm_score_scheduled(structures[a], structures[b], Schedule::Inline)
+                .map(|score| (score, Stage::Scored))
+        },
+    )
+    .map(|(scores, _)| scores)
 }
 
 /// Scores every unordered pair of `structures`, returning the condensed upper
@@ -64,13 +74,22 @@ pub fn tm_score_all_pairs(
     let count = structures.len();
     let total = count.checked_mul(count.saturating_sub(1)).map(|v| v / 2);
     let total = total.ok_or(CompareError::InvalidMapping)?;
-    run(structures, total, context, |index| {
-        condensed_pair(count, index)
-    })
+    run(
+        structures,
+        total,
+        context,
+        |index| condensed_pair(count, index),
+        0,
+        |&(a, b), (): &mut ()| {
+            tm_score_scheduled(structures[a], structures[b], Schedule::Inline)
+                .map(|score| (score, Stage::Scored))
+        },
+    )
+    .map(|(scores, _)| scores)
 }
 
 /// Maps a condensed upper-triangle index back to `(row, column)`.
-fn condensed_pair(count: usize, index: usize) -> Option<(usize, usize)> {
+pub(crate) fn condensed_pair(count: usize, index: usize) -> Option<(usize, usize)> {
     let before = |row: usize| row * (2 * count - row - 1) / 2;
     // The row is the last one whose first entry does not exceed `index`.
     let (mut low, mut high) = (0, count.saturating_sub(1));
@@ -85,12 +104,17 @@ fn condensed_pair(count: usize, index: usize) -> Option<(usize, usize)> {
     (low + 1 < count && index < before(low + 1)).then(|| (low, low + 1 + index - before(low)))
 }
 
-fn run(
+/// Scores `total` pairs in blocks, giving `score` a workspace per block.
+///
+/// `extra_bytes` is the workspace size a block charges beyond the coordinates.
+pub(crate) fn run<W: Default>(
     structures: &[&[[f32; 3]]],
     total: usize,
     context: &ExecutionContext,
     pair_at: impl Fn(usize) -> Option<(usize, usize)> + Sync,
-) -> Result<Vec<f64>, CompareError> {
+    extra_bytes: usize,
+    score: impl Fn(&(usize, usize), &mut W) -> Result<(f64, Stage), CompareError> + Sync,
+) -> Result<(Vec<f64>, Tally), CompareError> {
     let mut scores = Vec::new();
     scores
         .try_reserve_exact(total)
@@ -98,21 +122,28 @@ fn run(
     let longest = structures.iter().map(|s| s.len()).max().unwrap_or(0);
     let bytes_per_block = PAIRS_PER_BLOCK
         .saturating_mul(longest)
-        .saturating_mul(BYTES_PER_COORDINATE);
+        .saturating_mul(BYTES_PER_COORDINATE)
+        .saturating_add(extra_bytes);
+    let mut tally = Tally::default();
     try_for_each_block_in(
         BlockPlan::new(total, PAIRS_PER_BLOCK),
         context,
         bytes_per_block,
         |_, range| {
-            range
-                .map(|index| {
-                    let (a, b) = pair_at(index).ok_or(CompareError::InvalidMapping)?;
-                    tm_score_scheduled(structures[a], structures[b], Schedule::Inline)
-                })
-                .collect::<Result<Vec<f64>, CompareError>>()
+            let mut workspace = W::default();
+            let mut block = Tally::default();
+            let mut values = Vec::with_capacity(range.len());
+            for index in range {
+                let pair = pair_at(index).ok_or(CompareError::InvalidMapping)?;
+                let (value, stage) = score(&pair, &mut workspace)?;
+                block.record(stage);
+                values.push(value);
+            }
+            Ok((values, block))
         },
-        |mut block| {
-            scores.append(&mut block);
+        |(mut values, block)| {
+            scores.append(&mut values);
+            tally.add(&block);
             Ok(())
         },
     )
@@ -122,7 +153,7 @@ fn run(
         BlockExecutionError::Worker(_) => CompareError::Spatial(SpatialError::WorkerPanicked),
         BlockExecutionError::Operation(error) => error,
     })?;
-    Ok(scores)
+    Ok((scores, tally))
 }
 
 #[cfg(test)]

@@ -44,6 +44,8 @@ mod seed_rows;
 mod seed_search;
 pub mod superposed;
 mod tm_batch;
+mod tm_bound;
+mod tm_screen;
 pub mod workflow;
 
 pub use atom_equivalence::{
@@ -89,6 +91,7 @@ pub use quaternary::{
 pub use region::{InterfaceRmsd, PocketRmsd, interface_rmsd, pocket_rmsd};
 pub use superposed::{gdt_ha, gdt_ts, gdt_with_cutoffs, tm_score, weighted_rmsd};
 pub use tm_batch::{tm_score_all_pairs, tm_score_pairs};
+pub use tm_screen::{TmPrefilter, TmScreen, tm_screen_all_pairs, tm_screen_pairs};
 pub use workflow::{
     ComparisonAlignment, ComparisonVerdict, DistanceMeasurement, PointMapping, PointMatch,
     align_mapping, decide_rmsd, measure_mapping,
