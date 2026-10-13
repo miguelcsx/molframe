@@ -370,6 +370,9 @@ registry! {
     W4101 = Warning 4101, Strict,
         "metadata dropped by the target format",
         "write a format that models the metadata if it matters";
+    W4102 = Warning 4102, Strict,
+        "identifier rewritten to stay unambiguous in the target format",
+        "give each chain and residue its own normalised identifier before writing";
     W5001 = Warning 5001, Info,
         "neighbour list rebuilt more often than expected",
         "increase the skin distance to trade memory for rebuild frequency";
