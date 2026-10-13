@@ -15,6 +15,8 @@ SymmetryOperation = _native.SymmetryOperation
 UnitCell = _native.UnitCell
 assemblies = _native.assemblies
 assembly = _native.assembly
+assembly_chunks = _native.assembly_chunks
+assembly_structure = _native.assembly_structure
 assembly_covalent_links = _native.assembly_covalent_links
 normalizers = _native.normalizers
 read_mrc = _native.read_mrc
@@ -37,7 +39,9 @@ __all__ = [
     "UnitCell",
     "assemblies",
     "assembly",
+    "assembly_chunks",
     "assembly_covalent_links",
+    "assembly_structure",
     "normalizers",
     "read_mrc",
     "read_mtz",

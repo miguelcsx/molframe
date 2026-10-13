@@ -14,12 +14,12 @@ impl AssemblyView {
     /// Chain labels are collision-free across the whole sequence and equal to
     /// those of [`AssemblyView::materialize`], atom-site identifiers continue
     /// from piece to piece, and every atom carries its assembly-wide instance
-    /// identifier. Only one piece is alive at a time, so peak memory follows
+    /// identifier. The iterator owns a cheap clone of the view. Only one piece is alive at a time, so peak memory follows
     /// `max_atoms`, not the size of the assembly.
     #[must_use]
-    pub fn chunks(&self, max_atoms: usize) -> AssemblyChunks<'_> {
+    pub fn chunks(&self, max_atoms: usize) -> AssemblyChunks {
         AssemblyChunks {
-            view: self,
+            view: self.clone(),
             max_atoms: max_atoms.max(1),
             cursor: 0,
             atom_base: 0,
@@ -30,15 +30,15 @@ impl AssemblyView {
 
 /// Iterator over the pieces of an expanded assembly; see [`AssemblyView::chunks`].
 #[derive(Debug)]
-pub struct AssemblyChunks<'a> {
-    view: &'a AssemblyView,
+pub struct AssemblyChunks {
+    view: AssemblyView,
     max_atoms: usize,
     cursor: usize,
     atom_base: u32,
     labels: Option<LabelLedger>,
 }
 
-impl AssemblyChunks<'_> {
+impl AssemblyChunks {
     /// The end of the next piece: whole transform runs up to the atom bound.
     fn next_end(&self) -> usize {
         let instances = &self.view.instances;
@@ -74,7 +74,7 @@ impl AssemblyChunks<'_> {
     }
 }
 
-impl Iterator for AssemblyChunks<'_> {
+impl Iterator for AssemblyChunks {
     type Item = Result<Structure, Vec<Diagnostic>>;
 
     fn next(&mut self) -> Option<Self::Item> {

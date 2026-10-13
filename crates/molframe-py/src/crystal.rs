@@ -406,6 +406,7 @@ fn placements(structure: &molframe::Structure, id: &str) -> PyResult<Vec<PyAssem
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     crate::crystal_links::register(module)?;
+    crate::crystal_assembly::register(module)?;
     crate::crystal_maps::register(module)?;
     crate::crystal_reflections::register(module)?;
     module.add_class::<PyAssemblyInstance>()?;

@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from os import PathLike
 from typing import Literal, Protocol, Self, final
 
@@ -164,6 +164,10 @@ def normalizers(
 ) -> FloatArray: ...
 def assemblies(structure: Structure) -> list[str]: ...
 def assembly(structure: Structure, id: str) -> list[AssemblyInstance]: ...
+def assembly_structure(structure: Structure, id: str) -> Structure: ...
+def assembly_chunks(
+    structure: Structure, id: str, max_atoms: int = 1_000_000
+) -> Iterator[Structure]: ...
 def structure_factors(structure: Structure, hkl: IntArray) -> ComplexArray: ...
 
 __all__ = [
@@ -175,6 +179,8 @@ __all__ = [
     "UnitCell",
     "assemblies",
     "assembly",
+    "assembly_chunks",
+    "assembly_structure",
     "normalizers",
     "reduce_cell",
     "structure_factors",

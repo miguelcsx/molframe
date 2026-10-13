@@ -30,6 +30,7 @@ mod compare_mapping;
 mod compare_structures;
 #[cfg(feature = "crystal")]
 mod crystal;
+mod crystal_assembly;
 #[cfg(feature = "crystal")]
 mod crystal_links;
 #[cfg(feature = "crystal")]

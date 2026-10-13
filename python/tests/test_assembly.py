@@ -67,3 +67,33 @@ def test_unknown_assemblies_and_structures_without_any_are_errors():
     assert molframe.crystal.assemblies(plain) == []
     with pytest.raises(ValueError, match="the structure declares no biological assemblies"):
         molframe.crystal.assembly(plain, "1")
+
+
+def test_an_assembly_expands_to_one_structure_with_every_copy_placed():
+    structure = molframe.read(ENTRY, name="entry.cif")
+    whole = molframe.crystal.assembly_structure(structure, "1")
+    assert whole.atom_count == 3
+    assert whole.chain_count == 3
+    # the copy of A: a quarter turn about z of (1, 0, 0), then +5 in x
+    assert whole.coordinates[2].tolist() == pytest.approx([5, 1, 0])
+
+
+def test_streamed_pieces_concatenate_to_the_whole_expansion():
+    structure = molframe.read(ENTRY, name="entry.cif")
+    whole = molframe.crystal.assembly_structure(structure, "1")
+    for bound in (1, 2, 1000):
+        pieces = list(molframe.crystal.assembly_chunks(structure, "1", bound))
+        assert sum(piece.atom_count for piece in pieces) == whole.atom_count
+        merged = [row for piece in pieces for row in piece.coordinates.tolist()]
+        assert merged == whole.coordinates.tolist()
+    # placements are never split: the first placement holds both source chains
+    sizes = [p.atom_count for p in molframe.crystal.assembly_chunks(structure, "1", 1)]
+    assert sizes == [2, 1]
+
+
+def test_expansion_refuses_unknown_assemblies():
+    structure = molframe.read(ENTRY, name="entry.cif")
+    with pytest.raises(ValueError, match="E6002"):
+        molframe.crystal.assembly_structure(structure, "9")
+    with pytest.raises(ValueError, match="E6002"):
+        molframe.crystal.assembly_chunks(structure, "9")
