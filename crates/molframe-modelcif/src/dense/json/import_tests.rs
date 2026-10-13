@@ -99,3 +99,11 @@ fn alphafold_p69905_matrix_round_trips_exactly() {
     assert!(matrix.is_exact());
     assert_eq!(matrix.declared_maximum(), Some(31.75));
 }
+
+#[test]
+fn two_decimal_values_survive_import_in_binary64() {
+    let matrix = read(r#"{"predicted_aligned_error":[[0,12.34],[0.07,0]]}"#).expect("matrix");
+    assert_eq!(matrix.get_f64(0, 1), Some(12.34));
+    assert_eq!(matrix.get_f64(1, 0), Some(0.07));
+    assert!(matrix.is_exact());
+}

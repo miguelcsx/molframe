@@ -34,6 +34,7 @@ pub struct PrecisionProbe {
     fixed_exact: [bool; MAX_DECIMALS + 1],
     fixed_maximum: [u64; MAX_DECIMALS + 1],
     half_exact: bool,
+    single_exact: bool,
     non_finite: bool,
 }
 
@@ -53,6 +54,7 @@ impl PrecisionProbe {
             fixed_exact: [true; MAX_DECIMALS + 1],
             fixed_maximum: [0; MAX_DECIMALS + 1],
             half_exact: true,
+            single_exact: true,
             non_finite: false,
         }
     }
@@ -81,6 +83,48 @@ impl PrecisionProbe {
                 _ => self.fixed_exact[slot] = false,
             }
         }
+    }
+
+    /// Folds one double-precision value into the probe.
+    ///
+    /// Fixed-point exactness is judged in binary64, so a value such as `12.34`
+    /// parsed from text is exact at two decimals even though no `f32` equals it.
+    pub fn observe_f64(&mut self, value: f64) {
+        self.count += 1;
+        if !value.is_finite() {
+            self.non_finite = true;
+            return;
+        }
+        let single = value as f32;
+        if single > self.maximum {
+            self.maximum = single;
+        }
+        if f64::from(single) != value {
+            self.single_exact = false;
+        }
+        if self.half_exact && f64::from(f16_bits_to_f32(f32_to_f16_bits(single))) != value {
+            self.half_exact = false;
+        }
+        for (slot, denominator) in POWERS.iter().enumerate() {
+            if !self.fixed_exact[slot] {
+                continue;
+            }
+            let integer = (value * f64::from(*denominator)).round();
+            if integer >= 0.0
+                && integer <= f64::from(u32::MAX)
+                && integer / f64::from(*denominator) == value
+            {
+                self.fixed_maximum[slot] = self.fixed_maximum[slot].max(integer as u64);
+            } else {
+                self.fixed_exact[slot] = false;
+            }
+        }
+    }
+
+    /// Whether every value observed through [`Self::observe_f64`] fits an `f32` exactly.
+    #[must_use]
+    pub const fn single_is_exact(&self) -> bool {
+        self.single_exact
     }
 
     /// Values observed so far.

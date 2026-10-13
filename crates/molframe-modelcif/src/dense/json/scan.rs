@@ -86,7 +86,7 @@ impl<'a> Scanner<'a> {
     }
 
     /// Reads one finite number.
-    pub(super) fn number(&mut self) -> Result<f32, ConfidenceError> {
+    pub(super) fn number(&mut self) -> Result<f64, ConfidenceError> {
         self.skip_ws();
         let start = self.pos;
         while matches!(
@@ -97,7 +97,7 @@ impl<'a> Scanner<'a> {
         }
         let text =
             std::str::from_utf8(&self.bytes[start..self.pos]).map_err(|_| self.fail("a number"))?;
-        match text.parse::<f32>() {
+        match text.parse::<f64>() {
             Ok(value) if value.is_finite() => Ok(value),
             _ => Err(Self::at(self.bytes, start).fail("a finite number")),
         }

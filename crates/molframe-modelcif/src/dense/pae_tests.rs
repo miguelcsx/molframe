@@ -35,7 +35,7 @@ fn forcing_one_byte_cells_reports_the_quantisation_error() {
     let matrix = PaeMatrix::from_values(2, &values, policy).expect("matrix");
     assert_eq!(matrix.kind(), PaeKind::U8);
     assert!(!matrix.is_exact());
-    assert!(matrix.max_quantisation_error() <= 0.0625 + f32::EPSILON);
+    assert!(matrix.max_quantisation_error() <= 0.0625 + 1e-6);
 }
 
 #[test]
@@ -72,4 +72,40 @@ fn setting_a_cell_outside_the_matrix_is_an_error() {
     let mut matrix = PaeMatrix::from_values(2, &[0.0; 4], PaePolicy::new()).expect("matrix");
     assert!(matrix.set(2, 0, 1.0).is_err());
     assert!(matrix.set(0, 0, f32::NAN).is_err());
+}
+
+fn matrix_from_f64(size: usize, values: &[f64]) -> PaeMatrix {
+    let mut probe = crate::PrecisionProbe::new();
+    for value in values {
+        probe.observe_f64(*value);
+    }
+    let policy = PaePolicy::new();
+    let layout = policy.layout(&probe, size).expect("layout");
+    let mut matrix = PaeMatrix::zeroed(size, layout, policy.max_bytes).expect("matrix");
+    for (index, value) in values.iter().enumerate() {
+        matrix
+            .set_f64(index / size, index % size, *value)
+            .expect("cell");
+    }
+    matrix
+}
+
+#[test]
+fn decimal_text_values_are_reproduced_exactly_in_binary64() {
+    let values = [12.34, 0.07, 31.75, 0.0];
+    let matrix = matrix_from_f64(2, &values);
+    assert_eq!(matrix.kind(), PaeKind::U16);
+    assert!(matrix.is_exact());
+    for (index, value) in values.iter().enumerate() {
+        assert_eq!(matrix.get_f64(index / 2, index % 2), Some(*value));
+    }
+}
+
+#[test]
+fn digits_beyond_single_precision_are_reported_as_an_error() {
+    let values = [1.234_567_890_123, 2.0, 3.0, 4.0];
+    let matrix = matrix_from_f64(2, &values);
+    assert_eq!(matrix.kind(), PaeKind::F32);
+    assert!(!matrix.is_exact());
+    assert!(matrix.max_quantisation_error() < 1e-6);
 }

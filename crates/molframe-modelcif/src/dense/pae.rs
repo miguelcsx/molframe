@@ -26,8 +26,8 @@ pub struct PaeMatrix {
     size: usize,
     layout: PaeLayout,
     cells: Cells,
-    max_error: f32,
-    declared_maximum: Option<f32>,
+    max_error: f64,
+    declared_maximum: Option<f64>,
 }
 
 impl PaeMatrix {
@@ -92,7 +92,7 @@ impl PaeMatrix {
 
     /// Records the maximum the producing model declares, such as 31.75.
     #[must_use]
-    pub const fn with_declared_maximum(mut self, maximum: Option<f32>) -> Self {
+    pub const fn with_declared_maximum(mut self, maximum: Option<f64>) -> Self {
         self.declared_maximum = maximum;
         self
     }
@@ -117,9 +117,40 @@ impl PaeMatrix {
         Ok(())
     }
 
+    /// Writes one double-precision cell; the reported error is measured in binary64.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an out-of-range cell or a non-finite value.
+    pub fn set_f64(
+        &mut self,
+        row: usize,
+        column: usize,
+        value: f64,
+    ) -> Result<(), ConfidenceError> {
+        if row >= self.size || column >= self.size {
+            return Err(ConfidenceError::OutOfRange {
+                row,
+                column,
+                size: self.size,
+            });
+        }
+        if !value.is_finite() {
+            return Err(ConfidenceError::NonFinite);
+        }
+        let encoded = self.layout.encode_f64(value);
+        let error = (self.layout.decode_f64(encoded) - value).abs();
+        self.write_encoded(row * self.size + column, encoded, error);
+        Ok(())
+    }
+
     fn store(&mut self, index: usize, value: f32) {
         let encoded = self.layout.encode(value);
-        let error = (self.layout.decode(encoded) - value).abs();
+        let error = f64::from((self.layout.decode(encoded) - value).abs());
+        self.write_encoded(index, encoded, error);
+    }
+
+    fn write_encoded(&mut self, index: usize, encoded: u32, error: f64) {
         if error > self.max_error {
             self.max_error = error;
         }
@@ -156,7 +187,7 @@ impl PaeMatrix {
 
     /// Largest absolute difference between a supplied value and its stored value.
     #[must_use]
-    pub const fn max_quantisation_error(&self) -> f32 {
+    pub const fn max_quantisation_error(&self) -> f64 {
         self.max_error
     }
 
@@ -168,7 +199,7 @@ impl PaeMatrix {
 
     /// Maximum the producing model declares, when the source stated one.
     #[must_use]
-    pub const fn declared_maximum(&self) -> Option<f32> {
+    pub const fn declared_maximum(&self) -> Option<f64> {
         self.declared_maximum
     }
 
@@ -179,6 +210,24 @@ impl PaeMatrix {
             return None;
         }
         Some(self.decode_at(row * self.size + column))
+    }
+
+    /// Decoded binary64 value at `(row, column)`; decimal sources come back exact.
+    #[must_use]
+    pub fn get_f64(&self, row: usize, column: usize) -> Option<f64> {
+        if row >= self.size || column >= self.size {
+            return None;
+        }
+        Some(self.decode_f64_at(row * self.size + column))
+    }
+
+    pub(crate) fn decode_f64_at(&self, index: usize) -> f64 {
+        let stored = match &self.cells {
+            Cells::U8(cells) => u32::from(cells[index]),
+            Cells::U16(cells) | Cells::F16(cells) => u32::from(cells[index]),
+            Cells::F32(cells) => return f64::from(cells[index]),
+        };
+        self.layout.decode_f64(stored)
     }
 
     fn decode_at(&self, index: usize) -> f32 {
@@ -260,7 +309,7 @@ impl PaeMatrix {
         let mut total = 0.0_f64;
         for row in rows.clone() {
             for column in columns.clone() {
-                total += f64::from(self.decode_at(row * self.size + column));
+                total += self.decode_f64_at(row * self.size + column);
             }
         }
         Some(total / (rows.len() * columns.len()) as f64)

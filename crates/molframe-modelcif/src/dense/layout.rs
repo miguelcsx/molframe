@@ -149,6 +149,28 @@ impl PaeLayout {
         }
     }
 
+    /// Encodes a double-precision value; fixed-point cells round in binary64.
+    #[must_use]
+    pub(crate) fn encode_f64(self, value: f64) -> u32 {
+        match self.kind {
+            PaeKind::U8 => clamp_fixed_f64(value, self.denominator, u64::from(u8::MAX)),
+            PaeKind::U16 => clamp_fixed_f64(value, self.denominator, u64::from(u16::MAX)),
+            PaeKind::F16 => u32::from(f32_to_f16_bits(value as f32)),
+            PaeKind::F32 => (value as f32).to_bits(),
+        }
+    }
+
+    /// Decodes to binary64; fixed-point cells divide in binary64 so a decimal
+    /// written with at most `decimals` places is reproduced exactly.
+    #[must_use]
+    pub(crate) fn decode_f64(self, stored: u32) -> f64 {
+        match self.kind {
+            PaeKind::U8 | PaeKind::U16 => f64::from(stored) / f64::from(self.denominator),
+            PaeKind::F16 => f64::from(f16_bits_to_f32(stored as u16)),
+            PaeKind::F32 => f64::from(f32::from_bits(stored)),
+        }
+    }
+
     /// Decodes a stored integer or bit pattern to the value it stands for.
     #[must_use]
     pub(crate) fn decode(self, stored: u32) -> f32 {
@@ -167,6 +189,17 @@ fn clamp_fixed(value: f32, denominator: u32, ceiling: u64) -> u32 {
         None => 0,
     };
     integer as u32
+}
+
+fn clamp_fixed_f64(value: f64, denominator: u32, ceiling: u64) -> u32 {
+    let scaled = (value * f64::from(denominator)).round();
+    if scaled < 0.0 {
+        0
+    } else if scaled > ceiling as f64 {
+        ceiling as u32
+    } else {
+        scaled as u32
+    }
 }
 
 fn exact_layout(probe: &PrecisionProbe) -> PaeLayout {

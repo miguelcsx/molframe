@@ -15,7 +15,7 @@ struct Located {
     first: Option<usize>,
     second: Option<usize>,
     distance: Option<usize>,
-    maximum: Option<f32>,
+    maximum: Option<f64>,
 }
 
 /// Reads an `AlphaFold` PAE JSON document into a budgeted dense matrix.
@@ -80,7 +80,7 @@ fn locate(text: &[u8]) -> Result<Located, ConfidenceError> {
 fn walk_matrix(
     text: &[u8],
     at: usize,
-    mut visit: impl FnMut(usize, usize, f32) -> Result<(), ConfidenceError>,
+    mut visit: impl FnMut(usize, usize, f64) -> Result<(), ConfidenceError>,
 ) -> Result<(usize, usize), ConfidenceError> {
     let mut scan = Scanner::at(text, at);
     scan.require(b'[', "a matrix")?;
@@ -122,7 +122,7 @@ fn walk_matrix(
 fn dense(text: &[u8], at: usize, policy: PaePolicy) -> Result<PaeMatrix, ConfidenceError> {
     let mut probe = PrecisionProbe::new();
     let (rows, columns) = walk_matrix(text, at, |_, _, value| {
-        probe.observe(value);
+        probe.observe_f64(value);
         Ok(())
     })?;
     if rows != columns {
@@ -134,7 +134,7 @@ fn dense(text: &[u8], at: usize, policy: PaePolicy) -> Result<PaeMatrix, Confide
     let layout = policy.layout(&probe, rows)?;
     let mut matrix = PaeMatrix::zeroed(rows, layout, policy.max_bytes)?;
     walk_matrix(text, at, |row, column, value| {
-        matrix.set(row, column, value)
+        matrix.set_f64(row, column, value)
     })?;
     Ok(matrix)
 }
@@ -143,7 +143,7 @@ fn dense(text: &[u8], at: usize, policy: PaePolicy) -> Result<PaeMatrix, Confide
 fn walk_triples(
     text: &[u8],
     at: [usize; 3],
-    mut visit: impl FnMut(usize, usize, f32) -> Result<(), ConfidenceError>,
+    mut visit: impl FnMut(usize, usize, f64) -> Result<(), ConfidenceError>,
 ) -> Result<(), ConfidenceError> {
     let mut scans = at.map(|position| Scanner::at(text, position));
     for scan in &mut scans {
@@ -190,7 +190,7 @@ fn triples(text: &[u8], at: [usize; 3], policy: PaePolicy) -> Result<PaeMatrix, 
     let mut probe = PrecisionProbe::new();
     let mut size = 0_usize;
     walk_triples(text, at, |first, second, value| {
-        probe.observe(value);
+        probe.observe_f64(value);
         size = size.max(first).max(second);
         Ok(())
     })?;
@@ -207,7 +207,7 @@ fn triples(text: &[u8], at: [usize; 3], policy: PaePolicy) -> Result<PaeMatrix, 
         }
         seen[word] |= bit;
         count += 1;
-        matrix.set(row, column, value)
+        matrix.set_f64(row, column, value)
     })?;
     let expected = (size as u64) * (size as u64);
     if count != expected {
