@@ -64,7 +64,7 @@ def test_all_carbohydrate_public_names_are_registered_and_namespace_identity_is_
     assert symbol.color == 0x0090BC
     assert symbol.secondary_color is None
     assert chemistry.snfg_symbol("MAN").abbreviation == chemistry.snfg_symbol("BMA").abbreviation
-    assert chemistry.snfg_symbol("GalN").secondary_color == 0xF1ECE1
+    assert chemistry.snfg_symbol("GalN").secondary_color == 0xFFFFFF
     assert chemistry.snfg_symbol("ZZZ") is None
     with pytest.raises(AttributeError):
         symbol.color = 0

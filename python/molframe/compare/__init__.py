@@ -49,7 +49,7 @@ __all__ = [
     "mapped_qs_score",
     "qs_score",
     "tm_score",
-    "tm_screen",
     "tm_scores",
+    "tm_screen",
     "weighted_rmsd",
 ]
