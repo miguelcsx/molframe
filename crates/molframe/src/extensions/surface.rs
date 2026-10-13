@@ -5,10 +5,17 @@
 //! gather and what to do about an atom whose element has no radius in the
 //! chosen set. The decision is stated here once. Such an atom gets a `NaN`
 //! area and, because it has no radius, does not occlude its neighbours.
+//!
+//! The same rule covers heteroatoms. By default only the polymer is measured,
+//! as NACCESS and `FreeSASA` do: waters, ligands and ions get `NaN` and do not
+//! occlude. [`SasaOptions::hetero`] brings any of them in, and
+//! [`SasaOptions::metals`] says where a metal the radius set lacks takes its
+//! radius from. Both sampling methods read the one radius vector, so
+//! Shrake-Rupley and Lee-Richards always measure the same set of atoms.
 
 use crate::ExecutionContext;
 use crate::structure::Structure;
-use molframe_chem::{RadiusSet, atom_radii};
+use molframe_chem::{HeteroPolicy, MetalFallback, RadiusPolicy, RadiusSet, policy_radii};
 use molframe_core::diagnostic::Diagnostic;
 use molframe_core::index::ModelIndex;
 use molframe_surface::SasaError;
@@ -30,8 +37,8 @@ pub enum SasaMethod {
 
 /// Options for [`SurfaceExt::sasa_with`].
 ///
-/// The default is Shrake-Rupley with 960 points, a 1.4 Å probe, Bondi radii
-/// and the first model.
+/// The default is Shrake-Rupley with 960 points, a 1.4 Å probe, Bondi radii,
+/// the polymer alone (no waters, ligands or ions) and the first model.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SasaOptions {
     /// The sampling method.
@@ -40,6 +47,10 @@ pub struct SasaOptions {
     pub probe: f32,
     /// Which radius table to use.
     pub radii: RadiusSet,
+    /// Which heteroatom classes are measured and occlude.
+    pub hetero: HeteroPolicy,
+    /// Where a metal the radius set has no value for takes its radius.
+    pub metals: MetalFallback,
     /// Which model to measure.
     pub model: ModelIndex,
 }
@@ -50,6 +61,8 @@ impl Default for SasaOptions {
             method: SasaMethod::ShrakeRupley { points: 960 },
             probe: 1.4,
             radii: RadiusSet::Bondi,
+            hetero: HeteroPolicy::POLYMER,
+            metals: MetalFallback::Vdw,
             model: ModelIndex::new(0),
         }
     }
@@ -107,7 +120,7 @@ pub trait SurfaceExt {
     fn sasa(&self) -> Result<Vec<f64>, SurfaceExtError>;
 
     /// Per-atom SASA, indexed by atom. Atoms whose element has no radius in
-    /// the chosen set get `NaN`.
+    /// the chosen set, and heteroatoms the options leave out, get `NaN`.
     ///
     /// # Errors
     ///
@@ -155,33 +168,43 @@ impl SurfaceExt for Structure {
         let positions = self
             .model_coordinates(options.model)
             .ok_or_else(|| missing_model(self, options.model))?;
-        let radii = atom_radii(engine, options.radii);
-        // An atom without a radius cannot occlude and has no area: give it a
-        // zero-radius sphere to measure, then report NaN for it.
-        let measured: Vec<f32> = radii
-            .iter()
-            .map(|radius| if radius.is_nan() { 0.0 } else { *radius })
+        let radii = policy_radii(
+            engine,
+            &RadiusPolicy {
+                set: options.radii,
+                metals: options.metals,
+                hetero: options.hetero,
+            },
+        );
+        // An atom without a radius is not an obstacle: even a zero-radius
+        // sphere would still block a probe, so such atoms are left out of the
+        // kernel entirely and their area is reported as NaN.
+        let kept: Vec<usize> = (0..radii.len())
+            .filter(|&atom| radii[atom].is_finite())
             .collect();
-        let mut areas = match options.method {
+        let (points_in, radii_in): (Vec<[f32; 3]>, Vec<f32>) = kept
+            .iter()
+            .filter_map(|&atom| Some((*positions.get(atom)?, radii[atom])))
+            .unzip();
+        let measured = match options.method {
             SasaMethod::ShrakeRupley { points } => molframe_surface::shrake_rupley(
-                positions,
-                &measured,
+                &points_in,
+                &radii_in,
                 options.probe,
                 points,
                 context,
             )?,
             SasaMethod::LeeRichards { slices } => molframe_surface::lee_richards(
-                positions,
-                &measured,
+                &points_in,
+                &radii_in,
                 options.probe,
                 slices,
                 context,
             )?,
         };
-        for (area, radius) in areas.iter_mut().zip(&radii) {
-            if radius.is_nan() {
-                *area = f64::NAN;
-            }
+        let mut areas = vec![f64::NAN; radii.len()];
+        for (&atom, area) in kept.iter().zip(measured) {
+            areas[atom] = area;
         }
         Ok(areas)
     }

@@ -62,3 +62,7 @@ mod tests;
 #[cfg(all(test, feature = "surface", feature = "chemistry"))]
 #[path = "surface_tests.rs"]
 mod surface_tests;
+
+#[cfg(all(test, feature = "surface", feature = "chemistry"))]
+#[path = "surface_reference_tests.rs"]
+mod surface_reference_tests;
