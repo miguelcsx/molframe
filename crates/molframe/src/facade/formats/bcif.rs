@@ -59,30 +59,49 @@ fn encode(
         .map_err(Findings::from)
 }
 
-/// Appends the retained `ModelCIF` categories, encoded as binary columns.
+/// Appends the retained `ModelCIF` tables, encoded column by column.
+///
+/// Cells are borrowed from the compact columns and the dense PAE matrix; no
+/// text and no parsed document is built.
 #[cfg(feature = "modelcif")]
 fn write_with_model(
     structure: &Structure,
     model: &molframe_modelcif::ModelCif,
     options: &molframe_cif::CifWriteOptions,
 ) -> Result<Vec<u8>, Findings> {
-    use molframe_core::diagnostic::{Code, Diagnostic};
-    let failure = |message: String| {
-        Findings::from(
-            Diagnostic::new(Code::E1901)
-                .with_message(message)
-                .in_category("ma_*"),
-        )
-    };
-    let mut text = b"data_extension\n".to_vec();
-    molframe_modelcif::write_extension_to(model, &mut text)
-        .map_err(|error| failure(error.to_string()))?;
-    let input = molframe_core::io::InputBuffer::from_bytes(text);
-    let (document, _) = molframe_cif::parse(&input).map_err(|findings| {
-        failure(format!(
-            "ModelCIF categories did not re-parse: {findings:?}"
-        ))
-    })?;
-    molframe_bcif::write_structure_with_extension(structure.engine(), options, &document)
+    struct Table<'a>(molframe_modelcif::ExportTable<'a>);
+
+    impl molframe_bcif::ColumnTable for Table<'_> {
+        fn name(&self) -> &str {
+            self.0.name()
+        }
+        fn row_count(&self) -> usize {
+            self.0.row_count()
+        }
+        fn column_count(&self) -> usize {
+            self.0.column_count()
+        }
+        fn item(&self, column: usize) -> &str {
+            self.0.item(column)
+        }
+        fn cell(&self, column: usize, row: usize) -> molframe_bcif::Cell<'_> {
+            use molframe_bcif::Cell;
+            use molframe_modelcif::ExportCell;
+            match self.0.cell(column, row) {
+                ExportCell::Inapplicable => Cell::Inapplicable,
+                ExportCell::Unknown => Cell::Unknown,
+                ExportCell::Text(value) => Cell::Text(value),
+                ExportCell::Integer(value) => Cell::Integer(value),
+                ExportCell::Float(value) => Cell::Float(value),
+            }
+        }
+    }
+
+    let tables: Vec<Table<'_>> = model.export_tables().into_iter().map(Table).collect();
+    let views: Vec<&dyn molframe_bcif::ColumnTable> = tables
+        .iter()
+        .map(|table| table as &dyn molframe_bcif::ColumnTable)
+        .collect();
+    molframe_bcif::write_structure_with_tables(structure.engine(), options, &views)
         .map_err(Findings::from)
 }
