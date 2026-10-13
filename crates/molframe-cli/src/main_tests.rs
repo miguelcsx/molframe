@@ -258,6 +258,17 @@ fn advanced_workflows_have_declarative_entrypoints() {
             "--ccd",
             "components.cif"
         ])
+        .is_ok()
+    );
+    assert!(
+        Cli::try_parse_from([
+            "molframe",
+            "sequence",
+            "extract",
+            "entry.cif",
+            "--ccd-version",
+            "v1"
+        ])
         .is_err()
     );
     assert!(
