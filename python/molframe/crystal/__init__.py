@@ -6,6 +6,8 @@ AssemblyBond = _native.AssemblyBond
 AssemblyInstance = _native.AssemblyInstance
 DensityMap = _native.DensityMap
 MapStatistics = _native.MapStatistics
+NcsChainPair = _native.NcsChainPair
+NcsOperator = _native.NcsOperator
 ReducedCell = _native.ReducedCell
 ReflectionSymmetry = _native.ReflectionSymmetry
 ReflectionTable = _native.ReflectionTable
@@ -18,6 +20,9 @@ assembly = _native.assembly
 assembly_chunks = _native.assembly_chunks
 assembly_structure = _native.assembly_structure
 assembly_covalent_links = _native.assembly_covalent_links
+ncs_chain_pairs = _native.ncs_chain_pairs
+ncs_operators = _native.ncs_operators
+ncs_structure = _native.ncs_structure
 normalizers = _native.normalizers
 read_mrc = _native.read_mrc
 read_mtz = _native.read_mtz
@@ -30,6 +35,8 @@ __all__ = [
     "AssemblyInstance",
     "DensityMap",
     "MapStatistics",
+    "NcsChainPair",
+    "NcsOperator",
     "ReducedCell",
     "ReflectionSymmetry",
     "ReflectionTable",
@@ -42,6 +49,9 @@ __all__ = [
     "assembly_chunks",
     "assembly_covalent_links",
     "assembly_structure",
+    "ncs_chain_pairs",
+    "ncs_operators",
+    "ncs_structure",
     "normalizers",
     "read_mrc",
     "read_mtz",

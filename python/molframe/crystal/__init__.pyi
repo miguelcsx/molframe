@@ -170,8 +170,47 @@ def assembly_chunks(
 ) -> Iterator[Structure]: ...
 def structure_factors(structure: Structure, hkl: IntArray) -> ComplexArray: ...
 
+@final
+class NcsOperator:
+    @property
+    def id(self) -> str: ...
+    @property
+    def code(self) -> Literal["given", "generate"]: ...
+    @property
+    def details(self) -> str | None: ...
+    @property
+    def rotation(self) -> FloatArray: ...
+    @property
+    def translation(self) -> FloatArray: ...
+
+@final
+class NcsChainPair:
+    @property
+    def operator(self) -> str: ...
+    @property
+    def source(self) -> str: ...
+    @property
+    def target(self) -> str: ...
+    @property
+    def rmsd(self) -> float | None: ...
+    @property
+    def atoms(self) -> int: ...
+    @property
+    def declared(self) -> bool: ...
+
+def ncs_operators(structure: Structure) -> list[NcsOperator]: ...
+def ncs_chain_pairs(
+    structure: Structure,
+    max_rmsd: float = 2.0,
+    include_generate: bool = False,
+    pair_limit: int = 4_000_000,
+) -> list[NcsChainPair]: ...
+def ncs_structure(structure: Structure) -> Structure: ...
+
 __all__ = [
     "AssemblyInstance",
+    "NcsChainPair",
+    "NcsOperator",
     "ReducedCell",
     "ReflectionSymmetry",
     "ResolutionBins",
@@ -181,6 +220,9 @@ __all__ = [
     "assembly",
     "assembly_chunks",
     "assembly_structure",
+    "ncs_chain_pairs",
+    "ncs_operators",
+    "ncs_structure",
     "normalizers",
     "reduce_cell",
     "structure_factors",
