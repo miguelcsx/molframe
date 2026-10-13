@@ -43,6 +43,50 @@ fn constant_branches_are_folded_before_execution() {
     ));
 }
 
+const GLYCAN: &str = "data_glycan\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.auth_seq_id\n_atom_site.auth_comp_id\n\
+_atom_site.auth_asym_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
+ATOM 1 N N ASN A 1 10 ASN A 0 0 0\n\
+HETATM 2 C C1 NAG B . 601 NAG A 5 0 0\n\
+HETATM 3 C C1 MAN B . 604 MAN A 10 0 0\n\
+HETATM 4 C C2 MAN B . 604 MAN A 11 0 0\n\
+HETATM 5 C C1 MAN B . 605 MAN A 12 0 0\n";
+
+#[test]
+fn branched_glycan_residues_are_selected_by_component_name() {
+    let input = InputBuffer::from_bytes(GLYCAN.as_bytes().to_vec());
+    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
+        Ok((structure, _)) => structure,
+        Err(findings) => panic!("fixture failed: {findings:?}"),
+    };
+    let policy = AnalysisPolicy::default();
+    for (text, expected) in [
+        ("resname MAN", 3),
+        ("label_resname MAN", 3),
+        ("auth_resname MAN", 3),
+        ("resname MAN and hetero", 3),
+        ("resname NAG", 1),
+        ("resname man", 0),
+    ] {
+        let query = match Query::compile(text) {
+            Ok(query) => query,
+            Err(findings) => panic!("compile failed: {findings:?}"),
+        };
+        let result = match query.plan(&structure, &policy).evaluate(
+            &structure,
+            &policy,
+            &Groups::new(),
+            None,
+        ) {
+            Ok(result) => result,
+            Err(findings) => panic!("evaluation failed: {findings:?}"),
+        };
+        assert_eq!(result.selection.iter().count(), expected, "{text}");
+    }
+}
+
 fn structure() -> Structure {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
     match molframe_cif::read(&input, &ReadOptions::new()) {
