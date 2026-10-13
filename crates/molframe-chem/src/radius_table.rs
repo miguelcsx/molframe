@@ -20,7 +20,8 @@
 //! `name`, `version`, `source` and `licence` are required. `base` is optional
 //! and layers the table over one of the built-in sets: an element the caller
 //! lists takes the caller's value, any other element falls through to the base,
-//! and without a base it has no radius. Blank lines and lines starting with `#`
+//! and without a base it has no radius; a table must list an element or name a
+//! base. Blank lines and lines starting with `#`
 //! are ignored. Every problem is reported with its line number and nothing is
 //! accepted partially.
 
@@ -109,8 +110,11 @@ impl CustomRadii {
             listed += 1;
         }
         let identity = header.identity()?;
-        if listed == 0 {
-            return Err(RadiusTableError::at(0, "the table lists no element"));
+        if listed == 0 && header.base.is_none() {
+            return Err(RadiusTableError::at(
+                0,
+                "the table lists no element and has no base",
+            ));
         }
         Ok(Self {
             identity,
