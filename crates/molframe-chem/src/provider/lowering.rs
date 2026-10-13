@@ -3,18 +3,13 @@
 //! Each reader reports every finding it can before giving up, so a malformed
 //! dictionary entry is diagnosed whole rather than one field at a time.
 
-use super::items::{
-    collect_rows, formal_charge, invalid_value, one_finding, required_flag, required_identifier,
-    required_number, required_text, unknown_marker,
-};
+use super::items::{collect_rows, one_finding, required_identifier, required_text};
 use super::validation::validate_component_topology;
-use crate::model::{
-    BondStereo, Component, ComponentAtom, ComponentBond, ComponentKind, StereoConfiguration,
-};
+use super::views::{atom_view, bond_view, coordinate_count_mismatch, coordinate_rows};
+use crate::model::{Component, ComponentAtom, ComponentBond, ComponentKind};
 use molframe_cif::{Category, DataBlock};
+use molframe_core::Element;
 use molframe_core::diagnostic::{Code, Diagnostic};
-use molframe_core::{BondOrder, Element};
-use num_traits::ToPrimitive;
 use std::sync::Arc;
 
 type ComponentCoordinates = Arc<[[f32; 3]]>;
@@ -59,6 +54,9 @@ pub(super) fn component(block: &DataBlock) -> LoweringResult<Component> {
     )
 }
 
+/// Lowers one component with its rows copied out of the category.
+///
+/// Time and allocation are proportional to the component's own rows.
 pub(super) fn component_from(
     metadata: &Category,
     row: usize,
@@ -141,136 +139,6 @@ fn one_letter_code(value: &str) -> Option<u8> {
     (bytes.len() == 1 && bytes[0].is_ascii()).then_some(bytes[0])
 }
 
-/// Atoms of a component; `lenient` accepts the reduced rows of a deposited
-/// structure file, which omit the formal charge and the leaving-atom flag.
-fn atoms(rows: Option<Rows<'_>>, lenient: bool) -> LoweringResult<Vec<ComponentAtom>> {
-    // A component with no atom category is a legitimate entry with no atoms,
-    // such as the unknown-ligand placeholder; an empty category is not.
-    let Some(Rows { category, rows }) = rows else {
-        return Ok(Vec::new());
-    };
-    if rows.is_empty() {
-        return Err(vec![
-            Diagnostic::new(Code::E2002)
-                .with_context("item", "atom_id")
-                .with_context("row", "0")
-                .in_category(category.name()),
-        ]);
-    }
-    collect_rows(rows, |row| {
-        let element = element(category, row)?;
-        let charge = if lenient && category.column("charge").is_none() {
-            0
-        } else {
-            formal_charge(category, row)?
-        };
-        let leaving = if lenient && category.column("pdbx_leaving_atom_flag").is_none() {
-            false
-        } else {
-            required_flag(category, "pdbx_leaving_atom_flag", row)?
-        };
-        Ok(ComponentAtom {
-            name: required_identifier(category, "atom_id", row)?,
-            alternate_name: category
-                .identifier("alt_atom_id", row)
-                .map(|value| value.into_owned().into()),
-            element,
-            charge,
-            aromatic: required_flag(category, "pdbx_aromatic_flag", row)?,
-            leaving,
-            stereo: optional_stereo(category, row)?,
-        })
-    })
-}
-
-/// The element of a component atom.
-///
-/// The archive writes `X` for an atom whose element is deliberately
-/// unspecified, as in the ambiguous residues ASX and GLX. That is reported as
-/// [`Element::UNKNOWN`] rather than guessed or rejected.
-fn element(category: &molframe_cif::Category, row: usize) -> Result<Element, Diagnostic> {
-    let symbol = required_text(category, "type_symbol", row)?;
-    if symbol.trim().eq_ignore_ascii_case("X") {
-        return Ok(Element::UNKNOWN);
-    }
-    Element::from_symbol(&symbol).ok_or_else(|| invalid_value(category, "type_symbol", row))
-}
-
-fn bonds(rows: Option<Rows<'_>>) -> LoweringResult<Vec<ComponentBond>> {
-    let Some(Rows { category, rows }) = rows else {
-        return Ok(Vec::new());
-    };
-    collect_rows(rows, |row| {
-        let aromatic = required_flag(category, "pdbx_aromatic_flag", row)?;
-        Ok(ComponentBond {
-            atom_a: required_identifier(category, "atom_id_1", row)?,
-            atom_b: required_identifier(category, "atom_id_2", row)?,
-            order: bond_order(category, row, aromatic)?,
-            aromatic,
-            stereo: bond_stereo(category, row)?,
-        })
-    })
-}
-
-/// One coordinate set (ideal or model) for every atom of a component.
-///
-/// The archive writes `?` for a coordinate it does not have, and the two sets
-/// are curated independently: a component can carry ideal coordinates and no
-/// model coordinates, or the reverse. A set with any unknown or inapplicable
-/// coordinate is reported as absent as a whole, because a partial set cannot be
-/// indexed by atom and substituting zeros would place atoms at the origin. The
-/// caller chooses between the sets; nothing here falls back from one to the
-/// other.
-fn coordinates(
-    atoms: Option<Rows<'_>>,
-    ideal: bool,
-    expected: usize,
-) -> LoweringResult<Option<ComponentCoordinates>> {
-    let Some(Rows { category, rows }) = atoms else {
-        return Ok(None);
-    };
-    let items = if ideal {
-        [
-            "pdbx_model_Cartn_x_ideal",
-            "pdbx_model_Cartn_y_ideal",
-            "pdbx_model_Cartn_z_ideal",
-        ]
-    } else {
-        ["model_Cartn_x", "model_Cartn_y", "model_Cartn_z"]
-    };
-    if items.iter().all(|item| category.column(item).is_none()) {
-        return Ok(None);
-    }
-    let mut positions = Vec::with_capacity(expected);
-    for &row in rows {
-        let mut position = [0.0; 3];
-        for (axis, item) in items.iter().enumerate() {
-            if unknown_marker(category, item, row) {
-                return Ok(None);
-            }
-            let value = required_number(category, item, row).map_err(one_finding)?;
-            if value < f64::from(f32::MIN) || value > f64::from(f32::MAX) {
-                return Err(vec![invalid_value(category, item, row)]);
-            }
-            let Some(value) = value.to_f32() else {
-                return Err(vec![invalid_value(category, item, row)]);
-            };
-            position[axis] = value;
-        }
-        positions.push(position);
-    }
-    if positions.len() == expected {
-        Ok(Some(positions.into()))
-    } else {
-        Err(vec![
-            Diagnostic::new(Code::E3001)
-                .in_category(category.name())
-                .with_context("expected", expected.to_string())
-                .with_context("observed", positions.len().to_string()),
-        ])
-    }
-}
-
 pub(super) fn kind(value: Option<&str>) -> ComponentKind {
     const PEPTIDE: &str = "PEPTIDE";
     const DNA: &str = "DNA";
@@ -306,55 +174,74 @@ pub(super) fn kind(value: Option<&str>) -> ComponentKind {
     }
 }
 
-fn bond_order(
-    category: &molframe_cif::Category,
-    row: usize,
-    aromatic: bool,
-) -> Result<BondOrder, Diagnostic> {
-    if aromatic {
-        return Ok(BondOrder::Aromatic);
+/// Atoms of a component; `lenient` accepts the reduced rows of a deposited
+/// structure file, which omit the formal charge and the leaving-atom flag.
+fn atoms(rows: Option<Rows<'_>>, lenient: bool) -> LoweringResult<Vec<ComponentAtom>> {
+    // A component with no atom category is a legitimate entry with no atoms,
+    // such as the unknown-ligand placeholder; an empty category is not.
+    let Some(Rows { category, rows }) = rows else {
+        return Ok(Vec::new());
+    };
+    if rows.is_empty() {
+        return Err(vec![
+            Diagnostic::new(Code::E2002)
+                .with_context("item", "atom_id")
+                .with_context("row", "0")
+                .in_category(category.name()),
+        ]);
     }
-    match required_text(category, "value_order", row)?
-        .to_ascii_uppercase()
-        .as_str()
-    {
-        "SING" => Ok(BondOrder::Single),
-        "DOUB" => Ok(BondOrder::Double),
-        "TRIP" => Ok(BondOrder::Triple),
-        "QUAD" => Ok(BondOrder::Quadruple),
-        _ => Err(invalid_value(category, "value_order", row)),
-    }
+    collect_rows(rows, |row| {
+        let view = atom_view(category, row, lenient)?;
+        Ok(ComponentAtom {
+            name: view.name.into_owned().into(),
+            alternate_name: view.alternate_name.map(|name| name.into_owned().into()),
+            element: view.element,
+            charge: view.charge,
+            aromatic: view.aromatic,
+            leaving: view.leaving,
+            stereo: view.stereo,
+        })
+    })
 }
 
-/// Bond stereo: `N` is none, and `E`/`Z` are double-bond geometry.
-///
-/// Anything else is rejected rather than reinterpreted: the tetrahedral values
-/// belong to atoms, and a bond carrying one is a malformed dictionary entry.
-fn bond_stereo(
-    category: &molframe_cif::Category,
-    row: usize,
-) -> Result<Option<BondStereo>, Diagnostic> {
-    let item = "pdbx_stereo_config";
-    match category.text(item, row) {
-        None => Ok(None),
-        Some(value) if value.eq_ignore_ascii_case("N") => Ok(None),
-        Some(value) if value.eq_ignore_ascii_case("E") => Ok(Some(BondStereo::E)),
-        Some(value) if value.eq_ignore_ascii_case("Z") => Ok(Some(BondStereo::Z)),
-        Some(_) => Err(invalid_value(category, item, row)),
-    }
+fn bonds(rows: Option<Rows<'_>>) -> LoweringResult<Vec<ComponentBond>> {
+    let Some(Rows { category, rows }) = rows else {
+        return Ok(Vec::new());
+    };
+    collect_rows(rows, |row| {
+        let view = bond_view(category, row)?;
+        Ok(ComponentBond {
+            atom_a: view.atom_a.into_owned().into(),
+            atom_b: view.atom_b.into_owned().into(),
+            order: view.order,
+            aromatic: view.aromatic,
+            stereo: view.stereo,
+        })
+    })
 }
 
-fn optional_stereo(
-    category: &molframe_cif::Category,
-    row: usize,
-) -> Result<Option<StereoConfiguration>, Diagnostic> {
-    let item = "pdbx_stereo_config";
-    match category.text(item, row) {
-        None => Ok(None),
-        Some(value) if value.eq_ignore_ascii_case("N") => Ok(None),
-        Some(value) if value.eq_ignore_ascii_case("R") => Ok(Some(StereoConfiguration::R)),
-        Some(value) if value.eq_ignore_ascii_case("S") => Ok(Some(StereoConfiguration::S)),
-        Some(value) if value.eq_ignore_ascii_case("MIXED") => Ok(Some(StereoConfiguration::Mixed)),
-        Some(_) => Err(invalid_value(category, item, row)),
+fn coordinates(
+    atoms: Option<Rows<'_>>,
+    ideal: bool,
+    expected: usize,
+) -> LoweringResult<Option<ComponentCoordinates>> {
+    let Some(Rows { category, rows }) = atoms else {
+        return Ok(None);
+    };
+    let mut positions = Vec::with_capacity(expected);
+    let present = coordinate_rows(category, rows.iter().copied(), ideal, |position| {
+        positions.push(position);
+    })?;
+    if !present {
+        return Ok(None);
+    }
+    if positions.len() == expected {
+        Ok(Some(positions.into()))
+    } else {
+        Err(coordinate_count_mismatch(
+            category,
+            expected,
+            positions.len(),
+        ))
     }
 }

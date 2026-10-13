@@ -2,6 +2,7 @@
 
 use molframe_cif::{Category, CifValue};
 use molframe_core::diagnostic::{Code, Diagnostic};
+use std::borrow::Cow;
 
 type LoweringResult<T> = Result<T, Vec<Diagnostic>>;
 
@@ -29,9 +30,18 @@ pub(super) fn required_identifier(
     item: &str,
     row: usize,
 ) -> Result<Box<str>, Diagnostic> {
+    identifier_ref(category, item, row).map(|value| value.into_owned().into())
+}
+
+/// The identifier borrowed from the category; it owns text only when the file
+/// wrote the identifier as a number.
+pub(super) fn identifier_ref<'a>(
+    category: &'a Category,
+    item: &str,
+    row: usize,
+) -> Result<Cow<'a, str>, Diagnostic> {
     category
         .identifier(item, row)
-        .map(|value| value.into_owned().into())
         .ok_or_else(|| missing_item(category, item, row))
 }
 
@@ -40,9 +50,16 @@ pub(super) fn required_text(
     item: &str,
     row: usize,
 ) -> Result<Box<str>, Diagnostic> {
+    text_ref(category, item, row).map(Into::into)
+}
+
+pub(super) fn text_ref<'a>(
+    category: &'a Category,
+    item: &str,
+    row: usize,
+) -> Result<&'a str, Diagnostic> {
     category
         .text(item, row)
-        .map(Into::into)
         .ok_or_else(|| missing_item(category, item, row))
 }
 

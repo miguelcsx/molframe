@@ -34,6 +34,19 @@ pub fn embedded_components(
     Ok((!provider.is_empty()).then_some(provider))
 }
 
+/// Like [`embedded_components`], moving the component tables out of a document
+/// the caller is done with instead of copying them.
+///
+/// # Errors
+///
+/// Returns every malformed or duplicate embedded definition.
+pub fn take_embedded_components(
+    document: &mut Document,
+) -> Result<Option<EmbeddedProvider>, Vec<Diagnostic>> {
+    let provider = EmbeddedProvider::take_from(document, DictionaryVersion::new(EMBEDDED_VERSION))?;
+    Ok((!provider.is_empty()).then_some(provider))
+}
+
 /// The provider for annotating `structure`: in-file definitions that state
 /// charges, then `user`, then the bundled core set, then in-file definitions
 /// that give connectivity only.

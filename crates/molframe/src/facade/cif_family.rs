@@ -30,26 +30,33 @@ macro_rules! cif_family_reader {
                     Ok(projection) => projection,
                     Err(error) => return Err(extensions::model_error(&error).into()),
                 };
-                let (document, structure, projected, findings) = $family::read_with_projection(
+                let (mut document, structure, projected, findings) = $family::read_with_projection(
                     input,
                     options,
                     extensions::keep_non_model_extension_category,
                     projection,
                 )?;
                 extensions::attach_projected_metadata(
-                    &document, structure, findings, projected, options,
+                    &mut document,
+                    structure,
+                    findings,
+                    projected,
+                    options,
                 )
                 .map_err(Findings::from)
             }
             #[cfg(not(feature = "modelcif"))]
             {
-                let (document, structure, findings) = $family::read_with_metadata(
+                let (mut document, structure, findings) = $family::read_with_metadata(
                     input,
                     options,
                     extensions::keep_non_model_extension_category,
                 )?;
                 extensions::attach_materialized_cif_metadata(
-                    &document, structure, findings, options,
+                    &mut document,
+                    structure,
+                    findings,
+                    options,
                 )
                 .map_err(Findings::from)
             }

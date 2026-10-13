@@ -86,7 +86,7 @@ pub use peoe::{
 pub use provider::{
     CORE_DICTIONARY_VERSION, CifProvider, ComponentProvider, CoreProvider,
     EMBEDDED_COMPONENTS_EXTENSION, EmbeddedProvider, LayeredProvider, LazyCifProvider,
-    MemoryProvider, embedded_components, read_ccd, resolution_stack,
+    MemoryProvider, embedded_components, read_ccd, resolution_stack, take_embedded_components,
 };
 pub use radii_defaults::{
     ALVAREZ as ALVAREZ_RADII, AMBER_UNITED as AMBER_UNITED_RADII, BONDI as BONDI_RADII,

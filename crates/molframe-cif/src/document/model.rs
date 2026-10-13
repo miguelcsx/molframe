@@ -403,6 +403,13 @@ impl DataBlock {
         &mut self.categories[index]
     }
 
+    /// Removes one category and hands it over, keeping the order of the rest.
+    ///
+    /// Moving a category out costs `O(items)` and copies none of its values.
+    pub fn take_category(&mut self, name: &str) -> Option<Category> {
+        self.categories.shift_remove(name)
+    }
+
     /// The categories, in the order the file gave them.
     pub fn categories(&self) -> impl Iterator<Item = &Category> {
         self.categories.values()
@@ -468,6 +475,11 @@ impl Document {
     /// Every block, in order.
     pub fn blocks(&self) -> impl Iterator<Item = &DataBlock> {
         self.blocks.iter()
+    }
+
+    /// Every block, in order, for taking categories out of them.
+    pub fn blocks_mut(&mut self) -> impl Iterator<Item = &mut DataBlock> {
+        self.blocks.iter_mut()
     }
 
     /// The number of blocks.

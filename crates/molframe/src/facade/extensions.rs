@@ -30,15 +30,17 @@ pub(super) fn keep_non_model_extension_category(category: &str) -> bool {
 }
 
 /// Attaches extensions from a document supplied by an explicitly materialising format.
+///
+/// The component tables are moved out of `document` rather than copied.
 pub(super) fn attach_materialized_cif_metadata(
-    document: &molframe_cif::Document,
+    document: &mut molframe_cif::Document,
     structure: Structure,
     findings: Vec<Diagnostic>,
     options: &ReadOptions,
 ) -> ReadResult {
     #[cfg(feature = "modelcif")]
     let (structure, findings) = {
-        let projected = molframe_modelcif::lower(document);
+        let projected = molframe_modelcif::lower(&*document);
         attach_model(structure, findings, projected)
     };
     let (structure, findings) = attach_non_model(document, structure, findings);
@@ -47,7 +49,7 @@ pub(super) fn attach_materialized_cif_metadata(
 
 #[cfg(feature = "modelcif")]
 pub(super) fn attach_projected_metadata(
-    document: &molframe_cif::Document,
+    document: &mut molframe_cif::Document,
     structure: Structure,
     findings: Vec<Diagnostic>,
     projected: Result<
@@ -106,18 +108,18 @@ pub(super) fn model_error(error: &molframe_modelcif::ModelCifError) -> Diagnosti
 }
 
 fn attach_non_model(
-    document: &molframe_cif::Document,
+    document: &mut molframe_cif::Document,
     structure: Structure,
     findings: Vec<Diagnostic>,
 ) -> (Structure, Vec<Diagnostic>) {
     let (structure, findings) = attach_embedded_components(document, structure, findings);
-    attach_crystal(document, structure, findings)
+    attach_crystal(&*document, structure, findings)
 }
 
 /// Keeps the component definitions the file carries, so annotation resolves
 /// them before any dictionary without the caller asking.
 fn attach_embedded_components(
-    document: &molframe_cif::Document,
+    document: &mut molframe_cif::Document,
     structure: Structure,
     findings: Vec<Diagnostic>,
 ) -> (Structure, Vec<Diagnostic>) {
@@ -125,7 +127,7 @@ fn attach_embedded_components(
     {
         let mut structure = structure;
         let mut findings = findings;
-        match molframe_chem::embedded_components(document) {
+        match molframe_chem::take_embedded_components(document) {
             Ok(Some(provider)) => {
                 structure = structure
                     .with_extension(molframe_chem::EMBEDDED_COMPONENTS_EXTENSION, provider);

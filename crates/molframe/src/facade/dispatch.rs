@@ -56,10 +56,13 @@ fn read_pdbml_buffer(
     // error, so the catch-all arm below produces the same finding the variant
     // arm would have.
     match molframe_cif::read_pdbml(input.as_bytes(), options) {
-        Ok((document, structure, findings)) => {
-            extensions::attach_materialized_cif_metadata(&document, structure, findings, options)
-                .map_err(Findings::from)
-        }
+        Ok((mut document, structure, findings)) => extensions::attach_materialized_cif_metadata(
+            &mut document,
+            structure,
+            findings,
+            options,
+        )
+        .map_err(Findings::from),
         Err(molframe_cif::PdbmlReadError::Findings(findings)) => Err(findings.into()),
         Err(error) => Err(Findings::from(
             Diagnostic::new(Code::E1102)

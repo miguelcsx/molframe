@@ -135,10 +135,10 @@ fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
 
     let input = InputBuffer::from_bytes(MMCIF_XTAL.as_bytes().to_vec());
     let options = ReadOptions::new();
-    let (document, base, base_findings) =
+    let (mut document, base, base_findings) =
         molframe_cif::read_with_document(&input, &options).expect("lossless read should succeed");
     let (lossless, lossless_findings) = super::extensions::attach_materialized_cif_metadata(
-        &document,
+        &mut document,
         base,
         base_findings,
         &options,

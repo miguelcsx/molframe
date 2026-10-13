@@ -2,12 +2,14 @@
 
 mod bundled;
 mod embedded;
+mod embedded_scan;
 mod items;
 mod layered;
 mod lazy;
 mod lowering;
 mod stack;
 mod validation;
+mod views;
 
 use crate::model::Component;
 pub use bundled::{CORE_DICTIONARY_VERSION, CoreProvider};
@@ -20,7 +22,9 @@ use molframe_cif::Document;
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::io::InputBuffer;
-pub use stack::{EMBEDDED_COMPONENTS_EXTENSION, embedded_components, resolution_stack};
+pub use stack::{
+    EMBEDDED_COMPONENTS_EXTENSION, embedded_components, resolution_stack, take_embedded_components,
+};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -157,3 +161,7 @@ mod core_tests;
 #[cfg(test)]
 #[path = "provider_stack_tests.rs"]
 mod stack_tests;
+
+#[cfg(test)]
+#[path = "provider_embedded_tests.rs"]
+mod embedded_tests;
