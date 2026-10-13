@@ -173,41 +173,38 @@ fn surface_has_a_short_top_level_form_with_explicit_physics() {
 }
 
 #[test]
-fn sse_requires_a_caller_selected_role_profile_even_with_explicit_numerics() {
+fn sse_runs_with_standard_roles_and_accepts_an_explicit_profile() {
     let mut arguments = vec![
         "molframe",
         "sse",
         "entry.cif",
-        "--ccd",
-        "components.cif",
-        "--ccd-version",
-        "2026-10-03",
         "--electrostatic-prefactor",
         "27.888",
         "--hydrogen-bond-energy=-0.5",
-        "--amide-hydrogen-distance",
-        "1.0",
-        "--minimum-sequence-separation",
-        "1",
-        "--helix-offset",
-        "4",
-        "--three-ten-offset",
-        "3",
-        "--pi-offset",
-        "5",
         "--turn-offsets",
         "3",
         "5",
         "--bend-angle-degrees",
         "70",
     ];
-    let error = Cli::try_parse_from(&arguments).expect_err("a role profile is mandatory");
-    assert!(error.to_string().contains("--role-profile"));
+    assert!(matches!(
+        Cli::try_parse_from(&arguments),
+        Ok(Cli {
+            command: Command::Sse {
+                role_profile: None,
+                ..
+            },
+            ..
+        })
+    ));
     arguments.extend(["--role-profile", "roles.toml"]);
     assert!(matches!(
         Cli::try_parse_from(arguments),
         Ok(Cli {
-            command: Command::Sse { .. },
+            command: Command::Sse {
+                role_profile: Some(_),
+                ..
+            },
             ..
         })
     ));

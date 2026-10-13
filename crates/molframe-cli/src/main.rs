@@ -224,31 +224,35 @@ pub(crate) enum Command {
         cutoff: f32,
     },
     /// Assign secondary structure with the native DSSP kernel.
+    ///
+    /// Without `--role-profile` the standard protein atom names are used and
+    /// no dictionary is needed. Every numeric default is the published
+    /// Kabsch-Sander value; each can be overridden.
     Sse {
         input: PathBuf,
         #[command(flatten)]
         chemistry: CcdArguments,
         /// Caller-authored JSON/TOML polymer roles with `profile_id` and rules.
         #[arg(long)]
-        role_profile: PathBuf,
+        role_profile: Option<PathBuf>,
         #[arg(long)]
-        electrostatic_prefactor: f64,
+        electrostatic_prefactor: Option<f64>,
         #[arg(long)]
-        hydrogen_bond_energy: f64,
+        hydrogen_bond_energy: Option<f64>,
         #[arg(long)]
-        amide_hydrogen_distance: f32,
+        amide_hydrogen_distance: Option<f32>,
         #[arg(long)]
-        minimum_sequence_separation: usize,
+        minimum_sequence_separation: Option<usize>,
         #[arg(long)]
-        helix_offset: usize,
+        helix_offset: Option<usize>,
         #[arg(long)]
-        three_ten_offset: usize,
+        three_ten_offset: Option<usize>,
         #[arg(long)]
-        pi_offset: usize,
+        pi_offset: Option<usize>,
         #[arg(long, num_args = 2, value_names = ["MIN", "MAX"])]
         turn_offsets: Vec<usize>,
         #[arg(long)]
-        bend_angle_degrees: f32,
+        bend_angle_degrees: Option<f32>,
     },
     /// Report backbone torsions with explicit missing values.
     Torsions {

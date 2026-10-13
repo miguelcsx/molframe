@@ -146,20 +146,24 @@ pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context
     finish_rows(output, write_error.as_ref())
 }
 
-#[derive(Clone, Copy)]
 pub(crate) struct SseOptions<'a> {
     pub(crate) ccd: &'a Path,
     pub(crate) ccd_version: &'a str,
     pub(crate) role_profile: &'a Path,
-    pub(crate) electrostatic_prefactor: f64,
-    pub(crate) hydrogen_bond_energy: f64,
-    pub(crate) amide_hydrogen_distance: f32,
-    pub(crate) minimum_sequence_separation: usize,
-    pub(crate) helix_offset: usize,
-    pub(crate) three_ten_offset: usize,
-    pub(crate) pi_offset: usize,
-    pub(crate) turn_offsets: &'a [usize],
-    pub(crate) bend_angle_degrees: f32,
+    pub(crate) dssp: &'a molframe::analysis::DsspOptions,
+}
+
+/// Assigns secondary structure with the built-in standard protein roles.
+pub(crate) fn sse_standard(
+    input: &Path,
+    dssp: &molframe::analysis::DsspOptions,
+    context: Context,
+) -> Exit {
+    let structure = match open(input, context) {
+        Ok(structure) => structure,
+        Err(exit) => return exit,
+    };
+    emit_sse(structure.engine(), dssp, context)
 }
 
 pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Exit {
@@ -195,22 +199,15 @@ pub(crate) fn sse(input: &Path, options: SseOptions<'_>, context: Context) -> Ex
             roles.profile_id
         );
     }
-    let [turn_minimum, turn_maximum] = options.turn_offsets else {
-        eprintln!("--turn-offsets requires exactly two values");
-        return Exit::Usage;
-    };
-    let dssp = molframe::analysis::DsspOptions {
-        electrostatic_prefactor: options.electrostatic_prefactor,
-        hydrogen_bond_energy: options.hydrogen_bond_energy,
-        amide_hydrogen_distance: options.amide_hydrogen_distance,
-        minimum_sequence_separation: options.minimum_sequence_separation,
-        helix_offset: options.helix_offset,
-        three_ten_offset: options.three_ten_offset,
-        pi_offset: options.pi_offset,
-        turn_offsets: *turn_minimum..=*turn_maximum,
-        bend_angle_degrees: options.bend_angle_degrees,
-    };
-    let records = match molframe::analysis::secondary_structure(&roles.structure, &dssp) {
+    emit_sse(&roles.structure, options.dssp, context)
+}
+
+fn emit_sse(
+    structure: &molframe_core::Structure,
+    dssp: &molframe::analysis::DsspOptions,
+    context: Context,
+) -> Exit {
+    let records = match molframe::analysis::secondary_structure(structure, dssp) {
         Ok(records) => records,
         Err(error) => {
             eprintln!("secondary-structure assignment failed: {error}");

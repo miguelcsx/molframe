@@ -112,31 +112,52 @@ fn execute_data(command: Command, context: Context) -> Exit {
             pi_offset,
             turn_offsets,
             bend_angle_degrees,
-        } => crate::chemistry::with_ccd(
-            chemistry.ccd.as_deref(),
-            chemistry.ccd_version.as_deref(),
-            context,
-            |ccd, version, context| {
-                crate::analysis_commands::sse(
-                    &input,
-                    crate::analysis_commands::SseOptions {
-                        ccd,
-                        ccd_version: version,
-                        role_profile: &role_profile,
-                        electrostatic_prefactor,
-                        hydrogen_bond_energy,
-                        amide_hydrogen_distance,
-                        minimum_sequence_separation,
-                        helix_offset,
-                        three_ten_offset,
-                        pi_offset,
-                        turn_offsets: &turn_offsets,
-                        bend_angle_degrees,
-                    },
+        } => {
+            let defaults = molframe::analysis::DsspOptions::default();
+            let dssp = molframe::analysis::DsspOptions {
+                electrostatic_prefactor: pick(
+                    electrostatic_prefactor,
+                    defaults.electrostatic_prefactor,
+                ),
+                hydrogen_bond_energy: pick(hydrogen_bond_energy, defaults.hydrogen_bond_energy),
+                amide_hydrogen_distance: pick(
+                    amide_hydrogen_distance,
+                    defaults.amide_hydrogen_distance,
+                ),
+                minimum_sequence_separation: pick(
+                    minimum_sequence_separation,
+                    defaults.minimum_sequence_separation,
+                ),
+                helix_offset: pick(helix_offset, defaults.helix_offset),
+                three_ten_offset: pick(three_ten_offset, defaults.three_ten_offset),
+                pi_offset: pick(pi_offset, defaults.pi_offset),
+                turn_offsets: match turn_offsets.as_slice() {
+                    [minimum, maximum] => *minimum..=*maximum,
+                    _ => defaults.turn_offsets,
+                },
+                bend_angle_degrees: pick(bend_angle_degrees, defaults.bend_angle_degrees),
+            };
+            match role_profile {
+                None => crate::analysis_commands::sse_standard(&input, &dssp, context),
+                Some(role_profile) => crate::chemistry::with_ccd(
+                    chemistry.ccd.as_deref(),
+                    chemistry.ccd_version.as_deref(),
                     context,
-                )
-            },
-        ),
+                    |ccd, version, context| {
+                        crate::analysis_commands::sse(
+                            &input,
+                            crate::analysis_commands::SseOptions {
+                                ccd,
+                                ccd_version: version,
+                                role_profile: &role_profile,
+                                dssp: &dssp,
+                            },
+                            context,
+                        )
+                    },
+                ),
+            }
+        }
         Command::Torsions { input, chemistry } => crate::chemistry::with_ccd(
             chemistry.ccd.as_deref(),
             chemistry.ccd_version.as_deref(),
@@ -402,5 +423,13 @@ fn ccd(command: CcdCommand, context: Context) -> Exit {
             replace,
             context,
         ),
+    }
+}
+
+/// The caller's value, or the documented default when the flag was omitted.
+fn pick<T>(value: Option<T>, default: T) -> T {
+    match value {
+        Some(value) => value,
+        None => default,
     }
 }

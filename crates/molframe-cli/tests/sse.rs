@@ -116,12 +116,6 @@ fn real_crambin_with_complete_amino_acid_ccd_and_explicit_backbone_roles_is_eval
 fn missing_and_invalid_profiles_fail_without_emitting_an_assignment() {
     let directory = tempfile::tempdir().expect("temporary CLI context");
     let output = cli(directory.path())
-        .output()
-        .expect("run CLI without profile");
-    assert_eq!(output.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&output.stderr).contains("--role-profile"));
-    assert!(output.stdout.is_empty());
-    let output = cli(directory.path())
         .arg("--role-profile")
         .arg(directory.path().join("absent.toml"))
         .output()
@@ -142,4 +136,24 @@ fn missing_and_invalid_profiles_fail_without_emitting_an_assignment() {
         assert!(output.stdout.is_empty(), "assignment for invalid {profile}");
         assert!(!output.stderr.is_empty());
     }
+}
+
+#[test]
+fn crambin_gets_its_published_secondary_structure_without_a_profile() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let directory = tempfile::tempdir().expect("temporary CLI context");
+    let output = Command::new(env!("CARGO_BIN_EXE_molframe"))
+        .current_dir(directory.path())
+        .env("XDG_CONFIG_HOME", directory.path())
+        .arg("sse")
+        .arg(root.join("../molframe-bench/data/1crn.cif"))
+        .args(["--format", "json"])
+        .output()
+        .expect("run CLI with the default roles");
+    assert_eq!(output.status.code(), Some(0));
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("alpha_helix") || text.contains("helix"),
+        "{text}"
+    );
 }
