@@ -38,11 +38,13 @@ def vdw_radius(symbol: str, *, radii: _RadiusSet = "bondi") -> float | None: ...
 def vdw_radii(structure: Structure, *, radii: _RadiusSet = "bondi") -> Float32Array: ...
 def annotate(
     structure: Structure,
-    components: str | PathLike[str],
+    components: str | PathLike[str] | None = None,
     *,
     version: str = "unversioned",
     polymer_links: PolymerLinkPolicy | None = None,
-) -> Structure: ...
+    core_fallback: bool = False,
+) -> Structure:
+    """Apply a component dictionary; without one, the bundled core set is used."""
 
 @final
 class PolymerLinkRule:

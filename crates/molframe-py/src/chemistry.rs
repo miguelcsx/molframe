@@ -10,7 +10,9 @@ use molframe::Element;
 use molframe::chemistry::{self as chem, RadiusSet};
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
+use std::fmt::Write as _;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// The radius set a name selects, through the spelling Rust owns.
 pub(crate) fn radius_set(name: &str) -> PyResult<RadiusSet> {
@@ -123,14 +125,28 @@ fn vdw_radii<'py>(
 /// interaction analyses need. File connectivity is kept. Components the
 /// dictionary lacks are reported as one warning, not an error.
 /// Inter-residue bonds are added only with an explicit `polymer_links` policy.
+///
+/// Without `components` the compact bundled core set is used (standard and
+/// common modified residues, nucleotides, water, common ions, frequent
+/// cofactors, carbohydrates); every other component is reported as unknown.
+/// With a `components` path, that dictionary alone answers unless
+/// `core_fallback` also lets the bundled set cover what it lacks.
 #[pyfunction]
-#[pyo3(signature = (structure, components, *, version="unversioned", polymer_links=None))]
+#[pyo3(signature = (
+    structure,
+    components=None,
+    *,
+    version="unversioned",
+    polymer_links=None,
+    core_fallback=false,
+))]
 fn annotate(
     py: Python<'_>,
     structure: &PyStructure,
-    components: PathBuf,
+    components: Option<PathBuf>,
     version: &str,
     polymer_links: Option<PyRef<'_, linkage::PyPolymerLinkPolicy>>,
+    core_fallback: bool,
 ) -> PyResult<PyStructure> {
     let source = structure.inner.clone();
     let policy = match polymer_links {
@@ -140,29 +156,57 @@ fn annotate(
     let version = molframe::DictionaryVersion::new(version);
     let report = py.detach(move || {
         // Only the components the structure uses are parsed and lowered.
-        let provider = molframe::open_component_dictionary(&components, version)
-            .map_err(|findings| findings_error(&findings))?;
-        chem::apply_component_chemistry(source.engine(), &provider, policy)
+        let provider: Arc<dyn chem::ComponentProvider> = match components {
+            None => Arc::new(chem::CoreProvider),
+            Some(path) => {
+                let full = molframe::open_component_dictionary(&path, version)
+                    .map_err(|findings| findings_error(&findings))?;
+                if core_fallback {
+                    Arc::new(chem::LayeredProvider::new(vec![
+                        Arc::new(full),
+                        Arc::new(chem::CoreProvider),
+                    ]))
+                } else {
+                    Arc::new(full)
+                }
+            }
+        };
+        chem::apply_component_chemistry(source.engine(), provider.as_ref(), policy)
             .map_err(crate::error::kernel)
     })?;
     if !report.findings.is_empty() {
+        let unknown: Vec<&str> = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code() == molframe::Code::W3201)
+            .flat_map(molframe::Diagnostic::context)
+            .filter(|item| item.label() == "component")
+            .map(molframe::ContextItem::value)
+            .collect();
         let first: Vec<String> = report
             .findings
             .iter()
+            .filter(|finding| finding.code() != molframe::Code::W3201)
             .take(3)
             .map(ToString::to_string)
             .collect();
+        let mut message = format!("{} component finding(s)", report.findings.len());
+        if !unknown.is_empty() {
+            let _ = write!(
+                message,
+                "; no definition for component(s) {}: pass the full wwPDB dictionary \
+                 (components.cif.gz) as `components` (with core_fallback=True to keep \
+                 the bundled set) or embed chem_comp_atom and chem_comp_bond rows in the file",
+                unknown.join(", ")
+            );
+        }
+        if !first.is_empty() {
+            let _ = write!(message, "; e.g. {}", first.join("; "));
+        }
         PyErr::warn(
             py,
             &py.get_type::<pyo3::exceptions::PyUserWarning>(),
-            &std::ffi::CString::new(
-                format!(
-                    "{} component finding(s), e.g. {}",
-                    report.findings.len(),
-                    first.join("; ")
-                )
-                .replace('\0', " "),
-            )?,
+            &std::ffi::CString::new(message.replace('\0', " "))?,
             1,
         )?;
     }
