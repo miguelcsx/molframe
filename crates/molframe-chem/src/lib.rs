@@ -24,6 +24,7 @@ mod numeric;
 mod peoe;
 mod provider;
 mod radius_policy;
+mod radius_policy_text;
 mod roles;
 mod secondary;
 mod side_chain;
@@ -82,10 +83,11 @@ pub use provider::{
     LayeredProvider, LazyCifProvider, MemoryProvider, read_ccd,
 };
 pub use radius_policy::{
-    HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, policy_radii,
-    radius_with_fallback,
+    HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, included_atoms,
+    policy_radii, radius_with_fallback,
 };
 pub use roles::{
+pub use radius_policy_text::PolicyWordError;
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };
 pub use secondary::{

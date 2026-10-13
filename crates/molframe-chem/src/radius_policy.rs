@@ -156,13 +156,11 @@ pub fn classify_residue(residue: &ResidueRef<'_>, kind: Option<ComponentKind>) -
     }
 }
 
-/// The radius of every atom of `structure` under `policy`, indexed by atom.
-///
-/// `NaN` marks an atom that is excluded by the heteroatom policy, whose element
-/// is unknown, or which has no value in the set and no metal fallback.
+/// Which atoms of `structure` belong to a residue class `hetero` includes,
+/// indexed by atom. Atoms outside any residue are never included.
 #[must_use]
-pub fn policy_radii(structure: &Structure, policy: &RadiusPolicy) -> Vec<f32> {
-    let mut radii = vec![f32::NAN; structure.atom_count() as usize];
+pub fn included_atoms(structure: &Structure, hetero: HeteroPolicy) -> Vec<bool> {
+    let mut included = vec![false; structure.atom_count() as usize];
     let kinds = match structure
         .annotations()
         .get(molframe_core::COMPONENT_KIND_ANNOTATION)
@@ -179,18 +177,37 @@ pub fn policy_radii(structure: &Structure, policy: &RadiusPolicy) -> Vec<f32> {
                     _ => None,
                 }
             });
-            if !policy.hetero.includes(classify_residue(&residue, declared)) {
+            if !hetero.includes(classify_residue(&residue, declared)) {
                 continue;
             }
             for atom in residue.atoms() {
-                let radius = atom
-                    .element()
-                    .and_then(|element| radius_with_fallback(element, policy.set, policy.metals));
-                if let (Some(radius), Some(slot)) = (radius, radii.get_mut(atom.index().as_usize()))
-                {
-                    *slot = radius;
+                if let Some(slot) = included.get_mut(atom.index().as_usize()) {
+                    *slot = true;
                 }
             }
+        }
+    }
+    included
+}
+
+/// The radius of every atom of `structure` under `policy`, indexed by atom.
+///
+/// `NaN` marks an atom that is excluded by the heteroatom policy, whose element
+/// is unknown, or which has no value in the set and no metal fallback.
+#[must_use]
+pub fn policy_radii(structure: &Structure, policy: &RadiusPolicy) -> Vec<f32> {
+    let included = included_atoms(structure, policy.hetero);
+    let mut radii = vec![f32::NAN; included.len()];
+    for atom in structure.data().atoms() {
+        let index = atom.index().as_usize();
+        if !matches!(included.get(index), Some(true)) {
+            continue;
+        }
+        let radius = atom
+            .element()
+            .and_then(|element| radius_with_fallback(element, policy.set, policy.metals));
+        if let (Some(radius), Some(slot)) = (radius, radii.get_mut(index)) {
+            *slot = radius;
         }
     }
     radii
