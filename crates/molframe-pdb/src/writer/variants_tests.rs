@@ -6,7 +6,7 @@ use molframe_core::{Format, InputBuffer, ReadOptions};
 
 const PQR: &str = "ATOM      1  N   ALA A   1      11.104  13.207   9.124 -0.3000 1.5500\nEND\n";
 const PDBQT: &str = "ROOT\n\
-ATOM      1  N   LIG A   1      11.104  13.207   9.124  1.00  0.00      -0.300 N \n\
+ATOM      1  N   LIG A   1      11.104  13.207   9.124  1.00  0.00    -0.300 N \n\
 ENDROOT\nTORSDOF 0\n";
 
 #[test]

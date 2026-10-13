@@ -75,6 +75,14 @@ impl ReadState<'_> {
     }
 
     pub(super) fn finish_variant_annotations(&mut self) {
+        if self.branches > 0 {
+            self.findings
+                .push(Diagnostic::new(Code::W4101).with_message(format!(
+                    "{} PDBQT BRANCH record(s) define a torsion tree that is not kept; \
+                 a PDBQT write is rigid",
+                    self.branches
+                )));
+        }
         if !self.partial_charges.is_empty() {
             let Ok(column) =
                 AnnotationColumn::from_entries(std::mem::take(&mut self.partial_charges))

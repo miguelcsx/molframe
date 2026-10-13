@@ -86,6 +86,7 @@ pub(super) struct ReadState<'a> {
     radii: Vec<(f64, Presence)>,
     autodock_types: Vec<(SymbolId, Presence)>,
     headers: PdbHeaders,
+    branches: usize,
 }
 
 impl<'a> ReadState<'a> {
@@ -124,11 +125,15 @@ impl<'a> ReadState<'a> {
             radii: Vec::new(),
             autodock_types: Vec::new(),
             headers: PdbHeaders::default(),
+            branches: 0,
         }
     }
 
     pub(super) fn line(&mut self, line: &Line<'_>) {
         let record = fixed::record(line.text);
+        if record == "BRANCH" && self.variant == Format::Pdbqt {
+            self.branches += 1;
+        }
         if !self.options.categories.keeps_record(record) {
             // A malformed coordinate row is filtered out here too, because its
             // broken record name matches no filter entry. Counting it before the
@@ -248,8 +253,14 @@ impl<'a> ReadState<'a> {
         let residue = ResidueIndex::new(position);
 
         let position = self.position_of(line);
-        let occupancy = self.optional_real(line, 55, 60, "occupancy", 1.0);
-        let b_factor = self.optional_real(line, 61, 66, "B factor", 0.0);
+        let (occupancy, b_factor) = if self.variant == Format::Pqr {
+            ((1.0, Presence::Unknown), (0.0, Presence::Unknown))
+        } else {
+            (
+                self.optional_real(line, 55, 60, "occupancy", 1.0),
+                self.optional_real(line, 61, 66, "B factor", 0.0),
+            )
+        };
         let alternate_component_id = self.alternate_component_of(line, residue, component_id);
         let serial = serial_of(line);
         if serial != 0 {
@@ -269,7 +280,11 @@ impl<'a> ReadState<'a> {
             residue,
             occupancy,
             b_factor,
-            formal_charge: charge_of(line),
+            formal_charge: if matches!(self.variant, Format::Pqr | Format::Pdbqt) {
+                (0, Presence::Unknown)
+            } else {
+                charge_of(line)
+            },
             atom_site_id: serial,
         });
         self.note_link_atom(line, AtomIndex::new(self.atom_position), element);

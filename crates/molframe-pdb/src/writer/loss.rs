@@ -40,12 +40,12 @@ pub fn projection_loss(structure: &Structure, options: &PdbOptions) -> Vec<Diagn
     findings
 }
 
-fn loss(message: String) -> Diagnostic {
+pub(super) fn loss(message: String) -> Diagnostic {
     Diagnostic::new(Code::W4101).with_message(message)
 }
 
 /// The identifier namespace the options do not write is dropped.
-fn renamed_identifiers(
+pub(super) fn renamed_identifiers(
     structure: &Structure,
     options: &PdbOptions,
     findings: &mut Vec<Diagnostic>,
@@ -78,7 +78,7 @@ fn renamed_identifiers(
 }
 
 #[allow(clippy::cast_possible_truncation)]
-fn rounded(value: f32, scale: f64) -> bool {
+pub(super) fn rounded(value: f32, scale: f64) -> bool {
     let kept = ((f64::from(value) * scale).round() / scale) as f32;
     kept.to_bits() != value.to_bits()
 }
@@ -138,7 +138,7 @@ fn rounded_header(structure: &Structure, findings: &mut Vec<Diagnostic>) {
     }
 }
 
-fn rounded_f64(value: f64, scale: f64) -> bool {
+pub(super) fn rounded_f64(value: f64, scale: f64) -> bool {
     ((value * scale).round() / scale).to_bits() != value.to_bits()
 }
 

@@ -17,8 +17,8 @@ use molframe_core::symbol::SymbolId;
 use std::fmt;
 use std::io::Write as IoWrite;
 
-#[derive(Clone, Copy)]
-enum Variant {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Variant {
     Pqr,
     Pdbqt,
 }
@@ -243,7 +243,7 @@ fn write_atom(
                 .ok_or_else(|| missing_field("B factor", *atom))?;
             let _ = writeln!(
                 out,
-                "{occ:6.2}{b:6.2}      {charge:6.3} {atom_type:<2}",
+                "{occ:6.2}{b:6.2}    {charge:+6.3} {atom_type:<2}",
                 occ = f64::from(occupancy),
                 b = f64::from(b_factor),
                 charge = charge,
@@ -293,13 +293,13 @@ fn require_present(
     Ok(())
 }
 
-fn present_real(column: &AnnotationColumn<f64>, atom: u32) -> Option<f64> {
+pub(super) fn present_real(column: &AnnotationColumn<f64>, atom: u32) -> Option<f64> {
     column
         .get(atom)
         .and_then(|(value, presence)| (presence == Presence::Present).then_some(value))
 }
 
-fn present_symbol(column: &AnnotationColumn<SymbolId>, atom: u32) -> Option<SymbolId> {
+pub(super) fn present_symbol(column: &AnnotationColumn<SymbolId>, atom: u32) -> Option<SymbolId> {
     column
         .get(atom)
         .and_then(|(value, presence)| (presence == Presence::Present).then_some(value))
