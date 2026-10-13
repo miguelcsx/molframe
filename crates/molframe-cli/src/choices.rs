@@ -81,4 +81,8 @@ pub(crate) enum ValidationChoice {
     Rotamer,
     PlaneRestraints,
     Tls,
+    Protein,
+    GeometryZ,
+    Clashscore,
+    NucleicConformation,
 }

@@ -2,7 +2,7 @@
 //! requested check in order and emits the findings as one table.
 
 use super::types::{Row, Subject, ValidationOptions};
-use super::{basic, reference, structural};
+use super::{basic, builtin, reference, structural};
 use crate::ValidationChoice;
 use crate::commands::open;
 use crate::exit::Exit;
@@ -70,7 +70,7 @@ pub(crate) fn validate(options: ValidationOptions<'_>, context: Context) -> Exit
         }
     }
     emit(&rows, context);
-    if rows.is_empty() {
+    if rows.iter().all(|row| !row.finding) {
         Exit::Success
     } else {
         Exit::Consistency
@@ -105,6 +105,10 @@ fn run_check(check: ValidationChoice, subject: &Subject<'_>) -> Result<Vec<Row>,
         ValidationChoice::Rotamer => reference::rotamer_rows(subject),
         ValidationChoice::PlaneRestraints => reference::plane_restraint_rows(subject),
         ValidationChoice::Tls => reference::tls_rows(subject),
+        ValidationChoice::Protein => builtin::protein_rows(subject),
+        ValidationChoice::GeometryZ => builtin::geometry_z_rows(subject),
+        ValidationChoice::Clashscore => builtin::clashscore_rows(subject),
+        ValidationChoice::NucleicConformation => builtin::nucleic_rows(subject),
     }
 }
 

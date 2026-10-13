@@ -5,6 +5,7 @@
 //! refuses to run without its explicit parameters.
 
 mod basic;
+mod builtin;
 mod pipeline;
 mod reference;
 mod structural;

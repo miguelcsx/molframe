@@ -108,6 +108,21 @@ pub(crate) struct ReferenceArguments {
     /// Tolerance for the symmetry of the TLS tensors.
     #[arg(long)]
     pub(crate) tls_symmetry_tolerance: Option<f64>,
+    /// Ramachandran grid file replacing the bundled Top8000 grids.
+    #[arg(long)]
+    pub(crate) rama_table: Option<PathBuf>,
+    /// Rotamer table file replacing the bundled Top8000 rotamer tables.
+    #[arg(long)]
+    pub(crate) rotamer_table: Option<PathBuf>,
+    /// Bond and angle target file replacing the bundled Engh and Huber targets.
+    #[arg(long)]
+    pub(crate) geometry_table: Option<PathBuf>,
+    /// Chi-angle atom definition file replacing the bundled one.
+    #[arg(long)]
+    pub(crate) chi_table: Option<PathBuf>,
+    /// Absolute z-score above which `geometry-z` reports a bond or angle.
+    #[arg(long, default_value_t = 4.0)]
+    pub(crate) geometry_z_cutoff: f64,
 }
 
 /// One Ramachandran basin and the reference grid that describes it.

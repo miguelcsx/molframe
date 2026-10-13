@@ -18,6 +18,8 @@ pub(super) struct Row {
     pub(super) check: String,
     pub(super) item: String,
     pub(super) value: String,
+    /// Whether the row reports a problem; summaries and provenance do not.
+    pub(super) finding: bool,
 }
 
 impl Row {
@@ -30,6 +32,19 @@ impl Row {
             check: check.into(),
             item: item.into(),
             value: value.into(),
+            finding: true,
+        }
+    }
+
+    /// A row that informs without counting as a finding.
+    pub(super) fn info(
+        check: impl Into<String>,
+        item: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        Self {
+            finding: false,
+            ..Self::new(check, item, value)
         }
     }
 }
