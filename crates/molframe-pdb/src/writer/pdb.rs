@@ -109,6 +109,10 @@ impl PdbOptions {
         self.namespace
     }
 
+    pub(crate) fn space_group_fallback(&self) -> Option<&str> {
+        self.space_group.as_deref()
+    }
+
     pub(crate) const fn uses_hybrid36(&self) -> bool {
         self.hybrid36
     }
@@ -184,7 +188,7 @@ pub(super) fn render_selected(
             let _ = writeln!(out, "{}", record.line());
         }
     } else {
-        write_generated_metadata(out, structure, options);
+        super::metadata::write_generated(out, structure, options);
     }
     super::secondary::write(out, structure, options, select);
     super::connections::write_links(out, structure, options, select, has_ssbond, has_link);
@@ -298,55 +302,6 @@ fn write_model(
         serial += 1;
     }
     Ok(())
-}
-
-fn write_generated_metadata(
-    out: &mut impl fmt::Write,
-    structure: &Structure,
-    options: &PdbOptions,
-) {
-    let data = structure.data();
-    if let Some(id) = &data.entry.id {
-        let _ = writeln!(out, "HEADER    {:<40}{:<9}   {:>4}", "", "", id);
-    }
-    if let Some(title) = &data.entry.title {
-        let _ = writeln!(out, "TITLE     {title}");
-    }
-    if let Some(method) = &data.entry.method {
-        let _ = writeln!(out, "EXPDTA    {method}");
-    }
-    if let Some(resolution) = data.entry.resolution {
-        let _ = writeln!(out, "REMARK   2");
-        let _ = writeln!(out, "REMARK   2 RESOLUTION. {resolution:>7.2} ANGSTROMS.");
-    }
-    if let Some(cell) = data.cell {
-        let _ = writeln!(
-            out,
-            "CRYST1{:9.3}{:9.3}{:9.3}{:7.2}{:7.2}{:7.2} {:<11}",
-            cell.lengths[0],
-            cell.lengths[1],
-            cell.lengths[2],
-            cell.angles[0],
-            cell.angles[1],
-            cell.angles[2],
-            // CRYST1 names P 1 when the entry records no space group.
-            match data
-                .entry
-                .space_group
-                .as_deref()
-                .or(options.space_group.as_deref())
-            {
-                Some(symbol) => symbol,
-                None => "P 1",
-            },
-        );
-        super::connections::write_scale(out, &cell);
-    }
-    if let Some(extra) = options.extra_records() {
-        for line in extra.lines() {
-            let _ = writeln!(out, "{line}");
-        }
-    }
 }
 
 /// Where one atom row lands: chain column, serial and position.

@@ -3,6 +3,7 @@
 mod aniso;
 mod capacity;
 mod connections;
+mod metadata;
 mod models;
 mod pdb;
 mod secondary;
