@@ -398,7 +398,7 @@ pub(crate) fn stored_frame_count(header: &DcdHeader, payload_bytes: usize) -> Op
         return (payload_bytes == 0).then_some(0);
     }
     let remainder = payload_bytes - first;
-    if remainder % rest != 0 {
+    if !remainder.is_multiple_of(rest) {
         return None;
     }
     Some(1 + remainder / rest)

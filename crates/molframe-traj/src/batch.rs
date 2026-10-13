@@ -203,7 +203,8 @@ impl<R: TrajectoryReader> BatchSource for TrajectoryBatchSource<R> {
                     requested,
                     available,
                 } => (requested, available),
-                molframe_core::MemoryBudgetError::Zero => (retained_bytes, 0),
+                molframe_core::MemoryBudgetError::Zero
+                | molframe_core::MemoryBudgetError::Unparsable => (retained_bytes, 0),
             };
             TrajectoryError::MemoryLimit { required, limit }
         })?;

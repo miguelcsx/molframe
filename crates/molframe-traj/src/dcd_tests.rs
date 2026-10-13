@@ -132,8 +132,13 @@ fn header_frame_count_larger_than_the_data_and_zero_cells_are_accepted() {
     let cell = parsed.frames[1]
         .cell
         .unwrap_or_else(|| panic!("second frame lost its cell"));
-    assert_eq!(cell.lengths, [10.0, 20.0, 30.0]);
-    assert_eq!(cell.angles, [90.0; 3]);
+    assert!(
+        cell.lengths
+            .iter()
+            .zip([10.0, 20.0, 30.0])
+            .all(|(a, b)| (a - b).abs() < 1e-9)
+    );
+    assert!(cell.angles.iter().all(|angle| (angle - 90.0).abs() < 1e-9));
     assert_position(parsed.frames[1].positions[0], [1.0, 2.0, 3.0]);
 }
 

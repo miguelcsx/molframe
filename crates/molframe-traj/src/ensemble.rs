@@ -131,7 +131,10 @@ impl EnsembleDistanceMatrix {
         let (mut sum, mut max, mut pairs) = (0.0_f64, 0.0_f64, 0_usize);
         for row in 0..self.size {
             for column in row + 1..self.size {
-                let distance = self.get(row, column).unwrap_or(0.0);
+                let distance = match self.get(row, column) {
+                    Some(distance) => distance,
+                    None => 0.0,
+                };
                 sum += distance;
                 max = max.max(distance);
                 pairs += 1;
@@ -148,7 +151,11 @@ impl EnsembleDistanceMatrix {
         let mut max = 0.0_f64;
         for (position, &left) in members.iter().enumerate() {
             for &right in &members[position + 1..] {
-                max = max.max(self.get(left, right).unwrap_or(0.0));
+                let distance = match self.get(left, right) {
+                    Some(distance) => distance,
+                    None => 0.0,
+                };
+                max = max.max(distance);
             }
         }
         max
