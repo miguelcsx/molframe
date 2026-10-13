@@ -4,6 +4,7 @@ use molframe_core::index::{AtomIndex, ChainIndex, EntityIndex, ResidueIndex};
 use molframe_core::selection::AtomSelection;
 use molframe_core::structure::{ResidueRef, Structure};
 use std::collections::HashSet;
+use std::ops::Range;
 
 /// Expands `selected` to complete residues inside `universe`.
 ///
@@ -74,12 +75,14 @@ pub(crate) fn same_entity(
     select_entities(structure, universe, &entities)
 }
 
-/// Collects distinct residue indices referenced by `selected`.
+/// Collects the distinct residue indices referenced by `selected`, ascending.
 ///
-/// Invalid or hierarchy-less atom indices are ignored, preserving the original
-/// behavior. Expected runtime is `O(S)` with `O(K)` space.
-fn selected_residues(structure: &Structure, selected: &AtomSelection) -> HashSet<ResidueIndex> {
-    let mut residues = HashSet::new();
+/// Invalid or hierarchy-less atom indices are ignored. Selected atoms arrive in
+/// ascending order, so residues arrive almost sorted: consecutive repeats are
+/// dropped as they are seen and the final sort runs over an already ordered
+/// vector. Runtime is `O(S)` with `O(K)` space and no hashing.
+fn selected_residues(structure: &Structure, selected: &AtomSelection) -> Vec<u32> {
+    let mut residues: Vec<u32> = Vec::new();
 
     for atom in selected {
         let Some(residue) = structure
@@ -88,10 +91,14 @@ fn selected_residues(structure: &Structure, selected: &AtomSelection) -> HashSet
         else {
             continue;
         };
-
-        residues.insert(residue.index());
+        let residue = residue.index().get();
+        if residues.last() != Some(&residue) {
+            residues.push(residue);
+        }
     }
 
+    residues.sort_unstable();
+    residues.dedup();
     residues
 }
 
@@ -163,27 +170,36 @@ fn selected_entities(structure: &Structure, selected: &AtomSelection) -> HashSet
     entities
 }
 
-/// Selects atoms belonging to one of `residues`.
+/// Selects atoms belonging to one of the ascending `residues`.
 ///
-/// Chains without an entity are intentionally skipped to preserve the behavior
-/// of the original hierarchy expansion helper.
+/// Only the named residues are visited, so the cost follows the selection and
+/// not the structure. Residues in chains without an entity are skipped, as the
+/// hierarchy expansion has always done; the chain lookup is repeated only when
+/// a residue leaves the previous residue's chain.
 fn select_residues(
     structure: &Structure,
     universe: &AtomSelection,
-    residues: &HashSet<ResidueIndex>,
+    residues: &[u32],
 ) -> AtomSelection {
     let mut positions = Vec::new();
+    let mut cached: Option<(Range<u32>, bool)> = None;
 
-    for chain in structure.data().chains() {
-        if chain.entity().is_none() {
-            continue;
+    for &index in residues {
+        let inside = cached
+            .as_ref()
+            .is_some_and(|(span, _)| span.contains(&index));
+        if !inside {
+            let chain = structure.data().topology.chains.containing(index);
+            cached = chain.and_then(|chain| {
+                let span = structure.data().topology.chains.residues(chain)?;
+                let entity = structure.chain(chain)?.entity().is_some();
+                Some((span, entity))
+            });
         }
-
-        for residue in chain.residues() {
-            if !residues.contains(&residue.index()) {
-                continue;
-            }
-
+        let Some((_, true)) = cached else {
+            continue;
+        };
+        if let Some(residue) = structure.residue(ResidueIndex::new(index)) {
             append_residue_atoms(residue, universe, &mut positions);
         }
     }
@@ -261,3 +277,7 @@ fn append_residue_atoms(
             .filter(|atom| universe.contains(*atom)),
     );
 }
+
+#[cfg(test)]
+#[path = "expand_tests.rs"]
+mod tests;

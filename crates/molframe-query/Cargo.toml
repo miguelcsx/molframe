@@ -34,3 +34,7 @@ workspace = true
 [[bench]]
 name = "aliases"
 harness = false
+
+[[bench]]
+name = "scale"
+harness = false
