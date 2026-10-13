@@ -11,6 +11,8 @@ mod measurement;
 mod numeric;
 mod profile;
 mod specification;
+mod stream;
+mod stream_grid;
 mod verdict;
 
 pub use alignment::{AlignedMotif, AlignmentKind, align_intrinsic, align_with_transform};
@@ -18,7 +20,9 @@ pub use benchmark::{
     AmeMeasurementError, AmeMeasurements, MotifBenchMeasurements, measure_ame, measure_motifbench,
 };
 pub use config::{EvaluationSpecification, SpecificationError, read_evaluation_specification};
-pub use evaluation::{Evaluation, EvaluationError, EvaluationReport, evaluate_motif};
+pub use evaluation::{
+    Evaluation, EvaluationError, EvaluationReport, evaluate_motif, evaluate_plan,
+};
 pub use mapping::{MappedMotif, MappingError, MappingSet, map_motif};
 pub use measurement::{
     ConstraintMeasurement, IndeterminateReason, MeasurementError, MeasurementOptions,
@@ -31,6 +35,7 @@ pub use profile::{
 pub use specification::{
     AtomSite, ComponentRole, ComponentSpec, Constraint, Motif, MotifError, NamedConstraint,
 };
+pub use stream::{MappingPlan, MappingStream};
 pub use verdict::{
     Comparison, MissingVerdict, RuleOutcome, Verdict, VerdictProfile, VerdictRule, VerdictStatus,
 };

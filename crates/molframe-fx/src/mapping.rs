@@ -1,6 +1,7 @@
-use crate::{AtomSite, ComponentRole, ComponentSpec, Motif};
+use crate::{AtomSite, ComponentRole, ComponentSpec, MappingPlan, Motif};
 use molframe_chem::{Component, ComponentKind, ComponentProvider, equivalence_classes};
 use molframe_core::contract::{AnalysisPolicy, EquivalencePolicy};
+use molframe_core::execution::CancellationToken;
 use molframe_core::index::{AtomIndex, ResidueIndex};
 use molframe_core::structure::{ResidueRef, Structure};
 use std::collections::{BTreeMap, BTreeSet};
@@ -33,11 +34,17 @@ pub enum MappingError {
     #[error("component chemistry could not be read: {0}")]
     Chemistry(molframe_core::Diagnostic),
     /// The explicit enumeration bound was reached.
-    #[error("motif mapping exceeded the limit of {limit} alternatives")]
+    #[error(
+        "motif mapping exceeded the limit of {limit} mappings; raise the mapping limit, \
+         or stream and count the mappings instead of materialising them"
+    )]
     LimitExceeded {
-        /// Caller-selected upper bound.
+        /// Caller-selected upper bound on the number of mappings.
         limit: usize,
     },
+    /// The caller cancelled the enumeration.
+    #[error("motif mapping was cancelled")]
+    Cancelled,
 }
 
 /// Enumerates complete chemistry-aware motif mappings.
@@ -58,30 +65,32 @@ pub fn map_motif(
     policy: &AnalysisPolicy,
     limit: usize,
 ) -> Result<MappingSet, MappingError> {
-    let sites = referenced_sites(motif);
-    let mut candidates = BTreeMap::new();
-    for (name, spec) in motif.components() {
-        candidates.insert(
-            name.clone(),
-            component_candidates(structure, name, spec, provider, policy, &sites)?,
-        );
+    let plan = std::sync::Arc::new(MappingPlan::build(
+        structure, motif, provider, policy, false,
+    )?);
+    let cancel = CancellationToken::new();
+    let mut stream = plan.stream();
+    let mut tuple = vec![0u32; plan.width()];
+    let mut mappings = Vec::new();
+    while stream.next_into(&mut tuple, &cancel)? {
+        if mappings.len() == limit {
+            return Err(MappingError::LimitExceeded { limit });
+        }
+        mappings.push(plan.mapping(&tuple));
     }
-    let ordered: Vec<_> = motif.components().keys().cloned().collect();
-    let mut state = EnumerationState::default();
-    enumerate(&ordered, &candidates, 0, &mut state, limit)?;
     Ok(MappingSet {
-        ambiguous: state.output.len() > 1,
-        mappings: state.output,
+        ambiguous: mappings.len() > 1,
+        mappings,
     })
 }
 
-#[derive(Clone)]
-struct Candidate {
-    residue: ResidueIndex,
-    atoms: BTreeMap<AtomSite, Vec<AtomIndex>>,
+#[derive(Clone, Debug)]
+pub(crate) struct Candidate {
+    pub(crate) residue: ResidueIndex,
+    pub(crate) atoms: BTreeMap<AtomSite, Vec<AtomIndex>>,
 }
 
-fn component_candidates(
+pub(crate) fn component_candidates(
     structure: &Structure,
     motif_name: &str,
     spec: &ComponentSpec,
@@ -209,56 +218,12 @@ fn expand_ccd_names(names: &mut BTreeSet<Box<str>>, component: &Component, atom:
     }
 }
 
-fn referenced_sites(motif: &Motif) -> BTreeSet<AtomSite> {
+pub(crate) fn referenced_sites(motif: &Motif) -> BTreeSet<AtomSite> {
     motif
         .constraints()
         .iter()
         .flat_map(|named| named.constraint.sites().into_iter().cloned())
         .collect()
-}
-
-fn enumerate(
-    ordered: &[Box<str>],
-    candidates: &BTreeMap<Box<str>, Vec<Candidate>>,
-    depth: usize,
-    state: &mut EnumerationState,
-    limit: usize,
-) -> Result<(), MappingError> {
-    if depth == ordered.len() {
-        if state.output.len() == limit {
-            return Err(MappingError::LimitExceeded { limit });
-        }
-        state.output.push(MappedMotif {
-            components: state.components.clone(),
-            atoms: state.atoms.clone(),
-        });
-        return Ok(());
-    }
-    let name = &ordered[depth];
-    let Some(options) = candidates.get(name) else {
-        return Ok(());
-    };
-    for candidate in options {
-        if !state.used.insert(candidate.residue) {
-            continue;
-        }
-        state.components.insert(name.clone(), candidate.residue);
-        let old_atoms = state.atoms.clone();
-        state.atoms.extend(candidate.atoms.clone());
-        enumerate(ordered, candidates, depth + 1, state, limit)?;
-        state.atoms = old_atoms;
-        state.components.remove(name);
-        state.used.remove(&candidate.residue);
-    }
-    Ok(())
-}
-
-#[derive(Default)]
-struct EnumerationState {
-    used: BTreeSet<ResidueIndex>,
-    components: BTreeMap<Box<str>, ResidueIndex>,
-    atoms: BTreeMap<AtomSite, Vec<AtomIndex>>,
-    output: Vec<MappedMotif>,
 }
 
 #[cfg(test)]

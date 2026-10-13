@@ -1,10 +1,12 @@
 use crate::{
-    AlignmentKind, MappingError, MeasurementError, MeasurementOptions, MeasurementSet, Motif,
-    Verdict, VerdictProfile, align_intrinsic, map_motif, measure_constraints,
+    AlignmentKind, MappingError, MappingPlan, MeasurementError, MeasurementOptions, MeasurementSet,
+    Motif, Verdict, VerdictProfile, align_intrinsic, measure_constraints,
 };
 use molframe_chem::ComponentProvider;
 use molframe_core::contract::AnalysisPolicy;
+use molframe_core::execution::CancellationToken;
 use molframe_core::structure::Structure;
+use std::sync::Arc;
 
 /// One complete mapping → alignment → measurement → decision path.
 #[derive(Clone, Debug, PartialEq)]
@@ -60,21 +62,65 @@ pub fn evaluate_motif(
     mapping_limit: usize,
     measurement: MeasurementOptions,
 ) -> Result<EvaluationReport, EvaluationError> {
-    let mappings = map_motif(structure, motif, provider, policy, mapping_limit)?;
-    let mut evaluations = Vec::with_capacity(mappings.mappings.len());
-    for (mapping_index, mapping) in mappings.mappings.into_iter().enumerate() {
-        let aligned = align_intrinsic(mapping);
+    let plan = Arc::new(MappingPlan::build(
+        structure, motif, provider, policy, false,
+    )?);
+    evaluate_plan(
+        structure,
+        motif,
+        &plan,
+        profile,
+        mapping_limit,
+        measurement,
+        &CancellationToken::new(),
+    )
+}
+
+/// Evaluates every mapping of a prepared [`MappingPlan`].
+///
+/// The mappings are counted first, so a plan over the limit is refused before
+/// any evaluation is allocated.
+///
+/// # Errors
+///
+/// Returns the stage-specific error, [`MappingError::LimitExceeded`] when the
+/// plan admits more than `mapping_limit` mappings, or
+/// [`MappingError::Cancelled`] when `cancel` fires.
+pub fn evaluate_plan(
+    structure: &Structure,
+    motif: &Motif,
+    plan: &Arc<MappingPlan>,
+    profile: &VerdictProfile,
+    mapping_limit: usize,
+    measurement: MeasurementOptions,
+    cancel: &CancellationToken,
+) -> Result<EvaluationReport, EvaluationError> {
+    let total = plan.count(cancel)?;
+    if total > mapping_limit as u64 {
+        return Err(MappingError::LimitExceeded {
+            limit: mapping_limit,
+        }
+        .into());
+    }
+    let mut stream = plan.stream();
+    let mut tuple = vec![0u32; plan.width()];
+    let mut evaluations = Vec::with_capacity(match usize::try_from(total) {
+        Ok(total) => total,
+        Err(_) => 0,
+    });
+    while stream.next_into(&mut tuple, cancel)? {
+        let aligned = align_intrinsic(plan.mapping(&tuple));
         let measurements = measure_constraints(structure, motif, &aligned, measurement)?;
         let verdict = profile.decide(&measurements.metrics());
         evaluations.push(Evaluation {
-            mapping_index,
+            mapping_index: evaluations.len(),
             alignment: aligned.kind,
             measurements,
             verdict,
         });
     }
     Ok(EvaluationReport {
-        mapping_ambiguous: mappings.ambiguous,
+        mapping_ambiguous: total > 1,
         evaluations,
     })
 }
