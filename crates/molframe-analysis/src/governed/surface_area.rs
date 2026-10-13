@@ -6,80 +6,74 @@
 //! here: the radii are read from `vdw_radii`, and the executor resolves hydrogens and
 //! the system before the kernel sees the atoms.
 
-use super::common::{complete, descriptor, float};
+use super::common::{descriptor, float};
 use super::definition::DefinitionError;
 use super::{FrameKernelResult, StructureKernel, structure_kernel};
-use molframe_chem::{RadiusSet, atom_radii};
+use molframe_chem::{RadiusSet, included_atoms};
 use molframe_core::contract::{
-    AnalysisPolicy, Assumption, AssumptionSource, Coverage, Impact, PolicyField, Quality,
+    AnalysisPolicy, Assumption, AssumptionSource, Coverage, Impact, ParameterValue, PolicyField,
+    Quality,
 };
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::{ExecutionContext, Structure};
-use molframe_surface::shrake_rupley;
+use molframe_surface::{SasaMethod, SasaOptions, measure_atoms};
 use std::collections::BTreeMap;
 
 /// Governed per-atom solvent-accessible surface area, in square ångström.
 ///
-/// Shrake–Rupley with `points` samples per atom and a solvent sphere of radius
-/// `probe`. The radii are the policy's `vdw_radii`. An atom whose element has no radius
-/// in the set has no area (`NaN`) and does not occlude its neighbours; it is reported as
-/// missing coverage, so the policy's `missing_atoms` decides whether that is a partial
-/// answer, no answer, or a failure, and a warning names the elements and the policy field
-/// (`vdw_radii`) so another radius set can be chosen deliberately.
-///
-/// Every atom of the analysed system occludes and gets an area: crystallographic waters
-/// and heteroatoms included, which buries the protein atoms they touch. The result
-/// records how many of each were counted; the protein-only convention of DSSP and
-/// `FreeSASA` needs an input without them.
+/// `options` is the one option set every front end shares: the sampling method and its
+/// density, the probe radius, which heteroatom classes take part (`hetero`, the polymer
+/// alone by default) and where a metal the radius set lacks takes its radius (`metals`).
+/// The radius set is the policy's `vdw_radii`, not `options.radii`. An atom the options
+/// leave out, or whose element has no radius in the set, has no area (`NaN`) and does not
+/// occlude its neighbours. A left-out heteroatom is a choice and not a gap; an included
+/// atom with no radius is reported as missing coverage, so the policy's `missing_atoms`
+/// decides whether that is a partial answer, no answer, or a failure, and a warning names
+/// the elements and the policy field (`vdw_radii`) so another radius set can be chosen
+/// deliberately.
 #[must_use]
 pub fn sasa_kernel(
-    probe: f32,
-    points: u16,
+    options: SasaOptions,
 ) -> impl StructureKernel<Output = Vec<f64>, Error = DefinitionError> {
     structure_kernel(
         descriptor("solvent-accessible-surface")
             .estimating("the area of each atom's van der Waals surface a solvent sphere can touch")
             .reading(&[PolicyField::VdwRadii])
-            .with_parameter("probe", float(probe))
-            .with_parameter("points", float(f32::from(points))),
+            .with_parameter("probe", float(options.probe))
+            .with_parameter("method", method_parameter(options.method))
+            .with_parameter("hetero", text(&options.hetero.to_string()))
+            .with_parameter("metals", text(&options.metals.to_string())),
         move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
             let set: RadiusSet =
                 policy.vdw_radii.name().parse().map_err(|_| {
                     DefinitionError::UnknownRadiusSet(policy.vdw_radii.name().into())
                 })?;
-            let radii = atom_radii(structure, set);
-            let scope = scope_assumption(structure);
-            let known: Vec<usize> = (0..radii.len())
-                .filter(|&atom| radii[atom].is_finite())
-                .collect();
-            let missing = radii.len() - known.len();
+            let options = SasaOptions {
+                radii: set,
+                ..options
+            };
+            let radii = options.atom_radii(structure);
+            let included = included_atoms(structure, options.hetero);
+            let areas = measure_atoms(structure.positions(), &radii, &options, context)?;
+            let intended = included.iter().filter(|&&atom| atom).count();
+            let used = areas.iter().filter(|area| area.is_finite()).count();
+            let scope = scope_assumption(structure, &areas);
+            let missing = intended.saturating_sub(used);
             if missing == 0 {
-                let areas = shrake_rupley(structure.positions(), &radii, probe, points, context)?;
-                return Ok(add_scope(complete(structure, areas), scope));
+                let result = FrameKernelResult::complete(areas, count(used));
+                return Ok(add_scope(result, scope));
             }
-            let positions: Vec<[f32; 3]> = known
-                .iter()
-                .map(|&atom| structure.positions()[atom])
-                .collect();
-            let kept: Vec<f32> = known.iter().map(|&atom| radii[atom]).collect();
-            let measured = shrake_rupley(&positions, &kept, probe, points, context)?;
-            let mut areas = vec![f64::NAN; radii.len()];
-            for (&atom, area) in known.iter().zip(measured) {
-                areas[atom] = area;
-            }
-            let atoms = structure.atom_count();
-            let absent = u32::try_from(missing).map_or(atoms, |count| count.min(atoms));
             let coverage = Coverage {
-                intended: atoms,
-                used: atoms - absent,
-                missing: absent,
+                intended: count(intended),
+                used: count(used),
+                missing: count(missing),
                 ambiguous: 0,
             };
             let result = FrameKernelResult::governed(areas, Quality::Partial, coverage)
                 .with_assumption(Assumption::new(
                     PolicyField::VdwRadii,
                     format!(
-                        "{absent} atoms have an element with no radius in the {} set; they have no area and do not occlude",
+                        "{missing} atoms have an element with no radius in the {} set; they have no area and do not occlude",
                         set.name()
                     ),
                     AssumptionSource::Inferred,
@@ -91,12 +85,30 @@ pub fn sasa_kernel(
                         .with_message(format!(
                             "the {} radius set has no radius for {}; those atoms are excluded, so the total is partial (choose a set that covers them, such as alvarez, or remove them from the selection)",
                             set.name(),
-                            missing_elements(structure, &radii),
+                            missing_elements(structure, &radii, &included),
                         )),
                 );
             Ok(add_scope(result, scope))
         },
     )
+}
+
+fn count(value: usize) -> u32 {
+    match u32::try_from(value) {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
+    }
+}
+
+fn text(value: &str) -> ParameterValue {
+    ParameterValue::Text(value.into())
+}
+
+fn method_parameter(method: SasaMethod) -> ParameterValue {
+    match method {
+        SasaMethod::ShrakeRupley { points } => text(&format!("shrake-rupley:{points}")),
+        SasaMethod::LeeRichards { slices } => text(&format!("lee-richards:{slices}")),
+    }
 }
 
 fn add_scope<T>(result: FrameKernelResult<T>, scope: Option<Assumption>) -> FrameKernelResult<T> {
@@ -107,12 +119,14 @@ fn add_scope<T>(result: FrameKernelResult<T>, scope: Option<Assumption>) -> Fram
 }
 
 /// The elements without a radius and how many atoms each has, in symbol order.
-fn missing_elements(structure: &Structure, radii: &[f32]) -> String {
+fn missing_elements(structure: &Structure, radii: &[f32], included: &[bool]) -> String {
     let mut counts: BTreeMap<&'static str, usize> = BTreeMap::new();
     for atom in structure.data().atoms() {
-        let missing = radii
-            .get(atom.index().as_usize())
-            .is_some_and(|radius| !radius.is_finite());
+        let index = atom.index().as_usize();
+        let missing = matches!(included.get(index), Some(true))
+            && radii
+                .get(index)
+                .is_some_and(|radius| !(radius.is_finite() && *radius > 0.0));
         if missing {
             let symbol = atom
                 .element()
@@ -127,12 +141,15 @@ fn missing_elements(structure: &Structure, radii: &[f32]) -> String {
         .join(", ")
 }
 
-/// A note when the analysed atoms include waters or other heteroatoms, which
-/// occlude and receive areas like any polymer atom.
-fn scope_assumption(structure: &Structure) -> Option<Assumption> {
+/// A note when waters or other heteroatoms were measured, so they occlude and receive
+/// areas like any polymer atom.
+fn scope_assumption(structure: &Structure, areas: &[f64]) -> Option<Assumption> {
     let (mut water, mut hetero) = (0_u32, 0_u32);
     for atom in structure.data().atoms() {
-        let Some(residue) = atom.residue() else {
+        let measured = areas
+            .get(atom.index().as_usize())
+            .is_some_and(|area| area.is_finite());
+        let Some(residue) = atom.residue().filter(|_| measured) else {
             continue;
         };
         if matches!(atom.component_name(), Some("HOH" | "WAT" | "DOD" | "H2O")) {
@@ -145,9 +162,9 @@ fn scope_assumption(structure: &Structure) -> Option<Assumption> {
         Assumption::new(
             PolicyField::ContactDef,
             format!(
-                "{water} water and {hetero} other heteroatom atoms are included as occluders and receive areas; analyse an input without them for a protein-only area"
+                "{water} water and {hetero} other heteroatom atoms are measured as occluders and receive areas because the options include them"
             ),
-            AssumptionSource::ProfileDefault,
+            AssumptionSource::Explicit,
             Impact::Unmeasured,
         )
     })

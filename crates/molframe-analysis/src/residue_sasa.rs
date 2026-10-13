@@ -1,21 +1,25 @@
 //! Per-residue solvent-accessible surface area and its largest possible value.
 //!
-//! The area is [`shrake_rupley`] summed over the atoms of each residue, so this
-//! module only chooses the atoms and groups the result. The relative
-//! accessibility a caller divides it by comes from [`max_residue_area`], the
-//! Tien et al. (2013) theoretical maximum for each standard amino acid.
+//! The area is the per-atom area of [`molframe_surface::measure_atoms`] summed
+//! over the atoms of each residue, so this module only chooses the atoms and
+//! groups the result. Which residues take part, which radii they get and which
+//! sampling method runs all come from one [`SasaOptions`], the same one the
+//! facade, the command line and Python read. The relative accessibility a
+//! caller divides the area by comes from [`max_residue_area`], the Tien et al.
+//! (2013) theoretical maximum for each standard amino acid.
 //!
-//! What is in the calculation: the polymer residues (not `HETATM`) of the
-//! structure's coordinates, hydrogens left out, one alternate conformer per
-//! residue (the first label met). What is not: waters, ligands, ions and modified
-//! residues written as `HETATM` neither carry an area nor shield their
-//! neighbours, so a pocket a ligand fills reads as exposed. The counts of what
-//! was left out are returned so a report can say so.
+//! What is in the calculation: the residues the options include (the polymer by
+//! default, modified residues written as `HETATM` among it), hydrogens left
+//! out, one alternate conformer per residue (the first label met). What is not:
+//! excluded waters, ligands and ions neither carry an area nor shield their
+//! neighbours, so a pocket a ligand fills reads as exposed unless
+//! [`SasaOptions::hetero`] brings the ligand in. The counts of what was left
+//! out are returned so a report can say so.
 
-use molframe_chem::{RadiusSet, vdw_radius};
+use molframe_chem::included_atoms;
 use molframe_core::ExecutionContext;
 use molframe_core::structure::Structure;
-use molframe_surface::{SasaError, shrake_rupley};
+use molframe_surface::{SasaError, SasaOptions, measure_atoms};
 
 /// The table's name as a report records it.
 pub const MAX_RESIDUE_AREA_REFERENCE: &str =
@@ -57,15 +61,15 @@ pub fn max_residue_area(name: &str) -> Option<f64> {
 /// Why per-residue areas could not be computed.
 #[derive(Debug, thiserror::Error)]
 pub enum ResidueSasaError {
-    /// No polymer atom with a known radius was left to measure.
-    #[error("the structure has no polymer atom with a van der Waals radius to measure")]
+    /// No included atom with a known radius was left to measure.
+    #[error("the structure has no included atom with a van der Waals radius to measure")]
     NoAtoms,
     /// The surface calculation was refused.
     #[error("the surface could not be computed: {0}")]
     Surface(#[from] SasaError),
 }
 
-/// The accessible area of one polymer residue.
+/// The accessible area of one residue.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResidueArea {
     /// Author chain label, else the label chain, else empty.
@@ -80,21 +84,21 @@ pub struct ResidueArea {
     pub atoms: usize,
 }
 
-/// The areas of every polymer residue, and what was left out.
+/// The areas of every included residue, and what was left out.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResidueAreas {
     /// One row per residue, in structure order.
     pub residues: Vec<ResidueArea>,
-    /// Hetero residues (waters, ligands, ions, modified residues) left out.
+    /// Residues the heteroatom options left out.
     pub excluded_hetero_residues: usize,
     /// Atoms of the kept residues left out: hydrogens, other conformers, no radius.
     pub skipped_atoms: usize,
 }
 
-/// The per-residue accessible area of a structure's polymer residues.
+/// The per-residue accessible area of the residues `options` include.
 ///
-/// Radii are Bondi; hydrogens do not occlude. Runs one Shrake–Rupley pass over
-/// the kept atoms, so it costs what [`shrake_rupley`] costs.
+/// Hydrogens do not occlude. Runs one pass over the kept atoms with the
+/// method `options` names, so it costs what that kernel costs.
 ///
 /// # Errors
 ///
@@ -103,15 +107,13 @@ pub struct ResidueAreas {
 /// example, the memory budget).
 pub fn residue_areas(
     structure: &Structure,
-    probe: f32,
-    points: u16,
+    options: &SasaOptions,
     context: &ExecutionContext,
 ) -> Result<ResidueAreas, ResidueSasaError> {
-    let positions = structure.positions();
-    let mut coords = Vec::new();
-    let mut radii = Vec::new();
-    // (chain, number, name, index of its first kept atom, kept atom count)
-    let mut spans: Vec<(String, i32, String, usize, usize)> = Vec::new();
+    let mut radii = options.atom_radii(structure);
+    let included = included_atoms(structure, options.hetero);
+    // (chain, number, name, atom indices that take part)
+    let mut spans: Vec<(String, i32, String, Vec<usize>)> = Vec::new();
     let (mut excluded, mut skipped) = (0, 0);
     for chain in structure.data().chains() {
         let label = match chain.auth_label().or_else(|| chain.label()) {
@@ -119,7 +121,8 @@ pub fn residue_areas(
             None => Default::default(),
         };
         for residue in chain.residues() {
-            if residue.is_het() {
+            let first = residue.atoms().next().map(|atom| atom.index().as_usize());
+            if !first.is_some_and(|atom| matches!(included.get(atom), Some(true))) {
                 excluded += 1;
                 continue;
             }
@@ -131,48 +134,44 @@ pub fn residue_areas(
                 Some(name) => name,
                 None => "?",
             };
-            let start = coords.len();
+            let mut kept = Vec::new();
             let mut conformer: Option<&str> = None;
             for atom in residue.atoms() {
-                let radius = atom
+                let index = atom.index().as_usize();
+                let hydrogen = atom
                     .element()
-                    .filter(|element| element.atomic_number() > 1)
-                    .and_then(|element| vdw_radius(element, RadiusSet::Bondi));
-                let (Some(radius), Some(at)) = (radius, positions.get(atom.index().get() as usize))
-                else {
-                    skipped += 1;
-                    continue;
-                };
-                if let Some(alt) = atom.alt_label()
-                    && *conformer.get_or_insert(alt) != alt
-                {
+                    .is_some_and(|element| element.atomic_number() <= 1);
+                let other_conformer = atom
+                    .alt_label()
+                    .is_some_and(|alt| *conformer.get_or_insert(alt) != alt);
+                let radius = radii
+                    .get(index)
+                    .copied()
+                    .filter(|radius| radius.is_finite());
+                if hydrogen || other_conformer || radius.is_none() {
+                    if let Some(slot) = radii.get_mut(index) {
+                        *slot = f32::NAN;
+                    }
                     skipped += 1;
                     continue;
                 }
-                coords.push(*at);
-                radii.push(radius);
+                kept.push(index);
             }
-            spans.push((
-                label.to_owned(),
-                number,
-                name.to_owned(),
-                start,
-                coords.len() - start,
-            ));
+            spans.push((label.to_owned(), number, name.to_owned(), kept));
         }
     }
-    if coords.is_empty() {
+    if spans.iter().all(|(_, _, _, atoms)| atoms.is_empty()) {
         return Err(ResidueSasaError::NoAtoms);
     }
-    let areas = shrake_rupley(&coords, &radii, probe, points, context)?;
+    let areas = measure_atoms(structure.positions(), &radii, options, context)?;
     let residues = spans
         .into_iter()
-        .map(|(chain, number, name, start, count)| ResidueArea {
+        .map(|(chain, number, name, atoms)| ResidueArea {
             chain,
             number,
             name,
-            area: areas[start..start + count].iter().sum(),
-            atoms: count,
+            area: atoms.iter().map(|&atom| areas[atom]).sum(),
+            atoms: atoms.len(),
         })
         .collect();
     Ok(ResidueAreas {

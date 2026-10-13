@@ -130,6 +130,7 @@ pub use helix_geometry::{
 };
 pub use membrane_layers::{Leaflet, LeafletOptions, identify_leaflets};
 pub use mode_interchange::{NmdError, NormalMode, NormalModeSet, read_nmd, write_nmd};
+pub use molframe_surface::{SasaMethod, SasaOptions, SasaWordError};
 pub use motion_statistics::{
     DielectricOptions, DielectricResult, DynamicsError, WaterDynamicsOptions, WaterLag,
     dielectric_from_dipoles, water_dynamics,

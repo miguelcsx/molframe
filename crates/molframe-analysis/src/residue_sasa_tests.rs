@@ -1,7 +1,9 @@
 use super::{ResidueSasaError, max_residue_area, residue_areas};
+use molframe_chem::HeteroPolicy;
 use molframe_core::ExecutionContext;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
+use molframe_surface::SasaOptions;
 use std::fmt::Write;
 
 const HEADER: &str = "data_s\n\
@@ -27,7 +29,11 @@ fn structure(rows: &[(&str, &str, &str, &str, u32, f32)]) -> Structure {
 }
 
 fn areas(structure: &Structure) -> Result<super::ResidueAreas, ResidueSasaError> {
-    residue_areas(structure, 1.4, 960, &ExecutionContext::default())
+    residue_areas(
+        structure,
+        &SasaOptions::default(),
+        &ExecutionContext::default(),
+    )
 }
 
 #[test]
@@ -62,6 +68,24 @@ fn waters_and_ligands_are_left_out_and_shield_nothing() {
     assert_eq!(wet.residues.len(), 1);
     assert_eq!(wet.excluded_hetero_residues, 2);
     assert!((wet.residues[0].area - alone.residues[0].area).abs() < 1e-9);
+}
+
+#[test]
+fn a_ligand_the_options_include_shields_its_neighbour() {
+    let rows = [
+        ("ATOM", "C", "C", "ALA", 1, 0.0),
+        ("HETATM", "C", "C1", "LIG", 2, 3.0),
+    ];
+    let options = SasaOptions {
+        hetero: HeteroPolicy::SOLUTE,
+        ..SasaOptions::default()
+    };
+    let context = ExecutionContext::default();
+    let with = residue_areas(&structure(&rows), &options, &context).unwrap();
+    let without = areas(&structure(&rows)).unwrap();
+    assert_eq!(with.residues.len(), 2);
+    assert_eq!(with.excluded_hetero_residues, 0);
+    assert!(with.residues[0].area < without.residues[0].area - 1.0);
 }
 
 #[test]
