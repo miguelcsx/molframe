@@ -42,9 +42,8 @@ def annotate(
     *,
     version: str = "unversioned",
     polymer_links: PolymerLinkPolicy | None = None,
-    core_fallback: bool = False,
 ) -> Structure:
-    """Apply a component dictionary; without one, the bundled core set is used."""
+    """Apply component chemistry: in-file definitions, then `components`, then the core set."""
 
 @final
 class PolymerLinkRule:

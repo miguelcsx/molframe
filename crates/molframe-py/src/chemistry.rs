@@ -126,11 +126,11 @@ fn vdw_radii<'py>(
 /// dictionary lacks are reported as one warning, not an error.
 /// Inter-residue bonds are added only with an explicit `polymer_links` policy.
 ///
-/// Without `components` the compact bundled core set is used (standard and
-/// common modified residues, nucleotides, water, common ions, frequent
-/// cofactors, carbohydrates); every other component is reported as unknown.
-/// With a `components` path, that dictionary alone answers unless
-/// `core_fallback` also lets the bundled set cover what it lacks.
+/// Components resolve from the structure's own `chem_comp_*` rows first, then
+/// the `components` dictionary when given, then the compact bundled core set
+/// (standard and common modified residues, nucleotides, water, common ions,
+/// frequent cofactors, carbohydrates); every other component is reported as
+/// unknown.
 #[pyfunction]
 #[pyo3(signature = (
     structure,
@@ -138,7 +138,6 @@ fn vdw_radii<'py>(
     *,
     version="unversioned",
     polymer_links=None,
-    core_fallback=false,
 ))]
 fn annotate(
     py: Python<'_>,
@@ -146,7 +145,6 @@ fn annotate(
     components: Option<PathBuf>,
     version: &str,
     polymer_links: Option<PyRef<'_, linkage::PyPolymerLinkPolicy>>,
-    core_fallback: bool,
 ) -> PyResult<PyStructure> {
     let source = structure.inner.clone();
     let policy = match polymer_links {
@@ -156,22 +154,15 @@ fn annotate(
     let version = molframe::DictionaryVersion::new(version);
     let report = py.detach(move || {
         // Only the components the structure uses are parsed and lowered.
-        let provider: Arc<dyn chem::ComponentProvider> = match components {
-            None => Arc::new(chem::CoreProvider),
-            Some(path) => {
-                let full = molframe::open_component_dictionary(&path, version)
-                    .map_err(|findings| findings_error(&findings))?;
-                if core_fallback {
-                    Arc::new(chem::LayeredProvider::new(vec![
-                        Arc::new(full),
-                        Arc::new(chem::CoreProvider),
-                    ]))
-                } else {
-                    Arc::new(full)
-                }
-            }
+        let user: Option<Arc<dyn chem::ComponentProvider>> = match components {
+            None => None,
+            Some(path) => Some(Arc::new(
+                molframe::open_component_dictionary(&path, version)
+                    .map_err(|findings| findings_error(&findings))?,
+            )),
         };
-        chem::apply_component_chemistry(source.engine(), provider.as_ref(), policy)
+        let provider = chem::resolution_stack(source.engine(), user);
+        chem::apply_component_chemistry(source.engine(), &provider, policy)
             .map_err(crate::error::kernel)
     })?;
     if !report.findings.is_empty() {
@@ -195,8 +186,8 @@ fn annotate(
             let _ = write!(
                 message,
                 "; no definition for component(s) {}: pass the full wwPDB dictionary \
-                 (components.cif.gz) as `components` (with core_fallback=True to keep \
-                 the bundled set) or embed chem_comp_atom and chem_comp_bond rows in the file",
+                 (components.cif.gz) as `components` or embed chem_comp_atom and \
+                 chem_comp_bond rows in the file",
                 unknown.join(", ")
             );
         }
