@@ -43,7 +43,7 @@ See [Selecting atoms](/docs/selections) and [Reading bytes and editing structure
 | Module or object | Public entry points |
 | --- | --- |
 | `molframe.geometry` | `centroid`, `distance_matrix`, `rmsd`, `internal_coordinates`, `place_atom` |
-| `molframe.analysis` | `atom_contacts`, `contacts`, `hydrogen_bonds`, `salt_bridges` |
+| `molframe.analysis` | `atom_contacts`, `contacts`, `hydrogen_bonds`, `salt_bridges`, `dssp` (needs no role profile: amino-acid residues take the built-in backbone roles, and roles you apply are never overridden) |
 | `molframe.validation` | `clashes` |
 | `molframe.surface` | `sasa`, `lee_richards`, `cavities`, `surface_points`, `surface_points_at_density`, `solvent_excluded_surface` (a `Mesh`), `buried_surface`, `buried_solvent_excluded_surface`, `atom_depths`; `Mesh` carries components, curvatures, edge distances, patches and OBJ output |
 | `molframe.compare` | `tm_score`, `gdt_ts`, `gdt_ha`, `weighted_rmsd`, `lddt`, `dockq`, `qs_score` and their mapped forms, `ce_align`, `contact_areas`, `cad_score`, `contact_similarity`, `assign_chains`, `map_sequence_to_structure` |

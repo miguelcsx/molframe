@@ -56,7 +56,13 @@ def atom_contacts(
     context: ExecutionContext | None = None,
 ) -> ContactTable: ...
 def dssp(structure: Structure) -> Table:
-    """Native DSSP states as residue indices and stable SecondaryStructure integer codes."""
+    """Native DSSP states as residue indices and stable SecondaryStructure integer codes.
+
+    Needs no role profile: amino-acid residues without explicit role columns take the
+    built-in standard backbone roles (N, CA, C, O). Roles applied with
+    ``chemistry.apply_polymer_role_profile`` are never overridden, and residues that match
+    neither are left ``Unknown``.
+    """
 
 def contacts(
     structure: Structure,

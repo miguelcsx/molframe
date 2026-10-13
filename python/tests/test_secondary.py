@@ -1,15 +1,22 @@
 from pathlib import Path
 
-import pytest
-
 import molframe
 
 
-def test_explicit_dssp_requires_and_uses_caller_selected_ccd_roles():
+def test_dssp_without_a_role_profile_uses_the_standard_protein_roles():
+    root = Path(__file__).resolve().parents[2]
+    structure = molframe.read(root / "crates/molframe-bench/data/1crn.cif")
+    table = molframe.analysis.dssp(structure)
+    kinds = [int(kind) for kind in table["kind"]]
+    assert len(kinds) == len(table["residue"]) > 0
+    assert int(molframe.SecondaryStructure.AlphaHelix) in kinds
+    assert int(molframe.SecondaryStructure.Strand) in kinds
+
+
+def test_explicit_dssp_roles_agree_with_the_standard_roles():
     root = Path(__file__).resolve().parents[2]
     structure = molframe.read(root / "crates/molframe-bench/data/4hhb.cif")
-    with pytest.raises(ValueError, match="polymer"):
-        molframe.analysis.dssp(structure)
+    default = molframe.analysis.dssp(structure)
     rules = [
         molframe.chemistry.PolymerRoleRule(name, 1 << bit, component_kind=1)
         for bit, name in enumerate(("N", "CA", "C", "O"))
@@ -27,6 +34,7 @@ def test_explicit_dssp_requires_and_uses_caller_selected_ccd_roles():
     table = molframe.analysis.dssp(report.structure)
     kinds = list(table["kind"])
     assert {2, 4, 5, 6, 9}.issubset(kinds)
+    assert list(default["kind"]) == kinds
     empty = molframe.chemistry.apply_polymer_role_profile(
         structure,
         root / "crates/molframe-chem/data/CCD-amino-acids.cif",
