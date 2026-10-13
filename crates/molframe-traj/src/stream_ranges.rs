@@ -48,15 +48,9 @@ where
     S: FnMut(usize, T) -> Result<(), E>,
 {
     let mut first = open()?;
-    if first.n_frames().is_some_and(|n| range.start >= n) {
+    let Some(range) = clip_range(&mut first, range)? else {
         return Ok(0);
-    }
-    first.seek(range.start)?;
-    let stop = first.n_frames().map_or(range.end, |n| range.end.min(n));
-    if stop <= range.start {
-        return Ok(0);
-    }
-    let range = range.start..stop;
+    };
     let workers = context
         .worker_budget()
         .min(range.len() / MIN_FRAMES_PER_WORKER)
@@ -193,6 +187,22 @@ where
         count += 1;
     }
     Ok(count)
+}
+
+/// Positions `reader` at the start of `range` and clips the range to the frames
+/// the source holds; `None` when nothing is left.
+pub(crate) fn clip_range<R: TrajectoryReader>(
+    reader: &mut R,
+    range: Range<usize>,
+) -> Result<Option<Range<usize>>, TrajectoryError> {
+    if reader.n_frames().is_some_and(|n| range.start >= n) {
+        return Ok(None);
+    }
+    if range.start > 0 || reader.random_access() != RandomAccess::None {
+        reader.seek(range.start)?;
+    }
+    let stop = reader.n_frames().map_or(range.end, |n| range.end.min(n));
+    Ok((stop > range.start).then_some(range.start..stop))
 }
 
 pub(crate) const fn short_range() -> TrajectoryError {
