@@ -13,7 +13,6 @@ pub(crate) use language::{
     ast, expand, glob, lexer, macros, model_pattern, parser, predicate, predicate_pattern, print,
 };
 
-pub use residue_ranges::{compact_ranges, resid_query};
 pub use api::{Builder, ColumnBuilder, QueryAliases, col};
 pub use execution::{
     Evaluation, GeometricRequest, Groups, LogicalPlan, PhysicalQuery, Query, QueryFingerprint,
@@ -22,3 +21,4 @@ pub use execution::{
 pub use language::completion::{
     CompletionItem, CompletionKind, CompletionResult, StructureValues, complete,
 };
+pub use residue_ranges::{compact_ranges, resid_query};

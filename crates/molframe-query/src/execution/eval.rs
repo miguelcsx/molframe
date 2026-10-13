@@ -1,8 +1,8 @@
 //! Compiled query evaluation over immutable structures.
 
-use crate::ast::{Expr, GeometricExpr, SameKey};
+use crate::ast::{Expr, SameKey};
 use crate::plan::{PhysicalExpr, PhysicalQuery};
-use crate::spatial::{GeometricRequest, SpatialResolver};
+use crate::spatial::SpatialResolver;
 use molframe_chem::SmartsDataError;
 use molframe_core::contract::AnalysisPolicy;
 use molframe_core::diagnostic::{Code, Diagnostic};
@@ -10,6 +10,8 @@ use molframe_core::selection::AtomSelection;
 use molframe_core::structure::Structure;
 use std::collections::BTreeMap;
 
+#[path = "eval_geometric.rs"]
+mod geometric;
 #[path = "eval_query.rs"]
 mod query;
 
@@ -258,30 +260,8 @@ impl Context<'_> {
                 *absolute,
                 self.policy,
             ),
-            Expr::Membership { column, values } => {
-                let selected = crate::predicate::membership(
-                    self.structure,
-                    universe,
-                    *column,
-                    values,
-                    self.policy,
-                )?;
-
-                if selected.is_empty() {
-                    self.warnings.push(Diagnostic::new(Code::W4003));
-                }
-
-                Ok(selected)
-            }
-            Expr::Group(name) => {
-                if let Some(group) = self.groups.get(name) {
-                    Ok(universe.intersect(group))
-                } else {
-                    self.warnings
-                        .push(Diagnostic::new(Code::W4003).with_context("group", name.to_string()));
-                    Ok(AtomSelection::Empty)
-                }
-            }
+            Expr::Membership { column, values } => self.membership(*column, values, universe),
+            Expr::Group(name) => Ok(self.group(name, universe)),
             Expr::Atom {
                 segment,
                 residue,
@@ -304,6 +284,34 @@ impl Context<'_> {
                 crate::macros::chirality_selection(self.structure, universe, configuration)
             }
             Expr::Smarts { pattern, .. } => smarts_selection(pattern, self.structure, universe),
+        }
+    }
+
+    /// Atoms of `universe` whose `column` value is one of `values`; an empty
+    /// result is recorded as a warning.
+    fn membership(
+        &mut self,
+        column: crate::ast::Column,
+        values: &[Box<str>],
+        universe: &AtomSelection,
+    ) -> Result<AtomSelection, Diagnostic> {
+        let selected =
+            crate::predicate::membership(self.structure, universe, column, values, self.policy)?;
+        if selected.is_empty() {
+            self.warnings.push(Diagnostic::new(Code::W4003));
+        }
+        Ok(selected)
+    }
+
+    /// Atoms of `universe` in the named group; an unknown group is a warning
+    /// and selects nothing.
+    fn group(&mut self, name: &str, universe: &AtomSelection) -> AtomSelection {
+        if let Some(group) = self.groups.get(name) {
+            universe.intersect(group)
+        } else {
+            self.warnings
+                .push(Diagnostic::new(Code::W4003).with_context("group", name.to_string()));
+            AtomSelection::Empty
         }
     }
 
@@ -357,146 +365,6 @@ impl Context<'_> {
                 crate::ast::Column::SegmentId,
                 self.policy,
             ),
-        }
-    }
-
-    /// Resolves a geometric expression with the configured spatial backend.
-    ///
-    /// Target expressions are evaluated exactly once. Returns `E4003` when no
-    /// spatial resolver is available.
-    fn geometric(
-        &mut self,
-        expr: &GeometricExpr,
-        universe: &AtomSelection,
-    ) -> Result<AtomSelection, Diagnostic> {
-        let Some(spatial) = self.spatial else {
-            return Err(missing("spatial resolver"));
-        };
-
-        match expr {
-            GeometricExpr::Within { radius, target } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::Within {
-                    universe,
-                    target: &target,
-                    radius: *radius,
-                    include_target: true,
-                })
-            }
-            GeometricExpr::Beyond { radius, target } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::Beyond {
-                    universe,
-                    target: &target,
-                    radius: *radius,
-                })
-            }
-            GeometricExpr::Around { radius, target } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::Within {
-                    universe,
-                    target: &target,
-                    radius: *radius,
-                    include_target: false,
-                })
-            }
-            GeometricExpr::SphereZone { radius, target } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::SphereZone {
-                    universe,
-                    target: &target,
-                    radius: *radius,
-                })
-            }
-            GeometricExpr::SphereLayer {
-                inner,
-                outer,
-                target,
-            } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::SphereLayer {
-                    universe,
-                    target: &target,
-                    inner: *inner,
-                    outer: *outer,
-                })
-            }
-            GeometricExpr::IsoLayer {
-                inner,
-                outer,
-                target,
-            } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::IsoLayer {
-                    universe,
-                    target: &target,
-                    inner: *inner,
-                    outer: *outer,
-                })
-            }
-            GeometricExpr::CylinderZone { .. } | GeometricExpr::CylinderLayer { .. } => {
-                self.geometric_cylinder(expr, universe, spatial)
-            }
-            GeometricExpr::Point { point, radius } => spatial.resolve(GeometricRequest::Point {
-                universe,
-                point: *point,
-                radius: *radius,
-            }),
-        }
-    }
-
-    /// Resolves cylinder-specific geometric expressions.
-    ///
-    /// This helper keeps the primary geometric dispatcher compact while
-    /// evaluating the cylinder target exactly once.
-    fn geometric_cylinder(
-        &mut self,
-        expr: &GeometricExpr,
-        universe: &AtomSelection,
-        spatial: &dyn SpatialResolver,
-    ) -> Result<AtomSelection, Diagnostic> {
-        match expr {
-            GeometricExpr::CylinderZone {
-                radius,
-                z_max,
-                z_min,
-                target,
-            } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::CylinderZone {
-                    universe,
-                    target: &target,
-                    radius: *radius,
-                    z_max: *z_max,
-                    z_min: *z_min,
-                })
-            }
-            GeometricExpr::CylinderLayer {
-                inner,
-                outer,
-                z_max,
-                z_min,
-                target,
-            } => {
-                let target = self.eval(target, universe)?;
-
-                spatial.resolve(GeometricRequest::CylinderLayer {
-                    universe,
-                    target: &target,
-                    inner: *inner,
-                    outer: *outer,
-                    z_max: *z_max,
-                    z_min: *z_min,
-                })
-            }
-            _ => Err(Diagnostic::new(Code::E9001)),
         }
     }
 }

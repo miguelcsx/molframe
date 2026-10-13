@@ -7,7 +7,10 @@ fn consecutive_numbers_collapse_into_ranges_whatever_the_order() {
     assert_eq!(compact_ranges(&[7]), "7");
     assert_eq!(compact_ranges(&[]), "");
     assert_eq!(compact_ranges(&[-2, -1, 0, 1]), "-2-1");
-    assert_eq!(compact_ranges(&[i32::MAX - 1, i32::MAX]), "2147483646-2147483647");
+    assert_eq!(
+        compact_ranges(&[i32::MAX - 1, i32::MAX]),
+        "2147483646-2147483647"
+    );
 }
 
 #[test]
