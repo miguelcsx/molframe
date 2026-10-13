@@ -86,10 +86,23 @@ impl PyExecutionContext {
         self.workers
     }
 
-    /// The memory budget in bytes, or `None` for the library default.
+    /// The memory budget in bytes, or `None` for the automatic default (a share of
+    /// physical memory, or `MOLFRAME_MEMORY_BUDGET`).
     #[getter]
     fn memory_budget(&self) -> Option<usize> {
         self.memory_budget
+    }
+
+    /// The budget operations actually run under, in bytes.
+    ///
+    /// The explicit `memory_budget` when one was given, otherwise the automatic
+    /// share of physical memory or the `MOLFRAME_MEMORY_BUDGET` override.
+    #[getter]
+    fn effective_memory_budget(&self) -> usize {
+        match self.memory_budget {
+            Some(bytes) => bytes,
+            None => MemoryBudget::default().bytes(),
+        }
     }
 
     /// The most candidate symmetry images a crystal search may examine, or `None` for the default.

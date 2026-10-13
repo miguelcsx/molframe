@@ -51,10 +51,11 @@ def test_quality_flags_name_each_kind_of_problem():
     assert result.status == "complete"
 
 
-def test_an_occupancy_above_one_makes_the_structure_invalid_and_says_so():
-    structure = read_text(pdb_line(1, "N", "ALA", 1, (0, 0, 0), occupancy=1.5, element="N"))
+def test_an_occupancy_above_one_is_kept_by_default_and_refused_on_request():
+    row = pdb_line(1, "N", "ALA", 1, (0, 0, 0), occupancy=1.5, element="N")
+    assert read_text(row).atom_count == 1
     with pytest.raises(molframe.MolframeError) as raised:
-        validation.quality_flags(structure)
+        read_text(row, occupancy_policy="reject")
     assert raised.value.code == "MOLFRAME-E3009"
     assert "occupancy" in raised.value.message
 

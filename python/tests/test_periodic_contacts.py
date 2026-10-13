@@ -63,7 +63,7 @@ def test_minimum_image_contacts_match_an_image_search_and_differ_from_open_space
 
 def test_pbc_refuses_a_cutoff_larger_than_half_the_cell(crambin):
     policy = molframe.AnalysisPolicy(periodic="pbc")
-    with pytest.raises(Exception, match="image|cutoff|cell"):
+    with pytest.raises(Exception, match=r"image|cutoff|cell"):
         analysis.contacts(crambin, 12.0, policy=policy)
 
 
@@ -80,9 +80,7 @@ def test_spatial_pairs_through_a_cell_match_the_image_search(crambin):
     reference = image_distances(xyz.astype(np.float64), crambin.cell)
     assert len(first) == pair_count(reference, cutoff)
     np.testing.assert_allclose(distance, reference[first, second], atol=2e-4)
-    left, right, cross = molframe.spatial.cross_pairs(
-        xyz[:20], xyz[20:], cutoff, cell=crambin.cell
-    )
+    left, right, cross = molframe.spatial.cross_pairs(xyz[:20], xyz[20:], cutoff, cell=crambin.cell)
     expected = reference[:20, 20:]
     assert len(left) == int((expected <= cutoff).sum())
     np.testing.assert_allclose(cross, expected[left, right], atol=2e-4)

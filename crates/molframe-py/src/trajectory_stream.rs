@@ -1,7 +1,7 @@
 //! Frame-sliced, atom-subset and chunked reading of trajectories.
 //!
 //! XTC, DCD and TRR are pulled frame by frame into one exactly sized output
-//! buffer that NumPy then owns, so a read peaks at the output plus one frame
+//! buffer that `NumPy` then owns, so a read peaks at the output plus one frame
 //! rather than at two copies of the file. Other containers are materialised by
 //! the Rust reader and then sliced.
 
@@ -47,8 +47,10 @@ impl Source {
         Ok(Self {
             path,
             format,
-            memory_limit: memory_limit
-                .unwrap_or(TrajectoryReaderOptions::DEFAULT_MEMORY_LIMIT_BYTES),
+            memory_limit: match memory_limit {
+                Some(limit) => limit,
+                None => TrajectoryReaderOptions::DEFAULT_MEMORY_LIMIT_BYTES,
+            },
         })
     }
 
@@ -120,9 +122,12 @@ pub(crate) fn resolve_slice(
         return Ok(FrameSlice::ALL);
     };
     let part = |name: &str| -> PyResult<Option<isize>> { slice.getattr(name)?.extract() };
-    let (start, stop, step) = (part("start")?, part("stop")?, part("step")?);
-    let step = step.unwrap_or(1);
-    if step < 1 {
+    let (start, stop, stride) = (part("start")?, part("stop")?, part("step")?);
+    let stride = match stride {
+        Some(stride) => stride,
+        None => 1,
+    };
+    if stride < 1 {
         return Err(crate::error::value(
             "frame stride must be a positive integer; reverse order is not supported",
         ));
@@ -132,14 +137,23 @@ pub(crate) fn resolve_slice(
     } else {
         None
     };
-    let place = |bound: isize| match usize::try_from(bound) {
-        Ok(index) => index,
-        Err(_) => counted.unwrap_or(0).saturating_sub(bound.unsigned_abs()),
+    let place = |bound: isize| {
+        if let Ok(index) = usize::try_from(bound) {
+            return index;
+        }
+        let known = match counted {
+            Some(known) => known,
+            None => 0,
+        };
+        known.saturating_sub(bound.unsigned_abs())
     };
     Ok(FrameSlice {
         start: start.map_or(0, place),
         stop: stop.map_or(usize::MAX, place),
-        step: usize::try_from(step).unwrap_or(1),
+        step: match usize::try_from(stride) {
+            Ok(every) => every,
+            Err(_) => 1,
+        },
     })
 }
 
@@ -150,6 +164,10 @@ pub(crate) fn resolve_slice(
 /// to each requested frame; DCD and TRR decode and discard the frames between.
 /// `memory_limit` bounds the reader's own workspace in bytes. The result's
 /// `frame_indices` name the source frame of every row.
+///
+/// A `.pdb`, `.cif`, `.mmcif` or `.bcif` path (or the matching `format`) reads
+/// the structure and returns its models as frames; a ragged ensemble is refused
+/// with an error naming `ragged_models`.
 #[pyfunction]
 #[pyo3(signature = (path, *, format=None, frames=None, atoms=None, memory_limit=None))]
 pub(crate) fn read(
@@ -160,6 +178,9 @@ pub(crate) fn read(
     atoms: Option<Vec<usize>>,
     memory_limit: Option<usize>,
 ) -> PyResult<PyTrajectory> {
+    if let Some(name) = crate::trajectory_structure::structure_format(&path, format) {
+        return crate::trajectory_structure::read_models(py, &path, name, frames, atoms.as_deref());
+    }
     let source = Source::new(path, format, memory_limit)?;
     if let (true, Some(format)) = (source.pulls(), source.format) {
         let (mut reader, _) = source.open(frames, atoms)?;

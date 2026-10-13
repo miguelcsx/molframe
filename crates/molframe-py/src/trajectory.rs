@@ -23,7 +23,7 @@ pub(crate) struct PyTrajectory {
 }
 
 impl PyTrajectory {
-    /// Hands a filled chunk's buffers to NumPy without copying them.
+    /// Hands a filled chunk's buffers to `NumPy` without copying them.
     pub(crate) fn from_chunk(py: Python<'_>, format: String, chunk: DenseChunk) -> PyResult<Self> {
         let frames = chunk.frames();
         let positions =

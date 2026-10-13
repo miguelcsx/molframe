@@ -239,6 +239,7 @@ pub(crate) fn select_compiled_in(
 ) -> PyResult<PySelection> {
     use molframe::QueryStructure;
 
+    structure.require_resolved()?;
     let evaluation = crate::execution::run(py, context, |context| {
         structure.inner.select_with_options(
             query,

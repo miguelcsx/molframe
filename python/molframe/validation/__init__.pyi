@@ -39,6 +39,7 @@ def clashes(
     links and disulfides before the exclusion, which a structure read from a
     coordinate file needs because it carries no bonds.
     """
+
 def bond_length_deviations(
     structure: Structure,
     *,

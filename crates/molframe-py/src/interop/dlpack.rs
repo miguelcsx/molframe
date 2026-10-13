@@ -135,8 +135,9 @@ impl PyCoordinateTensor {
 
 /// The coordinates of `structure` as a `DLPack` tensor source.
 #[pyfunction]
-pub(crate) fn coordinates(structure: &PyStructure) -> PyCoordinateTensor {
-    PyCoordinateTensor {
+pub(crate) fn coordinates(structure: &PyStructure) -> PyResult<PyCoordinateTensor> {
+    structure.require_resolved()?;
+    Ok(PyCoordinateTensor {
         structure: structure.clone(),
-    }
+    })
 }

@@ -139,7 +139,8 @@ fn annotate(
     };
     let version = molframe::DictionaryVersion::new(version);
     let report = py.detach(move || {
-        let (provider, _) = molframe::read_component_dictionary(&components, version)
+        // Only the components the structure uses are parsed and lowered.
+        let provider = molframe::open_component_dictionary(&components, version)
             .map_err(|findings| findings_error(&findings))?;
         chem::apply_component_chemistry(source.engine(), &provider, policy)
             .map_err(crate::error::kernel)

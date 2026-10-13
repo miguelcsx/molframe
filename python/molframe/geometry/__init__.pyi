@@ -1,7 +1,7 @@
-from collections.abc import Sequence
-from typing import Protocol
+from collections.abc import Iterator, Sequence
+from typing import Literal, Protocol
 
-from .. import Float64Array, Structure, Table
+from .. import ExecutionContext, Float64Array, Structure, Table
 
 class Coordinates(Protocol):
     @property
@@ -27,7 +27,43 @@ class Superposition:
     def apply(self, positions: Coordinates) -> Coordinates: ...
 
 def centroid(coordinates: Coordinates) -> list[float] | None: ...
-def distance_matrix(coordinates: Coordinates) -> DistanceMatrix: ...
+def distance_matrix(
+    coordinates: Coordinates,
+    *,
+    dtype: Literal["float64", "float32"] = "float64",
+    condensed: bool = False,
+    context: ExecutionContext | None = None,
+) -> DistanceMatrix:
+    """All pairwise distances, charged to the context memory budget.
+
+    ``dtype="float32"`` halves the memory; ``condensed=True`` returns the upper
+    triangle as a 1-D array in ``scipy.spatial.distance.pdist`` order. Over
+    budget it raises ``MemoryBudgetError`` naming these options.
+    """
+
+def distance_matrix_blocks(
+    coordinates: Coordinates,
+    block_rows: int | None = None,
+    *,
+    dtype: Literal["float64", "float32"] = "float64",
+    context: ExecutionContext | None = None,
+) -> Iterator[tuple[int, DistanceMatrix]]:
+    """Stream ``(start_row, block)`` row blocks, one resident at a time."""
+
+def _distance_block_rows(
+    coordinates: Coordinates,
+    *,
+    dtype: Literal["float64", "float32"] = "float64",
+    context: ExecutionContext | None = None,
+) -> int: ...
+def _distance_rows(
+    coordinates: Coordinates,
+    start: int,
+    stop: int,
+    *,
+    dtype: Literal["float64", "float32"] = "float64",
+    context: ExecutionContext | None = None,
+) -> DistanceMatrix: ...
 def rmsd(mobile: Coordinates, reference: Coordinates) -> float: ...
 def distances(left: Coordinates, right: Coordinates) -> Float64Array:
     """Distances between corresponding rows, in Å."""

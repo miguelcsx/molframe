@@ -7,7 +7,11 @@ tests pin the flag and the accessor that make the difference observable, and che
 that the atoms really are there rather than merely advertised.
 """
 
+from functools import partial
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 import molframe
 
@@ -85,3 +89,58 @@ def test_a_dense_ensemble_is_not_ragged_and_needs_no_model_iteration(tmp_path: P
     # One shared topology, so the flat accessors answer directly.
     assert structure.atom_count == 2
     assert structure.coordinates.shape == (2, 3)
+
+
+def test_a_dense_ensemble_gathers_into_one_array(tmp_path: Path) -> None:
+    structure = written(tmp_path, DENSE)
+
+    block = structure.model_coordinates()
+    assert block.shape == (2, 2, 3)
+    assert block.dtype == np.float32
+    assert not block.flags.writeable
+    assert block[1, 1].tolist() == [6.0, 0.0, 0.0]
+    # A subset keeps the order asked for.
+    picked = structure.model_coordinates([1, 0])
+    assert picked.shape == (2, 2, 3)
+    assert picked[0, 0].tolist() == [5.0, 0.0, 0.0]
+    with pytest.raises(Exception, match="model"):
+        structure.model_coordinates([7])
+
+
+def test_a_ragged_ensemble_is_refused_by_name_everywhere(tmp_path: Path) -> None:
+    structure = written(tmp_path, RAGGED)
+
+    calls = (
+        structure.model_coordinates,
+        partial(getattr, structure, "coordinates"),
+        partial(molframe.analysis.contacts, structure, 4.5),
+        partial(molframe.analysis.sasa, structure),
+        partial(molframe.analysis.atom_contacts, structure, 4.5),
+        partial(structure.select, "all"),
+    )
+    for call in calls:
+        with pytest.raises(Exception, match="ragged_models"):
+            call()
+
+
+def test_model_all_policy_runs_every_model_of_a_dense_ensemble(tmp_path: Path) -> None:
+    structure = written(tmp_path, DENSE)
+
+    result = molframe.analysis.contacts(structure, 4.5, policy=molframe.AnalysisPolicy(model="all"))
+    assert len(result.value) == 2
+
+
+def test_trajectory_read_takes_structure_files(tmp_path: Path) -> None:
+    path = tmp_path / "ensemble.pdb"
+    path.write_text(DENSE)
+
+    trajectory = molframe.trajectory.read(path)
+    assert (trajectory.n_frames, trajectory.n_atoms) == (2, 2)
+    assert np.asarray(trajectory.positions)[1, 1].tolist() == [6.0, 0.0, 0.0]
+    sliced = molframe.trajectory.read(path, frames=slice(1, None), atoms=[1])
+    assert sliced.positions.shape == (1, 1, 3)
+
+    ragged = tmp_path / "ragged.pdb"
+    ragged.write_text(RAGGED)
+    with pytest.raises(Exception, match="ragged_models"):
+        molframe.trajectory.read(ragged)

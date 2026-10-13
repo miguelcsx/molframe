@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 #[path = "surface_tests/stubs.rs"]
 mod stubs;
 use stubs::{
-    CONTRACT_DUNDERS, UNCATALOGUED_NAMESPACES, dunder_all, identifier, parse_stub, python_root,
-    read, reexports, source_root,
+    CONTRACT_DUNDERS, PYTHON_DEFINED, UNCATALOGUED_NAMESPACES, dunder_all, identifier, parse_stub,
+    python_root, read, reexports, source_root,
 };
 
 fn with_native<T>(check: impl FnOnce(&Bound<'_, PyModule>) -> T) -> T {
@@ -137,8 +137,12 @@ fn every_namespace_matches_its_stub_name_for_name_and_member_for_member() {
         for (name, space) in &spaces {
             let stub = parse_stub(&read(&root.join(name).join("__init__.pyi")));
             every_stub_name.extend(stub.names.iter().cloned());
-            let declared: BTreeSet<String> =
-                stub.names.difference(&stub.protocols).cloned().collect();
+            let declared: BTreeSet<String> = stub
+                .names
+                .difference(&stub.protocols)
+                .filter(|each| !PYTHON_DEFINED.contains(&(name.as_str(), each.as_str())))
+                .cloned()
+                .collect();
             compare(
                 name,
                 (

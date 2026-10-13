@@ -4,11 +4,16 @@ use crate::analysis_result::PyAnalysis;
 use crate::bindings::PyStructure;
 use crate::policy::{PyAnalysisPolicy, policy_of};
 use crate::table::TableBuilder;
-use molframe::analysis::{StructureKernel, analyse_structure};
+use molframe::analysis::{StructureKernel, analyse_models, analyse_structure};
 use pyo3::prelude::*;
 use std::fmt::Debug;
 
-/// Runs `kernel` on the first model under `policy` and converts the value.
+/// Runs `kernel` on the model the policy names and converts the value.
+///
+/// A policy that names `model="all"` or `"ensemble"` runs the kernel once per
+/// model of a dense ensemble and the value becomes a list with one entry per
+/// model; a ragged ensemble is refused with the error that names
+/// `ragged_models`, because it has no shared atom axis to run over.
 ///
 /// Alternate conformations are resolved once under the policy, so the result's
 /// coverage, status and assumptions describe what was actually analysed.
@@ -17,7 +22,7 @@ pub(crate) fn run<K>(
     structure: &PyStructure,
     policy: &molframe::AnalysisPolicy,
     kernel: &K,
-    convert: impl FnOnce(Python<'_>, K::Output) -> PyResult<Py<PyAny>>,
+    convert: impl Fn(Python<'_>, K::Output) -> PyResult<Py<PyAny>>,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<PyAnalysis>
 where
@@ -26,7 +31,34 @@ where
     K::Error: 'static,
     for<'a> molframe::Diagnostic: From<&'a K::Error>,
 {
+    structure.require_resolved()?;
     let structure = structure.inner.clone();
+    if matches!(
+        policy.model,
+        molframe::ModelChoice::All | molframe::ModelChoice::Ensemble
+    ) {
+        let analysis = crate::execution::run(py, context, |context| {
+            analyse_models(structure.engine(), None, policy, kernel, context)
+        })?
+        .map_err(|error| {
+            crate::error::from_diagnostic(&molframe::analysis::governed_diagnostic(
+                &error,
+                |inner| molframe::Diagnostic::from(inner),
+            ))
+        })?;
+        let envelope = PyAnalysis::new(&analysis, None);
+        let value = match analysis.into_result() {
+            Ok(values) => {
+                let converted = values
+                    .into_iter()
+                    .map(|value| convert(py, value))
+                    .collect::<PyResult<Vec<_>>>()?;
+                Some(pyo3::types::PyList::new(py, converted)?.into_any().unbind())
+            }
+            Err(_) => None,
+        };
+        return Ok(envelope.with_value(value));
+    }
     let analysis = crate::execution::run(py, context, |context| {
         analyse_structure(structure.engine(), policy, kernel, context)
     })?

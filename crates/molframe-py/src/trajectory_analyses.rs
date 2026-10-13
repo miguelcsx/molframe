@@ -65,7 +65,10 @@ impl<T> Collected<T> {
     fn push(&mut self, frame: usize, time: Option<f64>, value: T) -> Result<(), TrajectoryError> {
         self.frames
             .push(u64::try_from(frame).map_err(|_| TrajectoryError::IdentityOverflow)?);
-        self.times.push(time.unwrap_or(f64::NAN));
+        self.times.push(match time {
+            Some(time) => time,
+            None => f64::NAN,
+        });
         self.values.push(value);
         Ok(())
     }
@@ -263,6 +266,7 @@ impl From<TrajectoryError> for Stop {
 #[pyfunction]
 #[pyo3(signature = (path, callback, *, format=None, frames=None, atoms=None, memory_limit=None, context=None))]
 #[pyo3(name = "run_analysis_stream")]
+#[allow(clippy::too_many_arguments)]
 fn run_analysis_stream_py(
     py: Python<'_>,
     path: PathBuf,

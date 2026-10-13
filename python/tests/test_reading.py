@@ -130,9 +130,11 @@ def test_a_read_runs_under_a_context_and_obeys_its_cancellation():
     cancelled.cancel()
     with pytest.raises(molframe.Cancelled):
         molframe.read(FOUR_HHB_PDB, context=cancelled)
+    # A read never fails for want of search scratch: a budget that cannot hold the
+    # parallel blocks falls back to the serial walk and perceives the same bonds.
     starved = molframe.ExecutionContext(memory_budget=1024)
-    with pytest.raises(molframe.MemoryBudgetError):
-        molframe.read(FOUR_HHB_PDB, context=starved)
+    whole = molframe.read(FOUR_HHB_PDB, context=context)
+    assert molframe.read(FOUR_HHB_PDB, context=starved).atom_count == whole.atom_count
 
 
 @pytest.mark.parametrize("path", [FOUR_HHB_CIF, FOUR_HHB_PDB, FOUR_HHB_BCIF])
@@ -185,6 +187,6 @@ def test_write_states_its_decisions(tmp_path):
     molframe.formats.write(molframe.read(WATER_SDF.encode(), format="sdf"), sdf)
     assert molframe.read(sdf).atom_count == 3
     with pytest.raises(molframe.MolframeError):
-        molframe.formats.write(structure, tmp_path / "x.cif", memory_limit=1)
+        molframe.formats.write(structure, tmp_path / "x.bcif", memory_limit=1)
     with pytest.raises(molframe.PolicyError):
         molframe.formats.write(structure, tmp_path / "y", format="nonsense")

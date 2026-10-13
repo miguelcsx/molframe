@@ -2,7 +2,7 @@
 
 use crate::hierarchy::{PyAtoms, PyChains, PyModels, PyResidues};
 use numpy::ndarray::ArrayView2;
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, ToPyArray};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
@@ -13,7 +13,9 @@ mod geometry;
 #[cfg(feature = "geometry")]
 pub(crate) mod measures;
 #[cfg(feature = "geometry")]
-pub(crate) use geometry::{centroid, coordinates, distance_matrix, rmsd};
+pub(crate) use geometry::{
+    centroid, coordinates, distance_block_rows, distance_matrix, distance_rows, rmsd,
+};
 #[cfg(feature = "analysis")]
 mod bonds;
 #[cfg(feature = "analysis")]
@@ -32,6 +34,19 @@ struct SnapshotOwner {
 impl PyStructure {
     pub(crate) const fn new(inner: molframe::Structure) -> Self {
         Self { inner }
+    }
+
+    /// Refuses a ragged ensemble, whose shell has no atoms of its own.
+    ///
+    /// Every structure-level numeric entry point calls this first, so a ragged
+    /// ensemble raises an error that names `ragged_models` instead of returning
+    /// an empty result or a misleading atom-count mismatch.
+    pub(crate) fn require_resolved(&self) -> PyResult<()> {
+        self.inner
+            .engine()
+            .require_resolved_model()
+            .map(|_| ())
+            .map_err(|finding| crate::error::from_diagnostic(&finding))
     }
 
     fn coordinates_view<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f32>>> {
@@ -79,7 +94,31 @@ impl PyStructure {
 
     #[getter]
     fn coordinates<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f32>>> {
+        self.require_resolved()?;
         self.coordinates_view(py)
+    }
+
+    /// Positions of every model (or of `models`) as one float32 `(models, atoms, 3)` array.
+    ///
+    /// The array is built in one exactly sized allocation and is read-only. A
+    /// ragged ensemble has no shared atom axis and raises an error naming
+    /// `ragged_models`; so does a model index the structure does not have.
+    #[pyo3(signature = (models=None))]
+    fn model_coordinates<'py>(
+        &self,
+        py: Python<'py>,
+        models: Option<Vec<u32>>,
+    ) -> PyResult<Bound<'py, PyArray3<f32>>> {
+        let chosen: Option<Vec<molframe::ModelIndex>> =
+            models.map(|list| list.into_iter().map(molframe::ModelIndex::new).collect());
+        let structure = self.inner.clone();
+        let block = py
+            .detach(|| structure.ensemble_coordinates(chosen.as_deref()))
+            .map_err(|finding| crate::error::from_diagnostic(&finding))?;
+        let (count, atoms) = (block.models(), block.atoms());
+        let array = PyArray1::from_vec(py, block.into_flat()).reshape([count, atoms, 3])?;
+        array.readwrite().make_nonwriteable();
+        Ok(array)
     }
     #[getter]
     fn atom_count(&self) -> u32 {

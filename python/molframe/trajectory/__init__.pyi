@@ -33,13 +33,29 @@ class Trajectory:
 def read(
     path: str | PathLike[str],
     *,
-    format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
+    format: Literal[
+        "xtc",
+        "trr",
+        "dcd",
+        "tng",
+        "gro",
+        "xyz",
+        "lammps_dump",
+        "netcdf",
+        "pdb",
+        "mmcif",
+        "bcif",
+    ]
     | None = None,
     frames: slice | None = None,
     atoms: Sequence[int] | None = None,
     memory_limit: int | None = None,
 ) -> Trajectory:
     """Read a trajectory, or a slice and atom subset of it, into one exactly sized buffer.
+
+    A ``.pdb``, ``.cif``, ``.mmcif`` or ``.bcif`` path reads a multi-model
+    structure and returns its models as frames. A ragged ensemble has no shared
+    atom axis and raises an error naming ``ragged_models``.
 
     `frames` is a positive-stride `slice` of source frames and `atoms` the atom
     indices to keep. XTC seeks; DCD and TRR decode and discard in between.

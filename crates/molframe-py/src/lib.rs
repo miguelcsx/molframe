@@ -61,6 +61,8 @@ mod internal_coordinates;
 mod interop;
 #[cfg(feature = "motif")]
 mod motif;
+#[cfg(feature = "motif")]
+mod motif_stream;
 mod native_source;
 mod policy;
 #[cfg(feature = "query")]
@@ -93,6 +95,8 @@ mod trajectory_analyses;
 mod trajectory_ensemble;
 #[cfg(feature = "trajectory")]
 mod trajectory_stream;
+#[cfg(feature = "trajectory")]
+mod trajectory_structure;
 #[cfg(feature = "validation")]
 mod validation;
 #[cfg(feature = "validation")]

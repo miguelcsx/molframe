@@ -50,7 +50,20 @@ class Structure:
     @property
     def models(self) -> Models: ...
     @property
-    def coordinates(self) -> Float32Array: ...
+    def coordinates(self) -> Float32Array:
+        """Positions of the first model, shape ``(atoms, 3)``.
+
+        Raises for a ragged ensemble, which has no atoms of its own; the error
+        names ``ragged_models``.
+        """
+    def model_coordinates(self, models: Sequence[int] | None = None) -> Float32Array:
+        """Return every model (or ``models``) as a read-only float32 array.
+
+        The array is ``(models, atoms, 3)`` and built in one allocation.
+
+        Raises for a ragged ensemble (use ``ragged_models``) or a model index the
+        structure does not have.
+        """
     def select(
         self,
         query: str | Query,

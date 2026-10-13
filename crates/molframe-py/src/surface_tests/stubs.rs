@@ -34,6 +34,11 @@ pub(super) const STUB_ONLY_MEMBERS: &[&str] = &[
 /// so are not catalogued: each builds a small selection expression.
 pub(super) const UNCATALOGUED_NAMESPACES: &[&str] = &["sel", "query"];
 
+/// Names a package namespace defines in Python rather than registering natively
+/// (a generator over native row blocks); the stub declares them, the extension
+/// does not, and `__init__.py` must still export them.
+pub(super) const PYTHON_DEFINED: &[(&str, &str)] = &[("geometry", "distance_matrix_blocks")];
+
 pub(super) fn python_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../python/molframe")
 }

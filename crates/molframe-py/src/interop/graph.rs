@@ -130,6 +130,7 @@ pub(crate) fn graph(
     periodic: bool,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<PyGraph> {
+    structure.require_resolved()?;
     let node_features: Vec<NodeFeature> = parse_all(node_features)?;
     let edge_features: Vec<EdgeFeature> = parse_all(edge_features)?;
     let options = GraphOptions {

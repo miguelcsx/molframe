@@ -51,4 +51,16 @@ pub(super) const ROWS: &[Capability] = &[
         execution_needs: "cpu,memory",
         cost: molframe::Cost::Materialize,
     },
+    Capability {
+        name: "preserve_mmcif",
+        domain: "formats",
+        feature: "formats",
+        inputs: "path, path",
+        result: "file",
+        policy: false,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,memory",
+        cost: molframe::Cost::Copy,
+    },
 ];

@@ -117,11 +117,13 @@ pub(crate) fn atom_contacts(
 ) -> PyResult<PyContactTable> {
     let backend = crate::backend::parse(backend)?;
     let rows = if let Ok(structure) = value.extract::<PyRef<'_, PyStructure>>() {
+        structure.require_resolved()?;
         let structure = structure.inner.clone();
         crate::execution::run(py, context, move |context| {
             molframe::analysis::atom_contacts(structure.engine(), cutoff, backend, context)
         })?
     } else if let Ok(selection) = value.extract::<PyRef<'_, PySelection>>() {
+        selection.parent.require_resolved()?;
         let structure = selection.parent.inner.clone();
         let indices = selection.atom_indices().to_vec();
         crate::execution::run(py, context, move |context| {

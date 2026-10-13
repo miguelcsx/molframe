@@ -66,7 +66,7 @@ def contacts(
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[ContactTable]:
-    """Return atom pairs within ``cutoff``; indices refer to the analysed atoms (``atom_origin``)."""
+    """Return atom pairs within ``cutoff``; indices are analysed atoms (``atom_origin``)."""
 
 def hydrogen_bonds(
     structure: Structure,
@@ -195,7 +195,7 @@ def native_contacts(
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[dict[str, float]]:
-    """The fraction Q of the reference's contacts that ``target`` keeps.
+    """Return the fraction Q of the reference's contacts that ``target`` keeps.
 
     A reference pair within ``cutoff`` ångström is native; it is kept when the
     same pair is within ``cutoff + tolerance`` ångström in ``target``

@@ -255,7 +255,17 @@ class ExecutionContext:
         """The most candidate symmetry images a crystal search may examine, or ``None``."""
 
     @property
-    def memory_budget(self) -> int | None: ...
+    def memory_budget(self) -> int | None:
+        """The explicit budget in bytes, or ``None`` for the automatic default.
+
+        The automatic default is about 40% of the physical (or container) memory,
+        and ``MOLFRAME_MEMORY_BUDGET`` (``4GiB``, ``512MB`` or bytes) overrides it.
+        """
+
+    @property
+    def effective_memory_budget(self) -> int:
+        """The budget operations actually run under, in bytes."""
+
     @property
     def scratch_bytes(self) -> int: ...
     @property

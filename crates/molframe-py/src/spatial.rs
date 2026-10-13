@@ -1,7 +1,8 @@
 //! Mechanical adapters for fixed-radius neighbour search over coordinates.
 
 use crate::crystal::PyUnitCell;
-use numpy::{PyArray1, PyArray2, PyArrayMethods, ToPyArray};
+use molframe::spatial::{KnnOptions, NeighborPair};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
 
 type Pairs<'py> = (
@@ -15,6 +16,23 @@ fn periodic_box(cell: Option<&PyUnitCell>) -> PyResult<Option<molframe::spatial:
         molframe::spatial::PeriodicBox::from_cell(cell.parameters()).map_err(crate::error::kernel)
     })
     .transpose()
+}
+
+/// Struct-of-arrays columns handed to `NumPy` without a further copy.
+fn columns(py: Python<'_>, pairs: impl ExactSizeIterator<Item = (u32, u32, f32)>) -> Pairs<'_> {
+    let mut first = Vec::with_capacity(pairs.len());
+    let mut second = Vec::with_capacity(pairs.len());
+    let mut distance = Vec::with_capacity(pairs.len());
+    for (a, b, squared) in pairs {
+        first.push(a);
+        second.push(b);
+        distance.push(squared.sqrt());
+    }
+    (
+        first.into_pyarray(py),
+        second.into_pyarray(py),
+        distance.into_pyarray(py),
+    )
 }
 
 /// Unique unordered pairs no further apart than `cutoff`, sorted by index.
@@ -51,16 +69,11 @@ fn neighbor_pairs<'py>(
         )
     })?
     .map_err(crate::error::kernel)?;
-    let first: Vec<u32> = pairs.iter().map(|pair| pair.first).collect();
-    let second: Vec<u32> = pairs.iter().map(|pair| pair.second).collect();
-    let distance: Vec<f32> = pairs
-        .iter()
-        .map(|pair| pair.distance_squared.sqrt())
-        .collect();
-    Ok((
-        first.to_pyarray(py),
-        second.to_pyarray(py),
-        distance.to_pyarray(py),
+    Ok(columns(
+        py,
+        pairs
+            .iter()
+            .map(|pair| (pair.first, pair.second, pair.distance_squared)),
     ))
 }
 
@@ -94,20 +107,181 @@ fn cross_pairs<'py>(
         )
     })?
     .map_err(crate::error::kernel)?;
-    let first: Vec<u32> = pairs.iter().map(|pair| pair.first).collect();
-    let second: Vec<u32> = pairs.iter().map(|pair| pair.second).collect();
-    let distance: Vec<f32> = pairs
-        .iter()
-        .map(|pair| pair.distance_squared.sqrt())
-        .collect();
+    Ok(columns(
+        py,
+        pairs
+            .iter()
+            .map(|pair| (pair.first, pair.second, pair.distance_squared)),
+    ))
+}
+
+/// Iterator over `(first, second, distance)` chunks of a pair list.
+#[pyclass(name = "PairChunks", module = "molframe.spatial", skip_from_py_object)]
+struct PairChunks {
+    pairs: Vec<NeighborPair>,
+    cursor: usize,
+    size: usize,
+}
+
+#[pymethods]
+impl PairChunks {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__<'py>(&mut self, py: Python<'py>) -> Option<Pairs<'py>> {
+        if self.cursor >= self.pairs.len() {
+            self.pairs = Vec::new();
+            return None;
+        }
+        let end = self.pairs.len().min(self.cursor + self.size);
+        let chunk = self.pairs.get(self.cursor..end)?;
+        let out = columns(
+            py,
+            chunk
+                .iter()
+                .map(|pair| (pair.first, pair.second, pair.distance_squared)),
+        );
+        self.cursor = end;
+        Some(out)
+    }
+}
+
+/// Like `neighbor_pairs`, yielding bounded `(first, second, distance)` chunks.
+///
+/// The pair list is built once in 12 bytes per pair; each chunk then allocates
+/// only `chunk_size` entries, so consumers that reduce chunks never hold the
+/// three full-size `NumPy` columns as well.
+#[pyfunction]
+#[pyo3(signature = (coordinates, cutoff, *, chunk_size=1_048_576, cell=None, backend="auto", context=None))]
+fn neighbor_pairs_chunks(
+    py: Python<'_>,
+    coordinates: &Bound<'_, PyArray2<f32>>,
+    cutoff: f32,
+    chunk_size: usize,
+    cell: Option<&PyUnitCell>,
+    backend: &str,
+    context: Option<&crate::execution::PyExecutionContext>,
+) -> PyResult<PairChunks> {
+    if chunk_size == 0 {
+        return Err(crate::error::value("chunk_size must be positive"));
+    }
+    let backend = crate::backend::parse(backend)?;
+    let periodic = periodic_box(cell)?;
+    let array = coordinates.readonly();
+    let positions = crate::bindings::coordinates(&array)?;
+    let everything = molframe::engine::core::AtomSelection::All(
+        u32::try_from(positions.len())
+            .map_err(|_| crate::error::value("too many atoms for a 32-bit index"))?,
+    );
+    let pairs = crate::execution::run(py, context, |context| {
+        molframe::spatial::pairs_within(
+            positions,
+            &everything,
+            &everything,
+            cutoff,
+            backend,
+            periodic.as_ref(),
+            context,
+        )
+    })?
+    .map_err(crate::error::kernel)?;
+    Ok(PairChunks {
+        pairs,
+        cursor: 0,
+        size: chunk_size,
+    })
+}
+
+type Neighbors<'py> = (Bound<'py, PyArray2<u32>>, Bound<'py, PyArray2<f32>>);
+
+/// The `k` nearest `points` of every query point, as `(indices, distances)`.
+///
+/// Both outputs have shape `(n_query, k)`, rows ordered by increasing distance
+/// with ties by index. Missing neighbours (fewer than `k` points, or none within
+/// `max_distance`) hold `4294967295` and `inf`. Without `query` the points query
+/// themselves and `exclude_self` defaults to true; with `query` it defaults to
+/// false. Distances are float32 and, with a `cell`, minimum-image.
+#[pyfunction]
+#[pyo3(signature = (points, k, *, query=None, max_distance=None, cell=None, exclude_self=None, backend="auto", context=None))]
+#[allow(clippy::too_many_arguments)]
+fn knn<'py>(
+    py: Python<'py>,
+    points: &Bound<'py, PyArray2<f32>>,
+    k: usize,
+    query: Option<&Bound<'py, PyArray2<f32>>>,
+    max_distance: Option<f32>,
+    cell: Option<&PyUnitCell>,
+    exclude_self: Option<bool>,
+    backend: &str,
+    context: Option<&crate::execution::PyExecutionContext>,
+) -> PyResult<Neighbors<'py>> {
+    let backend = crate::backend::parse(backend)?;
+    let periodic = periodic_box(cell)?;
+    let array = points.readonly();
+    let targets = crate::bindings::coordinates(&array)?;
+    let too_many = || crate::error::value("too many atoms for a 32-bit index");
+    let count = u32::try_from(targets.len()).map_err(|_| too_many())?;
+    let options = KnnOptions {
+        max_distance,
+        exclude_self: match exclude_self {
+            Some(exclude) => exclude,
+            None => query.is_none(),
+        },
+    };
+    let result = if let Some(query) = query {
+        let query = query.readonly();
+        let query = crate::bindings::coordinates(&query)?;
+        let total = u32::try_from(targets.len() + query.len()).map_err(|_| too_many())?;
+        let mut joined = Vec::with_capacity(targets.len() + query.len());
+        joined.extend_from_slice(targets);
+        joined.extend_from_slice(query);
+        let rows = molframe::engine::core::AtomSelection::range(count..total);
+        let columns = molframe::engine::core::AtomSelection::range(0..count);
+        crate::execution::run(py, context, |context| {
+            molframe::spatial::knn_within(
+                &joined,
+                &rows,
+                &columns,
+                k,
+                options,
+                backend,
+                periodic.as_ref(),
+                context,
+            )
+        })?
+    } else {
+        let all = molframe::engine::core::AtomSelection::All(count);
+        crate::execution::run(py, context, |context| {
+            molframe::spatial::knn_within(
+                targets,
+                &all,
+                &all,
+                k,
+                options,
+                backend,
+                periodic.as_ref(),
+                context,
+            )
+        })?
+    }
+    .map_err(crate::error::kernel)?;
+    let rows = result.rows();
+    let mut distances = result.distances_squared;
+    for value in &mut distances {
+        *value = value.sqrt();
+    }
+    let shape = [rows, k];
     Ok((
-        first.to_pyarray(py),
-        second.to_pyarray(py),
-        distance.to_pyarray(py),
+        result.indices.into_pyarray(py).reshape(shape)?,
+        distances.into_pyarray(py).reshape(shape)?,
     ))
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(neighbor_pairs, module)?)?;
-    module.add_function(wrap_pyfunction!(cross_pairs, module)?)
+    module.add_function(wrap_pyfunction!(cross_pairs, module)?)?;
+    module.add_function(wrap_pyfunction!(neighbor_pairs_chunks, module)?)?;
+    module.add_function(wrap_pyfunction!(knn, module)?)?;
+    module.add_class::<PairChunks>()
 }

@@ -112,3 +112,55 @@ def test_the_interpreter_stays_usable_after_an_interrupt():
     first, _, _ = molframe.spatial.neighbor_pairs(coordinates, 6.0, context=context)
     again, _, _ = molframe.spatial.neighbor_pairs(coordinates, 6.0, context=context)
     assert np.array_equal(first, again)
+
+
+def test_a_memory_refusal_names_the_figures_and_every_knob():
+    with pytest.raises(MemoryBudgetError) as raised:
+        molframe.spatial.neighbor_pairs(
+            _cloud(4_000), 3.0, context=ExecutionContext(memory_budget=1_024)
+        )
+    message = str(raised.value)
+    for needle in (
+        "bytes",
+        "ExecutionContext(memory_budget",
+        "--memory-budget",
+        "MOLFRAME_MEMORY_BUDGET",
+    ):
+        assert needle in message, message
+
+
+def test_the_default_budget_scales_with_the_machine():
+    assert ExecutionContext().memory_budget is None
+    assert ExecutionContext().effective_memory_budget >= 100_000_000
+    assert ExecutionContext(memory_budget=5_000_000).effective_memory_budget == 5_000_000
+
+
+def test_distance_matrix_is_guarded_and_offers_f32_condensed_and_blocks():
+    coordinates = _cloud(300)
+    full = molframe.geometry.distance_matrix(coordinates)
+    assert full.shape == (300, 300)
+    assert full.dtype == np.float64
+    # 300*300*8 = 720 kB does not fit 500 kB; float32 (360 kB) and condensed do.
+    tight = ExecutionContext(memory_budget=500_000, scratch_bytes=0)
+    with pytest.raises(MemoryBudgetError) as raised:
+        molframe.geometry.distance_matrix(coordinates, context=tight)
+    message = str(raised.value)
+    for needle in (
+        "720000 bytes",
+        "float32",
+        "condensed",
+        "distance_matrix_blocks",
+        "MOLFRAME_MEMORY_BUDGET",
+    ):
+        assert needle in message, message
+    narrow = molframe.geometry.distance_matrix(coordinates, dtype="float32", context=tight)
+    assert narrow.dtype == np.float32
+    np.testing.assert_array_equal(narrow, full.astype(np.float32))
+    packed = molframe.geometry.distance_matrix(coordinates, condensed=True, context=tight)
+    np.testing.assert_array_equal(packed, full[np.triu_indices(300, 1)])
+    stacked = [None] * 300
+    for start, block in molframe.geometry.distance_matrix_blocks(coordinates, context=tight):
+        stacked[start : start + len(block)] = list(block)
+    np.testing.assert_array_equal(np.array(stacked), full)
+    with pytest.raises(ValueError, match="dtype"):
+        molframe.geometry.distance_matrix(coordinates, dtype="float16")

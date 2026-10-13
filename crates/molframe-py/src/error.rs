@@ -162,12 +162,29 @@ pub(crate) fn from_findings(findings: &[Diagnostic], message: &str) -> PyErr {
 /// As [`from_findings`], raised as the named class instead of the one the
 /// first finding's code selects.
 pub(crate) fn from_findings_as(name: &str, findings: &[Diagnostic], message: &str) -> PyErr {
+    let message = with_memory_remedy(findings.first(), message);
+    let message = message.as_str();
     Python::attach(
         |py| match build(py, name, message, findings.first(), findings) {
             Ok(error) => error,
             Err(error) => broken(&error, message),
         },
     )
+}
+
+const MEMORY_BUDGET_ENV: &str = "MOLFRAME_MEMORY_BUDGET";
+const MEMORY_BUDGET_REMEDY: &str = "raise the memory budget: ExecutionContext(memory_budget=...) \
+(Rust ExecutionContext::builder().memory_budget(MemoryBudget::new(..)?), CLI --memory-budget), \
+or set environment variable MOLFRAME_MEMORY_BUDGET";
+
+/// Every memory refusal names the knobs that lift it, whichever kernel raised it.
+fn with_memory_remedy(primary: Option<&Diagnostic>, message: &str) -> String {
+    let refusal = primary.is_some_and(|finding| finding.code().number() == 7001);
+    if refusal && !message.contains(MEMORY_BUDGET_ENV) {
+        format!("{message}; {MEMORY_BUDGET_REMEDY}")
+    } else {
+        message.to_owned()
+    }
 }
 
 /// The exception for any kernel error that names a diagnostic.
@@ -192,6 +209,11 @@ fn plain(name: &str, message: &str) -> PyErr {
 /// (see `diagnostic_from!`), not here.
 pub(crate) fn failure(error: impl std::fmt::Display) -> PyErr {
     plain("MolframeValueError", &error.to_string())
+}
+
+/// A failure raised as the named `molframe.errors` class with a caller-written message.
+pub(crate) fn named(name: &str, message: impl AsRef<str>) -> PyErr {
+    plain(name, message.as_ref())
 }
 
 /// An argument or input value that is not acceptable.
