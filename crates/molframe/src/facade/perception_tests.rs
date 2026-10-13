@@ -87,3 +87,20 @@ fn analysis_fills_only_the_residues_the_file_left_unassigned() {
     }
     assert!(sources.contains(&SecondarySource::Dssp));
 }
+
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+#[test]
+fn skipping_perception_returns_the_structure_as_the_file_states_it() {
+    let Ok((structure, _)) = read_bytes(
+        DEFAULT_PERCEPTION.as_bytes().to_vec(),
+        Some("perception.pdb"),
+        &ReadOptions::new().perceive(false),
+    ) else {
+        panic!("perception fixture must parse")
+    };
+    assert_eq!(structure.engine().data().bonds.iter().count(), 0);
+    assert_eq!(
+        structure.engine().secondary_structure(),
+        &[molframe_core::SecondaryStructure::AlphaHelix; 4]
+    );
+}

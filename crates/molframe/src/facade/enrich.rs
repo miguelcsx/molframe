@@ -1,5 +1,18 @@
 //! The perception pass that follows every file read.
 //!
+//! The stages run in this order on each model, each over the previous result:
+//!
+//! 1. bond perception (`molframe_chem::perceive_bonds_in`): file bonds, polymer
+//!    links, then inferred covalent bonds from a parallel cell-grid search;
+//!    this is the dominant stage, roughly a quarter of the parse time on a
+//!    2.4-million-atom file;
+//! 2. standard-component annotation: a table lookup per residue, negligible;
+//! 3. secondary structure (DSSP): fills only residues the file left unassigned.
+//!
+//! `ReadOptions::perceive(false)` skips all three, as does `only_atomic_coords`
+//! (which also drops the CIF extension projections). Nothing here is lazy: a
+//! snapshot is immutable, so a stage is either part of the read or left out.
+//!
 //! A ragged ensemble has no topology of its own: its atoms live in one
 //! independent structure per model. Perception therefore runs on each model
 //! and the shell is rebuilt around the enriched models, so a multi-model file
@@ -19,7 +32,7 @@ pub(super) fn enrich_read(
     context: &ExecutionContext,
 ) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
     let (structure, mut findings) = result?;
-    if options.only_atomic_coords {
+    if options.only_atomic_coords || options.perception == molframe_core::io::Perception::Skip {
         return Ok((structure, findings));
     }
     let structure = match structure.ragged_models() {

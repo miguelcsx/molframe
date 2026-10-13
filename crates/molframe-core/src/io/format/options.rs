@@ -31,6 +31,16 @@ impl ParseMode {
     }
 }
 
+/// Whether a read infers bonds, components and secondary structure afterwards.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Perception {
+    /// Run the perception pass: inferred bonds, standard components, DSSP.
+    #[default]
+    Infer,
+    /// Return the structure as the file states it.
+    Skip,
+}
+
 /// Whether a read records a digest of the bytes it parsed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum InputDigest {
@@ -193,6 +203,11 @@ pub struct ReadOptions {
     pub only_first_model: bool,
     /// Read coordinates and skip everything else.
     pub only_atomic_coords: bool,
+    /// Skip the perception pass that follows a read: inferred bonds, standard
+    /// component annotation and secondary-structure assignment. The parse and
+    /// everything the file itself records are unaffected; only what a reader
+    /// would otherwise compute from the coordinates is left out.
+    pub perception: Perception,
     /// Drop hydrogens while reading.
     pub discard_hydrogens: bool,
     /// What to do when a row does not declare a valid element.
@@ -242,6 +257,20 @@ impl ReadOptions {
     #[must_use]
     pub const fn only_atomic_coords(mut self, only: bool) -> Self {
         self.only_atomic_coords = only;
+        self
+    }
+
+    /// Chooses whether the perception pass runs after the parse (it does by default).
+    ///
+    /// Passing `false` returns the structure as the file states it: file bonds and
+    /// deposited secondary structure are kept, nothing is inferred from geometry.
+    #[must_use]
+    pub const fn perceive(mut self, perceive: bool) -> Self {
+        self.perception = if perceive {
+            Perception::Infer
+        } else {
+            Perception::Skip
+        };
         self
     }
 

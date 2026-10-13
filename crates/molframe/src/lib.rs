@@ -120,7 +120,7 @@ pub use molframe_core::index::{
 pub use molframe_core::io::{
     AmbiguousResidueBoundaryPolicy, BatchContinuity, CategoryFilter, Compression, ContinuityLevel,
     Format, InputBuffer, InputDigest, InputKind, Limits, MissingElementPolicy, OccupancyPolicy,
-    OutputOptions, ParseMode, ReadOptions, ReadResult, Reader, Select, SelectAll,
+    OutputOptions, ParseMode, Perception, ReadOptions, ReadResult, Reader, Select, SelectAll,
     StructureAtomRecord, StructureBatch, StructureBatchBuilder, StructureBatchError,
     collect_structure,
 };
