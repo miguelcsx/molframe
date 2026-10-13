@@ -7,10 +7,10 @@ use std::path::PathBuf;
 /// Optional per-command override for the configured chemistry resource.
 #[derive(Args, Debug)]
 pub(crate) struct CcdArguments {
-    /// Chemical Component Dictionary file; requires --ccd-version.
-    #[arg(long, requires = "ccd_version")]
+    /// Chemical Component Dictionary file layered over the bundled core set.
+    #[arg(long)]
     pub(crate) ccd: Option<PathBuf>,
-    /// Exact CCD release identifier; requires --ccd.
+    /// Exact CCD release identifier recorded with the results; requires --ccd.
     #[arg(long, requires = "ccd")]
     pub(crate) ccd_version: Option<String>,
 }

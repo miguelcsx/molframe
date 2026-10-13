@@ -1,8 +1,20 @@
-//! Explicit chemistry-provider loading for operations that require CCD.
+//! Component dictionary resolution for the commands that need chemistry.
+//!
+//! The bundled core set answers by default and a user dictionary, when given,
+//! is layered over it. An empty path stands for "no user dictionary"; the
+//! layering itself is Rust's [`molframe::chemistry::resolution_stack`].
 
 use crate::exit::Exit;
 use crate::report::Context;
+use molframe::chemistry::{ComponentProvider, LayeredProvider};
 use std::path::Path;
+use std::sync::Arc;
+
+/// The path that stands for "no user dictionary".
+const NO_USER_DICTIONARY: &str = "";
+
+/// The version recorded when a dictionary path is given without one.
+const UNVERSIONED: &str = "unversioned";
 
 pub(crate) struct CcdSource {
     pub(crate) path: &'static Path,
@@ -15,28 +27,29 @@ pub(crate) fn resolve_ccd(
     version: Option<&str>,
     mut context: Context,
 ) -> Result<CcdSource, Exit> {
+    let leak_path = |path: &Path| Box::leak(Box::new(path.to_path_buf())) as &'static Path;
+    let leak_version = |text: &str| Box::leak(text.to_owned().into_boxed_str()) as &'static str;
     let (path, version) = match (path, version) {
-        (Some(path), Some(version)) => (
-            Box::leak(Box::new(path.to_path_buf())) as &'static Path,
-            Box::leak(version.to_owned().into_boxed_str()) as &'static str,
-        ),
-        (None, None) => {
-            if let (Some(path), Some(version)) = (context.ccd, context.ccd_version) {
-                (path, version)
-            } else {
-                eprintln!(
-                    "chemistry requires --ccd and --ccd-version, or chem.ccd_cache and \
-                     chem.ccd_version in configuration"
-                );
-                return Err(Exit::Usage);
-            }
-        }
-        _ => {
-            eprintln!("--ccd and --ccd-version must be supplied together");
+        (Some(path), Some(version)) => (leak_path(path), leak_version(version)),
+        (Some(path), None) => (leak_path(path), UNVERSIONED),
+        (None, Some(_)) => {
+            eprintln!("--ccd-version needs --ccd");
             return Err(Exit::Usage);
         }
+        (None, None) => match (context.ccd, context.ccd_version) {
+            (Some(path), Some(version)) => (path, version),
+            (Some(path), None) => (path, UNVERSIONED),
+            _ => (
+                Path::new(NO_USER_DICTIONARY),
+                molframe::chemistry::CORE_DICTIONARY_VERSION,
+            ),
+        },
     };
-    context.ccd = Some(path);
+    if path.as_os_str().is_empty() {
+        context.ccd = None;
+    } else {
+        context.ccd = Some(path);
+    }
     context.ccd_version = Some(version);
     Ok(CcdSource {
         path,
@@ -58,7 +71,6 @@ pub(crate) fn with_ccd(
 }
 
 pub(crate) fn component(path: &Path, version: &str, id: &str, context: Context) -> Exit {
-    use molframe::chemistry::ComponentProvider as _;
     let provider = match load_ccd(path, version, context) {
         Ok(provider) => provider,
         Err(exit) => return exit,
@@ -66,7 +78,7 @@ pub(crate) fn component(path: &Path, version: &str, id: &str, context: Context) 
     let component = match provider.get(id) {
         Ok(Some(component)) => component,
         Ok(None) => {
-            eprintln!("component {id:?} is absent from {}", path.display());
+            eprintln!("component {id:?} is absent from {}", describe(path));
             return Exit::Indeterminate;
         }
         Err(finding) => {
@@ -113,21 +125,35 @@ const fn component_kind(kind: molframe::chemistry::ComponentKind) -> &'static st
     }
 }
 
+fn describe(path: &Path) -> String {
+    if path.as_os_str().is_empty() {
+        "the bundled core set".to_owned()
+    } else {
+        path.display().to_string()
+    }
+}
+
 pub(crate) fn load_ccd(
     path: &Path,
     version: &str,
     context: Context,
-) -> Result<molframe::chemistry::CifProvider, Exit> {
-    match molframe::read_component_dictionary(path, molframe::DictionaryVersion::new(version)) {
-        Ok((provider, findings)) => {
-            context.findings(&findings, &path.display().to_string());
-            Ok(provider)
-        }
-        Err(findings) => {
-            context.findings(&findings, &path.display().to_string());
-            Err(Exit::of(&findings))
+) -> Result<LayeredProvider, Exit> {
+    let source = describe(path);
+    let mut layers: Vec<Arc<dyn ComponentProvider>> = Vec::new();
+    if !path.as_os_str().is_empty() {
+        match molframe::read_component_dictionary(path, molframe::DictionaryVersion::new(version)) {
+            Ok((provider, findings)) => {
+                context.findings(&findings, &source);
+                layers.push(Arc::new(provider));
+            }
+            Err(findings) => {
+                context.findings(&findings, &source);
+                return Err(Exit::of(&findings));
+            }
         }
     }
+    layers.push(Arc::new(molframe::chemistry::CoreProvider));
+    Ok(LayeredProvider::new(layers))
 }
 
 pub(crate) fn annotate(
@@ -136,29 +162,32 @@ pub(crate) fn annotate(
     version: &str,
     context: Context,
 ) -> Result<molframe::Structure, Exit> {
-    // Annotation touches only the components the structure uses, so the
+    let source = describe(path);
+    // Annotation touches only the components the structure uses, so a user
     // dictionary is indexed and lowered on demand instead of read whole.
-    let provider = match molframe::open_component_dictionary(
-        path,
-        molframe::DictionaryVersion::new(version),
-    ) {
-        Ok(provider) => provider,
-        Err(findings) => {
-            context.findings(&findings, &path.display().to_string());
-            return Err(Exit::of(&findings));
+    let user: Option<Arc<dyn ComponentProvider>> = if path.as_os_str().is_empty() {
+        None
+    } else {
+        match molframe::open_component_dictionary(path, molframe::DictionaryVersion::new(version)) {
+            Ok(provider) => Some(Arc::new(provider)),
+            Err(findings) => {
+                context.findings(&findings, &source);
+                return Err(Exit::of(&findings));
+            }
         }
     };
+    let provider = molframe::chemistry::resolution_stack(structure.engine(), user);
     match molframe::chemistry::apply_component_chemistry(
         structure.engine(),
         &provider,
         molframe::chemistry::PolymerLinkPolicy::Disabled,
     ) {
         Ok(report) => {
-            context.findings(&report.findings, &path.display().to_string());
+            context.findings(&report.findings, &source);
             Ok(report.structure.into())
         }
         Err(finding) => {
-            context.findings(&[finding], &path.display().to_string());
+            context.findings(&[finding], &source);
             Err(Exit::Consistency)
         }
     }

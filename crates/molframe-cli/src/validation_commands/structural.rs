@@ -220,7 +220,9 @@ pub(super) fn nucleic_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
 }
 
 /// The explicit dictionary shared by every dictionary-reading check.
-pub(super) fn provider(subject: &Subject<'_>) -> Result<molframe::chemistry::CifProvider, Exit> {
+pub(super) fn provider(
+    subject: &Subject<'_>,
+) -> Result<molframe::chemistry::LayeredProvider, Exit> {
     let (Some(path), Some(version)) = (subject.context.ccd, subject.context.ccd_version) else {
         eprintln!("this check requires --ccd and --ccd-version");
         return Err(Exit::Usage);
