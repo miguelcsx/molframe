@@ -39,6 +39,25 @@ pub(crate) fn macro_selection(
             polar == (macro_name == Macro::PolarHydrogen)
         }));
     }
+    if let Some(band) = macro_name.plddt_band() {
+        if structure
+            .annotations()
+            .get(molframe_core::PLDDT_ANNOTATION)
+            .is_none()
+        {
+            return Err(Diagnostic::new(Code::E4003)
+                .with_context("required", "pLDDT confidence annotation"));
+        }
+        return Ok(scan(structure, universe, |context| {
+            crate::annotation::number(
+                structure,
+                context.atom.index().get(),
+                molframe_core::PLDDT_ANNOTATION,
+            )
+            .and_then(molframe_core::PlddtBand::classify)
+                == Some(band)
+        }));
+    }
     if macro_name == Macro::Aromatic {
         if structure
             .annotations()
@@ -226,7 +245,13 @@ fn macro_matches(structure: &Structure, context: AtomContext<'_>, macro_name: Ma
         Macro::Turn => secondary == Ss::Turn,
         Macro::Bend => secondary == Ss::Bend,
         Macro::Coil => secondary == Ss::Coil,
-        Macro::Aromatic | Macro::PolarHydrogen | Macro::NonpolarHydrogen => false,
+        Macro::Aromatic
+        | Macro::PolarHydrogen
+        | Macro::NonpolarHydrogen
+        | Macro::PlddtVeryHigh
+        | Macro::PlddtConfident
+        | Macro::PlddtLow
+        | Macro::PlddtVeryLow => false,
     }
 }
 

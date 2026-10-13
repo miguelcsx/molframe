@@ -390,6 +390,10 @@ fn segment_atom_and_predicted_annotations_execute_from_core_columns() {
         ("atom SYSTEM 1 CA", vec![1]),
         ("same segment as name CA", vec![0, 1]),
         ("plddt > 70", vec![0, 2]),
+        ("plddt_confident", vec![0, 2]),
+        ("plddt_very_low", vec![1]),
+        ("plddt_very_high or plddt_low", vec![]),
+        ("plddt_confident and not plddt_very_low", vec![0, 2]),
     ] {
         let query = match Query::compile(source) {
             Ok(query) => query,
@@ -404,6 +408,15 @@ fn segment_atom_and_predicted_annotations_execute_from_core_columns() {
         };
         assert_eq!(result.selection.iter().collect::<Vec<_>>(), expected);
     }
+}
+
+#[test]
+fn plddt_bands_refuse_structures_without_confidence() {
+    let policy = AnalysisPolicy::default();
+    let result = Query::compile("plddt_very_high")
+        .expect("query compiles")
+        .evaluate(&structure(), &policy, &Groups::new(), None);
+    assert!(result.is_err());
 }
 
 #[test]

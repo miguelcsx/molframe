@@ -179,9 +179,26 @@ pub(crate) enum Macro {
     Turn,
     Bend,
     Coil,
+    PlddtVeryHigh,
+    PlddtConfident,
+    PlddtLow,
+    PlddtVeryLow,
 }
 
 impl Macro {
+    /// The pLDDT band this shorthand selects, when it is a confidence macro.
+    #[must_use]
+    pub(crate) const fn plddt_band(self) -> Option<molframe_core::PlddtBand> {
+        use molframe_core::PlddtBand;
+        match self {
+            Self::PlddtVeryHigh => Some(PlddtBand::VeryHigh),
+            Self::PlddtConfident => Some(PlddtBand::Confident),
+            Self::PlddtLow => Some(PlddtBand::Low),
+            Self::PlddtVeryLow => Some(PlddtBand::VeryLow),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         Some(match name.to_ascii_lowercase().as_str() {
@@ -215,6 +232,10 @@ impl Macro {
             "turn" => Self::Turn,
             "bend" => Self::Bend,
             "coil" => Self::Coil,
+            "plddt_very_high" => Self::PlddtVeryHigh,
+            "plddt_confident" => Self::PlddtConfident,
+            "plddt_low" => Self::PlddtLow,
+            "plddt_very_low" => Self::PlddtVeryLow,
             _ => return None,
         })
     }

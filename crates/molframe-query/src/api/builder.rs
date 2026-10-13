@@ -249,6 +249,30 @@ assert_eq!(query.source(), \"nonpolar_hydrogen\");
         "coil",
         "Assigned coil residues, excluding unknown."
     );
+    molecular_selector!(
+        plddt_very_high,
+        PlddtVeryHigh,
+        "plddt_very_high",
+        "Atoms whose pLDDT is above 90."
+    );
+    molecular_selector!(
+        plddt_confident,
+        PlddtConfident,
+        "plddt_confident",
+        "Atoms whose pLDDT is above 70 and at most 90."
+    );
+    molecular_selector!(
+        plddt_low,
+        PlddtLow,
+        "plddt_low",
+        "Atoms whose pLDDT is above 50 and at most 70."
+    );
+    molecular_selector!(
+        plddt_very_low,
+        PlddtVeryLow,
+        "plddt_very_low",
+        "Atoms whose pLDDT is at most 50."
+    );
 
     /// Atom name column.
     #[must_use]

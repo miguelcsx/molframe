@@ -198,6 +198,10 @@ const MACROS: &[&str] = &[
     "turn",
     "bend",
     "coil",
+    "plddt_very_high",
+    "plddt_confident",
+    "plddt_low",
+    "plddt_very_low",
 ];
 
 /// Columns whose operands are identifiers a structure can lend, mapped to the

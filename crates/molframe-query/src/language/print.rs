@@ -282,6 +282,10 @@ pub(crate) const fn macro_name(value: Macro) -> &'static str {
         Macro::Turn => "turn",
         Macro::Bend => "bend",
         Macro::Coil => "coil",
+        Macro::PlddtVeryHigh => "plddt_very_high",
+        Macro::PlddtConfident => "plddt_confident",
+        Macro::PlddtLow => "plddt_low",
+        Macro::PlddtVeryLow => "plddt_very_low",
     }
 }
 
