@@ -9,6 +9,7 @@ description = "Trajectory frames and formats for molframe"
 
 [dependencies]
 bytemuck.workspace = true
+faer.workspace = true
 hoomd-gsd.workspace = true
 hdf5-reader.workspace = true
 hdf5-writer.workspace = true

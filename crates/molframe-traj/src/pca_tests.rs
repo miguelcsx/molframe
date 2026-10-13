@@ -94,6 +94,10 @@ fn exact_workspace_ceiling_is_accepted() {
     assert!(cartesian_pca(&frames, CartesianFit::None, components, exact).is_ok());
 }
 
+fn gram_matrix(matrix: &DMatrix<f64>, divisor: f64) -> DMatrix<f64> {
+    crate::pca_linalg::gram(matrix, divisor, &ExecutionContext::default()).expect("gram")
+}
+
 #[test]
 fn the_gram_matrix_matches_the_matrix_product_it_replaces() {
     // Deliberately wider than it is tall, the shape the Gram path exists for.

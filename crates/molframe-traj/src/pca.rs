@@ -1,5 +1,7 @@
 //! Deterministic Cartesian and circular-feature principal-component analysis.
 
+use crate::pca_linalg::{covariance, gram, project};
+use molframe_core::ExecutionContext;
 use molframe_geom::{PeriodicAngle, superpose};
 use nalgebra::{DMatrix, SymmetricEigen};
 use std::{borrow::Cow, mem::size_of};
@@ -203,12 +205,13 @@ fn principal_components(
         }
     }
     let limit = component_count.min(observations - 1).min(features);
+    let context = ExecutionContext::default();
     let (eigenvalues, components) = if features <= observations {
-        feature_eigenvectors(&centred, limit)?
+        feature_eigenvectors(&centred, limit, &context)?
     } else {
-        snapshot_eigenvectors(&centred, limit)?
+        snapshot_eigenvectors(&centred, limit, &context)?
     };
-    let projections = project(&centred, &components);
+    let projections = project(&centred, &components, &context)?;
     Ok(PcaResult {
         mean: mean.into_boxed_slice(),
         eigenvalues: eigenvalues.into_boxed_slice(),
@@ -220,11 +223,10 @@ fn principal_components(
 fn feature_eigenvectors(
     matrix: &DMatrix<f64>,
     limit: usize,
+    context: &ExecutionContext,
 ) -> Result<Eigenvectors, EnsembleGeometryError> {
     let divisor = observation_divisor(matrix)?;
-    // `tr_mul` forms the product without materialising the transpose, which
-    // for a feature-major matrix is a full second copy of the data.
-    let covariance = matrix.tr_mul(matrix) / divisor;
+    let covariance = covariance(matrix, divisor, context)?;
     Ok(selected_eigenvectors(
         &SymmetricEigen::new(covariance),
         limit,
@@ -234,9 +236,10 @@ fn feature_eigenvectors(
 fn snapshot_eigenvectors(
     matrix: &DMatrix<f64>,
     limit: usize,
+    context: &ExecutionContext,
 ) -> Result<Eigenvectors, EnsembleGeometryError> {
     let divisor = observation_divisor(matrix)?;
-    let decomposition = SymmetricEigen::new(gram_matrix(matrix, divisor));
+    let decomposition = SymmetricEigen::new(gram(matrix, divisor, context)?);
     let indices = sorted_indices(decomposition.eigenvalues.as_slice(), limit);
     let mut values = Vec::with_capacity(indices.len());
     let mut vectors = Vec::with_capacity(indices.len());
@@ -256,42 +259,6 @@ fn snapshot_eigenvectors(
         vectors.push(feature_vector.into_boxed_slice());
     }
     Ok((values, vectors))
-}
-
-/// The observation-by-observation Gram matrix, without a transpose copy.
-///
-/// `matrix * matrix.transpose()` allocates a second copy of the whole matrix,
-/// which on the path this is used for — more features than observations, the
-/// usual shape for a trajectory — is three doubles per atom per frame.
-///
-/// Accumulating one column's outer product at a time needs no copy, and reads
-/// each column contiguously: `nalgebra` stores column-major, so the row-wise
-/// alternative would stride through memory.
-fn gram_matrix(matrix: &DMatrix<f64>, divisor: f64) -> DMatrix<f64> {
-    let observations = matrix.nrows();
-    let mut gram = DMatrix::zeros(observations, observations);
-
-    for feature in 0..matrix.ncols() {
-        let column = matrix.column(feature);
-        for row in 0..observations {
-            let value = column[row];
-            if value == 0.0 {
-                continue;
-            }
-            for other in row..observations {
-                gram[(row, other)] += value * column[other];
-            }
-        }
-    }
-
-    for row in 0..observations {
-        for other in row..observations {
-            let value = gram[(row, other)] / divisor;
-            gram[(row, other)] = value;
-            gram[(other, row)] = value;
-        }
-    }
-    gram
 }
 
 fn observation_divisor(matrix: &DMatrix<f64>) -> Result<f64, EnsembleGeometryError> {
@@ -349,24 +316,6 @@ fn canonicalize_sign(vector: &mut [f64]) {
             *value = -*value;
         }
     }
-}
-
-fn project(matrix: &DMatrix<f64>, components: &[Box<[f64]>]) -> Box<[Box<[f64]>]> {
-    (0..matrix.nrows())
-        .map(|row| {
-            components
-                .iter()
-                .map(|component| {
-                    component
-                        .iter()
-                        .enumerate()
-                        .map(|(column, weight)| matrix[(row, column)] * weight)
-                        .sum()
-                })
-                .collect::<Vec<f64>>()
-                .into_boxed_slice()
-        })
-        .collect()
 }
 
 fn check_pca_request(
