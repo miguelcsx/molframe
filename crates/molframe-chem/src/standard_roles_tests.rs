@@ -43,7 +43,9 @@ fn ligands_and_waters_keep_unknown_roles_even_when_they_own_a_ca_or_c() {
     let source = structure(Sample::Medium);
     let annotated = annotate_standard_protein_roles(&source).expect("small column");
     for atom in annotated.data().atoms() {
-        let name = atom.residue().and_then(|residue| residue.name());
+        let name = atom
+            .residue()
+            .and_then(molframe_core::structure::ResidueRef::name);
         if matches!(name, Some("HEM" | "HOH")) {
             let (role, presence) = role_of(&annotated, atom.index().get());
             assert_eq!(role, PolymerAtomRole::UNKNOWN, "{name:?}");

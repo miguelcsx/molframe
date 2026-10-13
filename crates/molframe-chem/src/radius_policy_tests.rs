@@ -50,7 +50,7 @@ fn metals_follow_the_stated_fallback() {
         .atoms()
         .find(|atom| atom.element() == Some(Element::IRON))
         .map(|atom| atom.index().as_usize())
-        .unwrap_or_else(|| panic!("4HHB has haem iron"));
+        .expect("4HHB has haem iron");
     let radius = |metals| {
         let policy = RadiusPolicy {
             metals,
@@ -59,7 +59,7 @@ fn metals_follow_the_stated_fallback() {
         };
         policy_radii(&hemoglobin, &policy)[iron]
     };
-    assert_eq!(radius(MetalFallback::Vdw), 2.44);
+    assert!((radius(MetalFallback::Vdw) - 2.44).abs() < 1e-6);
     assert!((radius(MetalFallback::Ionic) - 0.78).abs() < 1e-4);
     assert!(radius(MetalFallback::None).is_nan());
 }
@@ -70,7 +70,7 @@ fn a_set_value_always_beats_the_fallback() {
     let radii = policy_radii(&crambin, &RadiusPolicy::default());
     let bondi = crate::atom_radii(&crambin, RadiusSet::Bondi);
     for (policy, plain) in radii.iter().zip(&bondi) {
-        assert!(policy.to_bits() == plain.to_bits());
+        assert_eq!(policy.to_bits(), plain.to_bits());
     }
 }
 
