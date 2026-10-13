@@ -158,8 +158,10 @@ def protein_conformation(
     """Ramachandran, rotamer and omega classes per residue.
 
     Classes are 0 outlier, 1 allowed, 2 favoured and 255 not evaluated; omega
-    classes are 0 trans, 1 cis, 2 twisted. Bundled Top8000 tables (CC-BY-4.0)
-    apply unless a ``*_table`` file replaces one; Rust parses the file.
+    classes are 0 trans, 1 cis, 2 twisted. Each table is the
+    ``*_table`` file you pass or the cache entry the profile names; none is built in,
+    and a missing one raises with the code E7102 and how to supply it. Rust parses
+    and validates the file. ``tables`` on the report lists what applied.
     """
 
 def geometry_z(
@@ -170,11 +172,12 @@ def geometry_z(
     chi_table: str | PathLike[str] | None = None,
     context: ExecutionContext | None = None,
 ) -> ValidationReport:
-    """Bond and angle z-scores against Engh and Huber targets (or a user table)."""
+    """Bond and angle z-scores against the selected geometry table (file or profile entry)."""
 
 def nucleic_conformation(
     structure: Structure,
     *,
+    nucleic_table: str | PathLike[str] | None = None,
     context: ExecutionContext | None = None,
 ) -> ValidationReport:
     """Sugar pucker and backbone suite sanity per nucleotide.

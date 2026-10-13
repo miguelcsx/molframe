@@ -1,4 +1,4 @@
-use super::{ResidueSasaError, max_residue_area, residue_areas};
+use super::{ResidueSasaError, residue_areas};
 use molframe_chem::HeteroPolicy;
 use molframe_core::ExecutionContext;
 use molframe_core::io::{InputBuffer, ReadOptions};
@@ -92,29 +92,4 @@ fn a_ligand_the_options_include_shields_its_neighbour() {
 fn a_structure_with_only_water_has_nothing_to_measure() {
     let found = areas(&structure(&[("HETATM", "O", "O", "HOH", 1, 0.0)]));
     assert!(matches!(found, Err(ResidueSasaError::NoAtoms)));
-}
-
-#[test]
-fn the_maximum_is_the_tien_value_for_a_standard_residue_and_absent_otherwise() {
-    assert_eq!(max_residue_area("GLY"), Some(104.0));
-    assert_eq!(max_residue_area("TRP"), Some(285.0));
-    assert_eq!(max_residue_area("XYZ"), None);
-}
-
-#[test]
-fn protonation_variants_share_the_maximum_of_their_parent() {
-    for (variant, parent) in [
-        ("HID", "HIS"),
-        ("HIE", "HIS"),
-        ("HIP", "HIS"),
-        ("HSD", "HIS"),
-        ("CYX", "CYS"),
-        ("CYM", "CYS"),
-        ("ASH", "ASP"),
-        ("GLH", "GLU"),
-        ("LYN", "LYS"),
-    ] {
-        assert_eq!(max_residue_area(variant), max_residue_area(parent));
-        assert!(max_residue_area(variant).is_some());
-    }
 }

@@ -5,9 +5,8 @@
 //! groups the result. Which residues take part, which radii they get and which
 //! sampling method runs all come from one [`SasaOptions`], the same one the
 //! facade, the command line and Python read. The relative accessibility a
-//! caller divides the area by comes from [`max_residue_area`], the Tien et al.
-//! (2013) theoretical maximum for each standard amino acid, or from a caller's own
-//! [`MaxAreaTable`].
+//! caller divides the area by comes from a [`MaxAreaTable`] the caller selects
+//! by name; no maximum is built in.
 //!
 //! What is in the calculation: the residues the options include (the polymer by
 //! default, modified residues written as `HETATM` among it), hydrogens left
@@ -17,23 +16,10 @@
 //! [`SasaOptions::hetero`] brings the ligand in. The counts of what was left
 //! out are returned so a report can say so.
 
-pub use crate::max_area_defaults::{MAX_RESIDUE_AREA_CITATION, MAX_RESIDUE_AREA_REFERENCE};
-use crate::max_area_table::MaxAreaTable;
 use molframe_chem::{AppliedRadiusPolicy, included_atoms};
 use molframe_core::ExecutionContext;
 use molframe_core::structure::Structure;
 use molframe_surface::{SasaError, SasaOptions, measure_atoms};
-
-/// The theoretical maximum accessible area of a standard amino acid, Å², from the built-in
-/// table.
-///
-/// Protonation variants (`HID`, `CYX`, `ASH`, `GLH`, `LYN`, ...) take their
-/// parent's value. `None` for anything else (modified residues, unknown names), which has no
-/// relative accessibility rather than a guessed one. Pass a [`MaxAreaTable`] to use other values.
-#[must_use]
-pub fn max_residue_area(name: &str) -> Option<f64> {
-    MaxAreaTable::builtin().max_area(name)
-}
 
 /// Why per-residue areas could not be computed.
 #[derive(Debug, thiserror::Error)]

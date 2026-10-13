@@ -1,23 +1,24 @@
 use super::*;
+use crate::builtin_validation::fixtures::{nucleic_with_delta, reference};
 use molframe_core::ExecutionContext;
 use molframe_core::io::{InputBuffer, ReadOptions};
 
 const STEM: &str = include_str!("../../tests/data/1ehz_stem.cif");
 
-fn table(policy: &NucleicPolicy) -> Result<NucleicTable, Box<dyn std::error::Error>> {
+fn table(reference: &ReferenceSet) -> Result<NucleicTable, Box<dyn std::error::Error>> {
     let input = InputBuffer::from_bytes(STEM.as_bytes().to_vec());
     let (structure, _) = molframe_cif::read(&input, &ReadOptions::new())
         .map_err(|findings| format!("{findings:?}"))?;
     Ok(nucleic_table(
         &Layout::new(&structure),
-        policy,
+        reference,
         &ExecutionContext::default(),
     )?)
 }
 
 #[test]
 fn a_form_stem_is_c3_endo_with_sane_suites() -> Result<(), Box<dyn std::error::Error>> {
-    let t = table(&NucleicPolicy::default())?;
+    let t = table(&reference())?;
     assert_eq!(t.len(), 7);
     let c3 = t
         .pucker_class
@@ -44,7 +45,7 @@ fn a_form_stem_is_c3_endo_with_sane_suites() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn backbone_torsions_are_measured_across_links() -> Result<(), Box<dyn std::error::Error>> {
-    let t = table(&NucleicPolicy::default())?;
+    let t = table(&reference())?;
     let at = |residue: usize, which: usize| t.torsions[residue * NUCLEIC_TORSIONS + which];
     assert!(at(0, 0).is_nan(), "no alpha without a preceding phosphate");
     assert!(at(3, 0).is_finite() && at(3, 4).is_finite() && at(3, 5).is_finite());
@@ -59,10 +60,8 @@ fn backbone_torsions_are_measured_across_links() -> Result<(), Box<dyn std::erro
 #[test]
 fn a_stricter_policy_changes_the_verdict_and_is_reported() -> Result<(), Box<dyn std::error::Error>>
 {
-    let strict = NucleicPolicy {
-        c3_endo_delta: [0.0, 10.0],
-        ..NucleicPolicy::default()
-    };
+    let mut strict = reference();
+    strict.nucleic = nucleic_with_delta([0.0, 10.0]);
     let t = table(&strict)?;
     let flagged = t
         .suite_class
@@ -75,7 +74,8 @@ fn a_stricter_policy_changes_the_verdict_and_is_reported() -> Result<(), Box<dyn
             .iter()
             .any(|f| f & SUITE_DELTA != 0 && *f != NOT_EVALUATED)
     );
-    assert_eq!(t.tables, vec![strict.info]);
+    assert_eq!(t.tables.len(), 1);
+    assert_eq!(t.tables[0].name, "strict-nucleic");
     Ok(())
 }
 
@@ -84,7 +84,7 @@ fn proteins_are_not_nucleotides() -> Result<(), Box<dyn std::error::Error>> {
     let structure = molframe_bench::structure(molframe_bench::Sample::Tiny);
     let t = nucleic_table(
         &Layout::new(&structure),
-        &NucleicPolicy::default(),
+        &reference(),
         &ExecutionContext::default(),
     )?;
     assert!(t.pucker_class.iter().all(|c| *c == NOT_EVALUATED));
@@ -97,4 +97,12 @@ fn windows_wrap_around_zero() {
     assert!(within(350.0, [-18.0, 54.0]));
     assert!(within(10.0, [-18.0, 54.0]));
     assert!(!within(100.0, [-18.0, 54.0]));
+}
+
+#[test]
+fn a_run_without_a_policy_table_fails_with_the_option_to_set() {
+    let mut set = reference();
+    set.nucleic = molframe_chem::TableRequest::named("not-in-the-cache");
+    let result = table(&set);
+    assert!(result.is_err());
 }

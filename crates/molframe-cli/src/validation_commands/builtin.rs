@@ -1,15 +1,16 @@
-//! Checks backed by the bundled reference tables.
+//! Checks backed by reference tables.
 //!
-//! Each check overlays any `--*-table` file on the bundled defaults, runs the
-//! Rust kernel and reports, besides its findings, which table or policy
+//! Each check resolves its tables from the `--*-table` file, else from the
+//! profile's choice in the cache (a missing table is a coded error that says how
+//! to supply it), runs the Rust kernel and reports, besides its findings, which table or policy
 //! decided them (name, version, source and licence).
 
 use super::{Row, Subject};
 use crate::exit::Exit;
+use molframe::chemistry::{TableIdentity, TableRequest};
 use molframe::validation::{
-    BuiltinError, ClashScoreOptions, Layout, NucleicPolicy, ReferenceOverrides, ReferenceSet,
-    TableInfo, bundled_reference, clash_score, geometry_scores, nucleic_table, percent,
-    protein_table,
+    BuiltinError, ClashScoreOptions, Layout, ReferenceSet, clash_score, geometry_scores,
+    nucleic_table, percent, protein_table,
 };
 
 fn failure(what: &str, error: &BuiltinError) -> Exit {
@@ -17,20 +18,25 @@ fn failure(what: &str, error: &BuiltinError) -> Exit {
     Exit::Policy
 }
 
-fn reference(subject: &Subject<'_>) -> Result<ReferenceSet, Exit> {
-    let args = &subject.options.references;
-    let overrides = ReferenceOverrides::from_paths(
-        args.rama_table.as_deref(),
-        args.rotamer_table.as_deref(),
-        args.geometry_table.as_deref(),
-        args.chi_table.as_deref(),
-    )
-    .map_err(|error| failure("reference table", &error))?;
-    let base = bundled_reference().map_err(|error| failure("bundled table", &error))?;
-    Ok(base.clone().overlaid(overrides))
+fn named<T>(path: Option<&std::path::PathBuf>) -> TableRequest<T> {
+    match path {
+        Some(path) => TableRequest::named(path.to_string_lossy().into_owned()),
+        None => TableRequest::profile(),
+    }
 }
 
-fn table_rows(check: &str, tables: &[TableInfo]) -> impl Iterator<Item = Row> {
+fn reference(subject: &Subject<'_>) -> ReferenceSet {
+    let args = &subject.options.references;
+    let mut set = ReferenceSet::default();
+    set.rama = named(args.rama_table.as_ref());
+    set.rotamers = named(args.rotamer_table.as_ref());
+    set.geometry = named(args.geometry_table.as_ref());
+    set.chi = named(args.chi_table.as_ref());
+    set.nucleic = named(args.nucleic_table.as_ref());
+    set
+}
+
+fn table_rows(check: &str, tables: &[TableIdentity]) -> impl Iterator<Item = Row> {
     tables.iter().map(move |info| {
         Row::info(
             check,
@@ -52,7 +58,7 @@ fn rate(check: &str, item: &str, part: usize, whole: usize) -> Row {
 }
 
 pub(super) fn protein_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
-    let set = reference(subject)?;
+    let set = reference(subject);
     let layout = Layout::new(subject.structure.engine());
     let table = protein_table(&layout, &set, subject.context.execution)
         .map_err(|error| failure("protein validation", &error))?;
@@ -122,7 +128,7 @@ pub(super) fn protein_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
 }
 
 pub(super) fn geometry_z_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
-    let set = reference(subject)?;
+    let set = reference(subject);
     let layout = Layout::new(subject.structure.engine());
     let cutoff = subject.options.references.geometry_z_cutoff;
     let scores = geometry_scores(&layout, &set, cutoff, subject.context.execution)
@@ -196,13 +202,10 @@ pub(super) fn clashscore_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
 }
 
 pub(super) fn nucleic_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
+    let set = reference(subject);
     let layout = Layout::new(subject.structure.engine());
-    let table = nucleic_table(
-        &layout,
-        &NucleicPolicy::default(),
-        subject.context.execution,
-    )
-    .map_err(|error| failure("nucleic conformation", &error))?;
+    let table = nucleic_table(&layout, &set, subject.context.execution)
+        .map_err(|error| failure("nucleic conformation", &error))?;
     let summary = table.summary();
     let mut rows = vec![
         rate(

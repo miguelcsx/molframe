@@ -6,15 +6,19 @@
 //! outlier list names the atoms behind every z beyond the cutoff, and the
 //! root-mean-square z over all terms summarises the model.
 //!
+//! The targets come from the resolved geometry table, whose identity the result
+//! records.
+//!
 //! Complexity: O(residues + terms), with each term a constant-time atom lookup
 //! and one distance or angle. Parallel blocks of 256 residues; no allocation
 //! per residue, since the peptide-link targets are iterated lazily.
 
+use molframe_chem::TableIdentity;
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockPlan, map_blocks_in};
 
 use super::reference_tables::{GeometryTargets, Target};
-use super::{BuiltinError, Layout, ReferenceSet, TableInfo};
+use super::{BuiltinError, Layout, ReferenceSet};
 use crate::numeric::{f64_to_f32, usize_to_f64};
 
 /// Residues per parallel block.
@@ -63,7 +67,7 @@ pub struct GeometryScores {
     /// Root-mean-square z of the angles, `NaN` if none.
     pub angle_rmsz: f64,
     /// The target table the z-scores were computed against.
-    pub tables: Vec<TableInfo>,
+    pub tables: Vec<TableIdentity>,
 }
 
 #[derive(Default)]
@@ -182,18 +186,19 @@ pub fn geometry_scores(
     cutoff: f64,
     context: &ExecutionContext,
 ) -> Result<GeometryScores, BuiltinError> {
+    let targets = reference.geometry()?;
     let plan = BlockPlan::new(layout.len(), BLOCK);
     let blocks = map_blocks_in(plan, context, |_, range| {
         let mut block = Block::default();
         for residue in range {
             // The worst-z bookkeeping above is per residue, so a residue
             // without terms still pushes its NaN pair.
-            score_residue(layout, &reference.geometry, residue, cutoff, &mut block);
+            score_residue(layout, &targets.table, residue, cutoff, &mut block);
         }
         block
     })?;
     let mut scores = GeometryScores {
-        tables: vec![reference.geometry.info().clone()],
+        tables: vec![targets.identity.clone()],
         ..GeometryScores::default()
     };
     let mut squares = [0.0f64; 2];

@@ -1,5 +1,6 @@
 //! Stable diagnostic codes for every error the validation kernels return.
 
+use crate::BuiltinError;
 use crate::policy_execution::{
     AltlocOccupancyKernelError, BFactorKernelError, CcdCompletenessKernelError, GovernedMapError,
     LigandGeometryKernelError, PlaneRestraintKernelError,
@@ -9,6 +10,12 @@ use crate::{
     RamachandranError, RealSpaceCorrelationError, ReferenceError, RotamerError,
 };
 use molframe_core::{Code, Diagnostic, diagnostic_from};
+
+diagnostic_from!(BuiltinError, |error| match error {
+    BuiltinError::Table(inner) => Diagnostic::from(inner).code(),
+    BuiltinError::Worker(_) => Code::E9001,
+    BuiltinError::Spatial(_) => Code::E5101,
+});
 
 diagnostic_from!(AltlocOccupancyError, |error| match error {
     AltlocOccupancyError::InvalidOptions => Code::E5101,

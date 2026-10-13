@@ -1,5 +1,5 @@
 use super::*;
-use crate::builtin_validation::bundled_reference;
+use crate::builtin_validation::fixtures::reference;
 use molframe_bench::{Sample, structure as sample};
 use molframe_core::ExecutionContext;
 
@@ -14,7 +14,7 @@ fn table(which: Sample) -> Result<ProteinTable, BuiltinError> {
     let structure = sample(which);
     protein_table(
         &Layout::new(&structure),
-        bundled_reference()?,
+        &reference(),
         &ExecutionContext::default(),
     )
 }
@@ -40,17 +40,50 @@ fn crambin_terminal_residues_lack_one_torsion() -> Result<(), BuiltinError> {
 }
 
 #[test]
-fn ubiquitin_rotamer_outliers_match_the_wwpdb_report() -> Result<(), BuiltinError> {
-    let t = table(Sample::Small)?;
+fn only_residues_with_a_chi_definition_get_a_rotamer_class() -> Result<(), BuiltinError> {
+    let structure = sample(Sample::Small);
+    let layout = Layout::new(&structure);
+    let t = protein_table(&layout, &reference(), &ExecutionContext::default())?;
+    let valines = (0..layout.len())
+        .filter(|residue| layout.name(*residue) == "VAL")
+        .count();
+    assert!(valines > 0);
     let evaluated = t
         .rotamer_class
         .iter()
         .filter(|c| **c != NOT_EVALUATED)
         .count();
+    assert!(
+        evaluated > 0 && evaluated <= valines,
+        "{evaluated} of {valines}"
+    );
+    assert_eq!(t.tables.len(), 3);
+    assert_eq!(t.tables[0].name, "synthetic-rama");
+    Ok(())
+}
+
+#[test]
+fn a_run_without_a_rama_table_fails_before_scoring() {
+    let structure = sample(Sample::Tiny);
+    let mut set = reference();
+    set.rama = molframe_chem::TableRequest::named("not-in-the-cache");
+    let result = protein_table(&Layout::new(&structure), &set, &ExecutionContext::default());
+    assert!(matches!(result, Err(BuiltinError::Table(_))));
+}
+
+/// Parity with the wwPDB report for 1UBQ; runs only when the tables are present.
+#[test]
+#[ignore = "needs rama, rotamer and chi tables selected by the profile or MOLFRAME_DATA_DIR"]
+fn real_tables_match_the_wwpdb_report_for_ubiquitin() -> Result<(), BuiltinError> {
+    let structure = sample(Sample::Small);
+    let t = protein_table(
+        &Layout::new(&structure),
+        &ReferenceSet::default(),
+        &ExecutionContext::default(),
+    )?;
     let outliers = count(&t.rotamer_class, 0);
-    assert!(evaluated >= 40);
-    // The wwPDB report for 1UBQ lists 6 rotamer outliers among 68 residues.
-    assert!((4..=9).contains(&outliers), "{outliers} of {evaluated}");
+    assert!((4..=9).contains(&outliers), "{outliers}");
+    assert_eq!(count(&t.rama_class, 0), 0);
     Ok(())
 }
 
@@ -60,8 +93,8 @@ fn result_does_not_depend_on_worker_count() -> Result<(), Box<dyn std::error::Er
     let layout = Layout::new(&structure);
     let one = ExecutionContext::builder().worker_budget(1).build()?;
     let many = ExecutionContext::builder().worker_budget(4).build()?;
-    let a = protein_table(&layout, bundled_reference()?, &one)?;
-    let b = protein_table(&layout, bundled_reference()?, &many)?;
+    let a = protein_table(&layout, &reference(), &one)?;
+    let b = protein_table(&layout, &reference(), &many)?;
     assert_eq!(a.rama_class, b.rama_class);
     assert_eq!(a.rotamer_class, b.rotamer_class);
     assert_eq!(a.phi.len(), b.phi.len());

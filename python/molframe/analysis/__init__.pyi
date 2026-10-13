@@ -59,9 +59,10 @@ def heavy_atom_hydrogen_bonds(
     ``acceptor``, ``distance`` and ``acceptor_angle`` (NaN without an antecedent), sorted
     by ``(donor, acceptor)``. No hydrogen is implied. Periodic images are not supported.
 
-    ``role_table`` (text) or ``role_file`` (a path) replaces the built-in typing table with
-    one you supply; Rust parses and validates it. ``Table.applied["roles"]`` names the table
-    that applied (name, version, source, licence).
+    ``role_table`` (text) or ``role_file`` (a path) supplies the typing table; with
+    neither, the profile's ``heavy-roles`` entry selects one from the cache. Rust parses
+    and validates it. ``Table.applied["roles"]`` names the table that applied (name,
+    version, source, licence).
     """
 
 class ArrayColumn(Protocol):

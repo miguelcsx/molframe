@@ -104,27 +104,14 @@ define_soa_table! {
 ///
 /// Hydrogens present in the structure are ignored. Atoms from incompatible
 /// alternate locations are never paired, and a bonded neighbour in another
-/// conformer is not an antecedent.
+/// conformer is not an antecedent. Donor and acceptor typing comes from
+/// `roles`, a table the caller selected by name; nothing is built in.
 ///
 /// # Errors
 ///
 /// [`HydrogenBondError::InvalidOptions`] for a non-finite or inconsistent
 /// distance or angle, or a spatial-search failure.
 pub fn heavy_atom_hydrogen_bonds(
-    structure: &Structure,
-    options: HeavyAtomHydrogenBondOptions,
-    context: &ExecutionContext,
-) -> Result<HeavyAtomHydrogenBondTable, HydrogenBondError> {
-    heavy_atom_hydrogen_bonds_with_roles(structure, HeavyRoleTable::builtin(), options, context)
-}
-
-/// [`heavy_atom_hydrogen_bonds`] with the donor and acceptor typing taken from
-/// `roles` instead of the built-in table.
-///
-/// # Errors
-///
-/// As [`heavy_atom_hydrogen_bonds`].
-pub fn heavy_atom_hydrogen_bonds_with_roles(
     structure: &Structure,
     roles: &HeavyRoleTable,
     options: HeavyAtomHydrogenBondOptions,

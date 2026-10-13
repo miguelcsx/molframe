@@ -1,20 +1,21 @@
 //! Mechanical adapters for the table-backed built-in validation.
 //!
-//! Every kernel runs in Rust against the bundled reference tables, optionally
-//! overlaid by user files that Rust parses. The per-residue results move into
+//! Every kernel runs in Rust against reference tables that Rust resolves: a
+//! `*_table` path, else the profile's entry in the cache, else a coded error that
+//! says how to supply one. No table is built in. The per-residue results move into
 //! numpy arrays without a copy; the report names the tables that were applied.
 
 use crate::bindings::PyStructure;
 use crate::execution::{PyExecutionContext, run};
+use molframe::chemistry::{TableIdentity, TableRequest};
 use molframe::validation::{
-    BuiltinError, ClashScoreOptions, HydrogenMode, Layout, NucleicPolicy, ReferenceOverrides,
-    ReferenceSet, TableInfo, bundled_reference, clash_score, geometry_scores, nucleic_table,
-    protein_table,
+    ClashScoreOptions, HydrogenMode, Layout, ReferenceSet, clash_score, geometry_scores,
+    nucleic_table as score_nucleic, protein_table,
 };
 use numpy::{Element, PyArray1, PyArrayMethods};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Results of one built-in check: per-residue arrays, counts and provenance.
 #[derive(Debug)]
@@ -64,10 +65,6 @@ impl PyValidationReport {
     }
 }
 
-fn table_error(error: &BuiltinError) -> PyErr {
-    crate::error::value(error.to_string())
-}
-
 fn array<T: Element>(py: Python<'_>, values: Vec<T>) -> Bound<'_, PyArray1<T>> {
     PyArray1::from_vec(py, values)
 }
@@ -80,7 +77,7 @@ fn matrix(py: Python<'_>, values: Vec<f32>, columns: usize) -> PyResult<Bound<'_
     Ok(array(py, values).reshape([rows, columns])?.into_any())
 }
 
-fn info_list<'py>(py: Python<'py>, tables: &[TableInfo]) -> PyResult<Bound<'py, PyList>> {
+fn info_list<'py>(py: Python<'py>, tables: &[TableIdentity]) -> PyResult<Bound<'py, PyList>> {
     let list = PyList::empty(py);
     for info in tables {
         let entry = PyDict::new(py);
@@ -118,23 +115,35 @@ fn report(
     }
 }
 
-fn reference(
-    rama_table: Option<&Path>,
-    rotamer_table: Option<&Path>,
-    geometry_table: Option<&Path>,
-    chi_table: Option<&Path>,
-) -> PyResult<ReferenceSet> {
-    let overrides =
-        ReferenceOverrides::from_paths(rama_table, rotamer_table, geometry_table, chi_table)
-            .map_err(|error| table_error(&error))?;
-    let base = bundled_reference().map_err(|error| table_error(&error))?;
-    Ok(base.clone().overlaid(overrides))
+fn named<T>(path: Option<&PathBuf>) -> TableRequest<T> {
+    match path {
+        Some(path) => TableRequest::named(path.to_string_lossy().into_owned()),
+        None => TableRequest::profile(),
+    }
+}
+
+struct Paths<'a> {
+    rama: Option<&'a PathBuf>,
+    rotamer: Option<&'a PathBuf>,
+    geometry: Option<&'a PathBuf>,
+    chi: Option<&'a PathBuf>,
+    nucleic: Option<&'a PathBuf>,
+}
+
+fn reference(paths: &Paths<'_>) -> ReferenceSet {
+    let mut set = ReferenceSet::default();
+    set.rama = named(paths.rama);
+    set.rotamers = named(paths.rotamer);
+    set.geometry = named(paths.geometry);
+    set.chi = named(paths.chi);
+    set.nucleic = named(paths.nucleic);
+    set
 }
 
 /// Ramachandran, rotamer and omega classes for every residue.
 ///
-/// Reference tables default to the bundled Top8000 grids; each `*_table`
-/// path replaces one table with a user file parsed in Rust.
+/// Each `*_table` path names a table file parsed in Rust; without one the profile's
+/// entry in the table cache is used, and a missing table raises a coded error.
 #[pyfunction]
 #[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (structure, *, rama_table=None, rotamer_table=None, chi_table=None, context=None))]
@@ -146,17 +155,18 @@ fn protein_conformation(
     chi_table: Option<PathBuf>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyValidationReport> {
-    let set = reference(
-        rama_table.as_deref(),
-        rotamer_table.as_deref(),
-        None,
-        chi_table.as_deref(),
-    )?;
+    let set = reference(&Paths {
+        rama: rama_table.as_ref(),
+        rotamer: rotamer_table.as_ref(),
+        geometry: None,
+        chi: chi_table.as_ref(),
+        nucleic: None,
+    });
     let engine = structure.inner.engine();
     let table = run(py, context, |ctx| {
         protein_table(&Layout::new(engine), &set, ctx)
     })?
-    .map_err(|error| table_error(&error))?;
+    .map_err(crate::error::kernel)?;
     let s = table.summary();
     let arrays = PyDict::new(py);
     arrays.set_item("phi", array(py, table.phi))?;
@@ -188,7 +198,7 @@ fn protein_conformation(
     Ok(report("protein", arrays, summary, tables))
 }
 
-/// Bond-length and bond-angle z-scores against Engh and Huber targets.
+/// Bond-length and bond-angle z-scores against the selected geometry table.
 ///
 /// `cutoff` selects the terms listed in the `outlier_*` arrays.
 #[pyfunction]
@@ -205,12 +215,18 @@ fn geometry_z(
     if !cutoff.is_finite() || cutoff <= 0.0 {
         return Err(crate::error::value("cutoff must be finite and positive"));
     }
-    let set = reference(None, None, geometry_table.as_deref(), chi_table.as_deref())?;
+    let set = reference(&Paths {
+        rama: None,
+        rotamer: None,
+        geometry: geometry_table.as_ref(),
+        chi: chi_table.as_ref(),
+        nucleic: None,
+    });
     let engine = structure.inner.engine();
     let scores = run(py, context, |ctx| {
         geometry_scores(&Layout::new(engine), &set, cutoff, ctx)
     })?
-    .map_err(|error| table_error(&error))?;
+    .map_err(crate::error::kernel)?;
     let terms = &scores.outliers;
     let arrays = PyDict::new(py);
     arrays.set_item(
@@ -248,17 +264,26 @@ fn geometry_z(
 /// Suite sanity flags delta/pucker mismatch and gamma outside the staggered
 /// windows; it is a filter, not a named suite clustering.
 #[pyfunction]
-#[pyo3(signature = (structure, *, context=None))]
+#[allow(clippy::needless_pass_by_value)]
+#[pyo3(signature = (structure, *, nucleic_table=None, context=None))]
 fn nucleic_conformation(
     py: Python<'_>,
     structure: &PyStructure,
+    nucleic_table: Option<PathBuf>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyValidationReport> {
+    let set = reference(&Paths {
+        rama: None,
+        rotamer: None,
+        geometry: None,
+        chi: None,
+        nucleic: nucleic_table.as_ref(),
+    });
     let engine = structure.inner.engine();
     let table = run(py, context, |ctx| {
-        nucleic_table(&Layout::new(engine), &NucleicPolicy::default(), ctx)
+        score_nucleic(&Layout::new(engine), &set, ctx)
     })?
-    .map_err(|error| table_error(&error))?;
+    .map_err(crate::error::kernel)?;
     let s = table.summary();
     let arrays = PyDict::new(py);
     arrays.set_item("nu", matrix(py, table.nu, 5)?)?;
@@ -311,8 +336,8 @@ fn clashscore(
         polar_margin,
     };
     let engine = structure.inner.engine();
-    let score = run(py, context, |ctx| clash_score(engine, options, ctx))?
-        .map_err(|error| table_error(&error))?;
+    let score =
+        run(py, context, |ctx| clash_score(engine, options, ctx))?.map_err(crate::error::kernel)?;
     let arrays = PyDict::new(py);
     arrays.set_item("residue_clashes", array(py, score.residue_clashes))?;
     let summary = PyDict::new(py);
@@ -323,10 +348,10 @@ fn clashscore(
     summary.set_item("hydrogen_aware", score.hydrogen_aware)?;
     summary.set_item("tolerance", score.options.tolerance)?;
     summary.set_item("polar_margin", score.options.polar_margin)?;
-    let policy = TableInfo::new(
+    let policy = TableIdentity::supplied(
         "clashscore-policy",
         "molframe-1",
-        format!(
+        &format!(
             "radii={radii} tolerance={} polar_margin={} hydrogen_aware={}",
             score.options.tolerance, score.options.polar_margin, score.hydrogen_aware
         ),

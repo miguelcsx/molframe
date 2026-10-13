@@ -1,5 +1,8 @@
 """Fixtures shared by the Python tests."""
 
+import os
+import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -9,6 +12,16 @@ import molframe
 
 ROOT = Path(__file__).resolve().parents[2]
 CCD = ROOT / "crates" / "molframe-chem" / "data" / "CCD-amino-acids.cif"
+DATA = ROOT / "data"
+PROFILE = """\
+ramachandran: top8000-rama
+rotamer: top8000-rotamer
+chi: chi-atoms
+nucleic: nucleic-sanity
+geometry: alphafold-peptide-link
+heavy-roles: heavy-atom-roles
+max-area: tien-2013-max-area
+"""
 ROLES = (
     ("N", "protein_nitrogen"),
     ("CA", "protein_alpha_carbon"),
@@ -82,3 +95,22 @@ def dimer(tmp_path: Path) -> molframe.Structure:
     path = tmp_path / "dimer.cif"
     path.write_text(DIMER)
     return molframe.read(path)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Point the table cache at the repository's data files before any native call."""
+    cache = Path(tempfile.mkdtemp(prefix="molframe-tables-"))
+    for entry in DATA.iterdir():
+        if entry.is_file() and entry.suffix != ".py":
+            shutil.copy(entry, cache / entry.name)
+    (cache / "profile.txt").write_text(PROFILE)
+    os.environ["MOLFRAME_DATA_DIR"] = str(cache)
+    os.environ.pop("MOLFRAME_PROFILE", None)
+    config.stash_cache = cache  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Remove the temporary table cache."""
+    cache = getattr(config, "stash_cache", None)
+    if cache is not None:
+        shutil.rmtree(cache, ignore_errors=True)

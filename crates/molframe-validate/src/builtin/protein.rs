@@ -7,19 +7,23 @@
 //! [`NOT_EVALUATED`] class code instead of being dropped, which keeps every
 //! array aligned with the structure's residue index.
 //!
+//! Tables are resolved once per call, so the per-residue work never touches the
+//! store.
+//!
 //! Complexity: O(residues) time, with constant work per residue (atom lookups
 //! scan one residue's atoms; table lookups are a grid index). Parallel blocks of
 //! 256 residues; the result columns are the only allocations, one `Vec` per
 //! column plus one per block that is moved, not cloned, into the join.
 
+use molframe_chem::TableIdentity;
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockPlan, map_blocks_in};
 
 use super::BuiltinError;
 use super::Layout;
 use super::ReferenceSet;
-use super::TableInfo;
-use super::reference_data::RamaCategory;
+use super::reference_data::{RamaCategory, RamaGrids, RotamerTables};
+use super::reference_tables::ChiDefinitions;
 use crate::numeric::f64_to_f32;
 
 /// Class code for a residue the check does not apply to.
@@ -85,7 +89,7 @@ pub struct ProteinTable {
     /// [`OmegaClass`] code or [`NOT_EVALUATED`].
     pub omega_class: Vec<u8>,
     /// The reference tables the classes were scored against.
-    pub tables: Vec<TableInfo>,
+    pub tables: Vec<TableIdentity>,
 }
 
 impl ProteinTable {
@@ -124,6 +128,13 @@ impl ProteinTable {
         self.rotamer_class.push(row.rotamer_class);
         self.omega_class.push(row.omega_class);
     }
+}
+
+/// The tables one run reads, borrowed from the shared parts.
+struct Tables<'a> {
+    rama: &'a RamaGrids,
+    rotamers: &'a RotamerTables,
+    chi: &'a ChiDefinitions,
 }
 
 struct Row {
@@ -183,7 +194,7 @@ fn category(layout: &Layout<'_>, residue: usize, omega: Option<f64>) -> RamaCate
     }
 }
 
-fn row(layout: &Layout<'_>, residue: usize, reference: &ReferenceSet) -> Row {
+fn row(layout: &Layout<'_>, residue: usize, reference: &Tables<'_>) -> Row {
     let mut out = Row::EMPTY;
     if !layout.is_amino_acid(residue) {
         return out;
@@ -247,7 +258,7 @@ fn row(layout: &Layout<'_>, residue: usize, reference: &ReferenceSet) -> Row {
     out
 }
 
-fn chi_and_rotamer(layout: &Layout<'_>, residue: usize, reference: &ReferenceSet, out: &mut Row) {
+fn chi_and_rotamer(layout: &Layout<'_>, residue: usize, reference: &Tables<'_>, out: &mut Row) {
     let Some(definition) = reference.chi.get(layout.name(residue)) else {
         return;
     };
@@ -290,22 +301,35 @@ fn chi_and_rotamer(layout: &Layout<'_>, residue: usize, reference: &ReferenceSet
 ///
 /// # Errors
 ///
-/// Returns [`BuiltinError`] if a worker panics.
+/// Returns [`BuiltinError`] if a table is not selected or is bad, or a worker
+/// panics.
 pub fn protein_table(
     layout: &Layout<'_>,
     reference: &ReferenceSet,
     context: &ExecutionContext,
 ) -> Result<ProteinTable, BuiltinError> {
+    let rama = reference.rama()?;
+    let rotamers = reference.rotamers()?;
+    let chi = reference.chi()?;
+    let tables = Tables {
+        rama: &rama.table,
+        rotamers: &rotamers.table,
+        chi: &chi.table,
+    };
     let plan = BlockPlan::new(layout.len(), BLOCK);
     let blocks = map_blocks_in(plan, context, |_, range| {
         let mut part = ProteinTable::default();
         for residue in range {
-            part.push(&row(layout, residue, reference));
+            part.push(&row(layout, residue, &tables));
         }
         part
     })?;
     let mut table = ProteinTable {
-        tables: reference.infos(),
+        tables: vec![
+            rama.identity.clone(),
+            rotamers.identity.clone(),
+            chi.identity.clone(),
+        ],
         ..ProteinTable::default()
     };
     for block in blocks {

@@ -43,7 +43,6 @@ mod half_sphere;
 pub mod hbond;
 #[path = "helical.rs"]
 mod helix_geometry;
-mod max_area_defaults;
 mod max_area_table;
 #[path = "leaflet.rs"]
 mod membrane_layers;
@@ -78,7 +77,6 @@ mod stream_surface;
 #[path = "pucker.rs"]
 mod sugar_conformation;
 pub mod surface_contacts;
-mod table_text;
 #[path = "ensemble.rs"]
 mod trajectory_ensemble;
 mod vector_field;
@@ -122,20 +120,17 @@ pub use external_secondary_structure::{DsspBinaryError, DsspSegment, parse_dssp_
 pub use fragment_mapping::{FragmentMappingError, FragmentMatch, FragmentReference, map_fragments};
 pub use half_sphere::{HalfSphereExposure, HseError, half_sphere_exposure, protein_domain};
 pub use hbond::{
-    HEAVY_ROLES_DEFAULT, HEAVY_ROLES_DEFAULT_TEXT, HeavyAtomHydrogenBond,
-    HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable, HeavyRoleTable, HeavyRoleTableError,
-    HydrogenBond, HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
-    HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
-    heavy_atom_hydrogen_bonds, heavy_atom_hydrogen_bonds_with_roles,
-    hydrogen_bond_candidates_over_segment, hydrogen_bonds, hydrogen_bonds_at_sample,
-    hydrogen_bonds_with_policy,
+    HeavyAtomHydrogenBond, HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable,
+    HeavyRoleTable, HydrogenBond, HydrogenBondCandidate, HydrogenBondCandidateOptions,
+    HydrogenBondCandidateTable, HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy,
+    HydrogenBondTable, heavy_atom_hydrogen_bonds, hydrogen_bond_candidates_over_segment,
+    hydrogen_bonds, hydrogen_bonds_at_sample, hydrogen_bonds_with_policy,
 };
 pub use helix_geometry::{
     BaseFrame, HelicalError, HelicalOptions, HelicalParameters, MiddleFrameStep,
     helical_parameters, helical_steps, middle_frame_step, middle_frame_steps,
 };
-pub use max_area_defaults::{TIEN_2013, TIEN_2013_AREAS};
-pub use max_area_table::{MaxAreaTable, MaxAreaTableError};
+pub use max_area_table::MaxAreaTable;
 pub use membrane_layers::{Leaflet, LeafletOptions, identify_leaflets};
 pub use mode_interchange::{NmdError, NormalMode, NormalModeSet, read_nmd, write_nmd};
 pub use molframe_surface::{SasaMethod, SasaOptions, SasaWordError};
@@ -174,10 +169,7 @@ pub use residue_contacts::{
     ContactMap, ResidueContact, ResidueContactTable, residue_contact_map,
     residue_contact_map_periodic,
 };
-pub use residue_sasa::{
-    MAX_RESIDUE_AREA_CITATION, MAX_RESIDUE_AREA_REFERENCE, ResidueArea, ResidueAreas,
-    ResidueSasaError, max_residue_area, residue_areas,
-};
+pub use residue_sasa::{ResidueArea, ResidueAreas, ResidueSasaError, residue_areas};
 pub use salt_bridge::{
     SaltBridge, SaltBridgeError, SaltBridgeOptions, SaltBridgeTable, salt_bridges,
     salt_bridges_with_options,
@@ -191,7 +183,6 @@ pub use spatial_density::{
 };
 pub use sugar_conformation::{Pucker, sugar_pucker};
 pub use surface_contacts::{SurfaceContactOptions, surface_contacts};
-pub use table_text::TableTextError;
 pub use trajectory_ensemble::{
     Clustering, ConvergenceBlock, EnsembleDistanceMatrix, EnsembleGeometryError,
     EnsembleSimilarityError, EnsembleStatisticsError, FrameAlignment, GovernedEnsembleError,

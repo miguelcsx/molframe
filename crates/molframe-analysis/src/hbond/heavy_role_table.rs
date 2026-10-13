@@ -1,10 +1,10 @@
-//! Donor and acceptor typing rules for heavy atoms, built-in or the caller's own.
+//! Donor and acceptor typing rules for heavy atoms, from a table file.
 //!
 //! A [`HeavyRoleTable`] says which residue names are protein, nucleic acid or
 //! water, and what role each named atom of them plays. The typing code in
-//! `heavy_roles` only asks it; the default rows live in `heavy_role_defaults`.
-//! A caller's table has the same text format, headed by the four identity lines
-//! of every table:
+//! `heavy_roles` only asks it, and no rows live in code: the table is selected by
+//! name like every other. The text format is the shared table format, headed by
+//! the four identity lines of every table:
 //!
 //! ```text
 //! name: lab-roles
@@ -30,22 +30,21 @@
 //! own name and then their parent's; for one residue and atom the first row whose
 //! condition holds applies. An atom of a listed residue that no row names has no role;
 //! a residue in no class falls through to the generic rule.
+//!
+//! Complexity: decoding is O(rows x atoms listed); a role lookup is O(1) by hash
+//! plus O(prefix rows of the residue).
 
-use crate::hbond::heavy_role_defaults::{HEAVY_ROLES_DEFAULT, HEAVY_ROLES_DEFAULT_TEXT};
 use crate::protonation::parent_residue;
-use crate::table_text::{IdentityFields, TableTextError};
-use molframe_chem::TableIdentity;
+use molframe_chem::{
+    Provided, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
+};
 use std::collections::{BTreeSet, HashMap};
-use std::sync::OnceLock;
 
 pub(super) const DONOR: u8 = 1;
 pub(super) const ACCEPTOR: u8 = 2;
 pub(super) const BOTH: u8 = DONOR | ACCEPTOR;
 
 const WHAT: &str = "heavy-atom role table";
-
-/// Why a role table was refused.
-pub type HeavyRoleTableError = TableTextError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Condition {
@@ -60,10 +59,9 @@ struct Rule {
     role: u8,
 }
 
-/// Donor and acceptor roles by residue and atom name, with the identity of their source.
-#[derive(Clone, Debug, PartialEq)]
+/// Donor and acceptor roles by residue and atom name.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct HeavyRoleTable {
-    identity: TableIdentity,
     amino: BTreeSet<String>,
     nucleic: BTreeSet<String>,
     water: BTreeSet<String>,
@@ -71,46 +69,35 @@ pub struct HeavyRoleTable {
     prefix: HashMap<String, Vec<(String, Rule)>>,
 }
 
-impl HeavyRoleTable {
-    /// The built-in table, parsed once and borrowed for the life of the process.
-    #[must_use]
-    pub fn builtin() -> &'static Self {
-        static BUILTIN: OnceLock<HeavyRoleTable> = OnceLock::new();
-        BUILTIN.get_or_init(|| {
-            // The default text is pinned by a test, so a failure here cannot reach a
-            // caller; an empty table is the safe reading of one.
-            build(HEAVY_ROLES_DEFAULT_TEXT, Some(HEAVY_ROLES_DEFAULT))
-                .unwrap_or_else(|_| Self::empty(HEAVY_ROLES_DEFAULT))
-        })
-    }
+impl TableKind for HeavyRoleTable {
+    const KIND: &'static str = "heavy-roles";
+    const EXTENSION: &'static str = "roles";
 
-    fn empty(identity: TableIdentity) -> Self {
-        Self {
-            identity,
-            amino: BTreeSet::new(),
-            nucleic: BTreeSet::new(),
-            water: BTreeSet::new(),
-            exact: HashMap::new(),
-            prefix: HashMap::new(),
+    fn decode(bytes: &[u8], _: TableIdentity) -> Result<Provided<Self>, TableTextError> {
+        let mut table = Self::default();
+        let identity = read_table(WHAT, text_of(WHAT, bytes)?, &mut table)?;
+        if table.exact.is_empty() && table.prefix.is_empty() {
+            return Err(TableTextError::at(WHAT, 0, "the table has no row"));
         }
+        Ok(Provided { identity, table })
+    }
+}
+
+impl TableLines for HeavyRoleTable {
+    fn header(&mut self, line: usize, key: &str, value: &str) -> Result<bool, TableTextError> {
+        if !matches!(key, "amino" | "nucleic" | "water") {
+            return Ok(false);
+        }
+        declare_class(self, line, key, value)?;
+        Ok(true)
     }
 
-    /// Parses and validates a table.
-    ///
-    /// # Errors
-    ///
-    /// [`HeavyRoleTableError`] for a missing, unknown or repeated header, an unknown
-    /// role or condition, a class used before it is declared, or a malformed row.
-    pub fn parse(text: &str) -> Result<Self, HeavyRoleTableError> {
-        build(text, None)
+    fn row(&mut self, line: usize, text: &str) -> Result<(), TableTextError> {
+        read_row(self, line, text)
     }
+}
 
-    /// The declared identity of this table.
-    #[must_use]
-    pub const fn identity(&self) -> &TableIdentity {
-        &self.identity
-    }
-
+impl HeavyRoleTable {
     /// The role bits of `atom` in `component`, or `None` when the residue is in no
     /// class, so the generic rule applies.
     pub(super) fn role(
@@ -161,36 +148,6 @@ impl HeavyRoleTable {
     }
 }
 
-fn build(text: &str, fixed: Option<TableIdentity>) -> Result<HeavyRoleTable, TableTextError> {
-    let mut fields = IdentityFields::default();
-    let mut table = HeavyRoleTable::empty(HEAVY_ROLES_DEFAULT);
-    let mut rows = 0_usize;
-    for (index, raw) in text.lines().enumerate() {
-        let number = index + 1;
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some((key, value)) = line.split_once(':') {
-            let (key, value) = (key.trim(), value.trim());
-            if !fields.set(WHAT, number, key, value)? {
-                declare_class(&mut table, number, key, value)?;
-            }
-        } else {
-            read_row(&mut table, number, line)?;
-            rows += 1;
-        }
-    }
-    if rows == 0 {
-        return Err(TableTextError::at(WHAT, 0, "the table has no row"));
-    }
-    table.identity = match fixed {
-        Some(identity) => identity,
-        None => fields.finish(WHAT)?,
-    };
-    Ok(table)
-}
-
 fn declare_class(
     table: &mut HeavyRoleTable,
     line: usize,
@@ -209,9 +166,7 @@ fn declare_class(
             return Err(TableTextError::at(
                 WHAT,
                 line,
-                format!(
-                    "unknown header `{other}`; expected name, version, source, licence, amino, nucleic or water"
-                ),
+                format!("unknown header `{other}`"),
             ));
         }
     };

@@ -1,161 +1,109 @@
-//! The set of reference tables a built-in validation runs against.
+//! The reference tables a built-in validation runs against.
 //!
-//! The scoring code is generic: it receives a [`ReferenceSet`] and reads
-//! every parameter from it. Each table travels with a [`TableInfo`] naming its
-//! source, version and licence, so a result can report exactly what was
-//! applied. The bundled defaults live in the `bundled` module; a caller
-//! replaces any subset with its own tables through [`ReferenceOverrides`],
-//! and the remaining tables stay the defaults.
+//! The scoring code is generic: it asks a [`ReferenceSet`] for each table it
+//! needs and reads every parameter from it. The set holds one
+//! [`TableRequest`] per kind (the profile's choice, a path or cache entry name, or
+//! a table already decoded) and a [`TableStore`] that resolves them, so the
+//! library compiles in no table: a check whose table is not selected fails with
+//! [`TableError::Missing`](molframe_chem::TableError::Missing) naming the option,
+//! cache entry or fetch command that supplies it. Every resolved table carries
+//! its [`TableIdentity`](molframe_chem::TableIdentity), which results record.
+//!
+//! Cost: a request resolves in an `Arc` clone once its table has been decoded
+//! (see [`TableStore`]); nothing is copied per call.
 
-use std::ops::Deref;
 use std::sync::Arc;
 
+use molframe_chem::{Provided, TableRequest, TableStore};
+
+use super::BuiltinError;
+use super::nucleic_policy::NucleicPolicy;
 use super::reference_data::{RamaGrids, RotamerTables};
 use super::reference_tables::{ChiDefinitions, GeometryTargets};
 
-/// Name, version, source and licence of one reference table.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TableInfo {
-    /// Short stable name of the table.
-    pub name: String,
-    /// Version label, for example a commit or release.
-    pub version: String,
-    /// Where the data comes from.
-    pub source: String,
-    /// Licence the data is distributed under.
-    pub licence: String,
-}
+/// A decoded table with its identity, shared.
+pub type Part<T> = Arc<Provided<T>>;
 
-impl TableInfo {
-    /// Describes a table.
-    #[must_use]
-    pub fn new(
-        name: impl Into<String>,
-        version: impl Into<String>,
-        source: impl Into<String>,
-        licence: impl Into<String>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            version: version.into(),
-            source: source.into(),
-            licence: licence.into(),
-        }
-    }
-}
-
-impl std::fmt::Display for TableInfo {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            formatter,
-            "{} {} ({}; {})",
-            self.name, self.version, self.source, self.licence
-        )
-    }
-}
-
-/// A table together with the description of where it came from.
-#[derive(Debug)]
-pub struct Part<T> {
-    info: TableInfo,
-    value: Arc<T>,
-}
-
-impl<T> Clone for Part<T> {
-    fn clone(&self) -> Self {
-        Self {
-            info: self.info.clone(),
-            value: Arc::clone(&self.value),
-        }
-    }
-}
-
-impl<T> Part<T> {
-    /// Pairs a table with its description.
-    #[must_use]
-    pub fn new(info: TableInfo, value: T) -> Self {
-        Self {
-            info,
-            value: Arc::new(value),
-        }
-    }
-
-    /// Pairs an already shared table with its description.
-    #[must_use]
-    pub const fn shared(info: TableInfo, value: Arc<T>) -> Self {
-        Self { info, value }
-    }
-
-    /// The description of this table.
-    #[must_use]
-    pub const fn info(&self) -> &TableInfo {
-        &self.info
-    }
-}
-
-impl<T> Deref for Part<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.value
-    }
-}
-
-/// Every table the built-in protein checks read.
+/// Which table each built-in check reads, and the store that resolves them.
 #[derive(Clone, Debug)]
 pub struct ReferenceSet {
+    store: Arc<TableStore>,
     /// Ramachandran density grids and class cut-offs.
-    pub rama: Part<RamaGrids>,
+    pub rama: TableRequest<RamaGrids>,
     /// Side-chain rotamer classification tables.
-    pub rotamers: Part<RotamerTables>,
+    pub rotamers: TableRequest<RotamerTables>,
     /// Bond-length and bond-angle targets.
-    pub geometry: Part<GeometryTargets>,
+    pub geometry: TableRequest<GeometryTargets>,
     /// Chi-angle atom definitions and the rotamer table each uses.
-    pub chi: Part<ChiDefinitions>,
+    pub chi: TableRequest<ChiDefinitions>,
+    /// Nucleic pucker and suite windows.
+    pub nucleic: TableRequest<NucleicPolicy>,
+}
+
+impl Default for ReferenceSet {
+    fn default() -> Self {
+        Self::with_store(TableStore::global())
+    }
 }
 
 impl ReferenceSet {
-    /// The description of every table, in a fixed order.
+    /// A set whose every request is the profile's, resolved through `store`.
     #[must_use]
-    pub fn infos(&self) -> Vec<TableInfo> {
-        vec![
-            self.rama.info().clone(),
-            self.rotamers.info().clone(),
-            self.geometry.info().clone(),
-            self.chi.info().clone(),
-        ]
-    }
-
-    /// Replaces the tables present in `overrides`; the rest stay as they are.
-    #[must_use]
-    pub fn overlaid(self, overrides: ReferenceOverrides) -> Self {
+    pub fn with_store(store: Arc<TableStore>) -> Self {
         Self {
-            rama: pick(overrides.rama, self.rama),
-            rotamers: pick(overrides.rotamers, self.rotamers),
-            geometry: pick(overrides.geometry, self.geometry),
-            chi: pick(overrides.chi, self.chi),
+            store,
+            rama: TableRequest::profile(),
+            rotamers: TableRequest::profile(),
+            geometry: TableRequest::profile(),
+            chi: TableRequest::profile(),
+            nucleic: TableRequest::profile(),
         }
     }
-}
 
-fn pick<T>(replacement: Option<Part<T>>, default: Part<T>) -> Part<T> {
-    match replacement {
-        Some(part) => part,
-        None => default,
+    /// The Ramachandran grids.
+    ///
+    /// # Errors
+    ///
+    /// [`BuiltinError::Table`] when no table is selected or the selected one is bad.
+    pub fn rama(&self) -> Result<Part<RamaGrids>, BuiltinError> {
+        Ok(self.rama.resolve(&self.store, "--rama-table")?)
     }
-}
 
-/// Tables a caller supplies in place of the defaults.
-#[derive(Clone, Debug, Default)]
-pub struct ReferenceOverrides {
-    /// Replacement Ramachandran grids.
-    pub rama: Option<Part<RamaGrids>>,
-    /// Replacement rotamer tables.
-    pub rotamers: Option<Part<RotamerTables>>,
-    /// Replacement bond and angle targets.
-    pub geometry: Option<Part<GeometryTargets>>,
-    /// Replacement chi definitions.
-    pub chi: Option<Part<ChiDefinitions>>,
+    /// The rotamer tables.
+    ///
+    /// # Errors
+    ///
+    /// As [`ReferenceSet::rama`].
+    pub fn rotamers(&self) -> Result<Part<RotamerTables>, BuiltinError> {
+        Ok(self.rotamers.resolve(&self.store, "--rotamer-table")?)
+    }
+
+    /// The bond and angle targets.
+    ///
+    /// # Errors
+    ///
+    /// As [`ReferenceSet::rama`].
+    pub fn geometry(&self) -> Result<Part<GeometryTargets>, BuiltinError> {
+        Ok(self.geometry.resolve(&self.store, "--geometry-table")?)
+    }
+
+    /// The chi definitions.
+    ///
+    /// # Errors
+    ///
+    /// As [`ReferenceSet::rama`].
+    pub fn chi(&self) -> Result<Part<ChiDefinitions>, BuiltinError> {
+        Ok(self.chi.resolve(&self.store, "--chi-table")?)
+    }
+
+    /// The nucleic policy windows.
+    ///
+    /// # Errors
+    ///
+    /// As [`ReferenceSet::rama`].
+    pub fn nucleic(&self) -> Result<Part<NucleicPolicy>, BuiltinError> {
+        Ok(self.nucleic.resolve(&self.store, "--nucleic-table")?)
+    }
 }
 
 #[cfg(test)]

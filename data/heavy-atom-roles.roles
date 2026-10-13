@@ -1,28 +1,9 @@
-//! The built-in donor and acceptor typing for heavy-atom hydrogen bonds, as data.
-//!
-//! The rows follow the conventions of `McDonald` and Thornton's `HBPLUS` and of
-//! Baker and Hubbard. Nothing about residues or atoms is decided anywhere else:
-//! the typing code reads a [`HeavyRoleTable`](super::HeavyRoleTable) and this is
-//! the table it reads unless the caller supplies another, in the same text
-//! format, to [`HeavyRoleTable::parse`](super::HeavyRoleTable::parse).
-
-use molframe_chem::TableIdentity;
-
-/// Identity of the built-in table.
-pub const HEAVY_ROLES_DEFAULT: TableIdentity = TableIdentity::builtin(
-    "hbplus-baker-hubbard-heavy-roles",
-    "1",
-    "McDonald IK, Thornton JM (1994) J Mol Biol 238:777 (HBPLUS) and Baker EN, Hubbard RE (1984) Prog Biophys Mol Biol 44:97, as encoded in this crate",
-    "MIT (this repository)",
-);
-
-/// The built-in rows, in the text format a caller's own table uses.
-///
-/// Protonation variants are matched on their own name before their parent's; for one
-/// residue and atom the first row whose condition holds applies. A `weak` row is
-/// skipped unless sulfur is admitted, and a `chain-start` row only applies to the
-/// first residue of a chain.
-pub const HEAVY_ROLES_DEFAULT_TEXT: &str = "\
+# SPDX-License-Identifier: MIT
+format: 1
+name: hbplus-baker-hubbard-heavy-roles
+version: 1
+source: McDonald IK, Thornton JM (1994) J Mol Biol 238:777 (HBPLUS) and Baker EN, Hubbard RE (1984) Prog Biophys Mol Biol 44:97, as encoded in this repository
+licence: MIT
 amino: ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL
 nucleic: DA A DC C DG G DT DU U DI I
 water: HOH WAT H2O DOD
@@ -77,4 +58,3 @@ DA,A            N1,N3,N7     acceptor
 DC,C            N3,O2        acceptor
 DG,G,DI,I       N3,N7,O6     acceptor
 DT,DU,U         O2,O4        acceptor
-";

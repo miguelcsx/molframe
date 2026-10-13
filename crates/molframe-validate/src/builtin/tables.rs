@@ -1,13 +1,18 @@
-//! Parsers for bond, angle and chi-atom tables.
+//! Bond, angle and chi-atom tables.
 //!
-//! Both formats are tab-separated text, documented beside the data, and
-//! are parsed from any source: the bundled files and user-supplied ones go
-//! through the same code. Malformed lines are skipped rather than trusted.
+//! Both are tab-separated text under the shared table format and are decoded
+//! from any source by the same code. A malformed row is an error, never skipped.
+//! Rows are `bond|angle|link residue atoms mean sd [source]` for geometry and
+//! `residue table chi | chi` for chi atoms.
+//!
+//! Complexity: decoding is O(rows) once, then shared through an `Arc`; a
+//! residue lookup is O(1) by hash and a link lookup is O(link terms).
 
 use std::collections::HashMap;
 
-/// Atom-name patterns that join one residue to the previous one.
-const LINK_PATTERNS: [&str; 4] = ["C-N", "CA-C-N", "C-N-CA", "O-C-N"];
+use molframe_chem::{
+    Provided, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
+};
 
 /// A bond length or bond angle target with its standard deviation.
 #[derive(Clone, Debug, PartialEq)]
@@ -33,16 +38,10 @@ impl Target {
 pub struct GeometryTargets {
     residue: HashMap<String, Vec<Target>>,
     link: Vec<Target>,
-    proline_link: Vec<Target>,
+    link_special: HashMap<String, Vec<Target>>,
 }
 
 impl GeometryTargets {
-    /// Parses a bond and angle target table.
-    #[must_use]
-    pub fn parse(text: &str) -> Self {
-        parse_geometry(text)
-    }
-
     /// Targets inside one residue, by its parent residue name.
     #[must_use]
     pub fn residue(&self, name: &str) -> &[Target] {
@@ -53,21 +52,18 @@ impl GeometryTargets {
     }
 
     /// Peptide-link terms for a residue that follows a carbonyl, with the
-    /// proline-specific entries replacing the generic ones of the same atoms.
+    /// entries keyed by that residue replacing the generic ones of the same atoms.
     pub fn link<'a>(&'a self, following: &str) -> impl Iterator<Item = &'a Target> + 'a {
-        let proline = following == "PRO";
+        let special = self.link_special.get(following);
         self.link.iter().map(move |generic| {
-            if proline {
-                match self
-                    .proline_link
+            let replacement = special.and_then(|terms| {
+                terms
                     .iter()
-                    .find(|special| special.names == generic.names)
-                {
-                    Some(special) => special,
-                    None => generic,
-                }
-            } else {
-                generic
+                    .find(|candidate| candidate.names == generic.names)
+            });
+            match replacement {
+                Some(term) => term,
+                None => generic,
             }
         })
     }
@@ -77,7 +73,7 @@ impl GeometryTargets {
     pub fn len(&self) -> usize {
         self.residue.values().map(Vec::len).sum::<usize>()
             + self.link.len()
-            + self.proline_link.len()
+            + self.link_special.values().map(Vec::len).sum::<usize>()
     }
 
     /// Whether no targets were loaded.
@@ -87,34 +83,98 @@ impl GeometryTargets {
     }
 }
 
-fn parse_geometry(text: &str) -> GeometryTargets {
-    let mut targets = GeometryTargets::default();
-    for line in text.lines().filter(|line| !line.starts_with('#')) {
-        let fields: Vec<&str> = line.split('\t').collect();
-        let [_, residue, atoms, mean, sigma, ..] = fields.as_slice() else {
-            continue;
+const GEOMETRY: &str = "geometry table";
+const CHI: &str = "chi table";
+
+fn number(
+    what: &'static str,
+    line: usize,
+    field: &str,
+    label: &str,
+) -> Result<f64, TableTextError> {
+    match field.parse::<f64>() {
+        Ok(value) if value.is_finite() => Ok(value),
+        _ => Err(TableTextError::at(
+            what,
+            line,
+            format!("{label} `{field}` is not a number"),
+        )),
+    }
+}
+
+impl TableLines for GeometryTargets {
+    fn header(&mut self, _: usize, _: &str, _: &str) -> Result<bool, TableTextError> {
+        Ok(false)
+    }
+
+    fn row(&mut self, line: usize, text: &str) -> Result<(), TableTextError> {
+        let fields: Vec<&str> = text.split('\t').collect();
+        let (&[kind, residue, atoms, mean, sigma] | &[kind, residue, atoms, mean, sigma, _]) =
+            fields.as_slice()
+        else {
+            return Err(TableTextError::at(
+                GEOMETRY,
+                line,
+                "expected `kind residue atoms mean sd [source]` separated by tabs",
+            ));
         };
-        let (Ok(mean), Ok(sigma)) = (mean.parse::<f64>(), sigma.parse::<f64>()) else {
-            continue;
-        };
-        let target = Target {
-            names: atoms.split('-').map(str::to_owned).collect(),
-            mean,
-            sigma,
-        };
-        let link = LINK_PATTERNS.contains(atoms);
-        match (*residue, link) {
-            ("*", _) => targets.link.push(target),
-            ("PRO", true) => targets.proline_link.push(target),
-            (name, false) => targets
-                .residue
+        let names: Vec<String> = atoms.split('-').map(str::to_owned).collect();
+        if names.iter().any(String::is_empty) || !matches!(names.len(), 2 | 3) {
+            return Err(TableTextError::at(
+                GEOMETRY,
+                line,
+                format!("`{atoms}` is not two or three atom names joined by `-`"),
+            ));
+        }
+        let mean = number(GEOMETRY, line, mean, "mean")?;
+        let sigma = number(GEOMETRY, line, sigma, "sd")?;
+        if sigma <= 0.0 {
+            return Err(TableTextError::at(GEOMETRY, line, "sd must be positive"));
+        }
+        let target = Target { names, mean, sigma };
+        match (kind, residue) {
+            ("bond", name) if target.names.len() == 2 && name != "*" => {
+                self.residue
+                    .entry(name.to_owned())
+                    .or_default()
+                    .push(target);
+            }
+            ("angle", name) if target.names.len() == 3 && name != "*" => {
+                self.residue
+                    .entry(name.to_owned())
+                    .or_default()
+                    .push(target);
+            }
+            ("link", "*") => self.link.push(target),
+            ("link", name) => self
+                .link_special
                 .entry(name.to_owned())
                 .or_default()
                 .push(target),
-            _ => {}
+            _ => {
+                return Err(TableTextError::at(
+                    GEOMETRY,
+                    line,
+                    format!("`{kind}` with residue `{residue}` and `{atoms}` is not a valid row"),
+                ));
+            }
         }
+        Ok(())
     }
-    targets
+}
+
+impl TableKind for GeometryTargets {
+    const KIND: &'static str = "geometry";
+    const EXTENSION: &'static str = "geometry";
+
+    fn decode(bytes: &[u8], _: TableIdentity) -> Result<Provided<Self>, TableTextError> {
+        let mut table = Self::default();
+        let identity = read_table(GEOMETRY, text_of(GEOMETRY, bytes)?, &mut table)?;
+        if table.is_empty() {
+            return Err(TableTextError::at(GEOMETRY, 0, "the table has no rows"));
+        }
+        Ok(Provided { identity, table })
+    }
 }
 
 /// The atoms that define each chi angle of one residue type.
@@ -131,12 +191,6 @@ pub struct ChiDefinition {
 pub struct ChiDefinitions(HashMap<String, ChiDefinition>);
 
 impl ChiDefinitions {
-    /// Parses a chi-atom table.
-    #[must_use]
-    pub fn parse(text: &str) -> Self {
-        Self(parse_chi(text))
-    }
-
     /// The chi definition of one residue type, by parent name.
     #[must_use]
     pub fn get(&self, residue: &str) -> Option<&ChiDefinition> {
@@ -156,30 +210,59 @@ impl ChiDefinitions {
     }
 }
 
-fn parse_chi(text: &str) -> HashMap<String, ChiDefinition> {
-    let mut map = HashMap::new();
-    for line in text.lines().filter(|line| !line.starts_with('#')) {
-        let mut head = line.split('\t');
-        let (Some(residue), Some(table), Some(rest)) = (head.next(), head.next(), head.next())
-        else {
-            continue;
-        };
-        let chi = rest
-            .split('|')
-            .filter_map(|part| {
-                let names: Vec<String> = part.split_whitespace().map(str::to_owned).collect();
-                <[String; 4]>::try_from(names).ok()
-            })
-            .collect();
-        map.insert(
-            residue.to_owned(),
-            ChiDefinition {
-                table: table.to_owned(),
-                chi,
-            },
-        );
+impl TableLines for ChiDefinitions {
+    fn header(&mut self, _: usize, _: &str, _: &str) -> Result<bool, TableTextError> {
+        Ok(false)
     }
-    map
+
+    fn row(&mut self, line: usize, text: &str) -> Result<(), TableTextError> {
+        let fields: Vec<&str> = text.split('\t').collect();
+        let &[residue, table, angles] = fields.as_slice() else {
+            return Err(TableTextError::at(
+                CHI,
+                line,
+                "expected `residue table chi | chi` separated by tabs",
+            ));
+        };
+        let mut chi = Vec::new();
+        for part in angles.split('|') {
+            let names: Vec<String> = part.split_whitespace().map(str::to_owned).collect();
+            let Ok(four) = <[String; 4]>::try_from(names) else {
+                return Err(TableTextError::at(
+                    CHI,
+                    line,
+                    format!("`{}` is not four atom names", part.trim()),
+                ));
+            };
+            chi.push(four);
+        }
+        let definition = ChiDefinition {
+            table: table.to_owned(),
+            chi,
+        };
+        if self.0.insert(residue.to_owned(), definition).is_some() {
+            return Err(TableTextError::at(
+                CHI,
+                line,
+                format!("residue `{residue}` is defined twice"),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl TableKind for ChiDefinitions {
+    const KIND: &'static str = "chi";
+    const EXTENSION: &'static str = "chi";
+
+    fn decode(bytes: &[u8], _: TableIdentity) -> Result<Provided<Self>, TableTextError> {
+        let mut table = Self::default();
+        let identity = read_table(CHI, text_of(CHI, bytes)?, &mut table)?;
+        if table.is_empty() {
+            return Err(TableTextError::at(CHI, 0, "the table has no rows"));
+        }
+        Ok(Provided { identity, table })
+    }
 }
 
 #[cfg(test)]

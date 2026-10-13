@@ -3,22 +3,14 @@
 use molframe_core::parallel::WorkerPanicked;
 use molframe_spatial::SpatialError;
 
-use super::reference_data::TableError;
+use molframe_chem::TableError;
 
 /// Why a built-in validation could not complete.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum BuiltinError {
-    /// A reference table is damaged.
+    /// A reference table is missing, unreadable or malformed.
     #[error(transparent)]
     Table(#[from] TableError),
-    /// A user-supplied reference file could not be read.
-    #[error("cannot load reference table `{path}`: {reason}")]
-    Load {
-        /// The file that failed.
-        path: String,
-        /// Why it failed.
-        reason: String,
-    },
     /// A worker thread panicked.
     #[error(transparent)]
     Worker(#[from] WorkerPanicked),

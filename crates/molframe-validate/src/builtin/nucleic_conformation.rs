@@ -11,8 +11,8 @@
 //! is the backbone stretch between two sugars; for the suite ending at a
 //! residue it flags a delta that disagrees with the sugar pucker (on either
 //! sugar) and a gamma outside the three staggered windows. Every window comes
-//! from a [`NucleicPolicy`] passed in by the caller, and the result records
-//! the policy applied.
+//! from the [`NucleicPolicy`] table the reference set resolves, and the result
+//! records its identity.
 //!
 //! Blocks of residues run in parallel and are joined in order, so the arrays
 //! are identical at any worker count. Residues the check does not apply to
@@ -23,11 +23,13 @@
 //! in order.
 
 use molframe_analysis::sugar_pucker;
+use molframe_chem::TableIdentity;
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockPlan, map_blocks_in};
 
+use super::nucleic_policy::{NucleicPolicy, within};
 use super::protein_conformation::{NOT_EVALUATED, to_f32, torsion};
-use super::{BuiltinError, Layout, TableInfo};
+use super::{BuiltinError, Layout, ReferenceSet};
 
 /// Residues per parallel block.
 const BLOCK: usize = 256;
@@ -46,69 +48,6 @@ pub const SUITE_GAMMA: u8 = 2;
 pub const SUITE_PREVIOUS_DELTA: u8 = 4;
 /// Torsions stored per residue: alpha, beta, gamma, delta, epsilon, zeta, chi.
 pub const NUCLEIC_TORSIONS: usize = 7;
-
-/// An angular window in degrees from `low` to `high`, running upward.
-pub type Window = [f64; 2];
-
-/// Windows that decide pucker class and suite sanity.
-#[derive(Clone, Debug, PartialEq)]
-pub struct NucleicPolicy {
-    /// Name, version, source and licence of these windows.
-    pub info: TableInfo,
-    /// Pseudorotation phase window of C3'-endo.
-    pub c3_endo_phase: Window,
-    /// Pseudorotation phase window of C2'-endo.
-    pub c2_endo_phase: Window,
-    /// Delta window consistent with a C3'-endo sugar.
-    pub c3_endo_delta: Window,
-    /// Delta window consistent with a C2'-endo sugar.
-    pub c2_endo_delta: Window,
-    /// Staggered gamma windows.
-    pub gamma: Vec<Window>,
-}
-
-impl Default for NucleicPolicy {
-    fn default() -> Self {
-        Self {
-            info: TableInfo::new(
-                "molframe-nucleic-sanity",
-                "1",
-                "molframe defaults: pseudorotation phase windows of A-form and B-form sugars, \
-                 delta ranges of the two ring conformations, staggered gamma",
-                "MIT OR Apache-2.0",
-            ),
-            c3_endo_phase: [-18.0, 54.0],
-            c2_endo_phase: [126.0, 198.0],
-            c3_endo_delta: [55.0, 110.0],
-            c2_endo_delta: [120.0, 175.0],
-            gamma: vec![[30.0, 90.0], [150.0, 210.0], [270.0, 330.0]],
-        }
-    }
-}
-
-fn within(angle: f64, window: Window) -> bool {
-    (angle - window[0]).rem_euclid(360.0) <= (window[1] - window[0]).rem_euclid(360.0)
-}
-
-impl NucleicPolicy {
-    fn pucker_class(&self, phase: f64) -> u8 {
-        if within(phase, self.c3_endo_phase) {
-            PUCKER_C3_ENDO
-        } else if within(phase, self.c2_endo_phase) {
-            PUCKER_C2_ENDO
-        } else {
-            PUCKER_OTHER
-        }
-    }
-
-    fn delta_agrees(&self, class: u8, delta: f64) -> bool {
-        match class {
-            PUCKER_C3_ENDO => within(delta, self.c3_endo_delta),
-            PUCKER_C2_ENDO => within(delta, self.c2_endo_delta),
-            _ => within(delta, self.c3_endo_delta) || within(delta, self.c2_endo_delta),
-        }
-    }
-}
 
 /// Per-residue nucleic conformation, one entry per structure residue.
 #[derive(Clone, Debug, Default)]
@@ -130,7 +69,7 @@ pub struct NucleicTable {
     /// 0 sane, 1 flagged, or [`NOT_EVALUATED`] without a suite.
     pub suite_class: Vec<u8>,
     /// The policy the classes were decided by.
-    pub tables: Vec<TableInfo>,
+    pub tables: Vec<TableIdentity>,
 }
 
 impl NucleicTable {
@@ -378,16 +317,19 @@ fn row(policy: &NucleicPolicy, layout: &Layout<'_>, residue: usize) -> Row {
 /// Computes the per-residue nucleic conformation of a laid-out structure.
 ///
 /// Runs in `O(residues)` time split across the context's workers. Every window
-/// comes from `policy`, which the result records.
+/// comes from the policy table of `reference`, whose identity the result records.
 ///
 /// # Errors
 ///
-/// Returns [`BuiltinError`] if a worker panics.
+/// Returns [`BuiltinError`] if no policy table is selected or it is bad, or a
+/// worker panics.
 pub fn nucleic_table(
     layout: &Layout<'_>,
-    policy: &NucleicPolicy,
+    reference: &ReferenceSet,
     context: &ExecutionContext,
 ) -> Result<NucleicTable, BuiltinError> {
+    let resolved = reference.nucleic()?;
+    let policy = &resolved.table;
     let plan = BlockPlan::new(layout.len(), BLOCK);
     let blocks = map_blocks_in(plan, context, |_, range| {
         let mut part = NucleicTable::default();
@@ -404,7 +346,7 @@ pub fn nucleic_table(
         part
     })?;
     let mut table = NucleicTable {
-        tables: vec![policy.info.clone()],
+        tables: vec![resolved.identity.clone()],
         ..NucleicTable::default()
     };
     for block in blocks {

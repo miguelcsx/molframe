@@ -67,10 +67,9 @@ pub use builtin_validation::{
     GeometryScores, GeometryTargets, HydrogenMode, Layout, NO_ATOM, NOT_EVALUATED,
     NUCLEIC_TORSIONS, NucleicPolicy, NucleicSummary, NucleicTable, OmegaClass, PUCKER_C2_ENDO,
     PUCKER_C3_ENDO, PUCKER_OTHER, Part as ReferencePart, ProteinSummary, ProteinTable, RAMA_BINS,
-    RAMA_FAVOURED, RamaCategory, RamaGrids, RamaThresholds, ReferenceOverrides, ReferenceSet,
-    RotamerClass, RotamerTable, RotamerTables, SUITE_DELTA, SUITE_GAMMA, SUITE_PREVIOUS_DELTA,
-    TableError, TableInfo, Target, Window as AngleWindow, bundled_reference, clash_score,
-    geometry_scores, nucleic_table, percent, protein_table,
+    RamaCategory, RamaGrids, RamaThresholds, ReferenceSet, RotamerClass, RotamerTable,
+    RotamerTables, SUITE_DELTA, SUITE_GAMMA, SUITE_PREVIOUS_DELTA, Target, Window as AngleWindow,
+    clash_score, geometry_scores, nucleic_table, percent, protein_table,
 };
 pub use chain_integrity::{ChainCompleteness, CompletenessError, completeness};
 pub use component_completeness::{

@@ -1,12 +1,26 @@
 //! Decoders and lookups for Ramachandran and rotamer density tables.
 //!
 //! Generic over the table contents: the decoders accept the binary formats
-//! documented beside the data from any source, bundled or user supplied,
-//! and report damage as an error value rather than trusting their input. The
-//! bundled bytes live in the `bundled` module, not here.
+//! documented beside the data from any source and report damage as an error
+//! value rather than trusting their input. Each file starts with the shared
+//! identity header (name, version, source, licence), so a result can say which
+//! table produced it. A Ramachandran header also carries its class cut-offs
+//! (`favoured`, and `outlier` per category code). The library compiles in no
+//! table and no cut-off.
 //!
-//! Complexity: decoding is O(table bytes) once per table; a density or rotamer
-//! lookup is O(dimensions) with direct grid indexing and no allocation.
+//! Complexity: decoding is O(table bytes) once per table, then shared through an
+//! `Arc`; a density or rotamer lookup is O(dimensions) with direct grid indexing
+//! and no allocation. A rotamer table is found by name in O(1) through a hash
+//! index.
+
+use std::collections::HashMap;
+
+use molframe_chem::{
+    IdentityOnly, Provided, TableIdentity, TableKind, TableLines, TableTextError, split_binary,
+};
+
+const RAMA_MAGIC: [u8; 4] = *b"MFR2";
+const ROTAMER_MAGIC: [u8; 4] = *b"MFT2";
 
 /// Cells per axis of a Ramachandran grid.
 pub const RAMA_BINS: usize = 180;
@@ -42,20 +56,7 @@ impl RamaCategory {
             Self::IleVal => 5,
         }
     }
-
-    /// Density below which a residue is an outlier.
-    #[must_use]
-    pub const fn outlier_density(self) -> f32 {
-        match self {
-            Self::General => 0.0005,
-            Self::CisPro => 0.002,
-            _ => 0.001,
-        }
-    }
 }
-
-/// Density at or above which a Ramachandran residue is favoured.
-pub const RAMA_FAVOURED: f32 = 0.02;
 
 /// Density cut-offs that turn a Ramachandran density into a class.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -66,21 +67,63 @@ pub struct RamaThresholds {
     pub outlier: [f32; 6],
 }
 
-impl Default for RamaThresholds {
-    fn default() -> Self {
-        let outlier = [
-            RamaCategory::General,
-            RamaCategory::Gly,
-            RamaCategory::TransPro,
-            RamaCategory::CisPro,
-            RamaCategory::PrePro,
-            RamaCategory::IleVal,
-        ]
-        .map(RamaCategory::outlier_density);
-        Self {
-            favoured: RAMA_FAVOURED,
-            outlier,
+/// Reads the `favoured` and `outlier` headers of a Ramachandran table.
+#[derive(Default)]
+struct ThresholdHeader {
+    favoured: Option<f32>,
+    outlier: Option<[f32; 6]>,
+}
+
+impl ThresholdHeader {
+    fn number(line: usize, field: &str) -> Result<f32, TableTextError> {
+        match field.parse::<f32>() {
+            Ok(value) if value.is_finite() && value >= 0.0 => Ok(value),
+            _ => Err(TableTextError::at(
+                "ramachandran table",
+                line,
+                format!("`{field}` is not a non-negative number"),
+            )),
         }
+    }
+}
+
+impl TableLines for ThresholdHeader {
+    fn header(&mut self, line: usize, key: &str, value: &str) -> Result<bool, TableTextError> {
+        match key {
+            "favoured" => self.favoured = Some(Self::number(line, value.trim())?),
+            "outlier" => {
+                let mut cuts = [0.0f32; 6];
+                let mut fields = value.split_whitespace();
+                for cut in &mut cuts {
+                    let Some(field) = fields.next() else {
+                        return Err(TableTextError::at(
+                            "ramachandran table",
+                            line,
+                            "`outlier` needs six cut-offs, one per category code",
+                        ));
+                    };
+                    *cut = Self::number(line, field)?;
+                }
+                if fields.next().is_some() {
+                    return Err(TableTextError::at(
+                        "ramachandran table",
+                        line,
+                        "`outlier` has more than six cut-offs",
+                    ));
+                }
+                self.outlier = Some(cuts);
+            }
+            _ => return Ok(false),
+        }
+        Ok(true)
+    }
+
+    fn row(&mut self, line: usize, _: &str) -> Result<(), TableTextError> {
+        Err(TableTextError::at(
+            "ramachandran table",
+            line,
+            "the header takes no rows",
+        ))
     }
 }
 
@@ -92,15 +135,6 @@ pub struct RamaGrids {
 }
 
 impl RamaGrids {
-    /// Decodes a Ramachandran table file.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TableError`] if the bytes are not a well-formed table.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, TableError> {
-        decode_rama(bytes)
-    }
-
     /// Replaces the class cut-offs.
     #[must_use]
     pub fn with_thresholds(mut self, thresholds: RamaThresholds) -> Self {
@@ -154,11 +188,6 @@ fn bin(angle: f64) -> usize {
     }
 }
 
-/// Failure to decode a reference table.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("reference table `{0}` is malformed")]
-pub struct TableError(pub &'static str);
-
 fn dequantise(code: u8) -> f32 {
     if code == 0 {
         return 0.0;
@@ -167,27 +196,40 @@ fn dequantise(code: u8) -> f32 {
     crate::numeric::f64_to_f32(10f64.powf(exponent))
 }
 
-fn decode_rama(bytes: &[u8]) -> Result<RamaGrids, TableError> {
-    let bad = TableError("rama");
-    if bytes.get(..4) != Some(b"MFRM") {
-        return Err(bad);
+impl TableKind for RamaGrids {
+    const KIND: &'static str = "ramachandran";
+    const EXTENSION: &'static str = "rama";
+
+    fn decode(bytes: &[u8], _: TableIdentity) -> Result<Provided<Self>, TableTextError> {
+        let what = "ramachandran table";
+        let mut header = ThresholdHeader::default();
+        let (identity, payload) = split_binary(what, RAMA_MAGIC, bytes, &mut header)?;
+        let bad = |message: &str| TableTextError::at(what, 0, message);
+        let (Some(favoured), Some(outlier)) = (header.favoured, header.outlier) else {
+            return Err(bad(
+                "the header must give `favoured` and `outlier` cut-offs",
+            ));
+        };
+        let count = usize::from(*payload.first().ok_or_else(|| bad("no grid count"))?);
+        let cells = RAMA_BINS * RAMA_BINS;
+        let mut grids = Vec::with_capacity(count);
+        let mut at = 1;
+        for _ in 0..count {
+            let body = payload
+                .get(at + 8..at + 8 + cells)
+                .ok_or_else(|| bad("a grid is truncated"))?;
+            grids.push(body.iter().map(|code| dequantise(*code)).collect());
+            at += 8 + cells;
+        }
+        if grids.len() < 6 {
+            return Err(bad("fewer than six grids"));
+        }
+        let table = Self {
+            grids,
+            thresholds: RamaThresholds { favoured, outlier },
+        };
+        Ok(Provided { identity, table })
     }
-    let count = usize::from(*bytes.get(4).ok_or(bad)?);
-    let cells = RAMA_BINS * RAMA_BINS;
-    let mut grids = Vec::with_capacity(count);
-    let mut at = 5;
-    for _ in 0..count {
-        let body = bytes.get(at + 8..at + 8 + cells).ok_or(bad)?;
-        grids.push(body.iter().map(|code| dequantise(*code)).collect());
-        at += 8 + cells;
-    }
-    if grids.len() < 6 {
-        return Err(bad);
-    }
-    Ok(RamaGrids {
-        grids,
-        thresholds: RamaThresholds::default(),
-    })
 }
 
 /// Classification of a side-chain conformation cell.
@@ -253,26 +295,14 @@ impl RotamerTable {
 /// Every rotamer table, looked up by name.
 #[derive(Debug)]
 pub struct RotamerTables {
-    tables: Vec<(String, RotamerTable)>,
+    tables: HashMap<String, RotamerTable>,
 }
 
 impl RotamerTables {
-    /// Decodes a rotamer table file.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`TableError`] if the bytes are not a well-formed table.
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, TableError> {
-        decode_rotamers(bytes)
-    }
-
     /// The table with this lower-case name.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&RotamerTable> {
-        self.tables
-            .iter()
-            .find(|(label, _)| label == name)
-            .map(|(_, table)| table)
+        self.tables.get(name)
     }
 
     /// Number of tables.
@@ -347,18 +377,32 @@ fn decode_table(cursor: &mut Cursor<'_>) -> Option<(String, RotamerTable)> {
     (cells.len() == total).then_some((name, RotamerTable { dims, cells }))
 }
 
-fn decode_rotamers(bytes: &[u8]) -> Result<RotamerTables, TableError> {
-    let bad = TableError("rotamer");
-    if bytes.get(..4) != Some(b"MFRT") {
-        return Err(bad);
+impl TableKind for RotamerTables {
+    const KIND: &'static str = "rotamer";
+    const EXTENSION: &'static str = "rotamer";
+
+    fn decode(bytes: &[u8], _: TableIdentity) -> Result<Provided<Self>, TableTextError> {
+        let what = "rotamer table";
+        let (identity, payload) = split_binary(what, ROTAMER_MAGIC, bytes, &mut IdentityOnly)?;
+        let bad = |message: &str| TableTextError::at(what, 0, message);
+        let mut cursor = Cursor {
+            bytes: payload,
+            at: 0,
+        };
+        let count = cursor.byte().ok_or_else(|| bad("no table count"))?;
+        let mut tables = HashMap::with_capacity(usize::from(count));
+        for _ in 0..count {
+            let (name, table) =
+                decode_table(&mut cursor).ok_or_else(|| bad("a table is damaged"))?;
+            if tables.insert(name, table).is_some() {
+                return Err(bad("a table name is repeated"));
+            }
+        }
+        Ok(Provided {
+            identity,
+            table: Self { tables },
+        })
     }
-    let mut cursor = Cursor { bytes, at: 4 };
-    let count = cursor.byte().ok_or(bad)?;
-    let mut tables = Vec::with_capacity(usize::from(count));
-    for _ in 0..count {
-        tables.push(decode_table(&mut cursor).ok_or(bad)?);
-    }
-    Ok(RotamerTables { tables })
 }
 
 #[cfg(test)]

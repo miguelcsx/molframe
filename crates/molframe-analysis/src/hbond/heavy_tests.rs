@@ -1,8 +1,9 @@
 use std::fmt::Write;
 
 use super::{HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable, heavy_atom_hydrogen_bonds};
-use crate::hbond::HydrogenBondError;
+use crate::hbond::{HeavyRoleTable, HydrogenBondError};
 use molframe_bench::{Sample, structure};
+use molframe_chem::{TableIdentity, TableKind};
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{
     AnnotationColumn, AtomAnnotation, AtomIndex, ExecutionContext, Presence, Structure,
@@ -42,8 +43,26 @@ fn build(rows: &[Row]) -> Structure {
     }
 }
 
+/// The role table shipped under `data/`, decoded once; the repository carries it.
+fn roles() -> &'static HeavyRoleTable {
+    static ROLES: std::sync::OnceLock<HeavyRoleTable> = std::sync::OnceLock::new();
+    ROLES.get_or_init(|| {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../data/heavy-atom-roles.roles"
+        );
+        let Ok(bytes) = std::fs::read(path) else {
+            panic!("the repository's {path} is missing");
+        };
+        match HeavyRoleTable::decode(&bytes, TableIdentity::supplied("", "", "", "")) {
+            Ok(provided) => provided.table,
+            Err(error) => panic!("{path}: {error}"),
+        }
+    })
+}
+
 fn run(structure: &Structure, options: HeavyAtomHydrogenBondOptions) -> HeavyAtomHydrogenBondTable {
-    match heavy_atom_hydrogen_bonds(structure, options, &ExecutionContext::default()) {
+    match heavy_atom_hydrogen_bonds(structure, roles(), options, &ExecutionContext::default()) {
         Ok(table) => table,
         Err(error) => panic!("valid request failed: {error}"),
     }
@@ -298,7 +317,8 @@ fn invalid_options_are_refused() {
     ];
     for options in bad {
         assert_eq!(
-            heavy_atom_hydrogen_bonds(&structure, options, &ExecutionContext::default()).err(),
+            heavy_atom_hydrogen_bonds(&structure, roles(), options, &ExecutionContext::default())
+                .err(),
             Some(HydrogenBondError::InvalidOptions)
         );
     }
@@ -379,7 +399,8 @@ fn results_are_identical_across_backends_and_worker_counts() {
                 backend,
                 ..HeavyAtomHydrogenBondOptions::default()
             };
-            let Ok(table) = heavy_atom_hydrogen_bonds(&haemoglobin, options, &context) else {
+            let Ok(table) = heavy_atom_hydrogen_bonds(&haemoglobin, roles(), options, &context)
+            else {
                 panic!("request failed");
             };
             assert_eq!(pairs(&table), pairs(&reference), "{backend:?} x {workers}");

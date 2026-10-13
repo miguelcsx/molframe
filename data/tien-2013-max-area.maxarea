@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: CC-BY-4.0
+format: 1
+name: tien-2013-theoretical
+version: 2013
+source: Tien MZ, Meyer AG, Sydykova DK, Spielman SJ, Wilke CO (2013) Maximum allowed solvent accessibilities of residues in proteins. PLoS ONE 8(11): e80635
+licence: CC-BY-4.0
+
+# residue maximum-area-in-square-angstrom (theoretical, Gly-X-Gly extended)
+ALA 129
+ARG 274
+ASN 195
+ASP 193
+CYS 167
+GLN 225
+GLU 223
+GLY 104
+HIS 224
+ILE 197
+LEU 201
+LYS 236
+MET 224
+PHE 240
+PRO 159
+SER 155
+THR 172
+TRP 285
+TYR 263
+VAL 174
