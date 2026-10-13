@@ -21,6 +21,7 @@ mod registry;
 mod report;
 mod spatial_cases;
 mod traj_cases;
+mod traj_file_cases;
 
 use harness::{Case, Settings};
 use molframe_bench::Tier;

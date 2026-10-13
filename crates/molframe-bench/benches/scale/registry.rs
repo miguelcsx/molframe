@@ -8,6 +8,7 @@ pub fn all() -> Vec<Case> {
     cases.extend(crate::geom_cases::cases());
     cases.extend(crate::compare_cases::cases());
     cases.extend(crate::traj_cases::cases());
+    cases.extend(crate::traj_file_cases::cases());
     cases.extend(crate::interop_cases::cases());
     cases
 }
