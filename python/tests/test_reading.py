@@ -190,3 +190,11 @@ def test_write_states_its_decisions(tmp_path):
         molframe.formats.write(structure, tmp_path / "x.bcif", memory_limit=1)
     with pytest.raises(molframe.PolicyError):
         molframe.formats.write(structure, tmp_path / "y", format="nonsense")
+
+
+def test_perception_is_a_read_option_and_skipping_it_keeps_the_atoms():
+    assert molframe.ReadOptions().perceive is True
+    plain = molframe.read(FOUR_HHB_PDB, options=molframe.ReadOptions(perceive=False))
+    everything = molframe.read(FOUR_HHB_PDB)
+    assert plain.atom_count == everything.atom_count
+    assert plain.bond_count < everything.bond_count

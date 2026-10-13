@@ -74,6 +74,7 @@ impl PyReadOptions {
         max_nesting_depth=None,
         max_dictionary_entries=None,
         digest_input=false,
+        perceive=true,
     ))]
     // The keywords are flags in the Python signature; an enum there would be a worse API.
     #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
@@ -94,6 +95,7 @@ impl PyReadOptions {
         max_nesting_depth: Option<u32>,
         max_dictionary_entries: Option<u32>,
         digest_input: bool,
+        perceive: bool,
     ) -> PyResult<Self> {
         let categories = match (only_categories, skip_categories) {
             (None, None) => CategoryFilter::All,
@@ -127,8 +129,14 @@ impl PyReadOptions {
                 .occupancy_policy(occupancy(occupancy_policy)?)
                 .categories(categories)
                 .digest_input(digest_input)
+                .perceive(perceive)
                 .limits(limits),
         })
+    }
+
+    #[getter]
+    fn perceive(&self) -> bool {
+        self.inner.perception == molframe::Perception::Infer
     }
 
     #[getter]

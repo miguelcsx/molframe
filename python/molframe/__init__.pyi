@@ -297,6 +297,14 @@ class ReadOptions:
     the ``max_*`` limits bound hostile or oversized input. ``digest_input`` records the
     SHA-256 of the bytes parsed in the structure's metadata, so a result and its audit
     certificate can be tied to them; it is off because hashing is work on every read.
+
+    By default a read runs a perception pass after the parse, in this order: bond
+    perception (file bonds, polymer links, then bonds inferred from geometry), standard
+    component annotation, and DSSP secondary structure for residues the file left
+    unassigned. Bond perception dominates, about a quarter of the parse time on a
+    2.4-million-atom file. ``perceive=False`` skips all three and returns the structure
+    as the file states it; ``coordinates_only=True`` skips them too and drops the
+    optional categories as well.
     """
 
     def __init__(
@@ -318,6 +326,7 @@ class ReadOptions:
         max_nesting_depth: int | None = None,
         max_dictionary_entries: int | None = None,
         digest_input: bool = False,
+        perceive: bool = True,
     ) -> None: ...
     @property
     def format(self) -> str: ...
@@ -325,6 +334,8 @@ class ReadOptions:
     def mode(self) -> str: ...
     @property
     def digest_input(self) -> bool: ...
+    @property
+    def perceive(self) -> bool: ...
     @property
     def first_model_only(self) -> bool: ...
     @property
