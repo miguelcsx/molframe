@@ -6,6 +6,7 @@ mod items;
 mod layered;
 mod lazy;
 mod lowering;
+mod stack;
 mod validation;
 
 use crate::model::Component;
@@ -19,6 +20,7 @@ use molframe_cif::Document;
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::io::InputBuffer;
+pub use stack::{EMBEDDED_COMPONENTS_EXTENSION, embedded_components, resolution_stack};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -151,3 +153,7 @@ mod tests;
 #[cfg(test)]
 #[path = "provider_core_tests.rs"]
 mod core_tests;
+
+#[cfg(test)]
+#[path = "provider_stack_tests.rs"]
+mod stack_tests;

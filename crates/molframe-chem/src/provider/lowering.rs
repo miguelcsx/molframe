@@ -55,6 +55,7 @@ pub(super) fn component(block: &DataBlock) -> LoweringResult<Component> {
         bonds
             .as_ref()
             .map(|(category, rows)| Rows { category, rows }),
+        false,
     )
 }
 
@@ -63,11 +64,12 @@ pub(super) fn component_from(
     row: usize,
     atom_rows: Option<Rows<'_>>,
     bond_rows: Option<Rows<'_>>,
+    lenient: bool,
 ) -> LoweringResult<Component> {
     let id = required_identifier(metadata, "id", row).map_err(one_finding)?;
     let name = required_identifier(metadata, "name", row).map_err(one_finding)?;
     let component_type = required_text(metadata, "type", row).map_err(one_finding)?;
-    let atoms = atoms(atom_rows)?;
+    let atoms = atoms(atom_rows, lenient)?;
     let bonds = bonds(bond_rows)?;
     validate_component_topology(&atoms, &bonds)?;
     let component_kind = classify_component(&component_type, &atoms, &bonds);
@@ -139,7 +141,9 @@ fn one_letter_code(value: &str) -> Option<u8> {
     (bytes.len() == 1 && bytes[0].is_ascii()).then_some(bytes[0])
 }
 
-fn atoms(rows: Option<Rows<'_>>) -> LoweringResult<Vec<ComponentAtom>> {
+/// Atoms of a component; `lenient` accepts the reduced rows of a deposited
+/// structure file, which omit the formal charge and the leaving-atom flag.
+fn atoms(rows: Option<Rows<'_>>, lenient: bool) -> LoweringResult<Vec<ComponentAtom>> {
     // A component with no atom category is a legitimate entry with no atoms,
     // such as the unknown-ligand placeholder; an empty category is not.
     let Some(Rows { category, rows }) = rows else {
@@ -155,7 +159,16 @@ fn atoms(rows: Option<Rows<'_>>) -> LoweringResult<Vec<ComponentAtom>> {
     }
     collect_rows(rows, |row| {
         let element = element(category, row)?;
-        let charge = formal_charge(category, row)?;
+        let charge = if lenient && category.column("charge").is_none() {
+            0
+        } else {
+            formal_charge(category, row)?
+        };
+        let leaving = if lenient && category.column("pdbx_leaving_atom_flag").is_none() {
+            false
+        } else {
+            required_flag(category, "pdbx_leaving_atom_flag", row)?
+        };
         Ok(ComponentAtom {
             name: required_identifier(category, "atom_id", row)?,
             alternate_name: category
@@ -164,7 +177,7 @@ fn atoms(rows: Option<Rows<'_>>) -> LoweringResult<Vec<ComponentAtom>> {
             element,
             charge,
             aromatic: required_flag(category, "pdbx_aromatic_flag", row)?,
-            leaving: required_flag(category, "pdbx_leaving_atom_flag", row)?,
+            leaving,
             stereo: optional_stereo(category, row)?,
         })
     })

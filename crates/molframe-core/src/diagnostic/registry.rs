@@ -343,9 +343,12 @@ registry! {
     W3204 = Warning 3204, Loose,
         "unusual valence",
         "check the connectivity and formal charge of the atom named";
-    W3205 = Warning 3205, Strict,
-        "chirality disagrees with the component definition",
-        "check the geometry of the centre named; this is often a genuine modelling error";
+    W3205 = Warning 3205, Info,
+        "chirality was not assessed for a residue",
+        "the reason is named in the finding: the component has no ideal coordinates, they do not align with the model, or its stereocentre geometry is degenerate; supply a dictionary with ideal coordinates to assess it. A centre that was assessed and disagrees is reported as a chirality outlier, not by this code";
+    W3206 = Warning 3206, Loose,
+        "the component definitions embedded in the file are malformed and were ignored",
+        "the component is resolved from a dictionary instead; fix the chem_comp_atom and chem_comp_bond rows in the file, or supply a full dictionary";
     W3301 = Warning 3301, Info,
         "atoms expected by the component definition are absent from the model",
         "no action needed; the shortfall is reported as coverage rather than hidden";

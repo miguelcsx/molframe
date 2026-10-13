@@ -12,12 +12,15 @@ use crate::Component;
 use molframe_cif::{Category, DataBlock, Document};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::diagnostic::Diagnostic;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 /// Definitions of the components a structure file defines for itself.
 #[derive(Clone, Debug)]
-pub struct EmbeddedProvider(MemoryProvider);
+pub struct EmbeddedProvider {
+    components: MemoryProvider,
+    uncharged: BTreeSet<Box<str>>,
+}
 
 impl EmbeddedProvider {
     /// Lowers every component with embedded atom rows in a parsed structure
@@ -35,26 +38,45 @@ impl EmbeddedProvider {
         version: DictionaryVersion,
     ) -> Result<Self, Vec<Diagnostic>> {
         let mut components = Vec::new();
+        let mut uncharged = BTreeSet::new();
         let mut findings = Vec::new();
         for block in document.blocks() {
-            lower_block(block, &mut components, &mut findings);
+            lower_block(block, &mut components, &mut uncharged, &mut findings);
         }
         if !findings.is_empty() {
             return Err(findings);
         }
         MemoryProvider::new(version, components)
-            .map(Self)
+            .map(|components| Self {
+                components,
+                uncharged,
+            })
             .map_err(one_finding)
+    }
+
+    /// Whether the file stated this component's formal charges.
+    ///
+    /// Deposited entries list every component's atoms and bonds but leave the
+    /// charges out, so those definitions describe connectivity only and a
+    /// dictionary that does state charges is the better source for them.
+    #[must_use]
+    pub fn states_charges(&self, component_id: &str) -> bool {
+        !self.uncharged.contains(component_id)
     }
 
     /// Whether the file defines no component of its own.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.components.is_empty()
+        self.components.components.is_empty()
     }
 }
 
-fn lower_block(block: &DataBlock, components: &mut Vec<Component>, findings: &mut Vec<Diagnostic>) {
+fn lower_block(
+    block: &DataBlock,
+    components: &mut Vec<Component>,
+    uncharged: &mut BTreeSet<Box<str>>,
+    findings: &mut Vec<Diagnostic>,
+) {
     let (Some(metadata), Some(atoms)) = (
         block.category("chem_comp"),
         block.category("chem_comp_atom"),
@@ -84,8 +106,14 @@ fn lower_block(block: &DataBlock, components: &mut Vec<Component>, findings: &mu
                 rows,
             }),
             bonds,
+            true,
         ) {
-            Ok(component) => components.push(component),
+            Ok(component) => {
+                if atoms.column("charge").is_none() {
+                    uncharged.insert(component.id.clone());
+                }
+                components.push(component);
+            }
             Err(found) => findings.extend(found),
         }
     }
@@ -103,10 +131,10 @@ fn group_rows(category: &Category) -> BTreeMap<String, Vec<usize>> {
 
 impl ComponentProvider for EmbeddedProvider {
     fn get(&self, component_id: &str) -> Result<Option<Arc<Component>>, Diagnostic> {
-        self.0.get(component_id)
+        self.components.get(component_id)
     }
 
     fn version(&self) -> &DictionaryVersion {
-        self.0.version()
+        self.components.version()
     }
 }

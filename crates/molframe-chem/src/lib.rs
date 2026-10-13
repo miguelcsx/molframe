@@ -79,8 +79,9 @@ pub use peoe::{
     PeoeOptions, PeoeParameterProfile, component_peoe_charges, partial_charges, peoe_charges,
 };
 pub use provider::{
-    CORE_DICTIONARY_VERSION, CifProvider, ComponentProvider, CoreProvider, EmbeddedProvider,
-    LayeredProvider, LazyCifProvider, MemoryProvider, read_ccd,
+    CORE_DICTIONARY_VERSION, CifProvider, ComponentProvider, CoreProvider,
+    EMBEDDED_COMPONENTS_EXTENSION, EmbeddedProvider, LayeredProvider, LazyCifProvider,
+    MemoryProvider, embedded_components, read_ccd, resolution_stack,
 };
 pub use radius_policy::{
     HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, included_atoms,

@@ -36,3 +36,10 @@ fn refusing_a_lossy_write_is_an_error_and_never_merely_a_warning() {
         assert!(code.severity() >= Severity::Invalidating);
     }
 }
+
+#[test]
+fn an_unassessed_chirality_is_a_note_not_a_disagreement() {
+    assert_eq!(Code::W3205.severity(), Severity::Info);
+    assert!(Code::W3205.cause().contains("not assessed"));
+    assert!(!Code::W3205.cause().contains("disagree"));
+}

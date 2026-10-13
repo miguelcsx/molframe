@@ -20,7 +20,11 @@ pub(super) fn keep_non_model_extension_category(category: &str) -> bool {
     ) {
         return true;
     }
-    #[cfg(not(feature = "crystal"))]
+    #[cfg(feature = "chemistry")]
+    if matches!(category, "chem_comp" | "chem_comp_atom" | "chem_comp_bond") {
+        return true;
+    }
+    #[cfg(not(any(feature = "crystal", feature = "chemistry")))]
     let _ = category;
     false
 }
@@ -102,6 +106,51 @@ pub(super) fn model_error(error: &molframe_modelcif::ModelCifError) -> Diagnosti
 }
 
 fn attach_non_model(
+    document: &molframe_cif::Document,
+    structure: Structure,
+    findings: Vec<Diagnostic>,
+) -> (Structure, Vec<Diagnostic>) {
+    let (structure, findings) = attach_embedded_components(document, structure, findings);
+    attach_crystal(document, structure, findings)
+}
+
+/// Keeps the component definitions the file carries, so annotation resolves
+/// them before any dictionary without the caller asking.
+fn attach_embedded_components(
+    document: &molframe_cif::Document,
+    structure: Structure,
+    findings: Vec<Diagnostic>,
+) -> (Structure, Vec<Diagnostic>) {
+    #[cfg(feature = "chemistry")]
+    {
+        let mut structure = structure;
+        let mut findings = findings;
+        match molframe_chem::embedded_components(document) {
+            Ok(Some(provider)) => {
+                structure = structure
+                    .with_extension(molframe_chem::EMBEDDED_COMPONENTS_EXTENSION, provider);
+            }
+            Ok(None) => {}
+            Err(values) => findings.push(
+                Diagnostic::new(molframe_core::Code::W3206)
+                    .in_category("chem_comp_atom")
+                    .with_context("problems", values.len().to_string())
+                    .with_context(
+                        "first",
+                        values.first().map(ToString::to_string).unwrap_or_default(),
+                    ),
+            ),
+        }
+        (structure, findings)
+    }
+    #[cfg(not(feature = "chemistry"))]
+    {
+        let _ = document;
+        (structure, findings)
+    }
+}
+
+fn attach_crystal(
     document: &molframe_cif::Document,
     structure: Structure,
     findings: Vec<Diagnostic>,
