@@ -82,7 +82,10 @@ impl ModelBuilder {
         for category in self.categories {
             categories.push(category.finish()?);
         }
-        Ok(ModelCif { categories })
+        Ok(ModelCif {
+            categories,
+            pae: None,
+        })
     }
 
     #[cfg(test)]

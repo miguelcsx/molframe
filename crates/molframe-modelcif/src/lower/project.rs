@@ -44,9 +44,18 @@ pub fn lower_with_options(
     {
         categories.push(ModelCategory::from_category(category, &mut budget)?);
     }
-    let model = ModelCif { categories };
+    let mut model = ModelCif {
+        categories,
+        pae: None,
+    };
     let findings = validate_model(&model);
+    densify_default(&mut model);
     Ok((model, findings))
+}
+
+/// Stores a convertible PAE table densely; a table that cannot be converted stays compact.
+pub(crate) fn densify_default(model: &mut ModelCif) {
+    let _ = model.densify_pae(crate::PaePolicy::new());
 }
 
 pub(crate) fn validate_model(model: &ModelCif) -> Vec<Diagnostic> {

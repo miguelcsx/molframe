@@ -109,10 +109,11 @@ impl<'a> QualityMetrics<'a> {
 
     /// Residue-pair PAE values.
     pub fn pae(self) -> impl Iterator<Item = PairwiseMetric<'a>> + 'a {
-        self.pairwise().filter(move |value| {
+        let compact = self.pairwise().filter(move |value| {
             self.definition(value.metric_id)
                 .is_some_and(|definition| definition.metric_type.eq_ignore_ascii_case("PAE"))
-        })
+        });
+        compact.chain(self.model.pae.iter().flat_map(crate::DensePae::pairs))
     }
 
     /// Model-level pTM values.

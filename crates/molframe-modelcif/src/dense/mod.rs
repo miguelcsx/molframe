@@ -10,15 +10,20 @@
     clippy::float_cmp
 )]
 
+mod densify;
 mod error;
 mod half;
 mod json;
 mod layout;
 mod pae;
+mod pairs;
 mod precision;
+mod residues;
 
 pub use error::ConfidenceError;
 pub use json::read_pae_json;
 pub use layout::{PaeKind, PaeLayout, PaePolicy, PaeStorage};
 pub use pae::PaeMatrix;
+pub use pairs::DensePae;
 pub use precision::PrecisionProbe;
+pub use residues::{ResidueIndex, ResidueRef};

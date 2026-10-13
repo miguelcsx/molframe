@@ -1,5 +1,6 @@
 //! Canonical `ModelCIF` projection over the shared streaming mmCIF renderer.
 
+use super::dense_pae::write_dense_pae;
 use crate::{ModelCategory, ModelCif, ValueRef};
 use molframe_cif::{CifWriteOptions, CifWriteToError, write_quoted};
 use molframe_core::Structure;
@@ -52,10 +53,19 @@ pub fn write_canonical_to<W: IoWrite>(
 ) -> Result<(), CifWriteToError> {
     molframe_cif::write_canonical_to(structure, options, output)?;
     let mut output = TextOutput::new(output);
-    for category in &model_cif.categories {
+    for (index, category) in model_cif.categories.iter().enumerate() {
+        write_dense_at(&mut output, model_cif, index);
         write_category(&mut output, category);
     }
+    write_dense_at(&mut output, model_cif, model_cif.categories.len());
     output.finish().map_err(CifWriteToError::Output)
+}
+
+/// Writes the dense PAE matrix where its compact table used to sit.
+fn write_dense_at(output: &mut impl fmt::Write, model_cif: &ModelCif, index: usize) {
+    if let Some(dense) = model_cif.dense_pae().filter(|dense| dense.slot == index) {
+        write_dense_pae(output, dense);
+    }
 }
 
 fn write_category(output: &mut impl fmt::Write, category: &ModelCategory) {

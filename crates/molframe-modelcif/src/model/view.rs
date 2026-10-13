@@ -16,6 +16,7 @@ pub const MODEL_CIF_EXTENSION: &str = "molframe.modelcif.v1";
 pub struct ModelCif {
     /// Every `ma_*` category, including fields newer than this crate.
     pub categories: Vec<ModelCategory>,
+    pub(crate) pae: Option<crate::DensePae>,
 }
 
 impl ModelCif {
@@ -67,6 +68,12 @@ impl ModelCif {
         let category = self.category("ma_software_group");
         (0..category.map_or(0, ModelCategory::row_count))
             .filter_map(move |row| category.and_then(|value| metadata::software(value, row)))
+    }
+
+    /// Dense residue-pair aligned error, when the PAE table could be stored exactly as a matrix.
+    #[must_use]
+    pub const fn dense_pae(&self) -> Option<&crate::DensePae> {
+        self.pae.as_ref()
     }
 
     /// Typed confidence metrics.

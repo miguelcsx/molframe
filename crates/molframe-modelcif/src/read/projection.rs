@@ -74,8 +74,9 @@ impl CifEventSink for ModelCifProjection {
         if let Some(error) = self.error {
             return Err(error);
         }
-        let model = self.builder.finish()?;
+        let mut model = self.builder.finish()?;
         let findings = crate::lower::validate_model(&model);
+        crate::lower::densify_default(&mut model);
         Ok((model, findings))
     }
 }
