@@ -10,6 +10,7 @@ mod write;
 
 pub use dense::{
     ConfidenceError, PaeKind, PaeLayout, PaeMatrix, PaePolicy, PaeStorage, PrecisionProbe,
+    read_pae_json,
 };
 pub use lower::lower;
 pub use model::*;
