@@ -2,12 +2,9 @@
 
 use crate::AtomSite;
 use crate::mapping::Candidate;
+pub(crate) use crate::stream_cells::{Grid, Point};
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::Structure;
-use std::collections::HashMap;
-
-pub(crate) type Point = [f32; 3];
-pub(crate) type Cell = [i64; 3];
 
 /// The distances one pairwise constraint admits.
 ///
@@ -49,25 +46,6 @@ impl Window {
 /// Positions of the alternatives of one site on one candidate.
 pub(crate) type SitePoints = Vec<(AtomIndex, Point)>;
 
-#[derive(Debug)]
-pub(crate) struct Grid {
-    pub(crate) cell: f64,
-    pub(crate) cells: HashMap<Cell, Vec<(u32, Point)>>,
-}
-
-impl Grid {
-    pub(crate) fn key(&self, point: Point) -> Cell {
-        let scaled = |value: f32| {
-            let cell = (f64::from(value) / self.cell).floor();
-            // Saturating cast: a coordinate this far out cannot be near anything.
-            #[allow(clippy::cast_possible_truncation)]
-            let cell = cell as i64;
-            cell
-        };
-        [scaled(point[0]), scaled(point[1]), scaled(point[2])]
-    }
-}
-
 /// One pairwise distance constraint seen from the later component.
 #[derive(Debug)]
 pub(crate) struct Link {
@@ -103,22 +81,11 @@ impl Link {
     pub(crate) fn reachable(&self, earlier_candidate: usize) -> Vec<u32> {
         let mut found = Vec::new();
         for (_, point) in &self.earlier_points[earlier_candidate] {
-            let centre = self.grid.key(*point);
-            for dx in -1..=1 {
-                for dy in -1..=1 {
-                    for dz in -1..=1 {
-                        let key = [centre[0] + dx, centre[1] + dy, centre[2] + dz];
-                        let Some(entries) = self.grid.cells.get(&key) else {
-                            continue;
-                        };
-                        for (index, other) in entries {
-                            if self.window.admits(molframe_geom::distance(*point, *other)) {
-                                found.push(*index);
-                            }
-                        }
-                    }
+            self.grid.for_each_near(*point, |index, other| {
+                if self.window.admits(molframe_geom::distance(*point, other)) {
+                    found.push(index);
                 }
-            }
+            });
         }
         found.sort_unstable();
         found.dedup();

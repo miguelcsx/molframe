@@ -28,5 +28,9 @@ tempfile.workspace = true
 name = "fx"
 harness = false
 
+[[bench]]
+name = "motif_scale"
+harness = false
+
 [lints]
 workspace = true

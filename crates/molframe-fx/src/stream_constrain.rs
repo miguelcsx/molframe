@@ -10,7 +10,6 @@ use crate::stream::MappingPlan;
 use crate::stream_grid::{Grid, Link, Window, site_points};
 use crate::{AtomSite, Constraint, Motif, NamedConstraint, VerdictProfile, VerdictRule};
 use molframe_core::structure::Structure;
-use std::collections::HashMap;
 
 /// The closed range of distances a rule can accept.
 fn accepted_by(comparison: Comparison) -> (f64, f64) {
@@ -134,22 +133,18 @@ impl MappingPlan {
         } else {
             f64::INFINITY
         };
-        let mut grid = Grid {
+        let grid = Grid::build(
             cell,
-            cells: HashMap::new(),
-        };
-        for (index, candidate) in self.candidates[later].iter().enumerate() {
-            for (_, point) in site_points(structure, candidate, later_site) {
-                let key = grid.key(point);
-                grid.cells.entry(key).or_default().push((
-                    match u32::try_from(index) {
-                        Ok(index) => index,
-                        Err(_) => u32::MAX,
-                    },
-                    point,
-                ));
-            }
-        }
+            self.candidates[later]
+                .iter()
+                .enumerate()
+                .flat_map(|(index, candidate)| {
+                    let index = u32::try_from(index).unwrap_or(u32::MAX);
+                    site_points(structure, candidate, later_site)
+                        .into_iter()
+                        .map(move |(_, point)| (index, point))
+                }),
+        );
         let earlier_points = self.candidates[earlier]
             .iter()
             .map(|candidate| site_points(structure, candidate, earlier_site))
