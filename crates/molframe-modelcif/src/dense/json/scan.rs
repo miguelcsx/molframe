@@ -44,7 +44,7 @@ impl<'a> Scanner<'a> {
         self.bytes.get(self.pos).copied()
     }
 
-    pub(super) fn expect(
+    pub(super) fn require(
         &mut self,
         byte: u8,
         expected: &'static str,
