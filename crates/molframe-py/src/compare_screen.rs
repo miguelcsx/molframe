@@ -84,12 +84,15 @@ fn tm_scores<'py>(
     context: Option<&PyExecutionContext>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let views = views(&structures)?;
-    let pairs = pairs.as_ref().map(pair_list).transpose()?;
+    let pairs = pairs.map(|array| pair_list(&array)).transpose()?;
     let scores = crate::execution::run(py, context, |context| match &pairs {
         Some(pairs) => molframe::compare::tm_score_pairs(&views, pairs, context),
         None => molframe::compare::tm_score_all_pairs(&views, context),
     })?
     .map_err(crate::error::kernel)?;
+    // Release the NumPy read borrows now that the kernel is done.
+    drop(views);
+    drop(structures);
     Ok(scores.into_pyarray(py))
 }
 
@@ -112,7 +115,7 @@ fn tm_screen<'py>(
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyTmScreen> {
     let views = views(&structures)?;
-    let pairs = pairs.as_ref().map(pair_list).transpose()?;
+    let pairs = pairs.map(|array| pair_list(&array)).transpose()?;
     let mut filter =
         molframe::compare::TmPrefilter::new(threshold).map_err(crate::error::kernel)?;
     if let Some(ratio) = coarse_ratio {
@@ -125,6 +128,8 @@ fn tm_screen<'py>(
         None => molframe::compare::tm_screen_all_pairs(&views, &filter, context),
     })?
     .map_err(crate::error::kernel)?;
+    drop(views);
+    drop(structures);
     Ok(PyTmScreen {
         scores: screen.scores.into_pyarray(py).unbind(),
         evaluated: screen.evaluated,
