@@ -53,7 +53,10 @@ fn numeric_lead(text: &str) -> bool {
 /// `i64` parsing accepts a leading `+` and leading zeros; the canonical
 /// spelling has neither, and `-0` is not the spelling of zero.
 fn spells_integer(text: &str, value: i64) -> bool {
-    let digits = text.strip_prefix('-').unwrap_or(text);
+    let digits = match text.strip_prefix('-') {
+        Some(digits) => digits,
+        None => text,
+    };
     let canonical = !digits.starts_with('+') && (digits == "0" || !digits.starts_with('0'));
     canonical && (value != 0 || text == "0")
 }

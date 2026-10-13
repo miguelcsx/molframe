@@ -9,6 +9,7 @@ use molframe_core::structure::Structure;
 use std::fmt;
 
 /// Renders every supplementary category as mmCIF text without a block header.
+#[must_use]
 pub fn render(structure: &Structure, options: &CifWriteOptions) -> String {
     let mut out = String::new();
     write(&mut out, structure, options);
@@ -17,7 +18,10 @@ pub fn render(structure: &Structure, options: &CifWriteOptions) -> String {
 
 pub(super) fn write(out: &mut impl fmt::Write, structure: &Structure, options: &CifWriteOptions) {
     let entry = &structure.data().entry;
-    let extra = options.extra_categories().unwrap_or("");
+    let extra = match options.extra_categories() {
+        Some(extra) => extra,
+        None => "",
+    };
     if let Some(group) = entry.space_group.as_deref()
         && !extra.contains("_symmetry.space_group_name_H-M")
         && !extra.contains("_space_group.name_H-M_alt")
@@ -27,7 +31,10 @@ pub(super) fn write(out: &mut impl fmt::Write, structure: &Structure, options: &
     if let Some(resolution) = entry.resolution {
         // The refinement identifier is what makes a reader treat the row as a
         // refinement at all; the experiment decides which one it was.
-        let method = entry.method.as_deref().unwrap_or("");
+        let method = match entry.method.as_deref() {
+            Some(method) => method,
+            None => "",
+        };
         let refine = if method.to_ascii_uppercase().contains("NEUTRON") {
             "NEUTRON DIFFRACTION"
         } else {
