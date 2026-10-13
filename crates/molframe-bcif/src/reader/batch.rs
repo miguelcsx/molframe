@@ -458,3 +458,7 @@ fn charge_or_zero(value: Option<i8>) -> i8 {
 #[cfg(test)]
 #[path = "batch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "batch_hostile_tests.rs"]
+mod hostile_tests;
