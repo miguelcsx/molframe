@@ -4,6 +4,7 @@ mod coordinates;
 mod fixtures;
 mod numeric;
 mod samples;
+mod scale;
 mod synthetic;
 
 pub use coordinates::{coordinates, model_coordinates, perturbed, uniform_radii};
@@ -12,6 +13,10 @@ pub use fixtures::{
     structure_from_pdb, structure_with_atoms,
 };
 pub use samples::{Sample, ccd_atp, ccd_hem, large_cif_gz};
+pub use scale::{
+    Checksum, Cloud, Ensemble, Fit, SplitMix64, Tier, TierParseError, chain, ensemble,
+    fit_exponent, rotated, uniform_cloud,
+};
 pub use synthetic::{Placement, Seed, SyntheticCifSource, Tile, TileAtom};
 
 #[cfg(test)]

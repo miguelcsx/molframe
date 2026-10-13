@@ -15,5 +15,16 @@ molframe-pdb.workspace = true
 molframe-bcif.workspace = true
 num-traits.workspace = true
 
+[dev-dependencies]
+molframe-compare.workspace = true
+molframe-geom.workspace = true
+molframe-spatial.workspace = true
+molframe-traj.workspace = true
+
+[[bench]]
+name = "scale"
+path = "benches/scale/main.rs"
+harness = false
+
 [lints]
 workspace = true
