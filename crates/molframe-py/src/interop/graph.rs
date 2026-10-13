@@ -141,7 +141,7 @@ pub(crate) fn graph(
             .map_err(crate::error::kernel)?,
         node_features,
         edge_features,
-        missing: missing.map_or(MissingFeaturePolicy::Error, MissingFeaturePolicy::Fill),
+        missing: MissingFeaturePolicy::from_fill(missing),
         backend: crate::backend::parse(backend)?,
         periodic,
     };
@@ -154,13 +154,13 @@ pub(crate) fn graph(
         .node_features
         .features
         .iter()
-        .map(|feature| feature.name().replace('-', "_"))
+        .map(|feature| feature.column_name())
         .collect();
     let edge_names: Vec<String> = built
         .edge_features
         .features
         .iter()
-        .map(|feature| feature.name().replace('-', "_"))
+        .map(|feature| feature.column_name())
         .collect();
     let matrix = |values: Box<[f32]>, rows: usize, columns: usize| {
         PyArray1::from_vec(py, values.into_vec()).reshape([rows, columns])

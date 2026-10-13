@@ -85,6 +85,14 @@ pub enum MissingFeaturePolicy {
     Fill(f32),
 }
 
+impl MissingFeaturePolicy {
+    /// `Fill` with an explicit value, or `Error` when none was given.
+    #[must_use]
+    pub fn from_fill(fill: Option<f32>) -> Self {
+        fill.map_or(Self::Error, Self::Fill)
+    }
+}
+
 /// Complete, explicit graph construction request.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GraphOptions {

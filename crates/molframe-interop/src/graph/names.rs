@@ -21,6 +21,12 @@ macro_rules! named {
                     $($variant => $name,)+
                 }
             }
+
+            /// The spelling as an identifier (underscores), as a table column is named.
+            #[must_use]
+            pub fn column_name(self) -> String {
+                self.name().replace('-', "_")
+            }
         }
 
         impl fmt::Display for $type {

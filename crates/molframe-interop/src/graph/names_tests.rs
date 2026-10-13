@@ -1,4 +1,5 @@
 use super::*;
+use crate::MissingFeaturePolicy;
 
 #[test]
 fn every_name_round_trips_and_underscores_are_read_as_hyphens() {
@@ -39,4 +40,18 @@ fn an_edge_algorithm_takes_exactly_its_own_parameter() {
     assert!(EdgeKind::from_parts("radius", Some(5.0), Some(3)).is_err());
     assert!(EdgeKind::from_parts("bonds", Some(2.0), None).is_err());
     assert!(EdgeKind::from_parts("delaunay", None, None).is_err());
+}
+
+#[test]
+fn a_column_name_is_the_identifier_spelling() {
+    assert_eq!(NodeFeature::FormalCharge.column_name(), "formal_charge");
+    assert_eq!(NodeFeature::Element.column_name(), "element");
+    assert_eq!(
+        MissingFeaturePolicy::from_fill(None),
+        MissingFeaturePolicy::Error
+    );
+    assert_eq!(
+        MissingFeaturePolicy::from_fill(Some(0.0)),
+        MissingFeaturePolicy::Fill(0.0)
+    );
 }
