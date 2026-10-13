@@ -77,7 +77,10 @@ pub use peoe::{
     ChargeSource, PartialChargeError, PartialCharges, PeoeAtom, PeoeAtomType, PeoeBond, PeoeError,
     PeoeOptions, PeoeParameterProfile, component_peoe_charges, partial_charges, peoe_charges,
 };
-pub use provider::{CifProvider, ComponentProvider, LazyCifProvider, MemoryProvider, read_ccd};
+pub use provider::{
+    CORE_DICTIONARY_VERSION, CifProvider, ComponentProvider, CoreProvider, EmbeddedProvider,
+    LayeredProvider, LazyCifProvider, MemoryProvider, read_ccd,
+};
 pub use radius_policy::{
     HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, policy_radii,
 };

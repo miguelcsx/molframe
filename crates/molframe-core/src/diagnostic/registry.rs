@@ -333,7 +333,7 @@ registry! {
         "no action needed for coordinates, which are kept for every model; read per-model B-factors from the source file if they matter";
     W3201 = Warning 3201, Loose,
         "component not found in any chemical component provider",
-        "supply a provider that knows this component if its expected atoms or bonds matter";
+        "layer the full wwPDB dictionary (components.cif.gz from files.wwpdb.org/pub/pdb/data/monomers) over the bundled core set, or embed chem_comp_atom and chem_comp_bond rows for this component in the input file; until then its atoms and bonds are not checked";
     W3202 = Warning 3202, Strict,
         "observed atoms are inconsistent with the component definition; file connectivity was used",
         "check the component's atom names against its definition";

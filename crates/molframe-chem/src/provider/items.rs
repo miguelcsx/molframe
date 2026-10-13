@@ -6,12 +6,12 @@ use molframe_core::diagnostic::{Code, Diagnostic};
 type LoweringResult<T> = Result<T, Vec<Diagnostic>>;
 
 pub(super) fn collect_rows<T>(
-    category: &Category,
+    rows: &[usize],
     parse: impl Fn(usize) -> Result<T, Diagnostic>,
 ) -> LoweringResult<Vec<T>> {
-    let mut values = Vec::with_capacity(category.row_count());
+    let mut values = Vec::with_capacity(rows.len());
     let mut findings = Vec::new();
-    for row in 0..category.row_count() {
+    for &row in rows {
         match parse(row) {
             Ok(value) => values.push(value),
             Err(finding) => findings.push(finding),

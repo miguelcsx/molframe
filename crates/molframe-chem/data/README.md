@@ -46,3 +46,31 @@ standard amino acids, retrieved from the same RCSB ligand endpoint on
 The data are CC0-1.0. Charge validation uses the committed 4HHB protein atoms
 with an explicit dictionary; heme, waters and unparameterised metal chemistry
 are excluded from this protein-only fixture, not silently assigned zero.
+
+## Bundled core components
+
+`core-components.cif` is the compact component dictionary behind
+`CoreProvider`: 364 components cut verbatim from the wwPDB chemical component
+dictionary (`components.cif.gz`, release dated 2026-10-03, version label
+`wwpdb-ccd-2026-10-03-core`). It holds the 20 standard residues and common
+modified, D- and ambiguous residues, standard and modified nucleotides, water,
+common ions, crystallisation additives, frequent cofactors and every
+carbohydrate that `snfg.rs` names. Each block keeps its `chem_comp` identity
+(id, name, type, formula, parent, one-letter code), every atom (name,
+alternate name, element, charge, aromatic, leaving, stereo flags) and every
+bond (order, aromatic, stereo flags); coordinates are not bundled, so ideal
+and model coordinates read as absent. Anything outside the set is unknown to
+`CoreProvider` and is reported rather than guessed.
+
+Regenerate with `extract_core.py` (standard library only):
+
+```
+python3 -I extract_core.py components.cif.gz ../src/carbohydrates/snfg.rs \
+    core-components.cif 2026-10-03
+```
+
+The component list is the `CORE` table in the script plus every quoted
+identifier in `snfg.rs`, minus the large `DROP` entries. The script reports
+any requested identifier absent from the dictionary. Download the full
+dictionary from https://files.wwpdb.org/pub/pdb/data/monomers/components.cif.gz
+into an empty directory and pass its path.

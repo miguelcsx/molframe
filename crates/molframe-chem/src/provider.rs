@@ -1,12 +1,18 @@
 //! Pluggable deterministic component providers and CCD lowering.
 
+mod bundled;
+mod embedded;
 mod items;
+mod layered;
 mod lazy;
 mod lowering;
 mod validation;
 
 use crate::model::Component;
+pub use bundled::{CORE_DICTIONARY_VERSION, CoreProvider};
+pub use embedded::EmbeddedProvider;
 use items::one_finding;
+pub use layered::LayeredProvider;
 pub use lazy::LazyCifProvider;
 use lowering::component;
 use molframe_cif::Document;
@@ -33,7 +39,7 @@ pub trait ComponentProvider: Send + Sync {
 #[derive(Clone, Debug)]
 pub struct MemoryProvider {
     version: DictionaryVersion,
-    components: BTreeMap<Box<str>, Arc<Component>>,
+    pub(super) components: BTreeMap<Box<str>, Arc<Component>>,
 }
 
 impl MemoryProvider {
@@ -141,3 +147,7 @@ pub fn read_ccd(
 #[cfg(test)]
 #[path = "provider_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "provider_core_tests.rs"]
+mod core_tests;
