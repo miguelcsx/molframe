@@ -404,3 +404,7 @@ fn smarts_selection(
 #[cfg(test)]
 #[path = "eval_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "eval_universe_tests.rs"]
+mod universe_tests;
