@@ -1,6 +1,8 @@
 //! The safe view a consuming extension holds over a producer's capsule.
 
-use super::abi::{ABI_VERSION, CAPSULE_NAME, NativeSourceV2, NativeTopology};
+use super::abi::{
+    ABI_VERSION, BASE_ABI_VERSION, CAPSULE_NAME, NativeSourceV2, NativeSourceV3, NativeTopology,
+};
 use super::producer::SELECT_NULL_ARGUMENT;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyCapsule, PyCapsuleMethods};
@@ -11,7 +13,7 @@ use std::slice;
 /// Safe retained view of a `molframe.Structure` owned by another extension.
 pub struct NativeStructureSource {
     capsule: Py<PyCapsule>,
-    api: usize,
+    pub(super) api: usize,
 }
 
 impl fmt::Debug for NativeStructureSource {
@@ -39,7 +41,8 @@ impl NativeStructureSource {
     /// # Errors
     ///
     /// Returns a Python exception when the object is not a compatible
-    /// `molframe.Structure` or exposes a different ABI version.
+    /// `molframe.Structure` or exposes an ABI version outside the supported
+    /// range. The oldest supported version carries no failure channel.
     pub fn from_python(object: &Bound<'_, PyAny>) -> PyResult<Self> {
         let capsule = object.call_method0("_molframe_source_v2")?;
         let capsule = capsule.cast_into::<PyCapsule>()?;
@@ -48,7 +51,7 @@ impl NativeStructureSource {
         // SAFETY: the checked capsule name identifies a `NativeSourceV2`, its
         // first field is the ABI version, and the producer retains its storage.
         let version = unsafe { api_ref(api).abi_version };
-        if version != ABI_VERSION {
+        if !(BASE_ABI_VERSION..=ABI_VERSION).contains(&version) {
             return Err(crate::error::value(format!(
                 "unsupported MolFrame native source ABI {version}"
             )));
@@ -163,15 +166,18 @@ impl NativeStructureSource {
     ///
     /// # Errors
     ///
-    /// Returns a value error when the source cannot be encoded.
+    /// Raises the `MolFrame` exception the producer's diagnostic selects, with
+    /// its code and message, when the source cannot be encoded. A producer
+    /// that predates the failure channel yields a generic value error.
     pub fn encode_bcif(&self) -> PyResult<Vec<u8>> {
         // SAFETY: the retained checked capsule owns the callback and source.
         let size = unsafe {
             let api = api_ref(self.api);
             (api.encode_bcif)(api, std::ptr::null_mut(), 0)
         };
-        let size = usize::try_from(size)
-            .map_err(|_| crate::error::value("MolFrame BCIF encoding failed"))?;
+        let Ok(size) = usize::try_from(size) else {
+            return Err(self.encode_failure());
+        };
         let mut bytes = vec![0; size];
         // SAFETY: `bytes` has the exact capacity returned by the first call.
         let written = unsafe {
@@ -179,9 +185,42 @@ impl NativeStructureSource {
             (api.encode_bcif)(api, bytes.as_mut_ptr(), bytes.len())
         };
         if usize::try_from(written).ok() != Some(size) {
-            return Err(crate::error::value("MolFrame BCIF encoding failed"));
+            return Err(self.encode_failure());
         }
         Ok(bytes)
+    }
+
+    /// The producer's recorded reason for a failed encoding, as an exception.
+    fn encode_failure(&self) -> PyErr {
+        let generic = || crate::error::value("MolFrame BCIF encoding failed");
+        // SAFETY: `self.api` is a checked, retained capsule address.
+        if unsafe { api_ref(self.api).abi_version } < ABI_VERSION {
+            return generic();
+        }
+        // SAFETY: a version-3 producer allocates a `NativeSourceV3` whose
+        // first field is the base record `api_ref` reads.
+        let describe = unsafe { (*(self.api as *const NativeSourceV3)).describe_failure };
+        let mut code = 0u32;
+        // SAFETY: a null message with zero capacity asks only for the length.
+        let length = unsafe {
+            let api = api_ref(self.api);
+            describe(api, &raw mut code, std::ptr::null_mut(), 0)
+        };
+        let Ok(length) = usize::try_from(length) else {
+            return generic();
+        };
+        let mut message = vec![0u8; length];
+        // SAFETY: `message` is writable for `length` bytes for the whole call.
+        let written = unsafe {
+            let api = api_ref(self.api);
+            describe(api, &raw mut code, message.as_mut_ptr(), message.len())
+        };
+        match (usize::try_from(written), String::from_utf8(message)) {
+            (Ok(count), Ok(message)) if count == length => {
+                crate::error::native_failure(code, &message)
+            }
+            _ => generic(),
+        }
     }
 }
 

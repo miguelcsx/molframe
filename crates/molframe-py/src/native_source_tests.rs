@@ -1,3 +1,4 @@
+use super::abi::{NativeCapsule, NativeFailure, NativeSourceV2};
 use super::{NativeBond, NativeStructureSource};
 use crate::bindings::PyStructure;
 use pyo3::prelude::*;
@@ -216,5 +217,75 @@ fn native_bond_metadata_preserves_coordination_without_classifying_covalent_meta
             assert_eq!(topology.bonds[0].metal_coordination, coordinated);
             assert_eq!(topology.bonds[0].order, NativeBond::ORDER_SINGLE);
         }
+    });
+}
+
+/// Records `failure` as the capsule's cached encoding result.
+fn force_encode_failure(source: &NativeStructureSource, failure: NativeFailure) {
+    // SAFETY: the address is the first field of the retained capsule, which
+    // outlives `source`; the cell is only written before any encoding.
+    let capsule = unsafe { &*(source.api as *const NativeCapsule) };
+    assert!(capsule.encoded_bcif.set(Err(failure)).is_ok());
+}
+
+fn forced(code: u32, message: &str) -> NativeFailure {
+    NativeFailure {
+        code,
+        message: message.to_owned(),
+    }
+}
+
+#[test]
+fn a_failed_encoding_raises_the_molframe_exception_with_its_code_and_message() {
+    Python::initialize();
+    Python::attach(|py| {
+        crate::error::tests::install_package_for_tests(py);
+        let source = imported(py);
+        force_encode_failure(&source, forced(1103, "forced encode failure"));
+        let Err(error) = source.encode_bcif() else {
+            panic!("a recorded failure must not encode")
+        };
+        let value = error.value(py);
+        let parse = py
+            .import("molframe.errors")
+            .and_then(|module| module.getattr("ParseError"))
+            .expect("class exists");
+        assert!(value.is_instance(&parse).expect("isinstance works"));
+        let code: String = value.getattr("code").expect("code").extract().expect("str");
+        assert_eq!(code, "MOLFRAME-E1103");
+        assert!(error.to_string().contains("forced encode failure"));
+    });
+}
+
+#[test]
+fn a_failure_without_a_registered_code_is_a_value_error_that_keeps_the_text() {
+    Python::initialize();
+    Python::attach(|py| {
+        crate::error::tests::install_package_for_tests(py);
+        for (code, expected) in [(0, "forced"), (65_000, "forced (diagnostic number 65000)")] {
+            let source = imported(py);
+            force_encode_failure(&source, forced(code, "forced"));
+            let Err(error) = source.encode_bcif() else {
+                panic!("a recorded failure must not encode")
+            };
+            assert!(error.to_string().ends_with(expected), "{error}");
+        }
+    });
+}
+
+#[test]
+fn a_base_version_producer_has_no_failure_channel_and_raises_a_generic_error() {
+    Python::initialize();
+    Python::attach(|py| {
+        crate::error::tests::install_package_for_tests(py);
+        let source = imported(py);
+        force_encode_failure(&source, forced(1103, "forced encode failure"));
+        // SAFETY: the address is a live capsule; version 2 is the supported
+        // base layout, whose failure channel the consumer must not read.
+        unsafe { (*(source.api as *mut NativeSourceV2)).abi_version = 2 };
+        let Err(error) = source.encode_bcif() else {
+            panic!("a recorded failure must not encode")
+        };
+        assert!(error.to_string().contains("MolFrame BCIF encoding failed"));
     });
 }

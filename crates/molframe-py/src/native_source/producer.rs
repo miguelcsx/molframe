@@ -1,8 +1,8 @@
 //! Builds a structure's capsule and answers its C callbacks.
 
 use super::abi::{
-    ABI_VERSION, CAPSULE_NAME, NativeAtom, NativeBond, NativeCapsule, NativeSourceV2,
-    NativeTopology,
+    ABI_VERSION, CAPSULE_NAME, NativeAtom, NativeBond, NativeCapsule, NativeFailure,
+    NativeSourceV2, NativeSourceV3, NativeTopology,
 };
 use pyo3::prelude::*;
 use pyo3::types::PyCapsule;
@@ -16,7 +16,7 @@ pub(crate) fn capsule<'py>(
 ) -> PyResult<Bound<'py, PyCapsule>> {
     let topology = compact_topology(structure);
     let coordinates = structure.coordinates();
-    let api = NativeSourceV2 {
+    let base = NativeSourceV2 {
         abi_version: ABI_VERSION,
         coordinate_generation: structure.engine().generation().get(),
         coordinates: coordinates.as_ptr().cast::<f32>(),
@@ -33,6 +33,10 @@ pub(crate) fn capsule<'py>(
         bond_count: topology.bonds.len(),
         select,
         encode_bcif,
+    };
+    let api = NativeSourceV3 {
+        base,
+        describe_failure,
     };
     PyCapsule::new_with_value(
         py,
@@ -73,15 +77,9 @@ unsafe extern "C" fn encode_bcif(
 ) -> i64 {
     // SAFETY: the API is the first field of its retained capsule allocation.
     let capsule = unsafe { &*source.cast::<NativeCapsule>() };
-    let encoded = capsule.encoded_bcif.get_or_init(|| {
-        capsule
-            .structure
-            .with_transport_identifiers()
-            .map_err(|_| ())
-            .and_then(|structure| {
-                molframe::write_bcif_with_options(&structure, &transport_options()).map_err(|_| ())
-            })
-    });
+    let encoded = capsule
+        .encoded_bcif
+        .get_or_init(|| encode(&capsule.structure));
     let Ok(encoded) = encoded else {
         return -1;
     };
@@ -96,6 +94,68 @@ unsafe extern "C" fn encode_bcif(
     }
     // SAFETY: the caller supplies at least `encoded.len()` writable bytes.
     unsafe { std::ptr::copy_nonoverlapping(encoded.as_ptr(), output, encoded.len()) };
+    length
+}
+
+/// Encodes the transport payload, keeping the first diagnostic on failure.
+pub(super) fn encode(structure: &molframe::Structure) -> Result<Vec<u8>, NativeFailure> {
+    let structure = structure
+        .with_transport_identifiers()
+        .map_err(|diagnostic| failure_of(&diagnostic))?;
+    molframe::write_bcif_with_options(&structure, &transport_options()).map_err(|findings| {
+        findings
+            .as_slice()
+            .first()
+            .map_or_else(unnamed_failure, failure_of)
+    })
+}
+
+fn failure_of(diagnostic: &molframe::Diagnostic) -> NativeFailure {
+    NativeFailure {
+        code: u32::from(diagnostic.code().number()),
+        message: diagnostic.message().to_owned(),
+    }
+}
+
+fn unnamed_failure() -> NativeFailure {
+    NativeFailure {
+        code: 0,
+        message: "MolFrame BCIF encoding failed".to_owned(),
+    }
+}
+
+/// Answers a consumer's question of why the encoding failed.
+unsafe extern "C" fn describe_failure(
+    source: *const NativeSourceV2,
+    code: *mut u32,
+    output: *mut u8,
+    capacity: usize,
+) -> i64 {
+    if source.is_null() {
+        return -1;
+    }
+    // SAFETY: the API is the first field of its retained capsule allocation.
+    let capsule = unsafe { &*source.cast::<NativeCapsule>() };
+    let Some(Err(failure)) = capsule.encoded_bcif.get() else {
+        return -1;
+    };
+    let Ok(length) = i64::try_from(failure.message.len()) else {
+        return -1;
+    };
+    if !code.is_null() {
+        // SAFETY: a non-null `code` is writable for one `u32`.
+        unsafe { code.write(failure.code) };
+    }
+    if output.is_null() || capacity == 0 {
+        return length;
+    }
+    if capacity < failure.message.len() {
+        return -1;
+    }
+    // SAFETY: the caller supplies at least `message.len()` writable bytes.
+    unsafe {
+        std::ptr::copy_nonoverlapping(failure.message.as_ptr(), output, failure.message.len());
+    };
     length
 }
 

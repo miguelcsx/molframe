@@ -6,7 +6,7 @@
 //! decides what went wrong; the kernels name a registered code and the class
 //! follows from the code.
 
-use molframe::{Class, Code, Diagnostic};
+use molframe::{Class, Code, Diagnostic, Kind};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyTuple};
@@ -209,6 +209,23 @@ fn plain(name: &str, message: &str) -> PyErr {
 /// (see `diagnostic_from!`), not here.
 pub(crate) fn failure(error: impl std::fmt::Display) -> PyErr {
     plain("MolframeValueError", &error.to_string())
+}
+
+/// The exception for a failure a native producer reports as a number and text.
+///
+/// A registered number becomes the exception its diagnostic would have been
+/// raised as, with its code and remedy; zero or a number this build does not
+/// register is a `MolframeValueError` that still states the message.
+pub(crate) fn native_failure(number: u32, message: &str) -> PyErr {
+    let code = u16::try_from(number)
+        .ok()
+        .map(|number| Code::new(Kind::Error, number))
+        .filter(|code| code.is_registered());
+    match code {
+        Some(code) => from_diagnostic(&Diagnostic::new(code).with_message(message)),
+        None if number == 0 => value(message),
+        None => value(format!("{message} (diagnostic number {number})")),
+    }
 }
 
 /// A failure raised as the named `molframe.errors` class with a caller-written message.

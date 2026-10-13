@@ -4,7 +4,10 @@ use std::ffi::{CStr, c_char};
 use std::sync::{Mutex, OnceLock};
 
 pub(super) const CAPSULE_NAME: &CStr = c"molframe.StructureSource.v2";
-pub(super) const ABI_VERSION: u32 = 2;
+/// The version this producer writes: the base layout plus the failure channel.
+pub(super) const ABI_VERSION: u32 = 3;
+/// The oldest layout a consumer still reads; it has no failure channel.
+pub(super) const BASE_ABI_VERSION: u32 = 2;
 
 /// Compact renderer-facing atom metadata.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -73,6 +76,14 @@ pub struct NativeTopology {
 pub(super) type SelectFn =
     unsafe extern "C" fn(*const NativeSourceV2, *const c_char, usize, *mut u32, usize) -> i64;
 pub(super) type EncodeFn = unsafe extern "C" fn(*const NativeSourceV2, *mut u8, usize) -> i64;
+/// Reports why the last BCIF encoding failed: `(source, code, message, capacity)`.
+///
+/// Writes the diagnostic number (zero when the failure names none) through
+/// `code` when it is non-null, and returns the UTF-8 message length. A null
+/// `message` or zero `capacity` asks only for the length. Returns a negative
+/// value when no failure is recorded or the buffer is too small.
+pub(super) type FailureFn =
+    unsafe extern "C" fn(*const NativeSourceV2, *mut u32, *mut u8, usize) -> i64;
 
 #[repr(C)]
 pub(super) struct NativeSourceV2 {
@@ -94,6 +105,25 @@ pub(super) struct NativeSourceV2 {
     pub(super) encode_bcif: EncodeFn,
 }
 
+/// The version-3 layout: the base record followed by the failure channel.
+///
+/// Appending leaves every earlier field where a version-2 consumer expects
+/// it; a consumer reads `describe_failure` only after the version check.
+#[repr(C)]
+pub(super) struct NativeSourceV3 {
+    pub(super) base: NativeSourceV2,
+    pub(super) describe_failure: FailureFn,
+}
+
+/// Why an encoding failed, kept beside the cached result.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct NativeFailure {
+    /// The `MolFrame` diagnostic number, or zero when none was named.
+    pub(super) code: u32,
+    /// The diagnostic's own message.
+    pub(super) message: String,
+}
+
 // The raw pointers refer only to immutable buffers retained by the same
 // capsule. Python owns capsule destruction, and access requires an attached
 // interpreter through `NativeStructureSource`.
@@ -101,10 +131,10 @@ unsafe impl Send for NativeSourceV2 {}
 
 #[repr(C)]
 pub(super) struct NativeCapsule {
-    pub(super) api: NativeSourceV2,
+    pub(super) api: NativeSourceV3,
     pub(super) structure: molframe::Structure,
     pub(super) topology: NativeTopology,
-    pub(super) encoded_bcif: OnceLock<Result<Vec<u8>, ()>>,
+    pub(super) encoded_bcif: OnceLock<Result<Vec<u8>, NativeFailure>>,
     pub(super) queries: Mutex<crate::query_cache::QueryCache>,
     pub(super) pending: Mutex<crate::query_cache::PendingRows>,
 }

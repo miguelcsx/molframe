@@ -6,6 +6,12 @@ change the public API.
 
 ## Unreleased
 
+- **A failed native BCIF encoding reports its real cause.** The structure
+  capsule (ABI version 3) appends a failure callback returning the
+  diagnostic number and message, so a consumer such as molgfx raises the
+  matching `molframe.errors` exception with its `code` instead of a generic
+  `ValueError`. Consumers still accept version 2 producers, which have no
+  failure channel.
 - **The k-d tree is parallel and exact, and `spatial.knn` is first class.**
   The k-d tree is now an implicit, bucketed tree built and queried in
   parallel; on degenerate layouts (needle, collinear, offset, 1e6 A outliers)
