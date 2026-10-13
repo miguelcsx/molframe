@@ -40,3 +40,41 @@ def test_an_invalid_window_is_refused() -> None:
     structure = molframe.read(PDB, format="pdb")
     with pytest.raises(ValueError, match="invalid hydrogen-bond geometry"):
         molframe.analysis.heavy_atom_hydrogen_bonds(structure, min_distance=5.0)
+
+
+ROLES = """name: lab-roles
+version: 4
+source: bench notes
+licence: CC0-1.0
+amino: SER GLY
+@amino O acceptor
+SER OG donor
+"""
+
+
+def test_a_supplied_role_table_replaces_the_builtin_typing(tmp_path) -> None:
+    structure = molframe.read(PDB, format="pdb")
+    default = molframe.analysis.heavy_atom_hydrogen_bonds(structure)
+    assert "hbplus-baker-hubbard-heavy-roles" in default.applied["roles"]
+    path = tmp_path / "roles.txt"
+    path.write_text(ROLES)
+    for table in (
+        molframe.analysis.heavy_atom_hydrogen_bonds(structure, role_table=ROLES),
+        molframe.analysis.heavy_atom_hydrogen_bonds(structure, role_file=path),
+    ):
+        assert (int(table["donor"][0]), int(table["acceptor"][0])) == (0, 1)
+        assert "lab-roles 4 (source: bench notes; licence: CC0-1.0)" in table.applied["roles"]
+    acceptors_only = ROLES.replace("SER OG donor", "SER OG acceptor")
+    assert (
+        len(molframe.analysis.heavy_atom_hydrogen_bonds(structure, role_table=acceptors_only)) == 0
+    )
+
+
+def test_a_malformed_role_table_or_both_arguments_are_refused() -> None:
+    structure = molframe.read(PDB, format="pdb")
+    with pytest.raises(molframe.MolframeValueError, match="line"):
+        molframe.analysis.heavy_atom_hydrogen_bonds(
+            structure, role_table="name: lab\nSER OG fish\n"
+        )
+    with pytest.raises(molframe.MolframeValueError, match="not both"):
+        molframe.analysis.heavy_atom_hydrogen_bonds(structure, role_table=ROLES, role_file="x")

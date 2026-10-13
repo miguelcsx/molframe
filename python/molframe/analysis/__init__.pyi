@@ -44,6 +44,8 @@ def heavy_atom_hydrogen_bonds(
     covalent_distance: float = 1.9,
     include_same_residue: bool = False,
     include_sulfur: bool = False,
+    role_table: str | None = None,
+    role_file: str | os.PathLike[str] | None = None,
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     context: ExecutionContext | None = None,
 ) -> Table:
@@ -56,6 +58,10 @@ def heavy_atom_hydrogen_bonds(
     ``min_acceptor_angle`` (``None`` records it without filtering). Columns: ``donor``,
     ``acceptor``, ``distance`` and ``acceptor_angle`` (NaN without an antecedent), sorted
     by ``(donor, acceptor)``. No hydrogen is implied. Periodic images are not supported.
+
+    ``role_table`` (text) or ``role_file`` (a path) replaces the built-in typing table with
+    one you supply; Rust parses and validates it. ``Table.applied["roles"]`` names the table
+    that applied (name, version, source, licence).
     """
 
 class ArrayColumn(Protocol):

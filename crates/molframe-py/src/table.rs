@@ -9,6 +9,7 @@ use pyo3::{prelude::*, types::PyDict};
 pub(crate) struct PyTable {
     length: usize,
     columns: Vec<(&'static str, Py<PyAny>)>,
+    applied: Vec<(&'static str, String)>,
 }
 
 /// Builds a table one typed column at a time.
@@ -16,6 +17,7 @@ pub(crate) struct TableBuilder<'py> {
     py: Python<'py>,
     length: usize,
     columns: Vec<(&'static str, Py<PyAny>)>,
+    applied: Vec<(&'static str, String)>,
 }
 
 impl<'py> TableBuilder<'py> {
@@ -24,7 +26,15 @@ impl<'py> TableBuilder<'py> {
             py,
             length,
             columns: Vec::new(),
+            applied: Vec::new(),
         }
+    }
+
+    /// Records a table or policy the result was computed under, readable as
+    /// `Table.applied`.
+    pub(crate) fn applied(mut self, name: &'static str, identity: String) -> Self {
+        self.applied.push((name, identity));
+        self
     }
 
     /// Adds a `u32` atom-index column.
@@ -58,6 +68,7 @@ impl<'py> TableBuilder<'py> {
         PyTable {
             length: self.length,
             columns: self.columns,
+            applied: self.applied,
         }
     }
 }
@@ -72,6 +83,17 @@ impl PyTable {
     #[getter]
     fn names(&self) -> Vec<&'static str> {
         self.columns.iter().map(|(name, _)| *name).collect()
+    }
+
+    /// The tables and policies the result was computed under, by role, each as
+    /// name, version, source and licence. Empty when none was recorded.
+    #[getter]
+    fn applied<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dictionary = PyDict::new(py);
+        for (role, identity) in &self.applied {
+            dictionary.set_item(role, identity)?;
+        }
+        Ok(dictionary)
     }
 
     fn __getitem__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {

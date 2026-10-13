@@ -3,12 +3,18 @@
 use crate::bindings::PyStructure;
 use crate::execution::PyExecutionContext;
 use crate::table::{PyTable, TableBuilder};
-use molframe::analysis::{HeavyAtomHydrogenBondOptions, heavy_atom_hydrogen_bonds};
+use molframe::analysis::{
+    HeavyAtomHydrogenBondOptions, HeavyRoleTable, heavy_atom_hydrogen_bonds_with_roles,
+};
 use pyo3::prelude::*;
 
 /// Donor and acceptor roles come from residue and atom names, not from hydrogens.
 /// Rows are sorted by `(donor, acceptor)`; `acceptor_angle` is NaN when the acceptor
 /// has no covalent neighbour. Periodic images are not supported.
+///
+/// `role_table` (text) or `role_file` (a path) replaces the built-in typing table with one
+/// the caller supplies; Rust parses and validates it. `Table.applied["roles"]` names the
+/// table that applied: name, version, source and licence.
 #[pyfunction]
 #[pyo3(name = "heavy_atom_hydrogen_bonds", signature = (
     structure,
@@ -19,6 +25,8 @@ use pyo3::prelude::*;
     covalent_distance=1.9,
     include_same_residue=false,
     include_sulfur=false,
+    role_table=None,
+    role_file=None,
     backend="auto",
     context=None,
 ))]
@@ -35,6 +43,8 @@ fn heavy_atom_hydrogen_bonds_py(
     covalent_distance: f32,
     include_same_residue: bool,
     include_sulfur: bool,
+    role_table: Option<&str>,
+    role_file: Option<std::path::PathBuf>,
     backend: &str,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyTable> {
@@ -47,9 +57,27 @@ fn heavy_atom_hydrogen_bonds_py(
         include_sulfur,
         backend: crate::backend::parse(backend)?,
     };
+    let supplied = match (role_table, role_file) {
+        (Some(_), Some(_)) => {
+            return Err(crate::error::failure(
+                "give role_table or role_file, not both",
+            ));
+        }
+        (Some(text), None) => Some(text.to_owned()),
+        (None, Some(path)) => Some(std::fs::read_to_string(&path).map_err(|error| {
+            crate::error::failure(format!("cannot read {}: {error}", path.display()))
+        })?),
+        (None, None) => None,
+    };
+    let custom = supplied
+        .map(|text| HeavyRoleTable::parse(&text))
+        .transpose()
+        .map_err(crate::error::failure)?;
+    let roles = custom.as_ref().unwrap_or_else(|| HeavyRoleTable::builtin());
+    let identity = roles.identity().to_string();
     let source = structure.inner.clone();
     let bonds = crate::execution::run(py, context, |context| {
-        heavy_atom_hydrogen_bonds(source.engine(), options, context)
+        heavy_atom_hydrogen_bonds_with_roles(source.engine(), roles, options, context)
     })?
     .map_err(crate::error::kernel)?;
     let indices = |column: &[molframe::AtomIndex]| -> Vec<u32> {
@@ -60,6 +88,7 @@ fn heavy_atom_hydrogen_bonds_py(
         .indices("acceptor", &indices(bonds.acceptor()))
         .single("distance", bonds.distance())
         .double("acceptor_angle", bonds.acceptor_angle_degrees())
+        .applied("roles", identity)
         .finish())
 }
 
