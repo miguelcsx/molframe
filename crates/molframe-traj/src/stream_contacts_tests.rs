@@ -24,8 +24,8 @@ fn long_contact_stream_releases_each_index_and_preserves_frame_order() {
             assert_eq!(index, seen);
             assert_eq!(time, None);
             assert_eq!(count, 1);
-            // The index and partial reductions have already been released.
-            assert_eq!(context.reserved_bytes(), 4096);
+            // Only the bounded read-ahead windows stay reserved.
+            assert!(context.reserved_bytes() <= 4096 * 2 * 16);
             seen += 1;
             Ok(())
         },

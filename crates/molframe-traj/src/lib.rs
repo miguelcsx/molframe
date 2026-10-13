@@ -100,11 +100,13 @@ mod selected;
 mod stream_consume;
 mod stream_contacts;
 mod stream_metrics;
+mod stream_pipeline;
 pub use format_trr::TrrReader;
 pub use selected::{DenseChunk, FrameSlice, SelectedReader, count_frames, read_dense_chunk};
 pub use stream_consume::run_analysis_stream;
 pub use stream_contacts::contact_counts_stream;
 pub use stream_metrics::{rmsd_stream, rmsf_stream};
+pub use stream_pipeline::run_frame_pipeline;
 #[path = "dispatch/mod.rs"]
 pub mod io_dispatch;
 #[path = "diffusion.rs"]

@@ -1,11 +1,15 @@
 //! Incremental trajectory geometry with borrowed frames and retained outputs.
 
-use crate::{FrameAlignment, TrajectoryError, TrajectoryReader, run_analysis_stream};
+use crate::{
+    FrameAlignment, TrajectoryError, TrajectoryReader, run_analysis_stream, run_frame_pipeline,
+};
 use molframe_core::{ExecutionContext, execution::Retained};
 
 /// Streams one RMSD per frame without retaining the series.
 ///
-/// Reference coordinates are borrowed and remain in topology order.
+/// Reference coordinates are borrowed and remain in topology order. Frames
+/// are fitted in parallel behind a read-ahead window when the context allows
+/// more than one worker; values and their order do not depend on the count.
 ///
 /// # Errors
 ///
@@ -24,15 +28,18 @@ pub fn rmsd_stream<R: TrajectoryReader + ?Sized>(
             found: reference.len(),
         });
     }
-    run_analysis_stream(reader, context, frame_workspace_bytes, |frame, _| {
-        let value = match alignment {
+    run_frame_pipeline(
+        reader,
+        context,
+        frame_workspace_bytes,
+        |frame, _| match alignment {
             FrameAlignment::None => molframe_geom::rmsd(&frame.positions, reference)
-                .map_err(|_| TrajectoryError::DegenerateFit)?,
+                .map_err(|_| TrajectoryError::DegenerateFit),
             FrameAlignment::Rigid => molframe_geom::rmsd_after_fit(&frame.positions, reference)
-                .map_err(|_| TrajectoryError::DegenerateFit)?,
-        };
-        emit(frame.frame, frame.time, value)
-    })
+                .map_err(|_| TrajectoryError::DegenerateFit),
+        },
+        |frame, value| emit(frame.frame, frame.time, value),
+    )
 }
 
 /// Computes per-atom RMSF in one pass using Welford's recurrence.

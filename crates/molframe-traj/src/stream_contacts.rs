@@ -1,6 +1,6 @@
 //! Borrowed-frame contacts, with memory independent of trajectory length.
 
-use crate::{TrajectoryError, TrajectoryReader, run_analysis_stream};
+use crate::{TrajectoryError, TrajectoryReader, run_frame_pipeline};
 use molframe_core::{AtomSelection, ExecutionContext};
 use molframe_spatial::{PairQuery, PeriodicBox, SpatialSearchOptions, count_pairs_within};
 
@@ -8,7 +8,8 @@ use molframe_spatial::{PairQuery, PeriodicBox, SpatialSearchOptions, count_pairs
 ///
 /// Coordinates stay in the reusable reader buffer. Each frame's periodic cell
 /// is honored when present; absent cells use ordinary Cartesian distances.
-/// The spatial index and bounded parallel reductions share the reader account.
+/// Frames are counted in parallel behind a bounded read-ahead window; counts
+/// and their order do not depend on the worker budget.
 ///
 /// # Errors
 ///
@@ -27,19 +28,24 @@ pub fn contact_counts_stream<R: TrajectoryReader + ?Sized>(
     }
     options.plan(atoms as usize, atoms as usize, cutoff)?;
     let all = AtomSelection::All(atoms);
-    run_analysis_stream(reader, context, frame_workspace_bytes, |frame, context| {
-        let periodic = frame.cell.map(PeriodicBox::from_cell).transpose()?;
-        let count = count_pairs_within(&PairQuery {
-            positions: &frame.positions,
-            left: &all,
-            right: &all,
-            cutoff,
-            options,
-            periodic: periodic.as_ref(),
-            context,
-        })?;
-        emit(frame.frame, frame.time, count)
-    })
+    run_frame_pipeline(
+        reader,
+        context,
+        frame_workspace_bytes,
+        |frame, context| {
+            let periodic = frame.cell.map(PeriodicBox::from_cell).transpose()?;
+            Ok(count_pairs_within(&PairQuery {
+                positions: &frame.positions,
+                left: &all,
+                right: &all,
+                cutoff,
+                options,
+                periodic: periodic.as_ref(),
+                context,
+            })?)
+        },
+        |frame, count| emit(frame.frame, frame.time, count),
+    )
 }
 
 #[cfg(test)]
