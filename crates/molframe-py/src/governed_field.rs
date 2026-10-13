@@ -381,8 +381,13 @@ pub(crate) fn contacts_by_definition(
 /// area is that of the atom among its symmetry mates. The value is an array with one area
 /// (square ångström) per analysed atom, `NaN` where an atom is left out; use
 /// `atom_origin` to tie it to the input.
+///
+/// `radii_table` (text) or `radii_file` (a path) replaces the policy's radius set with a
+/// table the caller supplies; Rust parses and validates it. The result's `vdw_radii`
+/// assumption and its `radii_table` parameter name the table that applied, by name, version,
+/// source and licence.
 #[pyfunction]
-#[pyo3(signature = (structure, *, probe=None, method=None, n_points=None, hetero=None, metals=None, policy=None, context=None))]
+#[pyo3(signature = (structure, *, probe=None, method=None, n_points=None, hetero=None, metals=None, radii_table=None, radii_file=None, policy=None, context=None))]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sasa(
     py: Python<'_>,
@@ -392,11 +397,30 @@ pub(crate) fn sasa(
     n_points: Option<u16>,
     hetero: Option<&str>,
     metals: Option<&str>,
+    radii_table: Option<&str>,
+    radii_file: Option<std::path::PathBuf>,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
-    let options = molframe::SasaOptions::from_words(method, n_points, probe, hetero, metals)
+    let mut options = molframe::SasaOptions::from_words(method, n_points, probe, hetero, metals)
         .map_err(crate::error::failure)?;
+    let table = match (radii_table, radii_file) {
+        (Some(_), Some(_)) => {
+            return Err(crate::error::failure(
+                "give radii_table or radii_file, not both",
+            ));
+        }
+        (Some(text), None) => Some(text.to_owned()),
+        (None, Some(path)) => Some(std::fs::read_to_string(&path).map_err(|error| {
+            crate::error::failure(format!("cannot read {}: {error}", path.display()))
+        })?),
+        (None, None) => None,
+    };
+    if let Some(text) = table {
+        options = options
+            .with_radii_table(&text)
+            .map_err(crate::error::failure)?;
+    }
     let kernel = molframe::analysis::sasa_kernel(options);
     run(
         py,

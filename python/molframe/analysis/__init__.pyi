@@ -1,3 +1,4 @@
+import os
 from collections.abc import Sequence
 from typing import Literal, Protocol, Self
 
@@ -380,6 +381,8 @@ def sasa(
     n_points: int | None = None,
     hetero: str | None = None,
     metals: str | None = None,
+    radii_table: str | None = None,
+    radii_file: str | os.PathLike[str] | None = None,
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[Float64Array]:
@@ -404,4 +407,11 @@ def sasa(
     occlude their neighbours. An included atom whose element has no radius in the set (iron
     under ``bondi`` with ``metals="none"``) makes the result ``partial`` with a ``W6004``
     warning naming the element and ``vdw_radii``.
+
+    ``radii_table`` (the text) or ``radii_file`` (a path), not both, replaces the policy's radius
+    set with a table you supply: ``name:``, ``version:``, ``source:`` and ``licence:`` header
+    lines, an optional ``base:`` set, then one ``Symbol radius`` row per element. Rust parses
+    and validates it, and a malformed table raises ``MolframeValueError`` naming the line. The
+    result records the table that applied, by name, version, source and licence, in its
+    ``vdw_radii`` assumption and its ``radii_table`` parameter.
     """
