@@ -23,8 +23,12 @@ mod molecule_structure;
 mod numeric;
 mod peoe;
 mod provider;
+mod radii_defaults;
 mod radius_policy;
 mod radius_policy_text;
+mod radius_report;
+mod radius_source;
+mod radius_table;
 mod roles;
 mod secondary;
 mod side_chain;
@@ -34,6 +38,7 @@ mod smarts_parse;
 mod standard_bonds;
 mod standard_components;
 mod standard_roles;
+mod table_identity;
 
 pub use annotate::{
     ChemistryProvenance, ChemistryReport, FormalChargeSource, HBOND_WEAK_ACCEPTOR_ANNOTATION,
@@ -83,12 +88,20 @@ pub use provider::{
     EMBEDDED_COMPONENTS_EXTENSION, EmbeddedProvider, LayeredProvider, LazyCifProvider,
     MemoryProvider, embedded_components, read_ccd, resolution_stack,
 };
+pub use radii_defaults::{
+    ALVAREZ as ALVAREZ_RADII, AMBER_UNITED as AMBER_UNITED_RADII, BONDI as BONDI_RADII,
+    CHARMM as CHARMM_RADII, METAL_SITE_TABLE, PYYKKO_COVALENT as PYYKKO_COVALENT_RADII,
+    SHANNON_IONIC as SHANNON_IONIC_RADII,
+};
 pub use radius_policy::{
     HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, included_atoms,
-    policy_radii, radius_with_fallback,
+    policy_radii, radius_with_fallback, source_radius_with_fallback,
 };
-pub use roles::{
 pub use radius_policy_text::PolicyWordError;
+pub use radius_report::AppliedRadiusPolicy;
+pub use radius_source::RadiusSource;
+pub use radius_table::{CustomRadii, RadiusTableError};
+pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };
 pub use secondary::{
@@ -104,3 +117,4 @@ pub use standard_components::{annotate_standard_components, standard_component_k
 pub use standard_roles::{
     STANDARD_PROTEIN_ROLE_PROFILE, annotate_standard_protein_roles, standard_protein_atom_role,
 };
+pub use table_identity::TableIdentity;

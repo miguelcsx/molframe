@@ -5,6 +5,7 @@
 //! for another because that would change geometric results silently.
 
 use crate::element_data::ELEMENTS;
+use crate::radii_defaults::{AMBER_UNITED_RADII, CHARMM_RADII, lookup};
 use molframe_core::Element;
 
 /// Scalar reference properties of one element.
@@ -108,6 +109,17 @@ impl RadiusSet {
 }
 
 impl RadiusSet {
+    /// Name, version, source and licence of the table this value selects.
+    #[must_use]
+    pub const fn identity(self) -> crate::TableIdentity {
+        match self {
+            Self::Bondi => crate::radii_defaults::BONDI,
+            Self::AmberUnited => crate::radii_defaults::AMBER_UNITED,
+            Self::Charmm => crate::radii_defaults::CHARMM,
+            Self::Alvarez => crate::radii_defaults::ALVAREZ,
+        }
+    }
+
     /// The words a radius set can be spelled with, in declaration order.
     pub const NAMES: &'static [&'static str] = &["bondi", "amber-united", "charmm", "alvarez"];
 
@@ -204,8 +216,8 @@ pub fn vdw_radius(element: Element, set: RadiusSet) -> Option<f32> {
     let z = element.atomic_number() as usize;
     match set {
         RadiusSet::Bondi => ELEMENTS.get(z).and_then(|element| element.bondi),
-        RadiusSet::AmberUnited => amber(element),
-        RadiusSet::Charmm => charmm(element),
+        RadiusSet::AmberUnited => lookup(AMBER_UNITED_RADII, element.symbol()),
+        RadiusSet::Charmm => lookup(CHARMM_RADII, element.symbol()),
         RadiusSet::Alvarez => ELEMENTS.get(z).and_then(|element| element.alvarez),
     }
 }
@@ -331,32 +343,6 @@ const ATOMIC_WEIGHTS: [f64; 119] = [
     294.0,
     294.0,
 ];
-
-fn amber(element: Element) -> Option<f32> {
-    Some(match element.symbol() {
-        "H" => 1.0,
-        "C" | "N" => 1.8,
-        "O" => 1.6,
-        "F" => 1.55,
-        "P" => 2.1,
-        "S" | "Cl" => 2.0,
-        "W" => 1.4,
-        _ => return None,
-    })
-}
-
-fn charmm(element: Element) -> Option<f32> {
-    Some(match element.symbol() {
-        "H" => 1.25,
-        "C" | "S" => 2.0,
-        "N" => 1.85,
-        "O" => 1.70,
-        "F" => 1.47,
-        "P" => 2.15,
-        "Cl" => 1.75,
-        _ => return None,
-    })
-}
 
 #[cfg(test)]
 #[path = "element_tests.rs"]

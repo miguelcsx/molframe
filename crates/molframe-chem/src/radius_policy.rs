@@ -17,7 +17,7 @@
 
 use crate::metal::{MetalRadiusKind, metal_radius};
 use crate::standard_bonds::{is_amino_acid_component, is_water_component};
-use crate::{ComponentKind, RadiusSet, vdw_radius};
+use crate::{ComponentKind, RadiusSet, RadiusSource};
 use molframe_core::annotation::AtomAnnotation;
 use molframe_core::column::Presence;
 use molframe_core::structure::{ResidueRef, Structure};
@@ -91,10 +91,11 @@ pub enum MetalFallback {
 }
 
 /// A complete, explicit radius assignment.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RadiusPolicy {
-    /// Radius set for every element it covers.
-    pub set: RadiusSet,
+    /// Radius source for every element it covers: a built-in set or the
+    /// caller's own table.
+    pub source: RadiusSource,
     /// Source for metals the set does not cover.
     pub metals: MetalFallback,
     /// Heteroatom classes that take part.
@@ -104,7 +105,7 @@ pub struct RadiusPolicy {
 impl Default for RadiusPolicy {
     fn default() -> Self {
         Self {
-            set: RadiusSet::Bondi,
+            source: RadiusSource::default(),
             metals: MetalFallback::default(),
             hetero: HeteroPolicy::POLYMER,
         }
@@ -119,7 +120,18 @@ pub fn radius_with_fallback(
     set: RadiusSet,
     metals: MetalFallback,
 ) -> Option<f32> {
-    vdw_radius(element, set).or_else(|| match metals {
+    source_radius_with_fallback(element, &RadiusSource::Set(set), metals)
+}
+
+/// The radius of one element from `source`, drawing on the metal table under
+/// `metals` when the source has no value for it.
+#[must_use]
+pub fn source_radius_with_fallback(
+    element: molframe_core::Element,
+    source: &RadiusSource,
+    metals: MetalFallback,
+) -> Option<f32> {
+    source.radius(element).or_else(|| match metals {
         MetalFallback::None => None,
         MetalFallback::Vdw => metal_radius(element, MetalRadiusKind::Vdw),
         MetalFallback::Ionic => metal_radius(element, MetalRadiusKind::Ionic),
@@ -203,9 +215,9 @@ pub fn policy_radii(structure: &Structure, policy: &RadiusPolicy) -> Vec<f32> {
         if !matches!(included.get(index), Some(true)) {
             continue;
         }
-        let radius = atom
-            .element()
-            .and_then(|element| radius_with_fallback(element, policy.set, policy.metals));
+        let radius = atom.element().and_then(|element| {
+            source_radius_with_fallback(element, &policy.source, policy.metals)
+        });
         if let (Some(radius), Some(slot)) = (radius, radii.get_mut(index)) {
             *slot = radius;
         }
