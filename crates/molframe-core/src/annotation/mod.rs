@@ -3,5 +3,5 @@
 mod band;
 mod model;
 
-pub use band::PlddtBand;
+pub use band::{MISSING_BAND_CODE, PlddtBand};
 pub use model::*;

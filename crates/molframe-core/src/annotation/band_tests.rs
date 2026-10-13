@@ -1,4 +1,6 @@
-use super::PlddtBand;
+use super::{MISSING_BAND_CODE, PlddtBand};
+use crate::annotation::AnnotationColumn;
+use crate::column::Presence;
 
 #[test]
 fn boundaries_belong_to_the_lower_band() {
@@ -33,4 +35,20 @@ fn names_round_trip_and_bounds_are_consistent() {
 #[test]
 fn bands_are_ordered_by_confidence() {
     assert!(PlddtBand::VeryLow < PlddtBand::VeryHigh);
+}
+
+#[test]
+fn codes_mark_unrecorded_scores_as_missing() {
+    let column = AnnotationColumn::from_entries([
+        (95.0, Presence::Present),
+        (60.0, Presence::Present),
+        (0.0, Presence::Unknown),
+        (30.0, Presence::Present),
+        (80.0, Presence::Present),
+    ])
+    .expect("column");
+    assert_eq!(
+        PlddtBand::codes(&column),
+        vec![3, 1, MISSING_BAND_CODE, 0, 2]
+    );
 }

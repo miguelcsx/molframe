@@ -8,8 +8,9 @@ use crate::bindings::PyStructure;
 use molframe::formats::modelcif::{
     DensePae, ModelCifExt, PaeKind, PaeMatrix, PaePolicy, PaeStorage, read_pae_json as import_json,
 };
+use molframe::{AtomAnnotation, MISSING_BAND_CODE, PLDDT_ANNOTATION, PlddtBand};
 use numpy::ndarray::ArrayView2;
-use numpy::{PyArray2, PyArrayMethods};
+use numpy::{PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use std::path::PathBuf;
@@ -237,8 +238,38 @@ fn pae(structure: &PyStructure) -> Option<PyPaeMatrix> {
     })
 }
 
+/// Confidence band of every atom as `uint8`: 0 (`very_low`) to 3 (`very_high`), 255 unscored.
+///
+/// Returns None when the structure carries no pLDDT. The classification runs in Rust.
+#[pyfunction]
+fn plddt_bands<'py>(py: Python<'py>, structure: &PyStructure) -> Option<Bound<'py, PyArray1<u8>>> {
+    match structure.inner.annotations().get(PLDDT_ANNOTATION) {
+        Some(AtomAnnotation::Real(column)) => {
+            Some(PyArray1::from_vec(py, PlddtBand::codes(column)))
+        }
+        _ => None,
+    }
+}
+
+/// Band names indexed by the codes `plddt_bands` returns.
+#[pyfunction]
+fn plddt_band_names() -> Vec<&'static str> {
+    PlddtBand::ALL.iter().map(|band| band.name()).collect()
+}
+
+/// Conventional sRGB colour of each band as a `(4, 3)` `uint8` array.
+#[pyfunction]
+fn plddt_band_colors(py: Python<'_>) -> PyResult<Bound<'_, PyArray2<u8>>> {
+    let flat: Vec<u8> = PlddtBand::ALL.iter().flat_map(|band| band.rgb()).collect();
+    PyArray1::from_vec(py, flat).reshape((PlddtBand::ALL.len(), 3))
+}
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyPaeMatrix>()?;
     module.add_function(wrap_pyfunction!(read_pae_json, module)?)?;
-    module.add_function(wrap_pyfunction!(pae, module)?)
+    module.add_function(wrap_pyfunction!(pae, module)?)?;
+    module.add_function(wrap_pyfunction!(plddt_bands, module)?)?;
+    module.add_function(wrap_pyfunction!(plddt_band_names, module)?)?;
+    module.add_function(wrap_pyfunction!(plddt_band_colors, module)?)?;
+    module.add("PLDDT_UNSCORED", MISSING_BAND_CODE)
 }

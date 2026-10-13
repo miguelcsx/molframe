@@ -50,3 +50,17 @@ def read_pae_json(
     max_bytes: int | None = None,
 ) -> PaeMatrix:
     """Import an AlphaFold-style PAE JSON file as a dense matrix."""
+
+PLDDT_UNSCORED: int
+
+def plddt_bands(structure: Structure) -> np.ndarray | None:
+    """Return each atom's confidence band as uint8, or None without pLDDT.
+
+    Codes index ``plddt_band_names()``; ``PLDDT_UNSCORED`` marks atoms with no score.
+    """
+
+def plddt_band_names() -> list[str]:
+    """Return the band names, least to most confident."""
+
+def plddt_band_colors() -> np.ndarray:
+    """Return the conventional sRGB colour of each band as a ``(4, 3)`` uint8 array."""

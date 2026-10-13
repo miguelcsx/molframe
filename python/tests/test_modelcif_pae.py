@@ -138,3 +138,30 @@ def test_budget_and_bad_quantise_are_refused(tmp_path: Path) -> None:
         molframe.modelcif.read_pae_json(path, max_bytes=1)
     with pytest.raises(ValueError, match="quantise"):
         molframe.modelcif.read_pae_json(path, quantise="int4")  # pyright: ignore[reportArgumentType]
+
+
+PLDDT_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "crates"
+    / "molframe-py"
+    / "tests"
+    / "data"
+    / "modelcif_plddt.cif"
+)
+
+
+def test_confidence_bands_agree_with_selection_and_carry_colours() -> None:
+    structure = molframe.read(PLDDT_FIXTURE)
+    bands = molframe.modelcif.plddt_bands(structure)
+    assert bands is not None
+    names = molframe.modelcif.plddt_band_names()
+    assert names == ["very_low", "low", "confident", "very_high"]
+    colours = molframe.modelcif.plddt_band_colors()
+    assert colours.shape == (4, 3)
+    assert colours.dtype == np.uint8
+    scored = bands != molframe.modelcif.PLDDT_UNSCORED
+    assert scored.any()
+    assert not scored.all()
+    for code, name in enumerate(names):
+        selected = structure.select(f"plddt_{name}")
+        assert len(selected) == int((bands == code).sum()), name
