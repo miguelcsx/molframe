@@ -31,6 +31,25 @@ pub(crate) fn label_rewrites(structure: &Structure) -> Vec<Diagnostic> {
     findings
 }
 
+/// The PAE matrix stored under an approximate policy, with its worst error.
+///
+/// Written cells are the stored approximations, so they differ from the
+/// values the source file carried by up to the reported amount.
+#[cfg(feature = "modelcif")]
+pub(crate) fn quantised_confidence(structure: &Structure) -> Option<Diagnostic> {
+    let model = structure
+        .extensions()
+        .get::<molframe_modelcif::ModelCif>(molframe_modelcif::MODEL_CIF_EXTENSION)?;
+    let matrix = model.dense_pae()?.matrix();
+    (!matrix.is_exact()).then(|| {
+        Diagnostic::new(Code::W4101).with_message(format!(
+            "the PAE matrix is stored quantised; written values differ from the source \
+             by up to {}",
+            matrix.max_quantisation_error()
+        ))
+    })
+}
+
 /// One finding naming every extension the target format has no place for.
 pub(crate) fn uncarried_extensions(
     structure: &Structure,

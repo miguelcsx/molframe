@@ -178,6 +178,28 @@ impl ModelCif {
         self.pae = Some(dense);
         Ok(true)
     }
+
+    /// Swaps the stored matrix for one of the same side, such as a requantised copy.
+    ///
+    /// The matrix is moved in, not copied. Writers then report its quantisation
+    /// error when it is not exact.
+    ///
+    /// # Errors
+    ///
+    /// Returns a size mismatch when there is no dense PAE or the sides differ.
+    pub fn replace_pae_matrix(&mut self, matrix: PaeMatrix) -> Result<(), ConfidenceError> {
+        let current = self.pae.as_ref().map_or(0, |dense| dense.matrix.size());
+        match self.pae.as_mut() {
+            Some(dense) if current == matrix.size() => {
+                dense.matrix = matrix;
+                Ok(())
+            }
+            _ => Err(ConfidenceError::SizeMismatch {
+                residues: current,
+                matrix: matrix.size(),
+            }),
+        }
+    }
 }
 
 fn build(

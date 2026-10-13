@@ -88,6 +88,8 @@ pub(crate) fn cif_family_findings(structure: &Structure) -> Findings {
         &super::loss::cif_carried(),
         "mmCIF",
     ));
+    #[cfg(feature = "modelcif")]
+    findings.extend(super::loss::quantised_confidence(structure.engine()));
     Findings::from(findings)
 }
 

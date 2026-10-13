@@ -87,3 +87,25 @@ fn gaps_extra_items_and_inexact_values_stay_compact() {
     let dense = dense.dense_pae().expect("tenths are exact fixed point");
     assert_eq!(dense.matrix().get_f64(2, 2), Some(0.9));
 }
+
+#[test]
+fn a_replacement_matrix_must_keep_the_side() {
+    use crate::{PaeLayout, PaeMatrix};
+    let layout = PaeLayout {
+        kind: PaeKind::U8,
+        denominator: 1,
+        decimals: None,
+    };
+    let mut model = model(&table(&GRID));
+    let wrong = PaeMatrix::zeroed(2, layout, 1 << 10).expect("matrix");
+    assert!(model.replace_pae_matrix(wrong).is_err());
+    let right = PaeMatrix::zeroed(3, layout, 1 << 10).expect("matrix");
+    model.replace_pae_matrix(right).expect("same side");
+    assert_eq!(
+        model.dense_pae().map(|dense| dense.matrix().kind()),
+        Some(PaeKind::U8)
+    );
+    let mut empty = ModelCif::default();
+    let none = PaeMatrix::zeroed(1, layout, 1 << 10).expect("matrix");
+    assert!(empty.replace_pae_matrix(none).is_err());
+}
