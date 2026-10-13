@@ -27,8 +27,8 @@ pub(crate) struct NativeContactArguments {
     #[arg(long)]
     pub(crate) cutoff: f32,
     /// A contact is kept when the target distance is at most the cutoff plus this many Angstrom (0 demands it be within the cutoff again).
-    #[arg(long, default_value_t = 0.0)]
-    pub(crate) tolerance: f32,
+    #[arg(long = "contact-tolerance", default_value_t = 0.0)]
+    pub(crate) contact_tolerance: f32,
     /// How target atoms are paired with reference atoms.
     #[arg(long = "match", value_enum, default_value_t = AtomMatch::Index)]
     pub(crate) atom_match: AtomMatch,

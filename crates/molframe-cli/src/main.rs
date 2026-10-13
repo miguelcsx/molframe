@@ -43,9 +43,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub(crate) use args::{
-    AltlocArgument, AssemblyArgument, AtomMatch, AuditArguments, BatchCommand, CcdArguments,
-    ChemCommand, ContactMapArguments, CrystalCommand, EnsembleCommand, ExtraMetricArguments,
-    FxCommand, GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
+    AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, ChemCommand,
+    ContactMapArguments, CrystalCommand, EnsembleCommand, ExtraMetricArguments, FxCommand,
+    GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
     ModelArgument, MtzTable, NamespaceArgument, NativeContactArguments, NormalModeArguments,
     PairwiseMode, SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand,
     TrajectoryCommand, TreeMethod, ValidateArguments,

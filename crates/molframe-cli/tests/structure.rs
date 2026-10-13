@@ -53,7 +53,7 @@ fn a_rigid_motion_keeps_every_native_contact() {
             moved.to_str().expect("path"),
             "--cutoff",
             "4.5",
-            "--tolerance",
+            "--contact-tolerance",
             "0.0",
         ],
     );
@@ -77,7 +77,7 @@ fn moving_a_chain_away_breaks_its_native_contacts() {
             apart.to_str().expect("path"),
             "--cutoff",
             "4.5",
-            "--tolerance",
+            "--contact-tolerance",
             "0.0",
         ],
     );

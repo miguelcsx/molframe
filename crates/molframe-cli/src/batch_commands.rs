@@ -60,8 +60,9 @@ fn convert(patterns: &[String], format: &str, outdir: &Path, context: Context) -
         if output.exists() {
             return Err(format!("destination exists: {}", output.display()));
         }
-        let (structure, _findings) = molframe::read_with_options_in(input, &context.read_options(), context.execution)
-            .map_err(|findings| findings_message(&findings))?;
+        let (structure, _findings) =
+            molframe::read_with_options_in(input, &context.read_options(), context.execution)
+                .map_err(|findings| findings_message(&findings))?;
         molframe::write(output, &structure).map_err(|findings| findings_message(&findings))?;
         Ok(vec![
             input.display().to_string(),

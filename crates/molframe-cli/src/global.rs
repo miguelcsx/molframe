@@ -21,9 +21,10 @@ pub(crate) struct GlobalOptions {
     /// Maximum Rust workers shared by every operation; zero uses pool capacity.
     #[arg(long, global = true, default_value_t = 0)]
     pub workers: usize,
-    /// Complete retained-memory budget for the native execution graph.
-    #[arg(long, global = true, default_value_t = 100_000_000)]
-    pub memory_budget: usize,
+    /// Complete retained-memory budget in bytes for the native execution graph.
+    /// Defaults to a share of physical memory; `MOLFRAME_MEMORY_BUDGET` overrides it.
+    #[arg(long, global = true)]
+    pub memory_budget: Option<usize>,
     /// Directory for deterministic, bounded native spill files.
     #[arg(long, global = true, requires = "spill_budget")]
     pub spill_directory: Option<PathBuf>,
@@ -166,33 +167,12 @@ impl GlobalOptions {
                 None => default_output_format(),
             },
         };
-        let memory = molframe_core::MemoryBudget::new(self.memory_budget).map_err(|error| {
-            molframe::PolicyConfigError::InvalidValue {
-                field: "memory-budget",
-                value: error.to_string(),
-            }
-        })?;
-        let mut execution = molframe_core::ExecutionContext::builder()
-            .memory_budget(memory)
-            .scratch_policy(molframe_core::ScratchPolicy::new(
-                self.memory_budget.min(8_000_000),
-            ));
-        if self.workers > 0 {
-            execution = execution.worker_budget(self.workers);
-        }
-        if let Some(directory) = self.spill_directory {
-            execution = execution.temp_storage_policy(molframe_core::TempStoragePolicy::directory(
-                directory,
-                self.spill_budget,
-            ));
-        }
-        let execution =
-            execution
-                .build()
-                .map_err(|error| molframe::PolicyConfigError::InvalidValue {
-                    field: "execution-context",
-                    value: error.to_string(),
-                })?;
+        let execution = execution_context(
+            self.memory_budget,
+            self.workers,
+            self.spill_directory,
+            self.spill_budget,
+        )?;
         let execution = Box::leak(Box::new(execution));
         Ok(Context {
             format: format.into(),
@@ -313,4 +293,42 @@ fn default_output_format() -> OutputFormat {
     } else {
         OutputFormat::Json
     }
+}
+
+/// The execution context the global resource options describe.
+fn execution_context(
+    memory_budget: Option<usize>,
+    workers: usize,
+    spill_directory: Option<PathBuf>,
+    spill_budget: u64,
+) -> Result<molframe_core::ExecutionContext, molframe::PolicyConfigError> {
+    let memory = match memory_budget {
+        Some(bytes) => molframe_core::MemoryBudget::new(bytes).map_err(|error| {
+            molframe::PolicyConfigError::InvalidValue {
+                field: "memory-budget",
+                value: error.to_string(),
+            }
+        })?,
+        None => molframe_core::MemoryBudget::default(),
+    };
+    let mut execution = molframe_core::ExecutionContext::builder()
+        .memory_budget(memory)
+        .scratch_policy(molframe_core::ScratchPolicy::new(
+            memory.bytes().min(8_000_000),
+        ));
+    if workers > 0 {
+        execution = execution.worker_budget(workers);
+    }
+    if let Some(directory) = spill_directory {
+        execution = execution.temp_storage_policy(molframe_core::TempStoragePolicy::directory(
+            directory,
+            spill_budget,
+        ));
+    }
+    execution
+        .build()
+        .map_err(|error| molframe::PolicyConfigError::InvalidValue {
+            field: "execution-context",
+            value: error.to_string(),
+        })
 }

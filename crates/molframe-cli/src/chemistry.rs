@@ -136,7 +136,18 @@ pub(crate) fn annotate(
     version: &str,
     context: Context,
 ) -> Result<molframe::Structure, Exit> {
-    let provider = load_ccd(path, version, context)?;
+    // Annotation touches only the components the structure uses, so the
+    // dictionary is indexed and lowered on demand instead of read whole.
+    let provider = match molframe::open_component_dictionary(
+        path,
+        molframe::DictionaryVersion::new(version),
+    ) {
+        Ok(provider) => provider,
+        Err(findings) => {
+            context.findings(&findings, &path.display().to_string());
+            return Err(Exit::of(&findings));
+        }
+    };
     match molframe::chemistry::apply_component_chemistry(
         structure.engine(),
         &provider,
