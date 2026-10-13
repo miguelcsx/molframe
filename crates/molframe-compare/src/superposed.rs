@@ -20,7 +20,7 @@ use rayon::prelude::*;
 
 use crate::failure::CompareError;
 use crate::numeric::usize_to_f64;
-use crate::seed_search::{Objective, maximise};
+use crate::seed_search::{Objective, Schedule, maximise};
 
 pub use crate::gdt::{gdt_ha, gdt_ts, gdt_with_cutoffs};
 
@@ -47,6 +47,18 @@ pub use crate::gdt::{gdt_ha, gdt_ts, gdt_with_cutoffs};
 /// [`CompareError::Superpose`] when no fit exists (fewer than three points, or a
 /// degenerate arrangement).
 pub fn tm_score(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, CompareError> {
+    tm_score_scheduled(model, reference, Schedule::Pool)
+}
+
+/// [`tm_score`] with its seeds and polish starts placed by `schedule`.
+///
+/// The value does not depend on the schedule: every seed is independent and
+/// results are reduced in seed order.
+pub(crate) fn tm_score_scheduled(
+    model: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    schedule: Schedule,
+) -> Result<f64, CompareError> {
     if model.len() != reference.len() {
         return Err(CompareError::LengthMismatch {
             model: model.len(),
@@ -63,7 +75,7 @@ pub fn tm_score(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Compa
     // near their targets and refitting, scored by the TM sum. See
     // `crate::seed_search` for the seed schedule, the bound on its cost and why
     // the result does not depend on the number of workers.
-    let outcome = maximise(model, reference, &Objective::tm(scale), whole);
+    let outcome = maximise(model, reference, &Objective::tm(scale), whole, schedule);
     best_score = best_score.max(outcome.scores[0]);
 
     // Reweighted polish of the leading transforms. The gradient of
@@ -74,10 +86,11 @@ pub fn tm_score(model: &[[f32; 3]], reference: &[[f32; 3]]) -> Result<f64, Compa
     let starts: Vec<molframe_geom::Rigid> = std::iter::once(whole)
         .chain(outcome.leaders.iter().copied())
         .collect();
-    let polished: Vec<f64> = starts
-        .par_iter()
-        .map(|&start| reweighted_score(start, model, reference, scale))
-        .collect();
+    let polish = |&start: &molframe_geom::Rigid| reweighted_score(start, model, reference, scale);
+    let polished: Vec<f64> = match schedule {
+        Schedule::Pool => starts.par_iter().map(polish).collect(),
+        Schedule::Inline => starts.iter().map(polish).collect(),
+    };
     for score in polished {
         best_score = best_score.max(score);
     }

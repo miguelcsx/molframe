@@ -61,7 +61,7 @@ use molframe_geom::superpose;
 
 use crate::failure::CompareError;
 use crate::numeric::usize_to_f64;
-use crate::seed_search::{Objective, maximise, per_atom};
+use crate::seed_search::{Objective, Schedule, maximise, per_atom};
 
 /// The four distance cutoffs GDT-TS (total score) averages over, in ångström.
 const GDT_TS_CUTOFFS: [f64; 4] = [1.0, 2.0, 4.0, 8.0];
@@ -124,7 +124,13 @@ pub fn gdt_with_cutoffs(
     // search.
     let whole = superpose(model, reference).map_err(CompareError::Superpose)?;
     let objective = Objective::gdt(cutoffs);
-    let outcome = maximise(model, reference, &objective, whole.transform);
+    let outcome = maximise(
+        model,
+        reference,
+        &objective,
+        whole.transform,
+        Schedule::Pool,
+    );
     let fractions: f64 = outcome
         .scores
         .iter()

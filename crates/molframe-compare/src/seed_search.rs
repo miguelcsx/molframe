@@ -58,6 +58,16 @@ const POLISH_ITERATIONS: usize = 10;
 /// Seed transforms per tracked score that are carried to the full atom list.
 const CANDIDATES_PER_SLOT: usize = 8;
 
+/// Where the independent seeds of one search run.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Schedule {
+    /// Across the shared rayon pool, one scratch per task.
+    Pool,
+    /// On the calling thread with one scratch, for callers that already
+    /// parallelise over many searches.
+    Inline,
+}
+
 /// Two aligned coordinate lists.
 #[derive(Clone, Copy)]
 struct Problem<'a> {
@@ -241,6 +251,7 @@ pub(crate) fn maximise(
     reference: &[[f32; 3]],
     objective: &Objective,
     whole: Rigid,
+    schedule: Schedule,
 ) -> Outcome {
     let length = reference.len();
     let slots = objective.slots();
@@ -261,13 +272,24 @@ pub(crate) fn maximise(
     };
 
     let seed_list = seeds(search.reference.len());
-    let results: Vec<Best> = seed_list
-        .par_iter()
-        .map_init(
-            || Scratch::new(search.reference.len(), slots),
-            |scratch, &(start, fragment)| run_seed(search, objective, scratch, start, fragment),
-        )
-        .collect();
+    let results: Vec<Best> = match schedule {
+        Schedule::Pool => seed_list
+            .par_iter()
+            .map_init(
+                || Scratch::new(search.reference.len(), slots),
+                |scratch, &(start, fragment)| run_seed(search, objective, scratch, start, fragment),
+            )
+            .collect(),
+        Schedule::Inline => {
+            let mut scratch = Scratch::new(search.reference.len(), slots);
+            seed_list
+                .iter()
+                .map(|&(start, fragment)| {
+                    run_seed(search, objective, &mut scratch, start, fragment)
+                })
+                .collect()
+        }
+    };
 
     let mut total = Best::new(slots);
     if !sampled {
@@ -311,8 +333,42 @@ pub(crate) fn maximise(
         };
     }
 
-    // Sampled search: take every candidate (and the full-length fit, once per
-    // track) to the full atom list.
+    polish_sampled(
+        PolishInput {
+            full,
+            objective,
+            whole,
+            schedule,
+        },
+        &candidates,
+        total,
+    )
+}
+
+/// The inputs shared by every polish job of a sampled search.
+#[derive(Clone, Copy)]
+struct PolishInput<'a> {
+    full: Problem<'a>,
+    objective: &'a Objective,
+    whole: Rigid,
+    schedule: Schedule,
+}
+
+/// Takes every candidate (and the full-length fit, once per track) to the full
+/// atom list, merging the polished results into `total`.
+fn polish_sampled(
+    input: PolishInput<'_>,
+    candidates: &[(usize, Rigid)],
+    mut total: Best,
+) -> Outcome {
+    let PolishInput {
+        full,
+        objective,
+        whole,
+        schedule,
+    } = input;
+    let length = full.reference.len();
+    let slots = objective.slots();
     let mut jobs: Vec<(usize, Rigid)> = candidates
         .iter()
         .map(|&(slot, transform)| (slot, transform))
@@ -320,21 +376,27 @@ pub(crate) fn maximise(
     for track in 0..objective.select.len() {
         jobs.push((track, whole));
     }
-    let polished: Vec<Best> = jobs
-        .par_iter()
-        .map_init(
-            || Scratch::new(length, slots),
-            |scratch, &(track_hint, transform)| {
-                polish(
-                    full,
-                    objective,
-                    scratch,
-                    objective.select_for(track_hint),
-                    transform,
-                )
-            },
+    let polish_job = |scratch: &mut Scratch, &(track_hint, transform): &(usize, Rigid)| {
+        polish(
+            full,
+            objective,
+            scratch,
+            objective.select_for(track_hint),
+            transform,
         )
-        .collect();
+    };
+    let polished: Vec<Best> = match schedule {
+        Schedule::Pool => jobs
+            .par_iter()
+            .map_init(|| Scratch::new(length, slots), polish_job)
+            .collect(),
+        Schedule::Inline => {
+            let mut scratch = Scratch::new(length, slots);
+            jobs.iter()
+                .map(|job| polish_job(&mut scratch, job))
+                .collect()
+        }
+    };
     let mut leaders = Vec::new();
     for result in &polished {
         total.merge(result);
