@@ -9,6 +9,7 @@ description = "Solvent-accessible and molecular surfaces for molframe"
 
 [dependencies]
 num-traits.workspace = true
+molframe-chem.workspace = true
 molframe-core.workspace = true
 molframe-spatial.workspace = true
 rayon.workspace = true

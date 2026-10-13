@@ -35,6 +35,7 @@ mod sampling_plan;
 pub mod ses;
 mod solver_output;
 mod stream;
+mod structure_sasa;
 #[path = "mesh.rs"]
 mod triangulation;
 #[path = "governed.rs"]
@@ -75,6 +76,10 @@ pub use solver_output::{
     read_surf_surface,
 };
 pub use stream::visit_shrake_rupley;
+pub use structure_sasa::{
+    DEFAULT_POINTS, DEFAULT_PROBE, DEFAULT_SLICES, SasaMethod, SasaOptions, SasaWordError,
+    measure_atoms, structure_atom_areas,
+};
 pub use triangulation::{IndexedSurfaceMesh, MeshReport, SurfaceFace};
 pub use workflow_policy::{
     SurfaceWorkflowError, SurfaceWorkflowOptions, SurfaceWorkflowResult, governed_surface_geometry,
