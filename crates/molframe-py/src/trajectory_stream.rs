@@ -7,9 +7,10 @@
 
 use crate::trajectory::PyTrajectory;
 use molframe::trajectory::{
-    DenseChunk, FrameSlice, RandomAccess, SelectedReader, Timestep, TrajectoryFormat,
-    TrajectoryReadOptions, TrajectoryReader, TrajectoryReaderOptions, count_frames,
-    read_dense_chunk, read_trajectory, read_trajectory_materialized,
+    DenseChunk, FrameSlice, ParallelChunks, RandomAccess, SelectedReader, Timestep,
+    TrajectoryError, TrajectoryFormat, TrajectoryReadOptions, TrajectoryReader,
+    TrajectoryReaderOptions, count_frames, read_dense_chunk, read_trajectory,
+    read_trajectory_materialized,
 };
 use pyo3::prelude::*;
 use pyo3::types::PySlice;
@@ -237,6 +238,12 @@ pub(crate) fn read(
     PyTrajectory::from_chunk(py, data.format.name().replace('-', "_"), chunk)
 }
 
+/// How the next block is produced: pulled here, or by background workers.
+enum Pull {
+    Serial(Box<(Reader, Timestep)>),
+    Parallel(ParallelChunks),
+}
+
 /// Successive blocks of frames read from one trajectory, each a `Trajectory`.
 #[pyclass(
     name = "TrajectoryChunks",
@@ -245,7 +252,7 @@ pub(crate) fn read(
     module = "molframe.trajectory"
 )]
 struct PyTrajectoryChunks {
-    state: Mutex<(Reader, Timestep)>,
+    state: Mutex<Pull>,
     format: String,
     chunk_frames: usize,
     atoms: usize,
@@ -275,8 +282,16 @@ impl PyTrajectoryChunks {
             let Ok(mut state) = self.state.lock() else {
                 return Err(None);
             };
-            let (reader, frame) = &mut *state;
-            read_dense_chunk(reader, frame, self.chunk_frames).map_err(Some)
+            match &mut *state {
+                Pull::Serial(pair) => {
+                    let (reader, frame) = &mut **pair;
+                    read_dense_chunk(reader, frame, self.chunk_frames).map_err(Some)
+                }
+                Pull::Parallel(chunks) => match chunks.next() {
+                    Some(chunk) => chunk.map_err(Some),
+                    None => Ok(DenseChunk::default()),
+                },
+            }
         });
         let chunk = match chunk {
             Ok(chunk) => chunk,
@@ -295,7 +310,12 @@ impl PyTrajectoryChunks {
             .state
             .lock()
             .map_err(|_| crate::error::internal("the chunk reader was poisoned"))?;
-        state.0.seek(frame).map_err(crate::error::kernel)
+        match &mut *state {
+            Pull::Serial(pair) => pair.0.seek(frame).map_err(crate::error::kernel),
+            Pull::Parallel(_) => Err(crate::error::value(
+                "seek is not available on a chunk iterator that decodes in parallel",
+            )),
+        }
     }
 
     /// Selected frames in the whole iteration, or `None` when the container cannot say.
@@ -320,9 +340,14 @@ impl PyTrajectoryChunks {
 /// Iterates a trajectory in blocks of `chunk_frames` frames.
 ///
 /// Memory stays at one block plus one frame however long the trajectory is.
-/// `frames`, `atoms` and `memory_limit` mean what they do for `read`.
+/// `frames`, `atoms` and `memory_limit` mean what they do for `read`. With a
+/// `context` whose worker budget exceeds one, background workers decode
+/// blocks ahead of the consumer: blocks still arrive in frame order and are
+/// identical at every worker count, the read-ahead window is reserved from the
+/// context's memory budget, and the context's `cancel()` stops the workers.
 #[pyfunction]
-#[pyo3(signature = (path, *, chunk_frames=256, format=None, frames=None, atoms=None, memory_limit=None))]
+#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+#[pyo3(signature = (path, *, chunk_frames=256, format=None, frames=None, atoms=None, memory_limit=None, context=None))]
 fn read_chunks(
     py: Python<'_>,
     path: PathBuf,
@@ -331,22 +356,78 @@ fn read_chunks(
     frames: Option<&Bound<'_, PySlice>>,
     atoms: Option<Vec<usize>>,
     memory_limit: Option<usize>,
+    context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<PyTrajectoryChunks> {
     if chunk_frames == 0 {
         return Err(crate::error::value("chunk_frames must be positive"));
     }
     let source = Source::new(path, format, memory_limit)?;
     let slice = resolve_slice(frames, || source.total())?;
-    let (reader, _) = py.detach(|| source.open_slice(slice, atoms))?;
+    let (reader, _) = py.detach(|| source.open_slice(slice, atoms.clone()))?;
+    let (atom_count, frame_count) = (reader.n_atoms(), reader.n_frames());
+    let format = source
+        .format
+        .map_or_else(String::new, |format| format.name().replace('-', "_"));
+    let parallel = match (context, frame_count) {
+        (Some(context), Some(total)) if reader.random_access() != RandomAccess::None => {
+            let built = context.build(context.token())?;
+            (built.worker_budget() > 1 && total > 0).then_some((built, total))
+        }
+        _ => None,
+    };
+    let state = match parallel {
+        Some((built, total)) => {
+            drop(reader);
+            let opened = py.detach(|| {
+                open_parallel(
+                    &source,
+                    slice,
+                    atoms.as_deref(),
+                    total,
+                    chunk_frames,
+                    &built,
+                )
+            })?;
+            Pull::Parallel(opened)
+        }
+        None => Pull::Serial(Box::new((reader, Timestep::default()))),
+    };
     Ok(PyTrajectoryChunks {
-        format: source
-            .format
-            .map_or_else(String::new, |format| format.name().replace('-', "_")),
+        format,
         chunk_frames,
-        atoms: reader.n_atoms(),
-        frames: reader.n_frames(),
-        state: Mutex::new((reader, Timestep::default())),
+        atoms: atom_count,
+        frames: frame_count,
+        state: Mutex::new(state),
     })
+}
+
+/// Starts the workers; a reader that fails to open reports its Python error.
+fn open_parallel(
+    source: &Source,
+    slice: FrameSlice,
+    atoms: Option<&[usize]>,
+    total: usize,
+    chunk_frames: usize,
+    context: &molframe::ExecutionContext,
+) -> PyResult<ParallelChunks> {
+    let failure = std::cell::RefCell::new(None);
+    let opened = ParallelChunks::open(
+        || match source.open_slice(slice, atoms.map(<[usize]>::to_vec)) {
+            Ok((reader, _)) => Ok(reader),
+            Err(error) => {
+                *failure.borrow_mut() = Some(error);
+                Err(TrajectoryError::RandomAccessUnavailable)
+            }
+        },
+        0..total,
+        chunk_frames,
+        context,
+    );
+    match (opened, failure.take()) {
+        (Ok(chunks), _) => Ok(chunks),
+        (Err(_), Some(error)) => Err(error),
+        (Err(error), None) => Err(crate::error::kernel(error)),
+    }
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

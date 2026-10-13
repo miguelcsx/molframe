@@ -102,21 +102,14 @@ def test_chunks_respect_a_stride_and_an_atom_subset(fmt):
     assert np.array_equal(got, EXPECTED[fmt][1::3][:, [3, 4]])
 
 
-def test_chunks_are_exhausted_once_and_can_be_rewound_only_where_seekable():
-    chunks = trajectory.read_chunks(path("xtc"), chunk_frames=4)
+def test_chunks_are_exhausted_once_and_can_be_rewound(fmt):
+    chunks = trajectory.read_chunks(path(fmt), chunk_frames=4)
     assert sum(chunk.n_frames for chunk in chunks) == FRAMES
     assert next(chunks, None) is None
     chunks.seek(6)
-    assert np.array_equal(next(chunks).positions, EXPECTED["xtc"][6:10])
+    assert np.array_equal(next(chunks).positions, EXPECTED[fmt][6:10])
     chunks.seek(0)
-    assert np.array_equal(next(chunks).positions, EXPECTED["xtc"][0:4])
-
-    forward = trajectory.read_chunks(path("dcd"), chunk_frames=4)
-    next(forward)
-    forward.seek(6)
-    assert np.array_equal(next(forward).positions, EXPECTED["dcd"][6:10])
-    with pytest.raises(molframe.PolicyError, match="random access"):
-        forward.seek(0)
+    assert np.array_equal(next(chunks).positions, EXPECTED[fmt][0:4])
 
 
 def test_an_unrecognised_chunk_size_is_refused():
@@ -227,3 +220,37 @@ def test_coordinates_that_are_not_frames_by_atoms_by_three_are_refused():
         trajectory.rmsd(np.zeros((4, 5), dtype=np.float32))
     with pytest.raises(ValueError, match="shape"):
         trajectory.pairwise_rmsd(np.zeros((4, 5, 2), dtype=np.float32))
+
+
+def blocks(fmt, workers, size=3):
+    context = molframe.ExecutionContext(workers=workers)
+    return list(trajectory.read_chunks(path(fmt), chunk_frames=size, context=context))
+
+
+@pytest.mark.parametrize("workers", [1, 2, 4, 8])
+def test_parallel_blocks_equal_the_serial_blocks_in_order(fmt, workers):
+    serial = list(trajectory.read_chunks(path(fmt), chunk_frames=3))
+    parallel = blocks(fmt, workers)
+    assert [c.n_frames for c in parallel] == [c.n_frames for c in serial]
+    for got, want in zip(parallel, serial, strict=True):
+        assert np.array_equal(got.positions, want.positions)
+        assert np.array_equal(got.frame_indices, want.frame_indices)
+    assert np.array_equal(np.concatenate([c.frame_indices for c in parallel]), np.arange(FRAMES))
+
+
+def test_parallel_blocks_honour_a_stride_and_an_atom_subset():
+    context = molframe.ExecutionContext(workers=4)
+    chunks = trajectory.read_chunks(
+        path("xtc"), chunk_frames=2, frames=slice(1, None, 3), atoms=[3, 4], context=context
+    )
+    got = np.concatenate([chunk.positions for chunk in chunks])
+    assert np.array_equal(got, EXPECTED["xtc"][1::3][:, [3, 4]])
+
+
+def test_a_cancelled_context_stops_the_parallel_stream():
+    context = molframe.ExecutionContext(workers=4)
+    chunks = trajectory.read_chunks(path("xtc"), chunk_frames=1, context=context)
+    next(chunks)
+    context.cancel()
+    with pytest.raises(molframe.Cancelled):
+        list(chunks)

@@ -68,7 +68,7 @@ class TrajectoryChunks:
     def __iter__(self) -> TrajectoryChunks: ...
     def __next__(self) -> Trajectory: ...
     def seek(self, frame: int) -> None:
-        """Move to the `frame`-th selected frame; DCD and TRR can only move forward."""
+        """Move to the `frame`-th selected frame, forward or back."""
     @property
     def n_frames(self) -> int | None: ...
     @property
@@ -85,7 +85,13 @@ def read_chunks(
     frames: slice | None = None,
     atoms: Sequence[int] | None = None,
     memory_limit: int | None = None,
-) -> TrajectoryChunks: ...
+    context: ExecutionContext | None = None,
+) -> TrajectoryChunks:
+    """Iterate blocks of frames.
+
+    `context=` with more than one worker decodes ahead in parallel, in file
+    order, within the context's memory budget.
+    """
 
 @final
 class FrameSeries:
