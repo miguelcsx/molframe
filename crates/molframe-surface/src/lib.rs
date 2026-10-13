@@ -62,8 +62,8 @@ pub use geodesic::{
 pub use grid_options::SurfaceGridOptions;
 pub use io::write_obj;
 pub use lee_richards::lee_richards;
-pub use pocket::{GridPocket, PocketScanError, PocketScanOptions, PointProximity, scan_pockets};
 pub use local_shape::{CurvatureQuality, SurfaceCurvature, surface_curvatures};
+pub use pocket::{GridPocket, PocketScanError, PocketScanOptions, PointProximity, scan_pockets};
 pub use sampling::fibonacci_sphere;
 pub use sampling_plan::SasaSampler;
 pub use ses::{

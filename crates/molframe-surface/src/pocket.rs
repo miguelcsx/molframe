@@ -133,9 +133,14 @@ pub fn scan_pockets(
             radii: radii.len(),
         });
     }
-    let finite = [options.spacing, options.reach, options.probe, options.margin]
-        .iter()
-        .all(|v| v.is_finite());
+    let finite = [
+        options.spacing,
+        options.reach,
+        options.probe,
+        options.margin,
+    ]
+    .iter()
+    .all(|v| v.is_finite());
     if !finite || options.spacing <= 0.0 {
         return Err(PocketScanError::InvalidOptions);
     }
@@ -152,8 +157,9 @@ pub fn scan_pockets(
         }
     }
     let spacing = options.spacing;
-    let dims = [0, 1, 2]
-        .map(|k| f32_to_usize(((hi[k] - lo[k] + 2.0 * options.margin) / spacing).ceil()).saturating_add(1));
+    let dims = [0, 1, 2].map(|k| {
+        f32_to_usize(((hi[k] - lo[k] + 2.0 * options.margin) / spacing).ceil()).saturating_add(1)
+    });
     let cells = dims[0].saturating_mul(dims[1]).saturating_mul(dims[2]);
     if cells > options.max_cells {
         // a molecule this large is not a grid to scan blindly

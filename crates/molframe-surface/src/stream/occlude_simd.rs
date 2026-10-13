@@ -95,9 +95,10 @@ impl<const N: usize> NeighbourTile<N> {
         let py = F64xN::splat(point[1]);
         let pz = F64xN::splat(point[2]);
         let lanes = |values: &[f64; N], start: usize| {
-            let chunk: [f64; LANES] = values[start..start + LANES]
-                .try_into()
-                .unwrap_or([0.0; LANES]);
+            let chunk: [f64; LANES] = match values[start..start + LANES].try_into() {
+                Ok(chunk) => chunk,
+                Err(_) => [0.0; LANES],
+            };
             F64xN::from(chunk)
         };
         (first..groups).chain(0..first.min(groups)).find(|&group| {

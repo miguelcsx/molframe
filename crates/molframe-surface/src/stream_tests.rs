@@ -234,3 +234,94 @@ fn sampler_reuses_its_charge_and_collected_areas_keep_their_final_owner() {
     drop(retained);
     assert_eq!(context.reserved_bytes(), 0);
 }
+
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn lattice(count: usize, spacing: f32) -> (Vec<[f32; 3]>, Vec<f32>) {
+    let side = (count as f64).cbrt().ceil() as usize;
+    let positions = (0..count)
+        .map(|index| {
+            [
+                (index % side) as f32 * spacing,
+                (index / side % side) as f32 * spacing,
+                (index / (side * side)) as f32 * spacing,
+            ]
+        })
+        .collect();
+    (positions, vec![1.7; count])
+}
+
+fn explicit(bytes: usize) -> ExecutionContext {
+    ExecutionContext::builder()
+        .worker_budget(2)
+        .memory_budget(MemoryBudget::new(bytes).expect("budget"))
+        .scratch_policy(ScratchPolicy::new(0))
+        .build()
+        .expect("context")
+}
+
+fn bits(areas: &[f64]) -> Vec<u64> {
+    areas.iter().map(|area| area.to_bits()).collect()
+}
+
+#[test]
+fn a_budget_too_small_for_one_index_falls_back_to_slabs_with_identical_bits() {
+    let (positions, radii) = lattice(6000, 3.0);
+    let reference =
+        crate::shrake_rupley(&positions, &radii, 1.4, 24, &explicit(1 << 30)).expect("reference");
+    // Smallest budget at which the sweep still succeeds, by bisection.
+    let (mut low, mut high) = (0_usize, 1_usize << 30);
+    while high - low > 1024 {
+        let middle = low + (high - low) / 2;
+        if crate::shrake_rupley(&positions, &radii, 1.4, 24, &explicit(middle)).is_ok() {
+            high = middle;
+        } else {
+            low = middle;
+        }
+    }
+    // The whole-structure index needs far more than the slab sweep does.
+    let whole = (positions.len() * 60).max(high + 1);
+    assert!(
+        high < whole / 2,
+        "slab minimum {high} vs whole index {whole}"
+    );
+    let slabbed =
+        crate::shrake_rupley(&positions, &radii, 1.4, 24, &explicit(high)).expect("slabbed");
+    assert_eq!(bits(&slabbed), bits(&reference));
+}
+
+#[test]
+fn an_explicit_tiny_budget_still_refuses_with_the_remedy() {
+    let (positions, radii) = lattice(2000, 3.0);
+    let error = crate::shrake_rupley(&positions, &radii, 1.4, 24, &explicit(2000))
+        .expect_err("refused")
+        .to_string();
+    for needle in [
+        "bytes",
+        "memory_budget",
+        "--memory-budget",
+        "MOLFRAME_MEMORY_BUDGET",
+    ] {
+        assert!(error.contains(needle), "{needle}: {error}");
+    }
+}
+
+#[test]
+#[ignore = "3M atoms: run with `cargo test --release -p molframe-surface -- --ignored`"]
+fn three_million_atoms_run_under_the_default_budget() {
+    let (positions, radii) = lattice(3_000_000, 3.2);
+    let context = ExecutionContext::default();
+    let mut atoms = 0;
+    let mut total = 0.0;
+    visit_shrake_rupley(&positions, &radii, 1.4, 8, None, &context, |_, area| {
+        atoms += 1;
+        total += area;
+        Ok(())
+    })
+    .expect("the default budget must not refuse");
+    assert_eq!(atoms, 3_000_000);
+    assert!(total > 0.0);
+}

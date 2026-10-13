@@ -29,8 +29,7 @@ pub(crate) struct Neighbourhood<'a> {
     /// A double-precision copy costs twenty-four bytes per atom on top of the
     /// twelve the coordinates already occupy, which at a billion atoms is more
     /// memory than the whole surface calculation needs. Promoting one centre
-    /// when it is read is three conversions and touches no extra cache line
-    /// (ADR-0025).
+    /// when it is read is three conversions and touches no extra cache line.
     positions: &'a [[f32; 3]],
     /// Each atom's radius grown by the probe, indexed by atom.
     pub(crate) expanded: Vec<f64>,

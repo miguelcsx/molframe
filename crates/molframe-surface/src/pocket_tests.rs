@@ -30,7 +30,11 @@ fn a_shell_with_an_opening_holds_one_pocket_near_its_centre() {
     assert!(!found.is_empty());
     let pocket = &found[0];
     assert!(pocket.points.len() >= 24);
-    assert!(pocket.centre.iter().all(|c| c.abs() < 4.0), "{:?}", pocket.centre);
+    assert!(
+        pocket.centre.iter().all(|c| c.abs() < 4.0),
+        "{:?}",
+        pocket.centre
+    );
     assert!(pocket.volume > 0.0);
 }
 
@@ -114,12 +118,22 @@ fn the_nearest_point_agrees_with_a_brute_force_search_within_the_radius() {
         f64_to_f32(f64::from(u32::try_from(state >> 40).unwrap_or(0)) / 16_777_216.0)
     };
     let points: Vec<[f32; 3]> = (0..60)
-        .map(|_| [next() * 24.0 - 12.0, next() * 24.0 - 12.0, next() * 24.0 - 12.0])
+        .map(|_| {
+            [
+                next() * 24.0 - 12.0,
+                next() * 24.0 - 12.0,
+                next() * 24.0 - 12.0,
+            ]
+        })
         .collect();
     let radius = 3.6;
     let index = PointProximity::new(&points, radius);
     for _ in 0..200 {
-        let q = [next() * 24.0 - 12.0, next() * 24.0 - 12.0, next() * 24.0 - 12.0];
+        let q = [
+            next() * 24.0 - 12.0,
+            next() * 24.0 - 12.0,
+            next() * 24.0 - 12.0,
+        ];
         let brute = points
             .iter()
             .map(|p| ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2) + (p[2] - q[2]).powi(2)).sqrt())

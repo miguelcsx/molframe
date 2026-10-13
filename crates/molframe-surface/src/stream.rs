@@ -19,6 +19,8 @@ use occlude_simd::NeighbourTile;
 mod occlude_simd;
 
 const BLOCK_ATOMS: usize = 64;
+/// Smallest slab the memory fallback will shrink to before it refuses.
+const MIN_SLAB_ATOMS: usize = 256;
 const NEIGHBOR_TILE: usize = 64;
 type Neighbor = ([f64; 3], f64);
 
@@ -71,16 +73,47 @@ impl SasaSampler<'_> {
             return Ok(());
         }
         crate::neighbourhood::validate_positions(positions)?;
-        let sample_count = self.directions.len();
         let cutoff = self.cutoff;
-        let index = CellList::build_in(
+        match CellList::build_in(
             positions,
             &self.targets,
             cutoff,
             periodic.copied(),
             CellGridOptions::default(),
-            context,
-        )?;
+            &self.context,
+        ) {
+            Ok(index) => self.sample_blocks(
+                positions,
+                periodic,
+                &index,
+                positions.len(),
+                &|ordinal| ordinal,
+                &mut emit,
+            ),
+            // The whole-structure index does not fit the budget. Degrade to
+            // spatial slabs rather than refuse: peak memory then follows the slab
+            // size, not the structure size, and areas stay bit-identical because
+            // each atom still sees every neighbour within reach.
+            Err(SpatialError::Memory(error)) if periodic.is_none() => {
+                self.sample_slabs(positions, error, &mut emit)
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Samples `count` atoms, named by `atom_at`, against one index and emits
+    /// `(ordinal, area)` in ordinal order.
+    fn sample_blocks(
+        &self,
+        positions: &[[f32; 3]],
+        periodic: Option<&PeriodicBox>,
+        index: &CellList<'_>,
+        count: usize,
+        atom_at: &(dyn Fn(usize) -> usize + Sync),
+        emit: &mut impl FnMut(usize, f64) -> Result<(), SasaError>,
+    ) -> Result<(), SasaError> {
+        let context = &self.context;
+        let sample_count = self.directions.len();
         let bytes_per_block = sample_count * size_of::<[f64; 3]>()
             + sample_count.div_ceil(64) * size_of::<u64>()
             + BLOCK_ATOMS * size_of::<f64>()
@@ -90,31 +123,31 @@ impl SasaSampler<'_> {
             radii: self.radii,
             probe: self.probe,
             directions: &self.directions,
-            cutoff,
-            index: &index,
+            cutoff: self.cutoff,
+            index,
             periodic,
         };
-        let mut next_atom = 0;
+        let mut next = 0;
         try_for_each_block_in(
-            BlockPlan::new(positions.len(), BLOCK_ATOMS),
+            BlockPlan::new(count, BLOCK_ATOMS),
             context,
             bytes_per_block,
             |_, range| {
                 let mut points = vec![[0.0; 3]; sample_count];
                 let mut covered = vec![0_u64; sample_count.div_ceil(64)];
                 let mut areas = Vec::with_capacity(range.len());
-                for atom in range {
+                for ordinal in range {
                     if context.cancellation().is_cancelled() {
                         return Err(SasaError::from(SpatialError::Cancelled));
                     }
-                    areas.push(geometry.area(atom, &mut points, &mut covered)?);
+                    areas.push(geometry.area(atom_at(ordinal), &mut points, &mut covered)?);
                 }
                 Ok(areas)
             },
             |areas| {
                 for area in areas {
-                    emit(next_atom, area)?;
-                    next_atom += 1;
+                    emit(next, area)?;
+                    next += 1;
                 }
                 Ok(())
             },
@@ -126,6 +159,104 @@ impl SasaSampler<'_> {
             BlockExecutionError::Operation(error) => error,
         })
     }
+
+    /// Open-boundary fallback: sweep atoms in coordinate order along the longest
+    /// axis, one slab of core atoms at a time. A slab's index holds the core plus
+    /// a halo of one cutoff on each side, and the slab halves whenever its index
+    /// is still refused, down to [`MIN_SLAB_ATOMS`]; `refusal` is returned when
+    /// even that does not fit. Retained: one order array and one area per atom.
+    fn sample_slabs(
+        &self,
+        positions: &[[f32; 3]],
+        refusal: molframe_core::MemoryBudgetError,
+        emit: &mut impl FnMut(usize, f64) -> Result<(), SasaError>,
+    ) -> Result<(), SasaError> {
+        let context = &self.context;
+        let atoms = positions.len();
+        let retained = atoms.saturating_mul(size_of::<u32>() + size_of::<f64>());
+        let _reservation = context
+            .try_reserve(retained)
+            .map_err(|_| SasaError::from(SpatialError::Memory(refusal)))?;
+        let axis = longest_axis(positions);
+        let mut order: Vec<u32> = (0..atoms)
+            .map(|atom| u32::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded))
+            .collect::<Result<_, _>>()?;
+        order.sort_unstable_by(|&a, &b| {
+            positions[a as usize][axis]
+                .total_cmp(&positions[b as usize][axis])
+                .then(a.cmp(&b))
+        });
+        let coordinate = |atom: u32| f64::from(positions[atom as usize][axis]);
+        let reach = f64::from(self.cutoff);
+        let mut areas = vec![0.0_f64; atoms];
+        let mut core = atoms.div_ceil(2).max(1);
+        let mut start = 0;
+        while start < atoms {
+            if context.cancellation().is_cancelled() {
+                return Err(SpatialError::Cancelled.into());
+            }
+            let end = (start + core).min(atoms);
+            let low = coordinate(order[start]) - reach;
+            let high = coordinate(order[end - 1]) + reach;
+            let first = order.partition_point(|&atom| coordinate(atom) < low);
+            let last = order.partition_point(|&atom| coordinate(atom) <= high);
+            let index = match CellList::build_in(
+                positions,
+                &order[first..last],
+                self.cutoff,
+                None,
+                CellGridOptions::default(),
+                context,
+            ) {
+                Ok(index) => index,
+                Err(SpatialError::Memory(_)) if core > MIN_SLAB_ATOMS => {
+                    core = (core / 2).max(MIN_SLAB_ATOMS);
+                    continue;
+                }
+                Err(SpatialError::Memory(_)) => {
+                    return Err(SpatialError::Memory(refusal).into());
+                }
+                Err(error) => return Err(error.into()),
+            };
+            let slab = &order[start..end];
+            self.sample_blocks(
+                positions,
+                None,
+                &index,
+                slab.len(),
+                &|ordinal| slab[ordinal] as usize,
+                &mut |ordinal, area| {
+                    areas[slab[ordinal] as usize] = area;
+                    Ok(())
+                },
+            )?;
+            start = end;
+        }
+        for (atom, area) in areas.into_iter().enumerate() {
+            emit(atom, area)?;
+        }
+        Ok(())
+    }
+}
+
+/// The coordinate axis with the largest extent; ties go to the lowest axis.
+fn longest_axis(positions: &[[f32; 3]]) -> usize {
+    let mut low = [f32::INFINITY; 3];
+    let mut high = [f32::NEG_INFINITY; 3];
+    for position in positions {
+        for axis in 0..3 {
+            low[axis] = low[axis].min(position[axis]);
+            high[axis] = high[axis].max(position[axis]);
+        }
+    }
+    let extent = |axis: usize| high[axis] - low[axis];
+    let mut best = 0;
+    for axis in 1..3 {
+        if extent(axis) > extent(best) {
+            best = axis;
+        }
+    }
+    best
 }
 
 struct Sampling<'a> {
