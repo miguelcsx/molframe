@@ -66,6 +66,7 @@ mod hierarchy;
 #[cfg(feature = "geometry")]
 mod internal_coordinates;
 mod interop;
+mod modelcif;
 #[cfg(feature = "motif")]
 mod motif;
 #[cfg(feature = "motif")]

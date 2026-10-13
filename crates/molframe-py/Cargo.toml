@@ -25,7 +25,7 @@ workspace = true
 
 [features]
 default = ["full"]
-formats = ["molframe/mmcif", "molframe/pdb", "molframe/bcif"]
+formats = ["molframe/mmcif", "molframe/pdb", "molframe/bcif", "molframe/modelcif"]
 query = ["molframe/query"]
 interop = ["molframe/interop"]
 # Reading and selection are the module root every domain builds on.

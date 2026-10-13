@@ -55,6 +55,7 @@ from . import (
     formats as formats,
     geometry as geometry,
     interop as interop,
+    modelcif as modelcif,
     motif as motif,
     open_structure_batches as open_structure_batches,
     query as query,

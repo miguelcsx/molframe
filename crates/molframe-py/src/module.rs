@@ -188,5 +188,8 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     module.add_submodule(&interop)?;
     let formats = PyModule::new(py, "formats")?;
     formats::register(&formats)?;
-    module.add_submodule(&formats)
+    module.add_submodule(&formats)?;
+    let modelcif = PyModule::new(py, "modelcif")?;
+    crate::modelcif::register(&modelcif)?;
+    module.add_submodule(&modelcif)
 }
