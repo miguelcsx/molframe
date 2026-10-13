@@ -8,9 +8,14 @@ pub(crate) fn coordinates<'a>(array: &'a PyReadonlyArray2<'_, f32>) -> PyResult<
     if shape.len() != 2 || shape[1] != 3 {
         return Err(crate::error::value("coordinates must have shape (n, 3)"));
     }
-    let contiguous = array.as_slice().map_err(|_| {
-        crate::error::value("coordinates must be C-contiguous; call numpy.ascontiguousarray")
-    })?;
+    // `as_slice` also accepts Fortran order, which would silently misread the rows.
+    let contiguous = array
+        .as_slice()
+        .ok()
+        .filter(|_| array.is_c_contiguous())
+        .ok_or_else(|| {
+            crate::error::value("coordinates must be C-contiguous; call numpy.ascontiguousarray")
+        })?;
     Ok(contiguous.as_chunks::<3>().0)
 }
 

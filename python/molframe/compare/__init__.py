@@ -8,6 +8,7 @@ ChainAssignment = _native.ChainAssignment
 ContactSimilarity = _native.ContactSimilarity
 DockQ = _native.DockQ
 MappedComparison = _native.MappedComparison
+TmScreen = _native.TmScreen
 assign_chains = _native.assign_chains
 cad_score = _native.cad_score
 ce_align = _native.ce_align
@@ -22,6 +23,8 @@ mapped_dockq = _native.mapped_dockq
 mapped_qs_score = _native.mapped_qs_score
 qs_score = _native.qs_score
 tm_score = _native.tm_score
+tm_scores = _native.tm_scores
+tm_screen = _native.tm_screen
 weighted_rmsd = _native.weighted_rmsd
 
 __all__ = [
@@ -31,6 +34,7 @@ __all__ = [
     "ContactSimilarity",
     "DockQ",
     "MappedComparison",
+    "TmScreen",
     "assign_chains",
     "cad_score",
     "ce_align",
@@ -45,5 +49,7 @@ __all__ = [
     "mapped_qs_score",
     "qs_score",
     "tm_score",
+    "tm_screen",
+    "tm_scores",
     "weighted_rmsd",
 ]

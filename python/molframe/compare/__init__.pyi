@@ -40,6 +40,43 @@ class MappedComparison:
     def chain_assignments_tried(self) -> int: ...
 
 def tm_score(model: Array, reference: Array) -> float: ...
+
+class TmScreen:
+    """TM-scores behind a prefilter, and how many pairs each stage settled."""
+
+    @property
+    def scores(self) -> Array:
+        """One float64 score per pair; ``nan`` where the screen dropped it."""
+
+    @property
+    def evaluated(self) -> int: ...
+    @property
+    def pruned_bound(self) -> int: ...
+    @property
+    def pruned_coarse(self) -> int: ...
+
+def tm_scores(
+    structures: Sequence[Array],
+    *,
+    pairs: Array | None = None,
+    context: ExecutionContext | None = None,
+) -> Array:
+    """TM-scores of every unordered pair (condensed order), or of ``pairs`` rows."""
+
+def tm_screen(
+    structures: Sequence[Array],
+    *,
+    threshold: float,
+    coarse_ratio: float | None = None,
+    pairs: Array | None = None,
+    context: ExecutionContext | None = None,
+) -> TmScreen:
+    """`tm_scores` behind a prefilter that drops pairs unable to reach ``threshold``.
+
+    The exact stage never drops a pair whose score is at or above ``threshold``.
+    ``coarse_ratio`` adds a heuristic stage whose recall is measured, not guaranteed.
+    """
+
 def gdt_ts(model: Array, reference: Array) -> float: ...
 def gdt_ha(model: Array, reference: Array) -> float: ...
 def weighted_rmsd(model: Array, reference: Array, weights: Array) -> float: ...
