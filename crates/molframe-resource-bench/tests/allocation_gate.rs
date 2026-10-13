@@ -13,8 +13,8 @@ use std::sync::{Mutex, PoisonError};
 
 /// Case name and the most allocations the case may perform.
 const CEILINGS: &[(&str, u64)] = &[
-    ("mmcif_read_medium", 20_095),
-    ("bcif_read_medium", 30_477),
+    ("mmcif_read_medium", 15_827),
+    ("bcif_read_medium", 24_602),
     ("selection_medium", 63),
     ("contacts_medium", 65),
     ("sasa_medium", 527),
