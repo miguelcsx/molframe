@@ -21,14 +21,14 @@ pub use read_in::{read_buffer_in, read_bytes_in, read_with_options_in};
 
 #[cfg(feature = "geometry")]
 pub use formats::transform;
-#[cfg(feature = "pdb")]
-pub use formats::write_pdb;
 #[cfg(feature = "chemistry")]
 pub use formats::{open_component_dictionary, read_component_dictionary};
 #[cfg(feature = "mmcif")]
 pub use formats::{read_document, write_mmcif, write_mmcif_with_options};
 #[cfg(feature = "bcif")]
 pub use formats::{write_bcif, write_bcif_with_options};
+#[cfg(feature = "pdb")]
+pub use formats::{write_pdb, write_pdb_with_findings};
 
 #[cfg(feature = "mmcif")]
 mod cif_family;

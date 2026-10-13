@@ -32,7 +32,7 @@ pub(crate) use mmcif::{cif_write_findings, write_mmcif_to_with_options};
 #[cfg(feature = "mmcif")]
 pub use mmcif::{read_document, write_mmcif, write_mmcif_with_options};
 #[cfg(feature = "pdb")]
-pub use pdb::write_pdb;
+pub use pdb::{write_pdb, write_pdb_with_findings};
 #[cfg(feature = "pdb")]
 pub(crate) use pdb_metadata::complete as complete_pdb_options;
 #[cfg(feature = "geometry")]
