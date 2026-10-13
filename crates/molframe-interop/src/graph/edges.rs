@@ -3,7 +3,9 @@
 use super::nodes::Nodes;
 use super::{EdgeDirection, EdgeKind, GraphError, GraphOptions, NodeLevel};
 use molframe_core::{AtomSelection, BondOrder, ExecutionContext, Structure};
-use molframe_spatial::{KdTree, NeighborPair, PeriodicBox, SpatialBackend, pairs_within};
+use molframe_spatial::{
+    KnnOptions, NO_NEIGHBOR, NeighborPair, PeriodicBox, SpatialBackend, knn_within, pairs_within,
+};
 
 const BONDS_FEATURE: &str = "bonds";
 const DIRECTED_GEOMETRY_FEATURE: &str = "directed_non_knn_edges";
@@ -44,7 +46,13 @@ pub(super) fn build(
             false,
             context,
         )?,
-        EdgeKind::KNearest { neighbors } => nearest(nodes, neighbors, periodic.as_ref())?,
+        EdgeKind::KNearest { neighbors } => nearest(
+            nodes,
+            neighbors,
+            periodic.as_ref(),
+            options.backend,
+            context,
+        )?,
     };
     orient(base, options.direction, options.edges)
 }
@@ -124,34 +132,55 @@ fn nearest(
     nodes: &Nodes,
     neighbors: usize,
     periodic: Option<&PeriodicBox>,
+    backend: SpatialBackend,
+    context: &ExecutionContext,
 ) -> Result<Vec<Edge>, GraphError> {
     if neighbors == 0 {
         return Err(GraphError::InvalidParameter);
     }
-    let targets: Vec<_> = (0..nodes.positions.len())
-        .map(|node| u32::try_from(node).map_err(|_| GraphError::IndexOverflow))
-        .collect::<Result<_, _>>()?;
-    let tree = KdTree::build(&nodes.positions, &targets, periodic.copied())?;
-    let capacity = nodes
-        .positions
-        .len()
-        .checked_mul(neighbors)
-        .ok_or(GraphError::ResourceLimit)?;
+    let count = u32::try_from(nodes.positions.len()).map_err(|_| GraphError::IndexOverflow)?;
+    let everyone = AtomSelection::All(count);
+    let table = knn_within(
+        &nodes.positions,
+        &everyone,
+        &everyone,
+        neighbors,
+        KnnOptions {
+            max_distance: None,
+            exclude_self: true,
+        },
+        backend,
+        periodic,
+        context,
+    )?;
     let mut edges = Vec::new();
     edges
-        .try_reserve_exact(capacity)
+        .try_reserve_exact(table.indices.len())
         .map_err(|_| GraphError::ResourceLimit)?;
-    for source in targets {
-        for (target, distance_squared) in tree.k_nearest(source, neighbors)? {
-            edges.push(Edge {
-                source,
-                target,
-                distance_squared,
-                bond_order: None,
-            });
-        }
+    for (source, (ids, squared)) in (0..count).zip(
+        table
+            .indices
+            .chunks_exact(neighbors)
+            .zip(table.distances_squared.chunks_exact(neighbors)),
+    ) {
+        let start = edges.len();
+        edges.extend(
+            ids.iter()
+                .zip(squared)
+                .filter(|&(&target, _)| target != NO_NEIGHBOR)
+                .map(|(&target, &distance_squared)| Edge {
+                    source,
+                    target,
+                    distance_squared,
+                    bond_order: None,
+                }),
+        );
+        let row = match edges.get_mut(start..) {
+            Some(row) => row,
+            None => &mut [],
+        };
+        row.sort_unstable_by_key(|edge| edge.target);
     }
-    edges.sort_unstable_by_key(|edge| (edge.source, edge.target));
     edges.dedup_by_key(|edge| (edge.source, edge.target));
     Ok(edges)
 }
