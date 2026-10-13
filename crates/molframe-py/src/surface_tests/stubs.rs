@@ -99,7 +99,7 @@ pub(super) fn parse_stub(text: &str) -> Stub {
                 current = None;
                 continue;
             }
-            if rest.contains("Protocol") {
+            if rest.contains("Protocol") || rest.contains("TypedDict") {
                 stub.protocols.insert(name.clone());
             }
             stub.names.insert(name.clone());

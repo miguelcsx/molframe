@@ -3,6 +3,7 @@
 from .._native import crystal as _native
 
 AssemblyBond = _native.AssemblyBond
+AssemblyChunks = _native.AssemblyChunks
 AssemblyInstance = _native.AssemblyInstance
 DensityMap = _native.DensityMap
 MapStatistics = _native.MapStatistics
@@ -32,6 +33,7 @@ structure_factors = _native.structure_factors
 
 __all__ = [
     "AssemblyBond",
+    "AssemblyChunks",
     "AssemblyInstance",
     "DensityMap",
     "MapStatistics",

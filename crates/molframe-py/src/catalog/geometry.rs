@@ -255,4 +255,16 @@ pub(super) const ROWS: &[Capability] = &[
         execution_needs: "cpu",
         cost: molframe::Cost::Materialize,
     },
+    Capability {
+        name: "distance_matrix_blocks",
+        domain: "geometry",
+        feature: "geometry",
+        inputs: "coordinates",
+        result: "DistanceBlocks",
+        policy: false,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,memory",
+        cost: molframe::Cost::Materialize,
+    },
 ];
