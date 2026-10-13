@@ -105,6 +105,7 @@ pub(super) fn trajectory_error(error: XtcError) -> TrajectoryError {
             required: 1,
             limit: requested,
         },
+        XtcError::Index(error) => error.into(),
         XtcError::InvalidFrame | XtcError::InconsistentRecord => {
             TrajectoryError::InvalidSource { format: "xtc" }
         }

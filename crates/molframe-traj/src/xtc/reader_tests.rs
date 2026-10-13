@@ -86,7 +86,7 @@ fn boxed_dispatch_is_object_safe_and_builds_offsets_only_on_seek() {
     assert!(reader.read_next(&mut frame).expect("read indexed frame"));
     assert_eq!(frame.frame, 42);
     assert!((frame.positions[0][0] - 42.0).abs() < 0.01);
-    assert_eq!(frame.dt, None);
+    assert_eq!(frame.dt, Some(0.5));
 }
 
 #[test]

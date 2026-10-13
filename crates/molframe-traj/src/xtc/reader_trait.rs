@@ -1,6 +1,9 @@
 //! Common trajectory-reader operations for the bounded XTC decoder.
 
-use super::{FORMAT, XtcReader, support::trajectory_error};
+use super::{
+    FORMAT, XtcReader,
+    support::{guarded_record, trajectory_error},
+};
 use crate::{RandomAccess, Timestep, TrajectoryError, TrajectoryReader, Units};
 use std::io::{Seek, SeekFrom};
 
@@ -61,17 +64,30 @@ impl TrajectoryReader for XtcReader {
             Some(offset) => *offset,
             None => self.file_len,
         };
-        self.source
-            .file
-            .seek(SeekFrom::Start(offset))
-            .map_err(|error| TrajectoryError::SourceIo {
-                format: FORMAT,
-                kind: error.kind(),
-            })?;
+        let before = target
+            .checked_sub(1)
+            .and_then(|previous| offsets.get(previous))
+            .copied();
+        let io = |error: std::io::Error| TrajectoryError::SourceIo {
+            format: FORMAT,
+            kind: error.kind(),
+        };
+        // The header before the target supplies `dt`, so a frame decoded after
+        // a seek carries what a sequential read would have given it.
+        let previous_time = match before {
+            Some(before) => {
+                self.source.file.seek(SeekFrom::Start(before)).map_err(io)?;
+                let header =
+                    guarded_record(|| self.source.read_header()).map_err(trajectory_error)?;
+                Some(f64::from(header.time)).filter(|time| time.is_finite())
+            }
+            None => None,
+        };
+        self.source.file.seek(SeekFrom::Start(offset)).map_err(io)?;
         self.next_offset = offset;
         self.next_frame = target;
         self.source.step = target;
-        self.previous_time = None;
+        self.previous_time = previous_time;
         self.last_step = None;
         self.last_precision = None;
         Ok(())

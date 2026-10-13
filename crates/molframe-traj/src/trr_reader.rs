@@ -5,7 +5,11 @@ use crate::{RandomAccess, Timestep, TrajectoryError, TrajectoryReader, Units};
 use std::fs::File;
 use std::io::{BufReader, Read, Seek};
 use std::mem::size_of;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+#[path = "trr_reader_seek.rs"]
+mod seek;
 
 const BUFFER: usize = 8192;
 
@@ -21,6 +25,9 @@ pub struct TrrReader {
     last_precision: Option<TrrPrecision>,
     limit: usize,
     file_len: u64,
+    path: PathBuf,
+    stamp: crate::FileStamp,
+    offsets: Option<Arc<[u64]>>,
 }
 
 impl TrrReader {
@@ -36,8 +43,10 @@ impl TrrReader {
         if memory_limit_bytes < BUFFER + size_of::<Self>() {
             return Err(memory(BUFFER + size_of::<Self>(), memory_limit_bytes));
         }
+        let path = path.as_ref();
         let file = File::open(path).map_err(|error| io_error(&error))?;
-        let file_len = file.metadata().map_err(|error| io_error(&error))?.len();
+        let metadata = file.metadata().map_err(|error| io_error(&error))?;
+        let file_len = metadata.len();
         let mut input = BufReader::with_capacity(BUFFER, file);
         let pending = next_header(&mut input)?.ok_or_else(invalid)?;
         Ok(Self {
@@ -50,6 +59,9 @@ impl TrrReader {
             last_precision: None,
             limit: memory_limit_bytes,
             file_len,
+            path: path.to_path_buf(),
+            stamp: crate::FileStamp::from_metadata(&metadata),
+            offsets: None,
         })
     }
 
@@ -74,16 +86,20 @@ impl TrajectoryReader for TrrReader {
         self.atoms
     }
     fn n_frames(&self) -> Option<usize> {
-        None
+        self.offsets.as_ref().map(|offsets| offsets.len())
     }
     fn units(&self) -> Units {
         Units::CANONICAL
     }
     fn random_access(&self) -> RandomAccess {
-        RandomAccess::None
+        if self.offsets.is_some() {
+            RandomAccess::Full
+        } else {
+            RandomAccess::ViaIndex
+        }
     }
-    fn seek(&mut self, _: usize) -> Result<(), TrajectoryError> {
-        Err(TrajectoryError::RandomAccessUnavailable)
+    fn seek(&mut self, frame: usize) -> Result<(), TrajectoryError> {
+        self.seek_indexed(frame)
     }
 
     fn read_next(&mut self, frame: &mut Timestep) -> Result<bool, TrajectoryError> {
@@ -329,3 +345,7 @@ fn memory(required: usize, limit: usize) -> TrajectoryError {
 #[cfg(test)]
 #[path = "trr_reader_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "trr_reader_seek_tests.rs"]
+mod seek_tests;

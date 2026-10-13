@@ -87,6 +87,7 @@ pub mod format_xtc;
 pub mod format_xvg;
 #[path = "xyz.rs"]
 pub mod format_xyz;
+mod frame_index;
 #[path = "transform.rs"]
 pub mod frame_ops;
 #[path = "trajectory.rs"]
@@ -251,6 +252,7 @@ pub use ensemble_statistics::{
     ConvergenceBlock, EnsembleStatisticsError, GroupVariance, RemainderPolicy, block_convergence,
     group_coordinate_variance, group_coordinate_variance_view,
 };
+pub use frame_index::{FileStamp, FrameIndex, FrameIndexError};
 pub use frame_view::{FrameView, FrameViewError};
 pub use gamess::{
     GamessAtom, GamessError, GamessFrame, GamessRunType, GamessTrajectory, parse_gamess_output,

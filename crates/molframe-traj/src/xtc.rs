@@ -54,6 +54,9 @@ pub enum XtcError {
     /// The decoder rejected contradictory internal XTC fields.
     #[error("inconsistent XTC record")]
     InconsistentRecord,
+    /// A frame index is damaged, stale or describes another trajectory.
+    #[error("XTC frame index rejected: {0}")]
+    Index(#[from] crate::frame_index::FrameIndexError),
     /// A requested memory ceiling is zero or exceeds the process hard limit.
     #[error("invalid XTC memory limit {requested}; it must be at least one byte")]
     InvalidMemoryLimit {

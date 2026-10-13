@@ -5,13 +5,18 @@ use std::io::{BufReader, Seek, SeekFrom};
 use std::mem::size_of;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::Arc;
 
+use crate::frame_index::FileStamp;
 use crate::{Timestep, TrajectoryReaderOptions};
 
 use super::{NM_TO_ANGSTROM, XtcError, cell_from_box};
 
 #[path = "reader_support.rs"]
 mod support;
+
+#[path = "reader_index.rs"]
+mod reader_index;
 
 #[path = "reader_trait.rs"]
 mod reader_trait;
@@ -28,8 +33,9 @@ pub struct XtcReader {
     source: molly::XTCReader<BufReader<File>>,
     source_frame: molly::Frame,
     scratch: Vec<u8>,
-    offsets: Option<Vec<u64>>,
+    offsets: Option<Arc<[u64]>>,
     file_len: u64,
+    stamp: FileStamp,
     next_offset: u64,
     next_frame: usize,
     atom_count: usize,
@@ -69,7 +75,8 @@ impl XtcReader {
             });
         }
         let file = File::open(path)?;
-        let file_len = file.metadata()?.len();
+        let metadata = file.metadata()?;
+        let file_len = metadata.len();
         if file_len == 0 {
             return Err(XtcError::InvalidFrame);
         }
@@ -107,6 +114,7 @@ impl XtcReader {
             scratch: Vec::new(),
             offsets: None,
             file_len,
+            stamp: FileStamp::from_metadata(&metadata),
             next_offset: 0,
             next_frame: 0,
             atom_count: header.natoms,
@@ -365,7 +373,7 @@ impl XtcReader {
             return Err(error);
         }
         self.frame_count = Some(offsets.len());
-        self.offsets = Some(offsets);
+        self.offsets = Some(offsets.into());
         Ok(())
     }
 
@@ -425,7 +433,7 @@ impl XtcReader {
     }
 
     fn index_capacity(&self) -> usize {
-        self.offsets.as_ref().map_or(0, Vec::capacity)
+        self.offsets.as_ref().map_or(0, |offsets| offsets.len())
     }
 }
 
