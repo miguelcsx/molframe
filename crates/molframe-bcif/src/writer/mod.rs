@@ -7,6 +7,7 @@ mod document;
 mod extension;
 mod metadata;
 mod structure;
+mod tables;
 
 pub use document::write_document;
 pub use extension::write_structure_with_extension;
@@ -14,3 +15,4 @@ pub use structure::{
     write_structure, write_structure_to, write_structure_to_with_memory_limit,
     write_structure_with_options,
 };
+pub use tables::{Cell, ColumnTable, write_structure_with_tables};
