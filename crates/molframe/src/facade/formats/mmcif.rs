@@ -52,15 +52,43 @@ pub fn write_mmcif_with_options(
     structure: &Structure,
     options: &molframe_cif::CifWriteOptions,
 ) -> Result<String, Findings> {
+    write_mmcif_with_findings(structure, options).map(|(text, _)| text)
+}
+
+/// Renders mmCIF like [`write_mmcif_with_options`] and also reports what the
+/// write rewrote or could not carry.
+///
+/// A renamed chain or shifted residue number is `W4102`; an extension with no
+/// mmCIF counterpart is `W4101`. Lossless input returns no findings.
+///
+/// # Errors
+///
+/// Returns the same diagnostics the file verbs return.
+pub fn write_mmcif_with_findings(
+    structure: &Structure,
+    options: &molframe_cif::CifWriteOptions,
+) -> Result<(String, Findings), Findings> {
     let mut output = Vec::with_capacity(structure.atom_count() as usize * 100);
     write_mmcif_to_with_options(structure, options, &mut output)
         .map_err(|error| cif_write_findings(&error))?;
-    String::from_utf8(output).map_err(|error| {
+    let text = String::from_utf8(output).map_err(|error| {
         cif_write_findings(&molframe_cif::CifWriteToError::Output(io::Error::new(
             io::ErrorKind::InvalidData,
             error,
         )))
-    })
+    })?;
+    Ok((text, cif_family_findings(structure)))
+}
+
+/// The findings every CIF-family write of `structure` carries.
+pub(crate) fn cif_family_findings(structure: &Structure) -> Findings {
+    let mut findings = super::loss::label_rewrites(structure.engine());
+    findings.extend(super::loss::uncarried_extensions(
+        structure.engine(),
+        &super::loss::cif_carried(),
+        "mmCIF",
+    ));
+    Findings::from(findings)
 }
 
 /// Streams canonical mmCIF with explicit identifier decisions.

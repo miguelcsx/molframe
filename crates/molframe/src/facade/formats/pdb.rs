@@ -36,6 +36,11 @@ pub fn write_pdb_with_findings(
 ) -> Result<(String, Findings), Findings> {
     let completed = super::complete_pdb_options(structure.engine(), options);
     let text = molframe_pdb::write(structure.engine(), &completed).map_err(Findings::from)?;
-    let losses = molframe_pdb::projection_loss(structure.engine(), &completed);
+    let mut losses = molframe_pdb::projection_loss(structure.engine(), &completed);
+    losses.extend(super::loss::uncarried_extensions(
+        structure.engine(),
+        &super::loss::pdb_carried(structure.engine()),
+        "PDB",
+    ));
     Ok((text, Findings::from(losses)))
 }

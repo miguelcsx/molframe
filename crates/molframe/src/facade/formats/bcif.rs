@@ -22,6 +22,30 @@ pub fn write_bcif_with_options(
     structure: &Structure,
     options: &molframe_cif::CifWriteOptions,
 ) -> Result<Vec<u8>, Findings> {
+    write_bcif_with_findings(structure, options).map(|(bytes, _)| bytes)
+}
+
+/// Renders `BinaryCIF` like [`write_bcif_with_options`] and also reports what
+/// the write rewrote or could not carry.
+///
+/// A renamed chain or shifted residue number is `W4102`; an extension with no
+/// `BinaryCIF` counterpart is `W4101`. Lossless input returns no findings.
+///
+/// # Errors
+///
+/// Returns a diagnostic if canonical preflight or binary encoding fails.
+pub fn write_bcif_with_findings(
+    structure: &Structure,
+    options: &molframe_cif::CifWriteOptions,
+) -> Result<(Vec<u8>, Findings), Findings> {
+    let bytes = encode(structure, options)?;
+    Ok((bytes, super::cif_family_findings(structure)))
+}
+
+fn encode(
+    structure: &Structure,
+    options: &molframe_cif::CifWriteOptions,
+) -> Result<Vec<u8>, Findings> {
     let options = super::complete_cif_options(structure.engine(), options);
     #[cfg(feature = "modelcif")]
     if let Some(model) = structure

@@ -12,6 +12,8 @@ mod bcif;
 mod chem;
 #[cfg(feature = "mmcif")]
 mod cif_metadata;
+#[cfg(any(feature = "mmcif", feature = "pdb"))]
+mod loss;
 #[cfg(feature = "mmcif")]
 mod mmcif;
 #[cfg(feature = "pdb")]
@@ -22,15 +24,17 @@ mod pdb_metadata;
 mod transform;
 
 #[cfg(feature = "bcif")]
-pub use bcif::{write_bcif, write_bcif_with_options};
+pub use bcif::{write_bcif, write_bcif_with_findings, write_bcif_with_options};
 #[cfg(feature = "chemistry")]
 pub use chem::{open_component_dictionary, read_component_dictionary};
 #[cfg(all(feature = "mmcif", feature = "bcif"))]
 pub(crate) use cif_metadata::complete as complete_cif_options;
+#[cfg(feature = "bcif")]
+pub(crate) use mmcif::cif_family_findings;
 #[cfg(feature = "mmcif")]
 pub(crate) use mmcif::{cif_write_findings, write_mmcif_to_with_options};
 #[cfg(feature = "mmcif")]
-pub use mmcif::{read_document, write_mmcif, write_mmcif_with_options};
+pub use mmcif::{read_document, write_mmcif, write_mmcif_with_findings, write_mmcif_with_options};
 #[cfg(feature = "pdb")]
 pub use pdb::{write_pdb, write_pdb_with_findings};
 #[cfg(feature = "pdb")]

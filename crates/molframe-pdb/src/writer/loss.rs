@@ -62,7 +62,10 @@ fn renamed_identifiers(
         let dropped = chain_name(chain, other);
         if dropped.is_some() && dropped != written {
             differing += 1;
-            example.get_or_insert((written.unwrap_or(""), dropped.unwrap_or("")));
+            example.get_or_insert((
+                written.map_or("", |name| name),
+                dropped.map_or("", |name| name),
+            ));
         }
     }
     if let Some((kept, dropped)) = example {
