@@ -2221,8 +2221,13 @@ version = "0.6.0"
 dependencies = [
  "molframe-bcif",
  "molframe-cif",
+ "molframe-compare",
  "molframe-core",
+ "molframe-geom",
+ "molframe-interop",
  "molframe-pdb",
+ "molframe-spatial",
+ "molframe-traj",
  "num-traits",
 ]
 
@@ -2326,6 +2331,7 @@ dependencies = [
  "molframe-core",
  "molframe-geom",
  "num-traits",
+ "proptest",
  "serde",
  "serde_json",
  "tempfile",
@@ -2480,6 +2486,7 @@ version = "0.6.0"
 dependencies = [
  "criterion",
  "molframe-bench",
+ "molframe-chem",
  "molframe-core",
  "molframe-spatial",
  "num-traits",
@@ -2495,6 +2502,7 @@ version = "0.6.0"
 dependencies = [
  "bytemuck",
  "criterion",
+ "faer",
  "hdf5-reader",
  "hdf5-writer",
  "hoomd-gsd",
