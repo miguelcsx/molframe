@@ -6,7 +6,8 @@
 //! sampling method runs all come from one [`SasaOptions`], the same one the
 //! facade, the command line and Python read. The relative accessibility a
 //! caller divides the area by comes from [`max_residue_area`], the Tien et al.
-//! (2013) theoretical maximum for each standard amino acid.
+//! (2013) theoretical maximum for each standard amino acid, or from a caller's own
+//! [`MaxAreaTable`].
 //!
 //! What is in the calculation: the residues the options include (the polymer by
 //! default, modified residues written as `HETATM` among it), hydrogens left
@@ -16,47 +17,22 @@
 //! [`SasaOptions::hetero`] brings the ligand in. The counts of what was left
 //! out are returned so a report can say so.
 
-use molframe_chem::included_atoms;
+pub use crate::max_area_defaults::{MAX_RESIDUE_AREA_CITATION, MAX_RESIDUE_AREA_REFERENCE};
+use crate::max_area_table::MaxAreaTable;
+use molframe_chem::{AppliedRadiusPolicy, included_atoms};
 use molframe_core::ExecutionContext;
 use molframe_core::structure::Structure;
 use molframe_surface::{SasaError, SasaOptions, measure_atoms};
 
-/// The table's name as a report records it.
-pub const MAX_RESIDUE_AREA_REFERENCE: &str =
-    "Tien et al. 2013, theoretical maximum ASA (Gly-X-Gly extended, all-atom)";
-
-/// Where the table comes from.
-pub const MAX_RESIDUE_AREA_CITATION: &str = "Tien MZ, Meyer AG, Sydykova DK, Spielman SJ, Wilke CO (2013) Maximum allowed solvent accessibilities of residues in proteins. PLoS ONE 8(11): e80635";
-
-/// The theoretical maximum accessible area of a standard amino acid, Å².
+/// The theoretical maximum accessible area of a standard amino acid, Å², from the built-in
+/// table.
 ///
 /// Protonation variants (`HID`, `CYX`, `ASH`, `GLH`, `LYN`, ...) take their
 /// parent's value. `None` for anything else (modified residues, unknown names), which has no
-/// relative accessibility rather than a guessed one.
+/// relative accessibility rather than a guessed one. Pass a [`MaxAreaTable`] to use other values.
 #[must_use]
 pub fn max_residue_area(name: &str) -> Option<f64> {
-    Some(match crate::protonation::parent_residue(name) {
-        "ALA" => 129.0,
-        "ARG" => 274.0,
-        "ASN" => 195.0,
-        "ASP" => 193.0,
-        "CYS" => 167.0,
-        "GLN" => 225.0,
-        "GLU" => 223.0,
-        "GLY" => 104.0,
-        "ILE" => 197.0,
-        "LEU" => 201.0,
-        "LYS" => 236.0,
-        "HIS" | "MET" => 224.0,
-        "PHE" => 240.0,
-        "PRO" => 159.0,
-        "SER" => 155.0,
-        "THR" => 172.0,
-        "TRP" => 285.0,
-        "TYR" => 263.0,
-        "VAL" => 174.0,
-        _ => return None,
-    })
+    MaxAreaTable::default().max_area(name)
 }
 
 /// Why per-residue areas could not be computed.
@@ -94,6 +70,8 @@ pub struct ResidueAreas {
     pub excluded_hetero_residues: usize,
     /// Atoms of the kept residues left out: hydrogens, other conformers, no radius.
     pub skipped_atoms: usize,
+    /// The radius tables and choices the areas were computed with.
+    pub policy: AppliedRadiusPolicy,
 }
 
 /// The per-residue accessible area of the residues `options` include.
@@ -179,6 +157,7 @@ pub fn residue_areas(
         residues,
         excluded_hetero_residues: excluded,
         skipped_atoms: skipped,
+        policy: options.applied_policy(),
     })
 }
 

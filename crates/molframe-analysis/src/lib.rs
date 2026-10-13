@@ -43,6 +43,8 @@ mod half_sphere;
 pub mod hbond;
 #[path = "helical.rs"]
 mod helix_geometry;
+mod max_area_defaults;
+mod max_area_table;
 #[path = "leaflet.rs"]
 mod membrane_layers;
 #[path = "nmd.rs"]
@@ -129,6 +131,8 @@ pub use helix_geometry::{
     BaseFrame, HelicalError, HelicalOptions, HelicalParameters, MiddleFrameStep,
     helical_parameters, helical_steps, middle_frame_step, middle_frame_steps,
 };
+pub use max_area_defaults::{TIEN_2013, TIEN_2013_AREAS};
+pub use max_area_table::{MaxAreaTable, MaxAreaTableError};
 pub use membrane_layers::{Leaflet, LeafletOptions, identify_leaflets};
 pub use mode_interchange::{NmdError, NormalMode, NormalModeSet, read_nmd, write_nmd};
 pub use molframe_surface::{SasaMethod, SasaOptions, SasaWordError};
