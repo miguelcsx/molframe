@@ -34,9 +34,11 @@ pub(super) fn amide_hydrogen(
     let Some(previous) = residue.checked_sub(1).and_then(|i| backbones.get(i)) else {
         return Some(nitrogen);
     };
-    // DSSP reconstructs from the preceding carbonyl even after a peptide gap;
-    // continuity constrains local patterns, not this electrostatic estimate.
-    if previous.model != backbone.model {
+    // DSSP reconstructs from the preceding carbonyl even after a peptide gap
+    // within a chain; continuity constrains local patterns, not this
+    // electrostatic estimate. The first residue of a chain has no preceding
+    // carbonyl: the one before it in storage belongs to another chain.
+    if previous.model != backbone.model || previous.chain != backbone.chain {
         return Some(nitrogen);
     }
     let (Some(carbon), Some(oxygen)) = (previous.carbon, previous.oxygen) else {

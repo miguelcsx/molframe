@@ -64,12 +64,13 @@ fn proline_and_chain_starts_are_evaluable_without_donating() {
 }
 
 #[test]
-fn explicit_analysis_rejects_missing_annotations_and_invalid_options() {
+fn analysis_without_an_explicit_profile_matches_the_annotated_run_and_rejects_invalid_options() {
     let source = structure(Sample::Tiny);
-    assert_eq!(
-        secondary_structure(&source, &DsspOptions::default()).err(),
-        Some(DsspError::MissingRoleAnnotation)
-    );
+    let defaulted = secondary_structure(&source, &DsspOptions::default()).expect("default roles");
+    let explicit =
+        secondary_structure(&with_roles(&source), &DsspOptions::default()).expect("explicit roles");
+    assert_eq!(defaulted.kind(), explicit.kind());
+    assert!(defaulted.kind().iter().all(|k| *k != Ss::Unknown));
     let invalid = DsspOptions {
         electrostatic_prefactor: f64::NAN,
         ..DsspOptions::default()

@@ -14,9 +14,9 @@ use molframe_core::{AnalysisPolicy, SecondaryStructure};
 /// Why a secondary-structure assignment could not be evaluated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum DsspError {
-    /// Semantic polymer roles were not attached by an explicit profile.
-    #[error("secondary structure requires explicit CCD polymer atom-role annotations")]
-    MissingRoleAnnotation,
+    /// The built-in protein roles could not be attached to the structure.
+    #[error("standard protein atom roles could not be assigned")]
+    StandardRoles,
     /// A parameter is non-finite or outside its meaningful domain.
     #[error("secondary-structure options are invalid")]
     InvalidOptions,
@@ -59,7 +59,13 @@ impl SseTable {
     }
 }
 
-/// Assigns modern native DSSP states using explicitly annotated polymer roles.
+/// Assigns modern native DSSP states, the Kabsch-Sander algorithm as extended in
+/// DSSP 4.
+///
+/// Backbone atoms come from the structure's polymer-role annotation when an
+/// explicit profile attached one. Without it the built-in protein roles apply:
+/// `N`, `CA`, `C` and `O` of recognised amino acids, so a structure read from a
+/// PDB or mmCIF file works with no further setup. Other residues stay unknown.
 ///
 /// All complete heavy backbones are evaluable, including proline and chain starts
 /// that cannot donate. Missing heavy roles remain `Unknown`. Rows are in residue
@@ -68,8 +74,8 @@ impl SseTable {
 ///
 /// # Errors
 ///
-/// Rejects invalid numerical options, missing semantic-role annotations, and
-/// multiple atoms assigned to one unique backbone role.
+/// Rejects invalid numerical options and multiple atoms assigned to one unique
+/// backbone role.
 pub fn secondary_structure(
     structure: &Structure,
     options: &DsspOptions,
@@ -97,9 +103,14 @@ pub fn secondary_structure_with_policy(
     if !options.is_valid() {
         return Err(DsspError::InvalidOptions);
     }
-    if !crate::chemistry::has_polymer_roles(structure) {
-        return Err(DsspError::MissingRoleAnnotation);
-    }
+    let defaulted;
+    let structure = if crate::chemistry::has_polymer_roles(structure) {
+        structure
+    } else {
+        defaulted = molframe_chem::annotate_standard_protein_roles(structure)
+            .map_err(|_| DsspError::StandardRoles)?;
+        &defaulted
+    };
     let selection = altloc_selection(structure, policy);
     let selection = selection.as_ref();
     let mut backbones = vec![DsspBackbone::default(); structure.residue_count()];

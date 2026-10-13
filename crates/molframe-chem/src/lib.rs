@@ -30,6 +30,7 @@ mod smarts_match;
 mod smarts_parse;
 mod standard_bonds;
 mod standard_components;
+mod standard_roles;
 
 pub use annotate::{
     ChemistryProvenance, ChemistryReport, FormalChargeSource, HBOND_WEAK_ACCEPTOR_ANNOTATION,
@@ -87,3 +88,6 @@ pub use standard_bonds::{
     is_amino_acid_component, is_nucleotide_component, is_water_component, standard_bond_order,
 };
 pub use standard_components::{annotate_standard_components, standard_component_kind};
+pub use standard_roles::{
+    STANDARD_PROTEIN_ROLE_PROFILE, annotate_standard_protein_roles, standard_protein_atom_role,
+};

@@ -80,7 +80,7 @@ See [Compiled workflows](/docs/workflows).
 `Float32Array` and `UInt32Array` are typing protocols for coordinate and index arrays. At runtime, MolFrame returns NumPy-compatible values; users normally work with their `.shape` or pass them to NumPy-aware libraries.
 
 <Callout type="info">
-`molframe.motif.evaluate(structure, specification)` runs the declarative functional-geometry evaluation a TOML or JSON specification describes and returns one verdict per defensible mapping, with every constraint measurement kept beside it; pass `components=` for chemistry-aware atom mapping. The trajectory readers cover the self-describing formats only; formats that need caller-supplied units or topology (GSD, H5MD, AMBER ASCII) are rejected by name rather than guessed.
+`molframe.motif.evaluate(structure, specification)` runs the declarative functional-geometry evaluation a TOML or JSON specification describes and returns one verdict per admitted mapping, with every constraint measurement kept beside it and the mapping's `residues` identifying it. Pruning is on by default (`constrained=True`, shared by `count`, `matches`, `first` and `iter_matches`): a spatial index keeps a mapping when each distance constraint is within its tolerance or inside the range the verdict profile accepts, so cost follows the output, no passing mapping is dropped, and every kept verdict equals the unpruned one. Pass `constrained=False` to report every structural mapping, failures included; pass `components=` for chemistry-aware atom mapping. The trajectory readers cover the self-describing formats only; formats that need caller-supplied units or topology (GSD, H5MD, AMBER ASCII) are rejected by name rather than guessed.
 </Callout>
 
 ## Verification status

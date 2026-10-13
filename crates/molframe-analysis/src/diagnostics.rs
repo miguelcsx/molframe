@@ -71,7 +71,7 @@ diagnostic_from!(HydrogenBondError, |error| match error {
     HydrogenBondError::Spatial(inner) => Diagnostic::from(inner).code(),
 });
 diagnostic_from!(DsspError, |error| match error {
-    DsspError::MissingRoleAnnotation => Code::E6103,
+    DsspError::StandardRoles => Code::E6009,
     DsspError::InvalidOptions => Code::E5101,
     DsspError::AmbiguousRole { .. } => Code::E5105,
 });
