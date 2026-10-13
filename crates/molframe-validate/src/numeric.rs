@@ -16,3 +16,10 @@ pub(crate) fn f64_to_f32(value: f64) -> f32 {
         None => f32::INFINITY,
     }
 }
+
+pub(crate) fn f64_to_usize(value: f64) -> usize {
+    match value.to_usize() {
+        Some(converted) => converted,
+        None => 0,
+    }
+}

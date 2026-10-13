@@ -8,7 +8,7 @@
 
 /// The parent residue of a protonation variant, or the name itself.
 #[must_use]
-pub(crate) fn parent_residue(name: &str) -> &str {
+pub fn parent_residue(name: &str) -> &str {
     match name {
         "HID" | "HIE" | "HIP" | "HSD" | "HSE" | "HSP" => "HIS",
         "CYX" | "CYM" => "CYS",

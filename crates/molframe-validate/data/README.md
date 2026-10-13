@@ -71,3 +71,27 @@ git clone https://github.com/rlabduke/reference_data /tmp/ref-data/rd
 python3 -I build_reference.py --top8000 /tmp/ref-data/rd \
   --ost /tmp/ref-data/ost/stereo_chemical_props.txt
 ```
+
+## Supplying your own tables
+
+The scoring code never reads these files directly. It takes a `ReferenceSet`
+(`src/builtin/reference.rs`) whose four tables each carry a `TableInfo` (name,
+version, source, licence). `bundled_reference()` returns the files above;
+`ReferenceOverrides` replaces any subset, from bytes or from file paths
+(`ReferenceOverrides::from_paths`), and the rest stay default. The decoders and
+parsers are the ones used for the bundled data, so user files follow exactly
+the formats in this document:
+
+- `rama.bin`: grids in category-code order (general, Gly, trans-Pro, cis-Pro,
+  pre-Pro, Ile/Val). Class cut-offs default to the MolProbity values and are
+  replaceable with `RamaGrids::with_thresholds`.
+- `rotamer.bin`: tables named as in `chi_atoms.tsv`; classes are encoded in the
+  file, so a custom table carries its own contour levels.
+- `geometry.tsv`: tab-separated `kind, residue, atoms, mean, sigma, label`,
+  residue `*` for the generic peptide-link terms.
+- `chi_atoms.tsv`: tab-separated `residue, table, atoms of chi1 | chi2 | ...`.
+
+Files read from a path are described as `user-<kind>`, version
+`user-supplied`, source the path. Every result (`ProteinTable::tables`,
+`GeometryScores::tables`) lists the tables it was scored against; the clash
+score records its options in `ClashScore::options`.

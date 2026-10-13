@@ -159,6 +159,7 @@ pub use policy_execution::{
     sasa_kernel, secondary_structure_kernel, structure_kernel, surface_contacts_kernel,
     water_bridges_kernel,
 };
+pub use protonation::parent_residue;
 pub use reference_contacts::{
     NativeContacts, NativeError, native_contact_fraction, native_contact_fraction_matched,
 };

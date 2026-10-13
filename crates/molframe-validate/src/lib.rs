@@ -12,6 +12,8 @@ mod aromatic_planarity;
 mod backbone;
 #[path = "ramachandran.rs"]
 mod backbone_conformation;
+#[path = "builtin/mod.rs"]
+mod builtin_validation;
 #[path = "completeness.rs"]
 mod chain_integrity;
 #[path = "ccd_completeness.rs"]
@@ -59,6 +61,13 @@ pub use backbone_conformation::{
     BackboneTorsions, RamachandranBasin, RamachandranError, RamachandranOptions,
     RamachandranRecord, RamachandranRegion, backbone_torsions, classify, ramachandran,
     ramachandran_outliers,
+};
+pub use builtin_validation::{
+    BuiltinError, ChiDefinition, ChiDefinitions, ClashScore, ClashScoreOptions, GeometryOutlier,
+    GeometryScores, GeometryTargets, HydrogenMode, Layout, NO_ATOM, NOT_EVALUATED, OmegaClass,
+    Part as ReferencePart, ProteinTable, RAMA_BINS, RAMA_FAVOURED, RamaCategory, RamaGrids,
+    RamaThresholds, ReferenceOverrides, ReferenceSet, RotamerClass, RotamerTable, RotamerTables,
+    TableError, TableInfo, Target, bundled_reference, clash_score, geometry_scores, protein_table,
 };
 pub use chain_integrity::{ChainCompleteness, CompletenessError, completeness};
 pub use component_completeness::{
