@@ -342,7 +342,7 @@ registry! {
         "no action needed if the atom was filtered out on purpose; otherwise correct the record's chain, residue number, or atom name. The record itself is kept in the retained headers";
     W3201 = Warning 3201, Loose,
         "component not found in any chemical component provider",
-        "layer the full wwPDB dictionary (components.cif.gz from files.wwpdb.org/pub/pdb/data/monomers) over the bundled core set, or embed chem_comp_atom and chem_comp_bond rows for this component in the input file; until then its atoms and bonds are not checked";
+        "layer the full wwPDB dictionary (components.cif.gz from files.wwpdb.org/pub/pdb/data/monomers) as the user dictionary or as the profile's `components:` cache entry, or embed chem_comp_atom and chem_comp_bond rows for this component in the input file; until then its atoms and bonds are not checked";
     W3202 = Warning 3202, Strict,
         "observed atoms are inconsistent with the component definition; file connectivity was used",
         "check the component's atom names against its definition";

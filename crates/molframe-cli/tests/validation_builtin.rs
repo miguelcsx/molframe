@@ -22,7 +22,7 @@ fn value<'a>(rows: &'a [Vec<String>], check: &str, item: &str) -> &'a str {
 fn ubiquitin_has_no_ramachandran_outliers_and_names_its_tables() {
     let (_, rows) = run("1ubq.cif", "protein", &[]);
     assert!(value(&rows, "ramachandran", "outlier").starts_with("0/"));
-    assert!(value(&rows, "protein", "table:top8000-ramachandran").contains("CC-BY-4.0"));
+    assert!(value(&rows, "protein", "table:top8000-rama").contains("CC-BY-4.0"));
 }
 
 #[test]

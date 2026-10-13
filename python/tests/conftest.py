@@ -21,6 +21,7 @@ nucleic: nucleic-sanity
 geometry: alphafold-peptide-link
 heavy-roles: heavy-atom-roles
 max-area: tien-2013-max-area
+components: fixture-ccd
 """
 ROLES = (
     ("N", "protein_nitrogen"),
@@ -103,6 +104,7 @@ def pytest_configure(config: pytest.Config) -> None:
     for entry in DATA.iterdir():
         if entry.is_file() and entry.suffix != ".py":
             shutil.copy(entry, cache / entry.name)
+    shutil.copy(CCD, cache / "fixture-ccd.cif")
     (cache / "profile.txt").write_text(PROFILE)
     os.environ["MOLFRAME_DATA_DIR"] = str(cache)
     os.environ.pop("MOLFRAME_PROFILE", None)

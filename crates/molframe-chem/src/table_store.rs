@@ -142,16 +142,49 @@ impl TableStore {
         self.load::<T>(path, source, option)
     }
 
+    /// The profile's choice for `T`, or `None` when the profile does not name one.
+    ///
+    /// For a kind that is optional (a component dictionary layered under in-file
+    /// definitions) rather than required. An entry the profile names but the cache
+    /// lacks is still an error.
+    ///
+    /// # Errors
+    ///
+    /// As [`TableStore::select`], except that an absent profile or an absent line is
+    /// `Ok(None)`.
+    pub fn select_optional<T>(
+        &self,
+        option: &'static str,
+    ) -> Result<Option<Selected<T>>, TableError>
+    where
+        T: TableKind + Send + Sync + 'static,
+    {
+        match self.profile_line(T::KIND)? {
+            Ok(name) => {
+                let path = self.directory.join(format!("{name}.{}", T::EXTENSION));
+                self.load::<T>(path, Source::Cache, option).map(Some)
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
     fn profile_entry<T: TableKind>(&self, option: &'static str) -> Result<String, TableError> {
-        let missing = |wanted: String| TableError::Missing {
-            kind: T::KIND,
-            wanted,
-            option,
-        };
+        match self.profile_line(T::KIND)? {
+            Ok(name) => Ok(name),
+            Err(wanted) => Err(TableError::Missing {
+                kind: T::KIND,
+                wanted,
+                option,
+            }),
+        }
+    }
+
+    /// The entry the profile names for `kind`, or why it names none.
+    fn profile_line(&self, kind: &str) -> Result<Result<String, String>, TableError> {
         let text = match std::fs::read_to_string(&self.profile) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(missing(format!(
+                return Ok(Err(format!(
                     "no request was made and there is no profile at {}",
                     self.profile.display()
                 )));
@@ -167,16 +200,15 @@ impl TableStore {
             let line = line.trim();
             if let Some((key, value)) = line.split_once(':')
                 && !line.starts_with('#')
-                && key.trim() == T::KIND
+                && key.trim() == kind
                 && !value.trim().is_empty()
             {
-                return Ok(value.trim().to_owned());
+                return Ok(Ok(value.trim().to_owned()));
             }
         }
-        Err(missing(format!(
-            "no request was made and {} has no `{}:` line",
-            self.profile.display(),
-            T::KIND
+        Ok(Err(format!(
+            "no request was made and {} has no `{kind}:` line",
+            self.profile.display()
         )))
     }
 

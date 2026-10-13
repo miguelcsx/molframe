@@ -1,17 +1,22 @@
 //! Component dictionary resolution for the commands that need chemistry.
 //!
-//! The bundled core set answers by default and a user dictionary, when given,
-//! is layered over it. An empty path stands for "no user dictionary"; the
-//! layering itself is Rust's [`molframe::chemistry::resolution_stack`].
+//! A user dictionary, when given, answers first; the dictionary the store's
+//! profile names (`components:`) answers next; the structure's own definitions
+//! complete the stack. Nothing is built in. An empty path stands for "no user
+//! dictionary"; the layering itself is Rust's
+//! [`molframe::chemistry::resolution_stack`].
 
 use crate::exit::Exit;
 use crate::report::Context;
-use molframe::chemistry::{ComponentProvider, LayeredProvider};
+use molframe::chemistry::{ComponentProvider, LayeredProvider, TableStore};
 use std::path::Path;
 use std::sync::Arc;
 
 /// The path that stands for "no user dictionary".
 const NO_USER_DICTIONARY: &str = "";
+
+/// The version recorded when no dictionary is named: the profile decides.
+const PROFILE_VERSION: &str = "profile";
 
 /// The version recorded when a dictionary path is given without one.
 const UNVERSIONED: &str = "unversioned";
@@ -39,10 +44,7 @@ pub(crate) fn resolve_ccd(
         (None, None) => match (context.ccd, context.ccd_version) {
             (Some(path), Some(version)) => (path, version),
             (Some(path), None) => (path, UNVERSIONED),
-            _ => (
-                Path::new(NO_USER_DICTIONARY),
-                molframe::chemistry::CORE_DICTIONARY_VERSION,
-            ),
+            _ => (Path::new(NO_USER_DICTIONARY), PROFILE_VERSION),
         },
     };
     if path.as_os_str().is_empty() {
@@ -127,7 +129,7 @@ const fn component_kind(kind: molframe::chemistry::ComponentKind) -> &'static st
 
 fn describe(path: &Path) -> String {
     if path.as_os_str().is_empty() {
-        "the bundled core set".to_owned()
+        "the profile's dictionary".to_owned()
     } else {
         path.display().to_string()
     }
@@ -152,7 +154,15 @@ pub(crate) fn load_ccd(
             }
         }
     }
-    layers.push(Arc::new(molframe::chemistry::CoreProvider));
+    match molframe::chemistry::profile_dictionary(&TableStore::global()) {
+        Ok(Some(cached)) => layers.push(cached),
+        Ok(None) => {}
+        Err(error) => {
+            let finding = molframe::Diagnostic::from(error);
+            context.findings(std::slice::from_ref(&finding), &source);
+            return Err(Exit::of(std::slice::from_ref(&finding)));
+        }
+    }
     Ok(LayeredProvider::new(layers))
 }
 
@@ -176,7 +186,18 @@ pub(crate) fn annotate(
             }
         }
     };
-    let provider = molframe::chemistry::resolution_stack(structure.engine(), user);
+    let provider = match molframe::chemistry::resolution_stack(
+        structure.engine(),
+        user,
+        &TableStore::global(),
+    ) {
+        Ok(provider) => provider,
+        Err(error) => {
+            let finding = molframe::Diagnostic::from(error);
+            context.findings(std::slice::from_ref(&finding), &source);
+            return Err(Exit::of(std::slice::from_ref(&finding)));
+        }
+    };
     match molframe::chemistry::apply_component_chemistry(
         structure.engine(),
         &provider,

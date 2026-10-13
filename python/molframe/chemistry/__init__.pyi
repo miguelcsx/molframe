@@ -43,7 +43,7 @@ def annotate(
     version: str = "unversioned",
     polymer_links: PolymerLinkPolicy | None = None,
 ) -> Structure:
-    """Apply component chemistry: in-file definitions, then `components`, then the core set."""
+    """Apply component chemistry: in-file definitions, then `components`, then the profile's dictionary."""
 
 @final
 class PolymerLinkRule:

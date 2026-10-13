@@ -8,6 +8,7 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 
 pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -21,10 +22,44 @@ pub fn amino_acid_ccd() -> PathBuf {
     root().join("../molframe-chem/data/CCD-amino-acids.cif")
 }
 
+const PROFILE: &str = "\
+ramachandran: top8000-rama
+rotamer: top8000-rotamer
+chi: chi-atoms
+nucleic: nucleic-sanity
+geometry: alphafold-peptide-link
+heavy-roles: heavy-atom-roles
+max-area: tien-2013-max-area
+components: fixture-ccd
+";
+
+/// A table cache built from the repository's `data/` files and a profile that
+/// selects them; the library ships no table, so every run is given this one.
+fn table_cache() -> &'static Path {
+    static CACHE: OnceLock<PathBuf> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let cache =
+            std::env::temp_dir().join(format!("molframe-cli-tables-{}", std::process::id()));
+        std::fs::create_dir_all(&cache).expect("cache directory");
+        for entry in std::fs::read_dir(root().join("../../data")).expect("data directory") {
+            let path = entry.expect("entry").path();
+            if path.is_file() {
+                let name = path.file_name().expect("file name");
+                std::fs::copy(&path, cache.join(name)).expect("copy table");
+            }
+        }
+        std::fs::copy(amino_acid_ccd(), cache.join("fixture-ccd.cif")).expect("copy dictionary");
+        std::fs::write(cache.join("profile.txt"), PROFILE).expect("profile");
+        cache
+    })
+}
+
 /// Runs the binary with `arguments` in `directory` and returns its output.
 pub fn run(directory: &Path, arguments: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_molframe"))
         .current_dir(directory)
+        .env("MOLFRAME_DATA_DIR", table_cache())
+        .env_remove("MOLFRAME_PROFILE")
         .env("XDG_CONFIG_HOME", directory)
         .args(arguments)
         .output()

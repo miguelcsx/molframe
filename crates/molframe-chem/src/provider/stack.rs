@@ -1,12 +1,19 @@
 //! The component resolution order every entry point shares.
 //!
 //! A structure's own definitions answer first, an explicit user dictionary
-//! second and the bundled core set last, so a file that defines its ligand and
-//! a user who supplies a full dictionary each win over the compact defaults
-//! without any caller composing layers by hand. Definitions a file gives
-//! without formal charges rank below the dictionaries, which state them.
+//! second and the dictionary the store's profile names (`components:`) third,
+//! so a file that defines its ligand and a user who supplies a dictionary each
+//! win over the cache without any caller composing layers by hand. Definitions
+//! a file gives without formal charges rank below the dictionaries, which state
+//! them. No dictionary is compiled in: a component none of the layers knows is
+//! reported as unknown, with the way to supply a dictionary.
+//!
+//! Cost: building the stack is a few `Arc` clones plus the store's profile read
+//! and one `stat`; a lookup walks at most four layers.
 
-use super::{ComponentProvider, CoreProvider, EmbeddedProvider, LayeredProvider};
+use super::{ComponentProvider, EmbeddedProvider, LayeredProvider, profile_dictionary};
+use crate::TableError;
+use crate::TableStore;
 use crate::model::Component;
 use molframe_cif::Document;
 use molframe_core::contract::DictionaryVersion;
@@ -48,13 +55,18 @@ pub fn take_embedded_components(
 }
 
 /// The provider for annotating `structure`: in-file definitions that state
-/// charges, then `user`, then the bundled core set, then in-file definitions
-/// that give connectivity only.
-#[must_use]
+/// charges, then `user`, then the dictionary `store`'s profile selects, then
+/// in-file definitions that give connectivity only.
+///
+/// # Errors
+///
+/// [`TableError`] when the profile names a dictionary the cache lacks or that
+/// cannot be read.
 pub fn resolution_stack(
     structure: &Structure,
     user: Option<Arc<dyn ComponentProvider>>,
-) -> LayeredProvider {
+    store: &TableStore,
+) -> Result<LayeredProvider, TableError> {
     let mut layers: Vec<Arc<dyn ComponentProvider>> = Vec::new();
     let embedded = structure
         .extensions()
@@ -68,14 +80,16 @@ pub fn resolution_stack(
     if let Some(user) = user {
         layers.push(user);
     }
-    layers.push(Arc::new(CoreProvider));
+    if let Some(cached) = profile_dictionary(store)? {
+        layers.push(cached);
+    }
     if let Some(embedded) = embedded {
         layers.push(Arc::new(Tier {
             source: embedded,
             charged: false,
         }));
     }
-    LayeredProvider::new(layers)
+    Ok(LayeredProvider::new(layers))
 }
 
 /// One half of a file's definitions: those that state charges or those that

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 /// Optional per-command override for the configured chemistry resource.
 #[derive(Args, Debug)]
 pub(crate) struct CcdArguments {
-    /// Chemical Component Dictionary file layered over the bundled core set.
+    /// Chemical Component Dictionary file layered over the dictionary the profile names.
     #[arg(long)]
     pub(crate) ccd: Option<PathBuf>,
     /// Exact CCD release identifier recorded with the results; requires --ccd.

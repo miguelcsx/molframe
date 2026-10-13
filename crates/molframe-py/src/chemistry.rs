@@ -127,10 +127,9 @@ fn vdw_radii<'py>(
 /// Inter-residue bonds are added only with an explicit `polymer_links` policy.
 ///
 /// Components resolve from the structure's own `chem_comp_*` rows first, then
-/// the `components` dictionary when given, then the compact bundled core set
-/// (standard and common modified residues, nucleotides, water, common ions,
-/// frequent cofactors, carbohydrates); every other component is reported as
-/// unknown.
+/// the `components` dictionary when given, then the dictionary the table
+/// store's profile names (`components:` in `profile.txt`, a `<name>.cif` fetched
+/// into the cache); every other component is reported as unknown.
 #[pyfunction]
 #[pyo3(signature = (
     structure,
@@ -161,7 +160,8 @@ fn annotate(
                     .map_err(|findings| findings_error(&findings))?,
             )),
         };
-        let provider = chem::resolution_stack(source.engine(), user);
+        let provider = chem::resolution_stack(source.engine(), user, &chem::TableStore::global())
+            .map_err(crate::error::kernel)?;
         chem::apply_component_chemistry(source.engine(), &provider, policy)
             .map_err(crate::error::kernel)
     })?;

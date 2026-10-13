@@ -1,6 +1,6 @@
 //! Pluggable deterministic component providers and CCD lowering.
 
-mod bundled;
+mod dictionary;
 mod embedded;
 mod embedded_scan;
 mod items;
@@ -12,7 +12,7 @@ mod validation;
 mod views;
 
 use crate::model::Component;
-pub use bundled::{CORE_DICTIONARY_VERSION, CoreProvider};
+pub use dictionary::{ComponentDictionary, profile_dictionary};
 pub use embedded::EmbeddedProvider;
 use items::one_finding;
 pub use layered::LayeredProvider;
@@ -155,8 +155,8 @@ pub fn read_ccd(
 mod tests;
 
 #[cfg(test)]
-#[path = "provider_core_tests.rs"]
-mod core_tests;
+#[path = "provider_dictionary_tests.rs"]
+mod dictionary_tests;
 
 #[cfg(test)]
 #[path = "provider_stack_tests.rs"]

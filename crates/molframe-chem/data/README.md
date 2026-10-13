@@ -47,32 +47,12 @@ The data are CC0-1.0. Charge validation uses the committed 4HHB protein atoms
 with an explicit dictionary; heme, waters and unparameterised metal chemistry
 are excluded from this protein-only fixture, not silently assigned zero.
 
-## Bundled core components
+## Component dictionaries
 
-`core-components.cif` is the compact component dictionary behind
-`CoreProvider`: 364 components cut verbatim from the wwPDB chemical component
-dictionary (`components.cif.gz`, release dated 2026-10-03, version label
-`wwpdb-ccd-2026-10-03-core`). It holds the 20 standard residues and common
-modified, D- and ambiguous residues, standard and modified nucleotides, water,
-common ions, crystallisation additives, frequent cofactors and every
-carbohydrate that `snfg.rs` names. Each block keeps its `chem_comp` identity
-(id, name, type, formula, parent, one-letter code), every atom (name,
-alternate name, element, charge, aromatic, leaving, stereo flags) and every
-bond (order, aromatic, stereo flags). Ideal coordinates are bundled only for
-components with an R or S stereocentre, which is what chirality validation
-needs; every other component, and every model coordinate, reads as absent.
-Anything outside the set is unknown to
-`CoreProvider` and is reported rather than guessed.
-
-Regenerate with `extract_core.py` (standard library only):
-
-```
-python3 -I extract_core.py components.cif.gz ../src/carbohydrates/snfg.rs \
-    core-components.cif 2026-10-03
-```
-
-The component list is the `CORE` table in the script plus every quoted
-identifier in `snfg.rs`, minus the large `DROP` entries. The script reports
-any requested identifier absent from the dictionary. Download the full
-dictionary from https://files.wwpdb.org/pub/pdb/data/monomers/components.cif.gz
-into an empty directory and pass its path.
+No component dictionary is compiled in. A dictionary is resolved, in order,
+from the structure's own `chem_comp_*` rows, an explicit `--ccd` file, and the
+cache entry the profile names with a `components:` line (`<name>.cif`; the file
+stem is the recorded version). Fetch the full wwPDB dictionary from
+https://files.wwpdb.org/pub/pdb/data/monomers/components.cif.gz into the cache
+with `molframe data fetch` and a manifest, or point `--ccd` at a file. A
+component none of these layers defines is reported (W3201), never guessed.
