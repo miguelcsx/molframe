@@ -87,81 +87,86 @@ pub(crate) fn distance_matrix<'py>(
     output.into_python(py, (!condensed).then_some((size, size)))
 }
 
-/// One block of `distance_matrix` rows `[start, stop)`, as `(stop - start, n)`.
-#[pyfunction]
-#[pyo3(name = "_distance_rows", signature = (array, start, stop, *, dtype="float64", context=None))]
-pub(crate) fn distance_rows<'py>(
-    py: Python<'py>,
-    array: &Bound<'py, PyArray2<f32>>,
-    start: usize,
-    stop: usize,
-    dtype: &str,
-    context: Option<&crate::execution::PyExecutionContext>,
-) -> PyResult<Bound<'py, PyAny>> {
-    use molframe::geometry as geom;
-    let width = width(dtype)?;
-    let array = array.readonly();
-    let positions = coordinates(&array)?;
-    let size = positions.len();
-    if start > stop || stop > size {
-        return Err(crate::error::value(format!(
-            "row range {start}..{stop} is outside a matrix of {size} rows"
-        )));
-    }
-    let rows = stop - start;
-    let element = match width {
-        Width::Double => size_of::<f64>(),
-        Width::Single => size_of::<f32>(),
-    };
-    let output = crate::execution::run(
-        py,
-        context,
-        |context| -> Result<Output, geom::MatrixError> {
-            let bytes = rows.saturating_mul(size).saturating_mul(element);
-            let _held =
-                context
-                    .try_reserve(bytes)
-                    .map_err(|_| geom::MatrixError::MemoryBudget {
-                        requested: bytes,
-                        available: context.available_bytes(),
-                    })?;
-            match width {
-                Width::Double => {
-                    let mut block = vec![0.0_f64; rows * size];
-                    geom::distance_rows_into(positions, start..stop, &mut block)?;
-                    Ok(Output::Double(block))
-                }
-                Width::Single => {
-                    let mut block = vec![0.0_f32; rows * size];
-                    geom::distance_rows_f32_into(positions, start..stop, &mut block)?;
-                    Ok(Output::Single(block))
-                }
-            }
-        },
-    )?
-    .map_err(crate::error::kernel)?;
-    output.into_python(py, Some((rows, size)))
+/// Row blocks of the distance matrix, one resident at a time.
+#[pyclass(
+    name = "DistanceBlocks",
+    module = "molframe.geometry",
+    skip_from_py_object
+)]
+pub(crate) struct DistanceBlocks {
+    array: Py<PyArray2<f32>>,
+    width: Width,
+    blocks: molframe::geometry::RowBlocks,
+    context: Option<Py<crate::execution::PyExecutionContext>>,
 }
 
-/// Rows per block that keep a stream of `distance_rows` blocks within budget.
+#[pymethods]
+impl DistanceBlocks {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__<'py>(&mut self, py: Python<'py>) -> PyResult<Option<(usize, Bound<'py, PyAny>)>> {
+        use molframe::geometry as geom;
+        let Some(rows) = self.blocks.next() else {
+            return Ok(None);
+        };
+        let start = rows.start;
+        let array = self.array.bind(py).readonly();
+        let positions = coordinates(&array)?;
+        let size = positions.len();
+        let context = self.context.as_ref().map(|context| context.bind(py).get());
+        let width = self.width;
+        let output = crate::execution::run(py, context, |context| match width {
+            Width::Double => geom::distance_rows_with_context(positions, rows.clone(), context)
+                .map(Output::Double),
+            Width::Single => geom::distance_rows_f32_with_context(positions, rows.clone(), context)
+                .map(Output::Single),
+        })?
+        .map_err(crate::error::kernel)?;
+        Ok(Some((
+            start,
+            output.into_python(py, Some((rows.len(), size)))?,
+        )))
+    }
+}
+
+/// Stream `(start_row, block)` pairs covering the distance matrix.
+///
+/// `block_rows` defaults to the largest block that keeps the stream within the
+/// context memory budget.
 #[pyfunction]
-#[pyo3(name = "_distance_block_rows", signature = (array, *, dtype="float64", context=None))]
-pub(crate) fn distance_block_rows(
+#[pyo3(signature = (array, block_rows=None, *, dtype="float64", context=None))]
+pub(crate) fn distance_matrix_blocks(
     py: Python<'_>,
     array: &Bound<'_, PyArray2<f32>>,
+    block_rows: Option<usize>,
     dtype: &str,
-    context: Option<&crate::execution::PyExecutionContext>,
-) -> PyResult<usize> {
+    context: Option<Py<crate::execution::PyExecutionContext>>,
+) -> PyResult<DistanceBlocks> {
     let width = width(dtype)?;
     let size = coordinates(&array.readonly())?.len();
-    let element = match width {
-        Width::Double => size_of::<f64>(),
-        Width::Single => size_of::<f32>(),
+    let rows = if let Some(rows) = block_rows {
+        rows
+    } else {
+        let element = match width {
+            Width::Double => size_of::<f64>(),
+            Width::Single => size_of::<f32>(),
+        };
+        let bound = context.as_ref().map(|context| context.bind(py).get());
+        crate::execution::run(py, bound, |context| {
+            molframe::geometry::distance_block_rows(size, element, context)
+        })?
+        .map_err(crate::error::kernel)?
     };
-    crate::execution::run(py, context, |context| {
-        molframe::geometry::distance_block_rows(size, element, context)
-    })?
-    .map_err(crate::error::kernel)
+    let blocks = molframe::geometry::RowBlocks::new(size, rows)
+        .ok_or_else(|| crate::error::value("block_rows must be at least 1"))?;
+    Ok(DistanceBlocks {
+        array: array.clone().unbind(),
+        width,
+        blocks,
+        context,
+    })
 }
 
 enum Output {

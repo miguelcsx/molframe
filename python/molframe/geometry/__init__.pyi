@@ -1,4 +1,4 @@
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from typing import Literal, Protocol
 
 from .. import ExecutionContext, Float64Array, Structure, Table
@@ -41,29 +41,24 @@ def distance_matrix(
     budget it raises ``MemoryBudgetError`` naming these options.
     """
 
+class DistanceBlocks:
+    def __iter__(self) -> DistanceBlocks: ...
+    def __next__(self) -> tuple[int, DistanceMatrix]: ...
+
 def distance_matrix_blocks(
     coordinates: Coordinates,
     block_rows: int | None = None,
     *,
     dtype: Literal["float64", "float32"] = "float64",
     context: ExecutionContext | None = None,
-) -> Iterator[tuple[int, DistanceMatrix]]:
-    """Stream ``(start_row, block)`` row blocks, one resident at a time."""
+) -> DistanceBlocks:
+    """Stream ``(start_row, block)`` row blocks, one resident at a time.
 
-def _distance_block_rows(
-    coordinates: Coordinates,
-    *,
-    dtype: Literal["float64", "float32"] = "float64",
-    context: ExecutionContext | None = None,
-) -> int: ...
-def _distance_rows(
-    coordinates: Coordinates,
-    start: int,
-    stop: int,
-    *,
-    dtype: Literal["float64", "float32"] = "float64",
-    context: ExecutionContext | None = None,
-) -> DistanceMatrix: ...
+    Each block has shape ``(rows, n)``, so peak memory is bounded by
+    ``block_rows * n`` values instead of ``n * n``. When ``block_rows`` is
+    ``None`` it is chosen to fit the context memory budget.
+    """
+
 def rmsd(mobile: Coordinates, reference: Coordinates) -> float: ...
 def distances(left: Coordinates, right: Coordinates) -> Float64Array:
     """Distances between corresponding rows, in Å."""

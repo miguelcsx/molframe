@@ -14,7 +14,7 @@ mod geometry;
 pub(crate) mod measures;
 #[cfg(feature = "geometry")]
 pub(crate) use geometry::{
-    centroid, coordinates, distance_block_rows, distance_matrix, distance_rows, rmsd,
+    DistanceBlocks, centroid, coordinates, distance_matrix, distance_matrix_blocks, rmsd,
 };
 #[cfg(feature = "analysis")]
 mod bonds;

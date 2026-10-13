@@ -24,11 +24,11 @@ use super::{
 use super::{governed, workflow};
 #[cfg(feature = "query")]
 use super::{query_aliases, selection_expr};
+#[cfg(feature = "geometry")]
+use bindings::{DistanceBlocks, centroid, distance_matrix, distance_matrix_blocks, rmsd};
 #[cfg(feature = "analysis")]
 use bindings::{PyContactTable, atom_contacts};
 use bindings::{PyQuery, PySelection, PyStructure};
-#[cfg(feature = "geometry")]
-use bindings::{centroid, distance_block_rows, distance_matrix, distance_rows, rmsd};
 use editing::{PyCoordinateEditor, PyStructureEditor};
 use hierarchy::{
     PyAtom, PyAtoms, PyChain, PyChains, PyModel, PyModels, PyResidue, PyResidueSelection,
@@ -99,8 +99,8 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     {
         geometry.add_function(wrap_pyfunction!(centroid, &geometry)?)?;
         geometry.add_function(wrap_pyfunction!(distance_matrix, &geometry)?)?;
-        geometry.add_function(wrap_pyfunction!(distance_rows, &geometry)?)?;
-        geometry.add_function(wrap_pyfunction!(distance_block_rows, &geometry)?)?;
+        geometry.add_function(wrap_pyfunction!(distance_matrix_blocks, &geometry)?)?;
+        geometry.add_class::<DistanceBlocks>()?;
         geometry.add_function(wrap_pyfunction!(rmsd, &geometry)?)?;
         bindings::measures::register(&geometry)?;
         crate::internal_coordinates::register(&geometry)?;
