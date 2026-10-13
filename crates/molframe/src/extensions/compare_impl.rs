@@ -1,3 +1,7 @@
+//! Implements the comparison extension trait for `Structure` by forwarding to the comparison kernels.
+//!
+//! Complexity: O(1) forwarding overhead per method; cost is that of the kernel called.
+
 use super::compare::CompareExt;
 use crate::structure::Structure;
 use crate::{AnalysisPolicy, Namespace};

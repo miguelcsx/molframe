@@ -1,3 +1,7 @@
+//! Serde data types mirroring the MMTF `MessagePack` file, group and entity layout.
+//!
+//! Complexity: no algorithmic work; (de)serialisation is O(bytes) in the serde layer.
+
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 

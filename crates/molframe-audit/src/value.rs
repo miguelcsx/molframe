@@ -1,3 +1,7 @@
+//! A typed value that can replace one field of an analysis policy, parsed from its word.
+//!
+//! Complexity: O(w) time and O(1) space to parse a word of w bytes.
+
 use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AssemblyChoice, ContactDefinition, EquivalencePolicy,
     HydrogenPolicy, MissingPolicy, ModelChoice, Namespace, PeriodicPolicy, PolicyField,

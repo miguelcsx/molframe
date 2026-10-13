@@ -1,3 +1,8 @@
+// Whole-assembly materialisation: copies topology and transformed coordinates into one structure.
+//
+// Complexity: O(instances x atoms + bonds) time and space for the expanded
+// structure; the source snapshot is read, never modified.
+
 impl AssemblyView {
     /// Explicitly copies topology and transformed coordinates into a structure.
     ///

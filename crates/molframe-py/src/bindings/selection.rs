@@ -1,3 +1,9 @@
+//! Python wrappers for atom selections and compiled queries.
+//!
+//! Complexity: O(k) time and space for k selected atoms when exporting indices or
+//! coordinates; set operations are linear in the operands; compiling a query is
+//! linear in its source text.
+
 use super::PyStructure;
 use crate::hierarchy::PyResidueSelection;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};

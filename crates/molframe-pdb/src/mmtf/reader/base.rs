@@ -1,3 +1,7 @@
+// Shared per-file metadata for MMTF models, with identifiers interned once.
+//
+// Complexity: O(atoms + residues + chains) time and space, paid once rather than per model.
+
 /// Builds metadata shared by every model and interns the complete finite set
 /// of identifiers once. Model builders then clone only copy-on-write handles;
 /// repeated symbol lookups do not detach the shared dictionary.

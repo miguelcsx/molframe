@@ -1,3 +1,8 @@
+//! Single-pass parser from SMARTS text to a `SmartsPattern`.
+//!
+//! Complexity: O(n) time and space in the pattern length n, apart from bracket
+//! expressions and recursive patterns, which are re-parsed once per nesting level.
+
 use crate::StereoConfiguration;
 use crate::smarts::{
     AtomExpression, AtomTest, BondExpression, PatternBond, SignedAtomTest, SmartsError,

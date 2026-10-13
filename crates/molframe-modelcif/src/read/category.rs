@@ -1,3 +1,8 @@
+//! Streaming category builders that collect CIF cells into compact columns under a memory ceiling.
+//!
+//! Complexity: amortised O(1) time per cell with hashed category and column lookup;
+//! O(cells) space, checked against the ceiling on every push.
+
 use super::column::{ColumnBuilder, PushMemory};
 use super::pairwise::PairwiseStream;
 use crate::dense::PAIRWISE;

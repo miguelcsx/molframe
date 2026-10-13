@@ -1,3 +1,8 @@
+//! MMTF writer: validates a structure and encodes it as a `MessagePack` file.
+//!
+//! Complexity: O(atoms + bonds + residues) time and space; the group dictionary is
+//! built with hashed lookups.
+
 use super::codec::{encode_chars, encode_f32, encode_i32, encode_strings};
 use super::schema::{Entity, File, Group};
 use super::{MMTF_METADATA_EXTENSION, MmtfMetadata, MmtfOptionalField};

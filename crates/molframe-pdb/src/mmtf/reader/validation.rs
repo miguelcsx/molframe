@@ -1,3 +1,7 @@
+// Validation of MMTF versions, declared counts and decoded array lengths, plus small value conversions.
+//
+// Complexity: O(1) per check, O(arrays) for the length checks; no allocation beyond diagnostics.
+
 /// Validates that an MMTF version belongs to a supported major version.
 ///
 /// Major versions zero and one are accepted; malformed or newer major versions

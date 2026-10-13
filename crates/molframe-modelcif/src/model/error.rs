@@ -1,3 +1,7 @@
+//! Errors, options and the memory budget for `ModelCIF` projection.
+//!
+//! Complexity: no algorithmic work; O(1) per budget claim or option check.
+
 use molframe_core::Diagnostic;
 use std::fmt;
 

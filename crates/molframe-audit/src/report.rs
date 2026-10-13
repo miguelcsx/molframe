@@ -1,3 +1,7 @@
+//! Plain data types describing a completed audit: runs, sensitive items and per-dimension effects.
+//!
+//! Complexity: no algorithmic work; O(1) per accessor, storage is linear in the runs held.
+
 use crate::design::Interaction;
 use molframe_core::contract::{AnalysisPolicy, PolicyField};
 

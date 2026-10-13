@@ -1,3 +1,8 @@
+//! Policy dimensions and spaces, and their expansion into a deterministic audit plan.
+//!
+//! Complexity: costing is O(D) for D dimensions; expansion is O(P x D) time and
+//! O(P x D) space for the P points of the Cartesian product.
+
 use crate::{PlanError, PolicyValue, UncertaintyClass};
 use molframe_core::contract::{
     AlignmentPolicy, AltlocPolicy, AnalysisPolicy, AssemblyChoice, ContactDefinition,

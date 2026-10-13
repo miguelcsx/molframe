@@ -1,3 +1,8 @@
+//! Exact re-execution of an analysis from a recorded provenance record.
+//!
+//! Complexity: O(input bytes) to check the input digest, then whatever the caller's
+//! run costs; O(1) extra space.
+
 use super::{AnalysisPolicy, ContentDigest, DictionaryVersion, Provenance};
 
 /// Versions of executable and reference data available for a re-execution.

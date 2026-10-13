@@ -1,3 +1,8 @@
+//! Matching of parsed SMARTS patterns against components and structures.
+//!
+//! Complexity: building the molecular graph is O(atoms + bonds); ring queries are
+//! bounded searches over that graph; the match search itself is in `matcher`.
+
 use crate::smarts::{AtomTest, BondExpression, SmartsDataError, SmartsMatch, SmartsPattern};
 use crate::{Component, StereoConfiguration};
 use molframe_core::annotation::{

@@ -1,3 +1,8 @@
+//! Codecs for the MMTF binary array encodings, in both directions.
+//!
+//! Complexity: O(n) time and O(n) space for n decoded elements; every length and
+//! divisor is checked before it is trusted.
+
 use molframe_core::{Code, Diagnostic};
 use num_traits::ToPrimitive;
 use serde_bytes::ByteBuf;

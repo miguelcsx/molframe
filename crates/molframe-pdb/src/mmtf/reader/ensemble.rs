@@ -1,3 +1,7 @@
+// Assembles per-model structures into a dense or ragged ensemble.
+//
+// Complexity: O(models x atoms) time and space; models with identical topology share it.
+
 /// Moves the single coordinate frame out of a just-built model.
 fn take_frame(data: &mut StructureData) -> Result<CoordinateBlock, Diagnostic> {
     let coordinates = std::mem::replace(

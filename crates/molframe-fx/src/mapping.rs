@@ -1,3 +1,8 @@
+//! Enumerates the component and atom correspondences that satisfy a motif.
+//!
+//! Complexity: O(residues x atoms) to find candidates, then O(M x components) to
+//! list M mappings; fails with a limit error rather than exceeding the bound M.
+
 use crate::{AtomSite, ComponentRole, ComponentSpec, MappingPlan, Motif};
 use molframe_chem::{Component, ComponentKind, ComponentProvider, equivalence_classes};
 use molframe_core::contract::{AnalysisPolicy, EquivalencePolicy};

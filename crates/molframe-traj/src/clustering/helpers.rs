@@ -1,3 +1,8 @@
+// Matrix validation, merge-heap, medoid and neighbourhood helpers shared by the clustering routines.
+//
+// Complexity: validation is O(n^2) for n frames; the medoid helper is O(m^2) for m
+// members; the other helpers are O(1) to O(n) per call.
+
 /// Validates matrix dimensions, finite distances, non-negativity, and symmetry.
 fn validate_matrix(distances: &EnsembleDistanceMatrix) -> Result<(), EnsembleGeometryError> {
     let size = distances.size;

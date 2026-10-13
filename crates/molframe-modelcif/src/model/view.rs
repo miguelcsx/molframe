@@ -1,3 +1,7 @@
+//! The typed `ModelCIF` view and the structure extension that exposes it.
+//!
+//! Complexity: O(1) per accessor; row iterators are O(rows) over borrowed data.
+
 use crate::model::metadata;
 use crate::{
     ModelCategory, ModelDescription, ProtocolStep, QualityMetrics, SoftwareGroup, Target, Template,

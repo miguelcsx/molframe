@@ -1,3 +1,8 @@
+//! Runs an audit plan and summarises how the caller's result items move across policies.
+//!
+//! Complexity: one caller analysis per planned policy; the summary is O(P x I log I)
+//! time and O(P x I) space for P policy points and I distinct items.
+
 use crate::metric::jaccard_distance;
 use crate::{AuditPlan, AuditReport, AuditRun, DimensionSensitivity, SensitiveItem};
 use std::collections::{BTreeMap, BTreeSet};

@@ -1,3 +1,7 @@
+//! Frozen threshold profiles that turn named metrics into a pass, fail or indeterminate verdict.
+//!
+//! Complexity: O(rules x log metrics) time and O(rules) space per decision.
+
 use std::collections::BTreeMap;
 
 /// Numeric comparison made by a frozen profile rule.

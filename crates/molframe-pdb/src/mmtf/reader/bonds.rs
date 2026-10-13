@@ -1,3 +1,7 @@
+// Splits MMTF inter-group bonds and maps bond endpoints onto each model's atoms.
+//
+// Complexity: O(bonds) time and space; O(1) per endpoint lookup.
+
 /// One global MMTF bond translated to model-local atom indices.
 #[derive(Clone, Copy)]
 struct GlobalBond {

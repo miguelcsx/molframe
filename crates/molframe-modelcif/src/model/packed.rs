@@ -1,3 +1,7 @@
+//! Narrowest-width packed storage for dictionary indices and integers.
+//!
+//! Complexity: O(n) time and O(n) space to pack n values; O(1) per lookup.
+
 use crate::ModelCifError;
 use std::mem::size_of;
 

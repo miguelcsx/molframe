@@ -1,3 +1,7 @@
+//! Golden tests for hydrogen bonds, secondary-structure assignment and policy-sensitive interface contacts.
+//!
+//! Complexity: fixtures are fixed-size, so each test is O(1) in the size of its inputs.
+
 use molframe::{
     AnnotationColumn, AtomAnnotation, AtomIndex, BondOrder, BondProvenance, BondRecord,
     BondTableBuilder, ReadOptions, Structure,

@@ -1,3 +1,8 @@
+//! Reader state handlers for PDB metadata records: header, title, method and unit cell.
+//!
+//! Complexity: O(line width) per record; title and method text grow by append, so
+//! total work is linear in the metadata text.
+
 use super::ReadState;
 use crate::fixed;
 use crate::header::is_metadata_record;

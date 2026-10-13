@@ -1,3 +1,6 @@
+// Chain-label ledger that keeps generated labels unique across whole and chunked expansion.
+//
+// Complexity: amortised O(1) time per label assigned; O(labels) space.
 
 /// Chain-label bookkeeping shared by whole and chunked expansion.
 ///

@@ -1,3 +1,7 @@
+//! Golden tests for assembly listing, materialisation, interface queries and crystal contacts.
+//!
+//! Complexity: fixtures are fixed-size, so each test is O(1) in the size of its inputs.
+
 use molframe::crystal::{AssemblyExt, SymmetryExt};
 use molframe::spatial::SpatialBackend;
 use molframe::{InputBuffer, ModelIndex, ReadOptions, Structure};

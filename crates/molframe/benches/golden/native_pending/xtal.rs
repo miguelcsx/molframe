@@ -1,3 +1,8 @@
+//! Criterion benchmarks for the assembly and crystal golden workflows: listing, materialising
+//! and querying assemblies and finding crystal contacts.
+//!
+//! Complexity: fixtures are fixed-size, so setup is O(1); each case costs the operation it measures.
+
 use std::fmt::Debug;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};

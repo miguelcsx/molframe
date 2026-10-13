@@ -1,3 +1,8 @@
+//! Composes mapping, alignment, measurement and verdict into one evaluation.
+//!
+//! Complexity: the sum of its stages; mapping is bounded by the mapping limit M and
+//! measurement by the alternatives bound, so work is O(M x measurement cost).
+
 use crate::{
     AlignmentKind, MappingError, MappingPlan, MeasurementError, MeasurementOptions, MeasurementSet,
     Motif, Verdict, VerdictProfile, align_intrinsic, measure_constraints,

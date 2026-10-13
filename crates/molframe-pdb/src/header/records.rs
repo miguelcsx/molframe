@@ -1,3 +1,8 @@
+//! Ordered legacy PDB metadata records kept verbatim, with typed lookups for common fields.
+//!
+//! Complexity: O(1) per push and field read; `named` is O(records) per query;
+//! O(records x line width) space.
+
 use molframe_core::Structure;
 
 /// Stable extension key for ordered legacy PDB metadata records.

@@ -1,3 +1,8 @@
+// Agglomerative clustering to a fixed cluster count over a distance matrix.
+//
+// Complexity: O(n^2 log n) time and O(n^2) space for n frames, using a lazily
+// invalidated merge heap; ties break deterministically.
+
 /// Agglomerative clustering to an explicit number of clusters.
 ///
 /// Ties are resolved by the lexicographically smallest pair of current member

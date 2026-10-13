@@ -1,3 +1,8 @@
+//! MMTF reader: decodes a `MessagePack` file and lowers it into a structure or ensemble.
+//!
+//! Complexity: O(atoms + bonds + groups) time and space across decode, validation
+//! and lowering; each model is built once from shared base metadata.
+
 use super::codec::{decode_chars, decode_f32, decode_i32, decode_strings};
 use super::schema::{Entity, File, Group};
 use super::{

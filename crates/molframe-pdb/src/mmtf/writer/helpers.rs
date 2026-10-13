@@ -1,3 +1,7 @@
+// Field encoders and presence checks for the MMTF writer.
+//
+// Complexity: O(n) time and space for n values per column; O(1) for scalar helpers.
+
 fn encoded_order(order: BondOrder) -> (i32, i32) {
     match order {
         BondOrder::Single | BondOrder::Polymeric => (1, 0),

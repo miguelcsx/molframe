@@ -1,3 +1,8 @@
+//! Governed kernels wrapping the basic structure validation checks with descriptors and quality metadata.
+//!
+//! Complexity: that of the wrapped check, plus O(1) descriptor work and O(atoms)
+//! for the completeness record per kernel call.
+
 use crate::{
     AltlocOccupancyError, AltlocOccupancyOptions, AltlocOccupancyReport, BondDeviation,
     CcdCompletenessReport, ChainCompleteness, CisPeptide, ClashOptions, ClashTable,

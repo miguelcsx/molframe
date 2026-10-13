@@ -1,3 +1,8 @@
+//! Criterion benchmarks for the analysis golden workflows: hydrogen bonds, secondary structure,
+//! Ramachandran and policy-sensitive interface contacts.
+//!
+//! Complexity: fixtures are fixed-size, so setup is O(1); each case costs the analysis it measures.
+
 use molframe_core::optional::OptionalSymbol;
 use std::fmt::Debug;
 

@@ -1,3 +1,8 @@
+//! Lowers a CIF document's `ModelCIF` categories into one compact store and validates required items.
+//!
+//! Complexity: O(cells) time over the document's `ma_*` cells; O(cells) space,
+//! bounded by the configured memory ceiling.
+
 use crate::{CompactColumn, MemoryBudget, ModelCategory, ModelCif, ModelCifError, ModelCifOptions};
 use molframe_cif::Document;
 use molframe_core::{Code, Diagnostic};

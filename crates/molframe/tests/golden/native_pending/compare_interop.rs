@@ -1,3 +1,7 @@
+//! Golden tests for chain mapping, ligand symmetry, tensor export, manifest splitting and re-execution.
+//!
+//! Complexity: fixtures are fixed-size, so each test is O(1) in the size of its inputs.
+
 use std::sync::Arc;
 
 use molframe::chemistry::{Component, ComponentKind};

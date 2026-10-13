@@ -1,3 +1,7 @@
+//! Governed kernels wrapping the chemistry-aware validation checks with descriptors and quality metadata.
+//!
+//! Complexity: that of the wrapped check, plus O(1) descriptor work per kernel call.
+
 use crate::{
     ChiralityOptions, ChiralityReport, NucleicGeometryError, NucleicGeometryPolicy,
     NucleicGeometryRecord, RamachandranError, RamachandranOptions, RamachandranRecord,

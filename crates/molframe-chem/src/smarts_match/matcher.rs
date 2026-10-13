@@ -1,3 +1,8 @@
+//! Backtracking subgraph search that maps pattern atoms onto graph atoms.
+//!
+//! Complexity: worst case O(n^q) time for q pattern atoms over n graph atoms, far
+//! less when pattern atoms are connected; O(n + q) space plus the matches kept.
+
 use super::{
     AtomTest, BondExpression, Element, Graph, SmartsMatch, SmartsPattern, bond_matches, valence,
 };

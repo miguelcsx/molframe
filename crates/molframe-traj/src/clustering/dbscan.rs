@@ -1,3 +1,7 @@
+// Density-based clustering over a distance matrix.
+//
+// Complexity: O(n^2) time from neighbourhood scans over n frames; O(n) extra space.
+
 /// Density-based clustering with explicit neighbourhood and core-size policy.
 ///
 /// # Errors

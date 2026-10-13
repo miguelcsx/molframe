@@ -1,3 +1,7 @@
+// Representative member of a group: the one with least total distance to the rest.
+//
+// Complexity: O(n^2) validation of the matrix, then O(m^2) time and O(m) space for m members.
+
 /// Returns the member minimizing total within-group distance.
 ///
 /// # Errors

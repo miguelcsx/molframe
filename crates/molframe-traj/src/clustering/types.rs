@@ -1,3 +1,8 @@
+// Linkage, clustering result and condensed pair-distance types for clustering.
+//
+// Complexity: condensed pair storage is O(n^2) space for n frames, built in
+// O(n^2) time; lookups and updates are O(1).
+
 /// Agglomerative inter-cluster distance definition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Linkage {

@@ -1,3 +1,7 @@
+//! Shared constructors for governed analysis descriptors, parameters and results.
+//!
+//! Complexity: O(1) per helper, apart from the O(atoms) completeness check in `complete`.
+
 use super::{AnalysisDescriptor, ForbiddenResolution, FrameKernelResult, Requirement};
 use molframe_core::contract::{HydrogenPolicy, ParameterValue, PolicyField};
 use molframe_core::structure::Structure;

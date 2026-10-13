@@ -1,3 +1,8 @@
+//! Declarative motif description: components, atom sites and geometric constraints.
+//!
+//! Complexity: construction and validation are O(components + constraints x sites)
+//! time and space; no geometry is computed here.
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 

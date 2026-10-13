@@ -1,3 +1,8 @@
+// Topology comparison, atom and residue record construction, and bond lowering for the MMTF reader.
+//
+// Complexity: O(atoms + residues + bonds) time per call to the comparison and
+// build helpers; O(1) extra space apart from the records produced.
+
 /// Returns whether two structures have identical normalized topology.
 ///
 /// The comparison covers declared hierarchy sizes, bonds, chain metadata,

@@ -1,3 +1,7 @@
+// Parse state that turns CIF tokens into sink events and tracks loop columns.
+//
+// Complexity: O(1) amortised per token; O(columns) space for the open loop header.
+
 /// What the parser is in the middle of.
 struct ParseState<'input, S> {
     sink: S,

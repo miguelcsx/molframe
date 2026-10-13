@@ -1,3 +1,7 @@
+//! Names the `ModelCIF` items whose values are identifiers rather than free text.
+//!
+//! Complexity: O(1) time and space per lookup; a fixed match over static names.
+
 pub(crate) fn identifier_item(category: &str, item: &str) -> bool {
     match category {
         "ma_model_list" => matches!(

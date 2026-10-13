@@ -1,3 +1,8 @@
+//! Column builders that pick plain or dictionary encoding and widen as values arrive.
+//!
+//! Complexity: amortised O(1) time per value; O(rows + distinct values) space, with
+//! an O(rows) copy each time a column is promoted.
+
 use super::packed::{GrowingIndices, GrowingIntegers, push, reserved};
 use crate::{
     CompactColumn, DictionaryColumn, DictionaryEntry, IntegerColumn, ModelCifError, NumberColumn,

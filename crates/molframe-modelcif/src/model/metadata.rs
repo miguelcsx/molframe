@@ -1,3 +1,7 @@
+//! Borrowed typed views of `ModelCIF` model, target, template, protocol and software rows.
+//!
+//! Complexity: O(1) per row view; O(1) space, as every field borrows from the store.
+
 use crate::{CompactColumn, ModelCategory};
 
 /// A computational model declared by `ModelCIF`.

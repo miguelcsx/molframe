@@ -1,3 +1,8 @@
+//! Measures each motif constraint over the atom alternatives of a mapping.
+//!
+//! Complexity: per constraint O(A^s x s) time for s sites with up to A alternatives
+//! each, capped by the configured bound; O(s) working space plus the results.
+
 use crate::{AlignedMotif, Constraint, Motif};
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::Structure;

@@ -1,3 +1,7 @@
+//! Implements the analysis extension trait for `Structure` by forwarding to the analysis kernels.
+//!
+//! Complexity: O(1) forwarding overhead per method; cost is that of the kernel called.
+
 use super::analysis::AnalysisExt;
 use crate::ExecutionContext;
 use crate::structure::{Selection, Structure};

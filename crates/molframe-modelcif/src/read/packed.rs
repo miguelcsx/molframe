@@ -1,3 +1,8 @@
+//! Growable index and integer buffers that widen only when a value needs it.
+//!
+//! Complexity: amortised O(1) time per push; widening is an O(n) copy, at most twice
+//! per buffer; O(n) space.
+
 use crate::{ModelCifError, PackedIndices, PackedIntegers};
 use std::mem::size_of;
 

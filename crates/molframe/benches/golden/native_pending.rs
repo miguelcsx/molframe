@@ -1,3 +1,7 @@
+//! Registers the pending-workflow benchmark groups with the golden benchmark suite.
+//!
+//! Complexity: O(1) registration; each benchmark costs what the workflow it measures costs.
+
 use criterion::BenchmarkGroup;
 
 #[path = "native_pending/analysis.rs"]

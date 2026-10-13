@@ -1,3 +1,8 @@
+//! Criterion benchmarks for the trajectory golden workflows: neighbour-list reuse,
+//! frame extraction and parallel analysis.
+//!
+//! Complexity: fixtures are fixed-size, so setup is O(1); each case costs the trajectory operation it measures.
+
 use std::fmt::Debug;
 
 use criterion::{BenchmarkGroup, Throughput, black_box};

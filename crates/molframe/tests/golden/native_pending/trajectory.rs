@@ -1,3 +1,7 @@
+//! Golden tests for neighbour-list reuse, frame extraction and parallel trajectory analysis.
+//!
+//! Complexity: fixtures are fixed-size, so each test is O(1) in the size of its inputs.
+
 use molframe::AnalysisPolicy;
 use molframe::spatial::SpatialBackend;
 use molframe_core::selection::AtomSelection;

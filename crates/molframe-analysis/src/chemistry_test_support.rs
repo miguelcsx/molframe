@@ -1,3 +1,7 @@
+//! Test-only helpers that attach formal-charge annotations to a structure.
+//!
+//! Complexity: O(atoms x charges) time and O(atoms) space per call; fixtures are tiny.
+
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::column::Presence;
 use molframe_core::structure::Structure;

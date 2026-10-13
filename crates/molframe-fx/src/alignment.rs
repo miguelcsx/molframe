@@ -1,3 +1,7 @@
+//! Records how a mapped motif is placed in a frame before it is measured.
+//!
+//! Complexity: O(1) time and space; the mapping is moved, not copied.
+
 use crate::MappedMotif;
 use molframe_geom::Rigid;
 

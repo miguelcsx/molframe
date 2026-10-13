@@ -1,3 +1,8 @@
+//! Criterion benchmarks for the comparison and interoperability golden workflows: chain mapping,
+//! ligand symmetry, tensor export, manifest splitting and re-execution.
+//!
+//! Complexity: fixtures are fixed-size, so setup is O(1); each case costs the operation it measures.
+
 use std::fmt::Debug;
 use std::sync::Arc;
 

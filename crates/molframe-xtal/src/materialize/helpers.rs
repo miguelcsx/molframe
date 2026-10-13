@@ -1,3 +1,8 @@
+// Counting, copying and remapping helpers for assembly materialisation.
+//
+// Complexity: O(instances) for the counts; O(atoms) per annotation or coordinate
+// column copied; O(1) per atom or bond remap.
+
 /// Computes the expected expanded atom count with overflow checking.
 fn expanded_atom_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
     view.instances.iter().try_fold(0usize, |total, instance| {
