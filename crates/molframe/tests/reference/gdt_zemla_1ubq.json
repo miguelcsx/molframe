@@ -1,0 +1,53 @@
+{
+ "cases": {
+  "identical": {
+   "cutoffs": [
+    1.0,
+    2.0,
+    4.0,
+    8.0
+   ],
+   "fractions": [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   "score": 1.0
+  },
+  "perturbed_0p9": {
+   "cutoffs": [
+    1.0,
+    2.0,
+    4.0,
+    8.0
+   ],
+   "fractions": [
+    0.2631578947368421,
+    0.8157894736842105,
+    1.0,
+    1.0
+   ],
+   "score": 0.7697368421052632
+  },
+  "perturbed_0p9_ha": {
+   "cutoffs": [
+    0.5,
+    1.0,
+    2.0,
+    4.0
+   ],
+   "fractions": [
+    0.02631578947368421,
+    0.2236842105263158,
+    0.7894736842105263,
+    1.0
+   ],
+   "score": 0.5098684210526316
+  }
+ },
+ "definition": "Zemla 2003",
+ "fixture": "1ubq.pdb",
+ "note": "No reference program reports GDT on this platform, so each cutoff fraction was recomputed from the definition in NumPy at the least-squares superposition. That superposition's RMSD is checked separately against TM-align in tm_score_tmalign_0.3.0.json.",
+ "representation": "C-alpha trace"
+}

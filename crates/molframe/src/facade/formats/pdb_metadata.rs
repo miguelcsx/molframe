@@ -14,6 +14,8 @@ pub(crate) fn complete(
     structure: &Structure,
     options: &molframe_pdb::PdbOptions,
 ) -> molframe_pdb::PdbOptions {
+    // Only the crystal metadata below rewrites the options.
+    #[cfg_attr(not(feature = "crystal"), allow(unused_mut))]
     let mut completed = options.clone();
     #[cfg(feature = "crystal")]
     {

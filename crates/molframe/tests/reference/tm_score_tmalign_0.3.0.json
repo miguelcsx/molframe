@@ -1,0 +1,45 @@
+{
+ "case_values": {
+  "displaced_tail_12A": 0.68028,
+  "hinge_first_half_8A": 0.567915,
+  "identical": 1.0,
+  "noise_0p5": 0.93684,
+  "rigid_shift_8A": 1.0
+ },
+ "cases": {
+  "displaced_tail_12A": {
+   "rmsd": 1.8172533792599197,
+   "tm_norm_reference": 0.68028004546643
+  },
+  "hinge_first_half_8A": {
+   "rmsd": 2.552682668384113,
+   "tm_norm_reference": 0.5679148994333044
+  },
+  "identical": {
+   "rmsd": 1.622574442335893e-06,
+   "tm_norm_reference": 1.0
+  },
+  "noise_0p5": {
+   "rmsd": 0.8137137648005943,
+   "tm_norm_reference": 0.9368402293345858
+  },
+  "rigid_shift_8A": {
+   "rmsd": 1.7503031453747694e-06,
+   "tm_norm_reference": 1.0
+  }
+ },
+ "fixture": "1ubq.pdb",
+ "library": "tmtools (Zhang & Skolnick TM-align)",
+ "limitation": "molframe's tm_score fits by reweighting a correspondence-preserving superposition, and TM-align maximises over superpositions with a residue-level dynamic program that can also re-pair residues. The two agree exactly for a rigid displacement and to 1e-5 for small non-rigid noise, and the kernel is never below the plain least-squares fit. On motion that swings part of the chain past another it reads about 0.04 lower (hinge) and 0.015 lower (tail) than TM-align, which is the residue-repairing search it cannot reach from a fixed correspondence.",
+ "molframe_values": {
+  "displaced_tail_12A": 0.665254,
+  "hinge_first_half_8A": 0.523686,
+  "identical": 1.0,
+  "noise_0p5": 0.936846,
+  "rigid_shift_8A": 1.0
+ },
+ "representation": "C-alpha trace of the protein, one point per residue",
+ "sequence": "MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG",
+ "sha256": "d4a6812d8951cf6594e6a0763f089e35f5a80b62acb3c117b2c5565228a7b161",
+ "version": "0.3.0"
+}

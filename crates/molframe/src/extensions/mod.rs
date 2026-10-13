@@ -21,17 +21,15 @@
 //! # Which domains have a trait, and which do not
 //!
 //! A trait exists where the domain's kernels take a structure first:
-//! [`AnalysisExt`], [`ValidationExt`] and [`CompareExt`]. Geometry, surface and
-//! the spatial planners are coordinate-first — their kernels take
-//! `positions: &[[f32; 3]]` and the radii or selections that go with it — so a
-//! structure-level method would not be a forwarder. It would be new façade
-//! logic deciding what to gather and what to do about an atom whose element
-//! has no radius in the chosen set, and that is a design decision with an error
-//! vocabulary of its own, not a rewrite of a call. Those kernels stay free
-//! functions over coordinates, reached with
-//! [`Selection::to_coordinates`](crate::Selection::to_coordinates) and
-//! [`Structure::coordinates`](crate::Structure::coordinates) as the two
-//! borrow-or-gather doors.
+//! [`AnalysisExt`], [`ValidationExt`] and [`CompareExt`]. [`SurfaceExt`] is the
+//! one deliberate exception: surface kernels are coordinate-first, so its
+//! methods are not forwarders. They gather the coordinates of one model, take
+//! radii from a [`RadiusSet`](molframe_chem::RadiusSet), and give an atom with
+//! no radius a `NaN` area that does not occlude its neighbours. That policy is
+//! stated once, in `surface`, instead of being rediscovered by every caller.
+//! Geometry and the spatial planners stay free functions over coordinates,
+//! reached with [`Selection::to_coordinates`](crate::Selection::to_coordinates)
+//! and [`Structure::coordinates`](crate::Structure::coordinates).
 //!
 //! [`ExecutionContext`]: crate::ExecutionContext
 
@@ -43,6 +41,8 @@ mod analysis_impl;
 mod compare;
 #[cfg(feature = "compare")]
 mod compare_impl;
+#[cfg(all(feature = "surface", feature = "chemistry"))]
+mod surface;
 #[cfg(feature = "validation")]
 mod validation;
 
@@ -50,9 +50,15 @@ mod validation;
 pub use analysis::AnalysisExt;
 #[cfg(feature = "compare")]
 pub use compare::CompareExt;
+#[cfg(all(feature = "surface", feature = "chemistry"))]
+pub use surface::{SasaMethod, SasaOptions, SurfaceExt, SurfaceExtError};
 #[cfg(feature = "validation")]
 pub use validation::ValidationExt;
 
 #[cfg(test)]
 #[path = "extension_tests.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "surface", feature = "chemistry"))]
+#[path = "surface_tests.rs"]
+mod surface_tests;

@@ -24,8 +24,8 @@ mod transform;
 #[cfg(feature = "bcif")]
 pub use bcif::{write_bcif, write_bcif_with_options};
 #[cfg(feature = "chemistry")]
-pub use chem::read_component_dictionary;
-#[cfg(feature = "mmcif")]
+pub use chem::{open_component_dictionary, read_component_dictionary};
+#[cfg(all(feature = "mmcif", feature = "bcif"))]
 pub(crate) use cif_metadata::complete as complete_cif_options;
 #[cfg(feature = "mmcif")]
 pub(crate) use mmcif::{cif_write_findings, write_mmcif_to_with_options};

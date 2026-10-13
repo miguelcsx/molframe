@@ -182,7 +182,11 @@ fn named_heavy_atoms(ligand: &Structure) -> Vec<(String, u8, [f32; 3])> {
         .into_iter()
         .filter_map(|a| {
             let e = a.element().filter(|e| e.atomic_number() > 1)?;
-            Some((a.name()?.trim().to_owned(), e.atomic_number(), a.position()?))
+            Some((
+                a.name()?.trim().to_owned(),
+                e.atomic_number(),
+                a.position()?,
+            ))
         })
         .collect()
 }

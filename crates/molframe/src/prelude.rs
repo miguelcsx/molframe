@@ -15,8 +15,9 @@ pub use crate::{
 // The policies and identifiers a call takes.
 pub use crate::{
     AltlocPolicy, AmbiguousResidueBoundaryPolicy, AssemblyChoice, AtomRef, ChainRef,
-    ChainSequenceExt, Element, ExecutionContext, Limits, MissingElementPolicy, MissingPolicy,
-    ModelChoice, ModelIndex, ModelRef, Namespace, ParseMode, ReadOptions, ResidueRef,
+    ChainSequenceExt, Element, ExecutionContext, Limits, MemoryBudget, MissingElementPolicy,
+    MissingPolicy, ModelChoice, ModelIndex, ModelRef, Namespace, ParseMode, ReadOptions,
+    ResidueRef,
 };
 
 // The verbs.
@@ -34,7 +35,7 @@ pub use crate::{write_bcif, write_bcif_with_options};
 pub use crate::{formats::pdb::PdbHeadersExt, write_pdb};
 
 #[cfg(feature = "chemistry")]
-pub use crate::read_component_dictionary;
+pub use crate::{open_component_dictionary, read_component_dictionary};
 
 #[cfg(feature = "geometry")]
 pub use crate::geometry::Rigid;
@@ -70,6 +71,8 @@ pub use crate::CompareExt;
 pub use crate::ValidationExt;
 #[cfg(feature = "crystal")]
 pub use crate::crystal::{AssemblyExt, NcsExt, SymmetryExt};
+#[cfg(all(feature = "surface", feature = "chemistry"))]
+pub use crate::{SasaMethod, SasaOptions, SurfaceExt};
 
 #[cfg(feature = "modelcif")]
 pub use crate::formats::modelcif::ModelCifExt;

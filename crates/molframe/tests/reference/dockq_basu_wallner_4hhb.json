@@ -1,0 +1,29 @@
+{
+ "cases": {
+  "shift_0": {
+   "fnat": 1.0,
+   "interface_rmsd": 7.353814400003832e-15,
+   "ligand_rmsd": 7.098580217917763e-15,
+   "score": 1.0
+  },
+  "shift_3": {
+   "fnat": 0.6545454545454545,
+   "interface_rmsd": 1.1490100884977235,
+   "ligand_rmsd": 2.9999999838741225,
+   "score": 0.7246629168469582
+  },
+  "shift_8": {
+   "fnat": 0.2909090909090909,
+   "interface_rmsd": 3.075808400912508,
+   "ligand_rmsd": 7.999999997754668,
+   "score": 0.3377726623071216
+  }
+ },
+ "chains": [
+  "A",
+  "B"
+ ],
+ "definition": "Basu and Wallner 2016",
+ "fixture": "4hhb.cif",
+ "note": "Recomputed from the definition in NumPy; no installable OpenStructure exists for this platform. DockQ's own program defaults are a different metric surface, so the definition is the reference here."
+}

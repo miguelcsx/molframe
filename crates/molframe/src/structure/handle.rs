@@ -116,6 +116,24 @@ impl Structure {
         self.0.model_positions(model)
     }
 
+    /// The positions of every model (or of `models`) as one model-major block.
+    ///
+    /// For a dense ensemble this is the `(models, atoms, 3)` array in one
+    /// exactly sized allocation.
+    ///
+    /// # Errors
+    ///
+    /// A ragged ensemble has no shared atom axis, so it is refused with a
+    /// diagnostic that names [`Self::ragged_models`]; so is a model index the
+    /// structure does not have.
+    pub fn ensemble_coordinates(
+        &self,
+        models: Option<&[molframe_core::index::ModelIndex]>,
+    ) -> Result<molframe_core::structure::EnsembleBlock, molframe_core::diagnostic::Diagnostic>
+    {
+        self.0.ensemble_positions(models)
+    }
+
     /// A handle on every chain, in structure order.
     #[must_use]
     pub fn chains(&self) -> Chains<'_> {

@@ -21,3 +21,21 @@ pub fn read_component_dictionary(
     let input = InputBuffer::open(path, Limits::default()).map_err(Findings::from)?;
     molframe_chem::read_ccd(&input, version).map_err(Findings::from)
 }
+
+/// Opens a Chemical Component Dictionary that lowers components on demand.
+///
+/// Only the blocks a caller asks for are parsed and lowered, so a structure
+/// that uses a few dozen components does not pay for the other fifty thousand.
+/// Unlike [`read_component_dictionary`], a malformed block that is never
+/// requested goes undetected.
+///
+/// # Errors
+///
+/// Returns file-access diagnostics.
+pub fn open_component_dictionary(
+    path: impl AsRef<Path>,
+    version: DictionaryVersion,
+) -> Result<molframe_chem::LazyCifProvider, Findings> {
+    let input = InputBuffer::open(path, Limits::default()).map_err(Findings::from)?;
+    Ok(molframe_chem::LazyCifProvider::new(input, version))
+}

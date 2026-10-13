@@ -83,7 +83,7 @@
 //!
 //! The in-memory paths above run as doctests. The remaining public items follow
 //! the reference documentation of the crate that owns them rather than repeating
-//! it here; `CONTRIBUTING.md`'s rule that every public item carry an example is
+//! it here; the rule that every public item carry an example is
 //! not yet met for the facade's format writers, which is a known debt.
 
 #![forbid(unsafe_code)]
@@ -256,6 +256,8 @@ pub use extensions::AnalysisExt;
 pub use extensions::CompareExt;
 #[cfg(feature = "validation")]
 pub use extensions::ValidationExt;
+#[cfg(all(feature = "surface", feature = "chemistry"))]
+pub use extensions::{SasaMethod, SasaOptions, SurfaceExt, SurfaceExtError};
 #[cfg(feature = "validation")]
 pub use validation_inputs::{
     ValidationInputError, read_plane_restraints, read_reference_library, read_rotamer_profile,
@@ -282,7 +284,7 @@ pub use structure::{
 };
 
 #[cfg(feature = "chemistry")]
-pub use facade::read_component_dictionary;
+pub use facade::{open_component_dictionary, read_component_dictionary};
 
 #[cfg(feature = "query")]
 pub use structure::QueryStructure;

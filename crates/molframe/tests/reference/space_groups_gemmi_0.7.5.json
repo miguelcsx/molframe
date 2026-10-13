@@ -1,0 +1,2657 @@
+{
+ "description": "Hall-setting catalogue and operator counts, for comparison against molframe.crystal.SpaceGroup. Generated from molframe's bundled catalogue; the gemmi test compares each entry against gemmi's own table.",
+ "library": "gemmi",
+ "settings": {
+  "1": {
+   "hall_symbol": "P 1",
+   "international_number": 1,
+   "operator_count": 1
+  },
+  "10": {
+   "hall_symbol": "A 2y",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "100": {
+   "hall_symbol": "-A 2ab",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "101": {
+   "hall_symbol": "-I 2a",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "102": {
+   "hall_symbol": "-B 2xb",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "103": {
+   "hall_symbol": "-C 2xac",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "104": {
+   "hall_symbol": "-I 2xc",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "105": {
+   "hall_symbol": "-C 2xc",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "106": {
+   "hall_symbol": "-B 2xab",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "107": {
+   "hall_symbol": "-I 2xb",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "108": {
+   "hall_symbol": "P 2 2",
+   "international_number": 16,
+   "operator_count": 4
+  },
+  "109": {
+   "hall_symbol": "P 2c 2",
+   "international_number": 17,
+   "operator_count": 4
+  },
+  "11": {
+   "hall_symbol": "I 2y",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "110": {
+   "hall_symbol": "P 2a 2a",
+   "international_number": 17,
+   "operator_count": 4
+  },
+  "111": {
+   "hall_symbol": "P 2 2b",
+   "international_number": 17,
+   "operator_count": 4
+  },
+  "112": {
+   "hall_symbol": "P 2 2ab",
+   "international_number": 18,
+   "operator_count": 4
+  },
+  "113": {
+   "hall_symbol": "P 2bc 2",
+   "international_number": 18,
+   "operator_count": 4
+  },
+  "114": {
+   "hall_symbol": "P 2ac 2ac",
+   "international_number": 18,
+   "operator_count": 4
+  },
+  "115": {
+   "hall_symbol": "P 2ac 2ab",
+   "international_number": 19,
+   "operator_count": 4
+  },
+  "116": {
+   "hall_symbol": "C 2c 2",
+   "international_number": 20,
+   "operator_count": 8
+  },
+  "117": {
+   "hall_symbol": "A 2a 2a",
+   "international_number": 20,
+   "operator_count": 8
+  },
+  "118": {
+   "hall_symbol": "B 2 2b",
+   "international_number": 20,
+   "operator_count": 8
+  },
+  "119": {
+   "hall_symbol": "C 2 2",
+   "international_number": 21,
+   "operator_count": 8
+  },
+  "12": {
+   "hall_symbol": "A 2",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "120": {
+   "hall_symbol": "A 2 2",
+   "international_number": 21,
+   "operator_count": 8
+  },
+  "121": {
+   "hall_symbol": "B 2 2",
+   "international_number": 21,
+   "operator_count": 8
+  },
+  "122": {
+   "hall_symbol": "F 2 2",
+   "international_number": 22,
+   "operator_count": 16
+  },
+  "123": {
+   "hall_symbol": "I 2 2",
+   "international_number": 23,
+   "operator_count": 8
+  },
+  "124": {
+   "hall_symbol": "I 2b 2c",
+   "international_number": 24,
+   "operator_count": 8
+  },
+  "125": {
+   "hall_symbol": "P 2 -2",
+   "international_number": 25,
+   "operator_count": 4
+  },
+  "126": {
+   "hall_symbol": "P -2 2",
+   "international_number": 25,
+   "operator_count": 4
+  },
+  "127": {
+   "hall_symbol": "P -2 -2",
+   "international_number": 25,
+   "operator_count": 4
+  },
+  "128": {
+   "hall_symbol": "P 2c -2",
+   "international_number": 26,
+   "operator_count": 4
+  },
+  "129": {
+   "hall_symbol": "P 2c -2c",
+   "international_number": 26,
+   "operator_count": 4
+  },
+  "13": {
+   "hall_symbol": "B 2",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "130": {
+   "hall_symbol": "P -2a 2a",
+   "international_number": 26,
+   "operator_count": 4
+  },
+  "131": {
+   "hall_symbol": "P -2 2a",
+   "international_number": 26,
+   "operator_count": 4
+  },
+  "132": {
+   "hall_symbol": "P -2 -2b",
+   "international_number": 26,
+   "operator_count": 4
+  },
+  "133": {
+   "hall_symbol": "P -2b -2",
+   "international_number": 26,
+   "operator_count": 4
+  },
+  "134": {
+   "hall_symbol": "P 2 -2c",
+   "international_number": 27,
+   "operator_count": 4
+  },
+  "135": {
+   "hall_symbol": "P -2a 2",
+   "international_number": 27,
+   "operator_count": 4
+  },
+  "136": {
+   "hall_symbol": "P -2b -2b",
+   "international_number": 27,
+   "operator_count": 4
+  },
+  "137": {
+   "hall_symbol": "P 2 -2a",
+   "international_number": 28,
+   "operator_count": 4
+  },
+  "138": {
+   "hall_symbol": "P 2 -2b",
+   "international_number": 28,
+   "operator_count": 4
+  },
+  "139": {
+   "hall_symbol": "P -2b 2",
+   "international_number": 28,
+   "operator_count": 4
+  },
+  "14": {
+   "hall_symbol": "I 2",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "140": {
+   "hall_symbol": "P -2c 2",
+   "international_number": 28,
+   "operator_count": 4
+  },
+  "141": {
+   "hall_symbol": "P -2c -2c",
+   "international_number": 28,
+   "operator_count": 4
+  },
+  "142": {
+   "hall_symbol": "P -2a -2a",
+   "international_number": 28,
+   "operator_count": 4
+  },
+  "143": {
+   "hall_symbol": "P 2c -2ac",
+   "international_number": 29,
+   "operator_count": 4
+  },
+  "144": {
+   "hall_symbol": "P 2c -2b",
+   "international_number": 29,
+   "operator_count": 4
+  },
+  "145": {
+   "hall_symbol": "P -2b 2a",
+   "international_number": 29,
+   "operator_count": 4
+  },
+  "146": {
+   "hall_symbol": "P -2ac 2a",
+   "international_number": 29,
+   "operator_count": 4
+  },
+  "147": {
+   "hall_symbol": "P -2bc -2c",
+   "international_number": 29,
+   "operator_count": 4
+  },
+  "148": {
+   "hall_symbol": "P -2a -2ab",
+   "international_number": 29,
+   "operator_count": 4
+  },
+  "149": {
+   "hall_symbol": "P 2 -2bc",
+   "international_number": 30,
+   "operator_count": 4
+  },
+  "15": {
+   "hall_symbol": "B 2x",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "150": {
+   "hall_symbol": "P 2 -2ac",
+   "international_number": 30,
+   "operator_count": 4
+  },
+  "151": {
+   "hall_symbol": "P -2ac 2",
+   "international_number": 30,
+   "operator_count": 4
+  },
+  "152": {
+   "hall_symbol": "P -2ab 2",
+   "international_number": 30,
+   "operator_count": 4
+  },
+  "153": {
+   "hall_symbol": "P -2ab -2ab",
+   "international_number": 30,
+   "operator_count": 4
+  },
+  "154": {
+   "hall_symbol": "P -2bc -2bc",
+   "international_number": 30,
+   "operator_count": 4
+  },
+  "155": {
+   "hall_symbol": "P 2ac -2",
+   "international_number": 31,
+   "operator_count": 4
+  },
+  "156": {
+   "hall_symbol": "P 2bc -2bc",
+   "international_number": 31,
+   "operator_count": 4
+  },
+  "157": {
+   "hall_symbol": "P -2ab 2ab",
+   "international_number": 31,
+   "operator_count": 4
+  },
+  "158": {
+   "hall_symbol": "P -2 2ac",
+   "international_number": 31,
+   "operator_count": 4
+  },
+  "159": {
+   "hall_symbol": "P -2 -2bc",
+   "international_number": 31,
+   "operator_count": 4
+  },
+  "16": {
+   "hall_symbol": "C 2x",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "160": {
+   "hall_symbol": "P -2ab -2",
+   "international_number": 31,
+   "operator_count": 4
+  },
+  "161": {
+   "hall_symbol": "P 2 -2ab",
+   "international_number": 32,
+   "operator_count": 4
+  },
+  "162": {
+   "hall_symbol": "P -2bc 2",
+   "international_number": 32,
+   "operator_count": 4
+  },
+  "163": {
+   "hall_symbol": "P -2ac -2ac",
+   "international_number": 32,
+   "operator_count": 4
+  },
+  "164": {
+   "hall_symbol": "P 2c -2n",
+   "international_number": 33,
+   "operator_count": 4
+  },
+  "165": {
+   "hall_symbol": "P 2c -2ab",
+   "international_number": 33,
+   "operator_count": 4
+  },
+  "166": {
+   "hall_symbol": "P -2bc 2a",
+   "international_number": 33,
+   "operator_count": 4
+  },
+  "167": {
+   "hall_symbol": "P -2n 2a",
+   "international_number": 33,
+   "operator_count": 4
+  },
+  "168": {
+   "hall_symbol": "P -2n -2ac",
+   "international_number": 33,
+   "operator_count": 4
+  },
+  "169": {
+   "hall_symbol": "P -2ac -2n",
+   "international_number": 33,
+   "operator_count": 4
+  },
+  "17": {
+   "hall_symbol": "I 2x",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "170": {
+   "hall_symbol": "P 2 -2n",
+   "international_number": 34,
+   "operator_count": 4
+  },
+  "171": {
+   "hall_symbol": "P -2n 2",
+   "international_number": 34,
+   "operator_count": 4
+  },
+  "172": {
+   "hall_symbol": "P -2n -2n",
+   "international_number": 34,
+   "operator_count": 4
+  },
+  "173": {
+   "hall_symbol": "C 2 -2",
+   "international_number": 35,
+   "operator_count": 8
+  },
+  "174": {
+   "hall_symbol": "A -2 2",
+   "international_number": 35,
+   "operator_count": 8
+  },
+  "175": {
+   "hall_symbol": "B -2 -2",
+   "international_number": 35,
+   "operator_count": 8
+  },
+  "176": {
+   "hall_symbol": "C 2c -2",
+   "international_number": 36,
+   "operator_count": 8
+  },
+  "177": {
+   "hall_symbol": "C 2c -2c",
+   "international_number": 36,
+   "operator_count": 8
+  },
+  "178": {
+   "hall_symbol": "A -2a 2a",
+   "international_number": 36,
+   "operator_count": 8
+  },
+  "179": {
+   "hall_symbol": "A -2 2a",
+   "international_number": 36,
+   "operator_count": 8
+  },
+  "18": {
+   "hall_symbol": "P -2y",
+   "international_number": 6,
+   "operator_count": 2
+  },
+  "180": {
+   "hall_symbol": "B -2 -2b",
+   "international_number": 36,
+   "operator_count": 8
+  },
+  "181": {
+   "hall_symbol": "B -2b -2",
+   "international_number": 36,
+   "operator_count": 8
+  },
+  "182": {
+   "hall_symbol": "C 2 -2c",
+   "international_number": 37,
+   "operator_count": 8
+  },
+  "183": {
+   "hall_symbol": "A -2a 2",
+   "international_number": 37,
+   "operator_count": 8
+  },
+  "184": {
+   "hall_symbol": "B -2b -2b",
+   "international_number": 37,
+   "operator_count": 8
+  },
+  "185": {
+   "hall_symbol": "A 2 -2",
+   "international_number": 38,
+   "operator_count": 8
+  },
+  "186": {
+   "hall_symbol": "B 2 -2",
+   "international_number": 38,
+   "operator_count": 8
+  },
+  "187": {
+   "hall_symbol": "B -2 2",
+   "international_number": 38,
+   "operator_count": 8
+  },
+  "188": {
+   "hall_symbol": "C -2 2",
+   "international_number": 38,
+   "operator_count": 8
+  },
+  "189": {
+   "hall_symbol": "C -2 -2",
+   "international_number": 38,
+   "operator_count": 8
+  },
+  "19": {
+   "hall_symbol": "P -2",
+   "international_number": 6,
+   "operator_count": 2
+  },
+  "190": {
+   "hall_symbol": "A -2 -2",
+   "international_number": 38,
+   "operator_count": 8
+  },
+  "191": {
+   "hall_symbol": "A 2 -2b",
+   "international_number": 39,
+   "operator_count": 8
+  },
+  "192": {
+   "hall_symbol": "B 2 -2a",
+   "international_number": 39,
+   "operator_count": 8
+  },
+  "193": {
+   "hall_symbol": "B -2a 2",
+   "international_number": 39,
+   "operator_count": 8
+  },
+  "194": {
+   "hall_symbol": "C -2a 2",
+   "international_number": 39,
+   "operator_count": 8
+  },
+  "195": {
+   "hall_symbol": "C -2a -2a",
+   "international_number": 39,
+   "operator_count": 8
+  },
+  "196": {
+   "hall_symbol": "A -2b -2b",
+   "international_number": 39,
+   "operator_count": 8
+  },
+  "197": {
+   "hall_symbol": "A 2 -2a",
+   "international_number": 40,
+   "operator_count": 8
+  },
+  "198": {
+   "hall_symbol": "B 2 -2b",
+   "international_number": 40,
+   "operator_count": 8
+  },
+  "199": {
+   "hall_symbol": "B -2b 2",
+   "international_number": 40,
+   "operator_count": 8
+  },
+  "2": {
+   "hall_symbol": "-P 1",
+   "international_number": 2,
+   "operator_count": 2
+  },
+  "20": {
+   "hall_symbol": "P -2x",
+   "international_number": 6,
+   "operator_count": 2
+  },
+  "200": {
+   "hall_symbol": "C -2c 2",
+   "international_number": 40,
+   "operator_count": 8
+  },
+  "201": {
+   "hall_symbol": "C -2c -2c",
+   "international_number": 40,
+   "operator_count": 8
+  },
+  "202": {
+   "hall_symbol": "A -2a -2a",
+   "international_number": 40,
+   "operator_count": 8
+  },
+  "203": {
+   "hall_symbol": "A 2 -2ab",
+   "international_number": 41,
+   "operator_count": 8
+  },
+  "204": {
+   "hall_symbol": "B 2 -2ab",
+   "international_number": 41,
+   "operator_count": 8
+  },
+  "205": {
+   "hall_symbol": "B -2ab 2",
+   "international_number": 41,
+   "operator_count": 8
+  },
+  "206": {
+   "hall_symbol": "C -2ac 2",
+   "international_number": 41,
+   "operator_count": 8
+  },
+  "207": {
+   "hall_symbol": "C -2ac -2ac",
+   "international_number": 41,
+   "operator_count": 8
+  },
+  "208": {
+   "hall_symbol": "A -2ab -2ab",
+   "international_number": 41,
+   "operator_count": 8
+  },
+  "209": {
+   "hall_symbol": "F 2 -2",
+   "international_number": 42,
+   "operator_count": 16
+  },
+  "21": {
+   "hall_symbol": "P -2yc",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "210": {
+   "hall_symbol": "F -2 2",
+   "international_number": 42,
+   "operator_count": 16
+  },
+  "211": {
+   "hall_symbol": "F -2 -2",
+   "international_number": 42,
+   "operator_count": 16
+  },
+  "212": {
+   "hall_symbol": "F 2 -2d",
+   "international_number": 43,
+   "operator_count": 16
+  },
+  "213": {
+   "hall_symbol": "F -2d 2",
+   "international_number": 43,
+   "operator_count": 16
+  },
+  "214": {
+   "hall_symbol": "F -2d -2d",
+   "international_number": 43,
+   "operator_count": 16
+  },
+  "215": {
+   "hall_symbol": "I 2 -2",
+   "international_number": 44,
+   "operator_count": 8
+  },
+  "216": {
+   "hall_symbol": "I -2 2",
+   "international_number": 44,
+   "operator_count": 8
+  },
+  "217": {
+   "hall_symbol": "I -2 -2",
+   "international_number": 44,
+   "operator_count": 8
+  },
+  "218": {
+   "hall_symbol": "I 2 -2c",
+   "international_number": 45,
+   "operator_count": 8
+  },
+  "219": {
+   "hall_symbol": "I -2a 2",
+   "international_number": 45,
+   "operator_count": 8
+  },
+  "22": {
+   "hall_symbol": "P -2yac",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "220": {
+   "hall_symbol": "I -2b -2b",
+   "international_number": 45,
+   "operator_count": 8
+  },
+  "221": {
+   "hall_symbol": "I 2 -2a",
+   "international_number": 46,
+   "operator_count": 8
+  },
+  "222": {
+   "hall_symbol": "I 2 -2b",
+   "international_number": 46,
+   "operator_count": 8
+  },
+  "223": {
+   "hall_symbol": "I -2b 2",
+   "international_number": 46,
+   "operator_count": 8
+  },
+  "224": {
+   "hall_symbol": "I -2c 2",
+   "international_number": 46,
+   "operator_count": 8
+  },
+  "225": {
+   "hall_symbol": "I -2c -2c",
+   "international_number": 46,
+   "operator_count": 8
+  },
+  "226": {
+   "hall_symbol": "I -2a -2a",
+   "international_number": 46,
+   "operator_count": 8
+  },
+  "227": {
+   "hall_symbol": "-P 2 2",
+   "international_number": 47,
+   "operator_count": 8
+  },
+  "228": {
+   "hall_symbol": "P 2 2 -1n",
+   "international_number": 48,
+   "operator_count": 8
+  },
+  "229": {
+   "hall_symbol": "-P 2ab 2bc",
+   "international_number": 48,
+   "operator_count": 8
+  },
+  "23": {
+   "hall_symbol": "P -2ya",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "230": {
+   "hall_symbol": "-P 2 2c",
+   "international_number": 49,
+   "operator_count": 8
+  },
+  "231": {
+   "hall_symbol": "-P 2a 2",
+   "international_number": 49,
+   "operator_count": 8
+  },
+  "232": {
+   "hall_symbol": "-P 2b 2b",
+   "international_number": 49,
+   "operator_count": 8
+  },
+  "233": {
+   "hall_symbol": "P 2 2 -1ab",
+   "international_number": 50,
+   "operator_count": 8
+  },
+  "234": {
+   "hall_symbol": "-P 2ab 2b",
+   "international_number": 50,
+   "operator_count": 8
+  },
+  "235": {
+   "hall_symbol": "P 2 2 -1bc",
+   "international_number": 50,
+   "operator_count": 8
+  },
+  "236": {
+   "hall_symbol": "-P 2b 2bc",
+   "international_number": 50,
+   "operator_count": 8
+  },
+  "237": {
+   "hall_symbol": "P 2 2 -1ac",
+   "international_number": 50,
+   "operator_count": 8
+  },
+  "238": {
+   "hall_symbol": "-P 2a 2c",
+   "international_number": 50,
+   "operator_count": 8
+  },
+  "239": {
+   "hall_symbol": "-P 2a 2a",
+   "international_number": 51,
+   "operator_count": 8
+  },
+  "24": {
+   "hall_symbol": "P -2a",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "240": {
+   "hall_symbol": "-P 2b 2",
+   "international_number": 51,
+   "operator_count": 8
+  },
+  "241": {
+   "hall_symbol": "-P 2 2b",
+   "international_number": 51,
+   "operator_count": 8
+  },
+  "242": {
+   "hall_symbol": "-P 2c 2c",
+   "international_number": 51,
+   "operator_count": 8
+  },
+  "243": {
+   "hall_symbol": "-P 2c 2",
+   "international_number": 51,
+   "operator_count": 8
+  },
+  "244": {
+   "hall_symbol": "-P 2 2a",
+   "international_number": 51,
+   "operator_count": 8
+  },
+  "245": {
+   "hall_symbol": "-P 2a 2bc",
+   "international_number": 52,
+   "operator_count": 8
+  },
+  "246": {
+   "hall_symbol": "-P 2b 2n",
+   "international_number": 52,
+   "operator_count": 8
+  },
+  "247": {
+   "hall_symbol": "-P 2n 2b",
+   "international_number": 52,
+   "operator_count": 8
+  },
+  "248": {
+   "hall_symbol": "-P 2ab 2c",
+   "international_number": 52,
+   "operator_count": 8
+  },
+  "249": {
+   "hall_symbol": "-P 2ab 2n",
+   "international_number": 52,
+   "operator_count": 8
+  },
+  "25": {
+   "hall_symbol": "P -2ab",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "250": {
+   "hall_symbol": "-P 2n 2bc",
+   "international_number": 52,
+   "operator_count": 8
+  },
+  "251": {
+   "hall_symbol": "-P 2ac 2",
+   "international_number": 53,
+   "operator_count": 8
+  },
+  "252": {
+   "hall_symbol": "-P 2bc 2bc",
+   "international_number": 53,
+   "operator_count": 8
+  },
+  "253": {
+   "hall_symbol": "-P 2ab 2ab",
+   "international_number": 53,
+   "operator_count": 8
+  },
+  "254": {
+   "hall_symbol": "-P 2 2ac",
+   "international_number": 53,
+   "operator_count": 8
+  },
+  "255": {
+   "hall_symbol": "-P 2 2bc",
+   "international_number": 53,
+   "operator_count": 8
+  },
+  "256": {
+   "hall_symbol": "-P 2ab 2",
+   "international_number": 53,
+   "operator_count": 8
+  },
+  "257": {
+   "hall_symbol": "-P 2a 2ac",
+   "international_number": 54,
+   "operator_count": 8
+  },
+  "258": {
+   "hall_symbol": "-P 2b 2c",
+   "international_number": 54,
+   "operator_count": 8
+  },
+  "259": {
+   "hall_symbol": "-P 2a 2b",
+   "international_number": 54,
+   "operator_count": 8
+  },
+  "26": {
+   "hall_symbol": "P -2b",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "260": {
+   "hall_symbol": "-P 2ac 2c",
+   "international_number": 54,
+   "operator_count": 8
+  },
+  "261": {
+   "hall_symbol": "-P 2bc 2b",
+   "international_number": 54,
+   "operator_count": 8
+  },
+  "262": {
+   "hall_symbol": "-P 2b 2ab",
+   "international_number": 54,
+   "operator_count": 8
+  },
+  "263": {
+   "hall_symbol": "-P 2 2ab",
+   "international_number": 55,
+   "operator_count": 8
+  },
+  "264": {
+   "hall_symbol": "-P 2bc 2",
+   "international_number": 55,
+   "operator_count": 8
+  },
+  "265": {
+   "hall_symbol": "-P 2ac 2ac",
+   "international_number": 55,
+   "operator_count": 8
+  },
+  "266": {
+   "hall_symbol": "-P 2ab 2ac",
+   "international_number": 56,
+   "operator_count": 8
+  },
+  "267": {
+   "hall_symbol": "-P 2ac 2bc",
+   "international_number": 56,
+   "operator_count": 8
+  },
+  "268": {
+   "hall_symbol": "-P 2bc 2ab",
+   "international_number": 56,
+   "operator_count": 8
+  },
+  "269": {
+   "hall_symbol": "-P 2c 2b",
+   "international_number": 57,
+   "operator_count": 8
+  },
+  "27": {
+   "hall_symbol": "P -2xb",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "270": {
+   "hall_symbol": "-P 2c 2ac",
+   "international_number": 57,
+   "operator_count": 8
+  },
+  "271": {
+   "hall_symbol": "-P 2ac 2a",
+   "international_number": 57,
+   "operator_count": 8
+  },
+  "272": {
+   "hall_symbol": "-P 2b 2a",
+   "international_number": 57,
+   "operator_count": 8
+  },
+  "273": {
+   "hall_symbol": "-P 2a 2ab",
+   "international_number": 57,
+   "operator_count": 8
+  },
+  "274": {
+   "hall_symbol": "-P 2bc 2c",
+   "international_number": 57,
+   "operator_count": 8
+  },
+  "275": {
+   "hall_symbol": "-P 2 2n",
+   "international_number": 58,
+   "operator_count": 8
+  },
+  "276": {
+   "hall_symbol": "-P 2n 2",
+   "international_number": 58,
+   "operator_count": 8
+  },
+  "277": {
+   "hall_symbol": "-P 2n 2n",
+   "international_number": 58,
+   "operator_count": 8
+  },
+  "278": {
+   "hall_symbol": "P 2 2ab -1ab",
+   "international_number": 59,
+   "operator_count": 8
+  },
+  "279": {
+   "hall_symbol": "-P 2ab 2a",
+   "international_number": 59,
+   "operator_count": 8
+  },
+  "28": {
+   "hall_symbol": "P -2xbc",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "280": {
+   "hall_symbol": "P 2bc 2 -1bc",
+   "international_number": 59,
+   "operator_count": 8
+  },
+  "281": {
+   "hall_symbol": "-P 2c 2bc",
+   "international_number": 59,
+   "operator_count": 8
+  },
+  "282": {
+   "hall_symbol": "P 2ac 2ac -1ac",
+   "international_number": 59,
+   "operator_count": 8
+  },
+  "283": {
+   "hall_symbol": "-P 2c 2a",
+   "international_number": 59,
+   "operator_count": 8
+  },
+  "284": {
+   "hall_symbol": "-P 2n 2ab",
+   "international_number": 60,
+   "operator_count": 8
+  },
+  "285": {
+   "hall_symbol": "-P 2n 2c",
+   "international_number": 60,
+   "operator_count": 8
+  },
+  "286": {
+   "hall_symbol": "-P 2a 2n",
+   "international_number": 60,
+   "operator_count": 8
+  },
+  "287": {
+   "hall_symbol": "-P 2bc 2n",
+   "international_number": 60,
+   "operator_count": 8
+  },
+  "288": {
+   "hall_symbol": "-P 2ac 2b",
+   "international_number": 60,
+   "operator_count": 8
+  },
+  "289": {
+   "hall_symbol": "-P 2b 2ac",
+   "international_number": 60,
+   "operator_count": 8
+  },
+  "29": {
+   "hall_symbol": "P -2xc",
+   "international_number": 7,
+   "operator_count": 2
+  },
+  "290": {
+   "hall_symbol": "-P 2ac 2ab",
+   "international_number": 61,
+   "operator_count": 8
+  },
+  "291": {
+   "hall_symbol": "-P 2bc 2ac",
+   "international_number": 61,
+   "operator_count": 8
+  },
+  "292": {
+   "hall_symbol": "-P 2ac 2n",
+   "international_number": 62,
+   "operator_count": 8
+  },
+  "293": {
+   "hall_symbol": "-P 2bc 2a",
+   "international_number": 62,
+   "operator_count": 8
+  },
+  "294": {
+   "hall_symbol": "-P 2c 2ab",
+   "international_number": 62,
+   "operator_count": 8
+  },
+  "295": {
+   "hall_symbol": "-P 2n 2ac",
+   "international_number": 62,
+   "operator_count": 8
+  },
+  "296": {
+   "hall_symbol": "-P 2n 2a",
+   "international_number": 62,
+   "operator_count": 8
+  },
+  "297": {
+   "hall_symbol": "-P 2c 2n",
+   "international_number": 62,
+   "operator_count": 8
+  },
+  "298": {
+   "hall_symbol": "-C 2c 2",
+   "international_number": 63,
+   "operator_count": 16
+  },
+  "299": {
+   "hall_symbol": "-C 2c 2c",
+   "international_number": 63,
+   "operator_count": 16
+  },
+  "3": {
+   "hall_symbol": "P 2y",
+   "international_number": 3,
+   "operator_count": 2
+  },
+  "30": {
+   "hall_symbol": "C -2y",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "300": {
+   "hall_symbol": "-A 2a 2a",
+   "international_number": 63,
+   "operator_count": 16
+  },
+  "301": {
+   "hall_symbol": "-A 2 2a",
+   "international_number": 63,
+   "operator_count": 16
+  },
+  "302": {
+   "hall_symbol": "-B 2 2b",
+   "international_number": 63,
+   "operator_count": 16
+  },
+  "303": {
+   "hall_symbol": "-B 2b 2",
+   "international_number": 63,
+   "operator_count": 16
+  },
+  "304": {
+   "hall_symbol": "-C 2ac 2",
+   "international_number": 64,
+   "operator_count": 16
+  },
+  "305": {
+   "hall_symbol": "-C 2ac 2ac",
+   "international_number": 64,
+   "operator_count": 16
+  },
+  "306": {
+   "hall_symbol": "-A 2ab 2ab",
+   "international_number": 64,
+   "operator_count": 16
+  },
+  "307": {
+   "hall_symbol": "-A 2 2ab",
+   "international_number": 64,
+   "operator_count": 16
+  },
+  "308": {
+   "hall_symbol": "-B 2 2ab",
+   "international_number": 64,
+   "operator_count": 16
+  },
+  "309": {
+   "hall_symbol": "-B 2ab 2",
+   "international_number": 64,
+   "operator_count": 16
+  },
+  "31": {
+   "hall_symbol": "A -2y",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "310": {
+   "hall_symbol": "-C 2 2",
+   "international_number": 65,
+   "operator_count": 16
+  },
+  "311": {
+   "hall_symbol": "-A 2 2",
+   "international_number": 65,
+   "operator_count": 16
+  },
+  "312": {
+   "hall_symbol": "-B 2 2",
+   "international_number": 65,
+   "operator_count": 16
+  },
+  "313": {
+   "hall_symbol": "-C 2 2c",
+   "international_number": 66,
+   "operator_count": 16
+  },
+  "314": {
+   "hall_symbol": "-A 2a 2",
+   "international_number": 66,
+   "operator_count": 16
+  },
+  "315": {
+   "hall_symbol": "-B 2b 2b",
+   "international_number": 66,
+   "operator_count": 16
+  },
+  "316": {
+   "hall_symbol": "-C 2a 2",
+   "international_number": 67,
+   "operator_count": 16
+  },
+  "317": {
+   "hall_symbol": "-C 2a 2a",
+   "international_number": 67,
+   "operator_count": 16
+  },
+  "318": {
+   "hall_symbol": "-A 2b 2b",
+   "international_number": 67,
+   "operator_count": 16
+  },
+  "319": {
+   "hall_symbol": "-A 2 2b",
+   "international_number": 67,
+   "operator_count": 16
+  },
+  "32": {
+   "hall_symbol": "I -2y",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "320": {
+   "hall_symbol": "-B 2 2a",
+   "international_number": 67,
+   "operator_count": 16
+  },
+  "321": {
+   "hall_symbol": "-B 2a 2",
+   "international_number": 67,
+   "operator_count": 16
+  },
+  "322": {
+   "hall_symbol": "C 2 2 -1ac",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "323": {
+   "hall_symbol": "-C 2a 2ac",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "324": {
+   "hall_symbol": "C 2 2 -1ac",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "325": {
+   "hall_symbol": "-C 2a 2c",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "326": {
+   "hall_symbol": "A 2 2 -1ab",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "327": {
+   "hall_symbol": "-A 2a 2b",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "328": {
+   "hall_symbol": "A 2 2 -1ab",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "329": {
+   "hall_symbol": "-A 2ab 2b",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "33": {
+   "hall_symbol": "A -2",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "330": {
+   "hall_symbol": "B 2 2 -1ab",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "331": {
+   "hall_symbol": "-B 2ab 2b",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "332": {
+   "hall_symbol": "B 2 2 -1ab",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "333": {
+   "hall_symbol": "-B 2b 2ab",
+   "international_number": 68,
+   "operator_count": 16
+  },
+  "334": {
+   "hall_symbol": "-F 2 2",
+   "international_number": 69,
+   "operator_count": 32
+  },
+  "335": {
+   "hall_symbol": "F 2 2 -1d",
+   "international_number": 70,
+   "operator_count": 32
+  },
+  "336": {
+   "hall_symbol": "-F 2uv 2vw",
+   "international_number": 70,
+   "operator_count": 32
+  },
+  "337": {
+   "hall_symbol": "-I 2 2",
+   "international_number": 71,
+   "operator_count": 16
+  },
+  "338": {
+   "hall_symbol": "-I 2 2c",
+   "international_number": 72,
+   "operator_count": 16
+  },
+  "339": {
+   "hall_symbol": "-I 2a 2",
+   "international_number": 72,
+   "operator_count": 16
+  },
+  "34": {
+   "hall_symbol": "B -2",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "340": {
+   "hall_symbol": "-I 2b 2b",
+   "international_number": 72,
+   "operator_count": 16
+  },
+  "341": {
+   "hall_symbol": "-I 2b 2c",
+   "international_number": 73,
+   "operator_count": 16
+  },
+  "342": {
+   "hall_symbol": "-I 2a 2b",
+   "international_number": 73,
+   "operator_count": 16
+  },
+  "343": {
+   "hall_symbol": "-I 2b 2",
+   "international_number": 74,
+   "operator_count": 16
+  },
+  "344": {
+   "hall_symbol": "-I 2a 2a",
+   "international_number": 74,
+   "operator_count": 16
+  },
+  "345": {
+   "hall_symbol": "-I 2c 2c",
+   "international_number": 74,
+   "operator_count": 16
+  },
+  "346": {
+   "hall_symbol": "-I 2 2b",
+   "international_number": 74,
+   "operator_count": 16
+  },
+  "347": {
+   "hall_symbol": "-I 2 2a",
+   "international_number": 74,
+   "operator_count": 16
+  },
+  "348": {
+   "hall_symbol": "-I 2c 2",
+   "international_number": 74,
+   "operator_count": 16
+  },
+  "349": {
+   "hall_symbol": "P 4",
+   "international_number": 75,
+   "operator_count": 4
+  },
+  "35": {
+   "hall_symbol": "I -2",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "350": {
+   "hall_symbol": "P 4w",
+   "international_number": 76,
+   "operator_count": 4
+  },
+  "351": {
+   "hall_symbol": "P 4c",
+   "international_number": 77,
+   "operator_count": 4
+  },
+  "352": {
+   "hall_symbol": "P 4cw",
+   "international_number": 78,
+   "operator_count": 4
+  },
+  "353": {
+   "hall_symbol": "I 4",
+   "international_number": 79,
+   "operator_count": 8
+  },
+  "354": {
+   "hall_symbol": "I 4bw",
+   "international_number": 80,
+   "operator_count": 8
+  },
+  "355": {
+   "hall_symbol": "P -4",
+   "international_number": 81,
+   "operator_count": 4
+  },
+  "356": {
+   "hall_symbol": "I -4",
+   "international_number": 82,
+   "operator_count": 8
+  },
+  "357": {
+   "hall_symbol": "-P 4",
+   "international_number": 83,
+   "operator_count": 8
+  },
+  "358": {
+   "hall_symbol": "-P 4c",
+   "international_number": 84,
+   "operator_count": 8
+  },
+  "359": {
+   "hall_symbol": "P 4ab -1ab",
+   "international_number": 85,
+   "operator_count": 8
+  },
+  "36": {
+   "hall_symbol": "B -2x",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "360": {
+   "hall_symbol": "-P 4a",
+   "international_number": 85,
+   "operator_count": 8
+  },
+  "361": {
+   "hall_symbol": "P 4n -1n",
+   "international_number": 86,
+   "operator_count": 8
+  },
+  "362": {
+   "hall_symbol": "-P 4bc",
+   "international_number": 86,
+   "operator_count": 8
+  },
+  "363": {
+   "hall_symbol": "-I 4",
+   "international_number": 87,
+   "operator_count": 16
+  },
+  "364": {
+   "hall_symbol": "I 4bw -1bw",
+   "international_number": 88,
+   "operator_count": 16
+  },
+  "365": {
+   "hall_symbol": "-I 4ad",
+   "international_number": 88,
+   "operator_count": 16
+  },
+  "366": {
+   "hall_symbol": "P 4 2",
+   "international_number": 89,
+   "operator_count": 8
+  },
+  "367": {
+   "hall_symbol": "P 4ab 2ab",
+   "international_number": 90,
+   "operator_count": 8
+  },
+  "368": {
+   "hall_symbol": "P 4w 2c",
+   "international_number": 91,
+   "operator_count": 8
+  },
+  "369": {
+   "hall_symbol": "P 4abw 2nw",
+   "international_number": 92,
+   "operator_count": 8
+  },
+  "37": {
+   "hall_symbol": "C -2x",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "370": {
+   "hall_symbol": "P 4c 2",
+   "international_number": 93,
+   "operator_count": 8
+  },
+  "371": {
+   "hall_symbol": "P 4n 2n",
+   "international_number": 94,
+   "operator_count": 8
+  },
+  "372": {
+   "hall_symbol": "P 4cw 2c",
+   "international_number": 95,
+   "operator_count": 8
+  },
+  "373": {
+   "hall_symbol": "P 4nw 2abw",
+   "international_number": 96,
+   "operator_count": 8
+  },
+  "374": {
+   "hall_symbol": "I 4 2",
+   "international_number": 97,
+   "operator_count": 16
+  },
+  "375": {
+   "hall_symbol": "I 4bw 2bw",
+   "international_number": 98,
+   "operator_count": 16
+  },
+  "376": {
+   "hall_symbol": "P 4 -2",
+   "international_number": 99,
+   "operator_count": 8
+  },
+  "377": {
+   "hall_symbol": "P 4 -2ab",
+   "international_number": 100,
+   "operator_count": 8
+  },
+  "378": {
+   "hall_symbol": "P 4c -2c",
+   "international_number": 101,
+   "operator_count": 8
+  },
+  "379": {
+   "hall_symbol": "P 4n -2n",
+   "international_number": 102,
+   "operator_count": 8
+  },
+  "38": {
+   "hall_symbol": "I -2x",
+   "international_number": 8,
+   "operator_count": 4
+  },
+  "380": {
+   "hall_symbol": "P 4 -2c",
+   "international_number": 103,
+   "operator_count": 8
+  },
+  "381": {
+   "hall_symbol": "P 4 -2n",
+   "international_number": 104,
+   "operator_count": 8
+  },
+  "382": {
+   "hall_symbol": "P 4c -2",
+   "international_number": 105,
+   "operator_count": 8
+  },
+  "383": {
+   "hall_symbol": "P 4c -2ab",
+   "international_number": 106,
+   "operator_count": 8
+  },
+  "384": {
+   "hall_symbol": "I 4 -2",
+   "international_number": 107,
+   "operator_count": 16
+  },
+  "385": {
+   "hall_symbol": "I 4 -2c",
+   "international_number": 108,
+   "operator_count": 16
+  },
+  "386": {
+   "hall_symbol": "I 4bw -2",
+   "international_number": 109,
+   "operator_count": 16
+  },
+  "387": {
+   "hall_symbol": "I 4bw -2c",
+   "international_number": 110,
+   "operator_count": 16
+  },
+  "388": {
+   "hall_symbol": "P -4 2",
+   "international_number": 111,
+   "operator_count": 8
+  },
+  "389": {
+   "hall_symbol": "P -4 2c",
+   "international_number": 112,
+   "operator_count": 8
+  },
+  "39": {
+   "hall_symbol": "C -2yc",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "390": {
+   "hall_symbol": "P -4 2ab",
+   "international_number": 113,
+   "operator_count": 8
+  },
+  "391": {
+   "hall_symbol": "P -4 2n",
+   "international_number": 114,
+   "operator_count": 8
+  },
+  "392": {
+   "hall_symbol": "P -4 -2",
+   "international_number": 115,
+   "operator_count": 8
+  },
+  "393": {
+   "hall_symbol": "P -4 -2c",
+   "international_number": 116,
+   "operator_count": 8
+  },
+  "394": {
+   "hall_symbol": "P -4 -2ab",
+   "international_number": 117,
+   "operator_count": 8
+  },
+  "395": {
+   "hall_symbol": "P -4 -2n",
+   "international_number": 118,
+   "operator_count": 8
+  },
+  "396": {
+   "hall_symbol": "I -4 -2",
+   "international_number": 119,
+   "operator_count": 16
+  },
+  "397": {
+   "hall_symbol": "I -4 -2c",
+   "international_number": 120,
+   "operator_count": 16
+  },
+  "398": {
+   "hall_symbol": "I -4 2",
+   "international_number": 121,
+   "operator_count": 16
+  },
+  "399": {
+   "hall_symbol": "I -4 2bw",
+   "international_number": 122,
+   "operator_count": 16
+  },
+  "4": {
+   "hall_symbol": "P 2",
+   "international_number": 3,
+   "operator_count": 2
+  },
+  "40": {
+   "hall_symbol": "A -2yab",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "400": {
+   "hall_symbol": "-P 4 2",
+   "international_number": 123,
+   "operator_count": 16
+  },
+  "401": {
+   "hall_symbol": "-P 4 2c",
+   "international_number": 124,
+   "operator_count": 16
+  },
+  "402": {
+   "hall_symbol": "P 4 2 -1ab",
+   "international_number": 125,
+   "operator_count": 16
+  },
+  "403": {
+   "hall_symbol": "-P 4a 2b",
+   "international_number": 125,
+   "operator_count": 16
+  },
+  "404": {
+   "hall_symbol": "P 4 2 -1n",
+   "international_number": 126,
+   "operator_count": 16
+  },
+  "405": {
+   "hall_symbol": "-P 4a 2bc",
+   "international_number": 126,
+   "operator_count": 16
+  },
+  "406": {
+   "hall_symbol": "-P 4 2ab",
+   "international_number": 127,
+   "operator_count": 16
+  },
+  "407": {
+   "hall_symbol": "-P 4 2n",
+   "international_number": 128,
+   "operator_count": 16
+  },
+  "408": {
+   "hall_symbol": "P 4ab 2ab -1ab",
+   "international_number": 129,
+   "operator_count": 16
+  },
+  "409": {
+   "hall_symbol": "-P 4a 2a",
+   "international_number": 129,
+   "operator_count": 16
+  },
+  "41": {
+   "hall_symbol": "I -2ya",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "410": {
+   "hall_symbol": "P 4ab 2n -1ab",
+   "international_number": 130,
+   "operator_count": 16
+  },
+  "411": {
+   "hall_symbol": "-P 4a 2ac",
+   "international_number": 130,
+   "operator_count": 16
+  },
+  "412": {
+   "hall_symbol": "-P 4c 2",
+   "international_number": 131,
+   "operator_count": 16
+  },
+  "413": {
+   "hall_symbol": "-P 4c 2c",
+   "international_number": 132,
+   "operator_count": 16
+  },
+  "414": {
+   "hall_symbol": "P 4n 2c -1n",
+   "international_number": 133,
+   "operator_count": 16
+  },
+  "415": {
+   "hall_symbol": "-P 4ac 2b",
+   "international_number": 133,
+   "operator_count": 16
+  },
+  "416": {
+   "hall_symbol": "P 4n 2 -1n",
+   "international_number": 134,
+   "operator_count": 16
+  },
+  "417": {
+   "hall_symbol": "-P 4ac 2bc",
+   "international_number": 134,
+   "operator_count": 16
+  },
+  "418": {
+   "hall_symbol": "-P 4c 2ab",
+   "international_number": 135,
+   "operator_count": 16
+  },
+  "419": {
+   "hall_symbol": "-P 4n 2n",
+   "international_number": 136,
+   "operator_count": 16
+  },
+  "42": {
+   "hall_symbol": "A -2ya",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "420": {
+   "hall_symbol": "P 4n 2n -1n",
+   "international_number": 137,
+   "operator_count": 16
+  },
+  "421": {
+   "hall_symbol": "-P 4ac 2a",
+   "international_number": 137,
+   "operator_count": 16
+  },
+  "422": {
+   "hall_symbol": "P 4n 2ab -1n",
+   "international_number": 138,
+   "operator_count": 16
+  },
+  "423": {
+   "hall_symbol": "-P 4ac 2ac",
+   "international_number": 138,
+   "operator_count": 16
+  },
+  "424": {
+   "hall_symbol": "-I 4 2",
+   "international_number": 139,
+   "operator_count": 32
+  },
+  "425": {
+   "hall_symbol": "-I 4 2c",
+   "international_number": 140,
+   "operator_count": 32
+  },
+  "426": {
+   "hall_symbol": "I 4bw 2bw -1bw",
+   "international_number": 141,
+   "operator_count": 32
+  },
+  "427": {
+   "hall_symbol": "-I 4bd 2",
+   "international_number": 141,
+   "operator_count": 32
+  },
+  "428": {
+   "hall_symbol": "I 4bw 2aw -1bw",
+   "international_number": 142,
+   "operator_count": 32
+  },
+  "429": {
+   "hall_symbol": "-I 4bd 2c",
+   "international_number": 142,
+   "operator_count": 32
+  },
+  "43": {
+   "hall_symbol": "C -2yac",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "430": {
+   "hall_symbol": "P 3",
+   "international_number": 143,
+   "operator_count": 3
+  },
+  "431": {
+   "hall_symbol": "P 31",
+   "international_number": 144,
+   "operator_count": 3
+  },
+  "432": {
+   "hall_symbol": "P 32",
+   "international_number": 145,
+   "operator_count": 3
+  },
+  "433": {
+   "hall_symbol": "R 3",
+   "international_number": 146,
+   "operator_count": 9
+  },
+  "434": {
+   "hall_symbol": "P 3*",
+   "international_number": 146,
+   "operator_count": 3
+  },
+  "435": {
+   "hall_symbol": "-P 3",
+   "international_number": 147,
+   "operator_count": 6
+  },
+  "436": {
+   "hall_symbol": "-R 3",
+   "international_number": 148,
+   "operator_count": 18
+  },
+  "437": {
+   "hall_symbol": "-P 3*",
+   "international_number": 148,
+   "operator_count": 6
+  },
+  "438": {
+   "hall_symbol": "P 3 2",
+   "international_number": 149,
+   "operator_count": 6
+  },
+  "439": {
+   "hall_symbol": "P 3 2\"",
+   "international_number": 150,
+   "operator_count": 6
+  },
+  "44": {
+   "hall_symbol": "I -2yc",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "440": {
+   "hall_symbol": "P 31 2 (0 0 4)",
+   "international_number": 151,
+   "operator_count": 6
+  },
+  "441": {
+   "hall_symbol": "P 31 2\"",
+   "international_number": 152,
+   "operator_count": 6
+  },
+  "442": {
+   "hall_symbol": "P 32 2 (0 0 2)",
+   "international_number": 153,
+   "operator_count": 6
+  },
+  "443": {
+   "hall_symbol": "P 32 2\"",
+   "international_number": 154,
+   "operator_count": 6
+  },
+  "444": {
+   "hall_symbol": "R 3 2\"",
+   "international_number": 155,
+   "operator_count": 18
+  },
+  "445": {
+   "hall_symbol": "P 3* 2",
+   "international_number": 155,
+   "operator_count": 6
+  },
+  "446": {
+   "hall_symbol": "P 3 -2\"",
+   "international_number": 156,
+   "operator_count": 6
+  },
+  "447": {
+   "hall_symbol": "P 3 -2",
+   "international_number": 157,
+   "operator_count": 6
+  },
+  "448": {
+   "hall_symbol": "P 3 -2\"c",
+   "international_number": 158,
+   "operator_count": 6
+  },
+  "449": {
+   "hall_symbol": "P 3 -2c",
+   "international_number": 159,
+   "operator_count": 6
+  },
+  "45": {
+   "hall_symbol": "A -2a",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "450": {
+   "hall_symbol": "R 3 -2\"",
+   "international_number": 160,
+   "operator_count": 18
+  },
+  "451": {
+   "hall_symbol": "P 3* -2",
+   "international_number": 160,
+   "operator_count": 6
+  },
+  "452": {
+   "hall_symbol": "R 3 -2\"c",
+   "international_number": 161,
+   "operator_count": 18
+  },
+  "453": {
+   "hall_symbol": "P 3* -2n",
+   "international_number": 161,
+   "operator_count": 6
+  },
+  "454": {
+   "hall_symbol": "-P 3 2",
+   "international_number": 162,
+   "operator_count": 12
+  },
+  "455": {
+   "hall_symbol": "-P 3 2c",
+   "international_number": 163,
+   "operator_count": 12
+  },
+  "456": {
+   "hall_symbol": "-P 3 2\"",
+   "international_number": 164,
+   "operator_count": 12
+  },
+  "457": {
+   "hall_symbol": "-P 3 2\"c",
+   "international_number": 165,
+   "operator_count": 12
+  },
+  "458": {
+   "hall_symbol": "-R 3 2\"",
+   "international_number": 166,
+   "operator_count": 36
+  },
+  "459": {
+   "hall_symbol": "-P 3* 2",
+   "international_number": 166,
+   "operator_count": 12
+  },
+  "46": {
+   "hall_symbol": "B -2ab",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "460": {
+   "hall_symbol": "-R 3 2\"c",
+   "international_number": 167,
+   "operator_count": 36
+  },
+  "461": {
+   "hall_symbol": "-P 3* 2n",
+   "international_number": 167,
+   "operator_count": 12
+  },
+  "462": {
+   "hall_symbol": "P 6",
+   "international_number": 168,
+   "operator_count": 6
+  },
+  "463": {
+   "hall_symbol": "P 61",
+   "international_number": 169,
+   "operator_count": 6
+  },
+  "464": {
+   "hall_symbol": "P 65",
+   "international_number": 170,
+   "operator_count": 6
+  },
+  "465": {
+   "hall_symbol": "P 62",
+   "international_number": 171,
+   "operator_count": 6
+  },
+  "466": {
+   "hall_symbol": "P 64",
+   "international_number": 172,
+   "operator_count": 6
+  },
+  "467": {
+   "hall_symbol": "P 6c",
+   "international_number": 173,
+   "operator_count": 6
+  },
+  "468": {
+   "hall_symbol": "P -6",
+   "international_number": 174,
+   "operator_count": 6
+  },
+  "469": {
+   "hall_symbol": "-P 6",
+   "international_number": 175,
+   "operator_count": 12
+  },
+  "47": {
+   "hall_symbol": "I -2b",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "470": {
+   "hall_symbol": "-P 6c",
+   "international_number": 176,
+   "operator_count": 12
+  },
+  "471": {
+   "hall_symbol": "P 6 2",
+   "international_number": 177,
+   "operator_count": 12
+  },
+  "472": {
+   "hall_symbol": "P 61 2 (0 0 5)",
+   "international_number": 178,
+   "operator_count": 12
+  },
+  "473": {
+   "hall_symbol": "P 65 2 (0 0 1)",
+   "international_number": 179,
+   "operator_count": 12
+  },
+  "474": {
+   "hall_symbol": "P 62 2 (0 0 4)",
+   "international_number": 180,
+   "operator_count": 12
+  },
+  "475": {
+   "hall_symbol": "P 64 2 (0 0 2)",
+   "international_number": 181,
+   "operator_count": 12
+  },
+  "476": {
+   "hall_symbol": "P 6c 2c",
+   "international_number": 182,
+   "operator_count": 12
+  },
+  "477": {
+   "hall_symbol": "P 6 -2",
+   "international_number": 183,
+   "operator_count": 12
+  },
+  "478": {
+   "hall_symbol": "P 6 -2c",
+   "international_number": 184,
+   "operator_count": 12
+  },
+  "479": {
+   "hall_symbol": "P 6c -2",
+   "international_number": 185,
+   "operator_count": 12
+  },
+  "48": {
+   "hall_symbol": "B -2b",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "480": {
+   "hall_symbol": "P 6c -2c",
+   "international_number": 186,
+   "operator_count": 12
+  },
+  "481": {
+   "hall_symbol": "P -6 2",
+   "international_number": 187,
+   "operator_count": 12
+  },
+  "482": {
+   "hall_symbol": "P -6c 2",
+   "international_number": 188,
+   "operator_count": 12
+  },
+  "483": {
+   "hall_symbol": "P -6 -2",
+   "international_number": 189,
+   "operator_count": 12
+  },
+  "484": {
+   "hall_symbol": "P -6c -2c",
+   "international_number": 190,
+   "operator_count": 12
+  },
+  "485": {
+   "hall_symbol": "-P 6 2",
+   "international_number": 191,
+   "operator_count": 24
+  },
+  "486": {
+   "hall_symbol": "-P 6 2c",
+   "international_number": 192,
+   "operator_count": 24
+  },
+  "487": {
+   "hall_symbol": "-P 6c 2",
+   "international_number": 193,
+   "operator_count": 24
+  },
+  "488": {
+   "hall_symbol": "-P 6c 2c",
+   "international_number": 194,
+   "operator_count": 24
+  },
+  "489": {
+   "hall_symbol": "P 2 2 3",
+   "international_number": 195,
+   "operator_count": 12
+  },
+  "49": {
+   "hall_symbol": "A -2ab",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "490": {
+   "hall_symbol": "F 2 2 3",
+   "international_number": 196,
+   "operator_count": 48
+  },
+  "491": {
+   "hall_symbol": "I 2 2 3",
+   "international_number": 197,
+   "operator_count": 24
+  },
+  "492": {
+   "hall_symbol": "P 2ac 2ab 3",
+   "international_number": 198,
+   "operator_count": 12
+  },
+  "493": {
+   "hall_symbol": "I 2b 2c 3",
+   "international_number": 199,
+   "operator_count": 24
+  },
+  "494": {
+   "hall_symbol": "-P 2 2 3",
+   "international_number": 200,
+   "operator_count": 24
+  },
+  "495": {
+   "hall_symbol": "P 2 2 3 -1n",
+   "international_number": 201,
+   "operator_count": 24
+  },
+  "496": {
+   "hall_symbol": "-P 2ab 2bc 3",
+   "international_number": 201,
+   "operator_count": 24
+  },
+  "497": {
+   "hall_symbol": "-F 2 2 3",
+   "international_number": 202,
+   "operator_count": 96
+  },
+  "498": {
+   "hall_symbol": "F 2 2 3 -1d",
+   "international_number": 203,
+   "operator_count": 96
+  },
+  "499": {
+   "hall_symbol": "-F 2uv 2vw 3",
+   "international_number": 203,
+   "operator_count": 96
+  },
+  "5": {
+   "hall_symbol": "P 2x",
+   "international_number": 3,
+   "operator_count": 2
+  },
+  "50": {
+   "hall_symbol": "I -2a",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "500": {
+   "hall_symbol": "-I 2 2 3",
+   "international_number": 204,
+   "operator_count": 48
+  },
+  "501": {
+   "hall_symbol": "-P 2ac 2ab 3",
+   "international_number": 205,
+   "operator_count": 24
+  },
+  "502": {
+   "hall_symbol": "-I 2b 2c 3",
+   "international_number": 206,
+   "operator_count": 48
+  },
+  "503": {
+   "hall_symbol": "P 4 2 3",
+   "international_number": 207,
+   "operator_count": 24
+  },
+  "504": {
+   "hall_symbol": "P 4n 2 3",
+   "international_number": 208,
+   "operator_count": 24
+  },
+  "505": {
+   "hall_symbol": "F 4 2 3",
+   "international_number": 209,
+   "operator_count": 96
+  },
+  "506": {
+   "hall_symbol": "F 4d 2 3",
+   "international_number": 210,
+   "operator_count": 96
+  },
+  "507": {
+   "hall_symbol": "I 4 2 3",
+   "international_number": 211,
+   "operator_count": 48
+  },
+  "508": {
+   "hall_symbol": "P 4acd 2ab 3",
+   "international_number": 212,
+   "operator_count": 24
+  },
+  "509": {
+   "hall_symbol": "P 4bd 2ab 3",
+   "international_number": 213,
+   "operator_count": 24
+  },
+  "51": {
+   "hall_symbol": "B -2xb",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "510": {
+   "hall_symbol": "I 4bd 2c 3",
+   "international_number": 214,
+   "operator_count": 48
+  },
+  "511": {
+   "hall_symbol": "P -4 2 3",
+   "international_number": 215,
+   "operator_count": 24
+  },
+  "512": {
+   "hall_symbol": "F -4 2 3",
+   "international_number": 216,
+   "operator_count": 96
+  },
+  "513": {
+   "hall_symbol": "I -4 2 3",
+   "international_number": 217,
+   "operator_count": 48
+  },
+  "514": {
+   "hall_symbol": "P -4n 2 3",
+   "international_number": 218,
+   "operator_count": 24
+  },
+  "515": {
+   "hall_symbol": "F -4a 2 3",
+   "international_number": 219,
+   "operator_count": 96
+  },
+  "516": {
+   "hall_symbol": "I -4bd 2c 3",
+   "international_number": 220,
+   "operator_count": 48
+  },
+  "517": {
+   "hall_symbol": "-P 4 2 3",
+   "international_number": 221,
+   "operator_count": 48
+  },
+  "518": {
+   "hall_symbol": "P 4 2 3 -1n",
+   "international_number": 222,
+   "operator_count": 48
+  },
+  "519": {
+   "hall_symbol": "-P 4a 2bc 3",
+   "international_number": 222,
+   "operator_count": 48
+  },
+  "52": {
+   "hall_symbol": "C -2xac",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "520": {
+   "hall_symbol": "-P 4n 2 3",
+   "international_number": 223,
+   "operator_count": 48
+  },
+  "521": {
+   "hall_symbol": "P 4n 2 3 -1n",
+   "international_number": 224,
+   "operator_count": 48
+  },
+  "522": {
+   "hall_symbol": "-P 4bc 2bc 3",
+   "international_number": 224,
+   "operator_count": 48
+  },
+  "523": {
+   "hall_symbol": "-F 4 2 3",
+   "international_number": 225,
+   "operator_count": 192
+  },
+  "524": {
+   "hall_symbol": "-F 4a 2 3",
+   "international_number": 226,
+   "operator_count": 192
+  },
+  "525": {
+   "hall_symbol": "F 4d 2 3 -1d",
+   "international_number": 227,
+   "operator_count": 192
+  },
+  "526": {
+   "hall_symbol": "-F 4vw 2vw 3",
+   "international_number": 227,
+   "operator_count": 192
+  },
+  "527": {
+   "hall_symbol": "F 4d 2 3 -1ad",
+   "international_number": 228,
+   "operator_count": 192
+  },
+  "528": {
+   "hall_symbol": "-F 4ud 2vw 3",
+   "international_number": 228,
+   "operator_count": 192
+  },
+  "529": {
+   "hall_symbol": "-I 4 2 3",
+   "international_number": 229,
+   "operator_count": 96
+  },
+  "53": {
+   "hall_symbol": "I -2xc",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "530": {
+   "hall_symbol": "-I 4bd 2c 3",
+   "international_number": 230,
+   "operator_count": 96
+  },
+  "54": {
+   "hall_symbol": "C -2xc",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "55": {
+   "hall_symbol": "B -2xab",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "56": {
+   "hall_symbol": "I -2xb",
+   "international_number": 9,
+   "operator_count": 4
+  },
+  "57": {
+   "hall_symbol": "-P 2y",
+   "international_number": 10,
+   "operator_count": 4
+  },
+  "58": {
+   "hall_symbol": "-P 2",
+   "international_number": 10,
+   "operator_count": 4
+  },
+  "59": {
+   "hall_symbol": "-P 2x",
+   "international_number": 10,
+   "operator_count": 4
+  },
+  "6": {
+   "hall_symbol": "P 2yb",
+   "international_number": 4,
+   "operator_count": 2
+  },
+  "60": {
+   "hall_symbol": "-P 2yb",
+   "international_number": 11,
+   "operator_count": 4
+  },
+  "61": {
+   "hall_symbol": "-P 2c",
+   "international_number": 11,
+   "operator_count": 4
+  },
+  "62": {
+   "hall_symbol": "-P 2xa",
+   "international_number": 11,
+   "operator_count": 4
+  },
+  "63": {
+   "hall_symbol": "-C 2y",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "64": {
+   "hall_symbol": "-A 2y",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "65": {
+   "hall_symbol": "-I 2y",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "66": {
+   "hall_symbol": "-A 2",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "67": {
+   "hall_symbol": "-B 2",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "68": {
+   "hall_symbol": "-I 2",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "69": {
+   "hall_symbol": "-B 2x",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "7": {
+   "hall_symbol": "P 2c",
+   "international_number": 4,
+   "operator_count": 2
+  },
+  "70": {
+   "hall_symbol": "-C 2x",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "71": {
+   "hall_symbol": "-I 2x",
+   "international_number": 12,
+   "operator_count": 8
+  },
+  "72": {
+   "hall_symbol": "-P 2yc",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "73": {
+   "hall_symbol": "-P 2yac",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "74": {
+   "hall_symbol": "-P 2ya",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "75": {
+   "hall_symbol": "-P 2a",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "76": {
+   "hall_symbol": "-P 2ab",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "77": {
+   "hall_symbol": "-P 2b",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "78": {
+   "hall_symbol": "-P 2xb",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "79": {
+   "hall_symbol": "-P 2xbc",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "8": {
+   "hall_symbol": "P 2xa",
+   "international_number": 4,
+   "operator_count": 2
+  },
+  "80": {
+   "hall_symbol": "-P 2xc",
+   "international_number": 13,
+   "operator_count": 4
+  },
+  "81": {
+   "hall_symbol": "-P 2ybc",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "82": {
+   "hall_symbol": "-P 2yn",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "83": {
+   "hall_symbol": "-P 2yab",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "84": {
+   "hall_symbol": "-P 2ac",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "85": {
+   "hall_symbol": "-P 2n",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "86": {
+   "hall_symbol": "-P 2bc",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "87": {
+   "hall_symbol": "-P 2xab",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "88": {
+   "hall_symbol": "-P 2xn",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "89": {
+   "hall_symbol": "-P 2xac",
+   "international_number": 14,
+   "operator_count": 4
+  },
+  "9": {
+   "hall_symbol": "C 2y",
+   "international_number": 5,
+   "operator_count": 4
+  },
+  "90": {
+   "hall_symbol": "-C 2yc",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "91": {
+   "hall_symbol": "-A 2yab",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "92": {
+   "hall_symbol": "-I 2ya",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "93": {
+   "hall_symbol": "-A 2ya",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "94": {
+   "hall_symbol": "-C 2yac",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "95": {
+   "hall_symbol": "-I 2yc",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "96": {
+   "hall_symbol": "-A 2a",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "97": {
+   "hall_symbol": "-B 2ab",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "98": {
+   "hall_symbol": "-I 2b",
+   "international_number": 15,
+   "operator_count": 8
+  },
+  "99": {
+   "hall_symbol": "-B 2b",
+   "international_number": 15,
+   "operator_count": 8
+  }
+ },
+ "version": "0.7.5"
+}

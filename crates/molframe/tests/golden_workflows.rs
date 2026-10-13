@@ -25,6 +25,12 @@ mod connection_round_trip;
 #[path = "golden/evidence.rs"]
 mod evidence;
 
+#[path = "golden/scientific_references.rs"]
+mod scientific_references;
+
+#[path = "golden/score_evidence.rs"]
+mod score_evidence;
+
 const UNKNOWN_CATEGORY_CIF: &str = "data_unknown\n\
 _custom.note 'keep this category'\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\

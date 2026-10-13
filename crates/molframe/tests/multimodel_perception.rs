@@ -35,7 +35,10 @@ fn identical_models_with_two_chains_read_densely() {
 
 #[test]
 fn ragged_models_each_receive_perceived_bonds() {
-    let structure = read(format!("{}{}END\n", model(1, " 10.00"), model(2, " 20.00")));
+    // Models that differ only in B-factor stay dense, so the second model changes
+    // an atom's identity to force a different topology.
+    let second = model(2, " 20.00").replace(" CA  GLY", " CB  GLY");
+    let structure = read(format!("{}{second}END\n", model(1, " 10.00")));
     assert!(structure.is_ragged_ensemble());
     let Some(models) = structure.ragged_models() else {
         panic!("a ragged ensemble exposes its models")
