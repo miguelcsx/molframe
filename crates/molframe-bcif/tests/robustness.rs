@@ -1,4 +1,4 @@
-//! Corrupt, truncated and hostile BinaryCIF inputs must error, never panic or
+//! Corrupt, truncated and hostile `BinaryCIF` inputs must error, never panic or
 //! allocate what they merely claim.
 
 use molframe_bcif::{DataType, EncodedData, Encoding, decode, read, read_document};
