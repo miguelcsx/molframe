@@ -187,9 +187,11 @@ fn cgroup_limit() -> Option<usize> {
     ]
     .iter()
     .find_map(|path| std::fs::read_to_string(path).ok())
-    .and_then(|text| text.trim().parse::<usize>().ok())
-    // cgroup v1 reports "no limit" as a number near 2^63.
-    .filter(|limit| *limit < (1 << 60))
+    .and_then(|text| text.trim().parse::<u64>().ok())
+    // cgroup v1 reports "no limit" as a number near 2^63. The comparison is
+    // done in u64 so a 32-bit target does not overflow the shift.
+    .filter(|limit| *limit < (1_u64 << 60))
+    .and_then(|limit| usize::try_from(limit).ok())
 }
 
 /// Failure to construct or reserve an execution-memory budget.
