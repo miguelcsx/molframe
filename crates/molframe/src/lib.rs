@@ -257,7 +257,7 @@ pub use extensions::CompareExt;
 #[cfg(feature = "validation")]
 pub use extensions::ValidationExt;
 #[cfg(all(feature = "surface", feature = "chemistry"))]
-pub use extensions::{SasaMethod, SasaOptions, SurfaceExt, SurfaceExtError};
+pub use extensions::{SasaMethod, SasaOptions, SasaReport, SurfaceExt, SurfaceExtError};
 #[cfg(feature = "validation")]
 pub use validation_inputs::{
     ValidationInputError, read_plane_restraints, read_reference_library, read_rotamer_profile,

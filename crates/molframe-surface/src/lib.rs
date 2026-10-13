@@ -77,8 +77,8 @@ pub use solver_output::{
 };
 pub use stream::visit_shrake_rupley;
 pub use structure_sasa::{
-    DEFAULT_POINTS, DEFAULT_PROBE, DEFAULT_SLICES, SasaMethod, SasaOptions, SasaWordError,
-    measure_atoms, structure_atom_areas,
+    DEFAULT_POINTS, DEFAULT_PROBE, DEFAULT_SLICES, SasaMethod, SasaOptions, SasaReport,
+    SasaWordError, measure_atoms, structure_atom_areas, structure_sasa_report,
 };
 pub use triangulation::{IndexedSurfaceMesh, MeshReport, SurfaceFace};
 pub use workflow_policy::{

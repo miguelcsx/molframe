@@ -269,6 +269,11 @@ pub(crate) struct SasaWords {
     /// Radius for a metal the set lacks: none, vdw or ionic.
     #[arg(long)]
     pub(crate) metals: Option<String>,
+    /// A radius table file that replaces `--radii`: `name:`, `version:`,
+    /// `source:` and `licence:` header lines, an optional `base:` set, then
+    /// one `Symbol radius` row per element.
+    #[arg(long, value_name = "PATH")]
+    pub(crate) radii_file: Option<std::path::PathBuf>,
 }
 
 pub(crate) fn sasa(
@@ -287,7 +292,7 @@ pub(crate) fn sasa(
         words.metals.as_deref(),
     ) {
         Ok(options) => molframe::SasaOptions {
-            radii: radius_set,
+            radii: molframe::chemistry::RadiusSource::Set(radius_set),
             ..options
         },
         Err(error) => {
@@ -295,6 +300,25 @@ pub(crate) fn sasa(
             return Exit::Usage;
         }
     };
+    let options = match &words.radii_file {
+        None => options,
+        Some(path) => match std::fs::read_to_string(path) {
+            Ok(text) => match options.with_radii_table(&text) {
+                Ok(options) => options,
+                Err(error) => {
+                    eprintln!("{}: {error}", path.display());
+                    return Exit::Usage;
+                }
+            },
+            Err(error) => {
+                eprintln!("cannot read {}: {error}", path.display());
+                return Exit::Usage;
+            }
+        },
+    };
+    if !context.quiet {
+        eprintln!("# radius policy: {}", options.applied_policy());
+    }
     let structure = match open(input, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,

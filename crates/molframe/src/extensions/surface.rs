@@ -13,7 +13,7 @@ use crate::structure::Structure;
 use molframe_core::diagnostic::Diagnostic;
 use molframe_core::index::ModelIndex;
 use molframe_surface::SasaError;
-pub use molframe_surface::{SasaMethod, SasaOptions};
+pub use molframe_surface::{SasaMethod, SasaOptions, SasaReport};
 
 /// Why a structure-level SASA call failed.
 #[derive(Debug, thiserror::Error)]
@@ -79,6 +79,19 @@ pub trait SurfaceExt {
         context: &ExecutionContext,
     ) -> Result<Vec<f64>, SurfaceExtError>;
 
+    /// Per-atom SASA together with the radius policy that applied: the radius
+    /// set or caller-supplied table, the metal tables, and the hetero choice,
+    /// each by name, version, source and licence.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::sasa_with`].
+    fn sasa_report_with(
+        &self,
+        options: &SasaOptions,
+        context: &ExecutionContext,
+    ) -> Result<SasaReport, SurfaceExtError>;
+
     /// Per-residue SASA with the default options, indexed by residue.
     ///
     /// # Errors
@@ -118,6 +131,17 @@ impl SurfaceExt for Structure {
         Ok(molframe_surface::structure_atom_areas(
             engine, positions, options, context,
         )?)
+    }
+
+    fn sasa_report_with(
+        &self,
+        options: &SasaOptions,
+        context: &ExecutionContext,
+    ) -> Result<SasaReport, SurfaceExtError> {
+        Ok(SasaReport {
+            areas: self.sasa_with(options, context)?,
+            policy: options.applied_policy(),
+        })
     }
 
     fn residue_sasa(&self) -> Result<Vec<f64>, SurfaceExtError> {

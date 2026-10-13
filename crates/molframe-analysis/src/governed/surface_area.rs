@@ -9,7 +9,7 @@
 use super::common::{descriptor, float};
 use super::definition::DefinitionError;
 use super::{FrameKernelResult, StructureKernel, structure_kernel};
-use molframe_chem::{RadiusSet, included_atoms};
+use molframe_chem::{RadiusSet, RadiusSource, included_atoms};
 use molframe_core::contract::{
     AnalysisPolicy, Assumption, AssumptionSource, Coverage, Impact, ParameterValue, PolicyField,
     Quality,
@@ -24,7 +24,9 @@ use std::collections::BTreeMap;
 /// `options` is the one option set every front end shares: the sampling method and its
 /// density, the probe radius, which heteroatom classes take part (`hetero`, the polymer
 /// alone by default) and where a metal the radius set lacks takes its radius (`metals`).
-/// The radius set is the policy's `vdw_radii`, not `options.radii`. An atom the options
+/// The radius set is the policy's `vdw_radii` unless `options.radii` carries a table the
+/// caller supplied, which then replaces it. Either way the result records the table that
+/// was applied (name, version, source, licence) as a `vdw_radii` assumption. An atom the options
 /// leave out, or whose element has no radius in the set, has no area (`NaN`) and does not
 /// occlude its neighbours. A left-out heteroatom is a choice and not a gap; an included
 /// atom with no radius is reported as missing coverage, so the policy's `missing_atoms`
@@ -42,16 +44,24 @@ pub fn sasa_kernel(
             .with_parameter("probe", float(options.probe))
             .with_parameter("method", method_parameter(options.method))
             .with_parameter("hetero", text(&options.hetero.to_string()))
-            .with_parameter("metals", text(&options.metals.to_string())),
+            .with_parameter("metals", text(&options.metals.to_string()))
+            .with_parameter("radii_table", radii_parameter(&options)),
         move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
-            let set: RadiusSet =
-                policy.vdw_radii.name().parse().map_err(|_| {
-                    DefinitionError::UnknownRadiusSet(policy.vdw_radii.name().into())
-                })?;
-            let options = SasaOptions {
-                radii: set,
-                ..options
+            let (radii_source, origin) = match &options.radii {
+                custom @ RadiusSource::Custom(_) => (custom.clone(), AssumptionSource::Explicit),
+                RadiusSource::Set(_) => {
+                    let set: RadiusSet = policy.vdw_radii.name().parse().map_err(|_| {
+                        DefinitionError::UnknownRadiusSet(policy.vdw_radii.name().into())
+                    })?;
+                    (RadiusSource::Set(set), AssumptionSource::ProfileDefault)
+                }
             };
+            let options = SasaOptions {
+                radii: radii_source,
+                ..options.clone()
+            };
+            let applied = applied_assumption(&options, origin);
+            let table = options.radii.identity().name.to_string();
             let radii = options.atom_radii(structure);
             let included = included_atoms(structure, options.hetero);
             let areas = measure_atoms(structure.positions(), &radii, &options, context)?;
@@ -61,7 +71,7 @@ pub fn sasa_kernel(
             let missing = intended.saturating_sub(used);
             if missing == 0 {
                 let result = FrameKernelResult::complete(areas, count(used));
-                return Ok(add_scope(result, scope));
+                return Ok(add_scope(result.with_assumption(applied), scope));
             }
             let coverage = Coverage {
                 intended: count(intended),
@@ -73,8 +83,7 @@ pub fn sasa_kernel(
                 .with_assumption(Assumption::new(
                     PolicyField::VdwRadii,
                     format!(
-                        "{missing} atoms have an element with no radius in the {} set; they have no area and do not occlude",
-                        set.name()
+                        "{missing} atoms have an element with no radius in the {table} set; they have no area and do not occlude"
                     ),
                     AssumptionSource::Inferred,
                     Impact::Unmeasured,
@@ -84,11 +93,11 @@ pub fn sasa_kernel(
                         .about_field(PolicyField::VdwRadii.name())
                         .with_message(format!(
                             "the {} radius set has no radius for {}; those atoms are excluded, so the total is partial (choose a set that covers them, such as alvarez, or remove them from the selection)",
-                            set.name(),
+                            table,
                             missing_elements(structure, &radii, &included),
                         )),
                 );
-            Ok(add_scope(result, scope))
+            Ok(add_scope(result.with_assumption(applied), scope))
         },
     )
 }
@@ -102,6 +111,24 @@ fn count(value: usize) -> u32 {
 
 fn text(value: &str) -> ParameterValue {
     ParameterValue::Text(value.into())
+}
+
+fn radii_parameter(options: &SasaOptions) -> ParameterValue {
+    match &options.radii {
+        RadiusSource::Set(_) => text("policy"),
+        custom @ RadiusSource::Custom(_) => text(&custom.identity().to_string()),
+    }
+}
+
+/// The radius policy as applied: every table behind the radii, by name, version, source
+/// and licence.
+fn applied_assumption(options: &SasaOptions, origin: AssumptionSource) -> Assumption {
+    Assumption::new(
+        PolicyField::VdwRadii,
+        options.applied_policy().to_string(),
+        origin,
+        Impact::Unmeasured,
+    )
 }
 
 fn method_parameter(method: SasaMethod) -> ParameterValue {

@@ -1,5 +1,7 @@
-use super::{DEFAULT_POINTS, SasaMethod, SasaOptions, SasaWordError, measure_atoms};
-use molframe_chem::{HeteroPolicy, MetalFallback, RadiusSet};
+use super::{
+    DEFAULT_POINTS, SasaMethod, SasaOptions, SasaWordError, measure_atoms, structure_sasa_report,
+};
+use molframe_chem::{HeteroPolicy, MetalFallback, RadiusSet, RadiusSource};
 use molframe_core::ExecutionContext;
 
 fn areas(radii: &[f32], options: &SasaOptions) -> Vec<f64> {
@@ -21,7 +23,7 @@ fn the_default_is_polymer_only_shrake_rupley_with_bondi_radii() {
     );
     assert_eq!(options.hetero, HeteroPolicy::POLYMER);
     assert_eq!(options.metals, MetalFallback::Vdw);
-    assert_eq!(options.radii, RadiusSet::Bondi);
+    assert_eq!(options.radii, RadiusSource::Set(RadiusSet::Bondi));
     assert!((options.probe - 1.4).abs() < f32::EPSILON);
 }
 
@@ -84,4 +86,39 @@ fn bad_words_and_a_zero_count_are_refused() {
         Err(SasaWordError::Samples)
     ));
     assert!(SasaOptions::from_words(None, None, None, Some("lipids"), None).is_err());
+}
+
+#[test]
+fn a_supplied_table_drives_the_areas_and_is_named_in_the_report() {
+    let crambin = molframe_bench::structure(molframe_bench::Sample::Small);
+    let positions = molframe_bench::coordinates(&crambin);
+    let context = ExecutionContext::default();
+    let Ok(default) =
+        structure_sasa_report(&crambin, &positions, &SasaOptions::default(), &context)
+    else {
+        panic!("default areas");
+    };
+    assert_eq!(default.policy.radii.name, "bondi");
+    let table = "name: lab\nversion: 7\nsource: test\nlicence: CC0-1.0\nbase: bondi\n";
+    let Ok(same) = SasaOptions::default().with_radii_table(table) else {
+        panic!("table parses");
+    };
+    let Ok(layered) = structure_sasa_report(&crambin, &positions, &same, &context) else {
+        panic!("layered areas");
+    };
+    assert_eq!(layered.policy.radii.name, "lab");
+    assert_eq!(layered.policy.radii.version, "7");
+    let identical = default
+        .areas
+        .iter()
+        .zip(&layered.areas)
+        .all(|(a, b)| a.to_bits() == b.to_bits());
+    assert!(identical);
+    let Ok(wider) = SasaOptions::default().with_radii_table(&format!("{table}C 2.5\n")) else {
+        panic!("override parses");
+    };
+    let Ok(changed) = structure_sasa_report(&crambin, &positions, &wider, &context) else {
+        panic!("override areas");
+    };
+    assert_ne!(changed.areas, default.areas);
 }

@@ -51,7 +51,7 @@ pub use analysis::AnalysisExt;
 #[cfg(feature = "compare")]
 pub use compare::CompareExt;
 #[cfg(all(feature = "surface", feature = "chemistry"))]
-pub use surface::{SasaMethod, SasaOptions, SurfaceExt, SurfaceExtError};
+pub use surface::{SasaMethod, SasaOptions, SasaReport, SurfaceExt, SurfaceExtError};
 #[cfg(feature = "validation")]
 pub use validation::ValidationExt;
 

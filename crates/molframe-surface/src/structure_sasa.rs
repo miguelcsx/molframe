@@ -16,7 +16,8 @@
 
 use crate::{SasaError, lee_richards, shrake_rupley};
 use molframe_chem::{
-    HeteroPolicy, MetalFallback, PolicyWordError, RadiusPolicy, RadiusSet, policy_radii,
+    AppliedRadiusPolicy, CustomRadii, HeteroPolicy, MetalFallback, PolicyWordError, RadiusPolicy,
+    RadiusSet, RadiusSource, RadiusTableError, policy_radii,
 };
 use molframe_core::ExecutionContext;
 use molframe_core::index::ModelIndex;
@@ -57,14 +58,19 @@ impl Default for SasaMethod {
 /// The default is Shrake-Rupley with 960 points, a 1.4 Å probe, Bondi radii,
 /// the polymer alone (no waters, ligands or ions), the vdW metal fallback and
 /// the first model.
-#[derive(Clone, Copy, Debug, PartialEq)]
+///
+/// The radius source is an argument, not a constant: [`SasaOptions::radii`]
+/// holds either one of the built-in sets or a table the caller supplied (see
+/// [`SasaOptions::with_radii_table`]), and [`SasaOptions::applied_policy`]
+/// reports which table, version, source and licence a calculation used.
+#[derive(Clone, Debug, PartialEq)]
 pub struct SasaOptions {
     /// The sampling method.
     pub method: SasaMethod,
     /// Probe radius in ångström.
     pub probe: f32,
-    /// Which radius table to use.
-    pub radii: RadiusSet,
+    /// Which radius table to use: a built-in set or the caller's own.
+    pub radii: RadiusSource,
     /// Which heteroatom classes are measured and occlude.
     pub hetero: HeteroPolicy,
     /// Where a metal the radius set has no value for takes its radius.
@@ -78,7 +84,7 @@ impl Default for SasaOptions {
         Self {
             method: SasaMethod::default(),
             probe: DEFAULT_PROBE,
-            radii: RadiusSet::Bondi,
+            radii: RadiusSource::Set(RadiusSet::Bondi),
             hetero: HeteroPolicy::POLYMER,
             metals: MetalFallback::Vdw,
             model: ModelIndex::new(0),
@@ -89,12 +95,32 @@ impl Default for SasaOptions {
 impl SasaOptions {
     /// The radius assignment these options describe.
     #[must_use]
-    pub const fn radius_policy(&self) -> RadiusPolicy {
+    pub fn radius_policy(&self) -> RadiusPolicy {
         RadiusPolicy {
-            set: self.radii,
+            source: self.radii.clone(),
             metals: self.metals,
             hetero: self.hetero,
         }
+    }
+
+    /// The radius policy with every table it resolves to named, as a result
+    /// should record it.
+    #[must_use]
+    pub fn applied_policy(&self) -> AppliedRadiusPolicy {
+        self.radius_policy().applied()
+    }
+
+    /// These options with the radii taken from a caller's table, given as
+    /// text in the format of [`CustomRadii::parse`].
+    ///
+    /// # Errors
+    ///
+    /// [`RadiusTableError`] for a table that does not validate.
+    pub fn with_radii_table(self, text: &str) -> Result<Self, RadiusTableError> {
+        Ok(Self {
+            radii: RadiusSource::from(CustomRadii::parse(text)?),
+            ..self
+        })
     }
 
     /// The radius of every atom of `structure`, indexed by atom. `NaN` marks
@@ -219,6 +245,32 @@ pub fn measure_atoms(
         areas[atom] = area;
     }
     Ok(areas)
+}
+
+/// Per-atom areas together with the radius policy that produced them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SasaReport {
+    /// Area of every atom, indexed by atom; `NaN` where the atom is left out.
+    pub areas: Vec<f64>,
+    /// The tables and choices the radii came from.
+    pub policy: AppliedRadiusPolicy,
+}
+
+/// Like [`structure_atom_areas`], and states which radius policy applied.
+///
+/// # Errors
+///
+/// See [`measure_atoms`].
+pub fn structure_sasa_report(
+    structure: &Structure,
+    positions: &[[f32; 3]],
+    options: &SasaOptions,
+    context: &ExecutionContext,
+) -> Result<SasaReport, SasaError> {
+    Ok(SasaReport {
+        areas: structure_atom_areas(structure, positions, options, context)?,
+        policy: options.applied_policy(),
+    })
 }
 
 /// Per-atom area of `structure` at `positions`, indexed by atom.
