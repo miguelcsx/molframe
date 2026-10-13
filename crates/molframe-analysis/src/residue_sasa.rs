@@ -32,7 +32,7 @@ use molframe_surface::{SasaError, SasaOptions, measure_atoms};
 /// relative accessibility rather than a guessed one. Pass a [`MaxAreaTable`] to use other values.
 #[must_use]
 pub fn max_residue_area(name: &str) -> Option<f64> {
-    MaxAreaTable::default().max_area(name)
+    MaxAreaTable::builtin().max_area(name)
 }
 
 /// Why per-residue areas could not be computed.

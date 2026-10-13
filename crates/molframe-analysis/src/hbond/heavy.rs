@@ -2,7 +2,7 @@
 //!
 //! Crystal and many cryo-EM models stop at the heavy atoms, so the
 //! hydrogen-based detector has nothing to measure. This mode types donors and
-//! acceptors from residue and atom names (see `heavy_roles`), and accepts a
+//! acceptors from residue and atom names (see `heavy_role_table`), and accepts a
 //! donor–acceptor pair when
 //!
 //! - the heavy-atom distance lies in `[minimum_distance, maximum_distance]`
@@ -30,6 +30,7 @@ use molframe_spatial::{
     PairQuery, SpatialBackend, SpatialSearchOptions, reduce_pairs_within_unsorted,
 };
 
+use super::heavy_role_table::HeavyRoleTable;
 use super::heavy_roles::assign_roles;
 use super::{HydrogenBondError, altlocs_compatible, orientations};
 use crate::numeric::f64_to_f32;
@@ -114,8 +115,23 @@ pub fn heavy_atom_hydrogen_bonds(
     options: HeavyAtomHydrogenBondOptions,
     context: &ExecutionContext,
 ) -> Result<HeavyAtomHydrogenBondTable, HydrogenBondError> {
+    heavy_atom_hydrogen_bonds_with_roles(structure, HeavyRoleTable::builtin(), options, context)
+}
+
+/// [`heavy_atom_hydrogen_bonds`] with the donor and acceptor typing taken from
+/// `roles` instead of the built-in table.
+///
+/// # Errors
+///
+/// As [`heavy_atom_hydrogen_bonds`].
+pub fn heavy_atom_hydrogen_bonds_with_roles(
+    structure: &Structure,
+    roles: &HeavyRoleTable,
+    options: HeavyAtomHydrogenBondOptions,
+    context: &ExecutionContext,
+) -> Result<HeavyAtomHydrogenBondTable, HydrogenBondError> {
     validate(options)?;
-    let roles = assign_roles(structure, options.include_sulfur);
+    let roles = assign_roles(structure, roles, options.include_sulfur);
     let covalent = covalent_graph(structure, options, context)?;
     let positions = structure.positions();
     let residue_of = |atom: u32| {

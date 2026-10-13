@@ -3,7 +3,7 @@
 //! Relative accessibility is an area divided by a maximum, and which maximum is
 //! a choice. [`MaxAreaTable`] holds one set of maxima together with the
 //! [`TableIdentity`] that says where it came from; the built-in Tien et al.
-//! table is [`MaxAreaTable::default`], and [`MaxAreaTable::parse`] reads a
+//! table is [`MaxAreaTable::builtin`], and [`MaxAreaTable::parse`] reads a
 //! caller's own from text:
 //!
 //! ```text
@@ -25,51 +25,19 @@
 
 use crate::max_area_defaults::{TIEN_2013, TIEN_2013_AREAS};
 use crate::protonation::parent_residue;
-use core::fmt;
+use crate::table_text::{IdentityFields, TableTextError};
 use molframe_chem::TableIdentity;
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 /// The largest area a table may declare, in square ångström; anything above is
 /// a unit mistake.
 const MAXIMUM_AREA: f64 = 2000.0;
 
 /// Why a maximum-area table was refused.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MaxAreaTableError {
-    line: usize,
-    message: String,
-}
+pub type MaxAreaTableError = TableTextError;
 
-impl MaxAreaTableError {
-    fn at(line: usize, message: impl Into<String>) -> Self {
-        Self {
-            line,
-            message: message.into(),
-        }
-    }
-
-    /// The one-based line the problem is on, or zero for a whole-table problem.
-    #[must_use]
-    pub const fn line(&self) -> usize {
-        self.line
-    }
-}
-
-impl fmt::Display for MaxAreaTableError {
-    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.line == 0 {
-            write!(out, "maximum-area table: {}", self.message)
-        } else {
-            write!(
-                out,
-                "maximum-area table, line {}: {}",
-                self.line, self.message
-            )
-        }
-    }
-}
-
-impl core::error::Error for MaxAreaTableError {}
+const WHAT: &str = "maximum-area table";
 
 /// Maximum accessible area per residue name, with the identity of its source.
 #[derive(Clone, Debug, PartialEq)]
@@ -79,19 +47,28 @@ pub struct MaxAreaTable {
 }
 
 impl Default for MaxAreaTable {
-    /// The Tien et al. (2013) theoretical maxima.
+    /// A copy of the Tien et al. (2013) theoretical maxima; prefer
+    /// [`MaxAreaTable::builtin`], which borrows them.
     fn default() -> Self {
-        Self {
+        Self::builtin().clone()
+    }
+}
+
+impl MaxAreaTable {
+    /// The Tien et al. (2013) theoretical maxima, built once and borrowed for the
+    /// life of the process.
+    #[must_use]
+    pub fn builtin() -> &'static Self {
+        static BUILTIN: OnceLock<MaxAreaTable> = OnceLock::new();
+        BUILTIN.get_or_init(|| Self {
             identity: TIEN_2013,
             areas: TIEN_2013_AREAS
                 .iter()
                 .map(|&(name, area)| (name.to_owned(), area))
                 .collect(),
-        }
+        })
     }
-}
 
-impl MaxAreaTable {
     /// Parses and validates a table.
     ///
     /// # Errors
@@ -99,7 +76,7 @@ impl MaxAreaTable {
     /// [`MaxAreaTableError`] for a missing, unknown or repeated header, a
     /// repeated residue, or an area that is not a positive finite number.
     pub fn parse(text: &str) -> Result<Self, MaxAreaTableError> {
-        let mut fields: [Option<String>; 4] = Default::default();
+        let mut fields = IdentityFields::default();
         let mut areas = BTreeMap::new();
         for (index, raw) in text.lines().enumerate() {
             let number = index + 1;
@@ -108,25 +85,25 @@ impl MaxAreaTable {
                 continue;
             }
             if let Some((key, value)) = line.split_once(':') {
-                set_header(number, key.trim(), value.trim(), &mut fields)?;
+                if !fields.set(WHAT, number, key.trim(), value.trim())? {
+                    return Err(MaxAreaTableError::at(
+                        WHAT,
+                        number,
+                        format!(
+                            "unknown header `{}`; expected name, version, source or licence",
+                            key.trim()
+                        ),
+                    ));
+                }
             } else {
                 read_row(number, line, &mut areas)?;
             }
         }
         if areas.is_empty() {
-            return Err(MaxAreaTableError::at(0, "the table lists no residue"));
+            return Err(MaxAreaTableError::at(WHAT, 0, "the table lists no residue"));
         }
-        let [name, version, source, licence] = fields;
-        let need = |value: Option<String>, key: &str| {
-            value.ok_or_else(|| MaxAreaTableError::at(0, format!("missing `{key}` header")))
-        };
         Ok(Self {
-            identity: TableIdentity::supplied(
-                &need(name, "name")?,
-                &need(version, "version")?,
-                &need(source, "source")?,
-                &need(licence, "licence")?,
-            ),
+            identity: fields.finish(WHAT)?,
             areas,
         })
     }
@@ -154,39 +131,6 @@ impl MaxAreaTable {
     }
 }
 
-fn set_header(
-    line: usize,
-    key: &str,
-    value: &str,
-    fields: &mut [Option<String>; 4],
-) -> Result<(), MaxAreaTableError> {
-    if value.is_empty() {
-        return Err(MaxAreaTableError::at(line, format!("`{key}` has no value")));
-    }
-    let slot = match key {
-        "name" => 0,
-        "version" => 1,
-        "source" => 2,
-        "licence" | "license" => 3,
-        other => {
-            return Err(MaxAreaTableError::at(
-                line,
-                format!("unknown header `{other}`; expected name, version, source or licence"),
-            ));
-        }
-    };
-    match fields.get_mut(slot) {
-        Some(field) if field.is_none() => *field = Some(value.to_owned()),
-        _ => {
-            return Err(MaxAreaTableError::at(
-                line,
-                format!("`{key}` is declared twice"),
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn read_row(
     line: usize,
     text: &str,
@@ -195,21 +139,24 @@ fn read_row(
     let mut words = text.split_whitespace();
     let (Some(name), Some(value), None) = (words.next(), words.next(), words.next()) else {
         return Err(MaxAreaTableError::at(
+            WHAT,
             line,
             "expected `residue area`, two words",
         ));
     };
     let area: f64 = value
         .parse()
-        .map_err(|_| MaxAreaTableError::at(line, format!("`{value}` is not a number")))?;
+        .map_err(|_| MaxAreaTableError::at(WHAT, line, format!("`{value}` is not a number")))?;
     if !area.is_finite() || area <= 0.0 || area > MAXIMUM_AREA {
         return Err(MaxAreaTableError::at(
+            WHAT,
             line,
             format!("area {value} must be positive and at most {MAXIMUM_AREA}"),
         ));
     }
     if areas.insert(name.to_ascii_uppercase(), area).is_some() {
         return Err(MaxAreaTableError::at(
+            WHAT,
             line,
             format!("residue `{name}` is listed twice"),
         ));

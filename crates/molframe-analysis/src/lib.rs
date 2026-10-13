@@ -78,6 +78,7 @@ mod stream_surface;
 #[path = "pucker.rs"]
 mod sugar_conformation;
 pub mod surface_contacts;
+mod table_text;
 #[path = "ensemble.rs"]
 mod trajectory_ensemble;
 mod vector_field;
@@ -121,11 +122,13 @@ pub use external_secondary_structure::{DsspBinaryError, DsspSegment, parse_dssp_
 pub use fragment_mapping::{FragmentMappingError, FragmentMatch, FragmentReference, map_fragments};
 pub use half_sphere::{HalfSphereExposure, HseError, half_sphere_exposure, protein_domain};
 pub use hbond::{
-    HeavyAtomHydrogenBond, HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable, HydrogenBond,
-    HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
+    HEAVY_ROLES_DEFAULT, HEAVY_ROLES_DEFAULT_TEXT, HeavyAtomHydrogenBond,
+    HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable, HeavyRoleTable, HeavyRoleTableError,
+    HydrogenBond, HydrogenBondCandidate, HydrogenBondCandidateOptions, HydrogenBondCandidateTable,
     HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
-    heavy_atom_hydrogen_bonds, hydrogen_bond_candidates_over_segment, hydrogen_bonds,
-    hydrogen_bonds_at_sample, hydrogen_bonds_with_policy,
+    heavy_atom_hydrogen_bonds, heavy_atom_hydrogen_bonds_with_roles,
+    hydrogen_bond_candidates_over_segment, hydrogen_bonds, hydrogen_bonds_at_sample,
+    hydrogen_bonds_with_policy,
 };
 pub use helix_geometry::{
     BaseFrame, HelicalError, HelicalOptions, HelicalParameters, MiddleFrameStep,
@@ -188,6 +191,7 @@ pub use spatial_density::{
 };
 pub use sugar_conformation::{Pucker, sugar_pucker};
 pub use surface_contacts::{SurfaceContactOptions, surface_contacts};
+pub use table_text::TableTextError;
 pub use trajectory_ensemble::{
     Clustering, ConvergenceBlock, EnsembleDistanceMatrix, EnsembleGeometryError,
     EnsembleSimilarityError, EnsembleStatisticsError, FrameAlignment, GovernedEnsembleError,

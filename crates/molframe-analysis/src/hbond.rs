@@ -14,6 +14,8 @@ use crate::numeric::f64_to_f32;
 
 mod candidates;
 mod heavy;
+mod heavy_role_defaults;
+mod heavy_role_table;
 mod heavy_roles;
 mod sample;
 pub use candidates::{
@@ -22,8 +24,10 @@ pub use candidates::{
 };
 pub use heavy::{
     HeavyAtomHydrogenBond, HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable,
-    heavy_atom_hydrogen_bonds,
+    heavy_atom_hydrogen_bonds, heavy_atom_hydrogen_bonds_with_roles,
 };
+pub use heavy_role_defaults::{HEAVY_ROLES_DEFAULT, HEAVY_ROLES_DEFAULT_TEXT};
+pub use heavy_role_table::{HeavyRoleTable, HeavyRoleTableError};
 pub use sample::hydrogen_bonds_at_sample;
 
 /// Explicit geometric and spatial policy for hydrogen-bond detection.
