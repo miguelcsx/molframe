@@ -48,10 +48,10 @@ fn a_band_never_yields_a_reversed_range() {
 
 #[test]
 fn narrow_band_stores_linear_cells_for_long_sequences() {
-    let tables = seed(100_001, 100_001, -2, -1, Mode::Global, Some(2)).expect("band");
-    assert!(tables.m.len() < 800_010);
-    assert_eq!(tables.m[0], NEG);
-    assert_eq!(tables.at(50_000, 60_000), 0);
+    let trace = layout(100_001, 100_001, Some(2)).expect("band");
+    assert!(trace.bits.len() < 800_010);
+    assert_eq!(trace.bits[0], ALL_STOP);
+    assert_eq!(trace.at(50_000, 60_000), 0);
     let sequence = vec![b'A'; 100_000];
     let scoring = crate::Scoring {
         match_score: 2,
@@ -92,4 +92,30 @@ fn wide_band_matches_dense_scores_and_traceback_for_all_modes() {
             assert_eq!(dense, banded);
         }
     }
+}
+
+#[test]
+fn banded_global_covers_both_sequences_after_a_leading_gap() {
+    let scoring = crate::Scoring {
+        match_score: 2,
+        mismatch_score: -1,
+        gap_open: -3,
+        gap_extend: -1,
+    };
+    let left = b"AAAAB";
+    let right = b"B";
+    let banded = run(left, right, &scoring, -3, -1, Mode::Global, Some(4)).expect("band");
+    let dense = crate::align::global(left, right, scoring).expect("dense");
+    assert_eq!(banded.score, dense.score);
+    let covered = |side: fn(&Column) -> Option<usize>| {
+        banded.columns.iter().filter_map(side).collect::<Vec<_>>()
+    };
+    assert_eq!(covered(|c| c.left), vec![0, 1, 2, 3, 4]);
+    assert_eq!(covered(|c| c.right), vec![0]);
+}
+
+#[test]
+fn traceback_costs_one_byte_per_cell() {
+    let trace = layout(1001, 2001, None).expect("dense");
+    assert_eq!(trace.bits.len(), 1 + 1001 * 2001);
 }

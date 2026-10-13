@@ -11,7 +11,7 @@ use std::ops::Range;
 
 /// Aligns two sequences end to end (Needleman–Wunsch with affine gaps).
 ///
-/// Runs in `O(n·m)` time and space.
+/// Runs in `O(n·m)` time and one byte of traceback per cell.
 ///
 /// # Errors
 ///
@@ -54,7 +54,7 @@ pub fn global_banded(
 
 /// Finds the highest-scoring local alignment (Smith–Waterman with affine gaps).
 ///
-/// Runs in `O(n·m)` time and space.
+/// Runs in `O(n·m)` time and one byte of traceback per cell.
 ///
 /// # Errors
 ///
@@ -145,7 +145,7 @@ fn region<'a>(
 /// The gap costs are given directly — `gap_open` is the score for the first
 /// residue of a gap and `gap_extend` for each residue after it — because a
 /// substitution matrix carries only substitution scores, not gap policy. Runs
-/// in `O(n·m)` time and space.
+/// in `O(n·m)` time and one byte of traceback per cell.
 ///
 /// # Examples
 ///
@@ -205,7 +205,7 @@ pub fn local_matrix(
 /// Aligns two sequences with free end gaps, scored by a substitution matrix.
 ///
 /// The counterpart of [`semi_global`] for protein scoring. Runs in `O(n·m)`
-/// time and space.
+/// time and one byte of traceback per cell.
 ///
 /// # Examples
 ///
