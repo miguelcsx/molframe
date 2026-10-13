@@ -24,6 +24,8 @@ mod reference_set;
 mod reference_tables;
 #[path = "layout.rs"]
 mod residue_layout;
+#[path = "summary.rs"]
+mod summaries;
 #[path = "user_tables.rs"]
 mod user_reference;
 
@@ -43,3 +45,4 @@ pub use reference_data::{
 pub use reference_set::{Part, ReferenceOverrides, ReferenceSet, TableInfo};
 pub use reference_tables::{ChiDefinition, ChiDefinitions, GeometryTargets, Target};
 pub use residue_layout::Layout;
+pub use summaries::{NucleicSummary, ProteinSummary, percent};
