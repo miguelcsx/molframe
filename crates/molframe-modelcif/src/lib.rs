@@ -2,11 +2,15 @@
 
 #![forbid(unsafe_code)]
 
+mod dense;
 mod lower;
 mod model;
 mod read;
 mod write;
 
+pub use dense::{
+    ConfidenceError, PaeKind, PaeLayout, PaeMatrix, PaePolicy, PaeStorage, PrecisionProbe,
+};
 pub use lower::lower;
 pub use model::*;
 pub use read::{ModelCifBatchSource, ModelCifProjection, read_compact, read_compact_with_options};
