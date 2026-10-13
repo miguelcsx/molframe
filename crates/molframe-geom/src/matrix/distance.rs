@@ -8,6 +8,7 @@ use crate::distance;
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
 use std::fmt;
+use std::ops::Range;
 use wide::f64x4;
 
 const PARALLEL_MATRIX_ROWS: usize = 256;
@@ -22,8 +23,13 @@ pub enum MatrixError {
     AllocationFailed,
     /// A caller-supplied output slice has the wrong length.
     OutputLength,
-    /// The execution context refused the estimated peak allocation.
-    MemoryBudget,
+    /// The execution context refused the matrix allocation.
+    MemoryBudget {
+        /// Bytes the matrix (or one block) needs.
+        requested: usize,
+        /// Bytes the context still had available.
+        available: usize,
+    },
     /// Cooperative cancellation was requested.
     Cancelled,
     /// A worker panicked while computing a row block.
@@ -38,9 +44,18 @@ impl fmt::Display for MatrixError {
             Self::OutputLength => {
                 formatter.write_str("distance matrix output has the wrong length")
             }
-            Self::MemoryBudget => {
-                formatter.write_str("distance matrix exceeds the execution memory budget")
-            }
+            Self::MemoryBudget {
+                requested,
+                available,
+            } => write!(
+                formatter,
+                "geometry.distance_matrix requested {requested} bytes with {available} bytes \
+                 available; use dtype float32 to halve it, condensed output to halve it again, \
+                 or distance_matrix_blocks to stream row blocks, or raise the budget: \
+                 Python ExecutionContext(memory_budget=...), Rust \
+                 ExecutionContext::builder().memory_budget(MemoryBudget::new(..)?), \
+                 CLI --memory-budget, or env MOLFRAME_MEMORY_BUDGET"
+            ),
             Self::Cancelled => formatter.write_str("distance matrix execution was cancelled"),
             Self::WorkerPanicked => formatter.write_str("distance matrix worker panicked"),
         }
@@ -52,7 +67,7 @@ impl std::error::Error for MatrixError {}
 molframe_core::diagnostic_from!(MatrixError, |error| match error {
     MatrixError::SizeOverflow | MatrixError::AllocationFailed => molframe_core::Code::E1903,
     MatrixError::OutputLength => molframe_core::Code::E5102,
-    MatrixError::MemoryBudget => molframe_core::Code::E7001,
+    MatrixError::MemoryBudget { .. } => molframe_core::Code::E7001,
     MatrixError::Cancelled => molframe_core::Code::E1904,
     MatrixError::WorkerPanicked => molframe_core::Code::E9001,
 });
@@ -171,9 +186,7 @@ pub fn distance_matrix_with_context(
     // The reservation covers the retained matrix only: each row block is
     // charged separately while it is in flight and appended as it completes,
     // so the peak is one matrix plus a bounded window rather than two matrices.
-    let _reservation = context
-        .try_reserve(bytes)
-        .map_err(|_| MatrixError::MemoryBudget)?;
+    let _reservation = reserve(context, bytes)?;
     if context.cancellation().is_cancelled() {
         return Err(MatrixError::Cancelled);
     }
@@ -209,7 +222,10 @@ pub fn distance_matrix_with_context(
         },
     )
     .map_err(|error| match error {
-        BlockExecutionError::Memory(_) => MatrixError::MemoryBudget,
+        BlockExecutionError::Memory(_) => MatrixError::MemoryBudget {
+            requested: block_bytes,
+            available: context.available_bytes(),
+        },
         BlockExecutionError::Cancelled => MatrixError::Cancelled,
         BlockExecutionError::Worker(_) => MatrixError::WorkerPanicked,
         BlockExecutionError::Operation(error) => error,
@@ -253,6 +269,184 @@ pub fn distance_matrix_between(
         columns,
         values,
     })
+}
+
+fn reserve(
+    context: &ExecutionContext,
+    bytes: usize,
+) -> Result<molframe_core::MemoryReservation, MatrixError> {
+    context
+        .try_reserve(bytes)
+        .map_err(|_| MatrixError::MemoryBudget {
+            requested: bytes,
+            available: context.available_bytes(),
+        })
+}
+
+/// Fills `output` with the distances from each row in `rows` to every position.
+///
+/// `output` is row-major with `rows.len()` rows of `positions.len()` values.
+///
+/// # Errors
+///
+/// [`MatrixError::OutputLength`] when `rows` leaves the position set or
+/// `output` has the wrong length.
+pub fn distance_rows_into(
+    positions: &[[f32; 3]],
+    rows: Range<usize>,
+    output: &mut [f64],
+) -> Result<(), MatrixError> {
+    let size = positions.len();
+    if rows.end > positions.len()
+        || rows.start > rows.end
+        || output.len() != rows.len().saturating_mul(size)
+    {
+        return Err(MatrixError::OutputLength);
+    }
+    for (row, line) in rows.zip(output.chunks_exact_mut(size.max(1))) {
+        distances_from(positions[row], positions, line);
+    }
+    Ok(())
+}
+
+/// [`distance_rows_into`] narrowed to `f32`, for half-size row blocks.
+///
+/// # Errors
+///
+/// Same as [`distance_rows_into`].
+#[allow(clippy::cast_possible_truncation)] // narrowing to f32 is the point
+pub fn distance_rows_f32_into(
+    positions: &[[f32; 3]],
+    rows: Range<usize>,
+    output: &mut [f32],
+) -> Result<(), MatrixError> {
+    let size = positions.len();
+    if rows.end > size || rows.start > rows.end || output.len() != rows.len().saturating_mul(size) {
+        return Err(MatrixError::OutputLength);
+    }
+    let mut line = vec![0.0_f64; size];
+    for (row, target) in rows.zip(output.chunks_exact_mut(size.max(1))) {
+        distances_from(positions[row], positions, &mut line);
+        for (slot, value) in target.iter_mut().zip(&line) {
+            *slot = *value as f32;
+        }
+    }
+    Ok(())
+}
+
+/// Rows per block so that one block of `element_bytes`-wide values uses at most
+/// a quarter of the bytes still available, so a stream of blocks fits the budget.
+///
+/// # Errors
+///
+/// [`MatrixError::MemoryBudget`] when not even one row fits.
+pub fn distance_block_rows(
+    size: usize,
+    element_bytes: usize,
+    context: &ExecutionContext,
+) -> Result<usize, MatrixError> {
+    let row_bytes = size
+        .checked_mul(element_bytes)
+        .ok_or(MatrixError::SizeOverflow)?
+        .max(1);
+    let available = context.available_bytes();
+    if row_bytes > available {
+        return Err(MatrixError::MemoryBudget {
+            requested: row_bytes,
+            available,
+        });
+    }
+    Ok((available / 4 / row_bytes).clamp(1, size.max(1)))
+}
+
+/// Square distances narrowed to `f32`: half the memory of the `f64` matrix.
+///
+/// # Errors
+///
+/// Size, memory-admission, cancellation or worker errors.
+#[allow(clippy::cast_possible_truncation)] // narrowing to f32 is the point
+pub fn distance_matrix_f32_with_context(
+    positions: &[[f32; 3]],
+    context: &ExecutionContext,
+) -> Result<Vec<f32>, MatrixError> {
+    let size = positions.len();
+    let count = size.checked_mul(size).ok_or(MatrixError::SizeOverflow)?;
+    let bytes = count
+        .checked_mul(size_of::<f32>())
+        .ok_or(MatrixError::SizeOverflow)?;
+    let _reservation = reserve(context, bytes)?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| MatrixError::AllocationFailed)?;
+    values.resize(count, 0.0_f32);
+    let mut line = vec![0.0_f64; size];
+    for (row, target) in values.chunks_exact_mut(size.max(1)).enumerate() {
+        if context.cancellation().is_cancelled() {
+            return Err(MatrixError::Cancelled);
+        }
+        distances_from(positions[row], positions, &mut line);
+        for (slot, value) in target.iter_mut().zip(&line) {
+            *slot = *value as f32;
+        }
+    }
+    Ok(values)
+}
+
+/// Upper-triangle distances (`n(n-1)/2` values, row by row, `SciPy` `pdist` order).
+///
+/// # Errors
+///
+/// Size, memory-admission, cancellation or worker errors.
+pub fn condensed_distances_with_context(
+    positions: &[[f32; 3]],
+    context: &ExecutionContext,
+) -> Result<Vec<f64>, MatrixError> {
+    condensed(positions, context, |value| value)
+}
+
+/// [`condensed_distances_with_context`] narrowed to `f32`.
+///
+/// # Errors
+///
+/// Same as [`condensed_distances_with_context`].
+pub fn condensed_distances_f32_with_context(
+    positions: &[[f32; 3]],
+    context: &ExecutionContext,
+) -> Result<Vec<f32>, MatrixError> {
+    #[allow(clippy::cast_possible_truncation)] // narrowing to f32 is the point
+    let narrow = |value: f64| value as f32;
+    condensed(positions, context, narrow)
+}
+
+fn condensed<T: Copy>(
+    positions: &[[f32; 3]],
+    context: &ExecutionContext,
+    narrow: impl Fn(f64) -> T,
+) -> Result<Vec<T>, MatrixError> {
+    let size = positions.len();
+    let count = size
+        .checked_mul(size.saturating_sub(1))
+        .ok_or(MatrixError::SizeOverflow)?
+        / 2;
+    let bytes = count
+        .checked_mul(size_of::<T>())
+        .and_then(|bytes| bytes.checked_add(size.saturating_mul(size_of::<f64>())))
+        .ok_or(MatrixError::SizeOverflow)?;
+    let _reservation = reserve(context, bytes)?;
+    let mut values = Vec::new();
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| MatrixError::AllocationFailed)?;
+    let mut line = vec![0.0_f64; size];
+    for row in 0..size {
+        if context.cancellation().is_cancelled() {
+            return Err(MatrixError::Cancelled);
+        }
+        distances_from(positions[row], positions, &mut line);
+        values.extend(line[row + 1..].iter().map(|value| narrow(*value)));
+    }
+    Ok(values)
 }
 
 fn distances_from(origin: [f32; 3], positions: &[[f32; 3]], output: &mut [f64]) {

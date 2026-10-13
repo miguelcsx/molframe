@@ -113,6 +113,79 @@ fn a_budget_for_the_matrix_alone_suffices_and_a_smaller_one_is_refused() {
     let tight = budgeted(matrix_bytes - 1);
     assert_eq!(
         distance_matrix_with_context(&points, &tight).map(|_| ()),
-        Err(MatrixError::MemoryBudget)
+        Err(MatrixError::MemoryBudget {
+            requested: matrix_bytes,
+            available: matrix_bytes - 1,
+        })
     );
+}
+
+fn small_context(bytes: usize) -> ExecutionContext {
+    ExecutionContext::builder()
+        .worker_budget(1)
+        .memory_budget(molframe_core::MemoryBudget::new(bytes).expect("a positive budget"))
+        .scratch_policy(molframe_core::ScratchPolicy::new(0))
+        .build()
+        .expect("a valid context")
+}
+
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::float_cmp
+)]
+#[test]
+fn refusal_names_the_knobs_and_figures() {
+    let points: Vec<[f32; 3]> = (0..100).map(|i| [i as f32, 0.0, 0.0]).collect();
+    let message = distance_matrix_with_context(&points, &small_context(1000))
+        .expect_err("refused")
+        .to_string();
+    for needle in [
+        "80000 bytes",
+        "1000 bytes available",
+        "geometry.distance_matrix",
+        "float32",
+        "condensed",
+        "distance_matrix_blocks",
+        "ExecutionContext(memory_budget",
+        "--memory-budget",
+        "MOLFRAME_MEMORY_BUDGET",
+    ] {
+        assert!(message.contains(needle), "{needle}: {message}");
+    }
+}
+
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::float_cmp
+)]
+#[test]
+fn f32_condensed_and_blocks_fit_where_the_square_f64_matrix_does_not() {
+    let points: Vec<[f32; 3]> = (0..100).map(|i| [i as f32, (i % 7) as f32, 0.0]).collect();
+    let full = distance_matrix(&points).expect("matrix");
+    // 100*100*8 = 80000 does not fit; f32 (40000) and condensed f64 (39600+800) do.
+    let context = small_context(41_000);
+    assert!(distance_matrix_with_context(&points, &context).is_err());
+    let narrow = distance_matrix_f32_with_context(&points, &context).expect("f32");
+    for (wide, small) in full.as_slice().iter().zip(&narrow) {
+        assert_eq!(*small, *wide as f32);
+    }
+    let packed = condensed_distances_with_context(&points, &context).expect("condensed");
+    assert_eq!(packed.len(), 100 * 99 / 2);
+    assert_eq!(packed[0], full.get(0, 1).unwrap());
+    assert_eq!(packed[packed.len() - 1], full.get(98, 99).unwrap());
+    let rows = distance_block_rows(100, 8, &context).expect("block rows");
+    assert!((1..100).contains(&rows));
+    let mut block = vec![0.0; rows * 100];
+    distance_rows_into(&points, 3..3 + rows, &mut block).expect("block");
+    assert_eq!(&block[..100], &full.as_slice()[300..400]);
+    assert_eq!(
+        distance_rows_into(&points, 99..101, &mut block),
+        Err(MatrixError::OutputLength)
+    );
+    assert!(matches!(
+        distance_block_rows(100, 8, &small_context(10)),
+        Err(MatrixError::MemoryBudget { .. })
+    ));
 }

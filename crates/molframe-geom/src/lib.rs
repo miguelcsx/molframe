@@ -45,8 +45,10 @@ pub use batch_measure::{BatchGeometryError, angles_into, distances_into, torsion
 pub use eigen::{Decomposition, EigenError, EigenOptions, symmetric, symmetric_with_options};
 pub use fluctuation::{FluctuationError, rmsf};
 pub use matrix::{
-    DistanceMatrix, MatrixError, distance_matrix, distance_matrix_between, distance_matrix_into,
-    distance_matrix_with_context,
+    DistanceMatrix, MatrixError, condensed_distances_f32_with_context,
+    condensed_distances_with_context, distance_block_rows, distance_matrix,
+    distance_matrix_between, distance_matrix_f32_with_context, distance_matrix_into,
+    distance_matrix_with_context, distance_rows_f32_into, distance_rows_into,
 };
 pub use measure::{
     angle, cross, degrees, dihedral, displacement, distance, distance_squared, dot, norm, normalise,
@@ -60,7 +62,6 @@ pub use path::path_torsions;
 pub use periodic_angle::{
     CircularSummary, PeriodicAngle, PeriodicError, TorusMetric, circular_summary, torus_summary,
 };
-pub use single::{cross_f32, dot_f32, normalise_f32, sub_f32};
 pub use planar::{
     Plane, best_fit_plane, best_fit_plane_with_options, plane_deviation,
     plane_deviation_with_options,
@@ -70,6 +71,7 @@ pub use rotation::{
     Rotation3, RotationError, RotationMeanOptions, RotationOptions, rotation_mean,
     rotation_mean_with_options,
 };
+pub use single::{cross_f32, dot_f32, normalise_f32, sub_f32};
 pub use superpose::{
     SuperposeError, SuperposeOptions, Superposition, rmsd, rmsd_after_fit, rmsd_flat, superpose,
     superpose_weighted, superpose_weighted_with_options, superpose_with_options,

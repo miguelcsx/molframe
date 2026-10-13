@@ -180,10 +180,10 @@ fn principal_axes_come_back_ordered_by_their_moments() {
 #[test]
 fn a_slab_has_its_long_axis_first_and_right_handed_axes() {
     let mut points = Vec::new();
-    for i in -20..=20 {
-        for j in -6..=6 {
-            for k in -2..=2 {
-                points.push([k as f32, i as f32, j as f32]);
+    for i in -20_i16..=20 {
+        for j in -6_i16..=6 {
+            for k in -2_i16..=2 {
+                points.push([f32::from(k), f32::from(i), f32::from(j)]);
             }
         }
     }
@@ -198,7 +198,7 @@ fn a_slab_has_its_long_axis_first_and_right_handed_axes() {
 
 #[test]
 fn points_on_a_line_have_no_spread_frame() {
-    let line: Vec<[f32; 3]> = (0..10).map(|i| [i as f32, 0.0, 0.0]).collect();
+    let line: Vec<[f32; 3]> = (0..10_i16).map(|i| [f32::from(i), 0.0, 0.0]).collect();
     assert_eq!(spread_frame(&line, 20_000), Ok(None));
     assert_eq!(spread_frame(&line[..2], 20_000), Ok(None));
 }
