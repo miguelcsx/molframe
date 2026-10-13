@@ -2,7 +2,7 @@
 
 use crate::harness::{Axis, Case, Outcome, Run};
 use molframe_bench::{Checksum, Tier, chain, perturbed, rotated};
-use molframe_compare::{gdt_ts, lddt, tm_score};
+use molframe_compare::{gdt_ts, lddt, tm_score, tm_score_all_pairs};
 
 const ALL_TIERS: &[Tier] = &[
     Tier::Tiny,
@@ -38,6 +38,12 @@ pub fn cases() -> Vec<Case> {
             axis: Axis::Structures,
             tiers: &[Tier::Tiny, Tier::Small, Tier::Medium],
             run: all_vs_all,
+        },
+        Case {
+            id: "compare.all_pairs_tm.250_res",
+            axis: Axis::Structures,
+            tiers: &[Tier::Tiny, Tier::Small, Tier::Medium],
+            run: all_pairs_batch,
         },
     ]
 }
@@ -87,10 +93,7 @@ fn lddt_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
 /// Every unordered pair of `count` 250-residue models through [`tm_score`],
 /// one pair per serial iteration: the cost a caller pays without a batch API.
 fn all_vs_all(run: &Run<'_>, count: usize) -> Result<Outcome, String> {
-    let base = chain(RESIDUES, 3);
-    let models: Vec<Vec<[f32; 3]>> = (0..count)
-        .map(|index| perturbed(&rotated(&base, 100 + index as u64), 0.5))
-        .collect();
+    let models = models(count);
     let pairs = (count * (count - 1) / 2) as u64;
     let sample = run.measure(
         || {
@@ -102,6 +105,32 @@ fn all_vs_all(run: &Run<'_>, count: usize) -> Result<Outcome, String> {
             }
             Ok(values)
         },
+        |values: &Vec<f64>| {
+            let mut sum = Checksum::default();
+            sum.reals(values);
+            sum.value()
+        },
+    )?;
+    Ok(Outcome {
+        sample,
+        items: pairs,
+    })
+}
+
+fn models(count: usize) -> Vec<Vec<[f32; 3]>> {
+    let base = chain(RESIDUES, 3);
+    (0..count)
+        .map(|index| perturbed(&rotated(&base, 100 + index as u64), 0.5))
+        .collect()
+}
+
+/// The same pairs through the batch API, parallel across pairs.
+fn all_pairs_batch(run: &Run<'_>, count: usize) -> Result<Outcome, String> {
+    let owned = models(count);
+    let views: Vec<&[[f32; 3]]> = owned.iter().map(Vec::as_slice).collect();
+    let pairs = (count * (count - 1) / 2) as u64;
+    let sample = run.measure(
+        || tm_score_all_pairs(&views, &run.context).map_err(|e| e.to_string()),
         |values: &Vec<f64>| {
             let mut sum = Checksum::default();
             sum.reals(values);
