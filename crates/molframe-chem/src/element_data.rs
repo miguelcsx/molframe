@@ -1,7 +1,7 @@
 //! The 118-element reference table, derived from mendeleev 1.1.0.
 //!
-//! This is committed data, not a build step. `data/README.md` records which
-//! scientific series each column comes from.
+//! This is committed data, not a build step. Provenance recorded beside the
+//! data names which scientific series each column comes from.
 
 use crate::element::RawElement;
 

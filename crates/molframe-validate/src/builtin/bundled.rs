@@ -1,7 +1,7 @@
 //! The reference tables shipped inside the crate.
 //!
 //! Embedded at compile time and decoded once per process. Provenance and
-//! licences are recorded here and in `data/README.md`; a result built from
+//! licences are recorded beside the data; a result built from
 //! these tables reports them through [`TableInfo`].
 
 use std::sync::OnceLock;

@@ -1,6 +1,6 @@
 //! Parsers for bond, angle and chi-atom tables.
 //!
-//! Both formats are tab-separated text, documented in `data/README.md`, and
+//! Both formats are tab-separated text, documented beside the data, and
 //! are parsed from any source: the bundled files and user-supplied ones go
 //! through the same code. Malformed lines are skipped rather than trusted.
 

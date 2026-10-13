@@ -1,7 +1,7 @@
 //! Curated Mol* SNFG metadata and common CCD aliases, adapted under MIT.
 //!
 //! Copyright (c) 2018–2026 Mol* contributors. The retained permission notice is
-//! in data/LICENSE.molstar; data/README.md records the pinned source and scope.
+//! in data/LICENSE.molstar; the pinned source and scope are recorded beside the data.
 
 use super::types::{SnfgShape, SnfgSymbol};
 

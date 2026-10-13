@@ -1,7 +1,7 @@
 //! Decoders and lookups for Ramachandran and rotamer density tables.
 //!
 //! Generic over the table contents: the decoders accept the binary formats
-//! documented in `data/README.md` from any source, bundled or user supplied,
+//! documented beside the data from any source, bundled or user supplied,
 //! and report damage as an error value rather than trusting their input. The
 //! bundled bytes live in the `bundled` module, not here.
 //!
