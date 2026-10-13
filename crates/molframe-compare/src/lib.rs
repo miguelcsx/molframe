@@ -40,6 +40,7 @@ mod policy_execution;
 mod quaternary;
 pub mod region;
 mod seed_objective;
+mod seed_rows;
 mod seed_search;
 pub mod superposed;
 mod tm_batch;

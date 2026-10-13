@@ -76,6 +76,50 @@ pub(crate) struct Best {
     pub(crate) transforms: Vec<Option<Rigid>>,
 }
 
+/// A running best held in caller-owned storage, so a search can keep one row
+/// per seed in a single arena instead of two vectors per seed.
+pub(crate) struct BestRef<'a> {
+    pub(crate) scores: &'a mut [f64],
+    pub(crate) transforms: &'a mut [Option<Rigid>],
+}
+
+impl<'a> BestRef<'a> {
+    /// Resets a row to "nothing found".
+    pub(crate) fn reset(scores: &'a mut [f64], transforms: &'a mut [Option<Rigid>]) -> Self {
+        scores.fill(-1.0);
+        transforms.fill(None);
+        Self { scores, transforms }
+    }
+
+    pub(crate) fn offer(&mut self, scores: &[f64], transform: Rigid) {
+        for ((best, held), &score) in self
+            .scores
+            .iter_mut()
+            .zip(&mut *self.transforms)
+            .zip(scores)
+        {
+            if score > *best {
+                *best = score;
+                *held = Some(transform);
+            }
+        }
+    }
+
+    pub(crate) fn merge(&mut self, scores: &[f64], transforms: &[Option<Rigid>]) {
+        for ((best, held), (&score, transform)) in self
+            .scores
+            .iter_mut()
+            .zip(&mut *self.transforms)
+            .zip(scores.iter().zip(transforms))
+        {
+            if score > *best {
+                *best = score;
+                *held = *transform;
+            }
+        }
+    }
+}
+
 impl Best {
     pub(crate) fn new(slots: usize) -> Self {
         Self {
@@ -84,27 +128,19 @@ impl Best {
         }
     }
 
-    pub(crate) fn offer(&mut self, scores: &[f64], transform: Rigid) {
-        for ((best, held), &score) in self.scores.iter_mut().zip(&mut self.transforms).zip(scores) {
-            if score > *best {
-                *best = score;
-                *held = Some(transform);
-            }
+    pub(crate) fn view(&mut self) -> BestRef<'_> {
+        BestRef {
+            scores: &mut self.scores,
+            transforms: &mut self.transforms,
         }
     }
 
+    pub(crate) fn offer(&mut self, scores: &[f64], transform: Rigid) {
+        self.view().offer(scores, transform);
+    }
+
     pub(crate) fn merge(&mut self, other: &Self) {
-        for ((best, held), (&score, transform)) in self
-            .scores
-            .iter_mut()
-            .zip(&mut self.transforms)
-            .zip(other.scores.iter().zip(&other.transforms))
-        {
-            if score > *best {
-                *best = score;
-                *held = *transform;
-            }
-        }
+        self.view().merge(&other.scores, &other.transforms);
     }
 }
 

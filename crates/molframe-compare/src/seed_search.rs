@@ -34,8 +34,9 @@ use molframe_geom::{Rigid, superpose};
 use rayon::prelude::*;
 
 use crate::numeric::usize_to_f64;
-use crate::seed_objective::Best;
 pub(crate) use crate::seed_objective::Objective;
+use crate::seed_objective::{Best, BestRef};
+use crate::seed_rows::SeedRows;
 
 /// The most atoms the seed search refines on.
 pub(crate) const SAMPLE_CAP: usize = 1024;
@@ -157,7 +158,7 @@ impl Scratch {
         cutoff: f64,
         mut first: Option<Rigid>,
         iterations: usize,
-        best: &mut Best,
+        best: &mut BestRef<'_>,
     ) {
         for _ in 0..iterations {
             let fitted = match first.take() {
@@ -208,16 +209,16 @@ fn run_seed(
     problem: Problem<'_>,
     objective: &Objective,
     scratch: &mut Scratch,
-    start: usize,
-    fragment: usize,
-) -> Best {
-    let mut best = Best::new(objective.slots());
+    seed: (usize, usize),
+    mut best: BestRef<'_>,
+) {
+    let (start, fragment) = seed;
     let range = start..start + fragment;
     let Ok(fit) = superpose(
         &problem.model[range.clone()],
         &problem.reference[range.clone()],
     ) else {
-        return best;
+        return;
     };
     for &cutoff in &objective.select {
         scratch.current.clear();
@@ -231,7 +232,6 @@ fn run_seed(
             &mut best,
         );
     }
-    best
 }
 
 /// The outcome of a search, scored on every atom.
@@ -272,24 +272,13 @@ pub(crate) fn maximise(
     };
 
     let seed_list = seeds(search.reference.len());
-    let results: Vec<Best> = match schedule {
-        Schedule::Pool => seed_list
-            .par_iter()
-            .map_init(
-                || Scratch::new(search.reference.len(), slots),
-                |scratch, &(start, fragment)| run_seed(search, objective, scratch, start, fragment),
-            )
-            .collect(),
-        Schedule::Inline => {
-            let mut scratch = Scratch::new(search.reference.len(), slots);
-            seed_list
-                .iter()
-                .map(|&(start, fragment)| {
-                    run_seed(search, objective, &mut scratch, start, fragment)
-                })
-                .collect()
-        }
-    };
+    let rows = SeedRows::run(
+        &seed_list,
+        slots,
+        schedule,
+        || Scratch::new(search.reference.len(), slots),
+        |scratch, seed, best| run_seed(search, objective, scratch, seed, best),
+    );
 
     let mut total = Best::new(slots);
     if !sampled {
@@ -297,22 +286,20 @@ pub(crate) fn maximise(
         scratch.evaluate(full, objective, whole);
         total.offer(&scratch.scores, whole);
     }
-    for result in &results {
-        total.merge(result);
+    for seed in 0..rows.count() {
+        total.view().merge(rows.scores(seed), rows.transforms(seed));
     }
 
     // The best seed transforms per slot, ties broken by seed order.
     let mut candidates: Vec<(usize, Rigid)> = Vec::new();
     for slot in 0..slots {
-        let mut ranked: Vec<(f64, usize)> = results
-            .iter()
-            .enumerate()
-            .filter(|(_, result)| result.transforms[slot].is_some())
-            .map(|(index, result)| (result.scores[slot], index))
+        let mut ranked: Vec<(f64, usize)> = (0..rows.count())
+            .filter(|&seed| rows.transforms(seed)[slot].is_some())
+            .map(|seed| (rows.scores(seed)[slot], seed))
             .collect();
         ranked.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
         for &(_, index) in ranked.iter().take(CANDIDATES_PER_SLOT) {
-            let held = results[index].transforms[slot];
+            let held = rows.transforms(index)[slot];
             if let Some(transform) = held
                 && !candidates.iter().any(|(_, known)| *known == transform)
             {
@@ -324,7 +311,7 @@ pub(crate) fn maximise(
     if !sampled {
         let mut leaders: Vec<(f64, Rigid)> = candidates
             .iter()
-            .map(|&(slot, transform)| (results_score(&results, slot, transform), transform))
+            .map(|&(slot, transform)| (rows.score_of(slot, transform), transform))
             .collect();
         leaders.push((total.scores[0], whole));
         return Outcome {
@@ -410,14 +397,6 @@ fn polish_sampled(
     }
 }
 
-/// The score a seed result holds for a slot, matched by transform.
-fn results_score(results: &[Best], slot: usize, transform: Rigid) -> f64 {
-    results
-        .iter()
-        .find(|result| result.transforms[slot] == Some(transform))
-        .map_or(0.0, |result| result.scores[slot])
-}
-
 /// Sorts leaders best first (stable), drops duplicates, and keeps a few.
 fn ordered_leaders(mut leaders: Vec<(f64, Rigid)>) -> Vec<Rigid> {
     leaders.sort_by(|a, b| b.0.total_cmp(&a.0));
@@ -455,7 +434,7 @@ fn polish(
         cutoff,
         None,
         POLISH_ITERATIONS,
-        &mut best,
+        &mut best.view(),
     );
     best
 }
