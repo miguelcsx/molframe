@@ -60,9 +60,7 @@ pub fn rmsf_stream<R: TrajectoryReader + ?Sized>(
             required: bytes,
             limit: context.memory_budget().bytes(),
         })?;
-    let mut mean = vec![[0.0_f64; 3]; atoms];
-    let mut squares = vec![0.0_f64; atoms];
-    let mut seen = 0_u64;
+    let mut accumulator = molframe_geom::RmsfAccumulator::new(atoms);
     run_analysis_stream(reader, context, frame_workspace_bytes, |frame, _| {
         if frame.positions.len() != atoms {
             return Err(TrajectoryError::AtomCountMismatch {
@@ -70,41 +68,17 @@ pub fn rmsf_stream<R: TrajectoryReader + ?Sized>(
                 found: frame.positions.len(),
             });
         }
-        seen += 1;
-        if seen > (1_u64 << 53) {
-            return Err(TrajectoryError::IdentityOverflow);
-        }
-        let inverse = 1.0
-            / crate::numeric::f64_from_usize(
-                usize::try_from(seen).map_err(|_| TrajectoryError::IdentityOverflow)?,
-            )
-            .ok_or(TrajectoryError::IdentityOverflow)?;
-        for ((point, mean), square) in frame.positions.iter().zip(&mut mean).zip(&mut squares) {
-            let delta = std::array::from_fn::<_, 3, _>(|axis| f64::from(point[axis]) - mean[axis]);
-            for axis in 0..3 {
-                mean[axis] += delta[axis] * inverse;
-            }
-            *square += (0..3)
-                .map(|axis| delta[axis] * (f64::from(point[axis]) - mean[axis]))
-                .sum::<f64>();
-        }
-        Ok(())
+        accumulator
+            .push(&frame.positions)
+            .map_err(|_| TrajectoryError::IdentityOverflow)
     })?;
-    if seen == 0 {
-        return Err(TrajectoryError::InvalidSource {
+    let values = accumulator
+        .finish()
+        .map_err(|_| TrajectoryError::InvalidSource {
             format: "empty RMSF stream",
-        });
-    }
-    let divisor = crate::numeric::f64_from_usize(
-        usize::try_from(seen).map_err(|_| TrajectoryError::IdentityOverflow)?,
-    )
-    .ok_or(TrajectoryError::IdentityOverflow)?;
-    for square in &mut squares {
-        *square = (*square / divisor).max(0.0).sqrt();
-    }
-    drop(mean);
-    let retained_bytes = squares.capacity().saturating_mul(8);
-    Retained::new(squares, reservation, retained_bytes).map_err(|_| TrajectoryError::MemoryLimit {
+        })?;
+    let retained_bytes = values.capacity().saturating_mul(8);
+    Retained::new(values, reservation, retained_bytes).map_err(|_| TrajectoryError::MemoryLimit {
         required: retained_bytes,
         limit: bytes,
     })
