@@ -119,3 +119,24 @@ fn sparse_index_validation_borrows_the_existing_allocation() {
         Err(SpatialError::AtomOutOfBounds(9))
     );
 }
+
+#[test]
+fn merged_ranges_match_brute_force_when_atoms_span_several_ranges() {
+    // 22^3 = 10648 atoms exceeds one merge range of first-atom indices.
+    let positions = lattice(22);
+    let all = AtomSelection::All(10_648);
+    let cell = SpatialSearchOptions::with_backend(SpatialBackend::CellList);
+    let brute = SpatialSearchOptions::with_backend(SpatialBackend::BruteForce);
+    let expected = pairs_within_with_options(&positions, &all, &all, 1.2, brute, None, &context())
+        .expect("brute-force search is valid");
+    for workers in [1, 2, 5, 16] {
+        let worker_context = ExecutionContext::builder()
+            .worker_budget(workers)
+            .build()
+            .expect("worker context is valid");
+        let found =
+            pairs_within_with_options(&positions, &all, &all, 1.2, cell, None, &worker_context)
+                .expect("cell-list search is valid");
+        assert_eq!(found, expected, "worker count {workers}");
+    }
+}

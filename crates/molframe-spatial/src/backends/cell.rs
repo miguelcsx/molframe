@@ -13,6 +13,8 @@ mod coords;
 use coords::{cell_of, linear, linear_index, members_of_cell, neighbour_cell, raw_cell};
 #[path = "cell/geometry.rs"]
 mod geometry;
+#[path = "cell/ordered_merge.rs"]
+mod ordered_merge;
 #[path = "cell/owned.rs"]
 mod owned;
 use geometry::{Layout, choose_layout, finite_bounds};

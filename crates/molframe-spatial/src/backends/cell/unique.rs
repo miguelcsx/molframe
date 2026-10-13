@@ -1,12 +1,11 @@
 //! Pair enumeration specialised for identical query and target selections.
 
+use super::ordered_merge::{merge_sorted_blocks, spatial_error};
 use super::{CellGrid, CellList, Grid, NEIGHBOUR_OFFSETS};
 use crate::brute::{canonicalise, distance_squared};
 use crate::{NeighborPair, SpatialError};
 use molframe_core::ExecutionContext;
-use molframe_core::parallel::{
-    BlockExecutionError, BlockPlan, map_blocks_in, try_for_each_block_in,
-};
+use molframe_core::parallel::{BlockPlan, map_blocks_in, try_for_each_block_in};
 
 /// Finds each unordered pair from one selection once.
 ///
@@ -197,30 +196,37 @@ pub(crate) fn pairs_same_selection_parallel(
         .saturating_mul(EXPECTED_PAIRS_PER_ATOM)
         .saturating_mul(size_of::<NeighborPair>());
     let mut found = Vec::new();
-    // Blocks are appended as they complete, in block order, so the peak is the
-    // result plus a bounded window of blocks rather than the result twice.
+    let mut sorted_blocks = Vec::new();
+    // Blocks are sorted where they are produced, so the serial tail is a
+    // memory copy. Unsorted output appends as blocks complete, keeping the
+    // peak at the result plus a bounded window.
     try_for_each_block_in(
         plan,
         context,
         bytes_per_block,
-        |_, range| match cells.get(range) {
-            Some(chunk) => collect_cells(positions, grid, chunk, cutoff_squared),
-            None => Ok(Vec::new()),
+        |_, range| {
+            let mut block = match cells.get(range) {
+                Some(chunk) => collect_cells(positions, grid, chunk, cutoff_squared)?,
+                None => Vec::new(),
+            };
+            if sort_result {
+                canonicalise(&mut block);
+            }
+            Ok(block)
         },
         |mut block| {
-            found.append(&mut block);
+            if sort_result {
+                sorted_blocks.push(block);
+            } else {
+                found.append(&mut block);
+            }
             Ok(())
         },
     )
-    .map_err(|error| match error {
-        BlockExecutionError::Memory(error) => SpatialError::Memory(error),
-        BlockExecutionError::Cancelled => SpatialError::Cancelled,
-        BlockExecutionError::Worker(_) => SpatialError::WorkerPanicked,
-        BlockExecutionError::Operation(error) => error,
-    })?;
+    .map_err(|error| spatial_error(&error))?;
 
     if sort_result {
-        canonicalise(&mut found);
+        return merge_sorted_blocks(&sorted_blocks, positions.len(), context);
     }
     Ok(found)
 }
