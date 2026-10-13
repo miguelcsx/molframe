@@ -16,6 +16,7 @@ mod alloc;
 mod compare_cases;
 mod geom_cases;
 mod harness;
+mod interop_cases;
 mod registry;
 mod report;
 mod spatial_cases;

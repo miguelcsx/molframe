@@ -18,6 +18,7 @@ num-traits.workspace = true
 [dev-dependencies]
 molframe-compare.workspace = true
 molframe-geom.workspace = true
+molframe-interop.workspace = true
 molframe-spatial.workspace = true
 molframe-traj.workspace = true
 
