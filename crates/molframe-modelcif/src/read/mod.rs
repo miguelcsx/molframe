@@ -4,6 +4,8 @@ mod batch;
 mod category;
 mod column;
 mod packed;
+mod pairwise;
+mod pairwise_field;
 mod projection;
 mod reader;
 

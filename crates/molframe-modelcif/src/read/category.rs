@@ -1,10 +1,20 @@
 use super::column::{ColumnBuilder, PushMemory};
+use super::pairwise::PairwiseStream;
+use crate::dense::PAIRWISE;
 use crate::{CompactColumn, ModelCategory, ModelCif, ModelCifError, identifier_item};
 use molframe_cif::CifScalar;
 use std::collections::HashMap;
 use std::mem::size_of;
 
+/// Where the streaming dense PAE reader stands.
+enum Stream {
+    Idle,
+    Active(Box<PairwiseStream>),
+    Off,
+}
+
 pub(super) struct ModelBuilder {
+    stream: Stream,
     categories: Vec<CategoryBuilder>,
     lookup: HashMap<Box<str>, usize>,
     last_category: Option<usize>,
@@ -15,6 +25,7 @@ pub(super) struct ModelBuilder {
 impl ModelBuilder {
     pub(super) fn new(limit: usize) -> Self {
         Self {
+            stream: Stream::Idle,
             categories: Vec::new(),
             lookup: HashMap::new(),
             last_category: None,
@@ -24,6 +35,52 @@ impl ModelBuilder {
     }
 
     pub(super) fn push(
+        &mut self,
+        category: &str,
+        item: &str,
+        value: CifScalar<'_>,
+    ) -> Result<(), ModelCifError> {
+        if category == PAIRWISE && !matches!(self.stream, Stream::Off) {
+            if matches!(self.stream, Stream::Idle) {
+                self.stream = Stream::Active(Box::new(PairwiseStream::new(self.categories.len())));
+            }
+            if let Stream::Active(stream) = &mut self.stream
+                && stream.feed(item, value)
+            {
+                return Ok(());
+            }
+            return self.divert();
+        }
+        self.push_compact(category, item, value)
+    }
+
+    /// Hands the rows a rejected stream consumed back to the compact table.
+    fn divert(&mut self) -> Result<(), ModelCifError> {
+        let Stream::Active(stream) = std::mem::replace(&mut self.stream, Stream::Off) else {
+            return Ok(());
+        };
+        self.insert_category(stream.slot(), PAIRWISE)?;
+        stream.replay(&mut |item, value| self.push_compact(PAIRWISE, item, value))
+    }
+
+    fn insert_category(&mut self, slot: usize, name: &str) -> Result<(), ModelCifError> {
+        self.categories
+            .try_reserve(1)
+            .map_err(|_| ModelCifError::Allocation)?;
+        self.lookup
+            .try_reserve(1)
+            .map_err(|_| ModelCifError::Allocation)?;
+        self.categories.insert(slot, CategoryBuilder::new(name));
+        for index in self.lookup.values_mut().filter(|index| **index >= slot) {
+            *index += 1;
+        }
+        self.lookup.insert(name.into(), slot);
+        self.last_category = None;
+        self.refresh_live();
+        Ok(())
+    }
+
+    fn push_compact(
         &mut self,
         category: &str,
         item: &str,
@@ -52,6 +109,16 @@ impl ModelBuilder {
     }
 
     pub(super) fn finish(mut self) -> Result<ModelCif, ModelCifError> {
+        let mut stream = None;
+        if let Stream::Active(mut active) = std::mem::replace(&mut self.stream, Stream::Off) {
+            if active.complete() {
+                stream = Some(active);
+            } else {
+                self.stream = Stream::Active(active);
+                self.divert()?;
+            }
+        }
+        let limit = self.limit;
         for index in 0..self.categories.len() {
             let before = self.categories[index].live_bytes();
             let base = self.live_bytes.saturating_sub(before);
@@ -82,10 +149,14 @@ impl ModelBuilder {
         for category in self.categories {
             categories.push(category.finish()?);
         }
-        Ok(ModelCif {
+        let mut model = ModelCif {
             categories,
             pae: None,
-        })
+        };
+        if let Some(stream) = stream {
+            attach_stream(&mut model, *stream, limit)?;
+        }
+        Ok(model)
     }
 
     #[cfg(test)]
@@ -306,4 +377,33 @@ fn table_bytes<K, V>(values: &HashMap<K, V>) -> usize {
             .saturating_add(size_of::<usize>())
             .saturating_add(1),
     )
+}
+
+/// Installs the streamed matrix, or restores the compact table for a non-PAE metric.
+fn attach_stream(
+    model: &mut ModelCif,
+    stream: PairwiseStream,
+    limit: usize,
+) -> Result<(), ModelCifError> {
+    let is_pae = stream.metric_id().is_some_and(|metric| {
+        model.confidence().definitions().any(|definition| {
+            definition.id == metric.as_str() && definition.metric_type.eq_ignore_ascii_case("PAE")
+        })
+    });
+    if is_pae {
+        model.pae = stream.into_dense();
+        return Ok(());
+    }
+    let mut table = CategoryBuilder::new(PAIRWISE);
+    stream.replay(&mut |item, value| table.push(item, value).map(|_| ()))?;
+    table.normalize()?;
+    if table.live_bytes() > limit {
+        return Err(ModelCifError::MemoryLimit {
+            required: table.live_bytes(),
+            limit,
+        });
+    }
+    let slot = stream.slot().min(model.categories.len());
+    model.categories.insert(slot, table.finish()?);
+    Ok(())
 }

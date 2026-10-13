@@ -16,7 +16,7 @@ use crate::{CompactColumn, ModelCategory, ModelCif};
 
 pub(crate) const PAIRWISE: &str = "ma_qa_metric_local_pairwise";
 
-const KNOWN_ITEMS: [&str; 10] = [
+pub(crate) const KNOWN_ITEMS: [&str; 10] = [
     "ordinal_id",
     "model_id",
     "label_asym_id_1",

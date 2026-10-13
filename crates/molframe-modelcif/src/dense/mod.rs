@@ -20,6 +20,7 @@ mod pairs;
 mod precision;
 mod residues;
 
+pub(crate) use densify::{KNOWN_ITEMS, PAIRWISE};
 pub use error::ConfidenceError;
 pub use json::read_pae_json;
 pub use layout::{PaeKind, PaeLayout, PaePolicy, PaeStorage};
