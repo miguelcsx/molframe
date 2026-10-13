@@ -310,6 +310,15 @@ struct Placement<'a> {
     serial: i64,
     position: Option<[f32; 3]>,
 }
+/// Columns 79-80: magnitude then sign, blank for a neutral or unrecorded atom.
+fn charge_field(charge: Option<i8>) -> String {
+    match charge {
+        Some(value) if value > 0 => format!("{value}+"),
+        Some(value) if value < 0 => format!("{}-", value.unsigned_abs()),
+        _ => String::new(),
+    }
+}
+
 fn write_atom(
     out: &mut impl fmt::Write,
     structure: &Structure,
@@ -356,7 +365,7 @@ fn write_atom(
     let _ = writeln!(
         out,
         "{record}{serial:>5} {name:<4}{alt:1}{comp:>3} {chain:>1}{seq}{ins:1}   \
-         {x:8.3}{y:8.3}{z:8.3}{occ:6.2}{b:6.2}          {element:>2}",
+         {x:8.3}{y:8.3}{z:8.3}{occ:6.2}{b:6.2}          {element:>2}{charge}",
         serial = serial_field(serial, options),
         name = atom_name_field(name),
         alt = alt_field(structure, atom),
@@ -368,6 +377,7 @@ fn write_atom(
         z = f64::from(position[2]),
         occ = f64::from(occupancy),
         b = f64::from(b_factor),
+        charge = charge_field(atom.formal_charge()),
     );
     // A tensor recorded for this atom follows under the same serial and the
     // same identity columns, as the record pairs by serial.

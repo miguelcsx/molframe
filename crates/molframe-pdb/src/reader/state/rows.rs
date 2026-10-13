@@ -11,6 +11,7 @@
 use crate::fixed;
 use crate::hybrid36;
 use crate::reader::lines::Line;
+use molframe_core::column::Presence;
 use molframe_core::optional::OptionalI32;
 
 /// Whether a line carries a coordinate keyword but not as its record name.
@@ -61,3 +62,22 @@ pub(crate) fn serial_of(line: &Line<'_>) -> u32 {
 #[cfg(test)]
 #[path = "rows_tests.rs"]
 mod tests;
+
+/// Columns 79-80 as a formal charge: a digit and a sign in either order.
+/// Blank means the file does not say, not that the atom is neutral.
+pub(in crate::reader) fn charge_of(line: &Line<'_>) -> (i8, Presence) {
+    let field = fixed::text(line.text, 79, 80);
+    let mut magnitude = None;
+    let mut sign = None;
+    for character in field.chars() {
+        match character {
+            '+' => sign = Some(1i8),
+            '-' => sign = Some(-1i8),
+            digit => magnitude = digit.to_digit(10).and_then(|d| i8::try_from(d).ok()),
+        }
+    }
+    match (magnitude, sign) {
+        (Some(value), Some(sign)) => (value * sign, Presence::Present),
+        _ => (0, Presence::Unknown),
+    }
+}

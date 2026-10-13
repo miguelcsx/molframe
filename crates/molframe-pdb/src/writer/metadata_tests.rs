@@ -38,3 +38,24 @@ fn a_title_read_from_continuation_lines_is_rewrapped_and_reads_back_whole() {
     assert!(out.contains("TITLE    2 "));
     assert_eq!(parse(&out).data().entry.title, title);
 }
+
+#[test]
+fn formal_charges_in_columns_79_and_80_survive_a_round_trip() {
+    let source = "\
+HETATM    1 FE    FE A   1      27.340  24.430   2.614  1.00 10.00          FE2+
+HETATM    2  O   HOH A   2      26.266  25.413   2.842  1.00 11.00           O1-
+HETATM    3  C   LIG A   3      26.335  27.770   3.258  1.00 14.00           C
+END
+";
+    let out = written(&parse(source));
+    let again = parse(&out);
+    let charges: Vec<Option<i8>> = (0..3)
+        .map(|n| {
+            again
+                .atom(molframe_core::index::AtomIndex::new(n))
+                .and_then(molframe_core::structure::AtomRef::formal_charge)
+        })
+        .collect();
+    assert_eq!(charges, [Some(2), Some(-1), None]);
+    assert!(out.contains("2+\n"));
+}

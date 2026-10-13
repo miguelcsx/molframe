@@ -14,7 +14,7 @@ mod rows;
 mod secondary;
 mod variants;
 
-pub(super) use rows::{serial_of, starts_with_coordinate_keyword};
+pub(super) use rows::{charge_of, serial_of, starts_with_coordinate_keyword};
 
 use models::{AtomIdentity, ModelRead};
 
@@ -269,7 +269,7 @@ impl<'a> ReadState<'a> {
             residue,
             occupancy,
             b_factor,
-            formal_charge: (0, Presence::Inapplicable),
+            formal_charge: charge_of(line),
             atom_site_id: serial,
         });
         self.note_link_atom(line, AtomIndex::new(self.atom_position), element);
