@@ -17,6 +17,10 @@
 //! Blocks of residues run in parallel and are joined in order, so the arrays
 //! are identical at any worker count. Residues the check does not apply to
 //! carry `NaN` angles and the [`NOT_EVALUATED`] class code.
+//!
+//! Complexity: O(residues), constant work per nucleotide (about twenty named
+//! atom lookups and a few torsions). Parallel blocks of 256 residues, joined
+//! in order.
 
 use molframe_analysis::sugar_pucker;
 use molframe_core::ExecutionContext;

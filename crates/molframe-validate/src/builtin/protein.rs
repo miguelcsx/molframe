@@ -6,6 +6,11 @@
 //! no neighbour across a chain break) carries `NaN` angles and the
 //! [`NOT_EVALUATED`] class code instead of being dropped, which keeps every
 //! array aligned with the structure's residue index.
+//!
+//! Complexity: O(residues) time, with constant work per residue (atom lookups
+//! scan one residue's atoms; table lookups are a grid index). Parallel blocks of
+//! 256 residues; the result columns are the only allocations, one `Vec` per
+//! column plus one per block that is moved, not cloned, into the join.
 
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockPlan, map_blocks_in};
@@ -246,8 +251,9 @@ fn chi_and_rotamer(layout: &Layout<'_>, residue: usize, reference: &ReferenceSet
     let Some(definition) = reference.chi.get(layout.name(residue)) else {
         return;
     };
-    let mut angles = Vec::with_capacity(4);
-    for (slot, names) in out.chi.iter_mut().zip(&definition.chi) {
+    let mut angles = [None; 4];
+    let mut count = 0;
+    for ((slot, names), angle) in out.chi.iter_mut().zip(&definition.chi).zip(&mut angles) {
         let value = torsion(
             layout,
             [
@@ -258,13 +264,20 @@ fn chi_and_rotamer(layout: &Layout<'_>, residue: usize, reference: &ReferenceSet
             ],
         );
         *slot = to_f32(value);
-        angles.push(value);
+        *angle = value;
+        count += 1;
     }
     let Some(table) = reference.rotamers.get(&definition.table) else {
         return;
     };
-    let complete: Option<Vec<f64>> = angles.into_iter().collect();
-    if let Some(class) = complete.and_then(|chi| table.classify(&chi)) {
+    let mut chi = [0.0f64; 4];
+    for (slot, angle) in chi.iter_mut().zip(&angles[..count]) {
+        let Some(angle) = angle else {
+            return;
+        };
+        *slot = *angle;
+    }
+    if let Some(class) = table.classify(&chi[..count]) {
         out.rotamer_class = class.code();
     }
 }

@@ -16,8 +16,8 @@ fn geometry_has_backbone_targets_for_every_residue() {
 #[test]
 fn link_terms_prefer_the_proline_entries() {
     let targets = GeometryTargets::parse(GEOMETRY);
-    let generic = targets.link("ALA");
-    let proline = targets.link("PRO");
+    let generic: Vec<&Target> = targets.link("ALA").collect();
+    let proline: Vec<&Target> = targets.link("PRO").collect();
     assert_eq!(generic.len(), 4);
     assert_eq!(proline.len(), 4);
     let bond = |terms: &[&Target]| terms.iter().find(|t| t.names == ["C", "N"]).map(|t| t.mean);

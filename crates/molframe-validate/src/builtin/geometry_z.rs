@@ -5,6 +5,10 @@
 //! sigma`. The per-residue arrays keep the worst signed z of each kind, the
 //! outlier list names the atoms behind every z beyond the cutoff, and the
 //! root-mean-square z over all terms summarises the model.
+//!
+//! Complexity: O(residues + terms), with each term a constant-time atom lookup
+//! and one distance or angle. Parallel blocks of 256 residues; no allocation
+//! per residue, since the peptide-link targets are iterated lazily.
 
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockPlan, map_blocks_in};
@@ -109,13 +113,13 @@ fn score_residue(
 ) {
     let mut worst = [0.0f64; 2];
     let name = layout.name(residue);
-    let link = if layout.peptide_linked(residue) {
-        targets.link(name)
-    } else {
-        Vec::new()
-    };
+    let linked = layout.peptide_linked(residue);
     let own = targets.residue(name).iter().map(|target| (target, false));
-    for (target, is_link) in own.chain(link.into_iter().map(|target| (target, true))) {
+    let link = targets
+        .link(name)
+        .filter(|_| linked)
+        .map(|target| (target, true));
+    for (target, is_link) in own.chain(link) {
         let Some(found) = locate(layout, target, residue, is_link) else {
             continue;
         };

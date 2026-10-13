@@ -5,6 +5,9 @@
 //! residue). The checks then run over residue ranges in parallel and ask this
 //! layout for neighbours and atom positions, so none of them walks the chain
 //! structure again.
+//!
+//! Complexity: construction is O(residues) time and two `Vec`s; every lookup
+//! afterwards borrows from the structure and allocates nothing.
 
 use molframe_analysis::parent_residue;
 use molframe_core::index::ResidueIndex;

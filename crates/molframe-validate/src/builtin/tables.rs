@@ -54,26 +54,22 @@ impl GeometryTargets {
 
     /// Peptide-link terms for a residue that follows a carbonyl, with the
     /// proline-specific entries replacing the generic ones of the same atoms.
-    #[must_use]
-    pub fn link(&self, following: &str) -> Vec<&Target> {
+    pub fn link<'a>(&'a self, following: &str) -> impl Iterator<Item = &'a Target> + 'a {
         let proline = following == "PRO";
-        self.link
-            .iter()
-            .map(|generic| {
-                if proline {
-                    match self
-                        .proline_link
-                        .iter()
-                        .find(|special| special.names == generic.names)
-                    {
-                        Some(special) => special,
-                        None => generic,
-                    }
-                } else {
-                    generic
+        self.link.iter().map(move |generic| {
+            if proline {
+                match self
+                    .proline_link
+                    .iter()
+                    .find(|special| special.names == generic.names)
+                {
+                    Some(special) => special,
+                    None => generic,
                 }
-            })
-            .collect()
+            } else {
+                generic
+            }
+        })
     }
 
     /// Total number of targets.

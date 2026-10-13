@@ -19,6 +19,10 @@
 //!
 //! The two scores are not interchangeable and the result records which one
 //! was computed, together with the options (the policy) that produced it.
+//!
+//! Complexity: O(atoms) to index plus the shared grid search, which is
+//! O(atoms * local density) rather than all-pairs; the scoring pass is one
+//! linear scan of the clash table with no per-pair allocation.
 
 use molframe_chem::RadiusSet;
 use molframe_core::ExecutionContext;

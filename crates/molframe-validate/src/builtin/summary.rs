@@ -2,6 +2,8 @@
 //!
 //! The tables hold one code per residue; the summaries fold them into the
 //! counts a report needs, so callers never re-implement the class meanings.
+//!
+//! Complexity: O(residues), one pass per column, no allocation.
 
 use super::nucleic_scoring::{NucleicTable, PUCKER_C2_ENDO, PUCKER_C3_ENDO, PUCKER_OTHER};
 use super::protein_conformation::{NOT_EVALUATED, ProteinTable};

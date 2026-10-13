@@ -4,6 +4,9 @@
 //! documented in `data/README.md` from any source, bundled or user supplied,
 //! and report damage as an error value rather than trusting their input. The
 //! bundled bytes live in the `bundled` module, not here.
+//!
+//! Complexity: decoding is O(table bytes) once per table; a density or rotamer
+//! lookup is O(dimensions) with direct grid indexing and no allocation.
 
 /// Cells per axis of a Ramachandran grid.
 pub const RAMA_BINS: usize = 180;
