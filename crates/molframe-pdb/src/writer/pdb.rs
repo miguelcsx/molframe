@@ -278,9 +278,14 @@ fn write_model(
                         .and(frame.get(atom.index().as_usize()).copied()),
                     None => atom.position(),
                 };
-                if let Err(finding) = write_atom(
-                    out, structure, &atom, &residue, label, serial, position, options,
-                ) {
+                let placement = Placement {
+                    chain: label,
+                    serial,
+                    position,
+                };
+                if let Err(finding) =
+                    write_atom(out, structure, &atom, &residue, &placement, options)
+                {
                     return Err(vec![finding]);
                 }
                 if let Some(serials) = serials.as_deref_mut() {
@@ -344,16 +349,25 @@ fn write_generated_metadata(
     }
 }
 
+/// Where one atom row lands: chain column, serial and position.
+struct Placement<'a> {
+    chain: &'a str,
+    serial: i64,
+    position: Option<[f32; 3]>,
+}
 fn write_atom(
     out: &mut impl fmt::Write,
     structure: &Structure,
     atom: &AtomRef<'_>,
     residue: &ResidueRef<'_>,
-    chain: &str,
-    serial: i64,
-    position: Option<[f32; 3]>,
+    placement: &Placement<'_>,
     options: &PdbOptions,
 ) -> Result<(), Diagnostic> {
+    let Placement {
+        chain,
+        serial,
+        position,
+    } = *placement;
     let record = if residue.is_het() { "HETATM" } else { "ATOM  " };
     let name = required_text(
         atom_name(*atom, options.namespace),

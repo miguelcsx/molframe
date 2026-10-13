@@ -118,7 +118,10 @@ pub(super) fn write_links(
         ) else {
             continue;
         };
-        let length = distance(&first, &second).unwrap_or(0.0);
+        let length = match distance(&first, &second) {
+            Some(length) => length,
+            None => 0.0,
+        };
         match class {
             Class::Disulfide => {
                 ss += 1;
