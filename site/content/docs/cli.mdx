@@ -106,11 +106,15 @@ refused rather than ignored.
 | Command | Required parameters | Columns |
 | --- | --- | --- |
 | `contact-map FILE` | `--cutoff`, `--min-separation` | `first_residue`, `second_residue`, `min_distance_angstrom` |
-| `native-contacts REFERENCE TARGET` | `--cutoff`, `--retention` | `native`, `kept`, `fraction` |
+| `native-contacts REFERENCE TARGET` | `--cutoff`, `--contact-tolerance`, `--match index\|names` | `native`, `kept`, `fraction` |
 | `nma FILE` | `--network gnm\|anm`, `--sites`, `--contact-distance`, `--mode-count`, `--zero-mode-tolerance`, `--memory-limit`, `--table modes\|fluctuations`; `gnm` also `--reduction` | `mode`, `eigenvalue` or `site`, `fluctuation` |
 
-`native-contacts` needs the two structures to share atom numbering; a contact is
-kept when its target distance is at most `retention` times the cutoff. `nma`
+`native-contacts` counts a reference pair within `--cutoff` as native and keeps
+it when the target pair is within the cutoff plus `--tolerance` ångström (default
+0, so a structure compared with itself has Q = 1). `--match index` (default)
+needs the structures to share atom numbering; `--match names` pairs atoms by
+chain, residue number, residue name and atom name, and counts only contacts
+between atoms present in both. `nma`
 prints the zero-mode count on standard error; GNM fluctuations are summed over
 the requested modes only, so they are a lower bound unless every mode is asked
 for. `--reduction fast` lets the GNM solver reorder floating-point reductions;

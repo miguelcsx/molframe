@@ -80,7 +80,15 @@ as "there are no hydrogen bonds". Each analysis therefore declares:
   `hydrogens="exclude"`.
 - **required information**: what the analysed atoms must carry. An input without it is
   *indeterminate*, with the reason, not an empty answer. The same three analyses require
-  at least one modelled hydrogen.
+  at least one modelled hydrogen. `salt_bridges` requires charged groups to be knowable: a
+  titratable amino-acid group (Asp/Glu carboxylate, Lys, Arg, chain termini) or a
+  formal-charge annotation (`molframe.chemistry.annotate`). Without either it is
+  indeterminate, because no charged groups are known, which is different from there
+  being none. The Chemical Component Dictionary records neutral amino acids, so the
+  annotation alone never marks a protein's charges; the titratable groups do (the
+  Barlow and Thornton side-chain model: N and O atoms of oppositely charged groups
+  within 4 Å; histidine is not treated as charged). The groups used are recorded as an
+  assumption on the result.
 - **an estimand**: the quantity it estimates, in words (`analysis.estimand`), because two
   analyses can share a name and ask different questions of the same structure.
 
@@ -88,7 +96,7 @@ as "there are no hydrogen bonds". Each analysis therefore declares:
 result = analysis.hydrogen_bonds(annotated)       # a structure deposited without hydrogens
 result.status                                     # 'indeterminate'
 result.indeterminacy                              # 'the input models no hydrogen atoms, ...'
-analysis.salt_bridges(annotated).estimand         # 'the oppositely charged groups, by formal charge, ...'
+analysis.salt_bridges(annotated).estimand         # 'the oppositely charged groups (titratable amino-acid groups and annotated formal charges) ...'
 ```
 
 ## What a result holds
@@ -110,6 +118,22 @@ In Rust, `Analysis<T>` holds an `Outcome<T>`: `Determinate(value)` or
 `into_result()` each say what happens when there is none. `Quality` (complete,
 partial, ambiguous) qualifies an answer that exists. A trajectory in which one frame
 has no answer has none as a whole, and the reason names the frame.
+
+A `partial` or `ambiguous` status always names its cause in `assumptions` (the
+`Altloc`, `VdwRadii` or `ContactDef` entry says which decision and how many atoms it
+touched) and, where a better choice exists, in `warnings`. For example a one-element
+radius gap gives a `partial` SASA with a `W6004` warning naming the element and the
+`vdw_radii` field, and a structure with alternate locations gives an `ambiguous`
+result with an `Altloc` assumption stating how many atoms were left out.
+
+Indices in a result (the `contacts` pairs, the `salt_bridges` anion and cation) refer to
+the atoms the analysis ran over, not necessarily to the input: an altloc or hydrogen
+rule, or a crystal or assembly system, drops or copies atoms. `result.atom_origin` maps
+each analysed atom back to its input atom. `sasa` counts crystallographic waters and
+other heteroatoms as occluders and gives them areas, and says how many it counted;
+the protein-only convention of DSSP and FreeSASA (also the Biotite parity reference)
+needs an input without them. Masking the result with `atom_origin` and a selection drops
+their rows but not their occlusion of the polymer.
 
 An assumption records a decision made on the caller's behalf, and its impact is a
 measurement or nothing:

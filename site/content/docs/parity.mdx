@@ -267,7 +267,7 @@ These golden workflows cannot be promoted until their reference prerequisites ar
 | Bonds from file records | β | `molframe-chem` | — | Not yet promoted |
 | Bonds from CCD | β | `molframe-chem` | — | Not yet promoted |
 | Bond inference by distance | β | `molframe-chem` | — | Not yet promoted |
-| Element data / radii sets | β | `molframe-chem` | — | Not yet promoted |
+| Element data / radii sets | ✓ | `molframe-chem` | GW-045 | The atomic weights are the CIAAW 2021 conventional values. gemmi 0.7.5 still carries pre-2021 Ge (72.64) and Se (78.96), so it is not the reference for those two, and molframe matches CIAAW (`tests/reference/atomic_weights_ciaaw_2021.json`) |
 | **Named, versioned radii sets** | β | `molframe-chem` | — | Not yet promoted |
 | Atom equivalence (CCD symmetry) | β | `molframe-chem` | — | Not yet promoted |
 | Valence checking | β | `molframe-validate` | — | Not yet promoted |
@@ -285,9 +285,9 @@ These golden workflows cannot be promoted until their reference prerequisites ar
 | **Lazy assembly instances** | β | `molframe-xtal` | — | Not yet promoted |
 | Assembly materialisation | β | `molframe-xtal` | — | Not yet promoted |
 | Unit cell | β | `molframe-xtal` | — | Not yet promoted |
-| Space groups (all 230, all settings) | β | `molframe-xtal` | — | Not yet promoted |
+| Space groups (all 230, all settings) | ✓ | `molframe-xtal` | GW-041, GW-042 | All 530 Hall settings, keyed by Hall symbol, carry gemmi 0.7.5's operator count and international number, and every operator takes two probe points to gemmi's own images modulo 1 (`tests/reference/space_groups_gemmi_0.7.5.json`) |
 | Symmetry operators stored | β | `molframe-xtal` | — | Not yet promoted |
-| Fractional ↔ Cartesian | β | `molframe-xtal` | — | Not yet promoted |
+| Fractional ↔ Cartesian | ✓ | `molframe-xtal` | GW-043 | Four cells (triclinic, orthorhombic, hexagonal, acute) reproduce gemmi 0.7.5's `orthogonalize` to 3.6e-15 Å, and each round-trips to 1.1e-16 |
 | Crystal neighbour search | β | `molframe-xtal` | — | Not yet promoted |
 | NCS operators | β | `molframe-xtal` | — | Not yet promoted |
 | MTZ reflections | β | `molframe-xtal` | — | Not yet promoted |
@@ -327,10 +327,10 @@ These golden workflows cannot be promoted until their reference prerequisites ar
 | Atom mapping with equivalence | β | `molframe-compare` | — | Not yet promoted |
 | Ligand symmetry-aware comparison | β | `molframe-compare` | — | Not yet promoted |
 | RMSD family | β | `molframe-compare` | — | Not yet promoted |
-| GDT-TS / GDT-HA | β | `molframe-compare` | — | Not yet promoted |
-| TM-score | β | `molframe-compare` | — | Not yet promoted |
+| GDT-TS / GDT-HA | ✓ | `molframe-compare` | GW-046 | Match the Zemla 2003 definition exactly at the least-squares superposition, and that superposition's RMSD equals TM-align's to 6.5e-08 Å |
+| TM-score | β | `molframe-compare` | GW-044 | Every case agrees with TM-align (`tmtools` 0.3.0) on the 1UBQ Cα trace — exact for a rigid displacement, 1e-5 for 0.5 Å noise. On a hinge or a displaced tail the fixed-correspondence fit reads about 0.04 and 0.015 lower, because TM-align re-pairs residues as well as moves them; the limitation is recorded in `tests/reference/tm_score_tmalign_0.3.0.json` |
 | lDDT | β | `molframe-compare` | — | Not yet promoted |
-| DockQ | β | `molframe-compare` | — | Not yet promoted |
+| DockQ | ✓ | `molframe-compare` | GW-046 | Score and all three components (fnat, LRMSD, iRMSD) recomputed from the Basu & Wallner 2016 definition at three displacements on 4HHB chains A/B; agree to 1e-15 |
 | CAD-score | β | `molframe-compare` | — | Not yet promoted |
 | QS-score | β | `molframe-compare` | — | Not yet promoted |
 | Contact-map similarity | β | `molframe-compare` | — | Not yet promoted |
@@ -364,13 +364,13 @@ These golden workflows cannot be promoted until their reference prerequisites ar
 | Capability | molframe | Crate | GW | Evidence |
 | --- | :--: | --- | --- | --- |
 | Alphabets / encoded sequences | β | `molframe-seq` | — | Not yet promoted |
-| Global / local / semi-global alignment | β | `molframe-seq` | — | Not yet promoted |
+| Global / local / semi-global alignment | ✓ | `molframe-seq` | GW-047 | Global and local affine-gap scores match biopython 1.88's PairwiseAligner exactly, on seven pairs including end gaps, an internal gap and a tandem repeat |
 | Banded alignment | β | `molframe-seq` | — | Not yet promoted |
-| Affine gaps, substitution matrices | β | `molframe-seq` | — | Not yet promoted |
+| Affine gaps, substitution matrices | ✓ | `molframe-seq` | GW-047 | BLOSUM62, BLOSUM50 and PAM250 agree with biopython 1.88 entry for entry, and a zero-cost-gap scheme agrees too |
 | Multiple sequence alignment (guide-tree progressive + refinement) | β | `molframe-seq` | — | Not yet promoted |
 | k-mer tables / bucketed tables / spaced seeds / minimizers | β | `molframe-seq` | — | Not yet promoted |
 | Seed-and-extend search | β | `molframe-seq` | — | Not yet promoted |
-| Phylogenetics (NJ, UPGMA, reroot, ladderise, traverse) | β | `molframe-seq` | — | Not yet promoted |
+| Phylogenetics (NJ, UPGMA, reroot, ladderise, traverse) | ✓ | `molframe-seq` | GW-047 | On a matrix whose closest pair is (A,B), both UPGMA and neighbour joining produce a tree with that pair as a cherry and equal branch lengths |
 | Newick I/O | β | `molframe-seq` | — | Not yet promoted |
 | FASTA / FASTQ / Stockholm / Clustal / PHYLIP / A2M / A3M | β | `molframe-seq` | — | Not yet promoted |
 | Observed vs canonical vs reference sequence | β | `molframe-seq` | — | Not yet promoted |

@@ -77,7 +77,9 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
-# Python bindings
+# Python bindings: `pyproject.toml` pins the maturin profile to `release`, so this
+# is an optimised build. A debug extension is 5-100x slower on SASA and neighbour
+# search; never time or compare against one.
 maturin develop
 
 # benchmarks (dedicated machine; shared runners give noise, not data)

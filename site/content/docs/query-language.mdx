@@ -78,6 +78,8 @@ name CA
 
 Use `chain`, `resid`, `resname`, `name`, and `element` for ordinary structure work. MolFrame also exposes label and author variants such as `label_chain` / `auth_chain` and `label_resid` / `auth_resid` when a format carries both identifier systems.
 
+A plain `chain`, `resname` or `name` follows the policy's identifier namespace (author names by default). A value can also name its namespace itself with a `label:` or `auth:` prefix, so `chain label:A` selects the same atoms as `label_chain A`, and `chain label:A auth:C` is their union. `analysis.chain_interface` reads its chain names the same way: a bare name that means different chains as a label and as an author id is refused, and `"label:A"` or `"auth:A"` resolves it.
+
 ## Combine terms deliberately
 
 `not` binds most tightly, then `and`, then `or`. Parenthesize a mixed expression so its scientific meaning remains obvious.
@@ -93,6 +95,8 @@ protein and (name CA or name CB)
 ## Expand a molecular neighborhood
 
 Spatial predicates take distances in Å. `within` matches atoms near a target; `byres` expands those atoms to their complete residues.
+
+A spatial predicate reads its target and neighbours from the whole structure (or the view the query runs in), never from what the other side of an `and` has already kept, so `chain A and within 4 of chain B` and `within 4 of chain B and chain A` select the same atoms: the atoms of A that lie within 4 Å of B. Use `global` only to escape an enclosing view.
 
 ```python
 pocket = structure.select("byres (within 5 of resname HEM) and protein")

@@ -4,6 +4,163 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## Unreleased
+
+- **The k-d tree is parallel and exact, and `spatial.knn` is first class.**
+  The k-d tree is now an implicit, bucketed tree built and queried in
+  parallel; on degenerate layouts (needle, collinear, offset, 1e6 A outliers)
+  it no longer degrades, and periodic search visits images nearest first
+  instead of sweeping 125 shifts. `molframe.spatial.knn(points, k, query=None,
+  max_distance=None, cell=None, exclude_self=None)` returns `(n_query, k)`
+  `uint32` indices and `float32` distances ordered by distance then index,
+  padding with `4294967295` and `inf`. `interop.graph(edges="k_nearest")` uses
+  it and honours `backend`. `neighbor_pairs` and `cross_pairs` hand NumPy
+  columns over without extra copies, `neighbor_pairs_chunks` yields bounded
+  chunks, and `auto` moves to the tree on crowded clouds. Pair sets are
+  unchanged; distances are float32, so a pair within float32 rounding of the
+  cutoff may differ from a float64 library.
+- **Selection no longer holds the GIL, and `name CA` is no longer slow.**
+  `Structure.select` and `Query.select` run through the execution context: the
+  GIL is released for the native evaluation, Ctrl-C raises `KeyboardInterrupt`,
+  and both accept `context=` so `ExecutionContext.cancel()` stops them.
+  `resolve_altlocs` and `Selection.to_coordinates` also release the GIL.
+  Single-predicate selections on a per-atom symbol column (`name`, `auth_name`,
+  `altloc`) compare symbol ids chunk by chunk instead of resolving the chunk,
+  residue and chain of every atom, which took `name CA` on a 2.4M-atom
+  structure from about 0.9 s to a few tens of milliseconds. Results are
+  unchanged.
+- **Input limits are bounded by default.** `Limits::default()` now caps
+  decompressed size at 16 GiB, declared rows per category at 2^28 and
+  dictionary entries at 2^24 (previously unbounded). `Limits::unbounded()`
+  restores the old behaviour for trusted input; in Python pass a larger
+  `max_*` to `ReadOptions`. The compression-ratio and nesting ceilings are
+  unchanged.
+
+- **Pinned differential evidence against three reference libraries.** GW-041 to
+  GW-045 promote the crystallography, cell-transform, TM-score and element-data
+  rows using three new files under `crates/molframe/tests/reference/`: all 530
+  Hall settings against gemmi 0.7.5, the atomic weights against the CIAAW 2021
+  conventional table (gemmi still carries pre-2021 Ge and Se), and the TM-score
+  against TM-align on the 1UBQ C-alpha trace. The TM reference records that the
+  fixed-correspondence fit reads about 0.04 lower than TM-align on a hinge,
+  because TM-align's search can also re-pair residues.
+
+### Known limits found while validating
+
+- `molframe.spatial.neighbor_pairs` and `cross_pairs` take no unit cell, so the
+  Python surface cannot ask for a periodic neighbour search even though
+  `molframe-spatial` implements the triclinic minimum image and the Rust
+  `SpatialSearchOptions` carry it. The periodic path is exercised only from Rust.
+  Closing this means adding a `cell=` argument to the two bindings, which changes
+  a published signature and is left for a deliberate API decision.
+
+### Added
+
+- `molframe_geom::superpose_weighted`: the weighted quaternion rigid fit, the
+  minimiser of a per-pair weighted sum of squared deviations. An empty weight
+  slice reproduces `superpose`; a weight of zero removes a pair from the fit.
+
+### Fixed
+
+- **A component coordinate that cannot be represented as `f32` saturates rather
+  than becoming an infinity.** `small_cif_to_structure` narrowed each site with
+  an unchecked cast, so a magnitude beyond the `f32` range became an infinity
+  and every distance, angle and fit downstream inherited it. The new
+  `molframe_chem::numeric::f64_to_f32` saturates into the finite range, carries a
+  recorded NaN or infinity through as itself, and reserves saturation for a
+  finite value that genuinely exceeded the type.
+- **QS-score now uses the published normalisation.** The numerator is
+  `w(min(d_ref, d_mod)) * (1 - |d_ref - d_mod| / 12)` summed over shared residue
+  pairs, and the denominator is that shared weight plus the weight of every
+  contact present on one side only. The previous squared-weight-mass ratio
+  scored a contact moved 6 Å as 0.130 where the published score is 0.5, and
+  penalised an extra model contact by 1/3 where the published score is 1/2.
+  The published contact test is inclusive at the cutoff, so a pair exactly at
+  12 Å now counts.
+- **Python QS defaults moved from 5 Å to the published 12 Å** contact cutoff in
+  `qs_score` and `mapped_qs_score`. The `DockQ` 5 Å default is a different
+  metric and is unchanged. A non-default `contact_distance` selects a
+  nonpublished variant: it changes which pairs are contacts, while the 12 Å
+  distance penalty stays tied to the definition.
+- **Deposited connection classifications survive storage and export.**
+  `BondRecord` carries the source's `_struct_conn.conn_type_id` as an interned
+  identifier, and the canonical mmCIF and BinaryCIF writers emit each bond's
+  own classification instead of one caller-supplied type. 4HHB's four `metalc`
+  Fe–histidine connections are written as `metalc`, not as `covale`. A bond
+  whose source recorded no classification is written `?` rather than asserted
+  to be covalent. The global `CifWriteOptions::with_connection_type_id`, its
+  error and the CLI `--cif-connection-type` flag are gone; the kind is remapped
+  across dictionaries by `Structure::merge` and the adapter and Arrow bond
+  exports carry it as a nullable UTF-8 column.
+- **The connection class survives the provider bond projection.** The chunked
+  bond payload carried only the order and the provenance, so a consumer reading a
+  bond across a chunk boundary could not tell a metal coordination from a
+  covalent link — the distinction the class column exists for. `BondChunkRecord`
+  now carries the interned class as well.
+- **A semantic structure difference compares bond classes by their meaning.**
+  `changed_bonds` compared the raw `BondRecord`, whose connection class is an
+  interned identifier numbered per dictionary. Two independently read copies of
+  one file numbered the same class differently and were reported as different,
+  and two files whose classes happened to land in the same slot were reported as
+  identical. The comparison now resolves the class against each structure's own
+  dictionary, as it already did for entity and chain fields.
+- **A ragged PDB ensemble keeps its atoms reachable from Python.** Such an
+  ensemble holds its models as independent structures, so the outer object's
+  counts are zero — and the binding exposed no way to reach the models, meaning a
+  Python caller saw a file of several hundred atoms as an empty molecule with no
+  diagnostic. `Structure.is_ragged_ensemble` and `Structure.ragged_models` are now
+  bound, and the facade gained the matching accessors.
+- **Half-sphere exposure reports coverage over its own domain.** The governed
+  kernel counted every residue as intended, so a structure with bound water
+  reported an analysis that measured all 70 of its protein residues as 70 of 134,
+  or `partial`, and `missing_atoms` would reject a complete answer. The domain is
+  now the residues the role profile identifies as protein, read from the roles
+  rather than from the chain kind, because a PDB read has no `_entity_poly.type`
+  to classify a chain from.
+- **A coordinate row that will not parse is not reported as an empty file.** A
+  serial that outgrew its five columns pushes a digit into the record name, so
+  `ATOM 100000` reads `ATOM 1` and matched no record at all; the file was then
+  refused with "the file contains no coordinate records", which describes a
+  different problem and leaves the caller nothing to act on. Such rows are now
+  counted and reported as `E1201`, a field-layout fault, while a file that truly
+  holds no coordinate rows still reports `E1001`.
+- **A connection to another crystal image is refused instead of flattened.**
+  `_struct_conn` lowering preflights `ptnr1_symmetry` and `ptnr2_symmetry`; a
+  partner named through a nonzero cell translation, or through an operator the
+  block's own operator table does not define as the identity, is reported as
+  `E3016` (breaking) rather than lowered to a bond between the atoms that share
+  those identifiers. Lossless `Document` parsing is unaffected. The
+  `space_group_symop` and `symmetry_equiv` categories are retained whenever
+  `struct_conn` is, so a category filter cannot turn an explicit nonidentity
+  operator into the implicit local-identity assumption.
+- **TM-score now searches superpositions instead of taking one least-squares
+  fit.** The published score is a maximum over superpositions, and the TM sum at
+  a single least-squares fit is a smaller number whenever the movement is not
+  rigid: on the 1UBQ C-alpha trace, a least-squares fit scored 0.2169 where the
+  reweighted search scores 0.5237, which also beats every single-window fit of
+  the same trace (0.5236). The fit is now the deterministic reweighted search
+  whose weights are the squared TM kernel, keeping the best score seen.
+  `molframe-geom` gains `superpose_weighted` for the weighted quaternion fit it
+  is built from. The search stays a local one and fits a fixed correspondence,
+  so it remains below TM-align on motion that swings one part of a chain past
+  another (0.524 against 0.568 on a half-and-half hinge, 0.665 against 0.680 on a
+  displaced tail, exact for a rigid displacement); that limit is recorded in
+  `tests/reference/tm_score_tmalign_0.3.0.json` rather than papered over.
+- `molframe_bench::Sample::bcif` returns `Option<&'static [u8]>`: the 2M7C
+  ensemble fixture ships PDB, and the accessor previously returned those bytes
+  as BinaryCIF, which made a format sweep that trusted it measure PDB parsing
+  under a BinaryCIF label.
+- **Half-sphere exposure no longer returns a silent empty table.** A residue needs
+  both an alpha and a beta carbon role — the beta carbon fixes the outward
+  direction — so a residue without one takes no part. The governed kernel reported
+  an empty result as `Complete`, which reads as "no residue is crowded" when the
+  truth is "nothing was measured"; a caller whose profile supplied only backbone
+  roles saw zero rows and no explanation. The skipped residues are now reported as
+  missing coverage, so `missing_atoms` decides what a partial answer means, and
+  the descriptor requires a side-chain direction, so an input with none is
+  indeterminate rather than empty. Measured on a three-residue fixture with one
+  glycine: `used=2, missing=1, intended=3`, quality `Partial`.
+
 ## 0.5.1 — 2026-10-05
 
 - Synchronize MOL/SDF formal charges with chemistry annotations; omitted MDL charges are known neutral.

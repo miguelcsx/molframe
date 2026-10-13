@@ -117,6 +117,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+A first Rust program usually wants four things: a selection, a surface area, the
+contacts, and a bound on memory. Everything below comes from
+`use molframe::prelude::*`; SASA needs the `surface` and `chemistry` features
+(or `full`) and contacts need `analysis`.
+
+```rust
+use molframe::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let structure = molframe::read("1ubq.cif")?;
+
+    // Iterate atoms directly; `Atoms` is a collection, not an index range.
+    let carbons = structure
+        .atoms()
+        .into_iter()
+        .filter(|atom| atom.element() == Some(Element::C))
+        .count();
+
+    // Select by query and gather the coordinates of model 0.
+    let alpha = structure.select("name CA", &AnalysisPolicy::default())?;
+    let alpha_positions = alpha.to_coordinates(ModelIndex::new(0));
+
+    // Per-atom and per-residue SASA (Bondi radii, 1.4 A probe, 960 points).
+    // An atom whose element has no radius gets NaN and does not occlude.
+    let atom_areas = structure.sasa()?;
+    let residue_areas = structure.residue_sasa()?;
+
+    // Every contact within 4.5 A, under an explicit memory ceiling.
+    let context = ExecutionContext::builder()
+        .memory_budget(MemoryBudget::new(512 << 20)?)
+        .build()?;
+    let contacts = structure.atom_contacts_with(4.5, SpatialBackend::Auto, &context)?;
+
+    println!(
+        "{carbons} C, {} CA, {} atom areas, {} residue areas, {} contacts",
+        alpha_positions.len(),
+        atom_areas.len(),
+        residue_areas.len(),
+        contacts.len()
+    );
+    Ok(())
+}
+```
+
+A multi-model file whose models share one atom set is a dense ensemble:
+`structure.ensemble_coordinates(None)?` returns every model as one
+`(models, atoms, 3)` block (`block.as_flat()`, `block.model(i)`), and Python's
+`structure.model_coordinates()` returns the same as a float32 array. A file whose
+models differ is a ragged ensemble with no shared atom axis; every structure-level
+call refuses it with an error naming `ragged_models`, and the way forward is
+`structure.ragged_models()`, one independent structure per model.
+
 `read_with_diagnostics` preserves problems and ambiguities encountered while loading a structure instead of reducing parsing to a success/failure decision.
 
 `molframe read` parses a path, bytes, or reader; it does not turn an identifier into a guessed network URL. Use the CLI verified acquisition boundary when retrieving an external resource:

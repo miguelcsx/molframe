@@ -2235,6 +2235,7 @@ dependencies = [
  "molframe-cif",
  "molframe-core",
  "num-traits",
+ "rayon",
 ]
 
 [[package]]
@@ -2283,6 +2284,7 @@ dependencies = [
  "molframe-spatial",
  "molframe-surface",
  "num-traits",
+ "rayon",
  "thiserror 2.0.21",
 ]
 

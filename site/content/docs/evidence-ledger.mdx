@@ -177,6 +177,81 @@ entity mutation fields but records ALA versus reference CYS at chain D positions
 external corpus; it leaves the pilot's sampling and estimates unchanged.
 
 
+## Corrected scientific definitions (post-0.6.0)
+
+Four definitions were corrected against their published sources, each
+reproduced before the change and observed at the public boundary after it.
+
+**QS-score normalisation.** The numerator is
+`sum w(min(d_ref, d_mod)) * (1 - |d_ref - d_mod| / 12)` over shared residue
+pairs, and the denominator adds the weight of every contact present on one side
+only, exactly the `weighted_scores / (weight_sum + weight_extra_mapped)` of the
+published definition. The previous kernel divided by the mean of the two
+squared-weight masses. A single shared contact moved from 4 Å to 10 Å scored
+0.129951 where the published score is 0.5; one shared plus one extra model
+contact scored 2/3 where the published score is 0.5. Both are unit tests in
+`crates/molframe-compare/src/qs_tests.rs`. On 4HHB chains A and B with the model
+chain displaced 8 Å, the published 12 Å domain and the narrow 5 Å variant now
+read 0.486286 and 0.045150 through Rust, Python and the `compare --metrics qs`
+CLI.
+
+**Python QS default cutoff.** 5 Å to the published 12 Å in `qs_score` and
+`mapped_qs_score`, with the `.pyi` stubs updated. `DockQ`'s 5 Å default is a
+different metric and is unchanged.
+
+**Deposited connection classification.** `BondRecord` carries the source's
+`_struct_conn.conn_type_id`, and the mmCIF and BinaryCIF writers emit each
+bond's own class. 4HHB's four deposited `metalc` Fe–histidine connections were
+written as `covale` before the fix and are written as `metalc` now, confirmed by
+`the_four_deposited_metal_sites_keep_their_own_connection_class` against the
+shipped `4hhb.bcif` and by `molframe convert 4hhb.cif out.cif
+--generate-cif-connection-ids`, whose four rows carry `metalc`.
+
+**TM-score superposition.** The published score maximises the TM sum over
+superpositions; the code took it at a least-squares fit. On 1UBQ with one region
+displaced, that is 0.671257 instead of 0.691193; with a displaced tail, 0.886029
+instead of 0.923243. The fit is now the deterministic reweighted search whose
+weights are the squared TM kernel.
+
+## Differential validation against reference libraries (2026-10-10)
+
+A scratch workspace (`/tmp`, not committed) installed the reference
+implementations and ran 92 checks over the domains that had no pinned evidence.
+Every check names the library, its version, and the property compared; none was
+tuned to the observed difference.
+
+| Reference | Version | Domains | Result |
+| --- | --- | --- | --- |
+| gemmi | 0.7.5 | cell transforms, all 530 Hall settings, mmCIF atom/residue/element sets | 27 checks, all exact |
+| biotite | 1.7.1 | distances, angles, dihedrals, Rg, centre of mass, SASA | 10 checks; Rg to 2e-14 Å, SASA total within 0.01% and 602/602 atoms inside the 960-point sampling bound |
+| tmtools (TM-align) | 0.3.0 | TM-score on the 1UBQ Cα trace | exact for rigid motion; 0.04 lower on a hinge, recorded as a limitation |
+| mdtraj | 1.11.2 | XTC, TRR, DCD, NetCDF read-back | coordinates within 2.4e-07 Å, atom and frame counts exact |
+| CIAAW (IUPAC) | 2021 | atomic weights | 14/14 exact; gemmi 0.7.5 is the one carrying pre-2021 Ge and Se |
+| biopython | 1.88 | BLOSUM62/50, PAM250, global and local affine alignment, FASTA, UPGMA, neighbour joining | 24 checks; every matrix entry and every alignment score exact |
+| NumPy definitions | — | lDDT (Mariani), QS (Bertoni/OpenStructure), DockQ (Basu & Wallner), GDT (Zemla), contacts, HSE, minimum image, affine alignment | all exact |
+
+The differentials are reproducible: a scratch `run_all.py` prints one line per
+check with the reference it used, and `CONSOLIDATED: 92/92 checks passed`.
+
+Three findings were **not** molframe defects, and are recorded here so the
+comparison is not misread later:
+
+- mdtraj reports coordinates in nanometres while the files store ångström,
+  which reads as a 10× difference until the unit is accounted for.
+- gemmi regroups atoms by chain, discarding mmCIF file order; molframe preserves
+  file order, so a positional comparison needs to be order-independent.
+- mdtraj writes a present-but-zero 36-byte unit-cell block when it has no cell.
+  molframe refuses a degenerate cell, as GROMACS's own `do_trr_frame_data` would.
+
+DockQ was checked against the published Basu & Wallner combination *and* its
+three components separately (fnat, LRMSD, iRMSD), each recomputed from the
+definition, at three displacements; all agree to 1e-15. GDT-TS and GDT-HA match
+the Zemla definition exactly, and the superposition RMSD matches TM-align's own
+reported value to 6.5e-08 Å.
+
+The five results that are now pinned in the repository are the GW-041 to GW-045
+workflows over three new files under `crates/molframe/tests/reference/`.
+
 ## Python/Rust release-boundary checks (0.5.0, 2026-10-04)
 
 The Python package remains a curated interface over native kernels, not a

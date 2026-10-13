@@ -24,7 +24,7 @@ A query that fails with `E4003` asks for data the file does not carry: `backbone
 
 ## A query selects nothing
 
-Run it alone and check `len(structure.select(...))`. Values are case-sensitive (`resname HEM`, not `hem`), and a `QueryWarning` names a value that does not occur in the structure. For mmCIF, `chain` is the author chain; `label_chain` is the archive's.
+Run it alone and check `len(structure.select(...))`. Values are case-sensitive (`resname HEM`, not `hem`), and a `QueryWarning` names a value that does not occur in the structure. For mmCIF, `chain` is the author chain; `label_chain` is the archive's. Either can be named inside `chain` with a prefix: `chain label:A` or `chain auth:A`.
 
 ## An analysis result is empty or indeterminate
 
