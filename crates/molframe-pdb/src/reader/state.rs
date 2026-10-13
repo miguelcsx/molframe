@@ -7,6 +7,7 @@
 mod connectivity;
 mod finalize;
 mod hierarchy;
+mod links;
 mod metadata;
 mod models;
 mod rows;
@@ -21,6 +22,7 @@ use super::lines::Line;
 use crate::fixed;
 use crate::header::PdbHeaders;
 use crate::hybrid36;
+use links::{LinkAtoms, LinkRequest};
 use molframe_core::chunk::{AtomRecord, ChunkBuilder};
 use molframe_core::column::Presence;
 use molframe_core::coords::CoordinateBlock;
@@ -71,6 +73,10 @@ pub(super) struct ReadState<'a> {
     model_values_differ: bool,
     serial_to_atom: BTreeMap<u32, AtomIndex>,
     conect: Vec<(u32, u32, Position)>,
+    /// `SSBOND` and `LINK` records awaiting the atoms they name.
+    links: Vec<LinkRequest>,
+    link_atoms: LinkAtoms,
+    key_scratch: String,
     /// Ellipsoid rows awaiting their atom, joined by deposited serial.
     anisou: Vec<(u32, [f32; 6])>,
     /// The serial of the most recently read atom row, if it carried one.
@@ -108,6 +114,9 @@ impl<'a> ReadState<'a> {
             model_values_differ: false,
             serial_to_atom: BTreeMap::new(),
             conect: Vec::new(),
+            links: Vec::new(),
+            link_atoms: LinkAtoms::new(),
+            key_scratch: String::new(),
             anisou: Vec::new(),
             last_atom_serial: None,
             variant,
@@ -140,6 +149,8 @@ impl<'a> ReadState<'a> {
             "TITLE" => self.title(line),
             "EXPDTA" => self.method(line),
             "CONECT" => self.conect(line),
+            "SSBOND" => self.ssbond(line),
+            "LINK" => self.link(line),
             "ANISOU" => self.anisou(line),
             // A coordinate record whose serial outgrew its five columns pushes a
             // digit into column 6, so the record name reads `ATOM 1` and the line
@@ -261,6 +272,7 @@ impl<'a> ReadState<'a> {
             formal_charge: (0, Presence::Inapplicable),
             atom_site_id: serial,
         });
+        self.note_link_atom(line, AtomIndex::new(self.atom_position), element);
         self.atom_position += 1;
         self.saw_atoms = true;
     }

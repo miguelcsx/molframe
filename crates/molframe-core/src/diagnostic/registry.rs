@@ -331,6 +331,9 @@ registry! {
     W3015 = Warning 3015, Loose,
         "occupancies or B-factors differ between models of one ensemble; the first model's values are kept",
         "no action needed for coordinates, which are kept for every model; read per-model B-factors from the source file if they matter";
+    W3016 = Warning 3016, Loose,
+        "a connection record names an atom the file does not contain and was not lowered to a bond",
+        "no action needed if the atom was filtered out on purpose; otherwise correct the record's chain, residue number, or atom name. The record itself is kept in the retained headers";
     W3201 = Warning 3201, Loose,
         "component not found in any chemical component provider",
         "layer the full wwPDB dictionary (components.cif.gz from files.wwpdb.org/pub/pdb/data/monomers) over the bundled core set, or embed chem_comp_atom and chem_comp_bond rows for this component in the input file; until then its atoms and bonds are not checked";

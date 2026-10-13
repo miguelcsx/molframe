@@ -6,8 +6,10 @@ use crate::hybrid36;
 use crate::reader::lines::Line;
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::index::AtomIndex;
 use molframe_core::optional::OptionalSymbol;
 use molframe_core::span::ByteSpan;
+use std::collections::HashMap;
 
 impl ReadState<'_> {
     pub(super) fn conect(&mut self, line: &Line<'_>) {
@@ -36,10 +38,10 @@ impl ReadState<'_> {
     }
 
     pub(super) fn finish_bonds(&mut self) {
-        if self.conect.is_empty() {
+        if self.conect.is_empty() && self.links.is_empty() {
             return;
         }
-        let mut bonds = BondTableBuilder::new();
+        let mut records: Vec<BondRecord> = Vec::new();
         for (source, target, at) in &self.conect {
             let (Some(atom_a), Some(atom_b)) = (
                 self.serial_to_atom.get(source),
@@ -53,7 +55,7 @@ impl ReadState<'_> {
                 );
                 continue;
             };
-            bonds.push(BondRecord {
+            records.push(BondRecord {
                 atom_a: *atom_a,
                 atom_b: *atom_b,
                 order: BondOrder::Unknown,
@@ -63,7 +65,34 @@ impl ReadState<'_> {
                 kind: OptionalSymbol::NONE,
             });
         }
+        let mut seen: HashMap<(AtomIndex, AtomIndex), usize> = records
+            .iter()
+            .enumerate()
+            .map(|(position, bond)| (pair(bond), position))
+            .collect();
+        for bond in self.link_bonds() {
+            // A connection that `CONECT` also names is one bond; the typed
+            // record contributes only its kind.
+            if let Some(&position) = seen.get(&pair(&bond)) {
+                records[position].kind = bond.kind;
+            } else {
+                seen.insert(pair(&bond), records.len());
+                records.push(bond);
+            }
+        }
+        let mut bonds = BondTableBuilder::new();
+        for bond in records {
+            bonds.push(bond);
+        }
         self.data.bonds = bonds.finish();
+    }
+}
+
+fn pair(bond: &BondRecord) -> (AtomIndex, AtomIndex) {
+    if bond.atom_a <= bond.atom_b {
+        (bond.atom_a, bond.atom_b)
+    } else {
+        (bond.atom_b, bond.atom_a)
     }
 }
 

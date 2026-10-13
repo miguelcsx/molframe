@@ -192,9 +192,16 @@ END
     assert_eq!(link[42..46].trim(), "ZN");
     assert_eq!(link[73..78].trim(), "2.30");
     let again = parse(&out);
+    let kinds: Vec<_> = again
+        .data()
+        .bonds
+        .iter()
+        .filter_map(|bond| bond.kind.get().and_then(|kind| again.resolve(kind)))
+        .collect();
     assert_eq!(
-        again.data().bonds.len(),
-        0,
-        "LINK and SSBOND are headers, not CONECT"
+        kinds,
+        ["disulf", "metalc"],
+        "records read back as typed bonds"
     );
+    assert!(!out.contains("CONECT"), "typed bonds are not CONECT");
 }
