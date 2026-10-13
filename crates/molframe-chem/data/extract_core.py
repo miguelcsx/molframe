@@ -39,6 +39,11 @@ ATOM = [
     "pdbx_leaving_atom_flag",
     "pdbx_stereo_config",
 ]
+IDEAL = [
+    "pdbx_model_Cartn_x_ideal",
+    "pdbx_model_Cartn_y_ideal",
+    "pdbx_model_Cartn_z_ideal",
+]
 BOND = ["atom_id_1", "atom_id_2", "value_order", "pdbx_aromatic_flag", "pdbx_stereo_config"]
 KEPT = {"chem_comp_atom": ATOM, "chem_comp_bond": BOND}
 
@@ -67,11 +72,20 @@ class Block:
         wanted = KEPT.get(self.category)
         if wanted and self.rows:
             names = [name for name in wanted if name in self.items]
+            if self.category == "chem_comp_atom" and self.has_stereocentre():
+                names += [name for name in IDEAL if name in self.items]
             self.out.append("loop_\n")
             self.out.extend(f"_{self.category}.{name}\n" for name in names)
             columns = [self.items.index(name) for name in names]
             self.out.extend(" ".join(row[c] for c in columns) + "\n" for row in self.rows)
         self.items, self.rows, self.category = [], [], ""
+
+    def has_stereocentre(self) -> bool:
+        """Report whether any atom of the pending atom category is an R or S centre."""
+        if "pdbx_stereo_config" not in self.items:
+            return False
+        column = self.items.index("pdbx_stereo_config")
+        return any(row[column] in ("R", "S") for row in self.rows)
 
     def meta_text(self, line: str) -> None:
         """Read a metadata value that continues on following lines."""

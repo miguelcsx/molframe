@@ -58,8 +58,10 @@ common ions, crystallisation additives, frequent cofactors and every
 carbohydrate that `snfg.rs` names. Each block keeps its `chem_comp` identity
 (id, name, type, formula, parent, one-letter code), every atom (name,
 alternate name, element, charge, aromatic, leaving, stereo flags) and every
-bond (order, aromatic, stereo flags); coordinates are not bundled, so ideal
-and model coordinates read as absent. Anything outside the set is unknown to
+bond (order, aromatic, stereo flags). Ideal coordinates are bundled only for
+components with an R or S stereocentre, which is what chirality validation
+needs; every other component, and every model coordinate, reads as absent.
+Anything outside the set is unknown to
 `CoreProvider` and is reported rather than guessed.
 
 Regenerate with `extract_core.py` (standard library only):

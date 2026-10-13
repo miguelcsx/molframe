@@ -43,7 +43,13 @@ fn bundled_chemistry_matches_the_dictionary() {
     assert_eq!(get(&core, "NAG").kind, ComponentKind::Saccharide);
     assert_eq!(get(&core, "DT").kind, ComponentKind::Nucleotide);
     assert_eq!(core.version().as_str(), CORE_DICTIONARY_VERSION);
-    assert!(get(&core, "ALA").ideal_coordinates.is_none());
+    let ala = get(&core, "ALA");
+    assert_eq!(
+        ala.ideal_coordinates.as_ref().map(|ideal| ideal.len()),
+        Some(ala.atoms.len())
+    );
+    assert!(get(&core, "GLY").ideal_coordinates.is_none());
+    assert!(ala.model_coordinates.is_none());
 }
 
 #[test]
