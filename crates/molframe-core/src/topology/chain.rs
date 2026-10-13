@@ -185,6 +185,21 @@ impl ChainTable {
         Ok(())
     }
 
+    /// Replaces the normalised label only, leaving the depositor label alone.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TableError`] when `chain` is absent.
+    pub fn relabel(&mut self, chain: ChainIndex, label: SymbolId) -> Result<(), TableError> {
+        match Arc::make_mut(&mut self.label_asym_id).get_mut(chain.as_usize()) {
+            Some(normalised) => {
+                *normalised = label;
+                Ok(())
+            }
+            None => Err(TableError::MissingIndex { table: "chain" }),
+        }
+    }
+
     /// The species this chain instantiates.
     #[must_use]
     pub fn entity(&self, chain: ChainIndex) -> Option<EntityIndex> {

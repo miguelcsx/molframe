@@ -72,6 +72,8 @@ pub fn write_structure_to_with_memory_limit<W: Write>(
     memory_limit_bytes: usize,
     output: &mut W,
 ) -> Result<(), Vec<Diagnostic>> {
+    let distinct = structure.with_distinct_chain_labels();
+    let structure = distinct.as_ref().unwrap_or(structure);
     let projection = canonical_projection(structure, options)
         .map_err(|error| vec![projection_diagnostic(&error)])?;
     let rows = projection

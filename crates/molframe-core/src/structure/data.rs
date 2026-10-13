@@ -199,7 +199,7 @@ pub struct StructureData {
 /// ```
 #[repr(C)]
 #[derive(Clone, Debug)]
-pub struct Structure(Arc<StructureData>);
+pub struct Structure(pub(super) Arc<StructureData>);
 
 impl StructureData {
     /// A structure with nothing in it.

@@ -8,6 +8,7 @@
 #[cfg(test)]
 mod fixture;
 
+mod chain_labels;
 mod data;
 mod diff;
 mod disorder;
