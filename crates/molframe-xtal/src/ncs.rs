@@ -258,6 +258,25 @@ pub trait NcsExt {
 
     /// Lazy view containing only operators marked `generate`.
     fn ncs_generated(&self) -> Option<NcsView<'_>>;
+
+    /// The chain pairs the attached operators relate; empty without NCS.
+    ///
+    /// # Errors
+    ///
+    /// Returns a diagnostic for a domain naming an absent chain or a search
+    /// above the configured limit.
+    fn ncs_chain_pairs(
+        &self,
+        options: &crate::NcsBindOptions,
+    ) -> Result<Vec<crate::NcsChainPair>, Diagnostic>;
+
+    /// The structure with every `generate` operator applied; the structure
+    /// itself when none is attached.
+    ///
+    /// # Errors
+    ///
+    /// Returns diagnostics for a non-rigid operator or excessive expansion.
+    fn ncs_expanded(&self) -> Result<Structure, Vec<Diagnostic>>;
 }
 
 impl NcsExt for Structure {
@@ -270,6 +289,19 @@ impl NcsExt for Structure {
             structure: self,
             set,
         })
+    }
+
+    fn ncs_chain_pairs(
+        &self,
+        options: &crate::NcsBindOptions,
+    ) -> Result<Vec<crate::NcsChainPair>, Diagnostic> {
+        self.ncs_set()
+            .map_or_else(|| Ok(Vec::new()), |set| crate::bind_ncs(self, set, options))
+    }
+
+    fn ncs_expanded(&self) -> Result<Structure, Vec<Diagnostic>> {
+        self.ncs_set()
+            .map_or_else(|| Ok(self.clone()), |set| crate::expand_ncs(self, set))
     }
 }
 

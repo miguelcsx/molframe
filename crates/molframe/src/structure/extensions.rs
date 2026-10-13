@@ -38,6 +38,17 @@ impl molframe_xtal::NcsExt for Structure {
     fn ncs_generated(&self) -> Option<molframe_xtal::NcsView<'_>> {
         molframe_xtal::NcsExt::ncs_generated(self.engine())
     }
+
+    fn ncs_chain_pairs(
+        &self,
+        options: &molframe_xtal::NcsBindOptions,
+    ) -> Result<Vec<molframe_xtal::NcsChainPair>, Diagnostic> {
+        molframe_xtal::NcsExt::ncs_chain_pairs(self.engine(), options)
+    }
+
+    fn ncs_expanded(&self) -> Result<molframe_core::Structure, Vec<Diagnostic>> {
+        molframe_xtal::NcsExt::ncs_expanded(self.engine())
+    }
 }
 
 #[cfg(feature = "crystal")]

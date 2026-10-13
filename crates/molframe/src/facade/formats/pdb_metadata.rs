@@ -41,27 +41,52 @@ pub(crate) fn complete(
     completed
 }
 
-/// `MTRIX1..3` for the operators whose copies are already in the file.
+/// `MTRIX1..3` for every operator; the last column marks the copies already
+/// in the file.
+///
+/// Numeric identifiers are kept as the serials, so reading the records back
+/// names each operator as before; other identifiers are numbered in order.
 #[cfg(feature = "crystal")]
 fn mtrix_records(set: &molframe_xtal::NcsSet) -> String {
     use std::fmt::Write as _;
     let mut out = String::new();
-    for (position, operator) in set
+    let numeric: Option<Vec<u32>> = set
         .operators()
-        .filter(|operator| operator.code == molframe_xtal::NcsCode::Given)
+        .map(|operator| operator.id.parse().ok())
+        .collect();
+    let mut ordered: Vec<(u32, &molframe_xtal::NcsOperator)> = set
+        .operators()
         .enumerate()
-    {
+        .map(|(position, operator)| {
+            let fallback = u32::try_from(position + 1).unwrap_or(u32::MAX);
+            (
+                numeric
+                    .as_ref()
+                    .and_then(|ids| ids.get(position).copied())
+                    .unwrap_or(fallback),
+                operator,
+            )
+        })
+        .collect();
+    ordered.sort_by_key(|(serial, _)| *serial);
+    for (serial, operator) in ordered {
         let transform = &operator.transform;
+        let given = if operator.code == molframe_xtal::NcsCode::Given {
+            '1'
+        } else {
+            ' '
+        };
         for row in 0..3 {
             let _ = writeln!(
                 out,
-                "MTRIX{} {:>3}{:10.6}{:10.6}{:10.6}     {:10.5}    1",
+                "MTRIX{} {:>3}{:10.6}{:10.6}{:10.6}     {:10.5}    {}",
                 row + 1,
-                position + 1,
+                serial,
                 transform.matrix[row][0],
                 transform.matrix[row][1],
                 transform.matrix[row][2],
                 transform.translation[row],
+                given,
             );
         }
     }

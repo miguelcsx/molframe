@@ -24,7 +24,47 @@ pub(super) fn attach_pdb_symmetry(
         Ok(None) => {}
         Err(finding) => findings.push(finding),
     }
+    match mtrix_operators(&structure) {
+        Ok(Some(set)) => structure = structure.with_extension(molframe_xtal::NCS_EXTENSION, set),
+        Ok(None) => {}
+        Err(finding) => findings.push(finding),
+    }
     (structure, findings)
+}
+
+/// The operators of the `MTRIX` records, as the set an mmCIF read would build.
+///
+/// A copy the file marks as already present is `given`; every other operator
+/// generates coordinates the file does not hold.
+#[cfg(feature = "crystal")]
+fn mtrix_operators(structure: &Structure) -> Result<Option<molframe_xtal::NcsSet>, Diagnostic> {
+    use molframe_pdb::PdbHeadersExt;
+    use molframe_xtal::{AffineTransform, NcsCode, NcsOperator, NcsSet};
+
+    let Some(headers) = structure.pdb_headers() else {
+        return Ok(None);
+    };
+    let operators: Vec<NcsOperator> = headers
+        .mtrix()
+        .into_iter()
+        .map(|operator| NcsOperator {
+            id: operator.serial.to_string().into(),
+            code: if operator.given {
+                NcsCode::Given
+            } else {
+                NcsCode::Generate
+            },
+            details: None,
+            transform: AffineTransform {
+                matrix: operator.rotation,
+                translation: operator.translation,
+            },
+        })
+        .collect();
+    if operators.is_empty() {
+        return Ok(None);
+    }
+    NcsSet::from_operators(operators).map(Some)
 }
 
 #[cfg(feature = "crystal")]

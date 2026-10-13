@@ -84,3 +84,80 @@ END\n";
     let positions: Vec<[f32; 3]> = materialised.coordinates().to_vec();
     assert_eq!(positions, [[1.0, 2.0, 3.0], [9.0, -2.0, 3.0]]);
 }
+
+#[cfg(feature = "crystal")]
+fn mtrix_pdb() -> String {
+    let rows = |serial: u32, shift: f64, given: &str| -> String {
+        use std::fmt::Write as _;
+        let mut out = String::new();
+        for row in 0..3_usize {
+            let diagonal = |column: usize| if row == column { 1.0 } else { 0.0 };
+            let translation = if row == 0 { shift } else { 0.0 };
+            let _ = writeln!(
+                out,
+                "MTRIX{} {:>3}{:10.6}{:10.6}{:10.6}     {:10.5}    {}",
+                row + 1,
+                serial,
+                diagonal(0),
+                diagonal(1),
+                diagonal(2),
+                translation,
+                given
+            );
+        }
+        out
+    };
+    format!(
+        "{}{}ATOM      1  N   GLY A   1       1.000   1.000   1.000  1.00 10.00           N\n\
+END\n",
+        rows(1, 0.0, "1"),
+        rows(2, 30.0, "")
+    )
+}
+
+#[cfg(feature = "crystal")]
+#[test]
+fn mtrix_records_attach_given_and_generated_operators() {
+    use crate::crystal::{NcsCode, NcsExt};
+
+    let structure = read(&mtrix_pdb());
+    let Some(set) = structure.ncs_set() else {
+        panic!("MTRIX records attach an NCS set")
+    };
+    assert_eq!(set.len(), 2);
+    assert_eq!(
+        set.get("1").map(|operator| operator.code),
+        Some(NcsCode::Given)
+    );
+    assert_eq!(
+        set.get("2").map(|operator| operator.code),
+        Some(NcsCode::Generate)
+    );
+    assert_eq!(
+        set.get("2")
+            .map(|operator| operator.transform.translation[0]),
+        Some(30.0)
+    );
+}
+
+#[cfg(feature = "crystal")]
+#[test]
+fn mtrix_operators_survive_a_pdb_round_trip() {
+    use crate::crystal::NcsExt;
+
+    let structure = read(&mtrix_pdb());
+    let text = match write_pdb(&structure, &crate::formats::pdb::PdbOptions::new()) {
+        Ok(text) => text,
+        Err(findings) => panic!("the structure writes: {findings:?}"),
+    };
+    let again = read(&text);
+    let (Some(before), Some(after)) = (structure.ncs_set(), again.ncs_set()) else {
+        panic!("NCS lost across the round trip")
+    };
+    let describe = |set: &crate::crystal::NcsSet| {
+        set.operators()
+            .map(|operator| (operator.code, operator.transform))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(describe(before), describe(after));
+}

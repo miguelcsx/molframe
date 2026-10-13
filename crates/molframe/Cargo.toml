@@ -58,6 +58,10 @@ required-features = ["full"]
 name = "writer_metadata"
 required-features = ["full"]
 
+[[test]]
+name = "ncs_real"
+required-features = ["full"]
+
 [[bench]]
 name = "facade"
 harness = false
