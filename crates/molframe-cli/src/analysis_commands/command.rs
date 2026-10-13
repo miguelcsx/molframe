@@ -3,6 +3,7 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, RowWriter, emit_rows, finish_rows, output_error};
+use molframe::SurfaceExt;
 use molframe::chemistry::RadiusSet;
 use molframe::spatial::SpatialBackend;
 use std::path::Path;
@@ -255,42 +256,50 @@ pub(crate) fn interfaces(input: &Path, between: &[String], cutoff: f32, context:
     })
 }
 
+/// The policy words of `sasa`, parsed by the shared option set.
+#[derive(clap::Args, Debug)]
+pub(crate) struct SasaWords {
+    /// Sampling method: shrake-rupley or lee-richards.
+    #[arg(long)]
+    pub(crate) method: Option<String>,
+    /// Heteroatoms that are measured and occlude: none, solute, all, or a
+    /// list of waters, ligands, ions. Unset, only the polymer is measured.
+    #[arg(long)]
+    pub(crate) hetero: Option<String>,
+    /// Radius for a metal the set lacks: none, vdw or ionic.
+    #[arg(long)]
+    pub(crate) metals: Option<String>,
+}
+
 pub(crate) fn sasa(
     input: &Path,
     probe: f32,
     points: u16,
     radius_set: RadiusSet,
+    words: &SasaWords,
     context: Context,
 ) -> Exit {
+    let options = match molframe::SasaOptions::from_words(
+        words.method.as_deref(),
+        Some(points),
+        Some(probe),
+        words.hetero.as_deref(),
+        words.metals.as_deref(),
+    ) {
+        Ok(options) => molframe::SasaOptions {
+            radii: radius_set,
+            ..options
+        },
+        Err(error) => {
+            eprintln!("{error}");
+            return Exit::Usage;
+        }
+    };
     let structure = match open(input, context) {
         Ok(structure) => structure,
         Err(exit) => return exit,
     };
-    let mut positions = Vec::new();
-    let mut radii = Vec::new();
-    let mut indices = Vec::new();
-    for raw in 0..structure.atom_count() {
-        let Some(atom) = structure.atom_at(raw as usize) else {
-            continue;
-        };
-        let (Some(position), Some(element)) = (atom.position(), atom.element()) else {
-            continue;
-        };
-        let Some(radius) = molframe::chemistry::vdw_radius(element, radius_set) else {
-            eprintln!("radius set has no value for atom {raw}");
-            return Exit::Indeterminate;
-        };
-        indices.push(raw);
-        positions.push(position);
-        radii.push(radius);
-    }
-    let areas = match molframe::surface::shrake_rupley(
-        &positions,
-        &radii,
-        probe,
-        points,
-        context.execution,
-    ) {
+    let areas = match structure.sasa_with(&options, context.execution) {
         Ok(areas) => areas,
         Err(error) => {
             eprintln!("SASA calculation failed: {error}");
@@ -300,7 +309,7 @@ pub(crate) fn sasa(
     emit_rows(
         context,
         &["atom", "area_angstrom_squared"],
-        indices.into_iter().zip(areas),
+        areas.into_iter().enumerate(),
         |(atom, area)| vec![atom.to_string(), area.to_string()],
     )
 }

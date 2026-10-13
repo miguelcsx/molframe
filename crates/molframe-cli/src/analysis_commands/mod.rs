@@ -2,7 +2,9 @@
 
 mod command;
 
-pub(super) use command::{SseOptions, contacts, interfaces, neighbors, sasa, sse, sse_standard};
+pub(super) use command::{
+    SasaWords, SseOptions, contacts, interfaces, neighbors, sasa, sse, sse_standard,
+};
 
 #[cfg(test)]
 #[path = "analysis_commands_tests.rs"]

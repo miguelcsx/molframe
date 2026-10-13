@@ -171,18 +171,19 @@ fn execute_data(command: Command, context: Context) -> Exit {
             between,
             cutoff,
         } => crate::analysis_commands::interfaces(&input, &between, cutoff, context),
-        Command::Sasa {
-            input,
-            probe,
-            points,
-            radii,
-        } => crate::analysis_commands::sasa(&input, probe, points, radii.into(), context),
         command => execute_comparison(command, context),
     }
 }
 
 fn execute_comparison(command: Command, context: Context) -> Exit {
     match command {
+        Command::Sasa {
+            input,
+            probe,
+            points,
+            radii,
+            words,
+        } => crate::analysis_commands::sasa(&input, probe, points, radii.into(), &words, context),
         Command::Compare {
             model,
             reference,

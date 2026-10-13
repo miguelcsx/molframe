@@ -273,10 +273,13 @@ pub(crate) enum Command {
         input: PathBuf,
         #[arg(long)]
         probe: f32,
+        /// Test points per atom (Shrake-Rupley) or slices per atom (Lee-Richards).
         #[arg(long)]
         points: u16,
         #[arg(long, value_enum)]
         radii: RadiusChoice,
+        #[command(flatten)]
+        words: analysis_commands::SasaWords,
     },
     /// Compare corresponding coordinates with selected native metrics.
     Compare {
