@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Miguel Cardenas
+format: 1
+name: nucleic-sanity
+version: 1
+source: molframe; pseudorotation phase windows of A-form and B-form sugars, delta ranges of the two ring conformations, staggered gamma
+licence: MIT
+
+# Windows are `low high` in degrees running upward; each row below is one gamma window.
+c3_endo_phase: -18 54
+c2_endo_phase: 126 198
+c3_endo_delta: 55 110
+c2_endo_delta: 120 175
+30 90
+150 210
+270 330

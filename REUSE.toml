@@ -1,0 +1,7 @@
+version = 1
+
+[[annotations]]
+path = ["data/build_reference.py", "data/README.md", "data/manifests/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Miguel Cárdenas"
+SPDX-License-Identifier = "MIT"

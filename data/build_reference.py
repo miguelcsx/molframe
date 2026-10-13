@@ -1,11 +1,12 @@
-"""Builds the reference tables embedded by molframe-validate.
+"""Builds the Top8000 Ramachandran and rotamer tables molframe reads.
 
-Reads two downloaded sources and writes four small files next to this
-script. Pure standard library; see README.md for provenance and licences.
+Reads a checkout of the Richardson Laboratory reference data and writes two
+files in the versioned table format. Pure standard library; see README.md for
+provenance and licences.
 
     python3 -I build_reference.py \
         --top8000 DIR   checkout of rlabduke/reference_data
-        --ost FILE      OpenStructure stereo_chemical_props.txt
+        --commit SHA    the commit that checkout is at
         --out DIR       destination (default: this directory)
 """  # noqa: INP001
 
@@ -49,26 +50,25 @@ RAMA_BINS = 180
 GRID_HEADER_FIELDS = 6
 VARINT_MORE = 0x80
 FULL_CIRCLE = 359.0
-CHI_ATOMS = """\
-ARG ARG N CA CB CG | CA CB CG CD | CB CG CD NE | CG CD NE CZ
-ASN ASN N CA CB CG | CA CB CG OD1
-ASP ASP N CA CB CG | CA CB CG OD1
-CYS CYS N CA CB SG
-GLN GLN N CA CB CG | CA CB CG CD | CB CG CD OE1
-GLU GLU N CA CB CG | CA CB CG CD | CB CG CD OE1
-HIS HIS N CA CB CG | CA CB CG ND1
-ILE ILE N CA CB CG1 | CA CB CG1 CD1
-LEU LEU N CA CB CG | CA CB CG CD1
-LYS LYS N CA CB CG | CA CB CG CD | CB CG CD CE | CG CD CE NZ
-MET MET N CA CB CG | CA CB CG SD | CB CG SD CE
-PHE PHE N CA CB CG | CA CB CG CD1
-PRO PRO N CA CB CG
-SER SER N CA CB OG
-THR THR N CA CB OG1
-TRP TRP N CA CB CG | CA CB CG CD1
-TYR PHE N CA CB CG | CA CB CG CD1
-VAL VAL N CA CB CG1
-"""
+SOURCE = (
+    "Top8000 {} contour grids, Richardson Laboratory, Duke University "
+    "(https://github.com/rlabduke/reference_data commit {}); Williams et al., "
+    "Protein Sci 27:293 (2018); Hintze et al., Proteins 84:1177 (2016); "
+    "log-quantised and re-encoded by molframe"
+)
+RAMA_CUTOFFS = "favoured: 0.02\noutlier: 0.0005 0.001 0.001 0.002 0.001 0.001\n"
+
+
+def with_header(magic: bytes, name: str, kind: str, commit: str, extra: str) -> bytes:
+    """Magic, header length and the identity header of a binary table."""
+    header = (
+        "# SPDX-License-Identifier: CC-BY-4.0\n"
+        "# SPDX-FileCopyrightText: 2026 Richardson Laboratory, Duke University; "
+        "reformatted by Miguel Cardenas\n"
+        f"format: 1\nname: {name}\nversion: {commit[:8]}\n"
+        f"source: {SOURCE.format(kind, commit)}\nlicence: CC-BY-4.0\n{extra}"
+    ).encode()
+    return magic + struct.pack("<H", len(header)) + header
 
 
 Grid = tuple[list[tuple[float, float, int]], list[tuple[list[float], float]]]
@@ -110,9 +110,10 @@ def quantise(value: float) -> int:
     return min(max(q, 1), 255)
 
 
-def build_rama(top: Path, out: Path) -> None:
-    """Write `rama.bin`: one quantised 180 x 180 grid per category."""
-    blob = bytearray(b"MFRM" + bytes([len(RAMA_GRIDS)]))
+def build_rama(top: Path, out: Path, commit: str) -> None:
+    """Write `top8000-rama.rama`: one quantised 180 x 180 grid per category."""
+    blob = bytearray(with_header(b"MFR2", "top8000-rama", "Ramachandran", commit, RAMA_CUTOFFS))
+    blob.append(len(RAMA_GRIDS))
     folder = top / "Top8000" / "Top8000_ramachandran_pct_contour_grids"
     for name, filename in RAMA_GRIDS:
         dims, cells = read_grid(folder / filename)
@@ -123,7 +124,7 @@ def build_rama(top: Path, out: Path) -> None:
         for coords, value in cells:
             grid[cell_index(dims, coords)] = quantise(value)
         blob += name.encode().ljust(8, b"\0") + grid
-    (out / "rama.bin").write_bytes(blob)
+    (out / "top8000-rama.rama").write_bytes(blob)
 
 
 def varint(n: int) -> bytearray:
@@ -136,10 +137,11 @@ def varint(n: int) -> bytearray:
     return out
 
 
-def build_rota(top: Path, out: Path) -> None:
-    """Write `rotamer.bin`: run-length coded class grids per rotamer table."""
+def build_rota(top: Path, out: Path, commit: str) -> None:
+    """Write `top8000-rotamer.rotamer`: run-length coded class grids."""
     folder = top / "Top8000" / "Top8000_rotamer_pct_contour_grids"
-    blob = bytearray(b"MFRT" + bytes([len(ROTA_TABLES)]))
+    blob = bytearray(with_header(b"MFT2", "top8000-rotamer", "rotamer", commit, ""))
+    blob.append(len(ROTA_TABLES))
     for name in ROTA_TABLES:
         dims, cells = read_grid(folder / f"rota8000-{name}.data")
         total = 1
@@ -158,71 +160,19 @@ def build_rota(top: Path, out: Path) -> None:
         for lo, hi, bins in dims:
             blob += struct.pack("<HB", bins, 1 if hi - lo < FULL_CIRCLE else 0)
         blob += struct.pack("<I", len(payload)) + payload
-    (out / "rotamer.bin").write_bytes(blob)
-
-
-def build_chi(out: Path) -> None:
-    """Write `chi_atoms.tsv` from the embedded chi-atom listing."""
-    rows = ["# residue\ttable\tchi1 | chi2 ... (atom names)"]
-    for line in CHI_ATOMS.strip().splitlines():
-        head, _, tail = line.partition(" ")
-        table, _, chis = tail.partition(" ")
-        rows.append(f"{head}\t{table.lower().replace('phe', 'phetyr')}\t{chis}")
-    (out / "chi_atoms.tsv").write_text("\n".join(rows) + "\n")
-
-
-# Peptide-link terms, which the OpenStructure table does not carry. C-N and the
-# two angles at C and N come from the constants AlphaFold ships (derived there
-# from Engh and Huber); O-C-N comes from the CCP4 Monomer Library link_TRANS
-# and link_PTRANS entries. Residue PRO is the residue that follows the carbonyl.
-LINK_ROWS = [
-    ("bond", "*", "C-N", "1.329", "0.014", "AF"),
-    ("bond", "PRO", "C-N", "1.341", "0.016", "AF"),
-    ("angle", "*", "CA-C-N", "116.568", "1.995", "AF"),
-    ("angle", "*", "C-N-CA", "121.352", "2.315", "AF"),
-    ("angle", "*", "O-C-N", "123.469", "1.5", "CCP4"),
-    ("angle", "PRO", "O-C-N", "121.016", "1.53", "CCP4"),
-]
-
-
-def build_geometry(ost: Path, out: Path) -> None:
-    """Write `geometry.tsv` from the OpenStructure table and the link rows."""
-    lines = [
-        "# kind\tresidue\tatoms\tmean\tsd\tsource",
-        "# EH = Engh and Huber 1991 via OpenStructure; AF = AlphaFold",
-        "# residue_constants.py; CCP4 = CCP4 Monomer Library (see README.md).",
-        "# Residue * = any residue. Peptide-link terms are keyed by the residue",
-        "# that follows the carbonyl; the angle rows without a PRO entry apply to",
-        "# every residue.",
-    ]
-    section = None
-    for raw in ost.read_text().splitlines():
-        if raw.startswith("Bond"):
-            section = "bond"
-        elif raw.startswith("Angle"):
-            section = "angle"
-        elif raw.startswith("Non-bonded"):
-            section = None
-        elif section and raw.strip() and not raw.startswith("-"):
-            atoms, residue, mean, sd = raw.split()
-            lines.append(f"{section}\t{residue}\t{atoms}\t{mean}\t{sd}\tEH")
-    for kind, residue, atoms, mean, sd, source in LINK_ROWS:
-        lines.append(f"{kind}\t{residue}\t{atoms}\t{mean}\t{sd}\t{source}")
-    (out / "geometry.tsv").write_text("\n".join(lines) + "\n")
+    (out / "top8000-rotamer.rotamer").write_bytes(blob)
 
 
 def main() -> None:
-    """Parse the command line and write all four tables."""
+    """Parse the command line and write both tables."""
     here = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser()
     parser.add_argument("--top8000", required=True, type=Path)
-    parser.add_argument("--ost", required=True, type=Path)
+    parser.add_argument("--commit", required=True, help="reference_data commit")
     parser.add_argument("--out", default=here, type=Path)
     args = parser.parse_args()
-    build_rama(args.top8000, args.out)
-    build_rota(args.top8000, args.out)
-    build_chi(args.out)
-    build_geometry(args.ost, args.out)
+    build_rama(args.top8000, args.out, args.commit)
+    build_rota(args.top8000, args.out, args.commit)
 
 
 if __name__ == "__main__":

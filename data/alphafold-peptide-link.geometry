@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2021 DeepMind Technologies Limited
+format: 1
+name: alphafold-peptide-link
+version: c77e5d2a
+source: alphafold/common/residue_constants.py (google-deepmind/alphafold commit c77e5d2a8961d1a353632c462914ff0a32a950f6), peptide-link terms only
+licence: Apache-2.0
+
+# kind<TAB>residue<TAB>atoms<TAB>mean<TAB>sd<TAB>label
+# `link` rows span a peptide bond: atoms before N belong to the previous
+# residue. The residue is the one that follows the carbonyl; `*` is any residue
+# without a row of its own.
+link	*	C-N	1.329	0.014	AF
+link	PRO	C-N	1.341	0.016	AF
+link	*	CA-C-N	116.568	1.995	AF
+link	*	C-N-CA	121.352	2.315	AF
