@@ -29,6 +29,7 @@ pub mod matrix;
 pub mod msa;
 pub mod nj;
 pub mod phylip;
+mod residue_letters;
 pub mod scoring;
 pub mod seed;
 pub mod stockholm;
@@ -36,7 +37,6 @@ pub mod tree;
 pub mod upgma;
 pub mod variant_effects;
 pub mod variants;
-mod residue_letters;
 
 pub use a2m::{A2mError, a2m_match_columns, parse_a2m, write_a2m};
 pub use a3m::{a3m_match_columns, parse_a3m, write_a3m};

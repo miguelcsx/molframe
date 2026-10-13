@@ -82,9 +82,10 @@ pub fn parse_substitution(text: &str) -> Option<Substitution> {
     let trimmed = text.trim().trim_start_matches("p.");
     let digits_at = trimmed.find(|c: char| c.is_ascii_digit())?;
     let (head, rest) = trimmed.split_at(digits_at);
-    let end = rest
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(rest.len());
+    let end = match rest.find(|c: char| !c.is_ascii_digit()) {
+        Some(end) => end,
+        None => rest.len(),
+    };
     let (number, tail) = rest.split_at(end);
     let position: i32 = number.parse().ok()?;
     let letter = |name: &str| -> Option<char> {
@@ -150,9 +151,7 @@ pub fn parse_variants(text: &str, source: &str) -> Result<VariantTable, VariantT
         .iter()
         .position(|c| MUTANT_COLUMNS.contains(&c.to_ascii_lowercase().as_str()))
         .ok_or(VariantTableError::NoSubstitutionColumn)?;
-    let body: Vec<Vec<String>> = lines
-        .map(|l| split_delimited_row(l, delimiter))
-        .collect();
+    let body: Vec<Vec<String>> = lines.map(|l| split_delimited_row(l, delimiter)).collect();
     let mut numeric = Vec::new();
     for (k, name) in columns.iter().enumerate() {
         if k == mutant_at || name.is_empty() {

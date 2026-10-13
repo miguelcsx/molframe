@@ -48,7 +48,10 @@ fn an_offset_is_found_across_the_whole_range_in_either_direction() {
     let e = per_position(&t, 0);
     // the structure numbers the same residues 74 and 75: offset -226
     let residues = [(74, 'A'), (75, 'G')];
-    assert_eq!(best_offset(&e, &residues, 226).expect("a result").offset, -226);
+    assert_eq!(
+        best_offset(&e, &residues, 226).expect("a result").offset,
+        -226
+    );
     assert!(
         best_offset(&e, &residues, 225).is_none(),
         "range means plus or minus range, no more"

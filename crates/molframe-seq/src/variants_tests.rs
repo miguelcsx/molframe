@@ -46,7 +46,12 @@ fn a_table_gives_columns_variants_and_says_what_it_left_out() {
 
 #[test]
 fn a_table_that_cannot_be_read_says_why() {
-    assert!(parse_variants("", "x").expect_err("unreadable").to_string().contains("empty"));
+    assert!(
+        parse_variants("", "x")
+            .expect_err("unreadable")
+            .to_string()
+            .contains("empty")
+    );
     assert!(
         parse_variants("name,score\na,1\n", "x")
             .expect_err("unreadable")
@@ -66,7 +71,6 @@ fn a_table_that_cannot_be_read_says_why() {
             .contains("A123G")
     );
 }
-
 
 #[test]
 fn quoted_cells_may_hold_the_delimiter_and_cells_are_trimmed() {

@@ -77,7 +77,10 @@ impl Cutoff {
 
 /// A count as a float; counts past `u32::MAX` saturate, far beyond any table.
 fn count_as_f64(count: usize) -> f64 {
-    f64::from(u32::try_from(count).unwrap_or(u32::MAX))
+    f64::from(match u32::try_from(count) {
+        Ok(count) => count,
+        Err(_) => u32::MAX,
+    })
 }
 
 /// The median of an ascending slice (the mean of the middle two when the length is even), NaN
@@ -106,7 +109,8 @@ pub fn per_position(table: &VariantTable, column: usize) -> Vec<PositionEffect> 
 pub fn per_position_at(table: &VariantTable, column: usize, cutoff: Cutoff) -> Vec<PositionEffect> {
     let mut by: BTreeMap<i32, (char, Vec<f64>)> = BTreeMap::new();
     for variant in &table.variants {
-        let ([change], Some(Some(value))) = (variant.changes.as_slice(), variant.values.get(column))
+        let ([change], Some(Some(value))) =
+            (variant.changes.as_slice(), variant.values.get(column))
         else {
             continue;
         };
