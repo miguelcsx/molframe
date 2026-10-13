@@ -60,6 +60,7 @@ mod pair_distribution;
 mod paired_bases;
 #[path = "governed/mod.rs"]
 mod policy_execution;
+mod protonation;
 #[path = "native.rs"]
 mod reference_contacts;
 #[path = "contact_map.rs"]

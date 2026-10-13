@@ -10,6 +10,10 @@
 //! - side chains: Arg `NE NH1 NH2`, Asn `ND2`, Gln `NE2`, Lys `NZ` and Trp `NE1`
 //!   donate; Asn `OD1`, Gln `OE1`, Asp `OD1 OD2` and Glu `OE1 OE2` accept; His
 //!   `ND1 NE2`, Ser `OG`, Thr `OG1` and Tyr `OH` do both;
+//! - protonation variants follow their declared state: `HID`/`HSD` donate from
+//!   `ND1` and accept at `NE2`, `HIE`/`HSE` the reverse, `HIP`/`HSP` donate from
+//!   both; `ASH`/`GLH` accept at the carbonyl oxygen and do both at the hydroxyl;
+//!   `LYN` `NZ` does both; `CYX`/`CYM` `SG` only accept;
 //! - Cys `SG` (both) and Met `SD` (acceptor) are weak and only typed when asked;
 //! - water oxygen does both;
 //! - nucleic acids: base amino and imino nitrogens donate, ring nitrogens and
@@ -19,6 +23,7 @@
 //!
 //! Typing costs one pass over the atoms.
 
+use crate::protonation::parent_residue;
 use molframe_core::column::Presence;
 use molframe_core::selection::AtomSelection;
 use molframe_core::structure::Structure;
@@ -87,7 +92,7 @@ fn is_water(component: &str) -> bool {
 
 fn is_amino_acid(component: &str) -> bool {
     matches!(
-        component,
+        parent_residue(component),
         "ALA"
             | "ARG"
             | "ASN"
@@ -112,7 +117,10 @@ fn is_amino_acid(component: &str) -> bool {
 }
 
 fn protein_role(component: &str, atom: &str, starts_chain: bool, sulfur: bool) -> u8 {
-    match (component, atom) {
+    if let Some(role) = variant_role(component, atom, sulfur) {
+        return role;
+    }
+    match (parent_residue(component), atom) {
         ("PRO", "N") => {
             if starts_chain {
                 DONOR
@@ -135,6 +143,34 @@ fn protein_role(component: &str, atom: &str, starts_chain: bool, sulfur: bool) -
         ("MET", "SD") if sulfur => ACCEPTOR,
         _ => 0,
     }
+}
+
+/// Side-chain atoms whose role depends on the protonation state the residue
+/// name declares: a proton added makes an acceptor a donor, a proton removed
+/// leaves only an acceptor. `None` for every other atom, which follows its
+/// parent residue.
+fn variant_role(component: &str, atom: &str, sulfur: bool) -> Option<u8> {
+    Some(match (component, atom) {
+        // A proton on the nitrogen makes it a donor, its absence an acceptor;
+        // the doubly protonated ring donates from both.
+        ("HID" | "HSD", "ND1") | ("HIE" | "HSE", "NE2") | ("HIP" | "HSP", "ND1" | "NE2") => DONOR,
+        // Protonated carboxylic acid: the carbonyl oxygen accepts and the
+        // hydroxyl oxygen does both. Neutral lysine amine: lone pair plus
+        // hydrogens, so also both.
+        ("ASH", "OD2") | ("GLH", "OE2") | ("LYN", "NZ") => BOTH,
+        ("HID" | "HSD", "NE2") | ("HIE" | "HSE", "ND1") | ("ASH", "OD1") | ("GLH", "OE1") => {
+            ACCEPTOR
+        }
+        // Disulphide and thiolate sulfur carry no hydrogen.
+        ("CYX" | "CYM", "SG") => {
+            if sulfur {
+                ACCEPTOR
+            } else {
+                0
+            }
+        }
+        _ => return None,
+    })
 }
 
 fn nucleic_role(component: &str, atom: &str) -> Option<u8> {

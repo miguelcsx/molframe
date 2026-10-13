@@ -30,11 +30,12 @@ pub const MAX_RESIDUE_AREA_CITATION: &str = "Tien MZ, Meyer AG, Sydykova DK, Spi
 
 /// The theoretical maximum accessible area of a standard amino acid, Å².
 ///
-/// `None` for anything else (modified residues, unknown names), which has no
+/// Protonation variants (`HID`, `CYX`, `ASH`, `GLH`, `LYN`, ...) take their
+/// parent's value. `None` for anything else (modified residues, unknown names), which has no
 /// relative accessibility rather than a guessed one.
 #[must_use]
 pub fn max_residue_area(name: &str) -> Option<f64> {
-    Some(match name {
+    Some(match crate::protonation::parent_residue(name) {
         "ALA" => 129.0,
         "ARG" => 274.0,
         "ASN" => 195.0,

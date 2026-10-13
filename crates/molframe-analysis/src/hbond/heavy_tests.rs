@@ -391,3 +391,72 @@ fn results_are_identical_across_backends_and_worker_counts() {
     // the default policy; it guards typing and exclusions, not a reference tool.
     assert_eq!(reference.len(), 1501);
 }
+
+/// Roles of the two atoms of a pair: the number of directed bonds each
+/// orientation yields, `(first donates, second donates)`.
+fn directions(first: Row, second: Row, options: HeavyAtomHydrogenBondOptions) -> (bool, bool) {
+    let found = pairs(&run(&build(&[first, second]), options));
+    (found.contains(&(0, 1)), found.contains(&(1, 0)))
+}
+
+#[test]
+fn histidine_tautomers_donate_from_the_protonated_nitrogen_only() {
+    let water = |_: ()| ("O", "O", ".", "HOH", 2, [2.9, 0.0, 0.0]);
+    let options = HeavyAtomHydrogenBondOptions::default();
+    let nitrogen = |residue: &'static str, name: &'static str| {
+        directions(
+            ("N", name, ".", residue, 1, [0.0, 0.0, 0.0]),
+            water(()),
+            options,
+        )
+    };
+    // Water does both: a donor-only nitrogen takes no bond from it and an
+    // acceptor-only nitrogen gives none to it.
+    assert_eq!(nitrogen("HID", "ND1"), (true, false));
+    assert_eq!(nitrogen("HID", "NE2"), (false, true));
+    assert_eq!(nitrogen("HIE", "NE2"), (true, false));
+    assert_eq!(nitrogen("HIE", "ND1"), (false, true));
+    assert_eq!(nitrogen("HIP", "ND1"), (true, false));
+    assert_eq!(nitrogen("HIP", "NE2"), (true, false));
+}
+
+#[test]
+fn neutral_acids_and_amines_gain_the_roles_their_state_implies() {
+    let options = HeavyAtomHydrogenBondOptions::default();
+    let donor_probe = |residue: &'static str, atom: &'static str, element: &'static str| {
+        // Against Asp OD1 (acceptor only): can the variant atom donate?
+        directions(
+            (element, atom, ".", residue, 1, [0.0, 0.0, 0.0]),
+            ("O", "OD1", ".", "ASP", 2, [2.8, 0.0, 0.0]),
+            options,
+        )
+        .0
+    };
+    assert!(donor_probe("LYS", "NZ", "N"));
+    assert!(donor_probe("LYN", "NZ", "N"));
+    assert!(donor_probe("ASH", "OD2", "O"));
+    assert!(!donor_probe("ASH", "OD1", "O"));
+    assert!(donor_probe("GLH", "OE2", "O"));
+    assert!(!donor_probe("GLH", "OE1", "O"));
+    assert!(!donor_probe("ASP", "OD2", "O"));
+}
+
+#[test]
+fn disulphide_and_thiolate_sulfur_accept_but_never_donate() {
+    let with_sulfur = HeavyAtomHydrogenBondOptions {
+        include_sulfur: true,
+        ..HeavyAtomHydrogenBondOptions::default()
+    };
+    for residue in ["CYX", "CYM"] {
+        let sulfur = ("S", "SG", ".", residue, 1, [0.0, 0.0, 0.0]);
+        let donor = ("N", "NZ", ".", "LYS", 2, [3.3, 0.0, 0.0]);
+        assert_eq!(directions(sulfur, donor, with_sulfur), (false, true));
+        assert!(
+            run(
+                &build(&[sulfur, donor]),
+                HeavyAtomHydrogenBondOptions::default()
+            )
+            .is_empty()
+        );
+    }
+}
