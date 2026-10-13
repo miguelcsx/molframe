@@ -13,6 +13,7 @@ mod diff;
 mod disorder;
 mod disorder_checked;
 mod edit;
+mod ensemble;
 mod extensions;
 #[cfg(test)]
 mod extensions_tests;
@@ -30,6 +31,7 @@ pub use data::*;
 pub use diff::*;
 pub use disorder::{altloc_compatible, compatible_pairs};
 pub use edit::*;
+pub use ensemble::EnsembleBlock;
 pub use extensions::*;
 pub use handle::*;
 pub use overlay::*;

@@ -6,7 +6,7 @@ use crate::diagnostic::{Code, Diagnostic, Diagnostics};
 use crate::structure::{CoordinateStore, Structure};
 use std::sync::Arc;
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 struct Scan {
     count: u64,
     first: Option<(u32, f32)>,
@@ -50,10 +50,7 @@ fn clamped(structure: &Structure) -> Option<Structure> {
     let data = structure.data();
     let mut next = data.clone();
     if let Some(models) = structure.ragged_models() {
-        let models = models
-            .iter()
-            .map(|m| clamped(m))
-            .collect::<Option<Vec<_>>>()?;
+        let models = models.iter().map(clamped).collect::<Option<Vec<_>>>()?;
         next.coords = CoordinateStore::Ragged { models };
         return Some(Structure::new(next));
     }
@@ -98,16 +95,15 @@ pub(super) fn apply(
             findings.push(context(Code::E3009));
             (structure, true)
         }
-        OccupancyPolicy::Clamp => match clamped(&structure) {
-            Some(next) => {
+        OccupancyPolicy::Clamp => {
+            if let Some(next) = clamped(&structure) {
                 findings.push(context(Code::W3014));
                 (next, false)
-            }
-            None => {
+            } else {
                 findings.push(context(Code::E3009));
                 (structure, true)
             }
-        },
+        }
     }
 }
 

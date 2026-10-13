@@ -22,7 +22,10 @@ pub use batch::BatchBufferPool;
 pub use batch::{Backpressure, Batch, BatchDemand, BatchLease, BatchSource};
 pub use cancellation::{CancellationToken, Cancelled};
 pub use context::{ContextError, ExecutionContext, ExecutionContextBuilder};
-pub use memory::{DEFAULT_MEMORY_BUDGET_BYTES, MemoryBudget, MemoryBudgetError, MemoryReservation};
+pub use memory::{
+    DEFAULT_MEMORY_BUDGET_BYTES, MAX_AUTOMATIC_BUDGET_BYTES, MEMORY_BUDGET_ENV,
+    MEMORY_BUDGET_REMEDY, MemoryBudget, MemoryBudgetError, MemoryReservation,
+};
 pub use spill::{SpillArtifact, SpillError, SpillFile, SpillReader};
 pub use storage::{ScratchPolicy, TempStoragePolicy};
 #[cfg(not(target_arch = "wasm32"))]

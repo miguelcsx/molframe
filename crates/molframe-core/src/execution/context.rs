@@ -148,6 +148,17 @@ impl ExecutionContext {
         self.memory.peak_live_batches()
     }
 
+    /// Bytes not yet reserved: the budget minus everything currently charged.
+    ///
+    /// Tiled algorithms read this to shrink their block size to fit before
+    /// they would otherwise refuse.
+    #[must_use]
+    pub fn available_bytes(&self) -> usize {
+        self.memory_budget()
+            .bytes()
+            .saturating_sub(self.reserved_bytes())
+    }
+
     /// Charges retained bytes against this context until the result is dropped.
     ///
     /// # Errors
@@ -177,7 +188,8 @@ pub struct ExecutionContextBuilder {
 }
 
 impl ExecutionContextBuilder {
-    /// Replaces the default 100 MB execution budget.
+    /// Replaces the automatic execution budget (a share of physical memory, or
+    /// `MOLFRAME_MEMORY_BUDGET`; see [`MemoryBudget::auto`]).
     #[must_use]
     pub const fn memory_budget(mut self, budget: MemoryBudget) -> Self {
         self.memory_budget = budget;

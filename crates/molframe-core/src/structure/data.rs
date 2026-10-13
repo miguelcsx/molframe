@@ -363,14 +363,7 @@ impl Structure {
     /// context.
     pub fn require_resolved_model(&self) -> Result<&Self, crate::diagnostic::Diagnostic> {
         if self.is_ragged_ensemble() {
-            Err(
-                crate::diagnostic::Diagnostic::new(crate::diagnostic::Code::E6003)
-                    .with_context(
-                        "reason",
-                        "ragged ensemble: its atoms live in per-model structures; select a model",
-                    )
-                    .with_context("models", self.model_count().to_string()),
-            )
+            Err(self.ragged_refusal())
         } else {
             Ok(self)
         }

@@ -288,7 +288,7 @@ registry! {
         "use one of the documented words for that decision; names are kebab-case and an underscore is read as a hyphen";
     E7001 = Error 7001, Invalidating,
         "operation exceeds the execution memory budget",
-        "raise the memory budget deliberately, narrow the selection, or process the input in smaller pieces";
+        "raise the memory budget (Python ExecutionContext(memory_budget=...), Rust ExecutionContext::builder().memory_budget(MemoryBudget::new(..)?), CLI --memory-budget, or env MOLFRAME_MEMORY_BUDGET), narrow the selection, or process the input in smaller pieces";
     E7101 = Error 7101, Invalidating,
         "input could not be read",
         "check the path, permissions and that the file is complete and in the expected format";
