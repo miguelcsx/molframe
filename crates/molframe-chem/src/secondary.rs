@@ -154,15 +154,19 @@ fn gather_backbones(structure: &Structure, context: &ExecutionContext) -> Vec<Ds
                 continue;
             };
             for residue in chain.residues() {
-                out.push((residue.index().as_usize(), residue_backbone(model, chain.index().get(), residue)));
+                out.push((
+                    residue.index().as_usize(),
+                    residue_backbone(model, chain.index().get(), residue),
+                ));
             }
         }
         out
     };
-    let blocks = map_blocks_in(plan, context, run).unwrap_or_else(|_| {
+    let blocks = match map_blocks_in(plan, context, run) {
+        Ok(blocks) => blocks,
         // A worker failure falls back to the serial walk rather than guessing.
-        vec![run(0, 0..layout.len())]
-    });
+        Err(_) => vec![run(0, 0..layout.len())],
+    };
     for (index, backbone) in blocks.into_iter().flatten() {
         backbones[index] = backbone;
     }
@@ -232,8 +236,10 @@ fn hydrogen_bonds(
         found
     };
     let cells = BlockPlan::new(grid.cell_count(), CELLS_PER_BLOCK);
-    let blocks = map_blocks_in(cells, context, |_, range| search(range))
-        .unwrap_or_else(|_| vec![search(0..grid.cell_count())]);
+    let blocks = match map_blocks_in(cells, context, |_, range| search(range)) {
+        Ok(blocks) => blocks,
+        Err(_) => vec![search(0..grid.cell_count())],
+    };
     let pairs = sorted_pairs(blocks, backbones.len(), context);
     // Only the two strongest acceptors of each donor define DSSP TestBond.
     // Sorted residue pairs also make energy ties independent of grid traversal.
@@ -260,8 +266,10 @@ fn hydrogen_bonds(
             .collect::<Vec<_>>()
     };
     let plan = BlockPlan::new(pairs.len(), PAIRS_PER_BLOCK);
-    let energies = map_blocks_in(plan, context, |_, range| energy_of(range))
-        .unwrap_or_else(|_| vec![energy_of(0..pairs.len())]);
+    let energies = match map_blocks_in(plan, context, |_, range| energy_of(range)) {
+        Ok(energies) => energies,
+        Err(_) => vec![energy_of(0..pairs.len())],
+    };
     let mut strongest = vec![[(usize::MAX, 0.0_f64); 2]; backbones.len()];
     let mut position = 0;
     for block in &energies {
@@ -322,8 +330,10 @@ fn sorted_pairs(
         }
         out
     };
-    let sorted = map_blocks_in(rows, context, |_, range| sort_rows(range))
-        .unwrap_or_else(|_| vec![sort_rows(0..residues)]);
+    let sorted = match map_blocks_in(rows, context, |_, range| sort_rows(range)) {
+        Ok(sorted) => sorted,
+        Err(_) => vec![sort_rows(0..residues)],
+    };
     sorted.into_iter().flatten().collect()
 }
 

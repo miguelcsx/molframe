@@ -73,13 +73,13 @@ pub use peoe::{
     ChargeSource, PartialChargeError, PartialCharges, PeoeAtom, PeoeAtomType, PeoeBond, PeoeError,
     PeoeOptions, PeoeParameterProfile, component_peoe_charges, partial_charges, peoe_charges,
 };
-pub use provider::{CifProvider, ComponentProvider, MemoryProvider, read_ccd};
+pub use provider::{CifProvider, ComponentProvider, LazyCifProvider, MemoryProvider, read_ccd};
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };
 pub use secondary::{
-    DsspBackbone, DsspOptions, InvalidDsspOptions, assign_secondary_structure, assign_secondary_structure_in,
-    dssp_from_backbones,
+    DsspBackbone, DsspOptions, InvalidDsspOptions, assign_secondary_structure,
+    assign_secondary_structure_in, dssp_from_backbones,
 };
 pub use side_chain::{SideChainDefinition, SideChainRoles, side_chain_definition};
 pub use smarts::{SmartsDataError, SmartsError, SmartsMatch, SmartsPattern};

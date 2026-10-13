@@ -5,6 +5,8 @@
 //! visits 27 neighbouring cells, so the cost is O(N*k) for bounded local
 //! density and the output is O(N+B). It retains no per-atom neighbour vectors.
 
+mod pair;
+
 use crate::grid::{CellGrid, cell_for};
 use crate::standard_bonds::standard_bond_order;
 use molframe_core::ExecutionContext;
@@ -17,6 +19,10 @@ use molframe_core::parallel::{
 };
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
 use molframe_core::{AltId, SymbolId};
+use pair::{
+    element_threshold, in_bonding_window, is_metal, maximum_bonding_distance, pair_compatible,
+    squared_distance, within,
+};
 use std::ops::Range;
 
 /// Adds chemically plausible missing bonds to one immutable structure.
@@ -151,7 +157,10 @@ fn prepare_atoms(
                         hydrogen: atom
                             .element()
                             .is_some_and(molframe_core::Element::is_hydrogen),
-                        alt: atom.alt_id().unwrap_or(AltId::BLANK),
+                        alt: match atom.alt_id() {
+                            Some(alt) => alt,
+                            None => AltId::BLANK,
+                        },
                         residue: atom.residue().map(ResidueRef::index),
                         name: atom.name_symbol(),
                         component: atom.component_id(),
@@ -160,8 +169,7 @@ fn prepare_atoms(
             .collect::<Vec<_>>()
     })
     .map_err(|_| {
-        Diagnostic::new(Code::E1901)
-            .with_message("a worker thread panicked during bond perception")
+        Diagnostic::new(Code::E1901).with_message("a worker thread panicked during bond perception")
     })?;
     let mut facts = Vec::with_capacity(count);
     for block in blocks {
@@ -179,9 +187,11 @@ fn add_grid_bonds(
 ) -> Result<(), Diagnostic> {
     let mut entries = Vec::with_capacity(facts.len());
     for (atom, (position, fact)) in structure.positions().iter().zip(facts).enumerate() {
-        let (Some(threshold), Some(cell), Ok(atom)) =
-            (fact.threshold, cell_for(*position, cutoff), u32::try_from(atom))
-        else {
+        let (Some(threshold), Some(cell), Ok(atom)) = (
+            fact.threshold,
+            cell_for(*position, cutoff),
+            u32::try_from(atom),
+        ) else {
             continue;
         };
         entries.push((
@@ -248,8 +258,9 @@ fn add_grid_bonds(
                 }
             });
             if context.cancellation().is_cancelled() {
-                return Err(Diagnostic::new(Code::E1904)
-                    .with_message("bond perception was cancelled"));
+                return Err(
+                    Diagnostic::new(Code::E1904).with_message("bond perception was cancelled")
+                );
             }
             Ok(())
         }
@@ -270,9 +281,7 @@ fn add_grid_bonds(
 /// scaled first and rounded once.
 fn expected_block_atoms(atoms: usize, cells: usize, block_cells: usize) -> usize {
     let cells = cells.max(1);
-    atoms
-        .saturating_mul(block_cells.min(cells))
-        .div_ceil(cells)
+    atoms.saturating_mul(block_cells.min(cells)).div_ceil(cells)
 }
 
 /// Appends the bonds between one cell's atoms and everything in its neighbourhood.
@@ -382,29 +391,6 @@ fn add_link(left: AtomRef<'_>, right: AtomRef<'_>, output: &mut BondTableBuilder
     });
 }
 
-/// Whether a distance lies between the closest plausible contact and the sum of
-/// the two elements' bonding thresholds.
-fn in_bonding_window(left_threshold: f32, right_threshold: f32, distance_squared: f32) -> bool {
-    let maximum = maximum_bonding_distance(left_threshold, right_threshold);
-    distance_squared >= 0.16 && distance_squared <= maximum * maximum
-}
-
-fn maximum_bonding_distance(left_threshold: f32, right_threshold: f32) -> f32 {
-    (left_threshold + right_threshold) / 1.95
-}
-
-/// Whether two atoms may bond at all: two hydrogens never do, and two atoms in
-/// different alternate locations do not coexist.
-fn pair_compatible(left: AtomRef<'_>, right: AtomRef<'_>) -> bool {
-    let both_hydrogen = left
-        .element()
-        .is_some_and(molframe_core::Element::is_hydrogen)
-        && right
-            .element()
-            .is_some_and(molframe_core::Element::is_hydrogen);
-    !both_hydrogen && alt_compatible(left, right)
-}
-
 #[cfg(test)]
 fn intra_residue_order(left: AtomRef<'_>, right: AtomRef<'_>) -> BondOrder {
     let (Some(left_residue), Some(right_residue)) = (left.residue(), right.residue()) else {
@@ -419,96 +405,6 @@ fn intra_residue_order(left: AtomRef<'_>, right: AtomRef<'_>) -> BondOrder {
         return BondOrder::Single;
     };
     standard_bond_order(component, left_name, right_name)
-}
-
-fn alt_compatible(left: AtomRef<'_>, right: AtomRef<'_>) -> bool {
-    match (left.alt_id(), right.alt_id()) {
-        (Some(left), Some(right)) => left.is_blank() || right.is_blank() || left == right,
-        _ => true,
-    }
-}
-
-fn within(left: AtomRef<'_>, right: AtomRef<'_>, maximum: f32) -> bool {
-    let (Some(left), Some(right)) = (left.position(), right.position()) else {
-        return false;
-    };
-    squared_distance(left, right) <= maximum * maximum
-}
-
-fn squared_distance(left: [f32; 3], right: [f32; 3]) -> f32 {
-    left.iter().zip(right).map(|(a, b)| (a - b) * (a - b)).sum()
-}
-
-/// The bonding reach of one element, in ångström, or `None` when this reader
-/// has no reference value for it.
-///
-/// An element with no entry takes part in no inferred bond at all: perception
-/// leaves it to deposited connectivity rather than guessing a radius. Selenium
-/// is the case that matters in practice — selenomethionine's `SE` is a real
-/// covalent substituent — but the same list governs every other element, and
-/// widening it is a data decision, not a code one.
-fn element_threshold(element: molframe_core::Element) -> Option<f32> {
-    match element.symbol() {
-        "H" => Some(1.42),
-        "C" => Some(1.75),
-        "N" => Some(1.60),
-        "O" => Some(1.52),
-        "P" => Some(2.00),
-        "S" => Some(1.90),
-        "F" | "Cl" | "Br" | "I" => Some(1.80),
-        symbol if is_metal(symbol) => metal_threshold(symbol),
-        _ => None,
-    }
-}
-
-/// The coordination reach of one metal, in ångström, on the same scale as the
-/// non-metal thresholds.
-///
-/// A metal–ligand bond is accepted up to `(metal + ligand) / 1.95`, so a metal's
-/// value is chosen so that the longest ordinary coordination distance of that
-/// metal to a nitrogen, oxygen or sulfur donor still falls inside the window. One
-/// shared value cannot do it: a heme iron sits 1.9–2.3 Å from its pyrrole
-/// nitrogens and a calcium 2.3–2.6 Å from its oxygens, so a single compromise
-/// either drops iron–nitrogen bonds that are really there or lets small metals
-/// reach through to neighbours that are not coordinated.
-fn metal_threshold(symbol: &str) -> Option<f32> {
-    match symbol {
-        "Li" => Some(2.80),
-        "Na" => Some(3.30),
-        "K" => Some(3.90),
-        "Mg" | "Mn" | "Fe" | "Co" | "Ni" | "Cu" | "Au" | "Cr" | "V" => Some(2.90),
-        "Ca" => Some(3.30),
-        "Zn" => Some(2.85),
-        "Cd" | "Mo" | "W" | "Ag" => Some(3.10),
-        "Hg" => Some(3.00),
-        "Al" => Some(2.80),
-        _ => None,
-    }
-}
-
-fn is_metal(symbol: &str) -> bool {
-    matches!(
-        symbol,
-        "Li" | "Na"
-            | "K"
-            | "Mg"
-            | "Ca"
-            | "Mn"
-            | "Fe"
-            | "Co"
-            | "Ni"
-            | "Cu"
-            | "Zn"
-            | "Mo"
-            | "Ag"
-            | "Cd"
-            | "Hg"
-            | "Au"
-            | "Al"
-            | "Cr"
-            | "V"
-            | "W"
-    )
 }
 
 #[cfg(test)]

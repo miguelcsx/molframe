@@ -1,8 +1,11 @@
 use super::*;
-use crate::{ComponentAtom, ComponentBond, MemoryProvider, StereoConfiguration};
+use crate::Component;
+use crate::{ComponentAtom, ComponentBond, LazyCifProvider, MemoryProvider, StereoConfiguration};
+use molframe_core::bond::{BondProvenance, BondRecord};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{BondOrder, Element};
+use std::fmt::Write as _;
 
 const STRUCTURE: &str = "data_gly\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -335,6 +338,152 @@ fn an_unknown_component_is_reported_once_and_yields_a_known_empty_graph() {
             .count(),
         1
     );
+}
+
+const HEADER: &str = "data_big\n\
+loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
+_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
+_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
+
+/// `chains` chains of `residues` glycines each; every residue lacks its carbon.
+fn many_residues(chains: u32, residues: u32, component: &str) -> Structure {
+    let mut text = String::from(HEADER);
+    let mut id = 0;
+    for chain in 0..chains {
+        let label = char::from(b'A' + u8::try_from(chain).expect("few chains"));
+        for seq in 1..=residues {
+            for (name, element, x) in [("N", "N", 0.0_f32), ("CA", "C", 1.4)] {
+                id += 1;
+                writeln!(
+                    text,
+                    "ATOM {id} {element} {name} {component} {label} {seq} {x} {seq}.0 {chain}.0"
+                )
+                .expect("string write");
+            }
+        }
+    }
+    molframe_cif::read(
+        &InputBuffer::from_bytes(text.into_bytes()),
+        &ReadOptions::new(),
+    )
+    .expect("fixture reads")
+    .0
+}
+
+fn context<'a>(finding: &'a Diagnostic, label: &str) -> &'a str {
+    finding
+        .context()
+        .iter()
+        .find(|item| item.label() == label)
+        .map_or("", |item| item.value())
+}
+
+fn fingerprint(report: &ChemistryReport) -> (Vec<String>, Vec<String>) {
+    let bonds = report
+        .structure
+        .data()
+        .bonds
+        .iter()
+        .map(|bond| format!("{bond:?}"))
+        .collect();
+    let findings = report.findings.iter().map(ToString::to_string).collect();
+    (bonds, findings)
+}
+
+#[test]
+fn repeated_missing_atom_findings_collapse_into_one_summary_with_exact_counts() {
+    let structure = many_residues(2, 700, "GLY");
+    let provider =
+        MemoryProvider::new(DictionaryVersion::new("t"), [component()]).expect("dictionary");
+    let report = apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled)
+        .expect("annotation");
+    let missing: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|finding| finding.code() == Code::W3301)
+        .collect();
+    assert_eq!(missing.len(), 1, "one summary, not one line per residue");
+    let summary = missing[0];
+    assert_eq!(context(summary, "residues"), "1400");
+    assert_eq!(context(summary, "components"), "1");
+    assert_eq!(context(summary, "missing atoms"), "1400");
+    assert_eq!(context(summary, "by component"), "GLYx1400");
+    assert_eq!(context(summary, "sample").split(", ").count(), 8);
+    assert!(context(summary, "sample").starts_with("GLY@0 (1 missing)"));
+}
+
+#[test]
+fn inconsistent_residues_are_summarised_once_and_keep_their_severity() {
+    let structure = many_residues(1, 300, "GLY");
+    let mut odd = component();
+    odd.atoms = odd
+        .atoms
+        .iter()
+        .filter(|atom| atom.name.as_ref() != "CA")
+        .cloned()
+        .collect();
+    odd.bonds = Arc::from([]);
+    let provider = MemoryProvider::new(DictionaryVersion::new("t"), [odd]).expect("dictionary");
+    let report = apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled)
+        .expect("annotation");
+    let summary: Vec<_> = report
+        .findings
+        .iter()
+        .filter(|finding| finding.code() == Code::W3202)
+        .collect();
+    assert_eq!(summary.len(), 1);
+    assert_eq!(context(summary[0], "residues"), "300");
+    assert_eq!(summary[0].severity(), Code::W3202.severity());
+}
+
+#[test]
+fn parallel_units_match_a_single_threaded_pass_bond_for_bond() {
+    // 600 residues per chain spans several work units per chain.
+    let structure = many_residues(3, 600, "GLY");
+    let provider =
+        MemoryProvider::new(DictionaryVersion::new("t"), [component()]).expect("dictionary");
+    let run = |threads| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .expect("pool")
+            .install(|| {
+                apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled)
+                    .expect("annotation")
+            })
+    };
+    let sequential = run(1);
+    let parallel = run(4);
+    assert_eq!(fingerprint(&sequential), fingerprint(&parallel));
+    assert_eq!(sequential.structure.data().bonds.len(), 3 * 600);
+}
+
+#[test]
+fn a_lazy_dictionary_annotates_exactly_like_the_eager_one() {
+    let ccd = "data_GLY\n_chem_comp.id GLY\n_chem_comp.name GLYCINE\n\
+_chem_comp.type 'L-peptide linking'\n_chem_comp.one_letter_code G\n_chem_comp.formula 'C2 H5 N O2'\n\
+loop_\n_chem_comp_atom.atom_id\n_chem_comp_atom.type_symbol\n\
+_chem_comp_atom.charge\n_chem_comp_atom.pdbx_aromatic_flag\n\
+_chem_comp_atom.pdbx_leaving_atom_flag\n_chem_comp_atom.pdbx_stereo_config\n\
+N N 0 N N N\nCA C 0 N N S\nC C 0 N N N\n\
+loop_\n_chem_comp_bond.atom_id_1\n_chem_comp_bond.atom_id_2\n\
+_chem_comp_bond.value_order\n_chem_comp_bond.pdbx_aromatic_flag\n\
+_chem_comp_bond.pdbx_stereo_config\nN CA SING N N\nCA C SING N N\n\
+data_UNUSED\n_chem_comp.id UNUSED\nthis is not a valid block\n";
+    let structure = many_residues(1, 300, "GLY");
+    let lazy = LazyCifProvider::new(
+        InputBuffer::from_bytes(ccd.as_bytes().to_vec()),
+        DictionaryVersion::new("t"),
+    );
+    assert_eq!(lazy.block_count(), 2);
+    let eager =
+        MemoryProvider::new(DictionaryVersion::new("t"), [component()]).expect("dictionary");
+    let from_lazy = apply_component_chemistry(&structure, &lazy, PolymerLinkPolicy::Disabled)
+        .expect("lazy annotation");
+    let from_eager = apply_component_chemistry(&structure, &eager, PolymerLinkPolicy::Disabled)
+        .expect("eager annotation");
+    assert_eq!(lazy.lowered_count(), 1, "the unused block is never lowered");
+    assert_eq!(fingerprint(&from_lazy).0, fingerprint(&from_eager).0);
 }
 
 #[path = "annotate/linkage_tests.rs"]

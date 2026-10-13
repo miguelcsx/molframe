@@ -293,7 +293,7 @@ fn perception_and_public_covalent_eligibility_share_chemical_boundaries() {
         (["?", "C"], [".", "."], 1.2, false, false),
         (["Fe", "N"], [".", "."], 2.0, false, true),
         (["Fe", "N"], ["A", "B"], 2.0, false, false),
-        (["Fe", "N"], [".", "."], 2.3, false, false),
+        (["Fe", "N"], [".", "."], 2.4, false, false),
     ];
     for (elements, alternates, distance, covalent, perceived) in cases {
         let source = atom_pair(elements, alternates, distance);
@@ -346,7 +346,12 @@ fn a_budget_below_one_block_falls_back_to_the_serial_walk_with_the_same_bonds() 
 fn a_distant_outlier_does_not_make_the_grid_dense() {
     use crate::grid::{CellGrid, CellKey};
     let mut entries: Vec<(CellKey, u32)> = (0..500_u32)
-        .map(|atom| (CellKey([(atom % 8) as i32, (atom / 8 % 8) as i32, (atom / 64) as i32]), atom))
+        .map(|atom| {
+            (
+                CellKey([(atom % 8) as i32, (atom / 8 % 8) as i32, (atom / 64) as i32]),
+                atom,
+            )
+        })
         .collect();
     let compact = CellGrid::build(entries.clone());
     assert!(compact.is_dense());

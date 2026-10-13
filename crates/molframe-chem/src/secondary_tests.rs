@@ -12,7 +12,14 @@ fn classify(
     states: &mut [Ss],
     options: &DsspOptions,
 ) {
-    classify_in(backbones, bonds, pairs, states, options, &ExecutionContext::default());
+    classify_in(
+        backbones,
+        bonds,
+        pairs,
+        states,
+        options,
+        &ExecutionContext::default(),
+    );
 }
 
 fn continuous_backbones(count: usize) -> Vec<Backbone> {
@@ -368,9 +375,14 @@ fn hydrogen_bond_search_is_identical_at_every_worker_count() {
     }
     let direct: Vec<_> = (0..backbones.len())
         .flat_map(|i| (i + 1..backbones.len()).map(move |j| (i, j)))
-        .filter(|&(i, j)| squared_distance(backbones[i].ca, backbones[j].ca) <= CA_CUTOFF * CA_CUTOFF)
+        .filter(|&(i, j)| {
+            squared_distance(backbones[i].ca, backbones[j].ca) <= CA_CUTOFF * CA_CUTOFF
+        })
         .collect();
-    assert_eq!(pairs, direct, "the grid finds exactly the brute-force pairs");
+    assert_eq!(
+        pairs, direct,
+        "the grid finds exactly the brute-force pairs"
+    );
 }
 
 #[test]
@@ -401,7 +413,11 @@ fn assignment_on_a_structure_is_identical_at_every_worker_count() {
 
 #[test]
 fn sorted_pairs_orders_and_deduplicates_blocks() {
-    let blocks = vec![vec![(3, 5), (0, 9), (3, 4)], vec![(0, 2), (3, 5), (1, 2)], vec![]];
+    let blocks = vec![
+        vec![(3, 5), (0, 9), (3, 4)],
+        vec![(0, 2), (3, 5), (1, 2)],
+        vec![],
+    ];
     let merged = sorted_pairs(blocks, 10, &with_workers(4));
     assert_eq!(merged, vec![(0, 2), (0, 9), (1, 2), (3, 4), (3, 5)]);
 }

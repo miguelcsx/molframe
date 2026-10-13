@@ -11,6 +11,7 @@ description = "Deposited-component chemistry and versioned element data for molf
 num-traits.workspace = true
 molframe-cif.workspace = true
 molframe-core.workspace = true
+rayon.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

@@ -214,157 +214,76 @@ fn visit_sparse(
     neighbourhood: &mut Vec<Range<usize>>,
     visit: &mut impl FnMut(Range<usize>, &[Range<usize>]),
 ) {
-        let end = cells.end.min(occupied.len());
-        let Some(visited) = occupied.get(cells.start.min(end)..end) else {
-            return;
-        };
-        // Cells are visited in key order, and a fixed offset preserves
-        // that order, so each of the 27 neighbour keys only moves
-        // forward: one cursor per offset replaces a binary search per
-        // neighbour.
-        let mut cursors: Option<[usize; 27]> = None;
-        for (base, own) in visited {
-            neighbourhood.clear();
-            if base
-                .0
-                .iter()
-                .any(|value| *value <= i32::MIN + 1 || *value >= i32::MAX - 1)
-            {
-                // Saturating offsets break the ordering argument.
-                for dx in -1..=1 {
-                    for dy in -1..=1 {
-                        for dz in -1..=1 {
-                            let key = CellKey([
-                                base.0[0].saturating_add(dx),
-                                base.0[1].saturating_add(dy),
-                                base.0[2].saturating_add(dz),
-                            ]);
-                            if let Ok(index) =
-                                occupied.binary_search_by_key(&key, |(key, _)| *key)
-                            {
-                                neighbourhood.push(occupied[index].1.clone());
-                            }
-                        }
-                    }
-                }
-                visit(own.clone(), neighbourhood);
-                continue;
-            }
-            let cursors = cursors.get_or_insert_with(|| {
-                let mut start = [0_usize; 27];
-                let mut slot = 0;
-                for dx in -1..=1 {
-                    for dy in -1..=1 {
-                        for dz in -1..=1 {
-                            let key = CellKey([
-                                base.0[0] + dx,
-                                base.0[1] + dy,
-                                base.0[2] + dz,
-                            ]);
-                            start[slot] =
-                                occupied.partition_point(|(found, _)| *found < key);
-                            slot += 1;
-                        }
-                    }
-                }
-                start
-            });
-            let mut slot = 0;
+    let end = cells.end.min(occupied.len());
+    let Some(visited) = occupied.get(cells.start.min(end)..end) else {
+        return;
+    };
+    // Cells are visited in key order, and a fixed offset preserves
+    // that order, so each of the 27 neighbour keys only moves
+    // forward: one cursor per offset replaces a binary search per
+    // neighbour.
+    let mut cursors: Option<[usize; 27]> = None;
+    for (base, own) in visited {
+        neighbourhood.clear();
+        if base
+            .0
+            .iter()
+            .any(|value| *value <= i32::MIN + 1 || *value >= i32::MAX - 1)
+        {
+            // Saturating offsets break the ordering argument.
             for dx in -1..=1 {
                 for dy in -1..=1 {
                     for dz in -1..=1 {
-                        let key =
-                            CellKey([base.0[0] + dx, base.0[1] + dy, base.0[2] + dz]);
-                        let cursor = &mut cursors[slot];
-                        while occupied.get(*cursor).is_some_and(|(found, _)| *found < key)
-                        {
-                            *cursor += 1;
+                        let key = CellKey([
+                            base.0[0].saturating_add(dx),
+                            base.0[1].saturating_add(dy),
+                            base.0[2].saturating_add(dz),
+                        ]);
+                        if let Ok(index) = occupied.binary_search_by_key(&key, |(key, _)| *key) {
+                            neighbourhood.push(occupied[index].1.clone());
                         }
-                        if let Some((found, range)) = occupied.get(*cursor)
-                            && *found == key
-                        {
-                            neighbourhood.push(range.clone());
-                        }
-                        slot += 1;
                     }
                 }
             }
             visit(own.clone(), neighbourhood);
+            continue;
         }
+        let cursors = cursors.get_or_insert_with(|| {
+            let mut start = [0_usize; 27];
+            let mut slot = 0;
+            for dx in -1..=1 {
+                for dy in -1..=1 {
+                    for dz in -1..=1 {
+                        let key = CellKey([base.0[0] + dx, base.0[1] + dy, base.0[2] + dz]);
+                        start[slot] = occupied.partition_point(|(found, _)| *found < key);
+                        slot += 1;
+                    }
+                }
+            }
+            start
+        });
+        let mut slot = 0;
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                for dz in -1..=1 {
+                    let key = CellKey([base.0[0] + dx, base.0[1] + dy, base.0[2] + dz]);
+                    let cursor = &mut cursors[slot];
+                    while occupied.get(*cursor).is_some_and(|(found, _)| *found < key) {
+                        *cursor += 1;
+                    }
+                    if let Some((found, range)) = occupied.get(*cursor)
+                        && *found == key
+                    {
+                        neighbourhood.push(range.clone());
+                    }
+                    slot += 1;
+                }
+            }
+        }
+        visit(own.clone(), neighbourhood);
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Every cell's neighbourhood by exhaustive key lookup, the way the
-    /// cursor walk must reproduce it.
-    fn reference(grid: &CellGrid<u32>) -> Vec<(Range<usize>, Vec<Range<usize>>)> {
-        let Layout::Sparse { cells } = &grid.layout else {
-            panic!("the test builds sparse grids");
-        };
-        cells
-            .iter()
-            .map(|(base, own)| {
-                let mut around = Vec::new();
-                for dx in -1..=1_i32 {
-                    for dy in -1..=1_i32 {
-                        for dz in -1..=1_i32 {
-                            let key = CellKey([
-                                base.0[0].saturating_add(dx),
-                                base.0[1].saturating_add(dy),
-                                base.0[2].saturating_add(dz),
-                            ]);
-                            if let Some((_, range)) = cells.iter().find(|(found, _)| *found == key)
-                            {
-                                around.push(range.clone());
-                            }
-                        }
-                    }
-                }
-                (own.clone(), around)
-            })
-            .collect()
-    }
-
-    #[test]
-    fn sparse_neighbour_cursors_match_exhaustive_lookup() {
-        let mut state = 7_u32;
-        let mut next = move |span: i32| {
-            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            i32::try_from(state >> 20).expect("twelve bits") % span - span / 2
-        };
-        let mut entries = Vec::new();
-        for item in 0..600_u32 {
-            entries.push((CellKey([next(9), next(9), next(9)]), item));
-        }
-        // Far-apart cells force the sparse layout; extremes hit the fallback.
-        for (item, key) in [
-            [i32::MIN, 0, 0],
-            [i32::MIN + 1, 0, 0],
-            [i32::MAX, 5, -5],
-            [i32::MAX - 1, 5, -5],
-            [1_000_000_000, 1_000_000_000, 1_000_000_000],
-            [-1_000_000_000, 3, 3],
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            entries.push((CellKey(key), 1_000 + u32::try_from(item).expect("small")));
-        }
-        let grid = CellGrid::sparse(entries);
-        let expected = reference(&grid);
-        let mut seen = Vec::new();
-        grid.for_each_cell(|own, around| seen.push((own, around.to_vec())));
-        assert_eq!(seen, expected);
-        // Block-wise visits reproduce the whole sequence.
-        let mut pieces = Vec::new();
-        let count = grid.cell_count();
-        for start in (0..count).step_by(37) {
-            grid.visit_cells(start..start + 37, |own, around| {
-                pieces.push((own, around.to_vec()));
-            });
-        }
-        assert_eq!(pieces, expected);
-    }
-}
+#[path = "grid_tests.rs"]
+mod tests;

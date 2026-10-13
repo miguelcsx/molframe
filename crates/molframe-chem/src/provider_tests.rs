@@ -1,5 +1,8 @@
+use super::lowering::{classify_component, kind};
 use super::*;
+use crate::{BondStereo, ComponentAtom, ComponentKind};
 use molframe_core::io::InputBuffer;
+use molframe_core::{BondOrder, Element};
 
 const COMPONENT: &str = "data_GLY\n\
 _chem_comp.id GLY\n_chem_comp.name GLYCINE\n\
@@ -224,4 +227,56 @@ fn a_component_without_an_atom_category_has_no_atoms() {
 _chem_comp.type NON-POLYMER\n";
     let component = lower(text).expect("lowers").get("UNL").unwrap().unwrap();
     assert!(component.atoms.is_empty() && component.bonds.is_empty());
+}
+
+const SECOND: &str = "data_ALA\n\
+_chem_comp.id ALA\n_chem_comp.name ALANINE\n\
+_chem_comp.type 'L-peptide linking'\n_chem_comp.one_letter_code A\n_chem_comp.formula 'C3 H7 N O2'\n\
+loop_\n_chem_comp_atom.atom_id\n_chem_comp_atom.type_symbol\n\
+_chem_comp_atom.charge\n_chem_comp_atom.pdbx_aromatic_flag\n\
+_chem_comp_atom.pdbx_leaving_atom_flag\n_chem_comp_atom.pdbx_stereo_config\n\
+N N 0 N N N\nCA C 0 N N S\n";
+
+fn lazy(text: &str) -> LazyCifProvider {
+    LazyCifProvider::new(
+        InputBuffer::from_bytes(text.as_bytes().to_vec()),
+        DictionaryVersion::new("lazy"),
+    )
+}
+
+#[test]
+fn lazy_provider_indexes_every_block_but_lowers_only_requested_ones() {
+    let provider = lazy(&format!("{COMPONENT}{SECOND}"));
+    assert_eq!(provider.block_count(), 2);
+    assert_eq!(provider.lowered_count(), 0);
+    let ala = provider.get("ALA").expect("lowers").expect("present");
+    assert_eq!(ala.id.as_ref(), "ALA");
+    assert_eq!(provider.lowered_count(), 1);
+    let again = provider.get("ALA").expect("cached").expect("present");
+    assert!(Arc::ptr_eq(&ala, &again), "a block is lowered once");
+    assert_eq!(provider.version().as_str(), "lazy");
+}
+
+#[test]
+fn lazy_provider_matches_the_eager_lowering_and_reports_absence() {
+    let text = format!("{COMPONENT}{SECOND}");
+    let provider = lazy(&text);
+    let (eager, _) = read_ccd(
+        &InputBuffer::from_bytes(text.into_bytes()),
+        DictionaryVersion::new("eager"),
+    )
+    .expect("eager read");
+    for id in ["GLY", "ALA"] {
+        let lazily = provider.get(id).expect("lazy").expect("present");
+        let eagerly = eager.get(id).expect("eager").expect("present");
+        assert_eq!(*lazily, *eagerly);
+    }
+    assert!(provider.get("XXX").expect("lookup works").is_none());
+}
+
+#[test]
+fn lazy_provider_reports_a_malformed_block_only_when_it_is_requested() {
+    let provider = lazy(&format!("{COMPONENT}data_BAD\n_chem_comp.id BAD\n"));
+    assert!(provider.get("GLY").is_ok_and(|found| found.is_some()));
+    assert!(provider.get("BAD").is_err());
 }

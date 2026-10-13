@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::{ComponentAtom, ComponentBond, MemoryProvider, StereoConfiguration};
+use crate::{Component, ComponentAtom, ComponentBond, MemoryProvider, StereoConfiguration};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{BondOrder, Element};

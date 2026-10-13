@@ -4,8 +4,8 @@ use super::geometry::continuous;
 use super::{Bonds, DsspBackbone as Backbone};
 use molframe_core::ExecutionContext;
 use molframe_core::SecondaryStructure as Ss;
-use molframe_core::parallel::{BlockPlan, map_blocks_in};
 use molframe_core::hashing::IdentityHashMap;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Orientation {
@@ -46,25 +46,24 @@ fn bridge_candidates(
             {
                 continue;
             }
-            let orientation = if (has(i - 1, j) && has(j, i + 1))
-                || (has(j - 1, i) && has(i, j + 1))
-            {
-                Orientation::Parallel
-            } else if (has(i, j) && has(j, i)) || (has(i - 1, j + 1) && has(j - 1, i + 1)) {
-                Orientation::Antiparallel
-            } else {
-                continue;
-            };
+            let orientation =
+                if (has(i - 1, j) && has(j, i + 1)) || (has(j - 1, i) && has(i, j + 1)) {
+                    Orientation::Parallel
+                } else if (has(i, j) && has(j, i)) || (has(i - 1, j + 1) && has(j - 1, i + 1)) {
+                    Orientation::Antiparallel
+                } else {
+                    continue;
+                };
             found.push((i, j, orientation));
         }
         found
     };
     let plan = BlockPlan::new(pairs.len(), PAIRS_PER_BLOCK);
-    map_blocks_in(plan, context, |_, range| scan(range))
-        .unwrap_or_else(|_| vec![scan(0..pairs.len())])
-        .into_iter()
-        .flatten()
-        .collect()
+    let blocks = match map_blocks_in(plan, context, |_, range| scan(range)) {
+        Ok(blocks) => blocks,
+        Err(_) => vec![scan(0..pairs.len())],
+    };
+    blocks.into_iter().flatten().collect()
 }
 
 pub(super) fn assign(

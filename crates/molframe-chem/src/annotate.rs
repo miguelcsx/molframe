@@ -1,22 +1,29 @@
 //! Applying component chemistry to an immutable structure snapshot.
 
 mod atom_chemistry;
+mod component_bonds;
 mod component_index;
 mod hbond_roles;
 mod linkage;
+mod resolver;
+mod tally;
+mod worker;
 
-use component_index::ComponentIndex;
+use component_bonds::alt_compatible;
 use linkage::link_polymer;
+use rayon::prelude::*;
+use resolver::Resolver;
+use tally::Tally;
+use worker::{UnitOutput, Worker};
 
-use crate::{Component, ComponentKind, ComponentProvider};
+use crate::{ComponentKind, ComponentProvider};
 pub use atom_chemistry::HBOND_WEAK_ACCEPTOR_ANNOTATION;
-use atom_chemistry::{AtomChemistry, attach_annotations, observed_stereo};
-use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
+use atom_chemistry::{AtomChemistry, attach_annotations};
+use molframe_core::bond::BondTableBuilder;
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
 use molframe_core::index::ChainIndex;
-use molframe_core::optional::OptionalSymbol;
-use molframe_core::structure::{AtomRef, ResidueRef, Structure};
+use molframe_core::structure::{ResidueRef, Structure};
 use molframe_core::topology::PolymerKind;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -118,8 +125,19 @@ impl PolymerLinkPolicy {
     }
 }
 
+/// Residues handled by one parallel work unit.
+///
+/// Units are large enough to amortise scheduling and small enough that one huge
+/// chain still spreads over every core.
+const UNIT_RESIDUES: usize = 256;
+
 /// Adds CCD internal bonds and checked polymer links without replacing file
 /// connectivity.
+///
+/// Residues are independent, so they are processed in parallel units. Units are
+/// merged in file order, which keeps the bond table, annotations and findings
+/// identical to a sequential pass. Findings that repeat per residue (`W3202`,
+/// `W3301`) are reported once each, with exact counts and a bounded sample.
 ///
 /// # Errors
 ///
@@ -136,44 +154,83 @@ pub fn apply_component_chemistry(
     for bond in data.bonds.iter() {
         bonds.push(bond);
     }
-    let mut state = Annotator {
-        provider,
-        components: BTreeMap::new(),
-        indices: BTreeMap::new(),
-        missing: BTreeSet::new(),
-        bonds,
-        findings: Diagnostics::new(),
-        chemistry: vec![None; structure.atom_count() as usize],
+    let chains: Vec<(ChainIndex, Vec<ResidueRef<'_>>)> = structure
+        .data()
+        .chains()
+        .map(|chain| (chain.index(), chain.residues().collect()))
+        .collect();
+    let mut units: Vec<&[ResidueRef<'_>]> = Vec::new();
+    let mut chain_units = Vec::with_capacity(chains.len());
+    for (_, residues) in &chains {
+        let first = units.len();
+        units.extend(residues.chunks(UNIT_RESIDUES));
+        chain_units.push(first..units.len());
+    }
+    let resolver = Resolver::new(provider);
+    let outputs: Vec<Result<UnitOutput, Diagnostic>> = units
+        .par_iter()
+        .map_init(Worker::default, |worker, residues| {
+            worker.run(&resolver, residues)
+        })
+        .collect();
+
+    let mut outputs = outputs.into_iter();
+    let mut chemistry: Vec<Option<AtomChemistry>> = vec![None; structure.atom_count() as usize];
+    let mut inconsistent = Tally::default();
+    let mut missing_atoms = Tally::default();
+    let mut missing = BTreeSet::new();
+    let mut findings = Diagnostics::new();
+    let components = match &polymer_link_policy {
+        PolymerLinkPolicy::Disabled => BTreeMap::new(),
+        PolymerLinkPolicy::Explicit { .. } => resolver.components(),
     };
-    for chain in structure.data().chains() {
+    for ((chain, residues), range) in chains.iter().zip(&chain_units) {
         let mut kinds = BTreeMap::new();
-        let residues: Vec<_> = chain.residues().collect();
-        for residue in &residues {
-            state.annotate_residue(*residue, &mut kinds)?;
+        for output in outputs.by_ref().take(range.len()) {
+            let output = output?;
+            for (kind, count) in output.kinds {
+                *kinds.entry(kind).or_insert(0) += count;
+            }
+            for (atom, value) in output.chemistry {
+                if let Some(slot) = chemistry.get_mut(atom) {
+                    *slot = Some(value);
+                }
+            }
+            for bond in output.bonds {
+                bonds.push(bond);
+            }
+            inconsistent.merge(output.inconsistent);
+            missing_atoms.merge(output.missing_atoms);
+            missing.extend(output.missing);
         }
-        classify_chain(&mut data, chain.index(), &kinds)?;
+        classify_chain(&mut data, *chain, &kinds)?;
         link_polymer(
-            &residues,
-            &state.components,
-            &mut state.bonds,
-            &mut state.findings,
+            residues,
+            &components,
+            &mut bonds,
+            &mut findings,
             &polymer_link_policy,
         );
     }
-    for component in &state.missing {
-        state
-            .findings
+    if let Some(finding) = inconsistent.into_diagnostic(Code::W3202, None) {
+        findings.push(finding);
+    }
+    if let Some(finding) = missing_atoms.into_diagnostic(Code::W3301, Some("missing atoms")) {
+        findings.push(finding);
+    }
+    for component in &missing {
+        findings
             .push(Diagnostic::new(Code::W3201).with_context("component", component.to_string()));
     }
-    data.bonds = state.bonds.finish();
-    hbond_roles::refine_linked_acceptors(&data, &mut state.chemistry);
-    attach_annotations(&mut data, &state.chemistry)?;
+    data.bonds = bonds.finish();
+    hbond_roles::refine_linked_acceptors(&data, &mut chemistry);
+    attach_annotations(&mut data, &chemistry)?;
     for finding in molframe_core::structure::validate(&data) {
-        state.findings.push(finding);
+        findings.push(finding);
     }
     Ok(ChemistryReport {
         structure: Structure::new(data),
-        findings: state.findings.finish(),
+        findings: findings.finish(),
         dictionary_version: provider.version().clone(),
         polymer_link_policy: polymer_link_policy.clone(),
         provenance: ChemistryProvenance {
@@ -197,182 +254,6 @@ fn validate_link_policy(policy: &PolymerLinkPolicy) -> Result<(), Diagnostic> {
             "required",
             "finite positive polymer-link distance and attachment rules",
         )),
-    }
-}
-
-struct Annotator<'a> {
-    provider: &'a dyn ComponentProvider,
-    components: BTreeMap<Box<str>, Arc<Component>>,
-    /// Name index and hydrogen-bonding roles, built once per component.
-    ///
-    /// Both are pure functions of the component, so every residue of the same
-    /// component shares them instead of recomputing a quadratic bond walk.
-    indices: BTreeMap<Box<str>, Arc<ComponentIndex>>,
-    missing: BTreeSet<Box<str>>,
-    bonds: BondTableBuilder,
-    findings: Diagnostics,
-    chemistry: Vec<Option<AtomChemistry>>,
-}
-
-impl Annotator<'_> {
-    fn annotate_residue<'a>(
-        &mut self,
-        residue: ResidueRef<'a>,
-        kinds: &mut BTreeMap<ComponentKind, usize>,
-    ) -> Result<(), Diagnostic> {
-        let mut variants: BTreeMap<&str, Vec<AtomRef<'a>>> = BTreeMap::new();
-        for atom in residue.atoms() {
-            let Some(component_id) = atom.component_name() else {
-                continue;
-            };
-            variants.entry(component_id).or_default().push(atom);
-        }
-        for (component_id, atoms) in variants {
-            let component = match self.components.get(component_id) {
-                Some(component) => Some(Arc::clone(component)),
-                None => self.provider.get(component_id)?,
-            };
-            let Some(component) = component else {
-                self.missing.insert(component_id.into());
-                continue;
-            };
-            self.components
-                .entry(component_id.into())
-                .or_insert_with(|| Arc::clone(&component));
-            let index = Arc::clone(
-                self.indices
-                    .entry(component_id.into())
-                    .or_insert_with(|| Arc::new(ComponentIndex::build(Arc::clone(&component)))),
-            );
-            *kinds.entry(component.kind).or_insert(0) += 1;
-            if inconsistent(&index, &atoms) {
-                self.findings.push(
-                    Diagnostic::new(Code::W3202)
-                        .with_context("component", component_id)
-                        .with_context("residue", residue.index().to_string()),
-                );
-                continue;
-            }
-            report_missing_atoms(&component, &atoms, residue, &mut self.findings);
-            self.annotate_atoms(&index, &atoms);
-            add_component_bonds(&component, &atoms, &mut self.bonds);
-        }
-        Ok(())
-    }
-
-    fn annotate_atoms(&mut self, index: &ComponentIndex, atoms: &[AtomRef<'_>]) {
-        let component = index.component();
-        for atom in atoms {
-            let Some(name) = atom.name() else {
-                continue;
-            };
-            let Some(expected) = index.atom(name) else {
-                continue;
-            };
-            let Some(slot) = self.chemistry.get_mut(atom.index().as_usize()) else {
-                continue;
-            };
-            *slot = Some(AtomChemistry {
-                element: expected.element,
-                carbonyl: index.is_carbonyl(name),
-                kind: component.kind,
-                aromatic: expected.aromatic,
-                charge: expected.charge,
-                donor: index.is_donor(name),
-                acceptor: index.is_acceptor(name),
-                weak_acceptor: index.is_weak_acceptor(name),
-                stereo: observed_stereo(component, atoms, *atom, expected.stereo),
-            });
-        }
-    }
-}
-
-fn inconsistent(index: &ComponentIndex, atoms: &[AtomRef<'_>]) -> bool {
-    atoms.iter().any(|atom| {
-        // Hydrogen naming varies between deposition and preparation tools.
-        // Unmatched hydrogens remain unannotated; matched heavy atoms retain
-        // their dictionary chemistry and only confirmed bonds are installed.
-        !atom
-            .element()
-            .is_some_and(molframe_core::Element::is_hydrogen)
-            && atom.name().is_some_and(|name| index.atom(name).is_none())
-    })
-}
-
-fn report_missing_atoms(
-    component: &Component,
-    atoms: &[AtomRef<'_>],
-    residue: ResidueRef<'_>,
-    findings: &mut Diagnostics,
-) {
-    let observed: BTreeSet<_> = atoms.iter().filter_map(|atom| atom.name()).collect();
-    let absent = component
-        .atoms
-        .iter()
-        .filter(|atom| !atom.leaving && !observed.contains(atom.name.as_ref()))
-        .count();
-    if absent > 0 {
-        findings.push(
-            Diagnostic::new(Code::W3301)
-                .with_context("component", component.id.to_string())
-                .with_context("residue", residue.index().to_string())
-                .with_context("missing atoms", absent.to_string()),
-        );
-    }
-}
-
-fn add_component_bonds(
-    component: &Component,
-    atoms: &[AtomRef<'_>],
-    output: &mut BondTableBuilder,
-) {
-    // Scanning the residue's atoms once per bond endpoint costs
-    // `O(bonds x atoms^2)` name comparisons. Ordering the observed atoms by
-    // name once turns each endpoint into a binary search, and the sort is
-    // stable so atoms sharing a name keep their original relative order.
-    let mut by_name: Vec<(&str, AtomRef<'_>)> = atoms
-        .iter()
-        .filter_map(|atom| atom.name().map(|name| (name, *atom)))
-        .collect();
-    by_name.sort_by_key(|(name, _)| *name);
-
-    for bond in component.bonds.iter() {
-        for (_, atom_a) in named(&by_name, &bond.atom_a) {
-            for (_, atom_b) in named(&by_name, &bond.atom_b) {
-                if alt_compatible(*atom_a, *atom_b) {
-                    output.push(BondRecord {
-                        atom_a: atom_a.index(),
-                        atom_b: atom_b.index(),
-                        order: bond.order,
-                        provenance: BondProvenance::ChemicalComponentDictionary,
-                        // The dictionary states this bond exists inside a
-                        // component; it is not a `struct_conn` classification of
-                        // the assembly.
-                        kind: OptionalSymbol::NONE,
-                    });
-                }
-            }
-        }
-    }
-}
-
-/// The contiguous run of name-ordered atoms called `name`.
-fn named<'a, 'b>(
-    by_name: &'a [(&'a str, AtomRef<'b>)],
-    name: &str,
-) -> &'a [(&'a str, AtomRef<'b>)] {
-    let start = by_name.partition_point(|(observed, _)| *observed < name);
-    let end = by_name.partition_point(|(observed, _)| *observed <= name);
-    match by_name.get(start..end) {
-        Some(run) => run,
-        None => &[],
-    }
-}
-
-fn alt_compatible(atom_a: AtomRef<'_>, atom_b: AtomRef<'_>) -> bool {
-    match (atom_a.alt_id(), atom_b.alt_id()) {
-        (Some(a), Some(b)) => a.is_blank() || b.is_blank() || a == b,
-        _ => true,
     }
 }
 
