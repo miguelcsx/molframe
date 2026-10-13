@@ -22,14 +22,18 @@ fn a_form_stem_is_c3_endo_with_sane_suites() -> Result<(), Box<dyn std::error::E
     let c3 = t
         .pucker_class
         .iter()
-        .filter(|c| **c == PUCKER_C3_ENDO)
-        .count();
+        .map(|c| usize::from(*c == PUCKER_C3_ENDO))
+        .sum::<usize>();
     assert!(c3 >= 6, "{:?}", t.pucker_class);
     for phase in t.pucker_phase.iter().filter(|p| p.is_finite()) {
         assert!((0.0..360.0).contains(phase));
     }
     assert!(t.pucker_amplitude.iter().all(|a| *a > 20.0 && *a < 55.0));
-    let sane = t.suite_class.iter().filter(|c| **c == 0).count();
+    let sane = t
+        .suite_class
+        .iter()
+        .map(|c| usize::from(*c == 0))
+        .sum::<usize>();
     assert!(sane >= 5, "{:?} {:?}", t.suite_class, t.suite_flags);
     assert_eq!(
         t.suite_class[0], NOT_EVALUATED,
@@ -60,7 +64,11 @@ fn a_stricter_policy_changes_the_verdict_and_is_reported() -> Result<(), Box<dyn
         ..NucleicPolicy::default()
     };
     let t = table(&strict)?;
-    let flagged = t.suite_class.iter().filter(|c| **c == 1).count();
+    let flagged = t
+        .suite_class
+        .iter()
+        .map(|c| usize::from(*c == 1))
+        .sum::<usize>();
     assert!(flagged >= 5, "{:?}", t.suite_class);
     assert!(
         t.suite_flags

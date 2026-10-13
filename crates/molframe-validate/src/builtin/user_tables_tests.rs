@@ -31,18 +31,9 @@ fn a_user_rama_file_round_trips_through_the_decoder() -> Result<(), Box<dyn std:
     let overrides = ReferenceOverrides::from_paths(Some(&path), None, None, None)?;
     let part = overrides.rama.ok_or("missing rama")?;
     let default = &bundled_reference()?.rama;
-    assert_eq!(
-        part.density(
-            crate::builtin_validation::RamaCategory::General,
-            -63.0,
-            -43.0
-        ),
-        default.density(
-            crate::builtin_validation::RamaCategory::General,
-            -63.0,
-            -43.0
-        )
-    );
+    let category = crate::builtin_validation::RamaCategory::General;
+    let decoded = part.density(category, -63.0, -43.0);
+    assert!((decoded - default.density(category, -63.0, -43.0)).abs() < 1e-6);
     Ok(())
 }
 

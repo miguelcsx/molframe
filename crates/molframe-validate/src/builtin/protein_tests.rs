@@ -4,7 +4,10 @@ use molframe_bench::{Sample, structure as sample};
 use molframe_core::ExecutionContext;
 
 fn count(values: &[u8], wanted: u8) -> usize {
-    values.iter().filter(|value| **value == wanted).count()
+    values
+        .iter()
+        .map(|value| usize::from(*value == wanted))
+        .sum()
 }
 
 fn table(which: Sample) -> Result<ProteinTable, BuiltinError> {
@@ -32,7 +35,7 @@ fn crambin_terminal_residues_lack_one_torsion() -> Result<(), BuiltinError> {
     assert!(t.phi[45].is_finite() && t.psi[45].is_nan());
     assert_eq!(t.rama_class[0], NOT_EVALUATED);
     assert_eq!(t.chi.len(), 46 * 4);
-    assert!(count(&t.omega_class, OmegaClass::Cis.code()) == 0);
+    assert_eq!(count(&t.omega_class, OmegaClass::Cis.code()), 0);
     Ok(())
 }
 
