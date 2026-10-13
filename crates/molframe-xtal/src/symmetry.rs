@@ -321,16 +321,29 @@ impl SymmetryExt for Structure {
 }
 
 fn metadata(block: &DataBlock) -> Result<SymmetrySet, Vec<Diagnostic>> {
-    if let Some(category) = block.category("space_group") {
-        return modern_metadata(category);
-    }
-    let Some(category) = block.category("symmetry") else {
-        return Ok(SymmetrySet::default());
+    let legacy = match block.category("symmetry") {
+        Some(category) => Some(legacy_metadata(category)?),
+        None => None,
     };
-    let number = group_number(category, "Int_Tables_number")?;
+    let Some(category) = block.category("space_group") else {
+        return Ok(legacy.unwrap_or_default());
+    };
+    let mut set = modern_metadata(category)?;
+    // A file may name the group in both categories, each carrying what the
+    // other lacks; the modern category wins where they overlap.
+    if let Some(legacy) = legacy {
+        set.international_number = set.international_number.or(legacy.international_number);
+        set.hermann_mauguin = set.hermann_mauguin.or(legacy.hermann_mauguin);
+        set.hall = set.hall.or(legacy.hall);
+        set.crystal_system = set.crystal_system.or(legacy.crystal_system);
+    }
+    Ok(set)
+}
+
+fn legacy_metadata(category: &Category) -> Result<SymmetrySet, Vec<Diagnostic>> {
     Ok(SymmetrySet {
         hall_number: None,
-        international_number: number,
+        international_number: group_number(category, "Int_Tables_number")?,
         hermann_mauguin: text(category, "space_group_name_H-M"),
         hall: text(category, "space_group_name_Hall"),
         crystal_system: text(category, "cell_setting"),

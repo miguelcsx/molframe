@@ -134,3 +134,14 @@ fn a_triplet_is_written_in_the_form_the_tables_use() {
         "-x+1/2,-y,1/2+z".replace("-x+1/2", "1/2-x")
     );
 }
+
+#[test]
+fn legacy_symbol_survives_beside_a_modern_hall_only_category() {
+    let set = parsed_set(
+        "data_both\n_symmetry.space_group_name_H-M 'P 1 21 1'\n\
+         _symmetry.Int_Tables_number 4\n_space_group.name_Hall 'P 2yb'\n",
+    );
+    assert_eq!(set.hermann_mauguin.as_deref(), Some("P 1 21 1"));
+    assert_eq!(set.international_number, Some(4));
+    assert_eq!(set.hall.as_deref(), Some("P 2yb"));
+}
