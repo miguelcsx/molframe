@@ -381,6 +381,7 @@ fn execute_utilities(command: Command, context: Context) -> Exit {
             context,
         ),
         Command::Audit { args } => crate::audit_commands::audit_selection(&args, context),
+        Command::Data { command } => crate::data_commands::execute(command, context),
         Command::Fx { command } => crate::fx_commands::execute(command, context),
         Command::Batch { command } => crate::batch_commands::execute(command, context),
         Command::Man { outdir } => crate::man_commands::generate(&crate::Cli::command(), &outdir),

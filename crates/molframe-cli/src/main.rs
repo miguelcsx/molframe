@@ -19,6 +19,7 @@ mod choices;
 mod commands;
 mod comparison_commands;
 mod crystal_commands;
+mod data_commands;
 mod diff_commands;
 mod dispatch;
 mod exit;
@@ -44,8 +45,8 @@ use std::process::ExitCode;
 
 pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, ChemCommand,
-    ContactMapArguments, CrystalCommand, EnsembleCommand, ExtraMetricArguments, FxCommand,
-    GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
+    ContactMapArguments, CrystalCommand, DataCommand, EnsembleCommand, ExtraMetricArguments,
+    FxCommand, GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
     ModelArgument, MtzTable, NamespaceArgument, NativeContactArguments, NormalModeArguments,
     PairwiseMode, SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand,
     TrajectoryCommand, TreeMethod, ValidateArguments,
@@ -411,6 +412,11 @@ pub(crate) enum Command {
     Fx {
         #[command(subcommand)]
         command: FxCommand,
+    },
+    /// List, fetch and verify reference tables named by a manifest.
+    Data {
+        #[command(subcommand)]
+        command: DataCommand,
     },
     /// Deterministic parallel execution over paths and glob patterns.
     Batch {

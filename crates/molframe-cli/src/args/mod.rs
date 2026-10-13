@@ -5,6 +5,7 @@ mod chem;
 mod comparison;
 mod contacts;
 mod crystal;
+mod data;
 mod interactions;
 mod mapping;
 mod policy;
@@ -20,6 +21,7 @@ pub(crate) use contacts::{
     NormalModeArguments,
 };
 pub(crate) use crystal::{CrystalCommand, HistogramArguments, MatesArguments, MtzTable};
+pub(crate) use data::DataCommand;
 pub(crate) use interactions::{
     HydrogenBondArguments, InteractionCommand, InteractionInput, PlaneFitArguments,
 };

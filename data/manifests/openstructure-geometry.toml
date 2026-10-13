@@ -1,0 +1,18 @@
+# Example manifest. Nothing here is built into molframe: the address and the digest
+# are the user's to trust, and `molframe data fetch` refuses bytes that do not match.
+#
+#   molframe data fetch openstructure-geometry --manifest data/manifests/openstructure-geometry.toml
+#
+# The stored table is LGPL-3.0-only (OpenStructure) joined with Apache-2.0 link rows
+# (AlphaFold), which is why `licence` is an expression.
+
+[[entry]]
+name = "openstructure-geometry"
+version = "ba19c9a0"
+url = "https://git.scicore.unibas.ch/schwede/openstructure/-/raw/ba19c9a08a0a121b8ca78b11406180b4afa79c2c/modules/mol/alg/src/stereo_chemical_props.txt"
+source = "OpenStructure modules/mol/alg/src/stereo_chemical_props.txt at commit ba19c9a0, with AlphaFold peptide-link rows"
+licence = "LGPL-3.0-only AND Apache-2.0"
+sha256 = "24510899eeb49167cffedec8fa45363a4d08279c0c637a403b452f7d0ac09451"
+extension = "geometry"
+converter = "stereo_chemical_props"
+append = ["../alphafold-peptide-link.geometry"]

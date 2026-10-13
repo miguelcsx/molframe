@@ -212,6 +212,9 @@ pub mod engine {
     pub mod core;
 }
 
+/// Manifest-driven acquisition of reference tables into the cache.
+#[cfg(feature = "adapters")]
+pub mod data;
 mod document;
 mod extensions;
 mod facade;

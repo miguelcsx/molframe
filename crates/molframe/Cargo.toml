@@ -98,7 +98,7 @@ chemistry = ["dep:molframe-chem", "molframe-engine/chemistry"]
 interop = ["dep:molframe-interop", "molframe-engine/interop"]
 # Neutral byte acquisition, of which network fetch is one client; this is
 # what covers reqwest/rustls.
-adapters = ["dep:molframe-adapters", "molframe-engine/adapters"]
+adapters = ["dep:molframe-adapters", "dep:molframe-chem", "molframe-engine/adapters"]
 crystal = ["dep:molframe-xtal", "spatial", "molframe-engine/crystal"]
 
 # Analysis domains over the kernels above.
