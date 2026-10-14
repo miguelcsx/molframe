@@ -9,7 +9,7 @@
 
 use crate::exit::Exit;
 use molframe::chemistry::{
-    CovalentRadii, Provided, RadiusSource, TableError, TableRequest, TableStore, VdwRadii,
+    CovalentRadii, Provided, RadiusSelection, RadiusSource, TableError, TableRequest, TableStore,
 };
 use molframe::{Diagnostic, Rendered};
 use std::sync::Arc;
@@ -21,12 +21,17 @@ pub(crate) fn refuse(error: TableError) -> Exit {
 }
 
 /// The van der Waals radii a command measures with.
-pub(crate) fn radius_source(argument: Option<&str>) -> Result<RadiusSource, Exit> {
-    RadiusSource::resolve(
-        &TableRequest::<VdwRadii>::choose(argument),
-        &TableStore::global(),
-    )
-    .map_err(refuse)
+///
+/// The one rule of [`RadiusSelection`]: `--radii`, else the table the configured policy's
+/// `vdw_radii` names, else the profile; `--radii` naming another table than a configured
+/// policy is the typed `E7103` refusal.
+pub(crate) fn radius_source(
+    argument: Option<&str>,
+    context: &crate::report::Context,
+) -> Result<RadiusSource, Exit> {
+    RadiusSelection::choose(argument, context.radii_in_policy)
+        .resolve(context.policy.vdw_radii, &TableStore::global())
+        .map_err(refuse)
 }
 
 /// The covalent radii the profile selects.

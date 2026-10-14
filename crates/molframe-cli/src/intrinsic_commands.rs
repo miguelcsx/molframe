@@ -127,7 +127,7 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
         Ok(value) => value,
         Err(exit) => return exit,
     };
-    let source = match crate::tables::radius_source(options.radii) {
+    let source = match crate::tables::radius_source(options.radii, &context) {
         Ok(source) => source,
         Err(exit) => return exit,
     };

@@ -138,7 +138,7 @@ pub(super) fn cad(
     let (Some(probe), Some(density)) = (extra.cad_probe, extra.cad_density) else {
         return Err(missing("cad", "--cad-probe and --cad-density"));
     };
-    let radii = crate::tables::radius_source(extra.radii.as_deref())?;
+    let radii = crate::tables::radius_source(extra.radii.as_deref(), &context)?;
     let areas = |structure: &molframe::Structure| {
         let (radius, residue) = surface_inputs(structure, &radii)?;
         molframe::compare::cad_contact_areas(

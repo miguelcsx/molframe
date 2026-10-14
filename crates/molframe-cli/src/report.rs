@@ -48,6 +48,9 @@ pub struct Context {
     pub mode: ParseMode,
     /// Effective analysis policy after config and CLI overrides.
     pub policy: &'static molframe::AnalysisPolicy,
+    /// Whether a configuration file set the policy's `vdw_radii`, so that a command's
+    /// `--radii` is checked against it and its absence takes the policy's table.
+    pub radii_in_policy: bool,
     /// Optional destination for the primary rendered result.
     pub output: Option<&'static Path>,
     /// Optional destination for a standalone provenance record.

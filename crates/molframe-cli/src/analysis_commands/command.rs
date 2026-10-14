@@ -280,7 +280,10 @@ pub(crate) fn sasa(
     words: &SasaWords,
     context: Context,
 ) -> Exit {
-    let request = molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(radii);
+    let request = match crate::tables::radius_source(radii, &context) {
+        Ok(source) => source.request(),
+        Err(exit) => return exit,
+    };
     let options = match molframe::SasaOptions::from_words(
         words.method.as_deref(),
         Some(points),

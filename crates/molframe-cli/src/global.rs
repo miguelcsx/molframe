@@ -122,15 +122,31 @@ impl GlobalOptions {
         let mut policy = molframe::AnalysisPolicy::default();
         let mut configured_format = None;
         let mut chemistry = molframe::ChemistryConfiguration::default();
+        let mut radii_in_policy = false;
         if let Some(path) = xdg_policy_path().filter(|path| path.is_file()) {
-            apply_configuration(&path, &mut policy, &mut configured_format, &mut chemistry)?;
+            apply_configuration(
+                &path,
+                &mut policy,
+                &mut configured_format,
+                (&mut chemistry, &mut radii_in_policy),
+            )?;
         }
         let local = Path::new("molframe.toml");
         if local.is_file() {
-            apply_configuration(local, &mut policy, &mut configured_format, &mut chemistry)?;
+            apply_configuration(
+                local,
+                &mut policy,
+                &mut configured_format,
+                (&mut chemistry, &mut radii_in_policy),
+            )?;
         }
         if let Some(path) = self.policy {
-            apply_configuration(&path, &mut policy, &mut configured_format, &mut chemistry)?;
+            apply_configuration(
+                &path,
+                &mut policy,
+                &mut configured_format,
+                (&mut chemistry, &mut radii_in_policy),
+            )?;
         }
         if let Some(value) = self.assembly {
             policy.assembly = value.into();
@@ -180,6 +196,7 @@ impl GlobalOptions {
             color: !self.display_behavior.no_color && std::env::var_os("NO_COLOR").is_none(),
             mode: self.tolerance.into(),
             policy,
+            radii_in_policy,
             output,
             provenance,
             ccd,
@@ -205,9 +222,10 @@ fn apply_configuration(
     path: &Path,
     policy: &mut molframe::AnalysisPolicy,
     format: &mut Option<OutputFormat>,
-    chemistry: &mut molframe::ChemistryConfiguration,
+    (chemistry, radii_in_policy): (&mut molframe::ChemistryConfiguration, &mut bool),
 ) -> Result<(), molframe::PolicyConfigError> {
     let configuration = molframe::read_configuration(path)?;
+    *radii_in_policy |= configuration.policy.vdw_radii.is_some();
     *policy = configuration.policy.apply_to(policy.clone())?;
     if let Some(value) = configuration.output.format {
         *format = Some(parse_output_format(&value)?);

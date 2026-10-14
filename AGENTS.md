@@ -81,7 +81,10 @@ reach, Ramachandran and rotamer classes and the like live in `data/` as
 versioned text tables, are resolved by name from the profile (`profile.txt` in
 `MOLFRAME_DATA_DIR`, or `MOLFRAME_PROFILE`) or by path, and are read through the
 one `TableProvider`/`TableStore` in `molframe-chem`. A missing table is a typed
-`E7102`/`E7101`/`E2201` error naming how to supply it; results carry the
+`E7102`/`E7101`/`E2201` error naming how to supply it; a `radii` argument that
+conflicts with the policy's `vdw_radii` is `E7103` (one rule, `RadiusSelection`:
+argument, else the policy's table by name, else the profile when there is no
+policy); results carry the
 applied table identities; no computation touches the network
 (`molframe data fetch` and `molframe.data.fetch` are the only downloads). Tests
 use synthetic fixtures or the committed bench profile.

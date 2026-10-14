@@ -22,7 +22,7 @@ pub(crate) fn sasa(
         Ok(reader) => reader,
         Err(exit) => return exit,
     };
-    let source = match crate::tables::radius_source(radii) {
+    let source = match crate::tables::radius_source(radii, &context) {
         Ok(source) => source,
         Err(exit) => return exit,
     };
