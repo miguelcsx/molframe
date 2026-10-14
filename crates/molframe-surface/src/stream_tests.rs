@@ -235,19 +235,16 @@ fn sampler_reuses_its_charge_and_collected_areas_keep_their_final_owner() {
     assert_eq!(context.reserved_bytes(), 0);
 }
 
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
-)]
 fn lattice(count: usize, spacing: f32) -> (Vec<[f32; 3]>, Vec<f32>) {
-    let side = (count as f64).cbrt().ceil() as usize;
+    let side = molframe_core::numeric::f64_to_usize(
+        molframe_core::numeric::usize_to_f64(count).cbrt().ceil(),
+    );
     let positions = (0..count)
         .map(|index| {
             [
-                (index % side) as f32 * spacing,
-                (index / side % side) as f32 * spacing,
-                (index / (side * side)) as f32 * spacing,
+                molframe_core::numeric::usize_to_f32(index % side) * spacing,
+                molframe_core::numeric::usize_to_f32(index / side % side) * spacing,
+                molframe_core::numeric::usize_to_f32(index / (side * side)) * spacing,
             ]
         })
         .collect();
