@@ -37,7 +37,6 @@ fn move_domain(points: &mut [[f32; 3]], degrees: f32, shift: [f32; 3]) {
     }
 }
 
-#[allow(clippy::cast_precision_loss)] // test-sized lengths
 fn plain_fit_gdt(model: &[[f32; 3]], reference: &[[f32; 3]], cutoffs: &[f64]) -> f64 {
     let fit = molframe_geom::superpose(model, reference).expect("valid fit");
     let mut total = 0.0;
@@ -49,9 +48,10 @@ fn plain_fit_gdt(model: &[[f32; 3]], reference: &[[f32; 3]], cutoffs: &[f64]) ->
                 molframe_geom::distance(fit.transform.apply(point), target) <= *cutoff
             })
             .count();
-        total += f64::from(u32::try_from(inside).expect("small")) / reference.len() as f64;
+        total += f64::from(u32::try_from(inside).expect("small"))
+            / molframe_core::numeric::usize_to_f64(reference.len());
     }
-    total / cutoffs.len() as f64
+    total / molframe_core::numeric::usize_to_f64(cutoffs.len())
 }
 
 #[test]
