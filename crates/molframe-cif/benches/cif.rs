@@ -30,6 +30,24 @@ fn bench_read(c: &mut Criterion) {
     group.finish();
 }
 
+/// Read time against atom count: the parallel `atom_site` path should keep the
+/// per-atom cost flat (or falling) from 100k to 1M atoms.
+fn bench_read_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("cif_read_atoms");
+    group.sample_size(10);
+    for atoms in [100_000_u64, 1_000_000] {
+        let bytes = cif_bytes_with_atoms(atoms);
+        let input = input(&bytes);
+        group.throughput(Throughput::Elements(atoms));
+        group.bench_function(format!("{atoms}"), |b| {
+            b.iter(|| {
+                let _ = black_box(read(&input, &ReadOptions::new()));
+            });
+        });
+    }
+    group.finish();
+}
+
 fn bench_read_with_document(c: &mut Criterion) {
     let mut group = c.benchmark_group("cif_read_with_document");
     for sample in [Sample::Tiny, Sample::Small, Sample::Medium] {
@@ -175,6 +193,7 @@ fn bench_first_atom(c: &mut Criterion) {
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_read(&mut criterion);
+    bench_read_scaling(&mut criterion);
     bench_read_with_document(&mut criterion);
     bench_tokenize_and_parse(&mut criterion);
     bench_lower(&mut criterion);

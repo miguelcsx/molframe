@@ -8,7 +8,7 @@ use molframe_bcif::{
     BinaryDocument, DataType, EncodedData, Encoding, decode, decode_columns, encode_floats,
     encode_integers, encode_interval, encode_strings, read, write_structure,
 };
-use molframe_bench::{Sample, input, structure};
+use molframe_bench::{Sample, input, structure, structure_with_atoms};
 use molframe_core::io::{Limits, ReadOptions};
 
 fn bench_read(c: &mut Criterion) {
@@ -75,6 +75,27 @@ fn bench_column_decode(c: &mut Criterion) {
             let _ = black_box(decode(&wide_encoded));
         });
     });
+    group.finish();
+}
+
+/// Read time against atom count, to keep the per-atom cost flat at 1M atoms.
+fn bench_read_scaling(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bcif_read_atoms");
+    group.sample_size(10);
+    for atoms in [100_000_u64, 1_000_000] {
+        let structure = structure_with_atoms(atoms);
+        let bytes = match write_structure(&structure) {
+            Ok(bytes) => bytes,
+            Err(error) => panic!("synthetic BinaryCIF failed to write: {error:?}"),
+        };
+        let buffer = input(&bytes);
+        group.throughput(Throughput::Elements(u64::from(structure.atom_count())));
+        group.bench_function(format!("{atoms}"), |b| {
+            b.iter(|| {
+                let _ = black_box(read(&buffer, &ReadOptions::new()));
+            });
+        });
+    }
     group.finish();
 }
 
@@ -166,6 +187,7 @@ fn bench_lower(c: &mut Criterion) {
 fn main() {
     let mut criterion = Criterion::default().configure_from_args();
     bench_read(&mut criterion);
+    bench_read_scaling(&mut criterion);
     bench_container_parse(&mut criterion);
     bench_decode_columns(&mut criterion);
     bench_lower(&mut criterion);
