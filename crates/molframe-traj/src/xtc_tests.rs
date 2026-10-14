@@ -53,3 +53,21 @@ fn refuses_truncation_and_shape_changes() {
     mismatched.positions.pop();
     assert!(write_xtc(&[frame(0, 0.0), mismatched], XtcWriteOptions::default()).is_err());
 }
+
+#[test]
+fn many_frames_keep_file_order_across_parallel_blocks() {
+    let input: Vec<Timestep> = (0_u16..37)
+        .map(|index| frame(index, f32::from(index) * 0.5))
+        .collect();
+    let bytes = write_xtc(&input, XtcWriteOptions::default()).expect("encode XTC");
+    let decoded = parse_xtc(&bytes).expect("decode XTC");
+
+    assert_eq!(decoded.frames.len(), input.len());
+    for (index, (actual, expected)) in decoded.frames.iter().zip(&input).enumerate() {
+        assert_eq!(actual.frame, index);
+        assert_eq!(actual.time, expected.time);
+        assert!((actual.positions[0][0] - expected.positions[0][0]).abs() < 0.002);
+    }
+    let cut = bytes.len() - bytes.len() / 37 - 3;
+    assert!(parse_xtc(&bytes[..cut]).is_err());
+}

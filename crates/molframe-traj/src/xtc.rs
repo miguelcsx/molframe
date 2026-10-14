@@ -1,7 +1,6 @@
 //! GROMACS XTC compressed-coordinate trajectory support.
 
 use std::io::Cursor;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use molframe_core::structure::UnitCell;
 
@@ -12,6 +11,8 @@ use crate::numeric::f32_from_f64;
 const NM_TO_ANGSTROM: f32 = 10.0;
 const ANGSTROM_TO_NM: f32 = 1.0 / NM_TO_ANGSTROM;
 
+#[path = "xtc/parallel.rs"]
+mod parallel;
 #[path = "xtc/reader.rs"]
 mod reader;
 
@@ -76,6 +77,8 @@ pub enum XtcError {
 /// Parses all frames from an XTC byte stream.
 ///
 /// Coordinates and periodic cells are converted from nanometres to ångström.
+/// Frames are located by a header-only scan and decoded in parallel; see the
+/// `parallel` module for the cost model.
 ///
 /// # Errors
 ///
@@ -85,38 +88,16 @@ pub fn parse_xtc(bytes: &[u8]) -> Result<XtcTrajectory, XtcError> {
     if bytes.is_empty() {
         return Err(XtcError::InvalidFrame);
     }
-    let mut reader = molly::XTCReader::new(Cursor::new(bytes));
     let mut frames = Vec::new();
     let mut steps = Vec::new();
     let mut precisions = Vec::new();
-    let mut atoms = None;
-    while usize::try_from(reader.file.position()).map_err(|_| XtcError::InvalidFrame)? < bytes.len()
+    for (frame, (mut timestep, step, precision)) in
+        parallel::decode_all(bytes)?.into_iter().enumerate()
     {
-        let mut source = molly::Frame::default();
-        let decoded = catch_unwind(AssertUnwindSafe(|| reader.read_frame(&mut source)))
-            .map_err(|_| XtcError::InconsistentRecord)?;
-        decoded?;
-        let positions = positions_from_source(&source)?;
-        match atoms {
-            Some(expected) if expected != positions.len() => return Err(XtcError::InvalidFrame),
-            None => atoms = Some(positions.len()),
-            Some(_) => {}
-        }
-        let frame = frames.len();
-        let cell = cell_from_box(source.boxvec)?;
-        let time = f64::from(source.time);
-        if !time.is_finite() || !source.precision.is_finite() || source.precision <= 0.0 {
-            return Err(XtcError::InvalidFrame);
-        }
-        frames.push(Timestep {
-            frame,
-            time: Some(time),
-            positions,
-            cell,
-            ..Timestep::default()
-        });
-        steps.push(source.step);
-        precisions.push(source.precision);
+        timestep.frame = frame;
+        frames.push(timestep);
+        steps.push(step);
+        precisions.push(precision);
     }
     populate_dt(&mut frames);
     Ok(XtcTrajectory {
