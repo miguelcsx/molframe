@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::brute::{distance_squared, pairs_same_selection};
+use molframe_core::numeric::{f64_to_f32, u64_to_f64, usize_to_f64, usize_to_u32};
 use molframe_core::structure::UnitCell;
 
 struct Lcg(u64);
@@ -12,7 +13,7 @@ impl Lcg {
             .0
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
-        ((self.0 >> 40) as f32) / ((1_u64 << 24) as f32)
+        f64_to_f32(u64_to_f64(self.0 >> 40) / 16_777_216.0)
     }
 
     fn point(&mut self, extent: [f32; 3]) -> [f32; 3] {
@@ -30,8 +31,8 @@ fn layouts() -> Vec<(&'static str, Vec<[f32; 3]>, f32)> {
     let needle: Vec<_> = (0..2000).map(|_| rng.point([200.0, 0.02, 0.02])).collect();
     let slab: Vec<_> = (0..3000).map(|_| rng.point([60.0, 60.0, 0.4])).collect();
     let mut clustered = Vec::new();
-    for centre in 0..6 {
-        let origin = [centre as f32 * 30.0, 0.0, 0.0];
+    for centre in 0..6_i16 {
+        let origin = [f32::from(centre) * 30.0, 0.0, 0.0];
         for _ in 0..500 {
             let local = rng.point([1.5; 3]);
             clustered.push([origin[0] + local[0], local[1], local[2]]);
@@ -42,7 +43,9 @@ fn layouts() -> Vec<(&'static str, Vec<[f32; 3]>, f32)> {
         .iter()
         .map(|p| [p[0] + 1.0e5, p[1] + 1.0e5, p[2] + 1.0e5])
         .collect();
-    let collinear: Vec<_> = (0..2500).map(|i| [i as f32 * 0.37, 1.0, 2.0]).collect();
+    let collinear: Vec<_> = (0..2500_u16)
+        .map(|i| [f32::from(i) * 0.37, 1.0, 2.0])
+        .collect();
     let mut outliers = uniform.clone();
     for (slot, sign) in [(0, 1.0), (1, -1.0), (2, 1.0)] {
         outliers[slot] = [sign * 1.0e6, 3.0 * sign, -1.0e6];
@@ -69,7 +72,7 @@ fn triclinic() -> PeriodicBox {
 }
 
 fn all(count: usize) -> Vec<u32> {
-    (0..count as u32).collect()
+    (0..usize_to_u32(count)).collect()
 }
 
 fn key(pair: &NeighborPair) -> (u32, u32, u32) {
@@ -239,16 +242,16 @@ fn knn_pads_short_rows_and_skips_non_finite_points() {
     assert_eq!(result.indices[..3], [1, NO_NEIGHBOR, NO_NEIGHBOR]);
     assert_eq!(result.indices[3..6], [0, NO_NEIGHBOR, NO_NEIGHBOR]);
     assert_eq!(result.indices[6..], [NO_NEIGHBOR; 3]);
-    assert_eq!(result.distances_squared[0], 1.0);
+    assert!(result.distances_squared[0].total_cmp(&1.0).is_eq());
 }
 
 #[test]
 fn tree_depth_stays_logarithmic_for_degenerate_inputs() {
     for (name, positions, _) in layouts() {
         let tree = KdTree::build(&positions, &all(positions.len()), None).expect("tree");
-        let leaves = (tree.split_value.len() + 1) as f64;
+        let leaves = usize_to_f64(tree.split_value.len() + 1);
         assert!(
-            leaves <= 2.0 * positions.len() as f64 / 16.0 + 1.0,
+            leaves <= 2.0 * usize_to_f64(positions.len()) / 16.0 + 1.0,
             "{name}: {leaves} leaves for {}",
             positions.len()
         );

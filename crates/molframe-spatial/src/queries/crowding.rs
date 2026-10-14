@@ -1,6 +1,7 @@
 //! Distribution probe that keeps `auto` away from cell lists on clustered data.
 
 use crate::brute::finite;
+use molframe_core::numeric::{f32_to_i64, usize_to_f64};
 
 /// Largest sample the probe inspects, so its cost is independent of system size.
 const SAMPLE: usize = 65_536;
@@ -20,7 +21,6 @@ const CROWDING_LIMIT: f64 = 8.0;
 ///
 /// Estimates the occupancy seen by an average point, `sum(c^2) / n`, from an
 /// evenly strided sample. Runtime is `O(S log S)` for sample size `S`.
-#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 pub(super) fn is_crowded(positions: &[[f32; 3]], atoms: &[u32], cutoff: f32) -> bool {
     if atoms.len() < 2 * 1_024 || !cutoff.is_finite() || cutoff <= 0.0 {
         return false;
@@ -31,7 +31,7 @@ pub(super) fn is_crowded(positions: &[[f32; 3]], atoms: &[u32], cutoff: f32) -> 
         .step_by(stride)
         .filter_map(|&atom| positions.get(atom as usize).copied())
         .filter(|&point| finite(point))
-        .map(|point| point.map(|value| (value / cutoff).floor() as i64))
+        .map(|point| point.map(|value| f32_to_i64((value / cutoff).floor())))
         .collect();
     if keys.is_empty() {
         return false;
@@ -50,8 +50,8 @@ pub(super) fn is_crowded(positions: &[[f32; 3]], atoms: &[u32], cutoff: f32) -> 
         }
     }
     sum_squares += run * run;
-    let sampled = keys.len() as f64;
-    let rate = 1.0 / stride as f64;
+    let sampled = usize_to_f64(keys.len());
+    let rate = 1.0 / usize_to_f64(stride);
     // Unbiased estimate of sum(c^2) / n: a sampled count c_s has
     // E[c_s^2 - c_s] = rate^2 * c * (c - 1), which removes the sampling noise
     // that would otherwise add `1 / rate` to every estimate.

@@ -274,19 +274,19 @@ fn split_slice(slice: &mut [Entry]) -> (u8, f32, usize) {
             high[axis] = high[axis].max(entry.position[axis]);
         }
     }
-    let mut axis = 0;
-    for candidate in 1..3 {
-        if high[candidate] - low[candidate] > high[axis] - low[axis] {
+    let mut axis = 0_u8;
+    for candidate in 1..3_u8 {
+        let (current, next) = (usize::from(axis), usize::from(candidate));
+        if high[next] - low[next] > high[current] - low[current] {
             axis = candidate;
         }
     }
     let middle = slice.len() / 2;
+    let key = usize::from(axis);
     slice.select_nth_unstable_by(middle, |left, right| {
-        left.position[axis].total_cmp(&right.position[axis])
+        left.position[key].total_cmp(&right.position[key])
     });
-    #[allow(clippy::cast_possible_truncation)]
-    let axis_id = axis as u8;
-    (axis_id, slice[middle].position[axis], middle)
+    (axis, slice[middle].position[key], middle)
 }
 
 type Task<'s> = Mutex<Option<(usize, &'s mut [Entry])>>;
@@ -384,9 +384,4 @@ mod tests;
 
 #[cfg(test)]
 #[path = "kd_adversarial_tests.rs"]
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::float_cmp
-)]
 mod adversarial_tests;

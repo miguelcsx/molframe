@@ -43,9 +43,13 @@ impl KnnOptions {
         exclude_self: Option<bool>,
         separate_queries: bool,
     ) -> Self {
+        let exclude_self = match exclude_self {
+            Some(choice) => choice,
+            None => !separate_queries,
+        };
         Self {
             max_distance,
-            exclude_self: exclude_self.unwrap_or(!separate_queries),
+            exclude_self,
         }
     }
 }
@@ -71,13 +75,12 @@ impl KnnResult {
     }
 }
 
-#[allow(clippy::needless_pass_by_value)]
-fn block_error(error: BlockExecutionError<SpatialError>) -> SpatialError {
+fn block_error(error: &BlockExecutionError<SpatialError>) -> SpatialError {
     match error {
-        BlockExecutionError::Memory(error) => SpatialError::Memory(error),
+        BlockExecutionError::Memory(error) => SpatialError::Memory(*error),
         BlockExecutionError::Cancelled => SpatialError::Cancelled,
         BlockExecutionError::Worker(_) => SpatialError::WorkerPanicked,
-        BlockExecutionError::Operation(error) => error,
+        BlockExecutionError::Operation(error) => *error,
     }
 }
 
@@ -166,7 +169,7 @@ impl KdTree<'_> {
                 Ok(())
             },
         )
-        .map_err(block_error)?;
+        .map_err(|error| block_error(&error))?;
         Ok(KnnResult {
             k,
             indices,
@@ -237,7 +240,7 @@ impl KdTree<'_> {
                 Ok(())
             },
         )
-        .map_err(block_error)?;
+        .map_err(|error| block_error(&error))?;
 
         let ascending = query.windows(2).all(|pair| pair[0] < pair[1]);
         if !same_selection || (sorted && !ascending) {

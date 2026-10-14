@@ -13,7 +13,6 @@ use molframe_core::{AtomSelection, ExecutionContext};
 ///
 /// Returns an error when the combined point count exceeds a 32-bit index, or
 /// for any reason [`knn_within`] does.
-#[allow(clippy::too_many_arguments)]
 pub fn knn_between(
     targets: &[[f32; 3]],
     queries: &[[f32; 3]],

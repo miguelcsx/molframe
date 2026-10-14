@@ -26,7 +26,6 @@ use molframe_core::{AtomSelection, ExecutionContext};
 ///
 /// Returns an error for an invalid `max_distance`, out-of-range atom indices,
 /// memory admission failure or cancellation.
-#[allow(clippy::too_many_arguments)]
 pub fn knn_within(
     positions: &[[f32; 3]],
     query: &AtomSelection,

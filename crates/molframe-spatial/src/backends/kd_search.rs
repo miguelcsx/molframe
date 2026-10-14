@@ -8,6 +8,7 @@ use super::heap::KnnHeap;
 use super::{KdTree, LEAF_MAX};
 use crate::SpatialError;
 use crate::brute::finite;
+use molframe_core::numeric::f64_to_f32;
 
 /// Relative slack applied to pruning so that the incremental cell distance,
 /// which rounds differently from the exact point distance, never discards a
@@ -184,12 +185,11 @@ impl KdTree<'_> {
             return;
         };
         let wrapped = periodic.wrap(point);
-        #[allow(clippy::cast_possible_truncation)]
         for shift in images {
             let image = [
-                (f64::from(wrapped[0]) + shift[0]) as f32,
-                (f64::from(wrapped[1]) + shift[1]) as f32,
-                (f64::from(wrapped[2]) + shift[2]) as f32,
+                f64_to_f32(f64::from(wrapped[0]) + shift[0]),
+                f64_to_f32(f64::from(wrapped[1]) + shift[1]),
+                f64_to_f32(f64::from(wrapped[2]) + shift[2]),
             ];
             self.traverse(image, stack, sink);
         }
