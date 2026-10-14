@@ -306,7 +306,6 @@ fn validate_options(path: &Path, options: OutputOptions) -> Result<(), Diagnosti
     Ok(())
 }
 
-#[cfg(any(not(feature = "gzip"), not(feature = "zstd")))]
 fn unavailable(path: &Path, compression: &str) -> Diagnostic {
     Diagnostic::new(Code::E7901)
         .with_context("path", path.display().to_string())
