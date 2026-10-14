@@ -314,7 +314,6 @@ pub fn distance_rows_into(
 /// # Errors
 ///
 /// Same as [`distance_rows_into`].
-#[allow(clippy::cast_possible_truncation)] // narrowing to f32 is the point
 pub fn distance_rows_f32_into(
     positions: &[[f32; 3]],
     rows: Range<usize>,
@@ -328,7 +327,7 @@ pub fn distance_rows_f32_into(
     for (row, target) in rows.zip(output.chunks_exact_mut(size.max(1))) {
         distances_from(positions[row], positions, &mut line);
         for (slot, value) in target.iter_mut().zip(&line) {
-            *slot = *value as f32;
+            *slot = molframe_core::numeric::f64_to_f32(*value);
         }
     }
     Ok(())
@@ -364,7 +363,6 @@ pub fn distance_block_rows(
 /// # Errors
 ///
 /// Size, memory-admission, cancellation or worker errors.
-#[allow(clippy::cast_possible_truncation)] // narrowing to f32 is the point
 pub fn distance_matrix_f32_with_context(
     positions: &[[f32; 3]],
     context: &ExecutionContext,
@@ -387,7 +385,7 @@ pub fn distance_matrix_f32_with_context(
         }
         distances_from(positions[row], positions, &mut line);
         for (slot, value) in target.iter_mut().zip(&line) {
-            *slot = *value as f32;
+            *slot = molframe_core::numeric::f64_to_f32(*value);
         }
     }
     Ok(values)
@@ -414,8 +412,7 @@ pub fn condensed_distances_f32_with_context(
     positions: &[[f32; 3]],
     context: &ExecutionContext,
 ) -> Result<Vec<f32>, MatrixError> {
-    #[allow(clippy::cast_possible_truncation)] // narrowing to f32 is the point
-    let narrow = |value: f64| value as f32;
+    let narrow = molframe_core::numeric::f64_to_f32;
     condensed(positions, context, narrow)
 }
 
