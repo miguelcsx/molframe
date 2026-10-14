@@ -1,10 +1,11 @@
 //! Motion candidates preserve the caller's original topology and atom addresses.
 
 use crate::bindings::PyStructure;
+use crate::bindings::array::Array2;
 use crate::execution::PyExecutionContext;
 use crate::table::{PyTable, TableBuilder};
 use molframe::analysis::{HydrogenBondCandidateOptions, hydrogen_bond_candidates_over_segment};
-use numpy::{PyArray2, PyArrayMethods};
+use numpy::PyArrayMethods;
 use pyo3::prelude::*;
 
 #[pyclass(
@@ -40,8 +41,8 @@ impl PyCandidateOptions {
 fn hydrogen_bond_candidates(
     py: Python<'_>,
     structure: &PyStructure,
-    start: &Bound<'_, PyArray2<f32>>,
-    end: &Bound<'_, PyArray2<f32>>,
+    start: Array2<'_, '_, f32>,
+    end: Array2<'_, '_, f32>,
     options: Option<&PyCandidateOptions>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyTable> {

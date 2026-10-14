@@ -1,8 +1,9 @@
 //! Density maps: reading and writing MRC/CCP4, their statistics and interpolation.
 
+use crate::bindings::array::{Array2, Array3};
 use crate::crystal::PyUnitCell;
 use molframe::crystal::{DensityMap, MapBoundary};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3, PyArrayMethods, PyUntypedArrayMethods};
+use numpy::{IntoPyArray, PyArray1, PyArray3, PyArrayMethods, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::path::PathBuf;
@@ -92,7 +93,7 @@ impl PyDensityMap {
         labels=Vec::new(),
     ))]
     fn new(
-        values: &Bound<'_, PyArray3<f32>>,
+        values: Array3<'_, '_, f32>,
         cell: &PyUnitCell,
         sampling: Option<[usize; 3]>,
         starts: [i32; 3],
@@ -191,7 +192,7 @@ impl PyDensityMap {
     }
 
     /// The same over the voxels where `mask` (shape `(nz, ny, nx)`) is true.
-    fn masked_statistics(&self, mask: &Bound<'_, PyArray3<bool>>) -> PyResult<PyMapStatistics> {
+    fn masked_statistics(&self, mask: Array3<'_, '_, bool>) -> PyResult<PyMapStatistics> {
         let flat: Vec<bool> = mask.readonly().as_array().iter().copied().collect();
         self.inner
             .masked_statistics(&flat)
@@ -224,7 +225,7 @@ impl PyDensityMap {
     fn sample<'py>(
         &self,
         py: Python<'py>,
-        positions: &Bound<'py, PyArray2<f64>>,
+        positions: Array2<'_, 'py, f64>,
         method: &str,
         boundary: &str,
     ) -> PyResult<Bound<'py, PyArray1<f32>>> {

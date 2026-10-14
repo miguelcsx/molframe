@@ -1,10 +1,11 @@
 //! Mechanical adapters for solvent-accessible area and cavity detection.
 
+use crate::bindings::array::{Array1, Array2};
 use molframe::surface::{AtomDepthOptions, MoleculeRole, SurfaceGridOptions};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, ToPyArray};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 
-fn radii<'a>(array: &'a PyReadonlyArray1<'_, f32>) -> PyResult<&'a [f32]> {
+fn radii<'a>(array: &'a numpy::PyReadonlyArray1<'_, f32>) -> PyResult<&'a [f32]> {
     array.as_slice().map_err(|_| {
         crate::error::value("radii must be C-contiguous; call numpy.ascontiguousarray")
     })
@@ -15,8 +16,8 @@ fn radii<'a>(array: &'a PyReadonlyArray1<'_, f32>) -> PyResult<&'a [f32]> {
 #[pyo3(signature = (coordinates, radii, *, probe=1.4, points=960, context=None))]
 fn sasa<'py>(
     py: Python<'py>,
-    coordinates: &Bound<'py, PyArray2<f32>>,
-    radii: &Bound<'py, PyArray1<f32>>,
+    coordinates: Array2<'_, 'py, f32>,
+    radii: Array1<'_, 'py, f32>,
     probe: f32,
     points: u16,
     context: Option<&crate::execution::PyExecutionContext>,
@@ -39,8 +40,8 @@ fn sasa<'py>(
 #[pyo3(signature = (coordinates, radii, *, probe=1.4, slices=20, context=None))]
 fn lee_richards<'py>(
     py: Python<'py>,
-    coordinates: &Bound<'py, PyArray2<f32>>,
-    radii: &Bound<'py, PyArray1<f32>>,
+    coordinates: Array2<'_, 'py, f32>,
+    radii: Array1<'_, 'py, f32>,
     probe: f32,
     slices: u16,
     context: Option<&crate::execution::PyExecutionContext>,
@@ -63,8 +64,8 @@ fn lee_richards<'py>(
 #[pyo3(signature = (coordinates, radii, *, probe=1.4, resolution=0.5))]
 fn cavities(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
+    coordinates: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
     probe: f32,
     resolution: f32,
 ) -> PyResult<Vec<(f64, [f32; 3], usize)>> {
@@ -152,8 +153,8 @@ impl PySurfacePoints {
 #[pyo3(signature = (coordinates, radii, *, probe=1.4, samples=960, context=None))]
 fn surface_points(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
+    coordinates: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
     probe: f32,
     samples: u16,
     context: Option<&crate::execution::PyExecutionContext>,
@@ -176,8 +177,8 @@ fn surface_points(
 #[pyo3(signature = (coordinates, radii, *, probe=1.4, density=4.0, context=None))]
 fn surface_points_at_density(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
+    coordinates: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
     probe: f32,
     density: f32,
     context: Option<&crate::execution::PyExecutionContext>,
@@ -210,8 +211,8 @@ fn surface_points_at_density(
 ))]
 fn solvent_excluded_surface(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
+    coordinates: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
     probe: f32,
     resolution: f32,
     max_cells: Option<usize>,
@@ -282,9 +283,9 @@ impl PyBuriedSurface {
 #[pyo3(signature = (coordinates, radii, in_first, *, probe=1.4, points=960, context=None))]
 fn buried_surface(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
-    in_first: &Bound<'_, PyArray1<bool>>,
+    coordinates: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
+    in_first: Array1<'_, '_, bool>,
     probe: f32,
     points: u16,
     context: Option<&crate::execution::PyExecutionContext>,
@@ -322,8 +323,8 @@ fn buried_surface(
 ))]
 fn buried_solvent_excluded_surface(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
+    coordinates: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
     roles: Vec<String>,
     probe: f32,
     resolution: f32,
@@ -357,8 +358,8 @@ fn buried_solvent_excluded_surface(
 #[pyo3(signature = (atoms, surface, *, cell_size=3.0))]
 fn atom_depths<'py>(
     py: Python<'py>,
-    atoms: &Bound<'py, PyArray2<f32>>,
-    surface: &Bound<'py, PyArray2<f32>>,
+    atoms: Array2<'_, 'py, f32>,
+    surface: Array2<'_, 'py, f32>,
     cell_size: f64,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
     let atoms = atoms.readonly();

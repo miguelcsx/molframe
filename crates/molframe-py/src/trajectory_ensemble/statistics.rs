@@ -5,6 +5,7 @@ use super::results::{
 };
 use super::{MEMORY_LIMIT, frames, positions_f32, rows_of, wrap};
 use crate::analysis_result::PyAnalysis;
+use crate::bindings::array::Array2;
 use crate::policy::{PyAnalysisPolicy, policy_of};
 use molframe::trajectory::{
     HarmonicSimilarityOptions, PathFrameMetric, RemainderPolicy, analyse_block_convergence,
@@ -12,7 +13,6 @@ use molframe::trajectory::{
     analyse_harmonic_ensemble_similarity, analyse_mean_squared_displacement_view,
     path_similarity_view,
 };
-use numpy::PyArray2;
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -116,8 +116,8 @@ fn block_convergence(
 #[pyo3(signature = (first, second, *, regularization, memory_limit=MEMORY_LIMIT, policy=None))]
 fn harmonic_similarity(
     py: Python<'_>,
-    first: &Bound<'_, PyArray2<f64>>,
-    second: &Bound<'_, PyArray2<f64>>,
+    first: Array2<'_, '_, f64>,
+    second: Array2<'_, '_, f64>,
     regularization: f64,
     memory_limit: usize,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,

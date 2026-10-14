@@ -1,5 +1,6 @@
 //! Reflection tables: reading and writing MTZ, and the columns of reciprocal-space data.
 
+use crate::bindings::array::Array2;
 use crate::crystal::PyUnitCell;
 use molframe::crystal::{
     ReflectionColumn, ReflectionColumnType, ReflectionTable, ReflectionValue, read_mtz, write_mtz,
@@ -48,7 +49,7 @@ impl PyReflectionTable {
         title="",
     ))]
     fn new(
-        hkl: &Bound<'_, PyArray2<i32>>,
+        hkl: Array2<'_, '_, i32>,
         columns: BTreeMap<String, (String, Vec<f64>)>,
         cell: Option<&PyUnitCell>,
         space_group_number: Option<i32>,

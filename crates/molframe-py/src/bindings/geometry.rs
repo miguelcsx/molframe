@@ -1,9 +1,12 @@
 //! Stateless geometry over `NumPy` coordinate arrays.
 
-use numpy::{IntoPyArray, PyArray2, PyArrayMethods, PyReadonlyArray2, PyUntypedArrayMethods};
+use crate::bindings::array::Array2;
+use numpy::{IntoPyArray, PyArray2, PyArrayMethods, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 
-pub(crate) fn coordinates<'a>(array: &'a PyReadonlyArray2<'_, f32>) -> PyResult<&'a [[f32; 3]]> {
+pub(crate) fn coordinates<'a>(
+    array: &'a numpy::PyReadonlyArray2<'_, f32>,
+) -> PyResult<&'a [[f32; 3]]> {
     let shape = array.shape();
     if shape.len() != 2 || shape[1] != 3 {
         return Err(crate::error::value("coordinates must have shape (n, 3)"));
@@ -20,16 +23,13 @@ pub(crate) fn coordinates<'a>(array: &'a PyReadonlyArray2<'_, f32>) -> PyResult<
 }
 
 #[pyfunction]
-pub(crate) fn centroid(array: &Bound<'_, PyArray2<f32>>) -> PyResult<Option<[f64; 3]>> {
+pub(crate) fn centroid(array: Array2<'_, '_, f32>) -> PyResult<Option<[f64; 3]>> {
     let array = array.readonly();
     Ok(molframe::geometry::centroid(coordinates(&array)?))
 }
 
 #[pyfunction]
-pub(crate) fn rmsd(
-    mobile: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
-) -> PyResult<f64> {
+pub(crate) fn rmsd(mobile: Array2<'_, '_, f32>, reference: Array2<'_, '_, f32>) -> PyResult<f64> {
     let mobile = mobile.readonly();
     let reference = reference.readonly();
     molframe::geometry::rmsd(coordinates(&mobile)?, coordinates(&reference)?)
@@ -60,7 +60,7 @@ fn width(dtype: &str) -> PyResult<Width> {
 #[pyo3(signature = (array, *, dtype="float64", condensed=false, context=None))]
 pub(crate) fn distance_matrix<'py>(
     py: Python<'py>,
-    array: &Bound<'py, PyArray2<f32>>,
+    array: Array2<'_, 'py, f32>,
     dtype: &str,
     condensed: bool,
     context: Option<&crate::execution::PyExecutionContext>,
@@ -144,7 +144,7 @@ impl DistanceBlocks {
 #[pyo3(signature = (array, block_rows=None, *, dtype="float64", context=None))]
 pub(crate) fn distance_matrix_blocks(
     py: Python<'_>,
-    array: &Bound<'_, PyArray2<f32>>,
+    array: Array2<'_, '_, f32>,
     block_rows: Option<usize>,
     dtype: &str,
     context: Option<Py<crate::execution::PyExecutionContext>>,
@@ -167,7 +167,7 @@ pub(crate) fn distance_matrix_blocks(
     let blocks = molframe::geometry::RowBlocks::new(size, rows)
         .ok_or_else(|| crate::error::value("block_rows must be at least 1"))?;
     Ok(DistanceBlocks {
-        array: array.clone().unbind(),
+        array: Bound::clone(&array).unbind(),
         width,
         blocks,
         context,

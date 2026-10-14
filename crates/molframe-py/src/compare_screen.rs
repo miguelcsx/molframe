@@ -1,6 +1,7 @@
 //! Mechanical adapters for batched TM-score and its opt-in prefilter.
 
-use numpy::{IntoPyArray, PyArray1, PyReadonlyArray2, PyUntypedArrayMethods};
+use crate::bindings::array::Readonly2;
+use numpy::{IntoPyArray, PyArray1, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 
 use crate::execution::PyExecutionContext;
@@ -41,11 +42,14 @@ impl PyTmScreen {
     }
 }
 
-fn views<'a>(arrays: &'a [PyReadonlyArray2<'_, f32>]) -> PyResult<Vec<&'a [[f32; 3]]>> {
-    arrays.iter().map(crate::bindings::coordinates).collect()
+fn views<'a>(arrays: &'a [Readonly2<'_, f32>]) -> PyResult<Vec<&'a [[f32; 3]]>> {
+    arrays
+        .iter()
+        .map(|array| crate::bindings::coordinates(array))
+        .collect()
 }
 
-fn pair_list(pairs: &PyReadonlyArray2<'_, u64>) -> PyResult<Vec<(usize, usize)>> {
+fn pair_list(pairs: &numpy::PyReadonlyArray2<'_, u64>) -> PyResult<Vec<(usize, usize)>> {
     if pairs.shape()[1] != 2 {
         return Err(crate::error::value("pairs must have shape (n, 2)"));
     }
@@ -79,8 +83,8 @@ fn pair_list(pairs: &PyReadonlyArray2<'_, u64>) -> PyResult<Vec<(usize, usize)>>
 #[pyo3(signature = (structures, *, pairs=None, context=None))]
 fn tm_scores<'py>(
     py: Python<'py>,
-    structures: Vec<PyReadonlyArray2<'py, f32>>,
-    pairs: Option<PyReadonlyArray2<'py, u64>>,
+    structures: Vec<Readonly2<'py, f32>>,
+    pairs: Option<Readonly2<'py, u64>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let views = views(&structures)?;
@@ -108,10 +112,10 @@ fn tm_scores<'py>(
 #[pyo3(signature = (structures, *, threshold, coarse_ratio=None, pairs=None, context=None))]
 fn tm_screen<'py>(
     py: Python<'py>,
-    structures: Vec<PyReadonlyArray2<'py, f32>>,
+    structures: Vec<Readonly2<'py, f32>>,
     threshold: f64,
     coarse_ratio: Option<f64>,
-    pairs: Option<PyReadonlyArray2<'py, u64>>,
+    pairs: Option<Readonly2<'py, u64>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyTmScreen> {
     let views = views(&structures)?;

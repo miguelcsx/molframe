@@ -11,6 +11,7 @@ use self::results::{
     PyMsd, PyPathSimilarity, PyPca, matrix,
 };
 use crate::analysis_result::PyAnalysis;
+use crate::bindings::array::Array2;
 use crate::policy::{PyAnalysisPolicy, policy_of};
 use molframe::trajectory::{
     CartesianFit, EnsembleDistanceMatrix, FrameView, KMeansOptions, Linkage,
@@ -18,7 +19,7 @@ use molframe::trajectory::{
     analyse_diffusion_map, analyse_generalized_procrustes_mean_view, analyse_kmeans_view,
     analyse_medoid, analyse_pairwise_fitted_rmsd_view,
 };
-use numpy::{IntoPyArray, PyArray2, PyArray3, PyArrayMethods, PyUntypedArrayMethods};
+use numpy::{IntoPyArray, PyArray3, PyArrayMethods, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -56,7 +57,7 @@ pub(super) fn frames<'a>(array: &'a numpy::PyReadonlyArray3<'_, f32>) -> PyResul
     FrameView::new(flat.as_chunks::<3>().0, shape[0], shape[1]).map_err(crate::error::kernel)
 }
 
-fn distances(array: &Bound<'_, PyArray2<f64>>) -> PyResult<EnsembleDistanceMatrix> {
+fn distances(array: Array2<'_, '_, f64>) -> PyResult<EnsembleDistanceMatrix> {
     let readonly = array.readonly();
     let view = readonly.as_array();
     if view.nrows() != view.ncols() {
@@ -80,7 +81,7 @@ pub(super) fn wrap<T>(
     Ok(PyAnalysis::new(analysis, converted))
 }
 
-pub(super) fn rows_of(array: &Bound<'_, PyArray2<f64>>) -> Vec<Vec<f64>> {
+pub(super) fn rows_of(array: Array2<'_, '_, f64>) -> Vec<Vec<f64>> {
     let readonly = array.readonly();
     readonly
         .as_array()
@@ -137,7 +138,7 @@ fn pca(
     positions: &Bound<'_, PyAny>,
     components: usize,
     fit: &str,
-    reference: Option<&Bound<'_, PyArray2<f32>>>,
+    reference: Option<Array2<'_, '_, f32>>,
     tolerance: f64,
     max_iterations: usize,
     memory_limit: usize,
@@ -145,7 +146,7 @@ fn pca(
 ) -> PyResult<PyAnalysis> {
     let array = positions_f32(positions)?;
     let view = frames(&array)?;
-    let reference = reference.map(numpy::PyArrayMethods::readonly);
+    let reference = reference.map(|array| array.readonly());
     let reference = match &reference {
         Some(reference) => Some(crate::bindings::coordinates(reference)?),
         None => None,
@@ -209,7 +210,7 @@ fn mean_structure(
 #[pyo3(signature = (distances, *, epsilon, dimensions, time=1, policy=None))]
 fn diffusion_map(
     py: Python<'_>,
-    distances: &Bound<'_, PyArray2<f64>>,
+    distances: Array2<'_, '_, f64>,
     epsilon: f64,
     dimensions: usize,
     time: u32,
@@ -244,7 +245,7 @@ fn diffusion_map(
 ))]
 fn kmeans(
     py: Python<'_>,
-    observations: &Bound<'_, PyArray2<f64>>,
+    observations: Array2<'_, '_, f64>,
     initial_centres: Vec<usize>,
     maximum_iterations: usize,
     tolerance_squared: f64,
@@ -295,7 +296,7 @@ fn clustering(py: Python<'_>, value: &molframe::trajectory::Clustering) -> PyRes
 #[pyo3(signature = (distances, *, clusters, linkage="average", policy=None))]
 fn agglomerative_clustering(
     py: Python<'_>,
-    distances: &Bound<'_, PyArray2<f64>>,
+    distances: Array2<'_, '_, f64>,
     clusters: usize,
     linkage: &str,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
@@ -315,7 +316,7 @@ fn agglomerative_clustering(
 #[pyo3(signature = (distances, *, epsilon, minimum_points, policy=None))]
 fn dbscan(
     py: Python<'_>,
-    distances: &Bound<'_, PyArray2<f64>>,
+    distances: Array2<'_, '_, f64>,
     epsilon: f64,
     minimum_points: usize,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
@@ -333,7 +334,7 @@ fn dbscan(
 #[pyo3(signature = (distances, members, *, policy=None))]
 fn medoid(
     py: Python<'_>,
-    distances: &Bound<'_, PyArray2<f64>>,
+    distances: Array2<'_, '_, f64>,
     members: Vec<usize>,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
 ) -> PyResult<PyAnalysis> {

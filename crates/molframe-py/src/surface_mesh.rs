@@ -1,6 +1,7 @@
 //! Triangle meshes of molecular surfaces: construction, components, curvature and
 //! distances along the surface.
 
+use crate::bindings::array::Array2;
 use molframe::surface::{
     CurvatureQuality, IndexedSurfaceMesh, SurfaceComponentFilter, SurfaceFace,
     edge_geodesic_distances, filter_surface_components, surface_components, surface_curvatures,
@@ -54,10 +55,7 @@ impl PyMesh {
 #[pymethods]
 impl PyMesh {
     #[new]
-    fn construct(
-        vertices: &Bound<'_, PyArray2<f32>>,
-        faces: &Bound<'_, PyArray2<u32>>,
-    ) -> PyResult<Self> {
+    fn construct(vertices: Array2<'_, '_, f32>, faces: Array2<'_, '_, u32>) -> PyResult<Self> {
         let (vertices, faces) = (vertices.readonly(), faces.readonly());
         if vertices.as_array().ncols() != 3 || faces.as_array().ncols() != 3 {
             return Err(crate::error::value(

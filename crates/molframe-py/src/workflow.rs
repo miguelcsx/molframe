@@ -1,7 +1,8 @@
 //! Python's named facade over the typed native workflow.
 
+use crate::bindings::array::Readonly2;
 use crate::bindings::{PyContactTable, PyStructure, coordinates};
-use numpy::{IntoPyArray, PyArrayMethods, PyReadonlyArray2};
+use numpy::{IntoPyArray, PyArrayMethods};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -310,7 +311,7 @@ impl PyCompiledWorkflow {
                             "persistent coordinate inputs require copy=True",
                         ));
                     }
-                    let array = value.extract::<PyReadonlyArray2<'_, f32>>()?;
+                    let array = value.extract::<Readonly2<'_, f32>>()?;
                     inputs.insert(name.clone(), coordinates(&array)?.to_vec());
                 }
                 InputKind::Float => inputs.insert(name.clone(), value.extract::<f64>()?),

@@ -1,4 +1,5 @@
 //! Borrowed numerical inputs to caller-installed analytical surface executables.
+use crate::bindings::array::{Array1, Array2};
 use molframe::surface::native_solver::{
     NativeSurfaceMesh, NativeSurfaceOptions, NativeSurfaceProvider, SurfaceAtoms,
     native_molecular_surface,
@@ -144,9 +145,9 @@ impl PyMolecularSurface {
 #[pyo3(signature = (coordinates, radii, rows, provider, *, context=None))]
 fn native_surface(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
-    rows: &Bound<'_, PyArray1<u32>>,
+    coordinates: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
+    rows: Array1<'_, '_, u32>,
     provider: &PyNativeSurfaceProvider,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<PyMolecularSurface> {

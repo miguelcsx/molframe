@@ -1,12 +1,13 @@
 //! Structure alignment by combinatorial extension, contact-area difference scores, contact
 //! map overlap and the sequence-based mapping of chains and residues.
 
+use crate::bindings::array::{Array1, Array2, Readonly1};
 use crate::execution::PyExecutionContext;
 use crate::table::{PyTable, TableBuilder};
 use molframe::compare::{
     CeOptions, CeSignificanceProfile, ContactArea, ce_alignments, contact_map_similarity,
 };
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1};
+use numpy::{IntoPyArray, PyArray1, PyArrayMethods};
 use pyo3::prelude::*;
 
 fn coordinates<'a>(array: &'a numpy::PyReadonlyArray2<'_, f32>) -> PyResult<&'a [[f32; 3]]> {
@@ -110,8 +111,8 @@ impl PyCeAlignment {
 ))]
 fn ce_align(
     py: Python<'_>,
-    reference: &Bound<'_, PyArray2<f32>>,
-    mobile: &Bound<'_, PyArray2<f32>>,
+    reference: Array2<'_, '_, f32>,
+    mobile: Array2<'_, '_, f32>,
     window_size: usize,
     max_gap: usize,
     max_paths: usize,
@@ -144,7 +145,7 @@ fn column<'py, T: numpy::Element + Copy>(
     table: &Bound<'py, PyAny>,
     name: &str,
 ) -> PyResult<Vec<T>> {
-    let array: PyReadonlyArray1<'py, T> = table.get_item(name)?.extract()?;
+    let array: Readonly1<'py, T> = table.get_item(name)?.extract()?;
     Ok(array.as_array().to_vec())
 }
 
@@ -178,9 +179,9 @@ fn areas(table: &Bound<'_, PyAny>) -> PyResult<Vec<ContactArea>> {
 #[pyo3(signature = (positions, radii, residues, *, probe=1.4, density=4.0, context=None))]
 fn contact_areas(
     py: Python<'_>,
-    positions: &Bound<'_, PyArray2<f32>>,
-    radii: &Bound<'_, PyArray1<f32>>,
-    residues: &Bound<'_, PyArray1<u32>>,
+    positions: Array2<'_, '_, f32>,
+    radii: Array1<'_, '_, f32>,
+    residues: Array1<'_, '_, u32>,
     probe: f32,
     density: f32,
     context: Option<&PyExecutionContext>,
@@ -331,10 +332,10 @@ impl PyContactSimilarity {
 #[pyfunction]
 fn contact_similarity(
     py: Python<'_>,
-    first: &Bound<'_, PyArray2<u32>>,
-    second: &Bound<'_, PyArray2<u32>>,
+    first: Array2<'_, '_, u32>,
+    second: Array2<'_, '_, u32>,
 ) -> PyResult<PyContactSimilarity> {
-    let pairs = |array: &Bound<'_, PyArray2<u32>>| -> PyResult<Vec<(u32, u32)>> {
+    let pairs = |array: Array2<'_, '_, u32>| -> PyResult<Vec<(u32, u32)>> {
         let readonly = array.readonly();
         let view = readonly.as_array();
         if view.ncols() != 2 {

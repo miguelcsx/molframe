@@ -6,6 +6,15 @@ change the public API.
 
 ## Unreleased
 
+- **A wrong array dtype or rank is a clear `MolframeTypeError`.** Passing a
+  `float64` array where `float32` is expected used to fail with
+  `'ndarray' object is not an instance of 'ndarray'`, because PyO3's own
+  check can only name the type, not the dtype. Every array parameter now goes
+  through one extraction that states the dtype and rank expected and received
+  (`expected a float32 array, received dtype float64; convert it once with
+  array.astype(numpy.float32)`) and names the parameter in the exception
+  note. Nothing is converted silently, since the copy is the size of the
+  input and would narrow the values.
 - **A failed native BCIF encoding reports its real cause.** The structure
   capsule (ABI version 3) appends a failure callback returning the
   diagnostic number and message, so a consumer such as molgfx raises the

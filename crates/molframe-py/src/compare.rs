@@ -1,14 +1,15 @@
 //! Mechanical adapters for superposition-based structure comparison scores.
 
-use numpy::{PyArray1, PyArray2, PyArrayMethods};
+use crate::bindings::array::{Array1, Array2};
+use numpy::PyArrayMethods;
 use pyo3::prelude::*;
 
 type Scorer = fn(&[[f32; 3]], &[[f32; 3]]) -> Result<f64, molframe::compare::CompareError>;
 
 fn score(
     py: Python<'_>,
-    model: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
+    model: Array2<'_, '_, f32>,
+    reference: Array2<'_, '_, f32>,
     scorer: Scorer,
 ) -> PyResult<f64> {
     let model = model.readonly();
@@ -25,8 +26,8 @@ fn score(
 #[pyfunction]
 fn tm_score(
     py: Python<'_>,
-    model: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
+    model: Array2<'_, '_, f32>,
+    reference: Array2<'_, '_, f32>,
 ) -> PyResult<f64> {
     score(py, model, reference, molframe::compare::tm_score)
 }
@@ -35,8 +36,8 @@ fn tm_score(
 #[pyfunction]
 fn gdt_ts(
     py: Python<'_>,
-    model: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
+    model: Array2<'_, '_, f32>,
+    reference: Array2<'_, '_, f32>,
 ) -> PyResult<f64> {
     score(py, model, reference, molframe::compare::gdt_ts)
 }
@@ -45,8 +46,8 @@ fn gdt_ts(
 #[pyfunction]
 fn gdt_ha(
     py: Python<'_>,
-    model: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
+    model: Array2<'_, '_, f32>,
+    reference: Array2<'_, '_, f32>,
 ) -> PyResult<f64> {
     score(py, model, reference, molframe::compare::gdt_ha)
 }
@@ -55,9 +56,9 @@ fn gdt_ha(
 #[pyfunction]
 fn weighted_rmsd(
     py: Python<'_>,
-    model: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
-    weights: &Bound<'_, PyArray1<f64>>,
+    model: Array2<'_, '_, f32>,
+    reference: Array2<'_, '_, f32>,
+    weights: Array1<'_, '_, f64>,
 ) -> PyResult<f64> {
     let model = model.readonly();
     let reference = reference.readonly();

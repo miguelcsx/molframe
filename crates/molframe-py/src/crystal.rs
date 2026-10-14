@@ -1,13 +1,14 @@
 //! Mechanical adapters for reciprocal geometry and exact reflection symmetry.
 
 use crate::bindings::PyStructure;
+use crate::bindings::array::Array2;
 use molframe::UnitCell;
 use molframe::crystal::{AssemblyExt as _, AssemblyView};
 use molframe::crystal::{
     CellTransform, ReflectionSymmetry, SymmetryExt as _, SymmetryOperation, SymmetrySet,
     space_group_by_hall, space_group_by_hermann_mauguin, space_group_setting, space_group_settings,
 };
-use numpy::{Complex64, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
+use numpy::{Complex64, PyArray1, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 
 #[derive(Clone, Copy, Debug)]
@@ -289,7 +290,7 @@ impl PyReflectionSymmetry {
 fn structure_factors<'py>(
     py: Python<'py>,
     structure: &PyStructure,
-    hkl: &Bound<'py, PyArray2<i32>>,
+    hkl: Array2<'_, 'py, i32>,
 ) -> PyResult<Bound<'py, PyArray1<Complex64>>> {
     let hkl = hkl.readonly();
     let shape = hkl.shape();

@@ -2,13 +2,14 @@
 //! and quaternary structure, with and without a chain and atom mapping.
 
 use crate::bindings::PyStructure;
+use crate::bindings::array::Array2;
 use crate::execution::PyExecutionContext;
 use crate::sequence::PyScoring;
 use molframe::compare::{
     DockQ, DockQOptions, EmptyLddtPolicy, LddtOptions, MappingOptions, QsOptions,
 };
 use molframe::{CompareExt, Namespace};
-use numpy::{PyArray2, PyArrayMethods};
+use numpy::PyArrayMethods;
 use pyo3::prelude::*;
 use std::path::PathBuf;
 
@@ -35,8 +36,8 @@ fn namespace(name: &str) -> PyResult<Namespace> {
 ))]
 pub(crate) fn lddt(
     py: Python<'_>,
-    model: &Bound<'_, PyArray2<f32>>,
-    reference: &Bound<'_, PyArray2<f32>>,
+    model: Array2<'_, '_, f32>,
+    reference: Array2<'_, '_, f32>,
     inclusion_radius: f64,
     tolerances: Vec<f64>,
     minimum_reference_distance: f64,

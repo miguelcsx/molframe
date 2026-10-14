@@ -8,6 +8,7 @@ use pyo3::types::PyAny;
 
 #[cfg(feature = "analysis")]
 mod analysis;
+pub(crate) mod array;
 #[cfg(feature = "geometry")]
 mod geometry;
 #[cfg(feature = "geometry")]

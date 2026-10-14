@@ -5,16 +5,14 @@
 //! vertex, a torsion through a collinear triple) is `NaN`, never a placeholder.
 
 use super::geometry::coordinates;
+use crate::bindings::array::{Array2, Readonly1};
 use molframe::geometry as geom;
-use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyUntypedArrayMethods,
-    ToPyArray,
-};
+use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 
-type Coordinates<'py> = Bound<'py, PyArray2<f32>>;
+type Coordinates<'a, 'py> = Array2<'a, 'py, f32>;
 
-fn masses_or_ones(masses: Option<PyReadonlyArray1<'_, f64>>, count: usize) -> PyResult<Vec<f64>> {
+fn masses_or_ones(masses: Option<Readonly1<'_, f64>>, count: usize) -> PyResult<Vec<f64>> {
     match masses {
         Some(values) => {
             let values = values.as_slice().map_err(|_| {
@@ -40,8 +38,8 @@ fn to_degrees(radians: Vec<f64>) -> Vec<f64> {
 #[pyfunction]
 pub(crate) fn distances<'py>(
     py: Python<'py>,
-    left: &Coordinates<'py>,
-    right: &Coordinates<'py>,
+    left: Coordinates<'_, 'py>,
+    right: Coordinates<'_, 'py>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let (left, right) = (left.readonly(), right.readonly());
     let (left, right) = (coordinates(&left)?, coordinates(&right)?);
@@ -55,9 +53,9 @@ pub(crate) fn distances<'py>(
 #[pyfunction]
 pub(crate) fn angles<'py>(
     py: Python<'py>,
-    first: &Coordinates<'py>,
-    vertex: &Coordinates<'py>,
-    third: &Coordinates<'py>,
+    first: Coordinates<'_, 'py>,
+    vertex: Coordinates<'_, 'py>,
+    third: Coordinates<'_, 'py>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let (first, vertex, third) = (first.readonly(), vertex.readonly(), third.readonly());
     let (first, vertex, third) = (
@@ -75,10 +73,10 @@ pub(crate) fn angles<'py>(
 #[pyfunction]
 pub(crate) fn dihedrals<'py>(
     py: Python<'py>,
-    first: &Coordinates<'py>,
-    second: &Coordinates<'py>,
-    third: &Coordinates<'py>,
-    fourth: &Coordinates<'py>,
+    first: Coordinates<'_, 'py>,
+    second: Coordinates<'_, 'py>,
+    third: Coordinates<'_, 'py>,
+    fourth: Coordinates<'_, 'py>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let (a, b, c, d) = (
         first.readonly(),
@@ -103,8 +101,8 @@ pub(crate) fn dihedrals<'py>(
 #[pyo3(signature = (positions, masses=None))]
 pub(crate) fn centre_of_mass(
     py: Python<'_>,
-    positions: &Coordinates<'_>,
-    masses: Option<PyReadonlyArray1<'_, f64>>,
+    positions: Coordinates<'_, '_>,
+    masses: Option<Readonly1<'_, f64>>,
 ) -> PyResult<Option<[f64; 3]>> {
     let positions = positions.readonly();
     let positions = coordinates(&positions)?;
@@ -117,8 +115,8 @@ pub(crate) fn centre_of_mass(
 #[pyo3(signature = (positions, masses=None))]
 pub(crate) fn radius_of_gyration(
     py: Python<'_>,
-    positions: &Coordinates<'_>,
-    masses: Option<PyReadonlyArray1<'_, f64>>,
+    positions: Coordinates<'_, '_>,
+    masses: Option<Readonly1<'_, f64>>,
 ) -> PyResult<Option<f64>> {
     let positions = positions.readonly();
     let positions = coordinates(&positions)?;
@@ -131,8 +129,8 @@ pub(crate) fn radius_of_gyration(
 #[pyo3(signature = (positions, masses=None))]
 pub(crate) fn inertia_tensor<'py>(
     py: Python<'py>,
-    positions: &Coordinates<'py>,
-    masses: Option<PyReadonlyArray1<'py, f64>>,
+    positions: Coordinates<'_, 'py>,
+    masses: Option<Readonly1<'py, f64>>,
 ) -> PyResult<Option<Bound<'py, PyArray2<f64>>>> {
     let coordinates_view = positions.readonly();
     let positions = coordinates(&coordinates_view)?;
@@ -152,8 +150,8 @@ pub(crate) fn inertia_tensor<'py>(
 #[pyo3(signature = (positions, masses=None))]
 pub(crate) fn principal_axes<'py>(
     py: Python<'py>,
-    positions: &Coordinates<'py>,
-    masses: Option<PyReadonlyArray1<'py, f64>>,
+    positions: Coordinates<'_, 'py>,
+    masses: Option<Readonly1<'py, f64>>,
 ) -> PyResult<Axes<'py>> {
     let view = positions.readonly();
     let positions = coordinates(&view)?;
@@ -168,7 +166,7 @@ pub(crate) fn principal_axes<'py>(
 #[pyfunction]
 pub(crate) fn gyration_axes<'py>(
     py: Python<'py>,
-    positions: &Coordinates<'py>,
+    positions: Coordinates<'_, 'py>,
 ) -> PyResult<Axes<'py>> {
     let view = positions.readonly();
     let positions = coordinates(&view)?;
@@ -193,7 +191,7 @@ fn decomposition(py: Python<'_>, found: Option<geom::Decomposition<3>>) -> PyRes
 
 /// How far the shape departs from a sphere, `0` (spherical) to `1` (a line).
 #[pyfunction]
-pub(crate) fn asphericity(py: Python<'_>, positions: &Coordinates<'_>) -> PyResult<Option<f64>> {
+pub(crate) fn asphericity(py: Python<'_>, positions: Coordinates<'_, '_>) -> PyResult<Option<f64>> {
     let view = positions.readonly();
     let positions = coordinates(&view)?;
     py.detach(|| geom::asphericity(positions))
@@ -205,7 +203,7 @@ pub(crate) fn asphericity(py: Python<'_>, positions: &Coordinates<'_>) -> PyResu
 #[pyfunction]
 pub(crate) fn shape_parameter(
     py: Python<'_>,
-    positions: &Coordinates<'_>,
+    positions: Coordinates<'_, '_>,
 ) -> PyResult<Option<f64>> {
     let view = positions.readonly();
     let positions = coordinates(&view)?;
@@ -217,7 +215,7 @@ pub(crate) fn shape_parameter(
 #[pyfunction]
 pub(crate) fn best_fit_plane(
     py: Python<'_>,
-    points: &Coordinates<'_>,
+    points: Coordinates<'_, '_>,
 ) -> PyResult<Option<([f64; 3], [f64; 3])>> {
     let view = points.readonly();
     let points = coordinates(&view)?;
@@ -229,7 +227,10 @@ pub(crate) fn best_fit_plane(
 
 /// The RMS distance of the points from their best-fit plane, in ångström.
 #[pyfunction]
-pub(crate) fn plane_deviation(py: Python<'_>, points: &Coordinates<'_>) -> PyResult<Option<f64>> {
+pub(crate) fn plane_deviation(
+    py: Python<'_>,
+    points: Coordinates<'_, '_>,
+) -> PyResult<Option<f64>> {
     let view = points.readonly();
     let points = coordinates(&view)?;
     py.detach(|| geom::plane_deviation(points))
@@ -240,8 +241,8 @@ pub(crate) fn plane_deviation(py: Python<'_>, points: &Coordinates<'_>) -> PyRes
 #[pyfunction]
 pub(crate) fn rmsd_after_fit(
     py: Python<'_>,
-    mobile: &Coordinates<'_>,
-    reference: &Coordinates<'_>,
+    mobile: Coordinates<'_, '_>,
+    reference: Coordinates<'_, '_>,
 ) -> PyResult<f64> {
     let (mobile, reference) = (mobile.readonly(), reference.readonly());
     let (mobile, reference) = (coordinates(&mobile)?, coordinates(&reference)?);
@@ -286,7 +287,7 @@ impl PySuperposition {
     fn apply<'py>(
         &self,
         py: Python<'py>,
-        positions: &Coordinates<'py>,
+        positions: Coordinates<'_, 'py>,
     ) -> PyResult<Bound<'py, PyArray2<f32>>> {
         let view = positions.readonly();
         let mut moved = coordinates(&view)?.to_vec();
@@ -309,8 +310,8 @@ impl PySuperposition {
 #[pyfunction]
 pub(crate) fn superpose(
     py: Python<'_>,
-    mobile: &Coordinates<'_>,
-    reference: &Coordinates<'_>,
+    mobile: Coordinates<'_, '_>,
+    reference: Coordinates<'_, '_>,
 ) -> PyResult<PySuperposition> {
     let (mobile, reference) = (mobile.readonly(), reference.readonly());
     let (mobile, reference) = (coordinates(&mobile)?, coordinates(&reference)?);

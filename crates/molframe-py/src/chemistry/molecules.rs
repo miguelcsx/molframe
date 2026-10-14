@@ -1,6 +1,7 @@
 //! Small molecules as MDL records: read, build, write and convert to structures.
 
 use crate::bindings::PyStructure;
+use crate::bindings::array::Array2;
 use molframe::Element;
 use molframe::chemistry::{
     MolAtom, MolAtomMetadata, MolBond, MolBondMetadata, MolRecord, MolVersion, Molecule,
@@ -77,8 +78,8 @@ impl PyMolecule {
     #[pyo3(signature = (elements, coordinates, bonds=None, *, name="", formal_charges=None, properties=None))]
     fn construct(
         elements: Vec<String>,
-        coordinates: &Bound<'_, PyArray2<f32>>,
-        bonds: Option<&Bound<'_, PyArray2<u32>>>,
+        coordinates: Array2<'_, '_, f32>,
+        bonds: Option<Array2<'_, '_, u32>>,
         name: &str,
         formal_charges: Option<Vec<i8>>,
         properties: Option<BTreeMap<String, String>>,

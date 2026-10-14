@@ -1,9 +1,10 @@
 //! Substitution matrices, multiple alignment and trees.
 
+use crate::bindings::array::Array2;
 use crate::sequence::PyScoring;
 use molframe::chemistry::{TableRequest, TableStore};
 use molframe::sequence::{self as seq, LadderDirection, MsaOptions, SubstitutionMatrix, Tree};
-use numpy::{PyArray2, PyArrayMethods, PyUntypedArrayMethods};
+use numpy::{PyArrayMethods, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 
 /// A residue substitution matrix with the identity of its published source.
@@ -172,7 +173,7 @@ impl PyTree {
     }
 }
 
-fn rows_of(distances: &Bound<'_, PyArray2<f64>>) -> PyResult<Vec<Vec<f64>>> {
+fn rows_of(distances: Array2<'_, '_, f64>) -> PyResult<Vec<Vec<f64>>> {
     let view = distances.readonly();
     let shape = view.shape();
     let flat = view.as_slice().map_err(|_| {
@@ -184,7 +185,7 @@ fn rows_of(distances: &Bound<'_, PyArray2<f64>>) -> PyResult<Vec<Vec<f64>>> {
 fn build(
     py: Python<'_>,
     labels: Vec<String>,
-    distances: &Bound<'_, PyArray2<f64>>,
+    distances: Array2<'_, '_, f64>,
     builder: fn(&[&str], &[Vec<f64>]) -> Option<Tree>,
 ) -> PyResult<PyTree> {
     let rows = rows_of(distances)?;
@@ -201,7 +202,7 @@ fn build(
 pub(crate) fn neighbor_joining(
     py: Python<'_>,
     labels: Vec<String>,
-    distances: &Bound<'_, PyArray2<f64>>,
+    distances: Array2<'_, '_, f64>,
 ) -> PyResult<PyTree> {
     build(py, labels, distances, seq::neighbor_joining)
 }
@@ -211,7 +212,7 @@ pub(crate) fn neighbor_joining(
 pub(crate) fn upgma(
     py: Python<'_>,
     labels: Vec<String>,
-    distances: &Bound<'_, PyArray2<f64>>,
+    distances: Array2<'_, '_, f64>,
 ) -> PyResult<PyTree> {
     build(py, labels, distances, seq::upgma)
 }

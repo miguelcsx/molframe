@@ -1,10 +1,11 @@
 //! Mechanical adapters for resolution shells and amplitude normalization.
 
+use crate::bindings::array::{Array1, Array2};
 use crate::crystal::{PySpaceGroup, PyUnitCell};
 use molframe::crystal::{
     BinMethod, ReflectionBinningError, ResolutionBinner, amplitude_normalizers,
 };
-use numpy::{PyArray1, PyArray2, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
+use numpy::{PyArray1, PyArrayMethods, PyUntypedArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 
 fn failure(error: ReflectionBinningError) -> PyErr {
@@ -23,7 +24,7 @@ fn parse_method(name: &str) -> PyResult<BinMethod> {
     }
 }
 
-fn rows(hkl: &Bound<'_, PyArray2<i32>>) -> PyResult<Vec<[i32; 3]>> {
+fn rows(hkl: Array2<'_, '_, i32>) -> PyResult<Vec<[i32; 3]>> {
     let hkl = hkl.readonly();
     let shape = hkl.shape();
     if shape.len() != 2 || shape[1] != 3 {
@@ -54,7 +55,7 @@ impl PyResolutionBins {
     fn new(
         py: Python<'_>,
         cell: &PyUnitCell,
-        hkl: &Bound<'_, PyArray2<i32>>,
+        hkl: Array2<'_, '_, i32>,
         bins: usize,
         method: &str,
     ) -> PyResult<Self> {
@@ -86,7 +87,7 @@ impl PyResolutionBins {
     fn indices<'py>(
         &self,
         py: Python<'py>,
-        inverse_d2: &Bound<'py, PyArray1<f64>>,
+        inverse_d2: Array1<'_, 'py, f64>,
     ) -> PyResult<Bound<'py, PyArray1<i64>>> {
         let readonly = inverse_d2.readonly();
         let slice = readonly.as_slice()?;
@@ -122,8 +123,8 @@ fn normalizers<'py>(
     py: Python<'py>,
     cell: &PyUnitCell,
     space_group: &PySpaceGroup,
-    hkl: &Bound<'py, PyArray2<i32>>,
-    amplitudes: &Bound<'py, PyArray1<f64>>,
+    hkl: Array2<'_, 'py, i32>,
+    amplitudes: Array1<'_, 'py, f64>,
     bins: &PyResolutionBins,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
     let rows = rows(hkl)?;

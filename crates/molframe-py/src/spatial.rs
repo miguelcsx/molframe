@@ -1,5 +1,6 @@
 //! Mechanical adapters for fixed-radius neighbour search over coordinates.
 
+use crate::bindings::array::Array2;
 use crate::crystal::PyUnitCell;
 use molframe::spatial::{KnnOptions, NeighborPair, PairColumns};
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
@@ -35,7 +36,7 @@ fn columns(py: Python<'_>, columns: PairColumns) -> Pairs<'_> {
 #[pyo3(signature = (coordinates, cutoff, *, cell=None, backend="auto", context=None))]
 fn neighbor_pairs<'py>(
     py: Python<'py>,
-    coordinates: &Bound<'py, PyArray2<f32>>,
+    coordinates: Array2<'_, 'py, f32>,
     cutoff: f32,
     cell: Option<&PyUnitCell>,
     backend: &str,
@@ -70,8 +71,8 @@ fn neighbor_pairs<'py>(
 #[pyo3(signature = (first, second, cutoff, *, cell=None, backend="auto", context=None))]
 fn cross_pairs<'py>(
     py: Python<'py>,
-    first: &Bound<'py, PyArray2<f32>>,
-    second: &Bound<'py, PyArray2<f32>>,
+    first: Array2<'_, 'py, f32>,
+    second: Array2<'_, 'py, f32>,
     cutoff: f32,
     cell: Option<&PyUnitCell>,
     backend: &str,
@@ -133,7 +134,7 @@ impl PairChunks {
 #[pyo3(signature = (coordinates, cutoff, *, chunk_size=1_048_576, cell=None, backend="auto", context=None))]
 fn neighbor_pairs_chunks(
     py: Python<'_>,
-    coordinates: &Bound<'_, PyArray2<f32>>,
+    coordinates: Array2<'_, '_, f32>,
     cutoff: f32,
     chunk_size: usize,
     cell: Option<&PyUnitCell>,
@@ -183,9 +184,9 @@ type Neighbors<'py> = (Bound<'py, PyArray2<u32>>, Bound<'py, PyArray2<f32>>);
 #[pyo3(signature = (points, k, *, query=None, max_distance=None, cell=None, exclude_self=None, backend="auto", context=None))]
 fn knn<'py>(
     py: Python<'py>,
-    points: &Bound<'py, PyArray2<f32>>,
+    points: Array2<'_, 'py, f32>,
     k: usize,
-    query: Option<&Bound<'py, PyArray2<f32>>>,
+    query: Option<Array2<'_, 'py, f32>>,
     max_distance: Option<f32>,
     cell: Option<&PyUnitCell>,
     exclude_self: Option<bool>,
