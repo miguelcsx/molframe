@@ -77,9 +77,8 @@ pub(super) fn renamed_identifiers(
     }
 }
 
-#[allow(clippy::cast_possible_truncation)]
 pub(super) fn rounded(value: f32, scale: f64) -> bool {
-    let kept = ((f64::from(value) * scale).round() / scale) as f32;
+    let kept = molframe_core::numeric::f64_to_f32((f64::from(value) * scale).round() / scale);
     kept.to_bits() != value.to_bits()
 }
 

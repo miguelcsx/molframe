@@ -308,12 +308,11 @@ fn write_model(
         }
         // Only a polymer chain is terminated; waters and ligands follow without.
         if polymer {
-            let _ = writeln!(
-                out,
-                "TER   {}{}",
-                serial_field(serial, options),
-                terminus.as_deref().unwrap_or("")
-            );
+            let terminus = match terminus.as_deref() {
+                Some(text) => text,
+                None => "",
+            };
+            let _ = writeln!(out, "TER   {}{}", serial_field(serial, options), terminus);
             serial += 1;
         }
     }

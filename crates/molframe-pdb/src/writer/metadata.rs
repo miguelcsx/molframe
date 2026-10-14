@@ -29,12 +29,15 @@ pub(super) fn write_generated(
         let _ = writeln!(out, "REMARK   2 RESOLUTION. {resolution:>7.2} ANGSTROMS.");
     }
     if let Some(cell) = data.cell {
-        let symbol = data
+        let symbol = match data
             .entry
             .space_group
             .as_deref()
             .or_else(|| options.space_group_fallback())
-            .unwrap_or("P 1");
+        {
+            Some(symbol) => symbol,
+            None => "P 1",
+        };
         let _ = writeln!(
             out,
             "CRYST1{:9.3}{:9.3}{:9.3}{:7.2}{:7.2}{:7.2} {:<11}",

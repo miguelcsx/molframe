@@ -112,7 +112,7 @@ impl ReadState<'_> {
 
     pub(in crate::reader) fn requires_ragged(&mut self) -> bool {
         self.verify_frame_len();
-        self.requires_ragged
+        self.later_models.ragged
     }
 
     fn start_next_frame(&mut self) {
@@ -155,7 +155,7 @@ impl ReadState<'_> {
         let serial = super::serial_of(line);
         let standard_matches = self.stored_atom_matches(signature, occupancy, b_factor, serial);
         let variant_matches = self.variant_atom_matches(line);
-        self.requires_ragged |= !standard_matches || !variant_matches;
+        self.later_models.ragged |= !standard_matches || !variant_matches;
 
         self.frame.push(position_or_nan(position));
         self.atom_position += 1;
@@ -209,13 +209,13 @@ impl ReadState<'_> {
             && self.data.topology.residues.ins_code(residue) == signature.ins_code.get()
             && self.data.topology.residues.is_het(residue) == signature.het
             && self.data.topology.chains.label_asym_id(chain) == Some(signature.chain);
-        self.model_values_differ |= !same_values;
+        self.later_models.values |= !same_values;
         same_identity
     }
 
     pub(super) fn verify_frame_len(&mut self) {
         if self.topology_locked && self.atom_position != self.expected_atom_count() {
-            self.requires_ragged = true;
+            self.later_models.ragged = true;
         }
     }
 

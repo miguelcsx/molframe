@@ -45,8 +45,16 @@ struct ResidueKey {
     ins_code: OptionalSymbol,
 }
 
+/// How the models after the first depart from it.
+#[derive(Clone, Copy, Default)]
+struct Divergence {
+    /// The topology or a coordinate frame does not match the first model's.
+    ragged: bool,
+    /// A later model repeated the topology with other occupancies or B-factors.
+    values: bool,
+}
+
 /// Everything carried between lines while reading.
-#[allow(clippy::struct_excessive_bools)] // independent per-read facts: atoms seen, topology fixed, ragged needed, values differ
 pub(super) struct ReadState<'a> {
     options: &'a ReadOptions,
     data: StructureData,
@@ -68,9 +76,7 @@ pub(super) struct ReadState<'a> {
     malformed_atom: u64,
     topology_locked: bool,
     expected_chunk: usize,
-    requires_ragged: bool,
-    /// A later model repeated the topology with other occupancies or B-factors.
-    model_values_differ: bool,
+    later_models: Divergence,
     serial_to_atom: BTreeMap<u32, AtomIndex>,
     conect: Vec<(u32, u32, Position)>,
     /// `SSBOND` and `LINK` records awaiting the atoms they name.
@@ -111,8 +117,7 @@ impl<'a> ReadState<'a> {
             malformed_atom: 0,
             topology_locked: false,
             expected_chunk: 0,
-            requires_ragged: false,
-            model_values_differ: false,
+            later_models: Divergence::default(),
             serial_to_atom: BTreeMap::new(),
             conect: Vec::new(),
             links: Vec::new(),

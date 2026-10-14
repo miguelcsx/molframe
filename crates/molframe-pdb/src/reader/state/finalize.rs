@@ -26,7 +26,7 @@ impl ReadState<'_> {
     pub(in crate::reader) fn finish(mut self) -> ReadResult {
         self.close_chain();
         self.verify_frame_len();
-        if self.model_values_differ {
+        if self.later_models.values {
             self.findings
                 .push(Diagnostic::new(Code::W3015).with_message(
                     "occupancies or B-factors differ between models; model 1's values are kept",

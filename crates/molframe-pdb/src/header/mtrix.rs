@@ -44,10 +44,12 @@ impl PdbHeaders {
                 };
                 let given = fixed::text(line, 60, 60) == "1";
                 let position = rows.iter().position(|entry| entry.0 == serial);
-                let position = position.unwrap_or_else(|| {
+                let position = if let Some(position) = position {
+                    position
+                } else {
                     rows.push((serial, [None; 3], given));
                     rows.len() - 1
-                });
+                };
                 rows[position].1[row] = Some([a, b, c, t]);
             }
         }
