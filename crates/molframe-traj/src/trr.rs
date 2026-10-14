@@ -3,6 +3,8 @@
 use crate::Timestep;
 use crate::cell::cell_from_vectors;
 use crate::numeric::f32_from_f64;
+use molframe_core::ExecutionContext;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
 
 #[path = "trr_reader.rs"]
 mod reader;
@@ -68,55 +70,39 @@ pub enum TrrError {
 /// Positions and cells are converted from nm to ångström, velocities from
 /// nm/ps to ångström/ps, and forces from kJ mol⁻¹ nm⁻¹ to kJ mol⁻¹ Å⁻¹.
 ///
+/// Frame boundaries come from one header-only scan, `O(frames)`; the frame
+/// bodies are then decoded in parallel straight from the borrowed bytes, so
+/// the work is `O(bytes)` split over the worker pool with one output
+/// allocation per array. Output and errors are those of a sequential decode.
+///
 /// # Errors
 ///
 /// Returns the first header, XDR, size or numeric error without publishing a
 /// partial trajectory.
 pub fn parse_trr(bytes: &[u8]) -> Result<TrrTrajectory, TrrError> {
-    let mut reader = Xdr::new(bytes);
-    let mut frames = Vec::new();
-    let mut steps = Vec::new();
-    let mut precisions = Vec::new();
-    while !reader.is_empty() {
-        let header = read_header(&mut reader)?;
-        let precision = header.precision()?;
-        skip_prefix_blocks(&mut reader, &header)?;
-        let cell = read_cell(&mut reader, &header, precision)?;
-        reader.skip(header.virial() + header.pressure() + header.topology() + header.symmetry())?;
-        let positions = read_vectors(
-            &mut reader,
-            header.positions(),
-            header.atoms,
-            precision,
-            NM_TO_ANGSTROM,
-        )?
-        .ok_or(TrrError::InvalidSizes)?;
-        let velocities = read_vectors(
-            &mut reader,
-            header.velocities(),
-            header.atoms,
-            precision,
-            NM_TO_ANGSTROM,
-        )?;
-        let forces = read_vectors(
-            &mut reader,
-            header.forces(),
-            header.atoms,
-            precision,
-            FORCE_TO_CANONICAL,
-        )?;
-        let frame = frames.len();
-        frames.push(Timestep {
-            frame,
-            time: Some(header.time),
-            positions,
-            velocities,
-            forces,
-            cell,
-            ..Timestep::default()
-        });
-        steps.push(header.step);
+    let (spans, scan_error) = scan_frames(bytes);
+    let context = ExecutionContext::default();
+    let decoded = map_blocks_in(
+        BlockPlan::new(spans.len(), FRAMES_PER_BLOCK),
+        &context,
+        |_, range| {
+            range
+                .map(|index| decode_frame(bytes, spans[index].clone(), index))
+                .collect::<Vec<_>>()
+        },
+    )
+    .map_err(|_| TrrError::InvalidSizes)?;
+    let mut frames = Vec::with_capacity(spans.len());
+    let mut steps = Vec::with_capacity(spans.len());
+    let mut precisions = Vec::with_capacity(spans.len());
+    for result in decoded.into_iter().flatten() {
+        let (frame, step, precision) = result?;
+        frames.push(frame);
+        steps.push(step);
         precisions.push(precision);
+    }
+    if let Some(error) = scan_error {
+        return Err(error);
     }
     populate_dt(&mut frames);
     Ok(TrrTrajectory {
@@ -124,6 +110,91 @@ pub fn parse_trr(bytes: &[u8]) -> Result<TrrTrajectory, TrrError> {
         steps,
         precision: precisions,
     })
+}
+
+/// Frames decoded per parallel block.
+const FRAMES_PER_BLOCK: usize = 8;
+
+/// Byte spans of every frame whose header parsed, and the first scan error.
+///
+/// A frame that declares more bytes than remain ends the scan after being
+/// listed, so decoding it reports the exact truncation offset.
+fn scan_frames(bytes: &[u8]) -> (Vec<std::ops::Range<usize>>, Option<TrrError>) {
+    let mut spans = Vec::new();
+    let mut reader = Xdr::new(bytes);
+    while !reader.is_empty() {
+        let start = reader.cursor;
+        let header = match read_header(&mut reader) {
+            Ok(header) => header,
+            Err(error) => return (spans, Some(error)),
+        };
+        let body = header
+            .sizes
+            .iter()
+            .try_fold(0_usize, |sum, size| sum.checked_add(*size));
+        let end = body.and_then(|body| reader.cursor.checked_add(body));
+        match end {
+            Some(end) if end <= bytes.len() => {
+                spans.push(start..end);
+                reader.cursor = end;
+            }
+            _ => {
+                spans.push(start..bytes.len());
+                return (spans, None);
+            }
+        }
+    }
+    (spans, None)
+}
+
+type DecodedFrame = (Timestep, i32, TrrPrecision);
+
+fn decode_frame(
+    bytes: &[u8],
+    span: std::ops::Range<usize>,
+    frame: usize,
+) -> Result<DecodedFrame, TrrError> {
+    let mut reader = Xdr {
+        bytes: &bytes[..span.end],
+        cursor: span.start,
+    };
+    let header = read_header(&mut reader)?;
+    let precision = header.precision()?;
+    skip_prefix_blocks(&mut reader, &header)?;
+    let cell = read_cell(&mut reader, &header, precision)?;
+    reader.skip(header.virial() + header.pressure() + header.topology() + header.symmetry())?;
+    let positions = read_vectors(
+        &mut reader,
+        header.positions(),
+        header.atoms,
+        precision,
+        NM_TO_ANGSTROM,
+    )?
+    .ok_or(TrrError::InvalidSizes)?;
+    let velocities = read_vectors(
+        &mut reader,
+        header.velocities(),
+        header.atoms,
+        precision,
+        NM_TO_ANGSTROM,
+    )?;
+    let forces = read_vectors(
+        &mut reader,
+        header.forces(),
+        header.atoms,
+        precision,
+        FORCE_TO_CANONICAL,
+    )?;
+    let timestep = Timestep {
+        frame,
+        time: Some(header.time),
+        positions,
+        velocities,
+        forces,
+        cell,
+        ..Timestep::default()
+    };
+    Ok((timestep, header.step, precision))
 }
 
 #[derive(Debug)]
@@ -266,19 +337,47 @@ fn read_vectors(
     if size != atoms * 3 * precision.bytes() {
         return Err(TrrError::InvalidSizes);
     }
+    let raw = reader.take(size)?;
     let mut vectors = Vec::with_capacity(atoms);
-    for _ in 0..atoms {
-        let vector = [
-            f32_from_f64(reader.real(precision)?).ok_or(TrrError::InvalidValue)? * scale,
-            f32_from_f64(reader.real(precision)?).ok_or(TrrError::InvalidValue)? * scale,
-            f32_from_f64(reader.real(precision)?).ok_or(TrrError::InvalidValue)? * scale,
-        ];
-        if vector.iter().any(|value| !value.is_finite()) {
-            return Err(TrrError::InvalidValue);
+    match precision {
+        TrrPrecision::Single => {
+            let (words, _) = raw.as_chunks::<12>();
+            for chunk in words {
+                vectors.push(single_vector(chunk, scale)?);
+            }
         }
-        vectors.push(vector);
+        TrrPrecision::Double => {
+            let (words, _) = raw.as_chunks::<24>();
+            for chunk in words {
+                vectors.push(double_vector(chunk, scale)?);
+            }
+        }
     }
     Ok(Some(vectors))
+}
+
+fn single_vector(chunk: &[u8; 12], scale: f32) -> Result<[f32; 3], TrrError> {
+    let (words, _) = chunk.as_chunks::<4>();
+    let mut vector = [0.0_f32; 3];
+    for (value, word) in vector.iter_mut().zip(words) {
+        *value = f32::from_be_bytes(*word) * scale;
+        if !value.is_finite() {
+            return Err(TrrError::InvalidValue);
+        }
+    }
+    Ok(vector)
+}
+
+fn double_vector(chunk: &[u8; 24], scale: f32) -> Result<[f32; 3], TrrError> {
+    let (words, _) = chunk.as_chunks::<8>();
+    let mut vector = [0.0_f32; 3];
+    for (value, word) in vector.iter_mut().zip(words) {
+        *value = f32_from_f64(f64::from_be_bytes(*word)).ok_or(TrrError::InvalidValue)? * scale;
+        if !value.is_finite() {
+            return Err(TrrError::InvalidValue);
+        }
+    }
+    Ok(vector)
 }
 
 fn populate_dt(frames: &mut [Timestep]) {

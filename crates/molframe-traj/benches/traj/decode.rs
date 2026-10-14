@@ -71,3 +71,39 @@ pub(crate) fn bench_decode_throughput(c: &mut Criterion) {
     });
     group.finish();
 }
+
+/// Large-system decode: 200 frames of 30 000 atoms (about 72 MB of TRR),
+/// the shape where per-frame parallel decode matters.
+pub(crate) fn bench_decode_large(c: &mut Criterion) {
+    let atoms = 30_000_usize;
+    let frames: Vec<_> = (0..200_usize)
+        .map(|frame| Timestep {
+            frame,
+            time: Some(f64::from(usize_to_u32(frame))),
+            positions: (0..atoms)
+                .map(|atom| {
+                    let phase = f32::from(u16::try_from(atom % 4_096).unwrap_or(0)) * 0.013;
+                    [
+                        phase,
+                        phase.sin() + 0.01 * f32::from(u16::try_from(frame).unwrap_or(0)),
+                        phase.cos(),
+                    ]
+                })
+                .collect(),
+            ..Timestep::default()
+        })
+        .collect();
+    let xtc = write_xtc(&frames, XtcWriteOptions::default()).required("XTC fixture failed");
+    let trr = write_trr(&frames, TrrWriteOptions::default()).required("TRR fixture failed");
+    let mut group = c.benchmark_group("traj_decode_large");
+    group.sample_size(10);
+    group.throughput(Throughput::Bytes(xtc.len() as u64));
+    group.bench_function(format!("parse/xtc/200x{atoms}"), |b| {
+        b.iter(|| black_box(parse_xtc(&xtc).required("XTC decode failed").frames.len()));
+    });
+    group.throughput(Throughput::Bytes(trr.len() as u64));
+    group.bench_function(format!("parse/trr/200x{atoms}"), |b| {
+        b.iter(|| black_box(parse_trr(&trr).required("TRR decode failed").frames.len()));
+    });
+    group.finish();
+}

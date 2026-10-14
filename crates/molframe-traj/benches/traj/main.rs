@@ -467,6 +467,7 @@ fn main() {
     bench_extended_formats(&mut criterion);
     bench_dcd_streaming(&mut criterion);
     decode::bench_decode_throughput(&mut criterion);
+    decode::bench_decode_large(&mut criterion);
     pca_scale::bench_pca_scale(&mut criterion);
     criterion.final_summary();
 }

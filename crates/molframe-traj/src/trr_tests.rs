@@ -36,6 +36,26 @@ fn single_and_double_precision_round_trip_all_blocks() {
 }
 
 #[test]
+fn many_frames_keep_file_order_across_parallel_blocks() {
+    let frames: Vec<_> = (0..45).map(|index| frame(f64::from(index))).collect();
+    let bytes = write_trr(&frames, TrrWriteOptions::default())
+        .unwrap_or_else(|error| panic!("TRR write failed: {error}"));
+    let parsed = parse_trr(&bytes).unwrap_or_else(|error| panic!("TRR parse failed: {error}"));
+    assert_eq!(parsed.frames.len(), 45);
+    for (index, parsed_frame) in parsed.frames.iter().enumerate() {
+        assert_eq!(parsed_frame.frame, index);
+        assert_eq!(
+            parsed_frame.time,
+            Some(f64::from(u32::try_from(index).unwrap_or(0)))
+        );
+    }
+    assert!(matches!(
+        parse_trr(&bytes[..bytes.len() - 5]),
+        Err(TrrError::Truncated { .. })
+    ));
+}
+
+#[test]
 fn truncated_xdr_is_rejected() {
     let bytes = write_trr(&[frame(0.0)], TrrWriteOptions::default())
         .unwrap_or_else(|error| panic!("TRR write failed: {error}"));
