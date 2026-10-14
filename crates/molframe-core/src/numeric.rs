@@ -91,3 +91,76 @@ pub fn usize_to_u32(value: usize) -> u32 {
         Err(_) => u32::MAX,
     }
 }
+
+/// A `u64` as `u32`, saturating at `u32::MAX`.
+#[must_use]
+#[inline]
+pub fn u64_to_u32(value: u64) -> u32 {
+    match u32::try_from(value) {
+        Ok(converted) => converted,
+        Err(_) => u32::MAX,
+    }
+}
+
+/// `f64` truncated toward zero into `u32`, saturating; NaN and negative
+/// values are zero.
+#[must_use]
+#[inline]
+pub fn f64_to_u32(value: f64) -> u32 {
+    match value.to_u32() {
+        Some(converted) => converted,
+        None if value.is_nan() || value.is_sign_negative() => 0,
+        None => u32::MAX,
+    }
+}
+
+/// `f64` truncated toward zero into `u64`, saturating; NaN and negative
+/// values are zero.
+#[must_use]
+#[inline]
+pub fn f64_to_u64(value: f64) -> u64 {
+    match value.to_u64() {
+        Some(converted) => converted,
+        None if value.is_nan() || value.is_sign_negative() => 0,
+        None => u64::MAX,
+    }
+}
+
+/// The low eight bits of `value`; the rest are discarded on purpose.
+#[must_use]
+#[inline]
+pub const fn low_u8(value: u32) -> u8 {
+    value.to_le_bytes()[0]
+}
+
+/// The low sixteen bits of `value`; the rest are discarded on purpose.
+#[must_use]
+#[inline]
+pub const fn low_u16(value: u32) -> u16 {
+    let bytes = value.to_le_bytes();
+    u16::from_le_bytes([bytes[0], bytes[1]])
+}
+
+/// IEEE equality of two `f32` values: `-0.0` equals `0.0`, NaN equals nothing.
+#[must_use]
+#[inline]
+pub fn f32_eq(left: f32, right: f32) -> bool {
+    left.partial_cmp(&right) == Some(std::cmp::Ordering::Equal)
+}
+
+/// IEEE equality of two `f64` values: `-0.0` equals `0.0`, NaN equals nothing.
+#[must_use]
+#[inline]
+pub fn f64_eq(left: f64, right: f64) -> bool {
+    left.partial_cmp(&right) == Some(std::cmp::Ordering::Equal)
+}
+
+/// An `i64` as `f64`; exact up to 2^53 in magnitude, rounded to nearest beyond.
+#[must_use]
+#[inline]
+pub fn i64_to_f64(value: i64) -> f64 {
+    match value.to_f64() {
+        Some(converted) => converted,
+        None => f64::NAN,
+    }
+}
