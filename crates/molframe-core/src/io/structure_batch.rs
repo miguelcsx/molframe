@@ -6,6 +6,7 @@ use crate::optional::OptionalSymbol;
 use crate::provider::{ChunkDescriptor, ProviderError};
 use crate::symbol::{AltId, DictionaryFull, Interner, SymbolId};
 use crate::{Diagnostic, Element};
+use num_traits::ToPrimitive;
 use std::fmt;
 
 /// Failure shared by bounded structural batch readers and collectors.
@@ -140,6 +141,32 @@ pub struct StructureAtomRecord<'a> {
     pub atom_site_id: u32,
     /// Whether the source marked the residue as a heterogen.
     pub heterogen: bool,
+}
+
+impl StructureAtomRecord<'_> {
+    /// The element a symbol names, or [`Element::UNKNOWN`].
+    #[must_use]
+    pub fn element_of(symbol: &str) -> Element {
+        match Element::from_symbol(symbol) {
+            Some(element) => element,
+            None => Element::UNKNOWN,
+        }
+    }
+
+    /// Whether a row with this element symbol and model survives the read
+    /// options' hydrogen and first-model filters.
+    #[must_use]
+    pub fn admitted(options: &super::ReadOptions, symbol: &str, model: i32) -> bool {
+        let hydrogen = Element::from_symbol(symbol).is_some_and(Element::is_hydrogen);
+        !(options.discard_hydrogens && hydrogen || options.only_first_model && model != 1)
+    }
+
+    /// A position from three recorded coordinates, or `None` when any is
+    /// missing or does not fit single precision.
+    #[must_use]
+    pub fn position_of(x: Option<f64>, y: Option<f64>, z: Option<f64>) -> Option<[f32; 3]> {
+        Some([x?.to_f32()?, y?.to_f32()?, z?.to_f32()?])
+    }
 }
 
 /// Bounded structure rows in a format-neutral layout.

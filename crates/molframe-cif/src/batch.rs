@@ -6,8 +6,8 @@ mod token;
 use budget::{identity_overflow, reserve_bytes, row_capacity};
 use molframe_core::{
     Backpressure, Batch, BatchContinuity, BatchDemand, BatchLease, BatchSource, ChunkId,
-    ContinuityLevel, DatasetId, Element, ExecutionContext, LogicalRow, Presence, ReadOptions,
-    SourceBytes, StructureAtomRecord, StructureBatch, StructureBatchBuffer, StructureBatchBuilder,
+    ContinuityLevel, DatasetId, ExecutionContext, LogicalRow, Presence, ReadOptions, SourceBytes,
+    StructureAtomRecord, StructureBatch, StructureBatchBuffer, StructureBatchBuilder,
     StructureBatchError, StructureBatchPool,
 };
 use num_traits::ToPrimitive;
@@ -397,22 +397,14 @@ impl AtomRow {
     }
 
     fn accepted(&self, options: &ReadOptions) -> bool {
-        let element = Element::from_symbol(&self.text[1]);
-        let hydrogen = element.is_some_and(Element::is_hydrogen);
         let model = integer_i32(&self.integer, self.present, 3, 1);
-        !(options.discard_hydrogens && hydrogen || options.only_first_model && model != 1)
+        StructureAtomRecord::admitted(options, &self.text[1], model)
     }
 
     fn record(&self, _options: &ReadOptions) -> StructureAtomRecord<'_> {
-        let position = if self.present & (0b111 << 11) == 0b111 << 11 {
-            self.real[0]
-                .to_f32()
-                .zip(self.real[1].to_f32())
-                .zip(self.real[2].to_f32())
-                .map(|((x, y), z)| [x, y, z])
-        } else {
-            None
-        };
+        let recorded =
+            |index: usize| (self.present & (1 << (11 + index)) != 0).then(|| self.real[index]);
+        let position = StructureAtomRecord::position_of(recorded(0), recorded(1), recorded(2));
         StructureAtomRecord {
             model: integer_i32(&self.integer, self.present, 3, 1),
             chain: &self.text[5],
@@ -421,10 +413,7 @@ impl AtomRow {
             insertion: &self.text[6],
             atom: &self.text[2],
             alternate: &self.text[3],
-            element: match Element::from_symbol(&self.text[1]) {
-                Some(element) => element,
-                None => Element::UNKNOWN,
-            },
+            element: StructureAtomRecord::element_of(&self.text[1]),
             position,
             occupancy: real_presence(&self.real, self.present, 3, 1.0),
             b_factor: real_presence(&self.real, self.present, 4, 0.0),

@@ -13,7 +13,7 @@ use budget::{address_overflow, range_bytes, reserve_bytes};
 use decoded::{ColumnChunk, DecodedChunk};
 use molframe_core::{
     Backpressure, BatchDemand, BatchLease, BatchSource, ChunkId, Code, ContinuityLevel, DatasetId,
-    Diagnostic, Element, ExecutionContext, LogicalRow, MemoryReservation, Presence, ReadOptions,
+    Diagnostic, ExecutionContext, LogicalRow, MemoryReservation, Presence, ReadOptions,
     SourceBytes, StructureAtomRecord, StructureBatch, StructureBatchError, StructureBatchPool,
 };
 use num_traits::ToPrimitive;
@@ -257,23 +257,16 @@ struct RowView<'a> {
 
 impl RowView<'_> {
     fn accepted(&self, options: &ReadOptions) -> bool {
-        let element = Element::from_symbol(self.text(Field::Element));
-        let hydrogen = element.is_some_and(Element::is_hydrogen);
-        !(options.discard_hydrogens && hydrogen
-            || options.only_first_model && self.integer_i32(Field::Model, 1) != 1)
+        let model = self.integer_i32(Field::Model, 1);
+        StructureAtomRecord::admitted(options, self.text(Field::Element), model)
     }
 
     fn record(&self) -> StructureAtomRecord<'_> {
-        let position = self
-            .real(Field::X)
-            .zip(self.real(Field::Y))
-            .zip(self.real(Field::Z))
-            .and_then(|((x, y), z)| {
-                x.to_f32()
-                    .zip(y.to_f32())
-                    .zip(z.to_f32())
-                    .map(|((x, y), z)| [x, y, z])
-            });
+        let position = StructureAtomRecord::position_of(
+            self.real(Field::X),
+            self.real(Field::Y),
+            self.real(Field::Z),
+        );
         StructureAtomRecord {
             model: self.integer_i32(Field::Model, 1),
             chain: self.text(Field::Chain),
@@ -282,10 +275,7 @@ impl RowView<'_> {
             insertion: self.text(Field::Insertion),
             atom: self.text(Field::Atom),
             alternate: self.text(Field::Alternate),
-            element: match Element::from_symbol(self.text(Field::Element)) {
-                Some(element) => element,
-                None => Element::UNKNOWN,
-            },
+            element: StructureAtomRecord::element_of(self.text(Field::Element)),
             position,
             occupancy: self.real_presence(Field::Occupancy, 1.0),
             b_factor: self.real_presence(Field::BFactor, 0.0),
