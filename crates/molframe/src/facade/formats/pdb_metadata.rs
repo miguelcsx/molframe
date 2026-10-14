@@ -10,14 +10,12 @@ use molframe_core::structure::Structure;
 /// Options extended with the structure's space group and `MTRIX` records.
 ///
 /// A space group or records the caller already chose are never replaced.
+#[cfg(feature = "crystal")]
 pub(crate) fn complete(
     structure: &Structure,
     options: &molframe_pdb::PdbOptions,
 ) -> molframe_pdb::PdbOptions {
-    // Only the crystal metadata below rewrites the options.
-    #[cfg_attr(not(feature = "crystal"), allow(unused_mut))]
     let mut completed = options.clone();
-    #[cfg(feature = "crystal")]
     {
         let extensions = structure.extensions();
         if structure.data().entry.space_group.is_none()
@@ -36,9 +34,16 @@ pub(crate) fn complete(
             }
         }
     }
-    #[cfg(not(feature = "crystal"))]
-    let _ = structure;
     completed
+}
+
+/// Without the crystal metadata there is nothing to complete.
+#[cfg(not(feature = "crystal"))]
+pub(crate) fn complete(
+    _structure: &Structure,
+    options: &molframe_pdb::PdbOptions,
+) -> molframe_pdb::PdbOptions {
+    options.clone()
 }
 
 /// `MTRIX1..3` for every operator; the last column marks the copies already
