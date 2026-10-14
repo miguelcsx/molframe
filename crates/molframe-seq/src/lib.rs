@@ -61,9 +61,7 @@ pub use kmer::{
     SeedPatternError, SimilarKmer, SimilarKmerError, SimilarKmerOptions, kmer_counts, minimizers,
     similar_kmers,
 };
-pub use matrix::{
-    MatrixError, MatrixIdentity, MatrixProfile, SubstitutionMatrix, blosum62, load_matrix,
-};
+pub use matrix::{ScoreMatrix, SubstitutionMatrix, load_matrix};
 pub use msa::{MsaError, MsaOptions, msa, progressive_msa};
 pub use nj::neighbor_joining;
 pub use phylip::{parse_phylip, write_phylip};

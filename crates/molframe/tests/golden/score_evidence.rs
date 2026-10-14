@@ -133,9 +133,7 @@ fn gw_046_gdt_matches_the_zemla_definition_at_the_shared_superposition() {
 /// place the closest pair together with equal branch lengths.
 #[test]
 fn gw_047_sequence_kernels_agree_with_biopython() {
-    use molframe::sequence::{
-        Scoring, Tree, blosum62, global, load_matrix, local, neighbor_joining, upgma,
-    };
+    use molframe::sequence::{Scoring, Tree, global, load_matrix, local, neighbor_joining, upgma};
 
     let reference = reference("sequence_biopython_1.88.json");
     assert_eq!(reference["library"], "biopython");
@@ -151,17 +149,9 @@ fn gw_047_sequence_kernels_agree_with_biopython() {
         "BLOSUM62, BLOSUM50 and PAM250 are pinned"
     );
     for (name, entry) in matrices {
-        let matrix = if name == "BLOSUM62" {
-            blosum62()
-        } else {
-            // The file-backed tables carry their own identity.
-            let profile = match name.as_str() {
-                "BLOSUM50" => molframe::sequence::MatrixProfile::Blosum(50),
-                "PAM250" => molframe::sequence::MatrixProfile::Pam(250),
-                other => panic!("no profile for {other}"),
-            };
-            load_matrix(profile).unwrap_or_else(|error| panic!("{name}: {error}"))
-        };
+        let request = molframe::chemistry::TableRequest::named(name.to_lowercase());
+        let matrix = load_matrix(&request, molframe_bench::table_store())
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
         let pairs = entry
             .as_object()
             .unwrap_or_else(|| panic!("{name}: entries"));

@@ -2220,6 +2220,7 @@ name = "molframe-bench"
 version = "0.6.0"
 dependencies = [
  "molframe-bcif",
+ "molframe-chem",
  "molframe-cif",
  "molframe-compare",
  "molframe-core",
@@ -2459,6 +2460,8 @@ name = "molframe-seq"
 version = "0.6.0"
 dependencies = [
  "criterion",
+ "molframe-bench",
+ "molframe-chem",
  "molframe-core",
  "serde",
  "thiserror 2.0.21",

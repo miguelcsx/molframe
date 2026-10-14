@@ -9,7 +9,7 @@
 use super::common::{descriptor, float};
 use super::definition::DefinitionError;
 use super::{FrameKernelResult, StructureKernel, structure_kernel};
-use molframe_chem::{RadiusSet, RadiusSource, included_atoms};
+use molframe_chem::included_atoms;
 use molframe_core::contract::{
     AnalysisPolicy, Assumption, AssumptionSource, Coverage, Impact, ParameterValue, PolicyField,
     Quality,
@@ -24,9 +24,10 @@ use std::collections::BTreeMap;
 /// `options` is the one option set every front end shares: the sampling method and its
 /// density, the probe radius, which heteroatom classes take part (`hetero`, the polymer
 /// alone by default) and where a metal the radius set lacks takes its radius (`metals`).
-/// The radius set is the policy's `vdw_radii` unless `options.radii` carries a table the
-/// caller supplied, which then replaces it. Either way the result records the table that
-/// was applied (name, version, source, licence) as a `vdw_radii` assumption. An atom the options
+/// The radii are `options.radii`, a table the caller resolved. The result records the
+/// table that was applied (name, version, source, licence) as a `vdw_radii` assumption,
+/// which is a profile default when it carries the name the policy's `vdw_radii` gives and
+/// explicit otherwise. An atom the options
 /// leave out, or whose element has no radius in the set, has no area (`NaN`) and does not
 /// occlude its neighbours. A left-out heteroatom is a choice and not a gap; an included
 /// atom with no radius is reported as missing coverage, so the policy's `missing_atoms`
@@ -47,18 +48,10 @@ pub fn sasa_kernel(
             .with_parameter("metals", text(&options.metals.to_string()))
             .with_parameter("radii_table", radii_parameter(&options)),
         move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
-            let (radii_source, origin) = match &options.radii {
-                custom @ RadiusSource::Custom(_) => (custom.clone(), AssumptionSource::Explicit),
-                RadiusSource::Set(_) => {
-                    let set: RadiusSet = policy.vdw_radii.name().parse().map_err(|_| {
-                        DefinitionError::UnknownRadiusSet(policy.vdw_radii.name().into())
-                    })?;
-                    (RadiusSource::Set(set), AssumptionSource::ProfileDefault)
-                }
-            };
-            let options = SasaOptions {
-                radii: radii_source,
-                ..options.clone()
+            let origin = if options.radii.identity().name == policy.vdw_radii.name() {
+                AssumptionSource::ProfileDefault
+            } else {
+                AssumptionSource::Explicit
             };
             let applied = applied_assumption(&options, origin);
             let table = options.radii.identity().name.to_string();
@@ -114,10 +107,7 @@ fn text(value: &str) -> ParameterValue {
 }
 
 fn radii_parameter(options: &SasaOptions) -> ParameterValue {
-    match &options.radii {
-        RadiusSource::Set(_) => text("policy"),
-        custom @ RadiusSource::Custom(_) => text(&custom.identity().to_string()),
-    }
+    text(&options.radii.identity().to_string())
 }
 
 /// The radius policy as applied: every table behind the radii, by name, version, source

@@ -2,7 +2,7 @@
 
 use criterion::{BenchmarkGroup, Criterion, black_box, measurement::WallTime};
 use molframe_bench::{Sample, structure};
-use molframe_chem::RadiusSet;
+use molframe_chem::{CovalentRadii, TableRequest, VdwRadii};
 use molframe_core::ExecutionContext;
 use molframe_core::contract::Namespace;
 use molframe_core::index::AtomIndex;
@@ -11,25 +11,42 @@ use molframe_core::structure::UnitCell;
 use molframe_geom::EigenOptions;
 use molframe_spatial::SpatialBackend;
 use molframe_validate::{
-    AltlocOccupancyOptions, BondDeviation, PlanarityOptions, PlaneRestraint, ReferenceDistribution,
-    ReferenceLibrary, TlsGroup, TlsModel, altloc_occupancy_sums, assess_bond_deviation,
-    b_factor_distribution, bond_length_deviations, chirality_outliers, cis_peptides, clashes,
-    completeness, ligand_geometry, ligand_geometry_outliers, masked_real_space_correlation,
-    nonplanar_aromatic_rings, overvalent_atoms, plane_restraint_outliers, quality_flags,
-    real_space_map_correlation, sampled_real_space_correlation, tls_b_factor_consistency,
+    AltlocOccupancyOptions, BondDeviation, ClashOptions, PlanarityOptions, PlaneRestraint,
+    ReferenceDistribution, ReferenceLibrary, TlsGroup, TlsModel, altloc_occupancy_sums,
+    assess_bond_deviation, b_factor_distribution, bond_length_deviations, chirality_outliers,
+    cis_peptides, clashes_with, completeness, ligand_geometry, ligand_geometry_outliers,
+    masked_real_space_correlation, nonplanar_aromatic_rings, overvalent_atoms,
+    plane_restraint_outliers, quality_flags, real_space_map_correlation,
+    sampled_real_space_correlation, tls_b_factor_consistency,
 };
 use molframe_xtal::{DensityMap, MapBoundary};
 
+fn covalent() -> std::sync::Arc<molframe_chem::Provided<CovalentRadii>> {
+    match TableRequest::<CovalentRadii>::profile()
+        .resolve(molframe_bench::table_store(), "--covalent-radii")
+    {
+        Ok(radii) => radii,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    }
+}
+
 fn bench_validation(c: &mut Criterion) {
     let structure = structure(Sample::Medium);
+    let clash_options = match ClashOptions::resolve(
+        0.4,
+        &TableRequest::<VdwRadii>::profile(),
+        SpatialBackend::CellList,
+        molframe_bench::table_store(),
+    ) {
+        Ok(options) => options,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    };
     let mut group = c.benchmark_group("validate_structure");
     group.bench_function("clashes", |b| {
         b.iter(|| {
-            black_box(clashes(
+            black_box(clashes_with(
                 &structure,
-                0.4,
-                RadiusSet::Bondi,
-                SpatialBackend::CellList,
+                &clash_options,
                 &ExecutionContext::default(),
             ))
         });
@@ -70,7 +87,7 @@ fn bench_extended_structure(
         b.iter(|| black_box(quality_flags(structure)));
     });
     group.bench_function("bond_length_deviations/medium", |b| {
-        b.iter(|| black_box(bond_length_deviations(structure, 0.2)));
+        b.iter(|| black_box(bond_length_deviations(structure, &covalent().table, 0.2)));
     });
     group.bench_function("overvalent_atoms/medium", |b| {
         b.iter(|| black_box(overvalent_atoms(structure)));
@@ -79,10 +96,10 @@ fn bench_extended_structure(
         b.iter(|| black_box(cis_peptides(structure, 30.0)));
     });
     group.bench_function("ligand_geometry/medium", |b| {
-        b.iter(|| black_box(ligand_geometry(structure, 0.2)));
+        b.iter(|| black_box(ligand_geometry(structure, &covalent().table, 0.2)));
     });
     group.bench_function("ligand_geometry_outliers/medium", |b| {
-        b.iter(|| black_box(ligand_geometry_outliers(structure, 0.2)));
+        b.iter(|| black_box(ligand_geometry_outliers(structure, &covalent().table, 0.2)));
     });
 }
 

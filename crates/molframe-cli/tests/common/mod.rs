@@ -31,6 +31,12 @@ geometry: alphafold-peptide-link
 heavy-roles: heavy-atom-roles
 max-area: tien-2013-max-area
 components: fixture-ccd
+score-matrix: blosum62
+vdw-radii: bondi
+covalent-radii: pyykko-covalent
+metals: macromolecular-metals
+ionic-radii: shannon-ionic
+bond-reach: macromolecular-reach
 ";
 
 /// A table cache built from the repository's `data/` files and a profile that

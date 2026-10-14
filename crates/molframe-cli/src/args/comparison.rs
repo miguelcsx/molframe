@@ -3,7 +3,6 @@
 //! A metric that embodies a scientific definition takes every parameter as a
 //! flag with no default and refuses to run without it.
 
-use crate::RadiusChoice;
 use clap::{Args, ValueEnum};
 
 /// Whether the model is fitted onto the reference before a region is measured.
@@ -26,9 +25,10 @@ pub(crate) struct ExtraMetricArguments {
     /// Surface point density of the contact-area surface (CAD).
     #[arg(long)]
     pub(crate) cad_density: Option<f32>,
-    /// Van der Waals radius set used by the contact-area surface (CAD).
-    #[arg(long, value_enum)]
-    pub(crate) radii: Option<RadiusChoice>,
+    /// Van der Waals radius table (cache entry name or file path) used by the
+    /// contact-area surface (CAD); unset, the profile's `vdw-radii` line.
+    #[arg(long, value_name = "NAME|PATH")]
+    pub(crate) radii: Option<String>,
     /// Selection of the guide atoms CE aligns, evaluated in each structure.
     #[arg(long)]
     pub(crate) guide: Option<String>,

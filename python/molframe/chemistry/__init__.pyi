@@ -4,8 +4,6 @@ from typing import Literal, Protocol, final
 
 from .. import Structure
 
-type _RadiusSet = Literal["bondi", "amber_united", "charmm", "alvarez"]
-
 class Float32Array(Protocol):
     @property
     def shape(self) -> tuple[int, ...]: ...
@@ -23,8 +21,6 @@ class ElementProperties:
     @property
     def atomic_weight(self) -> float: ...
     @property
-    def covalent_radius(self) -> float | None: ...
-    @property
     def electronegativity(self) -> float | None: ...
     @property
     def valence_electrons(self) -> int: ...
@@ -34,8 +30,8 @@ class ElementProperties:
     def group(self) -> int | None: ...
 
 def element(symbol: str) -> ElementProperties: ...
-def vdw_radius(symbol: str, *, radii: _RadiusSet = "bondi") -> float | None: ...
-def vdw_radii(structure: Structure, *, radii: _RadiusSet = "bondi") -> Float32Array: ...
+def vdw_radius(symbol: str, *, radii: str | None = None) -> float | None: ...
+def vdw_radii(structure: Structure, *, radii: str | None = None) -> Float32Array: ...
 def annotate(
     structure: Structure,
     components: str | PathLike[str] | None = None,
@@ -43,7 +39,7 @@ def annotate(
     version: str = "unversioned",
     polymer_links: PolymerLinkPolicy | None = None,
 ) -> Structure:
-    """Apply component chemistry: in-file definitions, then `components`, then the profile's dictionary."""
+    """Apply component chemistry: in-file, then `components`, then the profile's dictionary."""
 
 @final
 class PolymerLinkRule:

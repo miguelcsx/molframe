@@ -14,8 +14,6 @@ from .. import (
 )
 from .._structure import Selection
 
-type _RadiusSet = Literal["bondi", "amber_united", "charmm", "alvarez"]
-
 class HydrogenBondCandidateOptions:
     def __new__(
         cls,
@@ -340,7 +338,7 @@ def pore_profile(
     search_radius: float,
     grid_spacing: float,
     probe_radius: float = 0.0,
-    radii: _RadiusSet = "bondi",
+    radii: str | None = None,
     memory_limit_bytes: int = ...,
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
@@ -354,7 +352,7 @@ def surface_contacts(
     probe: float,
     surface_density: float,
     minimum_area: float,
-    radii: _RadiusSet = "bondi",
+    radii: str | None = None,
     backend: Literal["auto", "cell", "kd_tree", "brute_force"] = "auto",
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
@@ -388,8 +386,7 @@ def sasa(
     n_points: int | None = None,
     hetero: str | None = None,
     metals: str | None = None,
-    radii_table: str | None = None,
-    radii_file: str | os.PathLike[str] | None = None,
+    radii: str | None = None,
     policy: AnalysisPolicy | None = None,
     context: ExecutionContext | None = None,
 ) -> Analysis[Float64Array]:
@@ -415,10 +412,9 @@ def sasa(
     under ``bondi`` with ``metals="none"``) makes the result ``partial`` with a ``W6004``
     warning naming the element and ``vdw_radii``.
 
-    ``radii_table`` (the text) or ``radii_file`` (a path), not both, replaces the policy's radius
-    set with a table you supply: ``name:``, ``version:``, ``source:`` and ``licence:`` header
-    lines, an optional ``base:`` set, then one ``Symbol radius`` row per element. Rust parses
-    and validates it, and a malformed table raises ``MolframeValueError`` naming the line. The
+    ``radii`` names the radius table: a cache entry (``<name>.radii``) or a file path; ``None``
+    takes the profile's ``vdw-radii`` line. Rust parses and validates it; a table that cannot be
+    supplied raises ``E7102`` (absent) or ``E2201`` (malformed), which name how to supply it. The
     result records the table that applied, by name, version, source and licence, in its
     ``vdw_radii`` assumption and its ``radii_table`` parameter.
     """

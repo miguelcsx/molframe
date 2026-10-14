@@ -6,6 +6,7 @@ mod numeric;
 mod samples;
 mod scale;
 mod synthetic;
+mod tables;
 
 pub use coordinates::{coordinates, model_coordinates, perturbed, uniform_radii};
 pub use fixtures::{
@@ -18,6 +19,7 @@ pub use scale::{
     fit_exponent, rotated, uniform_cloud,
 };
 pub use synthetic::{Placement, Seed, SyntheticCifSource, Tile, TileAtom};
+pub use tables::{bond_reach, shared_table_store, table_store};
 
 #[cfg(test)]
 #[path = "lib_tests.rs"]

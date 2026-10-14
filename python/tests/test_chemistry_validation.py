@@ -25,9 +25,7 @@ def test_radius_sets_differ_and_unknown_sets_are_rejected():
     bondi = molframe.chemistry.vdw_radius("C", radii="bondi")
     assert bondi == pytest.approx(1.7)
     assert molframe.chemistry.vdw_radius("C", radii="alvarez") != bondi
-    with pytest.raises(
-        molframe.PolicyError, match=r"radii: made_up .expected bondi, amber-united, charmm, alvarez"
-    ):
+    with pytest.raises(molframe.MolframeError, match="E7102"):
         molframe.chemistry.vdw_radius("C", radii="made_up")
 
 

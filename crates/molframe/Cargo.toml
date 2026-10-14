@@ -106,7 +106,7 @@ surface = ["spatial", "dep:molframe-surface", "molframe-engine/surface"]
 # Pulls in faer.
 analysis = ["spatial", "geometry", "chemistry", "dep:molframe-analysis", "dep:molframe-surface", "molframe-engine/analysis"]
 validation = ["spatial", "geometry", "chemistry", "dep:molframe-validate", "molframe-engine/validation"]
-sequence = ["dep:molframe-seq", "molframe-engine/sequence"]
+sequence = ["chemistry", "dep:molframe-seq", "molframe-engine/sequence"]
 compare = ["geometry", "chemistry", "sequence", "dep:molframe-compare", "molframe-engine/compare"]
 trajectory = ["dep:molframe-traj", "molframe-engine/trajectory"]
 audit = ["analysis", "dep:molframe-audit", "molframe-engine/audit"]

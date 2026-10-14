@@ -5,8 +5,8 @@
 //! or file formats shares the data-validity code, and the message carries which.
 
 use crate::{
-    A2mError, AlignError, AlphabetError, FastqError, KmerTableError, MatrixError, MsaError,
-    NewickError, RegionAlignError, RegionError, RerootError, SequenceError, SequenceFormatError,
+    A2mError, AlignError, AlphabetError, FastqError, KmerTableError, MsaError, NewickError,
+    RegionAlignError, RegionError, RerootError, SequenceError, SequenceFormatError,
     SimilarKmerError,
 };
 use molframe_core::{Code, diagnostic_from};
@@ -18,7 +18,6 @@ diagnostic_from!(A2mError, |_error| Code::E2101);
 diagnostic_from!(FastqError, |_error| Code::E2101);
 diagnostic_from!(NewickError, |_error| Code::E2101);
 diagnostic_from!(RerootError, |_error| Code::E2101);
-diagnostic_from!(MatrixError, |_error| Code::E2101);
 diagnostic_from!(KmerTableError, |_error| Code::E5101);
 diagnostic_from!(RegionError, |_error| Code::E5101);
 diagnostic_from!(AlignError, |error| match error {

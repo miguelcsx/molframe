@@ -24,7 +24,7 @@
 //! O(atoms * local density) rather than all-pairs; the scoring pass is one
 //! linear scan of the clash table with no per-pair allocation.
 
-use molframe_chem::RadiusSet;
+use molframe_chem::{TableRequest, TableStore, VdwRadii};
 use molframe_core::ExecutionContext;
 use molframe_core::element::Element;
 use molframe_core::structure::Structure;
@@ -47,12 +47,12 @@ pub enum HydrogenMode {
 }
 
 /// Options for [`clash_score`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ClashScoreOptions {
     /// Overlap at or above which a pair is a clash, in ångström.
     pub tolerance: f32,
-    /// Radius set for the overlap.
-    pub radius_set: RadiusSet,
+    /// The radius table for the overlap; by default the profile's choice.
+    pub radii: TableRequest<VdwRadii>,
     /// Hydrogen handling.
     pub hydrogens: HydrogenMode,
     /// Extra overlap beyond `tolerance` that a heavy-atom N/O pair needs to
@@ -64,7 +64,7 @@ impl Default for ClashScoreOptions {
     fn default() -> Self {
         Self {
             tolerance: 0.4,
-            radius_set: RadiusSet::Bondi,
+            radii: TableRequest::profile(),
             hydrogens: HydrogenMode::Auto,
             polar_margin: 0.6,
         }
@@ -88,6 +88,8 @@ pub struct ClashScore {
     pub worst_overlap: f32,
     /// The policy the score was computed under.
     pub options: ClashScoreOptions,
+    /// The radius table the clashes were measured against.
+    pub radii: molframe_chem::TableIdentity,
 }
 
 struct Atoms {
@@ -153,26 +155,30 @@ fn is_acceptor(kind: Option<Element>) -> bool {
 ///
 /// # Errors
 ///
-/// Returns [`BuiltinError`] if the neighbour search fails.
+/// Returns [`BuiltinError`] if a table cannot be supplied or the neighbour search fails.
 pub fn clash_score(
     structure: &Structure,
-    options: ClashScoreOptions,
+    options: &ClashScoreOptions,
+    store: &TableStore,
     context: &ExecutionContext,
 ) -> Result<ClashScore, BuiltinError> {
     let atoms = collect(structure);
     let hydrogen = |kind: &Option<Element>| kind.is_some_and(Element::is_hydrogen);
     let hydrogens = atoms.element.iter().filter(|kind| hydrogen(kind)).count();
     let aware = options.hydrogens == HydrogenMode::Auto && hydrogens > 0;
-    let table = clashes_with(
-        structure,
-        ClashOptions::new(options.tolerance, options.radius_set, SpatialBackend::Auto),
-        context,
+    let resolved = ClashOptions::resolve(
+        options.tolerance,
+        &options.radii,
+        SpatialBackend::Auto,
+        store,
     )?;
-    let mut score = ClashScore {
+    let table = clashes_with(structure, &resolved, context)?;
+    let mut tally = ClashScore {
         clashes: 0,
         score: 0.0,
         worst_overlap: 0.0,
-        options,
+        options: options.clone(),
+        radii: resolved.radii.source.identity().clone(),
         hydrogen_aware: aware,
         atoms: if aware {
             atoms.element.len()
@@ -200,22 +206,22 @@ pub fn clash_score(
         if exempt || hydrogen_bond_pair {
             continue;
         }
-        score.clashes += 1;
-        score.worst_overlap = score.worst_overlap.max(clash.overlap);
+        tally.clashes += 1;
+        tally.worst_overlap = tally.worst_overlap.max(clash.overlap);
         let mut touched = [atoms.residue.get(a).copied(), atoms.residue.get(b).copied()];
         if touched[0] == touched[1] {
             touched[1] = None;
         }
         for residue in touched.into_iter().flatten() {
-            if let Some(slot) = score.residue_clashes.get_mut(residue as usize) {
+            if let Some(slot) = tally.residue_clashes.get_mut(residue as usize) {
                 *slot += 1;
             }
         }
     }
-    if score.atoms > 0 {
-        score.score = 1000.0 * usize_to_f64(score.clashes) / usize_to_f64(score.atoms);
+    if tally.atoms > 0 {
+        tally.score = 1000.0 * usize_to_f64(tally.clashes) / usize_to_f64(tally.atoms);
     }
-    Ok(score)
+    Ok(tally)
 }
 
 #[cfg(test)]

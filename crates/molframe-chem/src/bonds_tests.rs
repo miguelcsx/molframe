@@ -1,6 +1,7 @@
 //! The grid search must find exactly the pairs a pairwise comparison finds.
 
 use super::*;
+use crate::test_data::reach;
 use molframe_bench::{Sample, structure};
 use std::collections::BTreeMap;
 
@@ -48,7 +49,7 @@ fn pairwise(structure: &Structure) -> BTreeMap<Edge, String> {
     let thresholds: Vec<_> = structure
         .data()
         .atoms()
-        .map(|atom| atom.element().and_then(element_threshold))
+        .map(|atom| atom.element().and_then(|element| reach().reach(element)))
         .collect();
     let positions = structure.positions();
     let count = u32::try_from(positions.len()).expect("a fixture fits in u32");
@@ -81,7 +82,7 @@ fn pairwise(structure: &Structure) -> BTreeMap<Edge, String> {
 fn the_grid_finds_the_bonds_a_pairwise_search_finds() {
     for sample in [Sample::Tiny, Sample::Small, Sample::Medium] {
         let structure = structure(sample);
-        let found = perceive_bonds(&structure).expect("coordinates are dense");
+        let found = perceive_bonds(&structure, reach()).expect("coordinates are dense");
         let expected = pairwise(&structure);
         assert!(!expected.is_empty(), "{sample:?} has bonds");
         assert_eq!(edges(&found), expected, "{sample:?}");
@@ -91,8 +92,8 @@ fn the_grid_finds_the_bonds_a_pairwise_search_finds() {
 #[test]
 fn perception_is_deterministic_and_keeps_file_bonds_first() {
     let structure = structure(Sample::Small);
-    let first = perceive_bonds(&structure).expect("coordinates are dense");
-    let second = perceive_bonds(&structure).expect("coordinates are dense");
+    let first = perceive_bonds(&structure, reach()).expect("coordinates are dense");
+    let second = perceive_bonds(&structure, reach()).expect("coordinates are dense");
     assert_eq!(edges(&first), edges(&second));
     let before = edges(&structure);
     let after = edges(&first);
@@ -226,7 +227,8 @@ fn perception_is_identical_at_every_worker_budget() {
             .worker_budget(workers)
             .build()
             .expect("a positive worker budget is valid");
-        let found = perceive_bonds_in(&structure, &context).expect("coordinates are dense");
+        let found =
+            perceive_bonds_in(&structure, reach(), &context).expect("coordinates are dense");
         let observed = edges(&found);
         match &reference {
             None => reference = Some(observed),
@@ -260,8 +262,11 @@ fn the_public_covalent_window_is_inclusive_and_rejects_nonfinite_distances() {
     let maximum_distance = 3.50_f32 / 1.95;
     let maximum = maximum_distance * maximum_distance;
     for distance in [minimum, minimum.next_up(), maximum.next_down(), maximum] {
-        assert!(covalent_pair(left, right, distance), "{distance}");
-        assert!(covalent_pair(right, left, distance), "symmetric {distance}");
+        assert!(covalent_pair(left, right, distance, reach()), "{distance}");
+        assert!(
+            covalent_pair(right, left, distance, reach()),
+            "symmetric {distance}"
+        );
     }
     for distance in [
         minimum.next_down(),
@@ -271,7 +276,7 @@ fn the_public_covalent_window_is_inclusive_and_rejects_nonfinite_distances() {
         f32::INFINITY,
         f32::NEG_INFINITY,
     ] {
-        assert!(!covalent_pair(left, right, distance), "{distance}");
+        assert!(!covalent_pair(left, right, distance, reach()), "{distance}");
     }
 }
 
@@ -301,16 +306,16 @@ fn perception_and_public_covalent_eligibility_share_chemical_boundaries() {
         let right = source.atom(AtomIndex::new(1)).expect("right atom");
         let label = format!("{elements:?} {alternates:?} {distance}");
         assert_eq!(
-            covalent_pair(left, right, distance * distance),
+            covalent_pair(left, right, distance * distance, reach()),
             covalent,
             "{label}"
         );
         assert_eq!(
-            covalent_pair(right, left, distance * distance),
+            covalent_pair(right, left, distance * distance, reach()),
             covalent,
             "{label}"
         );
-        let found = perceive_bonds(&source).expect("dense coordinates");
+        let found = perceive_bonds(&source, reach()).expect("dense coordinates");
         let bonds: Vec<_> = found.data().bonds.iter().collect();
         assert_eq!(bonds.len(), usize::from(perceived), "{label}");
         if perceived {
@@ -335,8 +340,10 @@ fn a_budget_below_one_block_falls_back_to_the_serial_walk_with_the_same_bonds() 
         .scratch_policy(molframe_core::ScratchPolicy::new(0))
         .build()
         .expect("a valid context");
-    let found = perceive_bonds_in(&structure, &tiny).expect("a read never fails for scratch");
-    let reference = perceive_bonds_in(&structure, &ExecutionContext::default()).expect("dense");
+    let found =
+        perceive_bonds_in(&structure, reach(), &tiny).expect("a read never fails for scratch");
+    let reference =
+        perceive_bonds_in(&structure, reach(), &ExecutionContext::default()).expect("dense");
     assert_eq!(edges(&found), edges(&reference));
     assert_eq!(tiny.reserved_bytes(), 0);
 }
@@ -366,7 +373,9 @@ fn a_distant_outlier_does_not_make_the_grid_dense() {
 fn bonds_at(metal: &str, donor: &str, distance: f32) -> bool {
     let threshold = |symbol: &str| {
         let element = molframe_core::Element::from_symbol(symbol).expect("a real element");
-        element_threshold(element).expect("the element has a bonding reach")
+        reach()
+            .reach(element)
+            .expect("the element has a bonding reach")
     };
     in_bonding_window(threshold(metal), threshold(donor), distance * distance)
 }

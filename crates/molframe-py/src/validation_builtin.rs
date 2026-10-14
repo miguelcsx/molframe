@@ -116,27 +116,24 @@ fn report(
 }
 
 fn named<T>(path: Option<&PathBuf>) -> TableRequest<T> {
-    match path {
-        Some(path) => TableRequest::named(path.to_string_lossy().into_owned()),
-        None => TableRequest::profile(),
-    }
+    TableRequest::choose(path.map(|path| path.to_string_lossy()).as_deref())
 }
 
-struct Paths<'a> {
-    rama: Option<&'a PathBuf>,
-    rotamer: Option<&'a PathBuf>,
-    geometry: Option<&'a PathBuf>,
-    chi: Option<&'a PathBuf>,
-    nucleic: Option<&'a PathBuf>,
+struct Paths {
+    rama: Option<PathBuf>,
+    rotamer: Option<PathBuf>,
+    geometry: Option<PathBuf>,
+    chi: Option<PathBuf>,
+    nucleic: Option<PathBuf>,
 }
 
-fn reference(paths: &Paths<'_>) -> ReferenceSet {
+fn reference(paths: &Paths) -> ReferenceSet {
     let mut set = ReferenceSet::default();
-    set.rama = named(paths.rama);
-    set.rotamers = named(paths.rotamer);
-    set.geometry = named(paths.geometry);
-    set.chi = named(paths.chi);
-    set.nucleic = named(paths.nucleic);
+    set.rama = named(paths.rama.as_ref());
+    set.rotamers = named(paths.rotamer.as_ref());
+    set.geometry = named(paths.geometry.as_ref());
+    set.chi = named(paths.chi.as_ref());
+    set.nucleic = named(paths.nucleic.as_ref());
     set
 }
 
@@ -145,7 +142,6 @@ fn reference(paths: &Paths<'_>) -> ReferenceSet {
 /// Each `*_table` path names a table file parsed in Rust; without one the profile's
 /// entry in the table cache is used, and a missing table raises a coded error.
 #[pyfunction]
-#[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (structure, *, rama_table=None, rotamer_table=None, chi_table=None, context=None))]
 fn protein_conformation(
     py: Python<'_>,
@@ -156,10 +152,10 @@ fn protein_conformation(
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyValidationReport> {
     let set = reference(&Paths {
-        rama: rama_table.as_ref(),
-        rotamer: rotamer_table.as_ref(),
+        rama: rama_table,
+        rotamer: rotamer_table,
         geometry: None,
-        chi: chi_table.as_ref(),
+        chi: chi_table,
         nucleic: None,
     });
     let engine = structure.inner.engine();
@@ -202,7 +198,6 @@ fn protein_conformation(
 ///
 /// `cutoff` selects the terms listed in the `outlier_*` arrays.
 #[pyfunction]
-#[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (structure, *, cutoff=4.0, geometry_table=None, chi_table=None, context=None))]
 fn geometry_z(
     py: Python<'_>,
@@ -218,8 +213,8 @@ fn geometry_z(
     let set = reference(&Paths {
         rama: None,
         rotamer: None,
-        geometry: geometry_table.as_ref(),
-        chi: chi_table.as_ref(),
+        geometry: geometry_table,
+        chi: chi_table,
         nucleic: None,
     });
     let engine = structure.inner.engine();
@@ -264,7 +259,6 @@ fn geometry_z(
 /// Suite sanity flags delta/pucker mismatch and gamma outside the staggered
 /// windows; it is a filter, not a named suite clustering.
 #[pyfunction]
-#[allow(clippy::needless_pass_by_value)]
 #[pyo3(signature = (structure, *, nucleic_table=None, context=None))]
 fn nucleic_conformation(
     py: Python<'_>,
@@ -277,7 +271,7 @@ fn nucleic_conformation(
         rotamer: None,
         geometry: None,
         chi: None,
-        nucleic: nucleic_table.as_ref(),
+        nucleic: nucleic_table,
     });
     let engine = structure.inner.engine();
     let table = run(py, context, |ctx| {
@@ -314,12 +308,12 @@ fn nucleic_conformation(
 /// `hydrogens="auto"` uses explicit hydrogens when the model has any;
 /// `"ignore"` forces the heavy-atom reading. The summary records the policy.
 #[pyfunction]
-#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", hydrogens="auto", polar_margin=0.6, context=None))]
+#[pyo3(signature = (structure, *, tolerance=0.4, radii=None, hydrogens="auto", polar_margin=0.6, context=None))]
 fn clashscore(
     py: Python<'_>,
     structure: &PyStructure,
     tolerance: f32,
-    radii: &str,
+    radii: Option<&str>,
     hydrogens: &str,
     polar_margin: f32,
     context: Option<&PyExecutionContext>,
@@ -331,29 +325,35 @@ fn clashscore(
     };
     let options = ClashScoreOptions {
         tolerance,
-        radius_set: crate::chemistry::radius_set(radii)?,
+        radii: molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(radii),
         hydrogens: mode,
         polar_margin,
     };
     let engine = structure.inner.engine();
-    let score =
-        run(py, context, |ctx| clash_score(engine, options, ctx))?.map_err(crate::error::kernel)?;
+    let store = molframe::chemistry::TableStore::global();
+    let result = run(py, context, |ctx| {
+        clash_score(engine, &options, &store, ctx)
+    })?
+    .map_err(crate::error::kernel)?;
     let arrays = PyDict::new(py);
-    arrays.set_item("residue_clashes", array(py, score.residue_clashes))?;
+    arrays.set_item("residue_clashes", array(py, result.residue_clashes))?;
     let summary = PyDict::new(py);
-    summary.set_item("score", score.score)?;
-    summary.set_item("clashes", score.clashes)?;
-    summary.set_item("atoms", score.atoms)?;
-    summary.set_item("worst_overlap", score.worst_overlap)?;
-    summary.set_item("hydrogen_aware", score.hydrogen_aware)?;
-    summary.set_item("tolerance", score.options.tolerance)?;
-    summary.set_item("polar_margin", score.options.polar_margin)?;
+    summary.set_item("score", result.score)?;
+    summary.set_item("clashes", result.clashes)?;
+    summary.set_item("atoms", result.atoms)?;
+    summary.set_item("worst_overlap", result.worst_overlap)?;
+    summary.set_item("hydrogen_aware", result.hydrogen_aware)?;
+    summary.set_item("tolerance", result.options.tolerance)?;
+    summary.set_item("polar_margin", result.options.polar_margin)?;
     let policy = TableIdentity::supplied(
         "clashscore-policy",
         "molframe-1",
         &format!(
-            "radii={radii} tolerance={} polar_margin={} hydrogen_aware={}",
-            score.options.tolerance, score.options.polar_margin, score.hydrogen_aware
+            "radii={} tolerance={} polar_margin={} hydrogen_aware={}",
+            result.radii,
+            result.options.tolerance,
+            result.options.polar_margin,
+            result.hydrogen_aware
         ),
         "not applicable",
     );

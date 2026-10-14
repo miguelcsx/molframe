@@ -39,6 +39,17 @@ impl<T> Clone for TableRequest<T> {
     }
 }
 
+impl<T: PartialEq> PartialEq for TableRequest<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Profile, Self::Profile) => true,
+            (Self::Named(left), Self::Named(right)) => left == right,
+            (Self::Given(left), Self::Given(right)) => left == right,
+            _ => false,
+        }
+    }
+}
+
 impl<T> core::fmt::Debug for TableRequest<T> {
     fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -66,6 +77,13 @@ impl<T> TableRequest<T> {
     #[must_use]
     pub fn named(name: impl Into<String>) -> Self {
         Self::Named(name.into())
+    }
+
+    /// The request a front end's optional argument makes: the name or path given,
+    /// or the profile's choice when there is none.
+    #[must_use]
+    pub fn choose(argument: Option<&str>) -> Self {
+        argument.map_or(Self::Profile, Self::named)
     }
 }
 

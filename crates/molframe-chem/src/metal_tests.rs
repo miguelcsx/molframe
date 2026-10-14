@@ -1,78 +1,99 @@
-use super::{METAL_SITES, MetalRadiusKind, metal_radius, metal_site};
-use molframe_core::Element;
+use super::*;
+use crate::test_data::shipped;
 
-fn element(symbol: &str) -> Element {
-    Element::from_symbol(symbol).unwrap_or_else(|| panic!("unknown symbol {symbol}"))
+const HEADER: &str = "name: lab\nversion: 1\nsource: survey\nlicence: CC0-1.0\n";
+
+fn sites(body: &str) -> Provided<MetalSites> {
+    match MetalSites::decode(
+        format!("{HEADER}{body}").as_bytes(),
+        TableIdentity::supplied("x", "x", "x", "x"),
+    ) {
+        Ok(provided) => provided,
+        Err(error) => panic!("sites refused: {error}"),
+    }
 }
 
-fn ionic(symbol: &str) -> f32 {
-    metal_radius(element(symbol), MetalRadiusKind::Ionic)
-        .unwrap_or_else(|| panic!("{symbol} has no ionic radius"))
+fn ionic(body: &str) -> Provided<IonicRadii> {
+    match IonicRadii::decode(
+        format!("{HEADER}{body}").as_bytes(),
+        TableIdentity::supplied("x", "x", "x", "x"),
+    ) {
+        Ok(provided) => provided,
+        Err(error) => panic!("ionic refused: {error}"),
+    }
 }
 
 #[test]
-fn ionic_radii_match_shannon_effective_values() {
-    // Shannon (1976) effective radii at the typical site, in angstrom.
-    for (symbol, expected) in [
-        ("Na", 1.02),
-        ("K", 1.38),
-        ("Mg", 0.72),
-        ("Ca", 1.00),
-        ("Mn", 0.83),
-        ("Fe", 0.78),
-        ("Co", 0.745),
-        ("Ni", 0.69),
-        ("Cu", 0.65),
-        ("Zn", 0.60),
+fn a_site_gives_its_vdw_radius_and_the_ionic_radius_of_exactly_that_state() {
+    let metals = sites("Fe 2 VI HS 2.44\n");
+    let catalogue =
+        ionic("Fe 2 VI LS 0.61 0.75 -\nFe 2 VI HS 0.78 0.92 yes\nFe 3 VI HS 0.645 0.785 yes\n");
+    let table = &metals.table;
+    assert_eq!(
+        table.radius(Element::IRON, MetalRadiusKind::Vdw, None),
+        Some(2.44)
+    );
+    assert_eq!(
+        table.radius(
+            Element::IRON,
+            MetalRadiusKind::Ionic,
+            Some(&catalogue.table)
+        ),
+        Some(0.78)
+    );
+    assert_eq!(
+        table.radius(Element::IRON, MetalRadiusKind::Ionic, None),
+        None
+    );
+    assert_eq!(
+        table.radius(Element::CARBON, MetalRadiusKind::Vdw, None),
+        None
+    );
+    assert!(table.is_metal(Element::IRON) && !table.is_metal(Element::CARBON));
+    assert_eq!(table.elements().collect::<Vec<_>>(), vec![Element::IRON]);
+}
+
+#[test]
+fn defects_are_refused() {
+    for body in [
+        "",
+        "Fe 2 VI HS\n",
+        "Fe 2 VI HS 0\n",
+        "Fe 2 VI x 2.4\n",
+        "Fe 2 VI - 2.4\nFe 3 VI - 2.4\n",
     ] {
-        assert!((ionic(symbol) - expected).abs() < 1e-4, "{symbol}");
+        let refused = MetalSites::decode(
+            format!("{HEADER}{body}").as_bytes(),
+            TableIdentity::supplied("x", "x", "x", "x"),
+        );
+        assert!(refused.is_err(), "{body:?}");
     }
 }
 
 #[test]
-fn van_der_waals_radii_are_alvarez() {
-    for (symbol, expected) in [("Mg", 2.51), ("Ca", 2.62), ("Zn", 2.39), ("Fe", 2.44)] {
-        let radius = metal_radius(element(symbol), MetalRadiusKind::Vdw);
-        assert_eq!(radius, Some(expected), "{symbol}");
-    }
-}
-
-#[test]
-fn every_site_resolves_all_three_radii_in_order() {
-    for site in &METAL_SITES {
-        let e = element(site.symbol);
-        let vdw = metal_radius(e, MetalRadiusKind::Vdw);
-        let covalent = metal_radius(e, MetalRadiusKind::Covalent);
-        let ionic = metal_radius(e, MetalRadiusKind::Ionic);
-        let (Some(vdw), Some(covalent), Some(ionic)) = (vdw, covalent, ionic) else {
-            panic!("{} lacks a radius", site.symbol)
+fn the_shipped_typical_sites_exist_in_the_shipped_shannon_catalogue() {
+    let metals = shipped::<MetalSites>("macromolecular-metals.metals");
+    let catalogue = shipped::<IonicRadii>("shannon-ionic.ionic");
+    for element in metals.table.elements() {
+        let ionic = metals
+            .table
+            .radius(element, MetalRadiusKind::Ionic, Some(&catalogue.table));
+        let vdw = metals.table.radius(element, MetalRadiusKind::Vdw, None);
+        let (Some(ionic), Some(vdw)) = (ionic, vdw) else {
+            panic!("{} lacks a radius", element.symbol())
         };
         assert!(
             ionic < vdw,
-            "{}: cation is smaller than its vdW sphere",
-            site.symbol
+            "{}: a cation is smaller than its vdW sphere",
+            element.symbol()
         );
-        assert!(covalent < vdw, "{}", site.symbol);
     }
-}
-
-#[test]
-fn bonding_reach_admits_the_ionic_contact_distance_to_oxide() {
-    // The coordination window must contain the crystal contact distance, the
-    // sum of the cation radius and Shannon's oxide radius (1.40 A), within
-    // sampling tolerance, and stay below the van der Waals contact.
-    for site in &METAL_SITES {
-        let e = element(site.symbol);
-        let contact = ionic(site.symbol) + 1.40;
-        let window = (site.reach + 1.52) / 1.95;
-        assert!(window >= contact - 0.05, "{} window {window}", site.symbol);
-        let vdw = metal_radius(e, MetalRadiusKind::Vdw).unwrap_or(0.0);
-        assert!(window < vdw + 1.52, "{}", site.symbol);
-    }
-}
-
-#[test]
-fn non_metals_have_no_site() {
-    assert!(metal_site("C").is_none());
-    assert_eq!(metal_radius(element("C"), MetalRadiusKind::Vdw), None);
+    assert_eq!(
+        metals.table.radius(
+            Element::IRON,
+            MetalRadiusKind::Ionic,
+            Some(&catalogue.table)
+        ),
+        Some(0.78)
+    );
 }

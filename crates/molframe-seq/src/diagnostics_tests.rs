@@ -24,11 +24,6 @@ fn sequence_content_failures_share_the_data_validity_code() {
     };
     let diagnostic = Diagnostic::from(unknown);
     assert_eq!(diagnostic.code(), Code::E2101);
-    assert!(
-        Diagnostic::from(MatrixError::UnknownProfile)
-            .code()
-            .is_registered()
-    );
     assert_eq!(
         Diagnostic::from(NewickError::UnexpectedEnd).code(),
         Code::E2101

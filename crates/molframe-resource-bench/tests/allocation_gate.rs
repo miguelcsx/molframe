@@ -18,6 +18,8 @@ const CEILINGS: &[(&str, u64)] = &[
     ("selection_medium", 63),
     ("contacts_medium", 65),
     ("sasa_medium", 527),
+    ("sasa_tables_medium", 445),
+    ("clashscore_medium", 2_060),
     ("rmsd_medium", 38),
     ("dlpack_coordinates", 56),
     ("coordinate_handoff", 0),

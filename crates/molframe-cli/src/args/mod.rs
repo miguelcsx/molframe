@@ -28,7 +28,7 @@ pub(crate) use interactions::{
 pub(crate) use mapping::MappingArguments;
 pub(crate) use policy::{AltlocArgument, AssemblyArgument, ModelArgument, NamespaceArgument};
 pub(crate) use sequence::{
-    KmerOperation, MatrixChoice, PairwiseMode, SequenceCommand, SequenceFormat, TreeMethod,
+    KmerOperation, PairwiseMode, SequenceCommand, SequenceFormat, TreeMethod,
 };
 pub(crate) use validate::ValidateArguments;
 

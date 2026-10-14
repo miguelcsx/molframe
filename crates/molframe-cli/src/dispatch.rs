@@ -183,7 +183,9 @@ fn execute_comparison(command: Command, context: Context) -> Exit {
             points,
             radii,
             words,
-        } => crate::analysis_commands::sasa(&input, probe, points, radii.into(), &words, context),
+        } => {
+            crate::analysis_commands::sasa(&input, probe, points, radii.as_deref(), &words, context)
+        }
         Command::Compare {
             model,
             reference,

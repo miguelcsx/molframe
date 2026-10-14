@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Sequence alignment and comparison for molframe"
 
 [dependencies]
+molframe-chem.workspace = true
 molframe-core.workspace = true
 serde = { workspace = true, optional = true }
 thiserror.workspace = true
@@ -17,6 +18,7 @@ thiserror.workspace = true
 serde = ["dep:serde"]
 
 [dev-dependencies]
+molframe-bench.workspace = true
 criterion.workspace = true
 
 [[bench]]

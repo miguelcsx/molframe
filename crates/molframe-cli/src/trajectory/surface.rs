@@ -10,7 +10,7 @@ pub(crate) fn sasa(
     topology: &Path,
     probe: f32,
     samples: u16,
-    radius_set: molframe::chemistry::RadiusSet,
+    radii: Option<&str>,
     context: Context,
 ) -> Exit {
     if !super::streaming::supported(path) {
@@ -22,7 +22,11 @@ pub(crate) fn sasa(
         Ok(reader) => reader,
         Err(exit) => return exit,
     };
-    let radii = match read_radii(topology, reader.n_atoms(), radius_set, context) {
+    let source = match crate::tables::radius_source(radii) {
+        Ok(source) => source,
+        Err(exit) => return exit,
+    };
+    let radii = match read_radii(topology, reader.n_atoms(), &source, context) {
         Ok(radii) => radii,
         Err(exit) => return exit,
     };
@@ -87,7 +91,7 @@ pub(crate) fn sasa(
 fn read_radii(
     path: &Path,
     atoms: usize,
-    set: molframe::chemistry::RadiusSet,
+    set: &molframe::chemistry::RadiusSource,
     context: Context,
 ) -> Result<Retained<Vec<f32>>, Exit> {
     let bytes = atoms
@@ -129,7 +133,7 @@ fn read_radii(
                         return Err(Exit::Consistency);
                     }
                     let element = molframe::Element::from_atomic_number(element);
-                    let Some(radius) = molframe::chemistry::vdw_radius(element, set) else {
+                    let Some(radius) = set.radius(element) else {
                         eprintln!("radius set has no value for topology atom {}", radii.len());
                         return Err(Exit::Indeterminate);
                     };

@@ -51,7 +51,11 @@ fn a_covalent_pair_crossing_a_ten_angstrom_placement_boundary_is_found() {
     let structure = attached(&boundary_entry(8.67));
     let view = structure.assembly("1").expect("assembly exists");
     let links = view
-        .covalent_links(ModelIndex::new(0), &ExecutionContext::default())
+        .covalent_links(
+            ModelIndex::new(0),
+            molframe_bench::bond_reach(),
+            &ExecutionContext::default(),
+        )
         .expect("search succeeds");
     assert_eq!(
         links,
@@ -70,9 +74,13 @@ fn a_three_point_two_angstrom_contact_is_not_a_covalent_link() {
     let structure = attached(&boundary_entry(6.8));
     let view = structure.assembly("1").expect("assembly exists");
     assert!(
-        view.covalent_links(ModelIndex::new(0), &ExecutionContext::default())
-            .expect("search succeeds")
-            .is_empty()
+        view.covalent_links(
+            ModelIndex::new(0),
+            molframe_bench::bond_reach(),
+            &ExecutionContext::default()
+        )
+        .expect("search succeeds")
+        .is_empty()
     );
 }
 
@@ -84,9 +92,13 @@ fn same_instance_pairs_are_not_cross_instance_links() {
     let structure = attached(&entry);
     let view = structure.assembly("1").expect("assembly exists");
     assert!(
-        view.covalent_links(ModelIndex::new(0), &ExecutionContext::default())
-            .expect("search succeeds")
-            .is_empty()
+        view.covalent_links(
+            ModelIndex::new(0),
+            molframe_bench::bond_reach(),
+            &ExecutionContext::default()
+        )
+        .expect("search succeeds")
+        .is_empty()
     );
 }
 
@@ -98,8 +110,12 @@ fn deposited_4hhb_assembly_has_no_cross_instance_covalent_links() {
     let structure = attached(std::str::from_utf8(bytes).expect("fixture is UTF-8"));
     let view = structure.assembly("1").expect("deposited assembly exists");
     assert!(
-        view.covalent_links(ModelIndex::new(0), &ExecutionContext::default())
-            .expect("valid real assembly search")
-            .is_empty()
+        view.covalent_links(
+            ModelIndex::new(0),
+            molframe_bench::bond_reach(),
+            &ExecutionContext::default()
+        )
+        .expect("valid real assembly search")
+        .is_empty()
     );
 }

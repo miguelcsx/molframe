@@ -24,7 +24,7 @@ use molframe_core::selection::AtomSelection;
 use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
 use scan::{SelectionCursor, scan_residues, selection_from_sorted, visit};
 use std::collections::{BTreeSet, HashMap, hash_map::Entry};
-use values::{numeric, residue_level, residue_text, text_resolved};
+use values::{numeric, radius_source, residue_level, residue_text, text_resolved};
 
 pub(crate) use helpers::atom_selector;
 pub(crate) use scan::scan;
@@ -74,8 +74,9 @@ pub(crate) fn comparison(
     if let Some(chunked) = chunked {
         return Ok(scan::scan_f32(structure, universe, &chunked, test));
     }
+    let radii = radius_source(column, policy)?;
     Ok(scan(structure, universe, |context| {
-        numeric(structure, context, column, policy).is_some_and(|mut actual| {
+        numeric(structure, context, column, radii.as_ref()).is_some_and(|mut actual| {
             if absolute {
                 actual = actual.abs();
             }
@@ -109,8 +110,9 @@ pub(crate) fn membership(
             ));
         }
         let matcher = NumericMatcher::from_patterns(&patterns);
+        let radii = radius_source(column, policy)?;
         return Ok(scan(structure, universe, |context| {
-            numeric(structure, context, column, policy)
+            numeric(structure, context, column, radii.as_ref())
                 .is_some_and(|actual| matcher.matches(actual))
         }));
     }
@@ -246,8 +248,9 @@ pub(crate) fn same_column(
         return Ok(AtomSelection::Empty);
     }
     if column.is_numeric() {
+        let radii = radius_source(column, policy)?;
         return Ok(same_by_key(structure, universe, selected, |context| {
-            numeric(structure, context, column, policy).map(f64::to_bits)
+            numeric(structure, context, column, radii.as_ref()).map(f64::to_bits)
         }));
     }
     let resolved = resolved_column(column, policy);

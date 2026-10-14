@@ -7,6 +7,7 @@
 
 mod pair;
 
+use crate::BondReach;
 use crate::grid::{CellGrid, cell_for};
 use crate::standard_bonds::standard_bond_order;
 use molframe_core::ExecutionContext;
@@ -20,12 +21,12 @@ use molframe_core::parallel::{
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
 use molframe_core::{AltId, SymbolId};
 use pair::{
-    element_threshold, in_bonding_window, is_metal, maximum_bonding_distance, pair_compatible,
-    squared_distance, within,
+    in_bonding_window, maximum_bonding_distance, pair_compatible, squared_distance, within,
 };
 use std::ops::Range;
 
-/// Adds chemically plausible missing bonds to one immutable structure.
+/// Adds chemically plausible missing bonds to one immutable structure, sizing
+/// each atom by `reach`.
 ///
 /// Existing file records always win. The returned snapshot shares all source
 /// storage with the input except for its compact bond columns.
@@ -33,8 +34,8 @@ use std::ops::Range;
 /// # Errors
 ///
 /// Returns a diagnostic when coordinates are not a dense first-model column.
-pub fn perceive_bonds(structure: &Structure) -> Result<Structure, Diagnostic> {
-    perceive_bonds_in(structure, &ExecutionContext::default())
+pub fn perceive_bonds(structure: &Structure, reach: &BondReach) -> Result<Structure, Diagnostic> {
+    perceive_bonds_in(structure, reach, &ExecutionContext::default())
 }
 
 /// [`perceive_bonds`] on the worker budget of `context`.
@@ -48,6 +49,7 @@ pub fn perceive_bonds(structure: &Structure) -> Result<Structure, Diagnostic> {
 /// or when a worker thread panics.
 pub fn perceive_bonds_in(
     structure: &Structure,
+    reach: &BondReach,
     context: &ExecutionContext,
 ) -> Result<Structure, Diagnostic> {
     if !structure.data().coords.is_dense()
@@ -65,7 +67,7 @@ pub fn perceive_bonds_in(
     }
 
     add_polymer_links(structure, &mut output);
-    let prepared = prepare_atoms(structure, context)?;
+    let prepared = prepare_atoms(structure, reach, context)?;
     let largest = prepared
         .iter()
         .filter_map(|atom| atom.threshold)
@@ -88,17 +90,20 @@ pub fn perceive_bonds_in(
 /// retain coordination edges. This is a geometric perception, not bond-order
 /// assignment or a substitute for deposited connectivity.
 #[must_use]
-pub fn covalent_pair(left: AtomRef<'_>, right: AtomRef<'_>, distance_squared: f32) -> bool {
+pub fn covalent_pair(
+    left: AtomRef<'_>,
+    right: AtomRef<'_>,
+    distance_squared: f32,
+    reach: &BondReach,
+) -> bool {
     let (Some(left_element), Some(right_element)) = (left.element(), right.element()) else {
         return false;
     };
-    if is_metal(left_element.symbol()) || is_metal(right_element.symbol()) {
+    if reach.is_metal(left_element) || reach.is_metal(right_element) {
         return false;
     }
-    let (Some(first), Some(second)) = (
-        element_threshold(left_element),
-        element_threshold(right_element),
-    ) else {
+    let (Some(first), Some(second)) = (reach.reach(left_element), reach.reach(right_element))
+    else {
         return false;
     };
     in_bonding_window(first, second, distance_squared) && pair_compatible(left, right)
@@ -142,6 +147,7 @@ struct AtomFacts {
 /// Reads [`AtomFacts`] for every atom, in atom order, on the worker budget.
 fn prepare_atoms(
     structure: &Structure,
+    reach: &BondReach,
     context: &ExecutionContext,
 ) -> Result<Vec<AtomFacts>, Diagnostic> {
     let count = structure.atom_count() as usize;
@@ -153,7 +159,7 @@ fn prepare_atoms(
                     .ok()
                     .and_then(|index| structure.atom(AtomIndex::new(index)))
                     .map_or_else(AtomFacts::default, |atom| AtomFacts {
-                        threshold: atom.element().and_then(element_threshold),
+                        threshold: atom.element().and_then(|element| reach.reach(element)),
                         hydrogen: atom
                             .element()
                             .is_some_and(molframe_core::Element::is_hydrogen),

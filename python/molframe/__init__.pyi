@@ -10,6 +10,7 @@ from . import (
     chemistry as chemistry,
     compare as compare,
     crystal as crystal,
+    data as data,
     errors as errors,
     formats as formats,
     geometry as geometry,

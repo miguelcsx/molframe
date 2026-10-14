@@ -2,14 +2,16 @@
 
 use super::AtomContext;
 use crate::ast::Column;
+use molframe_chem::{RadiusSource, TableRequest, TableStore};
 use molframe_core::contract::{AnalysisPolicy, Namespace};
+use molframe_core::diagnostic::Diagnostic;
 use molframe_core::structure::{ChainRef, ResidueRef, Structure};
 
 pub(super) fn numeric(
     structure: &Structure,
     context: AtomContext<'_>,
     column: Column,
-    policy: &AnalysisPolicy,
+    radii: Option<&RadiusSource>,
 ) -> Option<f64> {
     let value = match column {
         Column::Index => f64::from(context.atom.index().get()),
@@ -31,10 +33,7 @@ pub(super) fn numeric(
             )?,
         },
         Column::Mass => molframe_chem::element_properties(context.atom.element()?)?.atomic_weight,
-        Column::Radius => f64::from(molframe_chem::vdw_radius(
-            context.atom.element()?,
-            radius_set(policy.vdw_radii)?,
-        )?),
+        Column::Radius => f64::from(radii?.radius(context.atom.element()?)?),
         Column::BFactor => f64::from(context.atom.b_factor()?),
         Column::Occupancy => f64::from(context.atom.occupancy()?),
         Column::Charge | Column::Plddt | Column::Pae | Column::Assembly => {
@@ -49,14 +48,21 @@ pub(super) fn numeric(
     Some(value)
 }
 
-fn radius_set(set: molframe_core::contract::RadiiSet) -> Option<molframe_chem::RadiusSet> {
-    Some(match set {
-        molframe_core::contract::RadiiSet::Bondi => molframe_chem::RadiusSet::Bondi,
-        molframe_core::contract::RadiiSet::AmberUnited => molframe_chem::RadiusSet::AmberUnited,
-        molframe_core::contract::RadiiSet::Charmm => molframe_chem::RadiusSet::Charmm,
-        molframe_core::contract::RadiiSet::Alvarez => molframe_chem::RadiusSet::Alvarez,
-        _ => return None,
-    })
+/// The radius table a numeric `column` needs, resolved once per evaluation.
+///
+/// Only `radius` reads one: the table the policy's radius set names, looked up in
+/// the cache. A missing table is the typed table error, never a silent default.
+pub(super) fn radius_source(
+    column: Column,
+    policy: &AnalysisPolicy,
+) -> Result<Option<RadiusSource>, Diagnostic> {
+    if column != Column::Radius {
+        return Ok(None);
+    }
+    let request = TableRequest::named(policy.vdw_radii.name());
+    RadiusSource::resolve(&request, &TableStore::global())
+        .map(Some)
+        .map_err(Diagnostic::from)
 }
 
 /// Whether the text of `column` is decided by an atom's residue and chain alone.

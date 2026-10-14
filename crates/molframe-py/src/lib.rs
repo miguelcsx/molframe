@@ -45,6 +45,8 @@ mod crystal_reduction;
 mod crystal_reflections;
 #[cfg(feature = "crystal")]
 mod crystal_statistics;
+#[cfg(feature = "data")]
+mod data;
 mod editing;
 #[cfg(feature = "analysis")]
 mod electrostatics;
@@ -95,6 +97,8 @@ mod surface_mesh;
 #[cfg(feature = "surface")]
 mod surface_native;
 mod table;
+#[cfg(feature = "chemistry")]
+mod tables;
 #[cfg(feature = "trajectory")]
 mod trajectory;
 #[cfg(feature = "trajectory")]

@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 molframe-core = { workspace = true, features = ["gzip"] }
+molframe-chem.workspace = true
 molframe-cif.workspace = true
 molframe-pdb.workspace = true
 molframe-bcif.workspace = true

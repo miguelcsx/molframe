@@ -27,7 +27,10 @@
 //! skipped. The candidate pairs come from the shared spatial search bounded by
 //! the widest radius in play.
 
-use molframe_chem::{MetalFallback, RadiusSet, perceive_bonds_in, radius_with_fallback};
+use molframe_chem::{
+    BondReach, HeteroPolicy, MetalFallback, Provided, RadiusPolicy, TableError, TableRequest,
+    TableStore, VdwRadii, perceive_bonds_in,
+};
 use molframe_core::bond::{BondOrder, BondProvenance, BondRecord, BondTable, BondTableBuilder};
 use molframe_core::optional::OptionalSymbol;
 use molframe_core::selection::AtomSelection;
@@ -36,6 +39,7 @@ use molframe_core::{ExecutionContext, index::AtomIndex};
 use molframe_spatial::{
     PairQuery, SpatialBackend, SpatialError, SpatialSearchOptions, reduce_pairs_within_unsorted,
 };
+use std::sync::Arc;
 
 use crate::numeric::f64_to_f32;
 
@@ -138,17 +142,17 @@ impl FromIterator<Clash> for ClashTable {
 }
 
 /// Options for [`clashes_with`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ClashOptions {
     /// Overlap tolerated before a pair counts as a clash, in ångström.
     pub tolerance: f32,
-    /// Van der Waals radius set.
-    pub radius_set: RadiusSet,
-    /// Where a metal the radius set has no value for takes its radius. The
-    /// default is the ionic radius: a coordinated cation is a steric contact of
-    /// its crystal size, not of its van der Waals sphere, which would call every
-    /// ordinary coordination distance a clash.
-    pub metals: MetalFallback,
+    /// The van der Waals radii in force, and where a metal they lack takes its
+    /// radius. [`ClashOptions::resolve`] chooses the ionic radius: a coordinated
+    /// cation is a steric contact of its crystal size, not of its van der Waals
+    /// sphere, which would call every ordinary coordination distance a clash.
+    pub radii: RadiusPolicy,
+    /// The bonding reach table that perception of bonds uses.
+    pub reach: Arc<Provided<BondReach>>,
     /// Neighbour-search backend.
     pub backend: SpatialBackend,
     /// Exclude atoms exactly three bonds apart. On by default: torsions fix
@@ -164,65 +168,59 @@ pub struct ClashOptions {
 
 impl ClashOptions {
     /// Default policy (1-2, 1-3 and 1-4 excluded, bonds perceived where the
-    /// table lacks them) with the given tolerance, radius set and backend.
-    #[must_use]
-    pub const fn new(tolerance: f32, radius_set: RadiusSet, backend: SpatialBackend) -> Self {
-        Self {
+    /// table lacks them, ionic radii for metals the table lacks) with the given
+    /// tolerance and backend, over the radius table `radii` selects and the
+    /// profile's reach and metal tables.
+    ///
+    /// # Errors
+    ///
+    /// [`TableError`] naming how to supply whichever table is missing.
+    pub fn resolve(
+        tolerance: f32,
+        radii: &TableRequest<VdwRadii>,
+        backend: SpatialBackend,
+        store: &TableStore,
+    ) -> Result<Self, TableError> {
+        Ok(Self {
             tolerance,
-            radius_set,
-            metals: MetalFallback::Ionic,
+            radii: RadiusPolicy::resolve(radii, MetalFallback::Ionic, HeteroPolicy::ALL, store)?,
+            reach: TableRequest::<BondReach>::profile().resolve(store, "--reach")?,
             backend,
             exclude_one_four: true,
             perceive_bonds: true,
-        }
+        })
     }
 }
 
-/// Finds steric clashes under a van der Waals radius set.
+/// Finds steric clashes under the radii and exclusion policy of `options`.
 ///
-/// `tolerance` is the overlap tolerated before a pair counts as a clash; a
-/// common choice is about 0.4 Å. Atoms whose element has no radius in the set
-/// and no metal fallback take no part. Bonded (1-2), angle-related (1-3) and torsion-related (1-4)
-/// pairs and pairs from incompatible alternate locations are skipped (see
-/// [`ClashOptions`]). Results are sorted by `(first, second)`.
+/// `options.tolerance` is the overlap tolerated before a pair counts as a
+/// clash; a common choice is about 0.4 Å. Atoms whose element has no radius in
+/// the table and no metal fallback take no part. Bonded (1-2), angle-related
+/// (1-3) and torsion-related (1-4) pairs and pairs from incompatible alternate
+/// locations are skipped (see [`ClashOptions`]). Results are sorted by
+/// `(first, second)`.
 ///
 /// Runs in `O(atoms · local density)` time.
 ///
 /// # Errors
 ///
 /// Returns [`SpatialError`] from the neighbour search.
-pub fn clashes(
-    structure: &Structure,
-    tolerance: f32,
-    radius_set: RadiusSet,
-    backend: SpatialBackend,
-    context: &ExecutionContext,
-) -> Result<ClashTable, SpatialError> {
-    clashes_with(
-        structure,
-        ClashOptions::new(tolerance, radius_set, backend),
-        context,
-    )
-}
-
-/// Finds steric clashes with explicit exclusion policy.
-///
-/// # Errors
-///
-/// Returns [`SpatialError`] from the neighbour search.
 pub fn clashes_with(
     structure: &Structure,
-    options: ClashOptions,
+    options: &ClashOptions,
     context: &ExecutionContext,
 ) -> Result<ClashTable, SpatialError> {
     let ClashOptions {
         tolerance,
-        radius_set,
-        metals,
+        radii: policy,
+        reach,
         backend,
         exclude_one_four,
         perceive_bonds,
     } = options;
+    let (tolerance, backend) = (*tolerance, *backend);
+    let (exclude_one_four, perceive_bonds) = (*exclude_one_four, *perceive_bonds);
     let count = structure.atom_count() as usize;
     let mut radii = vec![f32::NAN; count];
     let mut widest = 0.0f32;
@@ -230,7 +228,7 @@ pub fn clashes_with(
         let Some(element) = atom.element() else {
             continue;
         };
-        if let Some(radius) = radius_with_fallback(element, radius_set, metals) {
+        if let Some(radius) = policy.radius(element) {
             if let Some(slot) = radii.get_mut(atom.index().as_usize()) {
                 *slot = radius;
             }
@@ -245,7 +243,7 @@ pub fn clashes_with(
         return Ok(ClashTable::default());
     }
     let topology = if perceive_bonds {
-        exclusion_topology(structure, context)
+        exclusion_topology(structure, &reach.table, context)
     } else {
         None
     };
@@ -322,8 +320,12 @@ pub fn clashes_with(
 ///
 /// Returns `None` when perception is impossible (no dense coordinate column), in
 /// which case the structure's own table is used as given.
-fn exclusion_topology(structure: &Structure, context: &ExecutionContext) -> Option<BondTable> {
-    let Ok(perceived) = perceive_bonds_in(structure, context) else {
+fn exclusion_topology(
+    structure: &Structure,
+    reach: &BondReach,
+    context: &ExecutionContext,
+) -> Option<BondTable> {
+    let Ok(perceived) = perceive_bonds_in(structure, reach, context) else {
         return None;
     };
     let mut builder = BondTableBuilder::new();

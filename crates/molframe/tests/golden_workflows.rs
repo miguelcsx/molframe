@@ -345,6 +345,16 @@ fn gw_028_structure_scores_are_perfect_for_identical_coordinates() {
     }
 }
 
+fn clash_options() -> molframe::validation::ClashOptions {
+    molframe::validation::ClashOptions::resolve(
+        0.4,
+        &molframe::chemistry::TableRequest::profile(),
+        molframe::spatial::SpatialBackend::Auto,
+        molframe_bench::table_store(),
+    )
+    .unwrap_or_else(|error| panic!("bench profile resolves: {error}"))
+}
+
 #[test]
 fn gw_030_validation_report_is_stable_and_structured() {
     let structure = structure(Sample::Tiny);
@@ -352,11 +362,9 @@ fn gw_030_validation_report_is_stable_and_structured() {
     let second_flags = molframe::validation::quality_flags(&structure);
     assert_eq!(first_flags, second_flags);
     assert!(molframe::validation::completeness(&structure, molframe::Namespace::Label).is_ok());
-    let clashes = molframe::validation::clashes(
+    let clashes = molframe::validation::clashes_with(
         &structure,
-        0.4,
-        molframe::chemistry::RadiusSet::Bondi,
-        molframe::spatial::SpatialBackend::Auto,
+        &clash_options(),
         &molframe::ExecutionContext::default(),
     )
     .unwrap_or_else(|error| panic!("clash report failed: {error}"));

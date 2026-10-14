@@ -9,10 +9,17 @@
 
 use super::*;
 use crate::prelude::*;
-use molframe_chem::{HeteroPolicy, MetalFallback};
+use molframe_chem::{HeteroPolicy, MetalFallback, TableRequest};
 
 const CRAMBIN: &[u8] = include_bytes!("../../../molframe-bench/data/1crn.pdb");
 const HEMOGLOBIN: &[u8] = include_bytes!("../../../molframe-bench/data/4hhb.pdb");
+
+fn bondi() -> SasaOptions {
+    match SasaOptions::resolve(&TableRequest::profile(), molframe_bench::table_store()) {
+        Ok(options) => options,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    }
+}
 
 fn read(bytes: &[u8]) -> crate::Structure {
     match crate::read_bytes(bytes.to_vec(), Some("e.pdb"), &ReadOptions::new()) {
@@ -35,14 +42,14 @@ fn within(value: f64, reference: f64, relative: f64) -> bool {
 fn lee_richards() -> SasaOptions {
     SasaOptions {
         method: SasaMethod::LeeRichards { slices: 20 },
-        ..SasaOptions::default()
+        ..bondi()
     }
 }
 
 #[test]
 fn crambin_matches_freesasa_for_both_methods() {
     let structure = read(CRAMBIN);
-    let sr = total(&structure, &SasaOptions::default());
+    let sr = total(&structure, &bondi());
     let lr = total(&structure, &lee_richards());
     assert!(within(sr, 2970.152, 0.005), "SR {sr}");
     assert!(within(lr, 2969.918, 0.005), "LR {lr}");
@@ -51,7 +58,7 @@ fn crambin_matches_freesasa_for_both_methods() {
 #[test]
 fn haemoglobin_default_measures_the_polymer_like_freesasa() {
     let structure = read(HEMOGLOBIN);
-    let sr = total(&structure, &SasaOptions::default());
+    let sr = total(&structure, &bondi());
     let lr = total(&structure, &lee_richards());
     assert!(within(sr, 26097.315, 0.005), "SR {sr}");
     assert!(within(lr, 26119.71, 0.005), "LR {lr}");
@@ -60,7 +67,7 @@ fn haemoglobin_default_measures_the_polymer_like_freesasa() {
 #[test]
 fn excluded_heteroatoms_have_nan_area_and_do_not_occlude() {
     let structure = read(HEMOGLOBIN);
-    let areas = structure.sasa().expect("sasa");
+    let areas = structure.sasa(molframe_bench::table_store()).expect("sasa");
     let finite = areas.iter().filter(|area| area.is_finite()).count();
     assert_eq!(finite, 4384);
     assert_eq!(areas.len() - finite, structure.atom_count() as usize - 4384);
@@ -72,7 +79,7 @@ fn including_every_heteroatom_matches_freesasa_with_haem_iron_at_alvarez_radius(
     let everything = |method| SasaOptions {
         method,
         hetero: HeteroPolicy::ALL,
-        ..SasaOptions::default()
+        ..bondi()
     };
     let sr = total(
         &structure,
@@ -98,7 +105,7 @@ fn a_metal_without_a_bondi_radius_is_measured_only_when_asked() {
     let options = |metals| SasaOptions {
         hetero: HeteroPolicy::SOLUTE,
         metals,
-        ..SasaOptions::default()
+        ..bondi()
     };
     let ask = |metals| {
         structure

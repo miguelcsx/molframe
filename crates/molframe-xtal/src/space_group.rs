@@ -1,4 +1,10 @@
 //! Offline catalogue for all crystallographic Hall settings.
+//!
+//! The 530 settings are definitional: the catalogue of space-group types and
+//! their exact operators is fixed by crystallography, so no profile can swap
+//! it, and decoding it from a missing file would make every symmetry query
+//! depend on a download. It therefore ships inside the binary. Cost: one
+//! embedded blob decoded once on first use, then shared for the process.
 
 use crate::{Rational, SymmetryOperation, SymmetrySet};
 use molframe_core::{Code, Diagnostic};

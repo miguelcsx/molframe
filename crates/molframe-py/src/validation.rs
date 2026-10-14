@@ -64,13 +64,13 @@ impl PyClashTable {
 /// first, so a structure read from a coordinate file is not flooded with its own
 /// covalent neighbours.
 #[pyfunction]
-#[pyo3(signature = (structure, *, tolerance=0.4, radii="bondi", backend="auto", exclude_one_four=true, perceive_bonds=true, policy=None, context=None))]
+#[pyo3(signature = (structure, *, tolerance=0.4, radii=None, backend="auto", exclude_one_four=true, perceive_bonds=true, policy=None, context=None))]
 #[allow(clippy::too_many_arguments)]
 fn clashes(
     py: Python<'_>,
     structure: &PyStructure,
     tolerance: f32,
-    radii: &str,
+    radii: Option<&str>,
     backend: &str,
     exclude_one_four: bool,
     perceive_bonds: bool,
@@ -82,9 +82,14 @@ fn clashes(
             "tolerance must be finite and non-negative",
         ));
     }
-    let set = crate::chemistry::radius_set(radii)?;
     let backend = crate::backend::parse(backend)?;
-    let mut options = molframe::validation::ClashOptions::new(tolerance, set, backend);
+    let mut options = molframe::validation::ClashOptions::resolve(
+        tolerance,
+        &molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(radii),
+        backend,
+        &molframe::chemistry::TableStore::global(),
+    )
+    .map_err(crate::error::kernel)?;
     options.exclude_one_four = exclude_one_four;
     options.perceive_bonds = perceive_bonds;
     let kernel = molframe::validation::clashes_with_kernel(options);

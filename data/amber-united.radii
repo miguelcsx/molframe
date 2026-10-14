@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+format: 1
+name: amber-united
+version: weiner-1984
+source: Weiner SJ et al. (1984) J. Am. Chem. Soc. 106, 765, united-atom radii by element
+licence: MIT
+
+# element van-der-Waals-radius-in-angstrom
+H 1.0
+C 1.8
+N 1.8
+O 1.6
+F 1.55
+P 2.1
+S 2.0
+Cl 2.0
+W 1.4

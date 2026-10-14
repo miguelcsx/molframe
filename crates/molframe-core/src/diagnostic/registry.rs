@@ -358,6 +358,9 @@ registry! {
     W3206 = Warning 3206, Loose,
         "the component definitions embedded in the file are malformed and were ignored",
         "the component is resolved from a dictionary instead; fix the chem_comp_atom and chem_comp_bond rows in the file, or supply a full dictionary";
+    W3207 = Warning 3207, Loose,
+        "bonds were not perceived because the profile names no bond-reach table",
+        "add a `bond-reach: <name>` line to the profile with a `<name>.reach` table in the cache, or perceive explicitly with a table file; the library compiles in no reach table";
     W3301 = Warning 3301, Info,
         "atoms expected by the component definition are absent from the model",
         "no action needed; the shortfall is reported as coverage rather than hidden";

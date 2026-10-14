@@ -2,3 +2,10 @@
 # process termination inside Python. Keep the workspace's release contract.
 [profile.release]
 panic = "unwind"
+
+# Tests and benches resolve reference tables against the repository's own
+# `data/` and the profile the bench crate commits. The library compiles in no
+# table, so a process without these variables has no profile and says so.
+[env]
+MOLFRAME_DATA_DIR = { value = "data", relative = true }
+MOLFRAME_PROFILE = { value = "crates/molframe-bench/data/profile.txt", relative = true }

@@ -7,6 +7,7 @@ mod kernel_bench;
 mod modelcif_bench;
 mod mrc_bench;
 mod stream_bench;
+mod table_bench;
 mod tng_bench;
 mod xtc_bench;
 
@@ -310,6 +311,8 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
 
 fn run_extended(name: &str) -> Result<ResourceRecord, String> {
     match name {
+        "sasa_tables_medium" => table_bench::run_sasa_tables_medium(),
+        "clashscore_medium" => table_bench::run_clashscore_medium(),
         "trajectory_contacts" => kernel_bench::run_trajectory_contacts(),
         "pore_profile_100000" => kernel_bench::run_pore_profile_100000(),
         "msa_eight_512" => kernel_bench::run_msa_eight_512(),

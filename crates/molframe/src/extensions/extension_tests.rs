@@ -106,27 +106,30 @@ fn validation_methods_agree_with_their_explicit_forms() {
     let structure = dipeptide();
     let context = crate::ExecutionContext::default();
 
+    let options = molframe_validate::ClashOptions::resolve(
+        0.4,
+        &molframe_chem::TableRequest::profile(),
+        crate::spatial::SpatialBackend::Auto,
+        molframe_bench::table_store(),
+    )
+    .expect("bench profile resolves");
     assert_eq!(
+        structure.clashes(&options).map(|rows| rows.len()),
         structure
-            .clashes(0.4, molframe_chem::RadiusSet::Bondi)
-            .map(|rows| rows.len()),
-        structure
-            .clashes_with(
-                0.4,
-                molframe_chem::RadiusSet::Bondi,
-                crate::spatial::SpatialBackend::Auto,
-                &context
-            )
+            .clashes_with(&options, &context)
             .map(|rows| rows.len()),
     );
+    let covalent = molframe_chem::TableRequest::<molframe_chem::CovalentRadii>::profile()
+        .resolve(molframe_bench::table_store(), "--covalent-radii")
+        .expect("bench profile resolves");
     assert_eq!(
         structure.quality_flags().len(),
         molframe_validate::quality_flags(structure.engine()).len(),
     );
     assert_eq!(structure.overvalent_atoms(), Vec::new());
     assert_eq!(
-        structure.bond_length_deviations(0.1).len(),
-        molframe_validate::bond_length_deviations(structure.engine(), 0.1).len(),
+        structure.bond_length_deviations(&covalent.table, 0.1).len(),
+        molframe_validate::bond_length_deviations(structure.engine(), &covalent.table, 0.1).len(),
     );
 }
 

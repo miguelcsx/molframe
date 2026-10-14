@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 
 use molframe_chem::{
-    IdentityOnly, Provided, TableIdentity, TableKind, TableLines, TableTextError, split_binary,
+    IdentityOnly, Provided, Row, TableIdentity, TableKind, TableLines, TableTextError, split_binary,
 };
 
 const RAMA_MAGIC: [u8; 4] = *b"MFR2";
@@ -74,23 +74,21 @@ struct ThresholdHeader {
     outlier: Option<[f32; 6]>,
 }
 
-impl ThresholdHeader {
-    fn number(line: usize, field: &str) -> Result<f32, TableTextError> {
-        match field.parse::<f32>() {
-            Ok(value) if value.is_finite() && value >= 0.0 => Ok(value),
-            _ => Err(TableTextError::at(
-                "ramachandran table",
-                line,
-                format!("`{field}` is not a non-negative number"),
-            )),
-        }
+const RAMA: &str = "ramachandran table";
+
+fn cutoff(line: usize, field: &str) -> Result<f32, TableTextError> {
+    let row = Row::new(RAMA, line);
+    let value = row.finite::<f32>(field)?;
+    if value < 0.0 {
+        return Err(row.fail(format!("`{field}` is not a non-negative number")));
     }
+    Ok(value)
 }
 
 impl TableLines for ThresholdHeader {
     fn header(&mut self, line: usize, key: &str, value: &str) -> Result<bool, TableTextError> {
         match key {
-            "favoured" => self.favoured = Some(Self::number(line, value.trim())?),
+            "favoured" => self.favoured = Some(cutoff(line, value.trim())?),
             "outlier" => {
                 let mut cuts = [0.0f32; 6];
                 let mut fields = value.split_whitespace();
@@ -102,7 +100,7 @@ impl TableLines for ThresholdHeader {
                             "`outlier` needs six cut-offs, one per category code",
                         ));
                     };
-                    *cut = Self::number(line, field)?;
+                    *cut = cutoff(line, field)?;
                 }
                 if fields.next().is_some() {
                     return Err(TableTextError::at(

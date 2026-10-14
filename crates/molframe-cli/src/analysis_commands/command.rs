@@ -3,8 +3,9 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, RowWriter, emit_rows, finish_rows, output_error};
+use molframe::SasaWordError;
 use molframe::SurfaceExt;
-use molframe::chemistry::RadiusSet;
+use molframe::chemistry::TableStore;
 use molframe::spatial::SpatialBackend;
 use std::path::Path;
 
@@ -269,52 +270,32 @@ pub(crate) struct SasaWords {
     /// Radius for a metal the set lacks: none, vdw or ionic.
     #[arg(long)]
     pub(crate) metals: Option<String>,
-    /// A radius table file that replaces `--radii`: `name:`, `version:`,
-    /// `source:` and `licence:` header lines, an optional `base:` set, then
-    /// one `Symbol radius` row per element.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) radii_file: Option<std::path::PathBuf>,
 }
 
 pub(crate) fn sasa(
     input: &Path,
     probe: f32,
     points: u16,
-    radius_set: RadiusSet,
+    radii: Option<&str>,
     words: &SasaWords,
     context: Context,
 ) -> Exit {
+    let request = molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(radii);
     let options = match molframe::SasaOptions::from_words(
         words.method.as_deref(),
         Some(points),
         Some(probe),
         words.hetero.as_deref(),
         words.metals.as_deref(),
+        &request,
+        &TableStore::global(),
     ) {
-        Ok(options) => molframe::SasaOptions {
-            radii: molframe::chemistry::RadiusSource::Set(radius_set),
-            ..options
-        },
+        Ok(options) => options,
+        Err(SasaWordError::Table(error)) => return crate::tables::refuse(error),
         Err(error) => {
             eprintln!("{error}");
             return Exit::Usage;
         }
-    };
-    let options = match &words.radii_file {
-        None => options,
-        Some(path) => match std::fs::read_to_string(path) {
-            Ok(text) => match options.with_radii_table(&text) {
-                Ok(options) => options,
-                Err(error) => {
-                    eprintln!("{}: {error}", path.display());
-                    return Exit::Usage;
-                }
-            },
-            Err(error) => {
-                eprintln!("cannot read {}: {error}", path.display());
-                return Exit::Usage;
-            }
-        },
     };
     if !context.quiet {
         eprintln!("# radius policy: {}", options.applied_policy());

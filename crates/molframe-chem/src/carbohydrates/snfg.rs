@@ -2,6 +2,13 @@
 //!
 //! Copyright (c) 2018–2026 Mol* contributors. The retained permission notice is
 //! in data/LICENSE.molstar; the pinned source and scope are recorded beside the data.
+//!
+//! The table stays in code because it is definitional, not a tunable choice: the
+//! symbol nomenclature fixes one shape and one colour per monosaccharide, so there
+//! is no alternative a profile could select. The CCD alias match is a curated
+//! convention of the same kind; a different alias list would be a different
+//! feature rather than a different table. Cost: a static slice scanned linearly
+//! per residue lookup, no allocation.
 
 use super::types::{SnfgShape, SnfgSymbol};
 

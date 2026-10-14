@@ -4,7 +4,7 @@
 //! flags with no default, and refuses to run without them.
 
 use super::workflows::CcdArguments;
-use crate::{RadiusChoice, ValidationChoice};
+use crate::ValidationChoice;
 use clap::Args;
 use std::path::PathBuf;
 
@@ -33,9 +33,10 @@ pub(crate) struct ValidateArguments {
     /// Tolerated van der Waals overlap in Angstrom.
     #[arg(long)]
     pub(crate) clash_tolerance: Option<f32>,
-    /// Published radius set for clash validation.
-    #[arg(long, value_enum)]
-    pub(crate) radii: Option<RadiusChoice>,
+    /// Radius table (cache entry name or file path) for clash validation;
+    /// unset, the profile's `vdw-radii` line.
+    #[arg(long, value_name = "NAME|PATH")]
+    pub(crate) radii: Option<String>,
     /// Expected occupancy sum for each alternate-site atom group.
     #[arg(long)]
     pub(crate) altloc_expected_sum: Option<f64>,

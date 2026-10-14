@@ -36,8 +36,9 @@ fn assembly_covalent_links(
 ) -> PyResult<Vec<PyAssemblyBond>> {
     let source = structure.inner.clone();
     let links = crate::execution::run(py, context, move |context| {
+        let reach = crate::tables::bond_reach()?;
         let view = source.assembly(&id).map_err(crate::error::kernel)?;
-        view.covalent_links(molframe::ModelIndex::new(model), context)
+        view.covalent_links(molframe::ModelIndex::new(model), &reach.table, context)
             .map_err(crate::error::kernel)
     })??;
     Ok(links

@@ -45,28 +45,29 @@ def reference_score(  # noqa: PLR0913, PLR0917
 
 
 def test_blosum62_holds_the_published_scores():
-    matrix = sequence.SubstitutionMatrix.blosum(62)
+    matrix = sequence.SubstitutionMatrix.load("blosum62")
     assert (matrix.score("A", "A"), matrix.score("W", "W"), matrix.score("C", "C")) == (4, 11, 9)
     assert (matrix.score("A", "R"), matrix.score("W", "C"), matrix.score("I", "V")) == (-1, -2, 3)
-    assert matrix.name == "BLOSUM62"
+    assert matrix.name == "blosum62"
     assert matrix.score("a", "A") == 4
     with pytest.raises(ValueError, match="single-letter"):
         matrix.score("AA", "A")
 
 
 def test_the_bundled_matrices_load_and_unknown_ones_are_refused():
-    assert sequence.SubstitutionMatrix.blosum(50).name == "BLOSUM50"
-    assert sequence.SubstitutionMatrix.pam(250).name == "PAM250"
-    assert sequence.SubstitutionMatrix.nuc44().score("A", "A") > 0
-    assert sequence.SubstitutionMatrix.identity().score("A", "A") == 1
+    assert sequence.SubstitutionMatrix.load("blosum50").name == "blosum50"
+    assert sequence.SubstitutionMatrix.load("pam250").name == "pam250"
+    assert sequence.SubstitutionMatrix.load("nuc44").score("A", "A") > 0
+    assert sequence.SubstitutionMatrix.load("identity").score("A", "A") == 1
+    assert sequence.SubstitutionMatrix.load().name == "blosum62"
     with pytest.raises(molframe.MolframeError) as raised:
-        sequence.SubstitutionMatrix.blosum(63)
+        sequence.SubstitutionMatrix.load("blosum63")
     assert raised.value.code is not None
 
 
 @pytest.mark.parametrize("local", [False, True])
 def test_matrix_alignment_scores_equal_an_independent_gotoh_programme(local):
-    matrix = sequence.SubstitutionMatrix.blosum(62)
+    matrix = sequence.SubstitutionMatrix.load("blosum62")
     for _ in range(25):
         left, right = random_sequence(rng.integers(6, 24)), random_sequence(rng.integers(6, 24))
         found = sequence.align(
@@ -81,7 +82,7 @@ def test_matrix_alignment_scores_equal_an_independent_gotoh_programme(local):
 
 
 def test_a_semi_global_alignment_never_scores_below_the_global_one():
-    matrix = sequence.SubstitutionMatrix.blosum(62)
+    matrix = sequence.SubstitutionMatrix.load("blosum62")
     left, right = "WWWAGHKLM", "AGHK"
     glob = sequence.align(left, right, matrix=matrix, gap_open=-10, gap_extend=-1)
     semi = sequence.align(
@@ -92,7 +93,7 @@ def test_a_semi_global_alignment_never_scores_below_the_global_one():
 
 
 def test_a_matrix_alignment_states_its_gaps_and_refuses_a_second_scoring():
-    matrix = sequence.SubstitutionMatrix.blosum(62)
+    matrix = sequence.SubstitutionMatrix.load("blosum62")
     with pytest.raises(molframe.MolframeValueError, match="gap_open and gap_extend"):
         sequence.align("AC", "AC", matrix=matrix)
     with pytest.raises(molframe.MolframeValueError, match="not both"):

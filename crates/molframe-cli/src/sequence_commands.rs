@@ -2,9 +2,8 @@
 
 use crate::exit::Exit;
 use crate::report::Context;
-use crate::{
-    KmerOperation, MatrixChoice, PairwiseMode, SequenceCommand, SequenceFormat, TreeMethod,
-};
+use crate::{KmerOperation, PairwiseMode, SequenceCommand, SequenceFormat, TreeMethod};
+use molframe::chemistry::{TableRequest, TableStore};
 use molframe::sequence::{Alignment, FastaRecord};
 use std::io::Read as _;
 
@@ -73,7 +72,7 @@ fn convert(input: &str, from: SequenceFormat, to: SequenceFormat) -> Result<Stri
 fn align(
     input: &str,
     mode: PairwiseMode,
-    matrix: MatrixChoice,
+    matrix: Option<String>,
     gap_open: i32,
     gap_extend: i32,
 ) -> Result<String, String> {
@@ -264,19 +263,10 @@ fn display(error: impl std::fmt::Display) -> String {
 }
 
 fn substitution_matrix(
-    choice: MatrixChoice,
+    name: Option<String>,
 ) -> Result<molframe::sequence::SubstitutionMatrix, String> {
-    match choice {
-        MatrixChoice::Blosum62 => Ok(molframe::sequence::blosum62()),
-        MatrixChoice::Identity => {
-            molframe::sequence::load_matrix(molframe::sequence::MatrixProfile::Identity)
-                .map_err(display)
-        }
-        MatrixChoice::Nuc44 => {
-            molframe::sequence::load_matrix(molframe::sequence::MatrixProfile::Nuc44)
-                .map_err(display)
-        }
-    }
+    let request = name.map_or_else(TableRequest::profile, TableRequest::named);
+    molframe::sequence::load_matrix(&request, &TableStore::global()).map_err(display)
 }
 
 #[cfg(test)]

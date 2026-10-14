@@ -63,7 +63,7 @@ pub(super) fn surface(args: &crate::SurfaceArguments, context: Context) -> Exit 
             probe: args.probe,
             resolution: args.resolution,
             max_cells: args.max_cells,
-            radii: args.radii.into(),
+            radii: args.radii.as_deref(),
             source_vertex: args.source_vertex,
             patch_radius: args.patch_radius,
             output: args.output.as_deref(),
@@ -172,7 +172,7 @@ pub(super) fn trajectory(command: TrajectoryCommand, context: Context) -> Exit {
             probe,
             samples,
             radii,
-        } => crate::trajectory::sasa(&input, &topology, probe, samples, radii.into(), context),
+        } => crate::trajectory::sasa(&input, &topology, probe, samples, radii.as_deref(), context),
         TrajectoryCommand::Rmsd {
             input,
             reference,

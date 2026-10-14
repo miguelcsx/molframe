@@ -19,7 +19,7 @@
 //! is O(1) and a gamma test is O(gamma windows).
 
 use molframe_chem::{
-    Provided, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
+    Provided, Row, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
 };
 
 use super::nucleic_scoring::{PUCKER_C2_ENDO, PUCKER_C3_ENDO, PUCKER_OTHER};
@@ -50,20 +50,9 @@ pub(super) fn within(angle: f64, window: Window) -> bool {
 }
 
 fn window(line: usize, value: &str) -> Result<Window, TableTextError> {
-    let mut numbers = value
-        .split_whitespace()
-        .map(|field| match field.parse::<f64>() {
-            Ok(number) if number.is_finite() => Some(number),
-            _ => None,
-        });
-    match (numbers.next(), numbers.next(), numbers.next()) {
-        (Some(Some(low)), Some(Some(high)), None) => Ok([low, high]),
-        _ => Err(TableTextError::at(
-            WHAT,
-            line,
-            format!("`{value}` is not two numbers `low high`"),
-        )),
-    }
+    let row = Row::new(WHAT, line);
+    let [low, high] = row.words(value, "two numbers `low high`")?;
+    Ok([row.finite(low)?, row.finite(high)?])
 }
 
 impl NucleicPolicy {

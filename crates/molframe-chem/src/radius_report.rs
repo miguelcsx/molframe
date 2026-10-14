@@ -5,8 +5,7 @@
 //! report names every table that fed the radii, with its version, source and
 //! licence, together with the choices that decided which atoms took part.
 
-use crate::radii_defaults::{ALVAREZ, METAL_SITE_TABLE, SHANNON_IONIC};
-use crate::{HeteroPolicy, MetalFallback, RadiusPolicy, TableIdentity};
+use crate::{HeteroPolicy, MetalFallback, MetalTables, RadiusPolicy, TableIdentity};
 use core::fmt;
 
 /// What a [`RadiusPolicy`] resolves to, table by table.
@@ -22,18 +21,6 @@ pub struct AppliedRadiusPolicy {
     pub hetero: HeteroPolicy,
 }
 
-impl MetalFallback {
-    /// The tables a metal radius is read from under this fallback.
-    #[must_use]
-    pub fn tables(self) -> Vec<TableIdentity> {
-        match self {
-            Self::None => Vec::new(),
-            Self::Vdw => vec![METAL_SITE_TABLE, ALVAREZ],
-            Self::Ionic => vec![METAL_SITE_TABLE, SHANNON_IONIC],
-        }
-    }
-}
-
 impl RadiusPolicy {
     /// The policy with every table it resolves to named.
     #[must_use]
@@ -41,7 +28,10 @@ impl RadiusPolicy {
         AppliedRadiusPolicy {
             radii: self.source.identity(),
             metals: self.metals,
-            metal_tables: self.metals.tables(),
+            metal_tables: self
+                .metal_tables
+                .as_ref()
+                .map_or_else(Vec::new, MetalTables::identities),
             hetero: self.hetero,
         }
     }

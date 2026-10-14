@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+# The profile the repository's tests and benches resolve against: one
+# `kind: name` line per table kind, each a file in the repository's `data/`.
+vdw-radii: bondi
+covalent-radii: pyykko-covalent
+metals: macromolecular-metals
+ionic-radii: shannon-ionic
+bond-reach: macromolecular-reach
+score-matrix: blosum62

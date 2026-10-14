@@ -16,8 +16,8 @@
 
 use crate::{SasaError, lee_richards, shrake_rupley};
 use molframe_chem::{
-    AppliedRadiusPolicy, CustomRadii, HeteroPolicy, MetalFallback, PolicyWordError, RadiusPolicy,
-    RadiusSet, RadiusSource, RadiusTableError, policy_radii,
+    AppliedRadiusPolicy, HeteroPolicy, MetalFallback, MetalTables, PolicyWordError, RadiusPolicy,
+    RadiusSource, TableError, TableRequest, TableStore, VdwRadii, policy_radii,
 };
 use molframe_core::ExecutionContext;
 use molframe_core::index::ModelIndex;
@@ -55,22 +55,22 @@ impl Default for SasaMethod {
 
 /// Options for a structure-level SASA calculation.
 ///
-/// The default is Shrake-Rupley with 960 points, a 1.4 Å probe, Bondi radii,
-/// the polymer alone (no waters, ligands or ions), the vdW metal fallback and
-/// the first model.
-///
-/// The radius source is an argument, not a constant: [`SasaOptions::radii`]
-/// holds either one of the built-in sets or a table the caller supplied (see
-/// [`SasaOptions::with_radii_table`]), and [`SasaOptions::applied_policy`]
-/// reports which table, version, source and licence a calculation used.
+/// There is no `Default`: the radii are a table, and a table is chosen, not
+/// assumed. [`SasaOptions::resolve`] takes the choice and fills the rest with
+/// Shrake-Rupley at 960 points, a 1.4 Å probe, the polymer alone (no waters,
+/// ligands or ions), the vdW metal fallback and the first model.
+/// [`SasaOptions::applied_policy`] reports which table, version, source and
+/// licence a calculation used.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SasaOptions {
     /// The sampling method.
     pub method: SasaMethod,
     /// Probe radius in ångström.
     pub probe: f32,
-    /// Which radius table to use: a built-in set or the caller's own.
+    /// The radius table in force.
     pub radii: RadiusSource,
+    /// The tables behind the metal fallback; absent when `metals` is `None`.
+    pub metal_tables: Option<MetalTables>,
     /// Which heteroatom classes are measured and occlude.
     pub hetero: HeteroPolicy,
     /// Where a metal the radius set has no value for takes its radius.
@@ -79,26 +79,51 @@ pub struct SasaOptions {
     pub model: ModelIndex,
 }
 
-impl Default for SasaOptions {
-    fn default() -> Self {
-        Self {
-            method: SasaMethod::default(),
-            probe: DEFAULT_PROBE,
-            radii: RadiusSource::Set(RadiusSet::Bondi),
-            hetero: HeteroPolicy::POLYMER,
-            metals: MetalFallback::Vdw,
-            model: ModelIndex::new(0),
-        }
-    }
-}
-
 impl SasaOptions {
+    /// The default method, probe, heteroatom and metal choices over the
+    /// radius table `radii` selects.
+    ///
+    /// # Errors
+    ///
+    /// [`TableError`] naming how to supply whichever table is missing.
+    pub fn resolve(radii: &TableRequest<VdwRadii>, store: &TableStore) -> Result<Self, TableError> {
+        Self::assemble(
+            SasaMethod::default(),
+            DEFAULT_PROBE,
+            HeteroPolicy::POLYMER,
+            MetalFallback::Vdw,
+            radii,
+            store,
+        )
+    }
+
+    fn assemble(
+        method: SasaMethod,
+        probe: f32,
+        hetero: HeteroPolicy,
+        metals: MetalFallback,
+        radii: &TableRequest<VdwRadii>,
+        store: &TableStore,
+    ) -> Result<Self, TableError> {
+        let policy = RadiusPolicy::resolve(radii, metals, hetero, store)?;
+        Ok(Self {
+            method,
+            probe,
+            radii: policy.source,
+            metal_tables: policy.metal_tables,
+            hetero,
+            metals,
+            model: ModelIndex::new(0),
+        })
+    }
+
     /// The radius assignment these options describe.
     #[must_use]
     pub fn radius_policy(&self) -> RadiusPolicy {
         RadiusPolicy {
             source: self.radii.clone(),
             metals: self.metals,
+            metal_tables: self.metal_tables.clone(),
             hetero: self.hetero,
         }
     }
@@ -108,19 +133,6 @@ impl SasaOptions {
     #[must_use]
     pub fn applied_policy(&self) -> AppliedRadiusPolicy {
         self.radius_policy().applied()
-    }
-
-    /// These options with the radii taken from a caller's table, given as
-    /// text in the format of [`CustomRadii::parse`].
-    ///
-    /// # Errors
-    ///
-    /// [`RadiusTableError`] for a table that does not validate.
-    pub fn with_radii_table(self, text: &str) -> Result<Self, RadiusTableError> {
-        Ok(Self {
-            radii: RadiusSource::from(CustomRadii::parse(text)?),
-            ..self
-        })
     }
 
     /// The radius of every atom of `structure`, indexed by atom. `NaN` marks
@@ -143,6 +155,9 @@ pub enum SasaWordError {
     /// The sample count does not fit the kernel's range.
     #[error("the sample count must be between 1 and 65535")]
     Samples,
+    /// A radius table could not be supplied.
+    #[error(transparent)]
+    Table(#[from] TableError),
 }
 
 impl SasaMethod {
@@ -178,38 +193,41 @@ impl SasaMethod {
 impl SasaOptions {
     /// Options built from the words a front end receives; every `None` keeps
     /// the default. `hetero` and `metals` use the spellings of [`HeteroPolicy`]
-    /// and [`MetalFallback`] parsing.
+    /// and [`MetalFallback`] parsing; `radii` selects the radius table.
     ///
     /// # Errors
     ///
-    /// [`SasaWordError`] naming the word that was not recognised.
+    /// [`SasaWordError`] naming the word that was not recognised, or the table
+    /// that could not be supplied.
     pub fn from_words(
         method: Option<&str>,
         samples: Option<u16>,
         probe: Option<f32>,
         hetero: Option<&str>,
         metals: Option<&str>,
+        radii: &TableRequest<VdwRadii>,
+        store: &TableStore,
     ) -> Result<Self, SasaWordError> {
-        let defaults = Self::default();
-        Ok(Self {
-            method: match method {
-                Some(name) => SasaMethod::named(name, samples)?,
-                None => SasaMethod::named("shrake-rupley", samples)?,
+        let method = SasaMethod::named(
+            match method {
+                Some(name) => name,
+                None => "shrake-rupley",
             },
-            probe: match probe {
-                Some(value) => value,
-                None => defaults.probe,
-            },
-            hetero: match hetero {
-                Some(words) => words.parse()?,
-                None => defaults.hetero,
-            },
-            metals: match metals {
-                Some(words) => words.parse()?,
-                None => defaults.metals,
-            },
-            ..defaults
-        })
+            samples,
+        )?;
+        let hetero = match hetero {
+            Some(words) => words.parse()?,
+            None => HeteroPolicy::POLYMER,
+        };
+        let metals = match metals {
+            Some(words) => words.parse()?,
+            None => MetalFallback::Vdw,
+        };
+        let probe = match probe {
+            Some(value) => value,
+            None => DEFAULT_PROBE,
+        };
+        Ok(Self::assemble(method, probe, hetero, metals, radii, store)?)
     }
 }
 

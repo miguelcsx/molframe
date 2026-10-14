@@ -35,7 +35,10 @@ pub(crate) fn bond_length_deviations(
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
-    let kernel = molframe::validation::bond_length_deviations_kernel(tolerance);
+    let kernel = molframe::validation::bond_length_deviations_kernel(
+        crate::tables::covalent_radii()?,
+        tolerance,
+    );
     run(
         py,
         structure,
@@ -320,7 +323,8 @@ pub(crate) fn ligand_geometry(
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
-    let kernel = molframe::validation::ligand_geometry_kernel(tolerance);
+    let kernel =
+        molframe::validation::ligand_geometry_kernel(crate::tables::covalent_radii()?, tolerance);
     run(
         py,
         structure,

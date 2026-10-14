@@ -1,6 +1,24 @@
 use super::*;
+use crate::test_data::{bondi, metal_tables};
 use molframe_bench::{Sample, structure};
 use molframe_core::Element;
+
+fn base(hetero: HeteroPolicy, metals: MetalFallback) -> RadiusPolicy {
+    let tables = match metals {
+        MetalFallback::None => None,
+        MetalFallback::Vdw => Some(MetalTables {
+            ionic: None,
+            ..metal_tables()
+        }),
+        MetalFallback::Ionic => Some(metal_tables()),
+    };
+    RadiusPolicy {
+        source: bondi(),
+        metals,
+        metal_tables: tables,
+        hetero,
+    }
+}
 
 fn finite(radii: &[f32]) -> usize {
     radii.iter().filter(|radius| radius.is_finite()).count()
@@ -18,7 +36,10 @@ fn count_where(structure: &Structure, keep: impl Fn(&str) -> bool) -> usize {
 #[test]
 fn default_measures_the_polymer_only() {
     let hemoglobin = structure(Sample::Medium);
-    let radii = policy_radii(&hemoglobin, &RadiusPolicy::default());
+    let radii = policy_radii(
+        &hemoglobin,
+        &base(HeteroPolicy::POLYMER, MetalFallback::Vdw),
+    );
     let hetero = count_where(&hemoglobin, |name| name == "HEM" || name == "HOH")
         + count_where(&hemoglobin, |name| name == "PO4");
     assert_eq!(finite(&radii), hemoglobin.atom_count() as usize - hetero);
@@ -31,11 +52,7 @@ fn classes_switch_independently() {
     let total = hemoglobin.atom_count() as usize;
     let waters = count_where(&hemoglobin, is_water_component);
     assert_eq!(waters, 221);
-    let policy = |hetero| RadiusPolicy {
-        hetero,
-        metals: MetalFallback::Vdw,
-        ..RadiusPolicy::default()
-    };
+    let policy = |hetero| base(hetero, MetalFallback::Vdw);
     let all = policy_radii(&hemoglobin, &policy(HeteroPolicy::ALL));
     assert_eq!(finite(&all), total);
     let solute = policy_radii(&hemoglobin, &policy(HeteroPolicy::SOLUTE));
@@ -52,11 +69,7 @@ fn metals_follow_the_stated_fallback() {
         .map(|atom| atom.index().as_usize())
         .expect("4HHB has haem iron");
     let radius = |metals| {
-        let policy = RadiusPolicy {
-            metals,
-            hetero: HeteroPolicy::SOLUTE,
-            ..RadiusPolicy::default()
-        };
+        let policy = base(HeteroPolicy::SOLUTE, metals);
         policy_radii(&hemoglobin, &policy)[iron]
     };
     assert!((radius(MetalFallback::Vdw) - 2.44).abs() < 1e-6);
@@ -67,8 +80,8 @@ fn metals_follow_the_stated_fallback() {
 #[test]
 fn a_set_value_always_beats_the_fallback() {
     let crambin = structure(Sample::Tiny);
-    let radii = policy_radii(&crambin, &RadiusPolicy::default());
-    let bondi = crate::atom_radii(&crambin, RadiusSet::Bondi);
+    let radii = policy_radii(&crambin, &base(HeteroPolicy::POLYMER, MetalFallback::Vdw));
+    let bondi = crate::atom_radii(&crambin, &bondi());
     for (policy, plain) in radii.iter().zip(&bondi) {
         assert_eq!(policy.to_bits(), plain.to_bits());
     }

@@ -40,7 +40,8 @@ impl AssemblyView {
     /// predicate over the shared assembly spatial search. No topology or
     /// expanded structure is copied; search coordinates are temporary.
     ///
-    /// Metal coordination and same-instance pairs are excluded. Results use
+    /// `reach` is the bonding-reach table in force. Metal coordination and
+    /// same-instance pairs are excluded. Results use
     /// stable chain instance identifiers, not operator-list indices.
     ///
     /// # Errors
@@ -49,6 +50,7 @@ impl AssemblyView {
     pub fn covalent_links(
         &self,
         model: ModelIndex,
+        reach: &molframe_chem::BondReach,
         context: &ExecutionContext,
     ) -> Result<Vec<AssemblyBond>, Diagnostic> {
         let pairs = self.neighbors(model, 2.6, SpatialBackend::Auto, context)?;
@@ -60,7 +62,7 @@ impl AssemblyView {
                 }
                 let first = self.source().atom(pair.first_atom)?;
                 let second = self.source().atom(pair.second_atom)?;
-                molframe_chem::covalent_pair(first, second, pair.distance_squared).then_some(
+                molframe_chem::covalent_pair(first, second, pair.distance_squared, reach).then_some(
                     AssemblyBond {
                         first_instance: pair.first_instance,
                         first_atom: pair.first_atom,

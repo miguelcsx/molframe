@@ -27,8 +27,9 @@ pub(crate) enum SequenceCommand {
         input: String,
         #[arg(long, value_enum, default_value_t = PairwiseMode::Global)]
         mode: PairwiseMode,
-        #[arg(long, value_enum, default_value_t = MatrixChoice::Blosum62)]
-        matrix: MatrixChoice,
+        /// Score matrix name or path; the profile's `score-matrix` when omitted.
+        #[arg(long)]
+        matrix: Option<String>,
         #[arg(long, default_value_t = -11)]
         gap_open: i32,
         #[arg(long, default_value_t = -1)]
@@ -87,14 +88,6 @@ pub(crate) enum PairwiseMode {
     Global,
     Local,
     SemiGlobal,
-}
-
-#[derive(Clone, Copy, Debug, Default, ValueEnum)]
-pub(crate) enum MatrixChoice {
-    #[default]
-    Blosum62,
-    Identity,
-    Nuc44,
 }
 
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]

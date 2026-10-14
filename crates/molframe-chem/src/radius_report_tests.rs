@@ -1,29 +1,30 @@
 use super::*;
-use crate::{CustomRadii, RadiusSource};
+use crate::test_data::{bondi, metal_tables};
 
 #[test]
-fn the_default_policy_names_every_table_behind_it() {
-    let applied = RadiusPolicy::default().applied();
+fn the_policy_names_every_table_behind_it() {
+    let policy = RadiusPolicy {
+        source: bondi(),
+        metals: MetalFallback::Ionic,
+        metal_tables: Some(metal_tables()),
+        hetero: HeteroPolicy::POLYMER,
+    };
+    let applied = policy.applied();
     assert_eq!(applied.radii.name, "bondi");
     assert_eq!(applied.metal_tables.len(), 2);
     let text = applied.to_string();
     assert!(text.contains("bondi 1964"), "{text}");
-    assert!(text.contains("alvarez 2013"), "{text}");
+    assert!(text.contains("shannon-ionic 1976"), "{text}");
     assert!(text.contains("hetero none"), "{text}");
 }
 
 #[test]
-fn a_supplied_table_replaces_the_default_identity() {
-    let Ok(table) = CustomRadii::parse("name: mine\nversion: 9\nsource: me\nlicence: MIT\nC 2.0\n")
-    else {
-        panic!("table parses");
-    };
+fn no_fallback_names_no_metal_table() {
     let policy = RadiusPolicy {
-        source: RadiusSource::from(table),
+        source: bondi(),
         metals: MetalFallback::None,
-        ..RadiusPolicy::default()
+        metal_tables: None,
+        hetero: HeteroPolicy::POLYMER,
     };
-    let applied = policy.applied();
-    assert_eq!(applied.radii.name, "mine");
-    assert!(applied.metal_tables.is_empty());
+    assert!(policy.applied().metal_tables.is_empty());
 }

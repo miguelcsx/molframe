@@ -8,8 +8,8 @@
 
 use crate::structure::{Selection, Structure};
 use crate::{AnalysisPolicy, ExecutionContext, Namespace};
-use molframe_chem::{ComponentProvider, PolymerRoleProfile, RadiusSet};
-use molframe_spatial::SpatialBackend;
+use molframe_chem::{ComponentProvider, CovalentRadii, PolymerRoleProfile};
+use molframe_validate::ClashOptions;
 
 /// Validation operations over a structure.
 ///
@@ -32,7 +32,8 @@ use molframe_spatial::SpatialBackend;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait ValidationExt {
-    /// Steric clashes under `tolerance` ångström, against `radius_set`.
+    /// Steric clashes under `options`, which carry the resolved radius and
+    /// bond-reach tables (see [`ClashOptions::resolve`]).
     ///
     /// # Errors
     ///
@@ -40,34 +41,43 @@ pub trait ValidationExt {
     /// cannot serve the structure.
     fn clashes(
         &self,
-        tolerance: f32,
-        radius_set: RadiusSet,
+        options: &ClashOptions,
     ) -> Result<molframe_validate::ClashTable, molframe_spatial::SpatialError>;
 
-    /// [`Self::clashes`] with the backend and context given explicitly.
+    /// [`Self::clashes`] on the worker budget of `context`.
     ///
     /// # Errors
     ///
     /// As [`Self::clashes`].
     fn clashes_with(
         &self,
-        tolerance: f32,
-        radius_set: RadiusSet,
-        backend: SpatialBackend,
+        options: &ClashOptions,
         context: &ExecutionContext,
     ) -> Result<molframe_validate::ClashTable, molframe_spatial::SpatialError>;
 
-    /// Bond-length deviations beyond `tolerance` ångström.
+    /// Bond-length deviations beyond `tolerance` ångström, against `radii`.
     #[must_use]
-    fn bond_length_deviations(&self, tolerance: f32) -> Vec<molframe_validate::BondDeviation>;
+    fn bond_length_deviations(
+        &self,
+        radii: &CovalentRadii,
+        tolerance: f32,
+    ) -> Vec<molframe_validate::BondDeviation>;
 
-    /// The ligand geometry report at `tolerance` ångström.
+    /// The ligand geometry report at `tolerance` ångström, against `radii`.
     #[must_use]
-    fn ligand_geometry(&self, tolerance: f32) -> molframe_validate::LigandGeometryReport;
+    fn ligand_geometry(
+        &self,
+        radii: &CovalentRadii,
+        tolerance: f32,
+    ) -> molframe_validate::LigandGeometryReport;
 
-    /// The ligand bond deviations beyond `tolerance` ångström.
+    /// The ligand bond deviations beyond `tolerance` ångström, against `radii`.
     #[must_use]
-    fn ligand_geometry_outliers(&self, tolerance: f32) -> Vec<molframe_validate::BondDeviation>;
+    fn ligand_geometry_outliers(
+        &self,
+        radii: &CovalentRadii,
+        tolerance: f32,
+    ) -> Vec<molframe_validate::BondDeviation>;
 
     /// One quality flag per atom: occupancy and B-factor sanity.
     #[must_use]
@@ -241,37 +251,41 @@ pub trait ValidationExt {
 impl ValidationExt for Structure {
     fn clashes(
         &self,
-        tolerance: f32,
-        radius_set: RadiusSet,
+        options: &ClashOptions,
     ) -> Result<molframe_validate::ClashTable, molframe_spatial::SpatialError> {
-        self.clashes_with(
-            tolerance,
-            radius_set,
-            SpatialBackend::Auto,
-            &ExecutionContext::default(),
-        )
+        self.clashes_with(options, &ExecutionContext::default())
     }
 
     fn clashes_with(
         &self,
-        tolerance: f32,
-        radius_set: RadiusSet,
-        backend: SpatialBackend,
+        options: &ClashOptions,
         context: &ExecutionContext,
     ) -> Result<molframe_validate::ClashTable, molframe_spatial::SpatialError> {
-        molframe_validate::clashes(self.engine(), tolerance, radius_set, backend, context)
+        molframe_validate::clashes_with(self.engine(), options, context)
     }
 
-    fn bond_length_deviations(&self, tolerance: f32) -> Vec<molframe_validate::BondDeviation> {
-        molframe_validate::bond_length_deviations(self.engine(), tolerance)
+    fn bond_length_deviations(
+        &self,
+        radii: &CovalentRadii,
+        tolerance: f32,
+    ) -> Vec<molframe_validate::BondDeviation> {
+        molframe_validate::bond_length_deviations(self.engine(), radii, tolerance)
     }
 
-    fn ligand_geometry(&self, tolerance: f32) -> molframe_validate::LigandGeometryReport {
-        molframe_validate::ligand_geometry(self.engine(), tolerance)
+    fn ligand_geometry(
+        &self,
+        radii: &CovalentRadii,
+        tolerance: f32,
+    ) -> molframe_validate::LigandGeometryReport {
+        molframe_validate::ligand_geometry(self.engine(), radii, tolerance)
     }
 
-    fn ligand_geometry_outliers(&self, tolerance: f32) -> Vec<molframe_validate::BondDeviation> {
-        molframe_validate::ligand_geometry_outliers(self.engine(), tolerance)
+    fn ligand_geometry_outliers(
+        &self,
+        radii: &CovalentRadii,
+        tolerance: f32,
+    ) -> Vec<molframe_validate::BondDeviation> {
+        molframe_validate::ligand_geometry_outliers(self.engine(), radii, tolerance)
     }
 
     fn quality_flags(&self) -> Vec<molframe_validate::QualityFlag> {

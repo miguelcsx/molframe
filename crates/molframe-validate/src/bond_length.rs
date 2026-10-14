@@ -10,6 +10,7 @@
 //! Needs a bond table and elements with known covalent radii; bonds missing
 //! either are skipped rather than guessed at.
 
+use molframe_chem::CovalentRadii;
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::Structure;
 use molframe_core::{Code, Diagnostic};
@@ -33,10 +34,15 @@ pub struct BondDeviation {
 ///
 /// An invalid `tolerance` (NaN, infinite or negative) yields no findings; use
 /// [`bond_length_deviations_checked`] to have it rejected instead. Findings
-/// keep the bond table's order (by endpoint indices). Runs in `O(bonds)` time.
+/// keep the bond table's order (by endpoint indices). `radii` is the covalent
+/// radius table in force. Runs in `O(bonds)` time.
 #[must_use]
-pub fn bond_length_deviations(structure: &Structure, tolerance: f32) -> Vec<BondDeviation> {
-    match bond_length_deviations_checked(structure, tolerance) {
+pub fn bond_length_deviations(
+    structure: &Structure,
+    radii: &CovalentRadii,
+    tolerance: f32,
+) -> Vec<BondDeviation> {
+    match bond_length_deviations_checked(structure, radii, tolerance) {
         Ok(found) => found,
         Err(_) => Vec::new(),
     }
@@ -49,6 +55,7 @@ pub fn bond_length_deviations(structure: &Structure, tolerance: f32) -> Vec<Bond
 /// Returns a diagnostic when `tolerance` is not finite and non-negative.
 pub fn bond_length_deviations_checked(
     structure: &Structure,
+    radii: &CovalentRadii,
     tolerance: f32,
 ) -> Result<Vec<BondDeviation>, Diagnostic> {
     if !tolerance.is_finite() || tolerance < 0.0 {
@@ -56,10 +63,10 @@ pub fn bond_length_deviations_checked(
             .with_context("parameter", "tolerance")
             .with_context("value", tolerance.to_string()));
     }
-    Ok(deviations(structure, tolerance))
+    Ok(deviations(structure, radii, tolerance))
 }
 
-fn deviations(structure: &Structure, tolerance: f32) -> Vec<BondDeviation> {
+fn deviations(structure: &Structure, radii: &CovalentRadii, tolerance: f32) -> Vec<BondDeviation> {
     if !structure.data().bonds.is_available() {
         return Vec::new();
     }
@@ -78,18 +85,13 @@ fn deviations(structure: &Structure, tolerance: f32) -> Vec<BondDeviation> {
         ) else {
             continue;
         };
-        let Some(deviation) = crate::covalent::covalent_deviation(a, element_a, b, element_b)
+        let Some(deviation) =
+            crate::covalent::covalent_deviation(radii, a, element_a, b, element_b)
         else {
             continue;
         };
         if deviation.delta.abs() > tolerance {
-            deviations.push(BondDeviation {
-                atom_a: bond.atom_a,
-                atom_b: bond.atom_b,
-                observed: deviation.observed,
-                expected: deviation.expected,
-                deviation: deviation.delta,
-            });
+            deviations.push(deviation.into_deviation(bond.atom_a, bond.atom_b));
         }
     }
     deviations

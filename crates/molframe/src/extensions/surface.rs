@@ -10,10 +10,11 @@
 
 use crate::ExecutionContext;
 use crate::structure::Structure;
+use molframe_chem::{TableError, TableRequest, TableStore};
 use molframe_core::diagnostic::Diagnostic;
 use molframe_core::index::ModelIndex;
 use molframe_surface::SasaError;
-pub use molframe_surface::{SasaMethod, SasaOptions, SasaReport};
+pub use molframe_surface::{SasaMethod, SasaOptions, SasaReport, SasaWordError};
 
 /// Why a structure-level SASA call failed.
 #[derive(Debug, thiserror::Error)]
@@ -25,6 +26,9 @@ pub enum SurfaceExtError {
     /// The surface kernel refused the input.
     #[error(transparent)]
     Sasa(#[from] SasaError),
+    /// The radius table could not be supplied.
+    #[error(transparent)]
+    Table(#[from] TableError),
 }
 
 /// Surface-area operations over a structure.
@@ -42,9 +46,11 @@ pub enum SurfaceExtError {
 /// # END
 /// # ";
 /// let (structure, _) = read_bytes(PDB.into(), Some("1abc.pdb"), &ReadOptions::new())?;
-/// let areas = structure.sasa()?;
+/// // The radius table comes from the profile of the global table store.
+/// let store = molframe::chemistry::TableStore::global();
+/// let areas = structure.sasa(&store)?;
 /// assert_eq!(areas.len(), structure.atom_count() as usize);
-/// let per_residue = structure.residue_sasa()?;
+/// let per_residue = structure.residue_sasa(&store)?;
 /// assert_eq!(per_residue.len(), 1);
 ///
 /// // The README quick start: a selection, an explicit memory ceiling, contacts.
@@ -59,12 +65,14 @@ pub enum SurfaceExtError {
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub trait SurfaceExt {
-    /// Per-atom SASA in square ångström with the default options.
+    /// Per-atom SASA in square ångström with the default options and the
+    /// radius table the profile of `store` selects.
     ///
     /// # Errors
     ///
-    /// See [`Self::sasa_with`].
-    fn sasa(&self) -> Result<Vec<f64>, SurfaceExtError>;
+    /// [`SurfaceExtError::Table`] when no radius table is configured, else
+    /// see [`Self::sasa_with`].
+    fn sasa(&self, store: &TableStore) -> Result<Vec<f64>, SurfaceExtError>;
 
     /// Per-atom SASA, indexed by atom. Atoms whose element has no radius in
     /// the chosen set, and heteroatoms the options leave out, get `NaN`.
@@ -96,8 +104,8 @@ pub trait SurfaceExt {
     ///
     /// # Errors
     ///
-    /// See [`Self::sasa_with`].
-    fn residue_sasa(&self) -> Result<Vec<f64>, SurfaceExtError>;
+    /// See [`Self::sasa`].
+    fn residue_sasa(&self, store: &TableStore) -> Result<Vec<f64>, SurfaceExtError>;
 
     /// Per-residue SASA: the sum of the finite atom areas of each residue.
     ///
@@ -112,8 +120,9 @@ pub trait SurfaceExt {
 }
 
 impl SurfaceExt for Structure {
-    fn sasa(&self) -> Result<Vec<f64>, SurfaceExtError> {
-        self.sasa_with(&SasaOptions::default(), &ExecutionContext::default())
+    fn sasa(&self, store: &TableStore) -> Result<Vec<f64>, SurfaceExtError> {
+        let options = SasaOptions::resolve(&TableRequest::profile(), store)?;
+        self.sasa_with(&options, &ExecutionContext::default())
     }
 
     fn sasa_with(
@@ -144,8 +153,9 @@ impl SurfaceExt for Structure {
         })
     }
 
-    fn residue_sasa(&self) -> Result<Vec<f64>, SurfaceExtError> {
-        self.residue_sasa_with(&SasaOptions::default(), &ExecutionContext::default())
+    fn residue_sasa(&self, store: &TableStore) -> Result<Vec<f64>, SurfaceExtError> {
+        let options = SasaOptions::resolve(&TableRequest::profile(), store)?;
+        self.residue_sasa_with(&options, &ExecutionContext::default())
     }
 
     fn residue_sasa_with(

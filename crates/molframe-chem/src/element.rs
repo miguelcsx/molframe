@@ -1,11 +1,15 @@
-//! Versioned properties of chemical elements.
+//! Definitional properties of chemical elements: weight, period, group, valence
+//! electrons and electronegativity.
 //!
-//! Lookup is constant time by atomic number and allocates nothing. Missing
-//! values remain absent; the library never substitutes one radius convention
-//! for another because that would change geometric results silently.
+//! These are the periodic table itself, fixed by definition (IUPAC weights, the
+//! ground-state configuration, the Pauling scale), not a scientific choice a
+//! user would swap, so they are the one place data is compiled in. Everything
+//! that is a choice (van der Waals, covalent and ionic radii, bonding reach, metal
+//! sites) is a table selected by name. Lookup is constant time by atomic number
+//! and allocates nothing.
 
+use crate::RadiusSource;
 use crate::element_data::ELEMENTS;
-use crate::radii_defaults::{AMBER_UNITED_RADII, CHARMM_RADII, lookup};
 use molframe_core::Element;
 
 /// Scalar reference properties of one element.
@@ -14,8 +18,6 @@ pub struct ElementProperties {
     /// Standard atomic weight, or the conventional mass number for elements
     /// without a standard atomic weight.
     pub atomic_weight: f64,
-    /// Single-bond covalent radius in ångström.
-    pub covalent_radius: Option<f32>,
     /// Pauling electronegativity where defined.
     pub electronegativity: Option<f32>,
     /// Valence-electron count from the ground-state electronic configuration.
@@ -26,136 +28,28 @@ pub struct ElementProperties {
     pub group: Option<u8>,
 }
 
-/// A named van der Waals radius convention.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum RadiusSet {
-    /// Bondi's widely used crystallographic values.
-    Bondi,
-    /// AMBER united-atom values.
-    AmberUnited,
-    /// CHARMM force-field values.
-    Charmm,
-    /// Alvarez's crystallographic compilation.
-    Alvarez,
-}
-
-/// Identity and version of a radius table.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RadiusTable {
-    /// Stable machine-readable name.
-    pub name: &'static str,
-    /// Source/version label recorded in provenance.
-    pub version: &'static str,
-}
-
 #[derive(Clone, Copy)]
 pub(super) struct RawElement {
-    covalent_radius: f32,
     electronegativity: Option<f32>,
     period: u8,
     group: u8,
     valence_electrons: u8,
-    bondi: Option<f32>,
-    alvarez: Option<f32>,
 }
 
 impl RawElement {
-    pub(super) const EMPTY: Self = Self::new(0.0, None, 0, 0, 0, None, None);
+    pub(super) const EMPTY: Self = Self::new(None, 0, 0, 0);
 
     pub(super) const fn new(
-        covalent_radius: f32,
         electronegativity: Option<f32>,
         period: u8,
         group: u8,
         valence_electrons: u8,
-        bondi: Option<f32>,
-        alvarez: Option<f32>,
     ) -> Self {
         Self {
-            covalent_radius,
             electronegativity,
             period,
             group,
             valence_electrons,
-            bondi,
-            alvarez,
-        }
-    }
-}
-
-impl RadiusSet {
-    /// The exact table identity represented by this value.
-    #[must_use]
-    pub const fn table(self) -> RadiusTable {
-        match self {
-            Self::Bondi => RadiusTable {
-                name: "bondi",
-                version: "1964",
-            },
-            Self::AmberUnited => RadiusTable {
-                name: "amber_united",
-                version: "weiner-1984",
-            },
-            Self::Charmm => RadiusTable {
-                name: "charmm",
-                version: "c36m-2021",
-            },
-            Self::Alvarez => RadiusTable {
-                name: "alvarez",
-                version: "2013",
-            },
-        }
-    }
-}
-
-impl RadiusSet {
-    /// Name, version, source and licence of the table this value selects.
-    #[must_use]
-    pub const fn identity(self) -> crate::TableIdentity {
-        match self {
-            Self::Bondi => crate::radii_defaults::BONDI,
-            Self::AmberUnited => crate::radii_defaults::AMBER_UNITED,
-            Self::Charmm => crate::radii_defaults::CHARMM,
-            Self::Alvarez => crate::radii_defaults::ALVAREZ,
-        }
-    }
-
-    /// The words a radius set can be spelled with, in declaration order.
-    pub const NAMES: &'static [&'static str] = &["bondi", "amber-united", "charmm", "alvarez"];
-
-    /// The canonical spelling of this set.
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::Bondi => "bondi",
-            Self::AmberUnited => "amber-united",
-            Self::Charmm => "charmm",
-            Self::Alvarez => "alvarez",
-        }
-    }
-}
-
-impl std::fmt::Display for RadiusSet {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(self.name())
-    }
-}
-
-impl std::str::FromStr for RadiusSet {
-    type Err = molframe_core::contract::PolicyParseError;
-
-    /// An underscore is read as a hyphen.
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match molframe_core::contract::canonical_spelling(value).as_str() {
-            "bondi" => Ok(Self::Bondi),
-            "amber-united" => Ok(Self::AmberUnited),
-            "charmm" => Ok(Self::Charmm),
-            "alvarez" => Ok(Self::Alvarez),
-            _ => Err(molframe_core::contract::PolicyParseError::new(
-                "radii",
-                value,
-                &Self::NAMES.join(", "),
-            )),
         }
     }
 }
@@ -170,7 +64,6 @@ pub fn element_properties(element: Element) -> Option<ElementProperties> {
     let raw = *ELEMENTS.get(z)?;
     Some(ElementProperties {
         atomic_weight: *ATOMIC_WEIGHTS.get(z)?,
-        covalent_radius: Some(raw.covalent_radius),
         electronegativity: raw.electronegativity,
         valence_electrons: raw.valence_electrons,
         period: raw.period,
@@ -178,14 +71,16 @@ pub fn element_properties(element: Element) -> Option<ElementProperties> {
     })
 }
 
-/// The radius of every atom of `structure`, indexed by atom, from exactly the
-/// requested set; `NaN` marks an atom whose element is unknown or has no
-/// value in the set.
+/// The radius of every atom of `structure`, indexed by atom, from `source`; `NaN`
+/// marks an atom whose element is unknown or has no value in the table.
 #[must_use]
-pub fn atom_radii(structure: &molframe_core::structure::Structure, set: RadiusSet) -> Vec<f32> {
+pub fn atom_radii(
+    structure: &molframe_core::structure::Structure,
+    source: &RadiusSource,
+) -> Vec<f32> {
     let mut radii = vec![f32::NAN; structure.atom_count() as usize];
     for atom in structure.data().atoms() {
-        let radius = atom.element().and_then(|element| vdw_radius(element, set));
+        let radius = atom.element().and_then(|element| source.radius(element));
         if let (Some(radius), Some(slot)) = (radius, radii.get_mut(atom.index().as_usize())) {
             *slot = radius;
         }
@@ -208,18 +103,6 @@ pub fn atom_masses(structure: &molframe_core::structure::Structure) -> Vec<f64> 
         }
     }
     masses
-}
-
-/// Returns a van der Waals radius in ångström from exactly the requested set.
-#[must_use]
-pub fn vdw_radius(element: Element, set: RadiusSet) -> Option<f32> {
-    let z = element.atomic_number() as usize;
-    match set {
-        RadiusSet::Bondi => ELEMENTS.get(z).and_then(|element| element.bondi),
-        RadiusSet::AmberUnited => lookup(AMBER_UNITED_RADII, element.symbol()),
-        RadiusSet::Charmm => lookup(CHARMM_RADII, element.symbol()),
-        RadiusSet::Alvarez => ELEMENTS.get(z).and_then(|element| element.alvarez),
-    }
 }
 
 const ATOMIC_WEIGHTS: [f64; 119] = [

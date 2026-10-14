@@ -8,16 +8,18 @@
 //! An excluded atom gets no radius (`NaN`), so it neither has an area nor
 //! occludes its neighbours.
 //!
-//! Metals are handled by one rule. A radius set that has no value for a metal
+//! Metals are handled by one rule. A radius table that has no value for a metal
 //! (Bondi has none for Ca, Zn, Fe, Cu, Ni, Co or Mn) either leaves the atom
-//! without a radius or draws on the metal table, as the caller chooses; the
-//! choice is never made silently.
+//! without a radius or draws on the metal tables, as the caller chooses; the
+//! choice is never made silently, and the tables used are named in the result.
 //!
 //! One pass over the residues, `O(N)` in atoms, one allocation.
 
-use crate::metal::{MetalRadiusKind, metal_radius};
+use crate::metal::MetalRadiusKind;
 use crate::standard_bonds::{is_amino_acid_component, is_water_component};
-use crate::{ComponentKind, RadiusSet, RadiusSource};
+use crate::{
+    ComponentKind, MetalTables, RadiusSource, TableError, TableRequest, TableStore, VdwRadii,
+};
 use molframe_core::annotation::AtomAnnotation;
 use molframe_core::column::Presence;
 use molframe_core::structure::{ResidueRef, Structure};
@@ -83,59 +85,70 @@ impl HeteroPolicy {
 pub enum MetalFallback {
     /// Leave the atom without a radius.
     None,
-    /// Use the Alvarez van der Waals radius: the ion as a solvent obstacle.
+    /// Use the metal table's van der Waals radius: the ion as a solvent obstacle.
     #[default]
     Vdw,
-    /// Use the Shannon ionic radius: the ion as a steric contact.
+    /// Use the ionic radius of the typical site: the ion as a steric contact.
     Ionic,
 }
 
 /// A complete, explicit radius assignment.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RadiusPolicy {
-    /// Radius source for every element it covers: a built-in set or the
-    /// caller's own table.
+    /// The van der Waals radius table for every element it covers.
     pub source: RadiusSource,
-    /// Source for metals the set does not cover.
+    /// What covers the metals the table does not.
     pub metals: MetalFallback,
+    /// The tables behind that fallback; absent when `metals` is `None`.
+    pub metal_tables: Option<MetalTables>,
     /// Heteroatom classes that take part.
     pub hetero: HeteroPolicy,
 }
 
-impl Default for RadiusPolicy {
-    fn default() -> Self {
-        Self {
-            source: RadiusSource::default(),
-            metals: MetalFallback::default(),
-            hetero: HeteroPolicy::POLYMER,
-        }
+impl RadiusPolicy {
+    /// Resolves the radius table from `radii`, and the metal tables the
+    /// fallback needs from the store's profile.
+    ///
+    /// # Errors
+    ///
+    /// [`TableError`] naming how to supply whichever table is missing or refused.
+    pub fn resolve(
+        radii: &TableRequest<VdwRadii>,
+        metals: MetalFallback,
+        hetero: HeteroPolicy,
+        store: &TableStore,
+    ) -> Result<Self, TableError> {
+        let metal_tables = match metals {
+            MetalFallback::None => None,
+            MetalFallback::Vdw => {
+                Some(MetalTables::resolve(&TableRequest::profile(), None, store)?)
+            }
+            MetalFallback::Ionic => Some(MetalTables::resolve(
+                &TableRequest::profile(),
+                Some(&TableRequest::profile()),
+                store,
+            )?),
+        };
+        Ok(Self {
+            source: RadiusSource::resolve(radii, store)?,
+            metals,
+            metal_tables,
+            hetero,
+        })
     }
-}
 
-/// The radius of one element from `set`, drawing on the metal table under
-/// `metals` when the set has no value for it.
-#[must_use]
-pub fn radius_with_fallback(
-    element: molframe_core::Element,
-    set: RadiusSet,
-    metals: MetalFallback,
-) -> Option<f32> {
-    source_radius_with_fallback(element, &RadiusSource::Set(set), metals)
-}
-
-/// The radius of one element from `source`, drawing on the metal table under
-/// `metals` when the source has no value for it.
-#[must_use]
-pub fn source_radius_with_fallback(
-    element: molframe_core::Element,
-    source: &RadiusSource,
-    metals: MetalFallback,
-) -> Option<f32> {
-    source.radius(element).or_else(|| match metals {
-        MetalFallback::None => None,
-        MetalFallback::Vdw => metal_radius(element, MetalRadiusKind::Vdw),
-        MetalFallback::Ionic => metal_radius(element, MetalRadiusKind::Ionic),
-    })
+    /// The radius of one element: the table's value, else the metal fallback's.
+    #[must_use]
+    pub fn radius(&self, element: molframe_core::Element) -> Option<f32> {
+        self.source.radius(element).or_else(|| {
+            let tables = self.metal_tables.as_ref()?;
+            match self.metals {
+                MetalFallback::None => None,
+                MetalFallback::Vdw => tables.radius(element, MetalRadiusKind::Vdw),
+                MetalFallback::Ionic => tables.radius(element, MetalRadiusKind::Ionic),
+            }
+        })
+    }
 }
 
 /// The class of one residue.
@@ -215,9 +228,7 @@ pub fn policy_radii(structure: &Structure, policy: &RadiusPolicy) -> Vec<f32> {
         if !matches!(included.get(index), Some(true)) {
             continue;
         }
-        let radius = atom.element().and_then(|element| {
-            source_radius_with_fallback(element, &policy.source, policy.metals)
-        });
+        let radius = atom.element().and_then(|element| policy.radius(element));
         if let (Some(radius), Some(slot)) = (radius, radii.get_mut(index)) {
             *slot = radius;
         }

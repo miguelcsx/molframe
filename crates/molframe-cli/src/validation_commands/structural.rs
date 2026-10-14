@@ -52,7 +52,12 @@ pub(super) fn ligand_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
         "ligand",
         "--ligand-bond-tolerance",
     )?;
-    let report = molframe::validation::ligand_geometry(subject.structure.engine(), tolerance);
+    let covalent = crate::tables::covalent_radii()?;
+    let report = molframe::validation::ligand_geometry(
+        subject.structure.engine(),
+        &covalent.table,
+        tolerance,
+    );
     eprintln!(
         "ligand geometry: assessed {} of {} hetero bonds",
         report.assessed, report.intended

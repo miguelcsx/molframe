@@ -7,6 +7,7 @@ use molframe_core::contract::{
 use molframe_core::{ExecutionContext, InputBuffer, ReadOptions, Structure};
 use molframe_spatial::SpatialBackend;
 use std::fmt::Write;
+use std::sync::Arc;
 
 const HEADER: &str = "data_t\nloop_\n_atom_site.group_PDB\n_atom_site.id\n\
 _atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n\
@@ -37,15 +38,21 @@ fn policy(definition: ContactDefinition, radii: RadiiSet) -> AnalysisPolicy {
     }
 }
 
-fn count(structure: &Structure, policy: &AnalysisPolicy) -> usize {
-    let kernel = definition_contacts_kernel(
+fn kernel()
+-> impl crate::StructureKernel<Output = crate::ContactTable, Error = super::DefinitionError> {
+    definition_contacts_kernel(
         SpatialBackend::BruteForce,
         SurfaceSampling {
             tolerance: 0.2,
             density: 4.0,
             minimum_area: 0.25,
         },
-    );
+        Arc::clone(molframe_bench::shared_table_store()),
+    )
+}
+
+fn count(structure: &Structure, policy: &AnalysisPolicy) -> usize {
+    let kernel = kernel();
     match analyse_structure(structure, policy, &kernel, &ExecutionContext::default()) {
         Ok(result) => result.value().map_or(0, crate::ContactTable::len),
         Err(error) => panic!("analysis failed: {error}"),
@@ -53,10 +60,13 @@ fn count(structure: &Structure, policy: &AnalysisPolicy) -> usize {
 }
 
 fn carbon_radius(set: RadiiSet) -> f32 {
-    let Ok(chem_set) = set.name().parse::<molframe_chem::RadiusSet>() else {
-        panic!("the radius set is known to chemistry");
+    let Ok(source) = molframe_chem::RadiusSource::resolve(
+        &molframe_chem::TableRequest::named(set.name()),
+        molframe_bench::table_store(),
+    ) else {
+        panic!("the radius table is in the data directory");
     };
-    let Some(radius) = molframe_chem::vdw_radius(molframe_core::Element::CARBON, chem_set) else {
+    let Some(radius) = source.radius(molframe_core::Element::CARBON) else {
         panic!("carbon has a radius in every set");
     };
     radius
@@ -110,14 +120,7 @@ fn the_tolerance_widens_the_contact_by_exactly_that_much() {
 #[test]
 fn an_atom_with_no_radius_is_missing_coverage_and_the_policy_decides_what_that_means() {
     let structure = carbons(&[("C", 0.0), ("C", 3.0), ("?", 6.0)]);
-    let kernel = definition_contacts_kernel(
-        SpatialBackend::BruteForce,
-        SurfaceSampling {
-            tolerance: 0.2,
-            density: 4.0,
-            minimum_area: 0.25,
-        },
-    );
+    let kernel = kernel();
     let context = ExecutionContext::default();
     let reported = AnalysisPolicy {
         missing_atoms: MissingPolicy::Report,
@@ -158,14 +161,7 @@ fn a_surface_contact_needs_exposed_surface_on_both_atoms() {
 #[test]
 fn the_kernel_records_the_two_decisions_it_applied() {
     let structure = two_carbons(3.0);
-    let kernel = definition_contacts_kernel(
-        SpatialBackend::BruteForce,
-        SurfaceSampling {
-            tolerance: 0.2,
-            density: 4.0,
-            minimum_area: 0.25,
-        },
-    );
+    let kernel = kernel();
     let Ok(result) = analyse_structure(
         &structure,
         &AnalysisPolicy::default(),

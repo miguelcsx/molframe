@@ -6,6 +6,7 @@
 //! are left to the general check; here a bond is reported only when both its
 //! atoms belong to het residues.
 
+use molframe_chem::CovalentRadii;
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::{AtomRef, Structure};
 
@@ -25,7 +26,11 @@ pub struct LigandGeometryReport {
 
 /// Assesses ligand bond geometry with explicit coverage.
 #[must_use]
-pub fn ligand_geometry(structure: &Structure, tolerance: f32) -> LigandGeometryReport {
+pub fn ligand_geometry(
+    structure: &Structure,
+    radii: &CovalentRadii,
+    tolerance: f32,
+) -> LigandGeometryReport {
     if !structure.data().bonds.is_available() {
         return LigandGeometryReport {
             outliers: Vec::new(),
@@ -56,18 +61,14 @@ pub fn ligand_geometry(structure: &Structure, tolerance: f32) -> LigandGeometryR
         ) else {
             continue;
         };
-        let Some(deviation) = covalent_deviation(a, element_a, b, element_b) else {
+        let Some(deviation) = covalent_deviation(radii, a, element_a, b, element_b) else {
             continue;
         };
         report.assessed += 1;
         if deviation.delta.abs() > tolerance {
-            report.outliers.push(BondDeviation {
-                atom_a: bond.atom_a,
-                atom_b: bond.atom_b,
-                observed: deviation.observed,
-                expected: deviation.expected,
-                deviation: deviation.delta,
-            });
+            report
+                .outliers
+                .push(deviation.into_deviation(bond.atom_a, bond.atom_b));
         }
     }
     report
@@ -81,8 +82,12 @@ pub fn ligand_geometry(structure: &Structure, tolerance: f32) -> LigandGeometryR
 ///
 /// Runs in `O(bonds)` time.
 #[must_use]
-pub fn ligand_geometry_outliers(structure: &Structure, tolerance: f32) -> Vec<BondDeviation> {
-    ligand_geometry(structure, tolerance).outliers
+pub fn ligand_geometry_outliers(
+    structure: &Structure,
+    radii: &CovalentRadii,
+    tolerance: f32,
+) -> Vec<BondDeviation> {
+    ligand_geometry(structure, radii, tolerance).outliers
 }
 
 /// Whether an atom belongs to a het (non-polymer) residue.

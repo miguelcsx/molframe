@@ -8,7 +8,7 @@
 use std::path::Path;
 
 use molframe::ExecutionContext;
-use molframe::chemistry::{RadiusSet, atom_radii};
+use molframe::chemistry::{RadiusSource, TableRequest, atom_radii};
 use molframe_bench::{Sample, structure_from_cif};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -84,7 +84,9 @@ fn gw_013_shrake_rupley_matches_biotite_per_atom() {
         assert_eq!(kept.len(), expected.len());
 
         let all_positions = structure.positions();
-        let all_radii = atom_radii(&structure, RadiusSet::Bondi);
+        let source = RadiusSource::resolve(&TableRequest::profile(), molframe_bench::table_store())
+            .unwrap_or_else(|error| panic!("bench profile resolves: {error}"));
+        let all_radii = atom_radii(&structure, &source);
         let positions: Vec<[f32; 3]> = kept.iter().map(|&atom| all_positions[atom]).collect();
         let radii: Vec<f32> = kept.iter().map(|&atom| all_radii[atom]).collect();
         let areas = molframe::surface::shrake_rupley(

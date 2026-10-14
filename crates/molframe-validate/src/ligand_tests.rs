@@ -1,6 +1,17 @@
 use super::{ligand_geometry, ligand_geometry_outliers};
+use molframe_chem::{CovalentRadii, Provided, TableRequest};
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
+use std::sync::Arc;
+
+fn radii() -> Arc<Provided<CovalentRadii>> {
+    match TableRequest::<CovalentRadii>::profile()
+        .resolve(molframe_bench::table_store(), "--covalent-radii")
+    {
+        Ok(radii) => radii,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    }
+}
 
 fn structure(source: &str) -> Structure {
     let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
@@ -32,7 +43,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
 
 #[test]
 fn a_stretched_ligand_bond_is_flagged() {
-    let report = ligand_geometry(&structure(&ligand("HETATM", 3.0)), 0.3);
+    let report = ligand_geometry(&structure(&ligand("HETATM", 3.0)), &radii().table, 0.3);
     assert_eq!(report.outliers.len(), 1);
     assert!(report.outliers[0].deviation > 0.3);
     assert_eq!((report.intended, report.assessed), (1, 1));
@@ -40,7 +51,8 @@ fn a_stretched_ligand_bond_is_flagged() {
 
 #[test]
 fn a_normal_ligand_bond_is_not_flagged() {
-    let deviations = ligand_geometry_outliers(&structure(&ligand("HETATM", 1.54)), 0.3);
+    let deviations =
+        ligand_geometry_outliers(&structure(&ligand("HETATM", 1.54)), &radii().table, 0.3);
     assert!(deviations.is_empty());
 }
 
@@ -48,6 +60,7 @@ fn a_normal_ligand_bond_is_not_flagged() {
 fn a_stretched_polymer_bond_is_left_to_the_general_check() {
     // ATOM records are polymer residues, not het, so this ligand check ignores
     // them even when the bond is stretched.
-    let deviations = ligand_geometry_outliers(&structure(&ligand("ATOM", 3.0)), 0.3);
+    let deviations =
+        ligand_geometry_outliers(&structure(&ligand("ATOM", 3.0)), &radii().table, 0.3);
     assert!(deviations.is_empty());
 }

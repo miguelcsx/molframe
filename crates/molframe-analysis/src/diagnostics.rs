@@ -133,7 +133,8 @@ diagnostic_from!(FragmentMappingError, |error| match error {
 diagnostic_from!(DefinitionError, |error| match error {
     DefinitionError::Spatial(inner) => Diagnostic::from(inner).code(),
     DefinitionError::Surface(inner) => Diagnostic::from(inner).code(),
-    DefinitionError::UnknownRadiusSet(_) => Code::E6103,
+    DefinitionError::Radii(inner) => Diagnostic::from(inner).code(),
+    DefinitionError::UnknownDefinition(_) => Code::E6103,
     DefinitionError::UnknownRadius { .. } => Code::E5103,
 });
 diagnostic_from!(DensityError, |error| match error {

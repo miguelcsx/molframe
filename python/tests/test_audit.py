@@ -370,7 +370,7 @@ def test_governed_sasa_equals_the_surface_routine_run_on_the_policys_radii():
     areas = {}
     for radii in ("bondi", "charmm", "alvarez"):
         policy = molframe.AnalysisPolicy(vdw_radii=radii)
-        result = analysis.sasa(crambin, hetero="all", policy=policy)
+        result = analysis.sasa(crambin, hetero="all", radii=radii, policy=policy)
         assert result.estimand is not None
         assert "vdw_radii" in (result.policy_reads or [])
         table = np.asarray(molframe.chemistry.vdw_radii(crambin, radii=radii), dtype=np.float32)
@@ -396,7 +396,7 @@ def test_the_radius_set_and_the_system_are_decisions_an_sasa_audit_can_vary():
 
     result = audit.run(
         space.plan(),
-        lambda policy: analysis.sasa(crambin, policy=policy),
+        lambda policy: analysis.sasa(crambin, radii=policy.vdw_radii, policy=policy),
         metric="relative",
         project=exposed_total,
     )

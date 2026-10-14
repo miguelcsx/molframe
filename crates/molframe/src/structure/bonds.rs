@@ -65,6 +65,7 @@ pub struct BondInferenceReport {
 /// indexing failure.
 pub fn infer_bonds(
     structure: &Structure,
+    radii: &molframe_chem::CovalentRadii,
     options: BondInference,
     context: &molframe_core::ExecutionContext,
 ) -> Result<BondInferenceReport, Findings> {
@@ -84,11 +85,7 @@ pub fn infer_bonds(
     let radii: Vec<_> = engine
         .data()
         .atoms()
-        .map(|atom| {
-            atom.element()
-                .and_then(molframe_chem::element_properties)
-                .and_then(|properties| properties.covalent_radius)
-        })
+        .map(|atom| atom.element().and_then(|element| radii.radius(element)))
         .collect();
     let skipped_atoms = radii
         .iter()

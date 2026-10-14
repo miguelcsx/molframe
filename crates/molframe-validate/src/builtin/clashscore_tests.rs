@@ -22,7 +22,8 @@ fn polar_hydrogen_against_oxygen_is_a_hydrogen_bond() -> Result<(), Box<dyn std:
     let structure = build(&format!("{N_H}HETATM 3 O O HOH B 2 2.8 0.0 0.0\n"))?;
     let result = clash_score(
         &structure,
-        ClashScoreOptions::default(),
+        &ClashScoreOptions::default(),
+        molframe_bench::table_store(),
         &ExecutionContext::default(),
     )?;
     assert!(result.hydrogen_aware);
@@ -36,16 +37,22 @@ fn hydrogen_against_carbon_is_a_clash_only_when_hydrogens_count()
 -> Result<(), Box<dyn std::error::Error>> {
     let structure = build(&format!("{N_H}ATOM 3 C CA ALA B 2 2.9 0.0 0.0\n"))?;
     let context = ExecutionContext::default();
-    let aware = clash_score(&structure, ClashScoreOptions::default(), &context)?;
+    let aware = clash_score(
+        &structure,
+        &ClashScoreOptions::default(),
+        molframe_bench::table_store(),
+        &context,
+    )?;
     assert_eq!(aware.clashes, 1);
     assert_eq!(aware.residue_clashes, vec![1, 1]);
     assert!((aware.score - 1000.0 / 3.0).abs() < 1e-9);
     let heavy = clash_score(
         &structure,
-        ClashScoreOptions {
+        &ClashScoreOptions {
             hydrogens: HydrogenMode::Ignore,
             ..ClashScoreOptions::default()
         },
+        molframe_bench::table_store(),
         &context,
     )?;
     assert!(!heavy.hydrogen_aware);
@@ -58,12 +65,14 @@ fn heavy_atom_score_separates_clean_and_crowded_models() -> Result<(), BuiltinEr
     let context = ExecutionContext::default();
     let ubiquitin = clash_score(
         &sample(Sample::Small),
-        ClashScoreOptions::default(),
+        &ClashScoreOptions::default(),
+        molframe_bench::table_store(),
         &context,
     )?;
     let haemoglobin = clash_score(
         &sample(Sample::Medium),
-        ClashScoreOptions::default(),
+        &ClashScoreOptions::default(),
+        molframe_bench::table_store(),
         &context,
     )?;
     assert!(!ubiquitin.hydrogen_aware);

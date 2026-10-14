@@ -24,7 +24,8 @@
 //! [`AnalysisExt`], [`ValidationExt`] and [`CompareExt`]. [`SurfaceExt`] is the
 //! one deliberate exception: surface kernels are coordinate-first, so its
 //! methods are not forwarders. They gather the coordinates of one model, take
-//! radii from a [`RadiusSet`](molframe_chem::RadiusSet), and give an atom with
+//! radii from the table the options resolve (the profile's `vdw-radii` line unless
+//! one is named), and give an atom with
 //! no radius a `NaN` area that does not occlude its neighbours. That policy is
 //! stated once, in `surface`, instead of being rediscovered by every caller.
 //! Geometry and the spatial planners stay free functions over coordinates,
@@ -51,7 +52,9 @@ pub use analysis::AnalysisExt;
 #[cfg(feature = "compare")]
 pub use compare::CompareExt;
 #[cfg(all(feature = "surface", feature = "chemistry"))]
-pub use surface::{SasaMethod, SasaOptions, SasaReport, SurfaceExt, SurfaceExtError};
+pub use surface::{
+    SasaMethod, SasaOptions, SasaReport, SasaWordError, SurfaceExt, SurfaceExtError,
+};
 #[cfg(feature = "validation")]
 pub use validation::ValidationExt;
 

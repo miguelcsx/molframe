@@ -186,7 +186,7 @@ pub(crate) fn density_map(
     search_radius,
     grid_spacing,
     probe_radius=0.0,
-    radii="bondi",
+    radii=None,
     memory_limit_bytes=PoreProfileOptions::DEFAULT_MEMORY_LIMIT_BYTES,
     policy=None,
     context=None,
@@ -203,14 +203,14 @@ pub(crate) fn pore_profile(
     search_radius: f32,
     grid_spacing: f32,
     probe_radius: f32,
-    radii: &str,
+    radii: Option<&str>,
     memory_limit_bytes: usize,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
     let radii = molframe::chemistry::atom_radii(
         structure.inner.engine(),
-        radii.parse().map_err(crate::error::kernel)?,
+        &crate::tables::radius_source(radii)?,
     );
     let kernel = molframe::analysis::pore_profile_kernel(
         &radii,
@@ -263,7 +263,7 @@ pub(crate) fn pore_profile(
     probe,
     surface_density,
     minimum_area,
-    radii="bondi",
+    radii=None,
     backend="auto",
     policy=None,
     context=None,
@@ -276,14 +276,14 @@ pub(crate) fn surface_contacts(
     probe: f32,
     surface_density: f32,
     minimum_area: f32,
-    radii: &str,
+    radii: Option<&str>,
     backend: &str,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
     let radii = molframe::chemistry::atom_radii(
         structure.inner.engine(),
-        radii.parse().map_err(crate::error::kernel)?,
+        &crate::tables::radius_source(radii)?,
     );
     let kernel = molframe::analysis::surface_contacts_kernel(
         &radii,
@@ -352,6 +352,7 @@ pub(crate) fn contacts_by_definition(
             density: surface_density,
             minimum_area: surface_minimum_area,
         },
+        molframe::chemistry::TableStore::global(),
     );
     run(
         py,
@@ -382,12 +383,13 @@ pub(crate) fn contacts_by_definition(
 /// (square ångström) per analysed atom, `NaN` where an atom is left out; use
 /// `atom_origin` to tie it to the input.
 ///
-/// `radii_table` (text) or `radii_file` (a path) replaces the policy's radius set with a
-/// table the caller supplies; Rust parses and validates it. The result's `vdw_radii`
+/// `radii` names the radius table: a cache entry name or a file path; unset, the profile's
+/// `vdw-radii` line. Rust parses and validates it, and a table that cannot be supplied raises
+/// the typed `E7102` or `E2201` error naming how to supply it. The result's `vdw_radii`
 /// assumption and its `radii_table` parameter name the table that applied, by name, version,
 /// source and licence.
 #[pyfunction]
-#[pyo3(signature = (structure, *, probe=None, method=None, n_points=None, hetero=None, metals=None, radii_table=None, radii_file=None, policy=None, context=None))]
+#[pyo3(signature = (structure, *, probe=None, method=None, n_points=None, hetero=None, metals=None, radii=None, policy=None, context=None))]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sasa(
     py: Python<'_>,
@@ -397,30 +399,23 @@ pub(crate) fn sasa(
     n_points: Option<u16>,
     hetero: Option<&str>,
     metals: Option<&str>,
-    radii_table: Option<&str>,
-    radii_file: Option<std::path::PathBuf>,
+    radii: Option<&str>,
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
-    let mut options = molframe::SasaOptions::from_words(method, n_points, probe, hetero, metals)
-        .map_err(crate::error::failure)?;
-    let table = match (radii_table, radii_file) {
-        (Some(_), Some(_)) => {
-            return Err(crate::error::failure(
-                "give radii_table or radii_file, not both",
-            ));
-        }
-        (Some(text), None) => Some(text.to_owned()),
-        (None, Some(path)) => Some(std::fs::read_to_string(&path).map_err(|error| {
-            crate::error::failure(format!("cannot read {}: {error}", path.display()))
-        })?),
-        (None, None) => None,
-    };
-    if let Some(text) = table {
-        options = options
-            .with_radii_table(&text)
-            .map_err(crate::error::failure)?;
-    }
+    let options = molframe::SasaOptions::from_words(
+        method,
+        n_points,
+        probe,
+        hetero,
+        metals,
+        &molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(radii),
+        &molframe::chemistry::TableStore::global(),
+    )
+    .map_err(|error| match error {
+        molframe::SasaWordError::Table(error) => crate::error::kernel(error),
+        other => crate::error::failure(other),
+    })?;
     let kernel = molframe::analysis::sasa_kernel(options);
     run(
         py,

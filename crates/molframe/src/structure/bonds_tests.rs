@@ -8,6 +8,15 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
 ATOM 1 C C1 LIG A 1 0 0 0\nATOM 2 O O1 LIG A 1 1.3 0 0\n\
 ATOM 3 C C2 LIG A 1 5 0 0\n";
 
+fn radii() -> std::sync::Arc<molframe_chem::Provided<molframe_chem::CovalentRadii>> {
+    match molframe_chem::TableRequest::profile()
+        .resolve(molframe_bench::table_store(), "--covalent-radii")
+    {
+        Ok(radii) => radii,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    }
+}
+
 #[test]
 fn inference_adds_only_radius_compatible_nearby_pairs_with_provenance() {
     let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
@@ -15,6 +24,7 @@ fn inference_adds_only_radius_compatible_nearby_pairs_with_provenance() {
     let structure = crate::Structure::from(structure);
     let report = infer_bonds(
         &structure,
+        &radii().table,
         BondInference::default(),
         &molframe_core::ExecutionContext::default(),
     )

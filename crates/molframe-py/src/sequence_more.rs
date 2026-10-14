@@ -1,9 +1,8 @@
 //! Substitution matrices, multiple alignment and trees.
 
 use crate::sequence::PyScoring;
-use molframe::sequence::{
-    self as seq, LadderDirection, MatrixProfile, MsaOptions, SubstitutionMatrix, Tree,
-};
+use molframe::chemistry::{TableRequest, TableStore};
+use molframe::sequence::{self as seq, LadderDirection, MsaOptions, SubstitutionMatrix, Tree};
 use numpy::{PyArray2, PyArrayMethods, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 
@@ -19,43 +18,17 @@ pub(crate) struct PySubstitutionMatrix {
     pub(crate) inner: SubstitutionMatrix,
 }
 
-impl PySubstitutionMatrix {
-    fn load(profile: MatrixProfile) -> PyResult<Self> {
-        seq::load_matrix(profile)
-            .map(|inner| Self { inner })
-            .map_err(crate::error::kernel)
-    }
-}
-
 #[pymethods]
 impl PySubstitutionMatrix {
-    /// A BLOSUM matrix: `62` (the usual) or a level from 30 to 90 in steps of 5.
+    /// The matrix `name` selects: a cache entry name or a file path, or the
+    /// profile's `score-matrix` when omitted.
     #[staticmethod]
-    fn blosum(level: u8) -> PyResult<Self> {
-        if level == 62 {
-            return Ok(Self {
-                inner: seq::blosum62(),
-            });
-        }
-        Self::load(MatrixProfile::Blosum(level))
-    }
-
-    /// A PAM matrix; `distance` is 10 to 500 in steps of 10.
-    #[staticmethod]
-    fn pam(distance: u16) -> PyResult<Self> {
-        Self::load(MatrixProfile::Pam(distance))
-    }
-
-    /// The identity matrix: a match scores 1 and a mismatch 0.
-    #[staticmethod]
-    fn identity() -> PyResult<Self> {
-        Self::load(MatrixProfile::Identity)
-    }
-
-    /// The NCBI `NUC.4.4` nucleotide matrix.
-    #[staticmethod]
-    fn nuc44() -> PyResult<Self> {
-        Self::load(MatrixProfile::Nuc44)
+    #[pyo3(signature = (name=None))]
+    fn load(name: Option<String>) -> PyResult<Self> {
+        let request = name.map_or_else(TableRequest::profile, TableRequest::named);
+        seq::load_matrix(&request, &TableStore::global())
+            .map(|inner| Self { inner })
+            .map_err(crate::error::kernel)
     }
 
     /// The score of aligning residue `first` with residue `second`.
@@ -68,22 +41,22 @@ impl PySubstitutionMatrix {
         }
     }
 
-    /// The matrix's name, for example `BLOSUM62`.
+    /// The matrix's name, for example `blosum62`.
     #[getter]
     fn name(&self) -> String {
-        self.inner.identity().name().to_owned()
+        self.inner.identity().name.to_string()
     }
 
     /// The version of the published table.
     #[getter]
     fn version(&self) -> String {
-        self.inner.identity().version().to_owned()
+        self.inner.identity().version.to_string()
     }
 
     /// Where the table was retrieved from.
     #[getter]
     fn source(&self) -> String {
-        self.inner.identity().source().to_owned()
+        self.inner.identity().source.to_string()
     }
 
     fn __repr__(&self) -> String {

@@ -158,17 +158,21 @@ pub(super) fn geometry_rows(
         );
         return Err(Exit::Usage);
     };
-    let mut rows: Vec<Row> =
-        molframe::validation::bond_length_deviations(structure.engine(), bond_tolerance)
-            .into_iter()
-            .map(|flag| {
-                Row::new(
-                    "bond-length",
-                    format!("{}-{}", flag.atom_a, flag.atom_b),
-                    flag.deviation.to_string(),
-                )
-            })
-            .collect();
+    let covalent = crate::tables::covalent_radii()?;
+    let mut rows: Vec<Row> = molframe::validation::bond_length_deviations(
+        structure.engine(),
+        &covalent.table,
+        bond_tolerance,
+    )
+    .into_iter()
+    .map(|flag| {
+        Row::new(
+            "bond-length",
+            format!("{}-{}", flag.atom_a, flag.atom_b),
+            flag.deviation.to_string(),
+        )
+    })
+    .collect();
     let planarity = molframe::validation::nonplanar_aromatic_rings(
         structure.engine(),
         molframe::validation::PlanarityOptions {
@@ -198,22 +202,20 @@ pub(super) fn clash_rows(
     options: ValidationOptions<'_>,
     execution: &molframe_core::ExecutionContext,
 ) -> Result<Vec<Row>, Exit> {
-    let (Some(tolerance), Some(radii)) = (
-        options.clash_tolerance,
-        options
-            .radii
-            .map(Into::<molframe::chemistry::RadiusSet>::into),
-    ) else {
-        eprintln!("clash validation requires --clash-tolerance and --radii");
+    let Some(tolerance) = options.clash_tolerance else {
+        eprintln!("clash validation requires --clash-tolerance");
         return Err(Exit::Usage);
     };
-    match molframe::validation::clashes(
-        structure.engine(),
+    let clash_options = molframe::validation::ClashOptions::resolve(
         tolerance,
-        radii,
+        &molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(
+            options.radii.as_deref(),
+        ),
         SpatialBackend::Auto,
-        execution,
-    ) {
+        &molframe::chemistry::TableStore::global(),
+    )
+    .map_err(crate::tables::refuse)?;
+    match molframe::validation::clashes_with(structure.engine(), &clash_options, execution) {
         Ok(flags) => Ok(flags
             .iter()
             .map(|flag| {

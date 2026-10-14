@@ -1,5 +1,5 @@
-use super::{ClashOptions, clashes, clashes_with};
-use molframe_chem::{MetalFallback, RadiusSet};
+use super::{ClashOptions, clashes_with};
+use molframe_chem::{MetalFallback, TableRequest, VdwRadii};
 use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::index::AtomIndex;
 use molframe_core::io::{InputBuffer, ReadOptions};
@@ -30,11 +30,9 @@ fn two_carbons_deep_inside_each_other_clash() {
 ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 2 2 0 0\n"
     );
-    let Ok(found) = clashes(
+    let Ok(found) = clashes_with(
         &structure(&source),
-        0.4,
-        RadiusSet::Bondi,
-        SpatialBackend::BruteForce,
+        &options(0.4, SpatialBackend::BruteForce),
         &ExecutionContext::default(),
     ) else {
         panic!("valid");
@@ -53,11 +51,9 @@ fn atoms_that_barely_touch_do_not_clash() {
 ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 2 3.2 0 0\n"
     );
-    let Ok(found) = clashes(
+    let Ok(found) = clashes_with(
         &structure(&source),
-        0.4,
-        RadiusSet::Bondi,
-        SpatialBackend::BruteForce,
+        &options(0.4, SpatialBackend::BruteForce),
         &ExecutionContext::default(),
     ) else {
         panic!("valid");
@@ -66,7 +62,7 @@ ATOM 2 C C2 LIG A 2 3.2 0 0\n"
 }
 
 #[test]
-fn every_backend_agrees_on_the_clashes() {
+fn every_backend_agrees_on_the_clashes_with() {
     let source = format!(
         "{HEADER}\
 ATOM 1 C C1 LIG A 1 0 0 0\n\
@@ -74,21 +70,17 @@ ATOM 2 C C2 LIG A 2 2 0 0\n\
 ATOM 3 C C3 LIG A 3 2 2 0\n"
     );
     let structure = structure(&source);
-    let Ok(baseline) = clashes(
+    let Ok(baseline) = clashes_with(
         &structure,
-        0.4,
-        RadiusSet::Bondi,
-        SpatialBackend::BruteForce,
+        &options(0.4, SpatialBackend::BruteForce),
         &ExecutionContext::default(),
     ) else {
         panic!("valid");
     };
     for backend in [SpatialBackend::CellList, SpatialBackend::KdTree] {
-        let Ok(other) = clashes(
+        let Ok(other) = clashes_with(
             &structure,
-            0.4,
-            RadiusSet::Bondi,
-            backend,
+            &options(0.4, backend),
             &ExecutionContext::default(),
         ) else {
             panic!("valid");
@@ -121,11 +113,9 @@ fn the_clash_list_is_identical_at_every_worker_count() {
     }
     let structure = structure(&source);
 
-    let serial = clashes(
+    let serial = clashes_with(
         &structure,
-        0.1,
-        RadiusSet::Bondi,
-        SpatialBackend::CellList,
+        &options(0.1, SpatialBackend::CellList),
         &ExecutionContext::default(),
     )
     .expect("serial clash search");
@@ -136,11 +126,9 @@ fn the_clash_list_is_identical_at_every_worker_count() {
             .worker_budget(workers)
             .build()
             .expect("worker context is valid");
-        let parallel = clashes(
+        let parallel = clashes_with(
             &structure,
-            0.1,
-            RadiusSet::Bondi,
-            SpatialBackend::CellList,
+            &options(0.1, SpatialBackend::CellList),
             &context,
         )
         .expect("parallel clash search");
@@ -167,7 +155,7 @@ fn bonded(source: &str, pairs: &[(u32, u32)]) -> Structure {
     Structure::new(data)
 }
 
-fn pairs(structure: &Structure, options: ClashOptions) -> Vec<(u32, u32)> {
+fn pairs(structure: &Structure, options: &ClashOptions) -> Vec<(u32, u32)> {
     let Ok(found) = clashes_with(structure, options, &ExecutionContext::default()) else {
         panic!("valid");
     };
@@ -177,8 +165,20 @@ fn pairs(structure: &Structure, options: ClashOptions) -> Vec<(u32, u32)> {
         .collect()
 }
 
+fn options(tolerance: f32, backend: SpatialBackend) -> ClashOptions {
+    match ClashOptions::resolve(
+        tolerance,
+        &TableRequest::<VdwRadii>::profile(),
+        backend,
+        molframe_bench::table_store(),
+    ) {
+        Ok(options) => options,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    }
+}
+
 fn defaults() -> ClashOptions {
-    ClashOptions::new(0.4, RadiusSet::Bondi, SpatialBackend::BruteForce)
+    options(0.4, SpatialBackend::BruteForce)
 }
 
 #[test]
@@ -191,7 +191,7 @@ ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 1 1.54 0 0\n\
 ATOM 3 C C3 LIG A 1 2.0539 1.4516 0\n"
     );
-    assert!(pairs(&bonded(&source, &[(0, 1), (1, 2)]), defaults()).is_empty());
+    assert!(pairs(&bonded(&source, &[(0, 1), (1, 2)]), &defaults()).is_empty());
 }
 
 #[test]
@@ -206,12 +206,12 @@ ATOM 4 C C4 LIG A 1 0.857 2.421 0\n"
     // A planar cis chain: bond lengths 1.54 Å and angles 109.5°, so the 1-4
     // distance is 2.57 Å, too long to be perceived as a bond yet overlapping.
     let structure = bonded(&source, &[(0, 1), (1, 2), (2, 3)]);
-    assert!(pairs(&structure, defaults()).is_empty());
+    assert!(pairs(&structure, &defaults()).is_empty());
     let reported = ClashOptions {
         exclude_one_four: false,
         ..defaults()
     };
-    assert_eq!(pairs(&structure, reported), vec![(0, 3)]);
+    assert_eq!(pairs(&structure, &reported), vec![(0, 3)]);
 }
 
 /// Heavy atoms of residues 1-4 of 1UBQ (Met-Gln-Ile-Phe) exactly as deposited,
@@ -262,7 +262,7 @@ fn a_crystal_peptide_without_a_bond_table_has_no_clashes() {
     // peptide links between them and the ring carbons of the phenylalanine all
     // sit well inside their summed van der Waals radii.
     let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
-    assert!(pairs(&structure, defaults()).is_empty());
+    assert!(pairs(&structure, &defaults()).is_empty());
 }
 
 #[test]
@@ -272,7 +272,7 @@ fn without_perceived_bonds_the_same_peptide_is_flooded_with_covalent_pairs() {
         perceive_bonds: false,
         ..defaults()
     };
-    let found = pairs(&structure, raw);
+    let found = pairs(&structure, &raw);
     // 1-2 pairs such as N-CA (1.46 Å) and the peptide C-N link are in the list.
     assert!(found.contains(&(0, 1)), "{found:?}");
     assert!(found.contains(&(2, 8)), "{found:?}");
@@ -288,9 +288,9 @@ fn a_phenylalanine_ring_needs_the_one_four_exclusion() {
         exclude_one_four: false,
         ..defaults()
     };
-    let found = pairs(&structure, keeps_one_four);
+    let found = pairs(&structure, &keeps_one_four);
     assert!(found.contains(&(31, 34)), "{found:?}");
-    assert!(pairs(&structure, defaults()).is_empty());
+    assert!(pairs(&structure, &defaults()).is_empty());
 }
 
 #[test]
@@ -299,7 +299,7 @@ fn a_real_overlap_between_non_neighbours_is_still_reported() {
     // 3.22 Å C...O contact distance, with nothing bonded to it.
     let intruder = "ATOM 37 O O HOH B 5 25.112 24.880 5.649\n";
     let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}{intruder}"));
-    let found = pairs(&structure, defaults());
+    let found = pairs(&structure, &defaults());
     assert!(found.contains(&(4, 36)), "{found:?}");
     assert!(
         found
@@ -318,7 +318,7 @@ fn a_close_contact_between_unbonded_residues_is_not_mistaken_for_a_bond() {
 ATOM 1 C CA ALA A 1 0 0 0\n\
 ATOM 2 C CA ALA A 2 1.6 0 0\n"
     );
-    assert_eq!(pairs(&structure(&source), defaults()), vec![(0, 1)]);
+    assert_eq!(pairs(&structure(&source), &defaults()), vec![(0, 1)]);
 }
 
 #[test]
@@ -331,7 +331,7 @@ _atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
     let run = |a: &str, b: &str| {
         let source =
             format!("{header}ATOM 1 C C1 LIG A 1 {a} 0 0 0\nATOM 2 C C2 LIG A 2 {b} 2 0 0\n");
-        pairs(&structure(&source), defaults())
+        pairs(&structure(&source), &defaults())
     };
     assert!(run("A", "B").is_empty());
     assert_eq!(run("A", "A"), vec![(0, 1)]);
@@ -350,13 +350,14 @@ ATOM 1 S SG CYS A 1 0 0 0\n\
 HETATM 2 ZN ZN ZN B 1 {distance} 0 0\n"
         ))
     };
-    let with = |metals| ClashOptions {
-        metals,
-        ..defaults()
+    let with = |metals| {
+        let mut options = defaults();
+        options.radii.metals = metals;
+        options
     };
     let contact = at(2.33);
-    assert!(pairs(&contact, defaults()).is_empty());
-    assert_eq!(pairs(&contact, with(MetalFallback::Vdw)), vec![(0, 1)]);
-    assert!(pairs(&contact, with(MetalFallback::None)).is_empty());
-    assert_eq!(pairs(&at(1.5), defaults()), vec![(0, 1)]);
+    assert!(pairs(&contact, &defaults()).is_empty());
+    assert_eq!(pairs(&contact, &with(MetalFallback::Vdw)), vec![(0, 1)]);
+    assert!(pairs(&contact, &with(MetalFallback::None)).is_empty());
+    assert_eq!(pairs(&at(1.5), &defaults()), vec![(0, 1)]);
 }

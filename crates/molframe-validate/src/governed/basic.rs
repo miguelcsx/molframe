@@ -12,11 +12,12 @@ use crate::{
     overvalent_atoms, quality_flags,
 };
 use molframe_analysis::{AnalysisDescriptor, FrameKernelResult, StructureKernel, structure_kernel};
-use molframe_chem::RadiusSet;
+use molframe_chem::{CovalentRadii, Provided};
 use molframe_core::contract::{AnalysisPolicy, Coverage, ParameterValue, Quality};
 use molframe_core::{Diagnostic, ExecutionContext, Structure};
-use molframe_spatial::{SpatialBackend, SpatialError};
+use molframe_spatial::SpatialError;
 use std::convert::Infallible;
+use std::sync::Arc;
 
 fn descriptor(name: &'static str) -> AnalysisDescriptor {
     AnalysisDescriptor::new(name, "1")
@@ -73,16 +74,6 @@ impl From<Diagnostic> for CcdCompletenessKernelError {
     }
 }
 
-/// Governed steric-clash validation under the default exclusion policy.
-#[must_use]
-pub fn clashes_kernel(
-    tolerance: f32,
-    radii: RadiusSet,
-    spatial: SpatialBackend,
-) -> impl StructureKernel<Output = ClashTable, Error = SpatialError> {
-    clashes_with_kernel(ClashOptions::new(tolerance, radii, spatial))
-}
-
 /// Governed steric-clash validation with an explicit exclusion policy.
 #[must_use]
 pub fn clashes_with_kernel(
@@ -92,8 +83,8 @@ pub fn clashes_with_kernel(
         descriptor("steric-clashes")
             .with_parameter("tolerance", float(options.tolerance))
             .with_parameter(
-                "radius_set",
-                ParameterValue::Text(format!("{:?}", options.radius_set).into()),
+                "radii_table",
+                ParameterValue::Text(options.radii.source.identity().to_string().into()),
             )
             .with_parameter(
                 "spatial_backend",
@@ -108,7 +99,7 @@ pub fn clashes_with_kernel(
                 ParameterValue::Text(options.perceive_bonds.to_string().into()),
             ),
         move |structure: &Structure, _policy: &AnalysisPolicy, context: &ExecutionContext| {
-            clashes_with(structure, options, context).map(|value| complete(structure, value))
+            clashes_with(structure, &options, context).map(|value| complete(structure, value))
         },
     )
 }
@@ -116,14 +107,20 @@ pub fn clashes_with_kernel(
 /// Governed bond-length validation.
 #[must_use]
 pub fn bond_length_deviations_kernel(
+    radii: Arc<Provided<CovalentRadii>>,
     tolerance: f32,
 ) -> impl StructureKernel<Output = Vec<BondDeviation>, Error = Infallible> {
     structure_kernel(
-        descriptor("bond-length-deviations").with_parameter("tolerance", float(tolerance)),
+        descriptor("bond-length-deviations")
+            .with_parameter("tolerance", float(tolerance))
+            .with_parameter(
+                "covalent_radii",
+                ParameterValue::Text(radii.identity.to_string().into()),
+            ),
         move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
             Ok(complete(
                 structure,
-                bond_length_deviations(structure, tolerance),
+                bond_length_deviations(structure, &radii.table, tolerance),
             ))
         },
     )
@@ -132,12 +129,18 @@ pub fn bond_length_deviations_kernel(
 /// Governed hetero-component bond-geometry validation.
 #[must_use]
 pub fn ligand_geometry_kernel(
+    radii: Arc<Provided<CovalentRadii>>,
     tolerance: f32,
 ) -> impl StructureKernel<Output = LigandGeometryReport, Error = LigandGeometryKernelError> {
     structure_kernel(
-        descriptor("ligand-geometry").with_parameter("tolerance", float(tolerance)),
+        descriptor("ligand-geometry")
+            .with_parameter("tolerance", float(tolerance))
+            .with_parameter(
+                "covalent_radii",
+                ParameterValue::Text(radii.identity.to_string().into()),
+            ),
         move |structure: &Structure, _policy: &AnalysisPolicy, _context: &ExecutionContext| {
-            let value = ligand_geometry(structure, tolerance);
+            let value = ligand_geometry(structure, &radii.table, tolerance);
             let intended = u32::try_from(value.intended)
                 .map_err(|_| LigandGeometryKernelError::CoverageOverflow)?;
             let used = u32::try_from(value.assessed)

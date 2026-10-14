@@ -169,9 +169,13 @@ pub(super) fn clashscore_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
     if let Some(tolerance) = subject.options.clash_tolerance {
         options.tolerance = tolerance;
     }
+    options.radii = molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(
+        subject.options.radii.as_deref(),
+    );
     let score = clash_score(
         subject.structure.engine(),
-        options,
+        &options,
+        &molframe::chemistry::TableStore::global(),
         subject.context.execution,
     )
     .map_err(|error| failure("clashscore", &error))?;
@@ -194,8 +198,8 @@ pub(super) fn clashscore_rows(subject: &Subject<'_>) -> Result<Vec<Row>, Exit> {
             "clashscore",
             "policy",
             format!(
-                "hydrogen_aware={} tolerance={} radii={:?} polar_margin={}",
-                score.hydrogen_aware, applied.tolerance, applied.radius_set, applied.polar_margin
+                "hydrogen_aware={} tolerance={} radii={} polar_margin={}",
+                score.hydrogen_aware, applied.tolerance, score.radii, applied.polar_margin
             ),
         ),
     ])

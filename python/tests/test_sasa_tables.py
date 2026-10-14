@@ -1,5 +1,6 @@
 """A caller-supplied radius table: parsed in Rust, applied, and reported on the result."""
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -8,35 +9,44 @@ import pytest
 import molframe
 from molframe import analysis
 
-BENCH = Path(__file__).resolve().parents[2] / "crates" / "molframe-bench" / "data"
-BASE_ONLY = "name: lab\nversion: 3\nsource: bench notes\nlicence: CC0\nbase: bondi\n"
+ROOT = Path(__file__).resolve().parents[2]
+BENCH = ROOT / "crates" / "molframe-bench" / "data"
+BONDI = (ROOT / "data" / "bondi.radii").read_text()
 
 
-def test_a_base_only_table_reproduces_the_default_and_names_itself(tmp_path: Path):
+def _lab(tmp_path: Path, carbon: str | None = None) -> Path:
+    text = (
+        BONDI.replace("name: bondi", "name: lab")
+        .replace("version: 1964", "version: 3")
+        .replace("licence: MIT", "licence: CC0")
+    )
+    path = tmp_path / "lab.radii"
+    if carbon is not None:
+        text = re.sub(r"(?m)^C .*$", f"C {carbon}", text)
+    path.write_text(text)
+    return path
+
+
+def test_a_copy_of_the_default_reproduces_it_and_names_itself(tmp_path: Path):
     crambin = molframe.read(BENCH / "1crn.cif")
     default = analysis.sasa(crambin)
-    path = tmp_path / "radii.txt"
-    path.write_text(BASE_ONLY)
-    for supplied in (
-        analysis.sasa(crambin, radii_table=BASE_ONLY),
-        analysis.sasa(crambin, radii_file=path),
-    ):
-        assert np.array_equal(supplied.value, default.value, equal_nan=True)
-        assert any(
-            "lab 3 (source: bench notes; licence: CC0)" in note for note in supplied.assumptions
-        )
+    supplied = analysis.sasa(crambin, radii=str(_lab(tmp_path)))
+    assert np.array_equal(supplied.value, default.value, equal_nan=True)
+    assert any("lab 3" in note for note in supplied.assumptions)
     assert any("bondi" in note for note in default.assumptions)
 
 
-def test_a_table_value_changes_the_area():
+def test_a_table_value_changes_the_area(tmp_path: Path):
     crambin = molframe.read(BENCH / "1crn.cif")
-    wider = analysis.sasa(crambin, radii_table=BASE_ONLY + "C 2.5\n")
+    wider = analysis.sasa(crambin, radii=str(_lab(tmp_path, "2.5")))
     assert not np.array_equal(wider.value, analysis.sasa(crambin).value, equal_nan=True)
 
 
-def test_a_malformed_table_or_both_arguments_are_refused():
+def test_a_malformed_or_absent_table_is_refused_with_its_code(tmp_path: Path):
     crambin = molframe.read(BENCH / "1crn.cif")
-    with pytest.raises(molframe.MolframeValueError, match="line"):
-        analysis.sasa(crambin, radii_table="name: lab\nC -1\n")
-    with pytest.raises(molframe.MolframeValueError, match="not both"):
-        analysis.sasa(crambin, radii_table=BASE_ONLY, radii_file="x.txt")
+    bad = tmp_path / "bad.radii"
+    bad.write_text("format: 1\nname: lab\nversion: 1\nsource: s\nlicence: CC0\nC -1\n")
+    with pytest.raises(molframe.MolframeError, match="E2201"):
+        analysis.sasa(crambin, radii=str(bad))
+    with pytest.raises(molframe.MolframeError, match="E7102"):
+        analysis.sasa(crambin, radii="no-such-table")

@@ -1,9 +1,17 @@
 use super::{ResidueSasaError, residue_areas};
 use molframe_chem::HeteroPolicy;
+use molframe_chem::TableRequest;
 use molframe_core::ExecutionContext;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_surface::SasaOptions;
+
+fn bondi() -> SasaOptions {
+    match SasaOptions::resolve(&TableRequest::named("bondi"), molframe_bench::table_store()) {
+        Ok(options) => options,
+        Err(error) => panic!("bondi radii: {error}"),
+    }
+}
 use std::fmt::Write;
 
 const HEADER: &str = "data_s\n\
@@ -29,11 +37,7 @@ fn structure(rows: &[(&str, &str, &str, &str, u32, f32)]) -> Structure {
 }
 
 fn areas(structure: &Structure) -> Result<super::ResidueAreas, ResidueSasaError> {
-    residue_areas(
-        structure,
-        &SasaOptions::default(),
-        &ExecutionContext::default(),
-    )
+    residue_areas(structure, &bondi(), &ExecutionContext::default())
 }
 
 #[test]
@@ -78,7 +82,7 @@ fn a_ligand_the_options_include_shields_its_neighbour() {
     ];
     let options = SasaOptions {
         hetero: HeteroPolicy::SOLUTE,
-        ..SasaOptions::default()
+        ..bondi()
     };
     let context = ExecutionContext::default();
     let with = residue_areas(&structure(&rows), &options, &context).unwrap();

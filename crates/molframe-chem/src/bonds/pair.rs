@@ -2,7 +2,7 @@
 //!
 //! Every test here is constant time and works on squared distances, so the
 //! grid search stays free of square roots; the thresholds are reference data
-//! for which elements may bond inferentially at all.
+//! whose per-element reach is a [`crate::BondReach`] table.
 
 use molframe_core::structure::AtomRef;
 
@@ -49,37 +49,4 @@ pub(super) fn within(left: AtomRef<'_>, right: AtomRef<'_>, maximum: f32) -> boo
 
 pub(super) fn squared_distance(left: [f32; 3], right: [f32; 3]) -> f32 {
     left.iter().zip(right).map(|(a, b)| (a - b) * (a - b)).sum()
-}
-
-/// The bonding reach of one element, in ångström, or `None` when this reader
-/// has no reference value for it.
-///
-/// An element with no entry takes part in no inferred bond at all: perception
-/// leaves it to deposited connectivity rather than guessing a radius. Selenium
-/// is the case that matters in practice — selenomethionine's `SE` is a real
-/// covalent substituent — but the same list governs every other element, and
-/// widening it is a data decision, not a code one.
-pub(super) fn element_threshold(element: molframe_core::Element) -> Option<f32> {
-    match element.symbol() {
-        "H" => Some(1.42),
-        "C" => Some(1.75),
-        "N" => Some(1.60),
-        "O" => Some(1.52),
-        "P" => Some(2.00),
-        "S" => Some(1.90),
-        "F" | "Cl" | "Br" | "I" => Some(1.80),
-        symbol if is_metal(symbol) => metal_threshold(symbol),
-        _ => None,
-    }
-}
-
-/// The coordination reach of one metal, in ångström, on the same scale as the
-/// non-metal thresholds; the table lives with the other metal radii so bonding,
-/// surface and clash code read one convention.
-fn metal_threshold(symbol: &str) -> Option<f32> {
-    crate::metal::metal_site(symbol).map(|site| site.reach)
-}
-
-pub(super) fn is_metal(symbol: &str) -> bool {
-    crate::metal::is_metal(symbol)
 }

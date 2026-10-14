@@ -91,15 +91,6 @@ fn failed(error: &DataError) -> Exit {
     }
 }
 
-fn state(status: &Status) -> String {
-    match status {
-        Status::Missing => "missing".to_owned(),
-        Status::Current => "current".to_owned(),
-        Status::Stale(why) => format!("stale: {why}"),
-        Status::Invalid(why) => format!("invalid: {why}"),
-    }
-}
-
 fn show(rows: &[Verified], context: Context) {
     if context.is_json() {
         let objects: Vec<String> = rows
@@ -111,7 +102,7 @@ fn show(rows: &[Verified], context: Context) {
                     .text("version", &row.entry.version)
                     .text("licence", &row.entry.licence)
                     .text("path", &row.path.display().to_string())
-                    .text("status", &state(&row.status));
+                    .text("status", &row.status.to_string());
                 object.finish()
             })
             .collect();
@@ -120,10 +111,7 @@ fn show(rows: &[Verified], context: Context) {
         for row in rows {
             context.result(&format!(
                 "{}\t{}\t{}\t{}",
-                row.entry.name,
-                row.entry.version,
-                row.entry.licence,
-                state(&row.status)
+                row.entry.name, row.entry.version, row.entry.licence, row.status
             ));
         }
     }

@@ -5,12 +5,14 @@
 mod annotate;
 mod aromaticity;
 pub mod base_pair;
+mod bond_reach;
 mod bonds;
 mod carbohydrates;
 mod coverage;
 mod diagnostics;
 mod element;
 mod element_data;
+mod element_radii;
 mod equivalence;
 mod grid;
 mod ionic;
@@ -23,12 +25,10 @@ mod molecule_structure;
 mod numeric;
 mod peoe;
 mod provider;
-mod radii_defaults;
 mod radius_policy;
 mod radius_policy_text;
 mod radius_report;
 mod radius_source;
-mod radius_table;
 mod roles;
 mod secondary;
 mod side_chain;
@@ -41,32 +41,34 @@ mod standard_roles;
 mod table_identity;
 mod table_provider;
 mod table_request;
+mod table_row;
 mod table_store;
 mod table_text;
+#[cfg(test)]
+mod test_data;
 
 pub use annotate::{
     ChemistryProvenance, ChemistryReport, FormalChargeSource, HBOND_WEAK_ACCEPTOR_ANNOTATION,
     PolymerLinkPolicy, PolymerLinkRule, apply_component_chemistry,
 };
+pub use bond_reach::BondReach;
 pub use bonds::{covalent_pair, perceive_bonds, perceive_bonds_in};
 pub use carbohydrates::{
     CarbohydrateLink, CarbohydrateOptions, CarbohydrateReport, Monosaccharide, RingGeometry,
     SnfgShape, SnfgSymbol, carbohydrates, snfg_symbol,
 };
 pub use coverage::{ComponentCoverage, component_coverage};
-pub use element::{
-    ElementProperties, RadiusSet, RadiusTable, atom_masses, atom_radii, element_properties,
-    vdw_radius,
-};
+pub use element::{ElementProperties, atom_masses, atom_radii, element_properties};
+pub use element_radii::{Covalent, CovalentRadii, ElementRadii, RadiusRole, Vdw, VdwRadii};
 pub use equivalence::{
     AutomorphismLimit, EquivalenceCache, EquivalenceClasses, automorphisms, equivalence_classes,
 };
-pub use ionic::{IonicRadius, IonicSpin, ionic_radii};
+pub use ionic::{IonicRadii, IonicRadius, IonicSpin};
 pub use library::{
     FINGERPRINT_BITS, Fingerprint, LigandDescriptors, RuleOfFive, cluster, describe, fingerprint,
     tanimoto,
 };
-pub use metal::{METAL_SITES, MetalRadiusKind, MetalSite, metal_radius, metal_site};
+pub use metal::{MetalRadiusKind, MetalSite, MetalSites, MetalTables};
 pub use model::{
     BondStereo, Component, ComponentAtom, ComponentBond, ComponentKind, PolymerAtomRole,
     StereoConfiguration,
@@ -92,19 +94,13 @@ pub use provider::{
     EmbeddedProvider, LayeredProvider, LazyCifProvider, MemoryProvider, embedded_components,
     profile_dictionary, read_ccd, resolution_stack, take_embedded_components,
 };
-pub use radii_defaults::{
-    ALVAREZ as ALVAREZ_RADII, AMBER_UNITED as AMBER_UNITED_RADII, BONDI as BONDI_RADII,
-    CHARMM as CHARMM_RADII, METAL_SITE_TABLE, PYYKKO_COVALENT as PYYKKO_COVALENT_RADII,
-    SHANNON_IONIC as SHANNON_IONIC_RADII,
-};
 pub use radius_policy::{
     HeteroPolicy, MetalFallback, RadiusPolicy, ResidueClass, classify_residue, included_atoms,
-    policy_radii, radius_with_fallback, source_radius_with_fallback,
+    policy_radii,
 };
 pub use radius_policy_text::PolicyWordError;
 pub use radius_report::AppliedRadiusPolicy;
 pub use radius_source::RadiusSource;
-pub use radius_table::{CustomRadii, RadiusTableError};
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };
@@ -126,6 +122,7 @@ pub use table_provider::{
     Cache, InMemory, Provided, Source, TableError, TableKind, TableProvider, UserFile,
 };
 pub use table_request::TableRequest;
+pub use table_row::Row;
 pub use table_store::{Selected, TableStore};
 pub use table_text::{
     IdentityOnly, TABLE_FORMAT_VERSION, TableLines, TableTextError, join_binary, read_table,

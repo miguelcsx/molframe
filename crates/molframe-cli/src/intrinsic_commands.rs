@@ -3,7 +3,6 @@
 use crate::commands::open;
 use crate::exit::Exit;
 use crate::report::{Context, Json};
-use molframe::chemistry::{RadiusSet, vdw_radius};
 use molframe::geometry::PeriodicAngle;
 use molframe::surface::{edge_geodesic_distances, surface_curvatures, surface_patch};
 use molframe::trajectory::{
@@ -109,7 +108,7 @@ pub(super) struct SurfaceOptions<'a> {
     pub(super) probe: f32,
     pub(super) resolution: f32,
     pub(super) max_cells: usize,
-    pub(super) radii: RadiusSet,
+    pub(super) radii: Option<&'a str>,
     pub(super) source_vertex: Option<u32>,
     pub(super) patch_radius: Option<f64>,
     pub(super) output: Option<&'a Path>,
@@ -128,6 +127,10 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
         Ok(value) => value,
         Err(exit) => return exit,
     };
+    let source = match crate::tables::radius_source(options.radii) {
+        Ok(source) => source,
+        Err(exit) => return exit,
+    };
     let mut positions = Vec::new();
     let mut radii = Vec::new();
     for index in 0..structure.atom_count() {
@@ -137,7 +140,7 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
         let (Some(position), Some(element)) = (atom.position(), atom.element()) else {
             continue;
         };
-        let Some(radius) = vdw_radius(element, options.radii) else {
+        let Some(radius) = source.radius(element) else {
             eprintln!("selected radius set has no value for atom {index}");
             return Exit::Indeterminate;
         };
@@ -178,7 +181,7 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
         ("faces", mesh.faces.len().to_string()),
         ("components", mesh.report.components.to_string()),
         ("curvature_values", curvature.len().to_string()),
-        ("radii_set", radius_set_name(options.radii).to_owned()),
+        ("radii_set", source.identity().to_string()),
         ("probe", options.probe.to_string()),
         ("resolution", options.resolution.to_string()),
     ];
@@ -322,15 +325,6 @@ pub(super) fn torsion_pca(
         &result.eigenvalues,
     );
     Exit::Success
-}
-
-const fn radius_set_name(radius_set: RadiusSet) -> &'static str {
-    match radius_set {
-        RadiusSet::Bondi => "bondi",
-        RadiusSet::AmberUnited => "amber-united",
-        RadiusSet::Charmm => "charmm",
-        RadiusSet::Alvarez => "alvarez",
-    }
 }
 
 pub(super) fn diffusion(

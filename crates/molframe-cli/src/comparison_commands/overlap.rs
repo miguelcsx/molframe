@@ -110,7 +110,7 @@ const fn count(value: usize) -> f64 {
 /// Per-atom radii and residue identifiers, which the contact-area surface needs.
 fn surface_inputs(
     structure: &molframe::Structure,
-    radii: molframe::chemistry::RadiusSet,
+    radii: &molframe::chemistry::RadiusSource,
 ) -> Result<(Vec<f32>, Vec<u32>), Exit> {
     let mut radius = Vec::new();
     let mut residue = Vec::new();
@@ -119,7 +119,7 @@ fn surface_inputs(
             eprintln!("cad needs an element and a residue for every atom");
             return Err(Exit::Consistency);
         };
-        let Some(value) = molframe::chemistry::vdw_radius(element, radii) else {
+        let Some(value) = radii.radius(element) else {
             eprintln!("cad: the radius set has no radius for {}", element.symbol());
             return Err(Exit::Consistency);
         };
@@ -136,13 +136,12 @@ pub(super) fn cad(
     context: Context,
 ) -> Rows {
     let extra = options.extra;
-    let (Some(probe), Some(density), Some(radii)) =
-        (extra.cad_probe, extra.cad_density, extra.radii)
-    else {
-        return Err(missing("cad", "--cad-probe, --cad-density and --radii"));
+    let (Some(probe), Some(density)) = (extra.cad_probe, extra.cad_density) else {
+        return Err(missing("cad", "--cad-probe and --cad-density"));
     };
+    let radii = crate::tables::radius_source(extra.radii.as_deref())?;
     let areas = |structure: &molframe::Structure| {
-        let (radius, residue) = surface_inputs(structure, radii.into())?;
+        let (radius, residue) = surface_inputs(structure, &radii)?;
         molframe::compare::cad_contact_areas(
             structure.coordinates(),
             &radius,

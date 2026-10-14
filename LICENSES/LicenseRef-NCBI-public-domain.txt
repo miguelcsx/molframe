@@ -1,0 +1,6 @@
+NCBI BLAST substitution matrices
+
+The matrices distributed by the National Center for Biotechnology Information
+(https://ftp.ncbi.nih.gov/blast/matrices/) are works of a United States
+government agency and are in the public domain. The BLOSUM matrices originate
+from Henikoff and Henikoff, Proc. Natl. Acad. Sci. USA 89:10915 (1992).

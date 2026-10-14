@@ -1,6 +1,5 @@
 //! Arguments for grouped structure, ensemble, trajectory and system workflows.
 
-use crate::RadiusChoice;
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
 
@@ -71,8 +70,10 @@ pub(crate) enum TrajectoryCommand {
         probe: f32,
         #[arg(long)]
         samples: u16,
-        #[arg(long, value_enum)]
-        radii: RadiusChoice,
+        /// A radius table: a cache entry name or a file path. Unset, the profile's
+        /// `vdw-radii` line.
+        #[arg(long, value_name = "NAME|PATH")]
+        radii: Option<String>,
     },
     /// Per-atom root-mean-square fluctuation about the mean position.
     ///
@@ -155,8 +156,10 @@ pub(crate) struct SurfaceArguments {
     /// Hard bound on allocated surface-grid cells.
     #[arg(long)]
     pub(crate) max_cells: usize,
-    #[arg(long, value_enum)]
-    pub(crate) radii: RadiusChoice,
+    /// A radius table: a cache entry name or a file path. Unset, the profile's
+    /// `vdw-radii` line.
+    #[arg(long, value_name = "NAME|PATH")]
+    pub(crate) radii: Option<String>,
     #[arg(long)]
     pub(crate) source_vertex: Option<u32>,
     #[arg(long)]

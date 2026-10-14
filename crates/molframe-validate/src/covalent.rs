@@ -7,8 +7,11 @@
 //! covalent radii, which makes it a coarse sanity check on gross errors rather
 //! than a per-bond-type restraint comparison.
 
+use molframe_chem::CovalentRadii;
 use molframe_core::element::Element;
+use molframe_core::index::AtomIndex;
 
+use crate::covalent_length::BondDeviation;
 use crate::numeric::f64_to_f32;
 
 /// A measured bond length set against the sum of the two covalent radii.
@@ -22,20 +25,40 @@ pub(crate) struct CovalentMeasurement {
     pub delta: f32,
 }
 
+impl CovalentMeasurement {
+    /// The finding for the bond between `atom_a` and `atom_b` this measures.
+    pub(crate) const fn into_deviation(
+        self,
+        atom_a: AtomIndex,
+        atom_b: AtomIndex,
+    ) -> BondDeviation {
+        BondDeviation {
+            atom_a,
+            atom_b,
+            observed: self.observed,
+            expected: self.expected,
+            deviation: self.delta,
+        }
+    }
+}
+
 /// The covalent-radius deviation of a bond, when both radii are known.
 ///
 /// Returns `None` when either element has no tabulated covalent radius, so a
 /// caller skips the pair rather than comparing against a guessed length.
 ///
+/// `radii` is the covalent-radius table in force.
+///
 /// Runs in `O(1)` time and allocates no memory.
 pub(crate) fn covalent_deviation(
+    radii: &CovalentRadii,
     position_a: [f32; 3],
     element_a: Element,
     position_b: [f32; 3],
     element_b: Element,
 ) -> Option<CovalentMeasurement> {
-    let radius_a = molframe_chem::element_properties(element_a)?.covalent_radius?;
-    let radius_b = molframe_chem::element_properties(element_b)?.covalent_radius?;
+    let radius_a = radii.radius(element_a)?;
+    let radius_b = radii.radius(element_b)?;
     let observed = f64_to_f32(molframe_geom::distance(position_a, position_b));
     let expected = radius_a + radius_b;
     Some(CovalentMeasurement {

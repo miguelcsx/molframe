@@ -1,37 +1,48 @@
-use super::{IonicSpin, ionic_radii};
-use crate::element_properties;
-use molframe_core::Element;
+use super::*;
 
-#[test]
-fn all_118_elements_have_complete_identity_and_periodic_properties() {
-    for atomic_number in 1..=118 {
-        let element = Element::from_atomic_number(atomic_number);
-        let Some(properties) = element_properties(element) else {
-            panic!("properties {atomic_number} absent")
-        };
-        assert!(properties.atomic_weight > 0.0);
-        assert!(
-            properties
-                .covalent_radius
-                .is_some_and(|radius| radius > 0.0)
-        );
-        assert!((1..=7).contains(&properties.period));
-        assert!(properties.valence_electrons > 0);
-    }
+const HEADER: &str = "name: lab\nversion: 1\nsource: survey\nlicence: CC0-1.0\n";
+
+fn table(body: &str) -> Result<Provided<IonicRadii>, TableTextError> {
+    IonicRadii::decode(
+        format!("{HEADER}{body}").as_bytes(),
+        TableIdentity::supplied("x", "x", "x", "x"),
+    )
 }
 
 #[test]
-fn ionic_entries_preserve_charge_coordination_spin_and_absence() {
-    let iron = match ionic_radii(Element::IRON) {
-        Ok(entries) => entries,
-        Err(finding) => panic!("ionic table failed: {finding}"),
+fn entries_keep_charge_coordination_spin_and_reliability() {
+    let Ok(provided) =
+        table("Na 1 VI - 1.02 1.16 yes\nFe 2 VI HS 0.78 0.92 yes\nFe 2 VI LS 0.61 0.75 -\n")
+    else {
+        panic!("a well-formed table parses");
     };
-    assert!(iron.iter().any(|entry| {
-        entry.charge == 2
-            && entry.coordination.as_ref() == "VI"
-            && entry.spin == IonicSpin::High
-            && entry.ionic_radius > 0.0
-    }));
-    let oganesson = ionic_radii(Element::from_atomic_number(118));
-    assert!(oganesson.is_ok_and(<[super::IonicRadius]>::is_empty));
+    let iron = provided.table.entries(Element::IRON);
+    assert_eq!(iron.len(), 2);
+    assert_eq!(iron[0].spin, IonicSpin::High);
+    assert_eq!(iron[1].spin, IonicSpin::Low);
+    assert_eq!(iron[1].most_reliable, None);
+    assert_eq!(&*iron[0].coordination, "VI");
+    assert!(provided.table.entries(Element::CARBON).is_empty());
+}
+
+#[test]
+fn every_defect_is_refused_with_its_line() {
+    for (body, line) in [
+        ("Na 1 VI - 1.02 1.16\n", 5),
+        ("Xx 1 VI - 1.02 1.16 yes\n", 5),
+        ("Na one VI - 1.02 1.16 yes\n", 5),
+        ("Na 1 VI up 1.02 1.16 yes\n", 5),
+        ("Na 1 VI - big 1.16 yes\n", 5),
+        ("Na 1 VI - 1.02 1.16 maybe\n", 5),
+        ("Fe 2 VI - 1.0 1.0 yes\nNa 1 VI - 1.0 1.0 yes\n", 6),
+    ] {
+        let Err(error) = table(body) else {
+            panic!("{body:?} must be refused");
+        };
+        assert!(
+            error.to_string().contains(&format!("line {line}")),
+            "{body:?}: {error}"
+        );
+    }
+    assert!(table("").is_err());
 }

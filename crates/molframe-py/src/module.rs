@@ -160,6 +160,11 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     chemistry::register(&chemistry)?;
     module.add_submodule(&chemistry)?;
 
+    let data = PyModule::new(py, "data")?;
+    #[cfg(feature = "data")]
+    crate::data::register(&data)?;
+    module.add_submodule(&data)?;
+
     let validation = PyModule::new(py, "validation")?;
     #[cfg(feature = "validation")]
     validation::register(&validation)?;

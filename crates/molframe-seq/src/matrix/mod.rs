@@ -1,7 +1,9 @@
-//! Versioned substitution-matrix profiles and dense lookup tables.
+//! Substitution matrices as reference tables, and the dense lookup built from one.
 
-mod profiles;
+mod load;
+mod score_matrix;
 mod table;
 
-pub use profiles::*;
-pub use table::*;
+pub use load::load_matrix;
+pub use score_matrix::ScoreMatrix;
+pub use table::SubstitutionMatrix;

@@ -106,11 +106,10 @@ pub use policy_execution::{
     AltlocOccupancyKernelError, BFactorKernelError, CcdCompletenessKernelError, GovernedMapError,
     LigandGeometryKernelError, PlaneRestraintKernelError, altloc_occupancy_sums_kernel,
     b_factor_distribution_kernel, bond_length_deviations_kernel, ccd_missing_atoms_kernel,
-    chirality_kernel, cis_peptides_kernel, clashes_kernel, clashes_with_kernel,
-    completeness_kernel, governed_masked_real_space_correlation,
-    governed_real_space_map_correlation, governed_sampled_real_space_correlation,
-    ligand_geometry_kernel, nucleic_geometry_kernel, planarity_kernel,
-    plane_restraint_outliers_kernel, quality_flags_kernel, ramachandran_kernel,
+    chirality_kernel, cis_peptides_kernel, clashes_with_kernel, completeness_kernel,
+    governed_masked_real_space_correlation, governed_real_space_map_correlation,
+    governed_sampled_real_space_correlation, ligand_geometry_kernel, nucleic_geometry_kernel,
+    planarity_kernel, plane_restraint_outliers_kernel, quality_flags_kernel, ramachandran_kernel,
     ramachandran_outliers_kernel, reference_geometry_kernel, rotamer_kernel,
     tls_b_factor_consistency_kernel, valence_kernel,
 };
@@ -122,7 +121,7 @@ pub use sidechain_conformation::{
 pub use stereocentre::{
     ChiralityFlag, ChiralityIssue, ChiralityOptions, ChiralityReport, chirality_outliers,
 };
-pub use steric_overlap::{Clash, ClashOptions, ClashTable, clashes, clashes_with};
+pub use steric_overlap::{Clash, ClashOptions, ClashTable, clashes_with};
 pub use thermal_motion::{
     BFactorDistribution, BFactorError, BFactorOutlier, TlsBFactorFlag, TlsBFactorReport, TlsGroup,
     TlsModel, b_factor_distribution, tls_b_factor_consistency,

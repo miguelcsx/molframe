@@ -269,6 +269,15 @@ fn bench_gw_028(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
 
 fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>) {
     let structure = structure(Sample::Tiny);
+    let options = match molframe::validation::ClashOptions::resolve(
+        0.4,
+        &molframe::chemistry::TableRequest::profile(),
+        molframe::spatial::SpatialBackend::Auto,
+        molframe_bench::table_store(),
+    ) {
+        Ok(options) => options,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    };
     group.throughput(Throughput::Elements(structure.atom_count().into()));
     group.bench_function("GW-030", |b| {
         b.iter(|| {
@@ -276,11 +285,9 @@ fn bench_gw_030(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
             let second_flags = molframe::validation::quality_flags(&structure);
             let complete =
                 molframe::validation::completeness(&structure, molframe::Namespace::Label);
-            let clashes = molframe::validation::clashes(
+            let clashes = molframe::validation::clashes_with(
                 &structure,
-                0.4,
-                molframe::chemistry::RadiusSet::Bondi,
-                molframe::spatial::SpatialBackend::Auto,
+                &options,
                 &molframe::ExecutionContext::default(),
             );
             black_box((

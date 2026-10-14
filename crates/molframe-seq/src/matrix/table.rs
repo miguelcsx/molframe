@@ -8,8 +8,9 @@
 //! nothing. Input is folded to upper case first, and a byte outside the
 //! alphabet is scored as `X`, the "any residue" column, rather than rejected.
 
-use super::profiles::{MatrixError, MatrixIdentity};
+use super::ScoreMatrix;
 use crate::scoring::Score;
+use molframe_chem::{Provided, TableIdentity};
 
 /// The number of symbols in the standard amino-acid substitution alphabet.
 const ORDER_LEN: usize = 24;
@@ -30,7 +31,7 @@ pub struct SubstitutionMatrix {
     scores: Vec<i32>,
     side: usize,
     lookup: [u8; 256],
-    identity: MatrixIdentity,
+    identity: TableIdentity,
 }
 
 impl SubstitutionMatrix {
@@ -43,10 +44,14 @@ impl SubstitutionMatrix {
     /// # Examples
     ///
     /// ```
-    /// use molframe_seq::matrix::blosum62;
-    /// // The distributed matrices are built through this constructor.
-    /// let m = blosum62();
-    /// assert_eq!(m.get(b'C', b'C'), 9);
+    /// use molframe_seq::SubstitutionMatrix;
+    /// let mut scores = [[-1; 24]; 24];
+    /// for (index, row) in scores.iter_mut().enumerate() {
+    ///     row[index] = 5;
+    /// }
+    /// let m = SubstitutionMatrix::new(scores);
+    /// assert_eq!(m.get(b'C', b'C'), 5);
+    /// assert_eq!(m.get(b'C', b'W'), -1);
     /// ```
     #[must_use]
     pub fn new(scores: [[i32; ORDER_LEN]; ORDER_LEN]) -> Self {
@@ -62,7 +67,7 @@ impl SubstitutionMatrix {
             scores: scores.into_iter().flatten().collect(),
             side: ORDER_LEN,
             lookup,
-            identity: MatrixIdentity::custom(),
+            identity: TableIdentity::builtin("custom", "caller-supplied", "caller", "caller"),
         }
     }
 
@@ -74,11 +79,10 @@ impl SubstitutionMatrix {
     /// # Examples
     ///
     /// ```
-    /// use molframe_seq::matrix::blosum62;
-    /// let m = blosum62();
-    /// assert_eq!(m.get(b'W', b'W'), 11);
-    /// assert_eq!(m.get(b'w', b'W'), 11);
-    /// assert_eq!(m.get(b'A', b'W'), -3);
+    /// use molframe_seq::SubstitutionMatrix;
+    /// let m = SubstitutionMatrix::new([[2; 24]; 24]);
+    /// assert_eq!(m.get(b'w', b'W'), 2);
+    /// assert_eq!(m.get(b'?', b'W'), 2);
     /// ```
     #[must_use]
     pub fn get(&self, a: u8, b: u8) -> i32 {
@@ -89,36 +93,33 @@ impl SubstitutionMatrix {
 
     /// Stable name, version and source of the selected score table.
     #[must_use]
-    pub const fn identity(&self) -> &MatrixIdentity {
+    pub const fn identity(&self) -> &TableIdentity {
         &self.identity
     }
 
-    pub(super) fn from_profile(
-        alphabet: &[u8],
-        scores: Vec<i32>,
-        identity: MatrixIdentity,
-    ) -> Result<Self, MatrixError> {
-        let side = alphabet.len();
-        if side == 0 || side > usize::from(u8::MAX) || scores.len() != side * side {
-            return Err(MatrixError::MalformedProfile);
+    /// Builds the dense lookup from a decoded table and keeps its identity.
+    #[must_use]
+    pub fn from_table(provided: &Provided<ScoreMatrix>) -> Self {
+        let table = &provided.table;
+        let side = table.alphabet.len();
+        let mut lookup = [0u8; 256];
+        let mut unknown = 0u8;
+        for (code, symbol) in (0u8..=u8::MAX).zip(table.alphabet.iter().copied()) {
+            if matches!(symbol, b'X' | b'N') {
+                unknown = code;
+            }
         }
-        let unknown = alphabet
-            .iter()
-            .position(|symbol| matches!(symbol, b'X' | b'N'))
-            .ok_or(MatrixError::MissingUnknownSymbol)?;
-        let unknown = u8::try_from(unknown).map_err(|_| MatrixError::MalformedProfile)?;
-        let mut lookup = [unknown; 256];
-        for (index, symbol) in alphabet.iter().copied().enumerate() {
-            let index = u8::try_from(index).map_err(|_| MatrixError::MalformedProfile)?;
-            lookup[usize::from(symbol)] = index;
-            lookup[usize::from(symbol.to_ascii_lowercase())] = index;
+        lookup.fill(unknown);
+        for (code, symbol) in (0u8..=u8::MAX).zip(table.alphabet.iter().copied()) {
+            lookup[usize::from(symbol)] = code;
+            lookup[usize::from(symbol.to_ascii_lowercase())] = code;
         }
-        Ok(Self {
-            scores,
+        Self {
+            scores: table.scores.clone(),
             side,
             lookup,
-            identity,
-        })
+            identity: provided.identity.clone(),
+        }
     }
 }
 
@@ -126,57 +127,6 @@ impl Score for SubstitutionMatrix {
     fn score(&self, a: u8, b: u8) -> i32 {
         self.get(a, b)
     }
-}
-
-/// The BLOSUM62 substitution matrix.
-///
-/// BLOSUM62 is the default matrix for protein comparison: scores derived from
-/// blocks of aligned proteins clustered at 62 % identity. Larger entries on the
-/// diagonal mark residues that are conserved (tryptophan at 11, cysteine at 9);
-/// off-diagonal entries are positive where a substitution is common and
-/// negative where it is rare.
-///
-/// # Examples
-///
-/// ```
-/// use molframe_seq::matrix::blosum62;
-/// let m = blosum62();
-/// assert_eq!(m.get(b'A', b'A'), 4);
-/// assert_eq!(m.get(b'W', b'W'), 11);
-/// assert_eq!(m.get(b'A', b'W'), -3);
-/// ```
-#[must_use]
-pub fn blosum62() -> SubstitutionMatrix {
-    #[rustfmt::skip]
-    let scores: [[i32; ORDER_LEN]; ORDER_LEN] = [
-        [ 4,-1,-2,-2, 0,-1,-1, 0,-2,-1,-1,-1,-1,-2,-1, 1, 0,-3,-2, 0,-2,-1, 0,-4],
-        [-1, 5, 0,-2,-3, 1, 0,-2, 0,-3,-2, 2,-1,-3,-2,-1,-1,-3,-2,-3,-1, 0,-1,-4],
-        [-2, 0, 6, 1,-3, 0, 0, 0, 1,-3,-3, 0,-2,-3,-2, 1, 0,-4,-2,-3, 3, 0,-1,-4],
-        [-2,-2, 1, 6,-3, 0, 2,-1,-1,-3,-4,-1,-3,-3,-1, 0,-1,-4,-3,-3, 4, 1,-1,-4],
-        [ 0,-3,-3,-3, 9,-3,-4,-3,-3,-1,-1,-3,-1,-2,-3,-1,-1,-2,-2,-1,-3,-3,-2,-4],
-        [-1, 1, 0, 0,-3, 5, 2,-2, 0,-3,-2, 1, 0,-3,-1, 0,-1,-2,-1,-2, 0, 3,-1,-4],
-        [-1, 0, 0, 2,-4, 2, 5,-2, 0,-3,-3, 1,-2,-3,-1, 0,-1,-3,-2,-2, 1, 4,-1,-4],
-        [ 0,-2, 0,-1,-3,-2,-2, 6,-2,-4,-4,-2,-3,-3,-2, 0,-2,-2,-3,-3,-1,-2,-1,-4],
-        [-2, 0, 1,-1,-3, 0, 0,-2, 8,-3,-3,-1,-2,-1,-2,-1,-2,-2, 2,-3, 0, 0,-1,-4],
-        [-1,-3,-3,-3,-1,-3,-3,-4,-3, 4, 2,-3, 1, 0,-3,-2,-1,-3,-1, 3,-3,-3,-1,-4],
-        [-1,-2,-3,-4,-1,-2,-3,-4,-3, 2, 4,-2, 2, 0,-3,-2,-1,-2,-1, 1,-4,-3,-1,-4],
-        [-1, 2, 0,-1,-3, 1, 1,-2,-1,-3,-2, 5,-1,-3,-1, 0,-1,-3,-2,-2, 0, 1,-1,-4],
-        [-1,-1,-2,-3,-1, 0,-2,-3,-2, 1, 2,-1, 5, 0,-2,-1,-1,-1,-1, 1,-3,-1,-1,-4],
-        [-2,-3,-3,-3,-2,-3,-3,-3,-1, 0, 0,-3, 0, 6,-4,-2,-2, 1, 3,-1,-3,-3,-1,-4],
-        [-1,-2,-2,-1,-3,-1,-1,-2,-2,-3,-3,-1,-2,-4, 7,-1,-1,-4,-3,-2,-2,-1,-2,-4],
-        [ 1,-1, 1, 0,-1, 0, 0, 0,-1,-2,-2, 0,-1,-2,-1, 4, 1,-3,-2,-2, 0, 0, 0,-4],
-        [ 0,-1, 0,-1,-1,-1,-1,-2,-2,-1,-1,-1,-1,-2,-1, 1, 5,-2,-2, 0,-1,-1, 0,-4],
-        [-3,-3,-4,-4,-2,-2,-3,-2,-2,-3,-2,-3,-1, 1,-4,-3,-2,11, 2,-3,-4,-3,-2,-4],
-        [-2,-2,-2,-3,-2,-1,-2,-3, 2,-1,-1,-2,-1, 3,-3,-2,-2, 2, 7,-1,-3,-2,-1,-4],
-        [ 0,-3,-3,-3,-1,-2,-2,-3,-3, 3, 1,-2, 1,-1,-2,-2, 0,-3,-1, 4,-3,-2,-1,-4],
-        [-2,-1, 3, 4,-3, 0, 1,-1, 0,-3,-4, 0,-3,-3,-2, 0,-1,-4,-3,-3, 4, 1,-1,-4],
-        [-1, 0, 0, 1,-3, 3, 4,-2, 0,-3,-3, 1,-1,-3,-1, 0,-1,-3,-2,-2, 1, 4,-1,-4],
-        [ 0,-1,-1,-1,-2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2, 0, 0,-2,-1,-1,-1,-1,-1,-4],
-        [-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4, 1],
-    ];
-    let mut matrix = SubstitutionMatrix::new(scores);
-    matrix.identity = MatrixIdentity::builtin_blosum62();
-    matrix
 }
 
 #[cfg(test)]

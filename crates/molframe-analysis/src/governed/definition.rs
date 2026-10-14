@@ -8,11 +8,12 @@
 use super::common::{backend, descriptor, float};
 use super::{FrameKernelResult, StructureKernel, structure_kernel};
 use crate::{Contact, ContactTable, SurfaceContactOptions, atom_contacts, surface_contacts};
-use molframe_chem::{RadiusSet, atom_radii};
+use molframe_chem::{RadiusSource, TableError, TableRequest, TableStore, atom_radii};
 use molframe_core::contract::{AnalysisPolicy, ContactDefinition, Coverage, PolicyField, Quality};
 use molframe_core::{ExecutionContext, Structure};
 use molframe_spatial::{SpatialBackend, SpatialError};
 use molframe_surface::SasaError;
+use std::sync::Arc;
 
 /// The parameters of the surface-based definition that the policy does not carry.
 ///
@@ -37,9 +38,12 @@ pub enum DefinitionError {
     /// The surface test refused its inputs.
     #[error(transparent)]
     Surface(#[from] SasaError),
-    /// The policy names a radius set this version does not have.
-    #[error("the policy's radius set {0:?} is not one this kernel knows")]
-    UnknownRadiusSet(Box<str>),
+    /// The radius table the policy names could not be supplied.
+    #[error(transparent)]
+    Radii(#[from] TableError),
+    /// The policy's contact definition is one this version does not know.
+    #[error("the policy's {0} is not one this kernel knows")]
+    UnknownDefinition(Box<str>),
     /// A surface contact cannot be decided for an atom with no radius.
     #[error(
         "{atoms} atoms have an element with no radius in the {set} set, and a surface \
@@ -49,7 +53,7 @@ pub enum DefinitionError {
         /// How many atoms lack a radius.
         atoms: usize,
         /// The radius set consulted.
-        set: &'static str,
+        set: Box<str>,
     },
 }
 
@@ -60,10 +64,15 @@ pub enum DefinitionError {
 /// radius in the set cannot be decided and is reported as missing coverage, so the
 /// missing-atoms policy governs what happens. With `surface:<probe>`, two atoms are
 /// in contact when their expanded surfaces touch and both have an exposed patch.
+///
+/// The policy names a radius set; `store` supplies the table of that name
+/// (`<name>.radii` in its cache), and a missing one is a typed error that says
+/// how to supply it.
 #[must_use]
 pub fn definition_contacts_kernel(
     spatial: SpatialBackend,
     surface: SurfaceSampling,
+    store: Arc<TableStore>,
 ) -> impl StructureKernel<Output = ContactTable, Error = DefinitionError> {
     structure_kernel(
         descriptor("contacts-by-definition")
@@ -76,7 +85,7 @@ pub fn definition_contacts_kernel(
             .with_parameter("surface_density", float(surface.density))
             .with_parameter("surface_minimum_area", float(surface.minimum_area)),
         move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
-            evaluate(structure, policy, spatial, surface, context)
+            evaluate(structure, policy, spatial, surface, &store, context)
         },
     )
 }
@@ -86,14 +95,12 @@ fn evaluate(
     policy: &AnalysisPolicy,
     spatial: SpatialBackend,
     surface: SurfaceSampling,
+    store: &TableStore,
     context: &ExecutionContext,
 ) -> Result<FrameKernelResult<ContactTable>, DefinitionError> {
-    let set: RadiusSet = policy
-        .vdw_radii
-        .name()
-        .parse()
-        .map_err(|_| DefinitionError::UnknownRadiusSet(policy.vdw_radii.name().into()))?;
-    let radii = atom_radii(structure, set);
+    let set = policy.vdw_radii.name();
+    let source = RadiusSource::resolve(&TableRequest::named(set), store)?;
+    let radii = atom_radii(structure, &source);
     let unknown = radii.iter().filter(|radius| !radius.is_finite()).count();
     let atoms = structure.atom_count();
     let table = match policy.contact_def {
@@ -104,7 +111,7 @@ fn evaluate(
             if unknown > 0 {
                 return Err(DefinitionError::UnknownRadius {
                     atoms: unknown,
-                    set: set.name(),
+                    set: set.into(),
                 });
             }
             let options = SurfaceContactOptions {
@@ -119,7 +126,7 @@ fn evaluate(
                 .collect::<ContactTable>()
         }
         // A definition this version does not know cannot be silently treated as a distance.
-        _ => return Err(DefinitionError::UnknownRadiusSet("contact_def".into())),
+        _ => return Err(DefinitionError::UnknownDefinition("contact_def".into())),
     };
     // More atoms than `u32` is not representable as a structure, so the count always fits.
     let missing = match u32::try_from(unknown) {

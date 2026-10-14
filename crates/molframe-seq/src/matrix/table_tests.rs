@@ -1,5 +1,12 @@
-use super::{ORDER, blosum62};
+use super::ORDER;
+use crate::matrix::{ScoreMatrix, SubstitutionMatrix, load_matrix};
 use crate::scoring::Score;
+use molframe_chem::TableRequest;
+
+fn blosum62() -> SubstitutionMatrix {
+    let request = TableRequest::<ScoreMatrix>::Named("blosum62".into());
+    load_matrix(&request, molframe_bench::table_store()).expect("blosum62 loads")
+}
 
 #[test]
 fn a_known_diagonal_entry_matches_the_published_matrix() {
@@ -50,6 +57,6 @@ fn the_score_trait_agrees_with_the_inherent_lookup() {
 #[test]
 fn the_compiled_blosum62_names_itself_instead_of_claiming_to_be_custom() {
     let matrix = blosum62();
-    assert_eq!(matrix.identity().name(), "BLOSUM62");
+    assert_eq!(matrix.identity().name, "blosum62");
     assert_eq!(matrix.get(b'W', b'W'), 11);
 }

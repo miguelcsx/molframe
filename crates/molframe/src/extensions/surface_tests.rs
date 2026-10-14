@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::prelude::*;
+use molframe_chem::TableRequest;
 
 const DENSE: &str = "\
 MODEL        1
@@ -26,6 +27,13 @@ ENDMDL
 END
 ";
 
+fn bondi() -> SasaOptions {
+    match SasaOptions::resolve(&TableRequest::profile(), molframe_bench::table_store()) {
+        Ok(options) => options,
+        Err(error) => panic!("bench profile resolves: {error}"),
+    }
+}
+
 fn read(text: &str) -> crate::Structure {
     match crate::read_bytes(text.as_bytes().to_vec(), Some("e.pdb"), &ReadOptions::new()) {
         Ok((structure, _)) => structure,
@@ -36,10 +44,12 @@ fn read(text: &str) -> crate::Structure {
 #[test]
 fn sasa_gives_one_positive_area_per_atom_and_sums_per_residue() {
     let structure = read(DENSE);
-    let areas = structure.sasa().expect("sasa");
+    let areas = structure.sasa(molframe_bench::table_store()).expect("sasa");
     assert_eq!(areas.len(), 2);
     assert!(areas.iter().all(|area| *area > 0.0));
-    let residues = structure.residue_sasa().expect("residue sasa");
+    let residues = structure
+        .residue_sasa(molframe_bench::table_store())
+        .expect("residue sasa");
     assert_eq!(residues.len(), 1);
     assert!((residues[0] - areas.iter().sum::<f64>()).abs() < 1e-9);
 }
@@ -49,17 +59,19 @@ fn sasa_measures_the_requested_model() {
     let structure = read(DENSE);
     let options = SasaOptions {
         model: ModelIndex::new(1),
-        ..SasaOptions::default()
+        ..bondi()
     };
     let second = structure
         .sasa_with(&options, &ExecutionContext::default())
         .expect("second model");
-    let first = structure.sasa().expect("first model");
+    let first = structure
+        .sasa(molframe_bench::table_store())
+        .expect("first model");
     // The models are translations of each other, so the areas agree.
     assert!((first[0] - second[0]).abs() < 1e-6);
     let missing = SasaOptions {
         model: ModelIndex::new(9),
-        ..SasaOptions::default()
+        ..bondi()
     };
     assert!(matches!(
         structure.sasa_with(&missing, &ExecutionContext::default()),
@@ -70,7 +82,8 @@ fn sasa_measures_the_requested_model() {
 #[test]
 fn a_ragged_ensemble_is_refused_by_name() {
     let structure = read(RAGGED);
-    let Err(SurfaceExtError::Structure(finding)) = structure.sasa() else {
+    let Err(SurfaceExtError::Structure(finding)) = structure.sasa(molframe_bench::table_store())
+    else {
         panic!("ragged ensemble must be refused");
     };
     assert!(finding.to_string().contains("ragged_models"));

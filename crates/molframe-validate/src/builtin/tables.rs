@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 use molframe_chem::{
-    Provided, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
+    Provided, Row, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
 };
 
 /// A bond length or bond angle target with its standard deviation.
@@ -86,22 +86,6 @@ impl GeometryTargets {
 const GEOMETRY: &str = "geometry table";
 const CHI: &str = "chi table";
 
-fn number(
-    what: &'static str,
-    line: usize,
-    field: &str,
-    label: &str,
-) -> Result<f64, TableTextError> {
-    match field.parse::<f64>() {
-        Ok(value) if value.is_finite() => Ok(value),
-        _ => Err(TableTextError::at(
-            what,
-            line,
-            format!("{label} `{field}` is not a number"),
-        )),
-    }
-}
-
 impl TableLines for GeometryTargets {
     fn header(&mut self, _: usize, _: &str, _: &str) -> Result<bool, TableTextError> {
         Ok(false)
@@ -126,8 +110,8 @@ impl TableLines for GeometryTargets {
                 format!("`{atoms}` is not two or three atom names joined by `-`"),
             ));
         }
-        let mean = number(GEOMETRY, line, mean, "mean")?;
-        let sigma = number(GEOMETRY, line, sigma, "sd")?;
+        let mean = Row::new(GEOMETRY, line).finite::<f64>(mean)?;
+        let sigma = Row::new(GEOMETRY, line).finite::<f64>(sigma)?;
         if sigma <= 0.0 {
             return Err(TableTextError::at(GEOMETRY, line, "sd must be positive"));
         }

@@ -26,7 +26,7 @@
 
 use crate::protonation::parent_residue;
 use molframe_chem::{
-    Provided, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
+    Provided, Row, TableIdentity, TableKind, TableLines, TableTextError, read_table, text_of,
 };
 use std::collections::BTreeMap;
 
@@ -62,30 +62,11 @@ impl TableLines for MaxAreaTable {
     }
 
     fn row(&mut self, line: usize, text: &str) -> Result<(), TableTextError> {
-        let mut words = text.split_whitespace();
-        let (Some(name), Some(value), None) = (words.next(), words.next(), words.next()) else {
-            return Err(TableTextError::at(
-                WHAT,
-                line,
-                "expected `residue area`, two words",
-            ));
-        };
-        let area: f64 = value
-            .parse()
-            .map_err(|_| TableTextError::at(WHAT, line, format!("`{value}` is not a number")))?;
-        if !area.is_finite() || area <= 0.0 || area > MAXIMUM_AREA {
-            return Err(TableTextError::at(
-                WHAT,
-                line,
-                format!("area {value} must be positive and at most {MAXIMUM_AREA}"),
-            ));
-        }
+        let row = Row::new(WHAT, line);
+        let [name, value] = row.words(text, "`residue area`, two words")?;
+        let area = row.bounded::<f64>(value, MAXIMUM_AREA, &format!("area {value}"))?;
         if self.areas.insert(name.to_ascii_uppercase(), area).is_some() {
-            return Err(TableTextError::at(
-                WHAT,
-                line,
-                format!("residue `{name}` is listed twice"),
-            ));
+            return Err(row.fail(format!("residue `{name}` is listed twice")));
         }
         Ok(())
     }

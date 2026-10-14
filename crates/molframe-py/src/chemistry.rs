@@ -7,17 +7,12 @@ mod molecules;
 mod roles;
 use crate::bindings::{PyStructure, findings_error};
 use molframe::Element;
-use molframe::chemistry::{self as chem, RadiusSet};
+use molframe::chemistry::{self as chem};
 use numpy::{PyArray1, ToPyArray};
 use pyo3::prelude::*;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-/// The radius set a name selects, through the spelling Rust owns.
-pub(crate) fn radius_set(name: &str) -> PyResult<RadiusSet> {
-    name.parse().map_err(crate::error::kernel)
-}
 
 /// Reference properties of one element.
 #[derive(Clone, Copy, Debug)]
@@ -48,11 +43,6 @@ impl PyElementProperties {
     #[getter]
     fn atomic_weight(&self) -> f64 {
         self.properties.atomic_weight
-    }
-
-    #[getter]
-    fn covalent_radius(&self) -> Option<f32> {
-        self.properties.covalent_radius
     }
 
     #[getter]
@@ -94,27 +84,29 @@ fn element(symbol: &str) -> PyResult<PyElementProperties> {
     })
 }
 
-/// Van der Waals radius of one element in ångström, or `None` when the set has none.
+/// Van der Waals radius of one element in ångström, or `None` when the table has none.
+///
+/// `radii` is a cache entry name or a file path; unset, the profile's `vdw-radii` line.
 #[pyfunction]
-#[pyo3(signature = (symbol, *, radii="bondi"))]
-fn vdw_radius(symbol: &str, radii: &str) -> PyResult<Option<f32>> {
-    let set = radius_set(radii)?;
+#[pyo3(signature = (symbol, *, radii=None))]
+fn vdw_radius(symbol: &str, radii: Option<&str>) -> PyResult<Option<f32>> {
+    let source = crate::tables::radius_source(radii)?;
     let element = Element::from_symbol(symbol)
         .ok_or_else(|| crate::error::value(format!("unknown element {symbol:?}")))?;
-    Ok(chem::vdw_radius(element, set))
+    Ok(source.radius(element))
 }
 
 /// Per-atom van der Waals radii; `nan` marks atoms whose element has none.
 #[pyfunction]
-#[pyo3(signature = (structure, *, radii="bondi"))]
+#[pyo3(signature = (structure, *, radii=None))]
 fn vdw_radii<'py>(
     py: Python<'py>,
     structure: &PyStructure,
-    radii: &str,
+    radii: Option<&str>,
 ) -> PyResult<Bound<'py, PyArray1<f32>>> {
-    let set = radius_set(radii)?;
+    let table = crate::tables::radius_source(radii)?;
     let source = structure.inner.clone();
-    let values = py.detach(move || chem::atom_radii(source.engine(), set));
+    let values = py.detach(move || chem::atom_radii(source.engine(), &table));
     Ok(values.to_pyarray(py))
 }
 

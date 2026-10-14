@@ -23,8 +23,9 @@ pub(super) fn infer(
         ..molframe::BondInference::default()
     };
     let source = structure.inner.clone();
+    let radii = crate::tables::covalent_radii()?;
     crate::execution::run(py, context, move |context| {
-        molframe::infer_bonds(&source, options, context)
+        molframe::infer_bonds(&source, &radii.table, options, context)
     })?
     .map(|report| PyStructure {
         inner: report.structure,

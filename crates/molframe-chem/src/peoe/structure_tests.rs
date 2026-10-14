@@ -164,7 +164,7 @@ fn complete_4hhb_protein_charges_resolve_linked_ccd_chemistry_in_stable_order() 
             .collect(),
     );
     let protein = source.materialize(&selected).unwrap();
-    let protein = crate::perceive_bonds(&protein).unwrap();
+    let protein = crate::perceive_bonds(&protein, crate::test_data::reach()).unwrap();
     let result = partial_charges(&protein, &provider, PeoeOptions::default()).unwrap();
     assert_eq!(result.values.len(), protein.atom_count() as usize);
     assert!(result.values.iter().all(|charge| charge.is_finite()));

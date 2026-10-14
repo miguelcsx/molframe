@@ -3,13 +3,20 @@
 use criterion::{Criterion, black_box};
 use molframe_bench::{ccd_atp, ccd_hem, input};
 use molframe_chem::{
-    ComponentProvider, PeoeAtom, PeoeAtomType, PeoeBond, PeoeOptions, RadiusSet, SmartsPattern,
-    component_peoe_charges, element_properties, equivalence_classes, peoe_charges, read_ccd,
-    vdw_radius,
+    ComponentProvider, PeoeAtom, PeoeAtomType, PeoeBond, PeoeOptions, SmartsPattern, TableIdentity,
+    TableKind, VdwRadii, component_peoe_charges, element_properties, equivalence_classes,
+    peoe_charges, read_ccd,
 };
 use molframe_core::contract::DictionaryVersion;
 
 fn bench_element_table(c: &mut Criterion) {
+    let text =
+        "name: bench\nversion: 1\nsource: bench\nlicence: CC0-1.0\nC 1.7\nN 1.55\nO 1.52\nS 1.8\n";
+    let radii = match VdwRadii::decode(text.as_bytes(), TableIdentity::supplied("b", "b", "b", "b"))
+    {
+        Ok(provided) => provided.table,
+        Err(error) => panic!("bench radii refused: {error}"),
+    };
     c.bench_function("chem_element_radius_table", |b| {
         b.iter(|| {
             for element in [
@@ -18,10 +25,7 @@ fn bench_element_table(c: &mut Criterion) {
                 molframe_core::Element::OXYGEN,
                 molframe_core::Element::SULFUR,
             ] {
-                black_box((
-                    element_properties(element),
-                    vdw_radius(element, RadiusSet::Bondi),
-                ));
+                black_box((element_properties(element), radii.radius(element)));
             }
         });
     });

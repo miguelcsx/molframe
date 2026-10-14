@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+format: 1
+name: charmm
+version: c36m-2021
+source: CHARMM36m van der Waals radii by element
+licence: MIT
+
+# element van-der-Waals-radius-in-angstrom
+H 1.25
+C 2.0
+S 2.0
+N 1.85
+O 1.7
+F 1.47
+P 2.15
+Cl 1.75

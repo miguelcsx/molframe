@@ -36,6 +36,7 @@ mod selection_commands;
 mod sequence_commands;
 mod structure_commands;
 mod system;
+mod tables;
 mod trajectory;
 mod validation_commands;
 
@@ -46,14 +47,12 @@ use std::process::ExitCode;
 pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, ChemCommand,
     ContactMapArguments, CrystalCommand, DataCommand, EnsembleCommand, ExtraMetricArguments,
-    FxCommand, GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, MatrixChoice,
-    ModelArgument, MtzTable, NamespaceArgument, NativeContactArguments, NormalModeArguments,
-    PairwiseMode, SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand,
-    TrajectoryCommand, TreeMethod, ValidateArguments,
+    FxCommand, GeometryCommand, InteractionCommand, KmerOperation, MappingArguments, ModelArgument,
+    MtzTable, NamespaceArgument, NativeContactArguments, NormalModeArguments, PairwiseMode,
+    SequenceCommand, SequenceFormat, SurfaceArguments, SystemCommand, TrajectoryCommand,
+    TreeMethod, ValidateArguments,
 };
-pub(crate) use choices::{
-    CompletionShell, EmptyLddtChoice, MetricChoice, RadiusChoice, ValidationChoice,
-};
+pub(crate) use choices::{CompletionShell, EmptyLddtChoice, MetricChoice, ValidationChoice};
 
 /// A batteries-included structural bioinformatics engine.
 #[derive(Parser, Debug)]
@@ -277,8 +276,10 @@ pub(crate) enum Command {
         /// Test points per atom (Shrake-Rupley) or slices per atom (Lee-Richards).
         #[arg(long)]
         points: u16,
-        #[arg(long, value_enum)]
-        radii: RadiusChoice,
+        /// A radius table: a cache entry name or a file path. Unset, the profile's
+        /// `vdw-radii` line.
+        #[arg(long, value_name = "NAME|PATH")]
+        radii: Option<String>,
         #[command(flatten)]
         words: analysis_commands::SasaWords,
     },

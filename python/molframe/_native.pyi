@@ -52,6 +52,7 @@ from . import (
     chemistry as chemistry,
     compare as compare,
     crystal as crystal,
+    data as data,
     formats as formats,
     geometry as geometry,
     interop as interop,

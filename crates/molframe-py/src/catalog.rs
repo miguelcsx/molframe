@@ -7,6 +7,7 @@ mod audit;
 mod chemistry;
 mod compare;
 mod crystal;
+mod data;
 mod formats;
 mod geometry;
 mod interop;
@@ -32,12 +33,13 @@ pub(crate) struct Capability {
 }
 
 /// Every catalogued operation, grouped by what it operates on.
-const GROUPS: [&[Capability]; 14] = [
+const GROUPS: [&[Capability]; 15] = [
     analysis::ROWS,
     audit::ROWS,
     chemistry::ROWS,
     compare::ROWS,
     crystal::ROWS,
+    data::ROWS,
     formats::ROWS,
     geometry::ROWS,
     interop::ROWS,

@@ -377,15 +377,31 @@ fn enrich_model(
     findings: &mut Vec<Diagnostic>,
     context: &ExecutionContext,
 ) -> Result<CoreStructure, Findings> {
-    let structure = match molframe_chem::perceive_bonds_in(&structure, context) {
-        Ok(structure) => structure,
-        // A cancellation or an exhausted budget is the caller's own limit
-        // taking effect, not a defect of the file: the read stops.
-        Err(finding) if matches!(finding.code(), Code::E1902 | Code::E1904 | Code::E7001) => {
-            return Err(Findings::from(finding));
+    let structure = match molframe_chem::TableStore::global()
+        .select_optional::<molframe_chem::BondReach>("--bond-reach")
+    {
+        Ok(Some(reach)) => {
+            match molframe_chem::perceive_bonds_in(&structure, &reach.provided.table, context) {
+                Ok(structure) => structure,
+                // A cancellation or an exhausted budget is the caller's own limit
+                // taking effect, not a defect of the file: the read stops.
+                Err(finding)
+                    if matches!(finding.code(), Code::E1902 | Code::E1904 | Code::E7001) =>
+                {
+                    return Err(Findings::from(finding));
+                }
+                Err(finding) => {
+                    findings.push(finding);
+                    structure
+                }
+            }
         }
-        Err(finding) => {
-            findings.push(finding);
+        Ok(None) => {
+            findings.push(Diagnostic::new(Code::W3207));
+            structure
+        }
+        Err(error) => {
+            findings.push(Diagnostic::from(error));
             structure
         }
     };

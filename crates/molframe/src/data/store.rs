@@ -31,6 +31,37 @@ pub enum Status {
     Invalid(String),
 }
 
+impl Status {
+    /// The state as one word: `missing`, `current`, `stale` or `invalid`.
+    #[must_use]
+    pub const fn word(&self) -> &'static str {
+        match self {
+            Self::Missing => "missing",
+            Self::Current => "current",
+            Self::Stale(_) => "stale",
+            Self::Invalid(_) => "invalid",
+        }
+    }
+
+    /// Why the entry is stale or invalid.
+    #[must_use]
+    pub fn detail(&self) -> Option<&str> {
+        match self {
+            Self::Stale(why) | Self::Invalid(why) => Some(why),
+            Self::Missing | Self::Current => None,
+        }
+    }
+}
+
+impl std::fmt::Display for Status {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.detail() {
+            Some(why) => write!(formatter, "{}: {why}", self.word()),
+            None => formatter.write_str(self.word()),
+        }
+    }
+}
+
 /// One entry and its cache state.
 #[derive(Clone, Debug)]
 pub struct Verified {
