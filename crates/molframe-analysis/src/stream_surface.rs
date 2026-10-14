@@ -14,6 +14,23 @@ pub enum SasaStreamError {
     /// Surface geometry, its working set or a worker failed.
     #[error(transparent)]
     Surface(#[from] SasaError),
+    /// The radius table conflicts with the policy or could not be supplied.
+    #[error(transparent)]
+    Radii(#[from] molframe_chem::TableError),
+    /// Only Shrake-Rupley sampling can be streamed.
+    #[error("streamed SASA samples points on each sphere; the lee-richards method cannot stream")]
+    Method,
+    /// No included atom with a known radius was left to measure.
+    #[error("the topology has no included atom with a van der Waals radius to measure")]
+    NoAtoms,
+    /// The topology and the trajectory describe different numbers of atoms.
+    #[error("the topology has {topology} atoms but the trajectory has {trajectory}")]
+    TopologyAtoms {
+        /// Atoms of the topology structure.
+        topology: usize,
+        /// Atoms of the trajectory.
+        trajectory: usize,
+    },
 }
 
 /// Emits total solvent-accessible area per frame without retaining the series.

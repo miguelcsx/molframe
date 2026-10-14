@@ -69,10 +69,12 @@ mod residue_contacts;
 mod residue_sasa;
 pub mod salt_bridge;
 pub(crate) mod salt_bridge_groups;
+mod sasa_atoms;
 #[path = "dssp.rs"]
 mod secondary_structure_assignment;
 #[path = "density.rs"]
 mod spatial_density;
+mod stream_plan;
 mod stream_surface;
 #[path = "pucker.rs"]
 mod sugar_conformation;
@@ -148,18 +150,18 @@ pub use paired_bases::{BasePair, BasePairError, BasePairOptions, WatsonCrickGeom
 pub use policy_execution::{
     AnalysisDescriptor, DefinitionError, FrameKernelResult, FrameRecord, GovernedAnalysisError,
     GovernedNativeError, GovernedStructureAnalysis, MappedClosureStructureKernel,
-    NativeCorrespondence, PhysicalKernelError, StandaloneAnalysisError, StructureKernel,
-    SurfaceSampling, analyse_models, analyse_structure, analyse_trajectory, base_pairs_kernel,
-    cation_pi_kernel, centre_of_mass_radial_distribution_kernel, chain_interface_kernel,
-    contact_map_kernel, contacts_kernel, coordination_numbers_kernel, definition_contacts_kernel,
-    density_map_kernel, gnm_kernel, governed_dielectric_from_dipoles, governed_fragment_mapping,
-    governed_helical_parameters, governed_helical_steps, governed_polymer_statistics,
-    governed_sugar_pucker, governed_water_dynamics, half_sphere_exposure_kernel,
-    hydrogen_bonds_kernel, leaflets_kernel, linear_density_kernel, mapped_structure_kernel,
-    native_contact_fraction_kernel, native_contact_fraction_kernel_with, nucleic_torsions_kernel,
-    pi_stacking_kernel, pore_profile_kernel, radial_distribution_kernel, salt_bridges_kernel,
-    sasa_kernel, secondary_structure_kernel, structure_kernel, surface_contacts_kernel,
-    water_bridges_kernel,
+    NativeCorrespondence, PhysicalKernelError, ResidueKernelError, StandaloneAnalysisError,
+    StructureKernel, SurfaceSampling, analyse_models, analyse_structure, analyse_trajectory,
+    base_pairs_kernel, cation_pi_kernel, centre_of_mass_radial_distribution_kernel,
+    chain_interface_kernel, contact_map_kernel, contacts_kernel, coordination_numbers_kernel,
+    definition_contacts_kernel, density_map_kernel, gnm_kernel, governed_dielectric_from_dipoles,
+    governed_fragment_mapping, governed_helical_parameters, governed_helical_steps,
+    governed_polymer_statistics, governed_sugar_pucker, governed_water_dynamics,
+    half_sphere_exposure_kernel, hydrogen_bonds_kernel, leaflets_kernel, linear_density_kernel,
+    mapped_structure_kernel, native_contact_fraction_kernel, native_contact_fraction_kernel_with,
+    nucleic_torsions_kernel, pi_stacking_kernel, pore_profile_kernel, radial_distribution_kernel,
+    residue_sasa_kernel, salt_bridges_kernel, sasa_kernel, secondary_structure_kernel,
+    structure_kernel, surface_contacts_kernel, water_bridges_kernel,
 };
 pub use protonation::parent_residue;
 pub use reference_contacts::{
@@ -206,4 +208,5 @@ pub use water_mediation::{
     WaterBridgeReport, WaterBridgeTable, water_bridges, water_bridges_with_policy,
 };
 
+pub use stream_plan::{SasaSeries, SasaStreamPlan};
 pub use stream_surface::{SasaStreamError, sasa_stream};

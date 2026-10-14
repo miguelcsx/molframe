@@ -97,3 +97,30 @@ fn a_structure_with_only_water_has_nothing_to_measure() {
     let found = areas(&structure(&[("HETATM", "O", "O", "HOH", 1, 0.0)]));
     assert!(matches!(found, Err(ResidueSasaError::NoAtoms)));
 }
+
+#[test]
+fn a_residues_area_is_the_sum_of_its_atoms_areas() {
+    let rows = [
+        ("ATOM", "N", "N", "ALA", 1, 0.0),
+        ("ATOM", "C", "CA", "ALA", 1, 1.5),
+        ("ATOM", "H", "H", "ALA", 1, 0.5),
+        ("ATOM", "C", "C", "GLY", 2, 3.0),
+        ("ATOM", "O", "O", "GLY", 2, 4.2),
+        ("HETATM", "O", "O", "HOH", 3, 2.0),
+    ];
+    let structure = structure(&rows);
+    let options = bondi();
+    let context = ExecutionContext::default();
+    let found = residue_areas(&structure, &options, &context).unwrap();
+    let radii = crate::sasa_atoms::measured_radii(&structure, &options).radii;
+    assert!(radii[2].is_nan() && radii[5].is_nan());
+    let atoms =
+        molframe_surface::measure_atoms(structure.positions(), &radii, &options, &context).unwrap();
+    let sums = [atoms[0] + atoms[1], atoms[3] + atoms[4]];
+    assert_eq!(found.residues.len(), 2);
+    for (residue, sum) in found.residues.iter().zip(sums) {
+        assert_eq!(residue.area.to_bits(), sum.to_bits());
+    }
+    assert_eq!(found.residues[0].atoms, 2);
+    assert_eq!(found.missing_radius, 0);
+}

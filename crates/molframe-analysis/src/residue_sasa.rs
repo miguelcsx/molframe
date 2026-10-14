@@ -56,6 +56,9 @@ pub struct ResidueAreas {
     pub excluded_hetero_residues: usize,
     /// Atoms of the kept residues left out: hydrogens, other conformers, no radius.
     pub skipped_atoms: usize,
+    /// Atoms the options include that have no radius in the table (a subset of
+    /// `skipped_atoms`): their element is missing from the radius set.
+    pub missing_radius: usize,
     /// The radius tables and choices the areas were computed with.
     pub policy: AppliedRadiusPolicy,
 }
@@ -79,7 +82,7 @@ pub fn residue_areas(
     let included = included_atoms(structure, options.hetero);
     // (chain, number, name, atom indices that take part)
     let mut spans: Vec<(String, i32, String, Vec<usize>)> = Vec::new();
-    let (mut excluded, mut skipped) = (0, 0);
+    let (mut excluded, mut skipped, mut missing) = (0, 0, 0);
     for chain in structure.data().chains() {
         let label = match chain.auth_label().or_else(|| chain.label()) {
             Some(label) => label,
@@ -118,6 +121,9 @@ pub fn residue_areas(
                         *slot = f32::NAN;
                     }
                     skipped += 1;
+                    if radius.is_none() && !hydrogen && !other_conformer {
+                        missing += 1;
+                    }
                     continue;
                 }
                 kept.push(index);
@@ -143,6 +149,7 @@ pub fn residue_areas(
         residues,
         excluded_hetero_residues: excluded,
         skipped_atoms: skipped,
+        missing_radius: missing,
         policy: options.applied_policy(),
     })
 }

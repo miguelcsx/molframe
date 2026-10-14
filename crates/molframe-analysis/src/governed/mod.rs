@@ -14,6 +14,7 @@ mod models;
 mod native;
 mod physical;
 mod requirements;
+mod residue_surface;
 mod source;
 mod standalone;
 mod structure;
@@ -46,6 +47,7 @@ pub use physical::{
     radial_distribution_kernel,
 };
 pub use requirements::{ForbiddenResolution, Requirement};
+pub use residue_surface::{ResidueKernelError, residue_sasa_kernel};
 pub use standalone::{
     StandaloneAnalysisError, governed_fragment_mapping, governed_polymer_statistics,
     governed_sugar_pucker,
@@ -54,6 +56,7 @@ pub use structure::{
     chain_interface_kernel, gnm_kernel, half_sphere_exposure_kernel, nucleic_torsions_kernel,
     secondary_structure_kernel,
 };
+pub(crate) use surface_area::radii_assumption;
 pub use surface_area::sasa_kernel;
 
 #[cfg(test)]

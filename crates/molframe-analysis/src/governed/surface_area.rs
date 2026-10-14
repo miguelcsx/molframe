@@ -9,7 +9,7 @@
 use super::common::{descriptor, float};
 use super::definition::DefinitionError;
 use super::{FrameKernelResult, StructureKernel, structure_kernel};
-use molframe_chem::{RadiusSelection, included_atoms};
+use molframe_chem::{RadiusSelection, TableError, included_atoms};
 use molframe_core::contract::{
     AnalysisPolicy, Assumption, AssumptionSource, Coverage, Impact, ParameterValue, PolicyField,
     Quality,
@@ -53,15 +53,7 @@ pub fn sasa_kernel(
             .with_parameter("metals", text(&options.metals.to_string()))
             .with_parameter("radii_table", radii_parameter(&options)),
         move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
-            selection
-                .verify(&options.radii.identity(), policy.vdw_radii)
-                .map_err(DefinitionError::Radii)?;
-            let origin = if options.radii.identity().name == policy.vdw_radii.name() {
-                AssumptionSource::ProfileDefault
-            } else {
-                AssumptionSource::Explicit
-            };
-            let applied = applied_assumption(&options, origin);
+            let applied = radii_assumption(&options, &selection, policy)?;
             let table = options.radii.identity().name.to_string();
             let radii = options.atom_radii(structure);
             let included = included_atoms(structure, options.hetero);
@@ -101,6 +93,25 @@ pub fn sasa_kernel(
             Ok(add_scope(result.with_assumption(applied), scope))
         },
     )
+}
+
+/// Checks the radius table against the policy under `selection` and records it.
+///
+/// The assumption is a profile default when the table carries the name the policy's
+/// `vdw_radii` gives and explicit otherwise; a table the selection ties to the policy
+/// and that is another is the typed `E7103` error.
+pub(crate) fn radii_assumption(
+    options: &SasaOptions,
+    selection: &RadiusSelection,
+    policy: &AnalysisPolicy,
+) -> Result<Assumption, TableError> {
+    selection.verify(&options.radii.identity(), policy.vdw_radii)?;
+    let origin = if options.radii.identity().name == policy.vdw_radii.name() {
+        AssumptionSource::ProfileDefault
+    } else {
+        AssumptionSource::Explicit
+    };
+    Ok(applied_assumption(options, origin))
 }
 
 fn count(value: usize) -> u32 {
