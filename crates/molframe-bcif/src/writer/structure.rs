@@ -84,7 +84,10 @@ pub(super) fn write_with_extra<W: Write>(
     output: &mut W,
 ) -> Result<(), Vec<Diagnostic>> {
     let distinct = structure.with_distinct_labels();
-    let structure = distinct.as_ref().unwrap_or(structure);
+    let structure = match distinct.as_ref() {
+        Some(distinct) => distinct,
+        None => structure,
+    };
     let projection = canonical_projection(structure, options)
         .map_err(|error| vec![projection_diagnostic(&error)])?;
     let rows = projection
