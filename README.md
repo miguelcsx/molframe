@@ -139,10 +139,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let alpha = structure.select("name CA", &AnalysisPolicy::default())?;
     let alpha_positions = alpha.to_coordinates(ModelIndex::new(0));
 
-    // Per-atom and per-residue SASA (Bondi radii, 1.4 A probe, 960 points).
+    // Per-atom and per-residue SASA (1.4 A probe, 960 points) with the radius
+    // table the profile's `vdw-radii` line names; see `data/README.md`.
     // An atom whose element has no radius gets NaN and does not occlude.
-    let atom_areas = structure.sasa()?;
-    let residue_areas = structure.residue_sasa()?;
+    let store = molframe::chemistry::TableStore::global();
+    let atom_areas = structure.sasa(&store)?;
+    let residue_areas = structure.residue_sasa(&store)?;
 
     // Every contact within 4.5 A, under an explicit memory ceiling.
     let context = ExecutionContext::builder()

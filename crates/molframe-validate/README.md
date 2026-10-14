@@ -24,4 +24,6 @@ The crate covers steric clashes, bond geometry, stereochemistry, planarity, back
 
 Reference-sensitive checks consume explicit CCD targets rather than hard-coded residue-name tables. Spatial checks reuse the common neighbor-search layer, and crystallographic checks consume the same map and symmetry representations used elsewhere in MolFrame.
 
+Radius-dependent checks (clashes, clashscore, bond deviations) take their tables from the `molframe-chem` table store: a caller-named table or the profile's entry, resolved once per call. Results report the identity of the table applied, and a table that cannot be supplied is a typed `E7102`/`E2201` error naming how to supply it.
+
 Results are deterministically ordered so the same structure and policy produce stable, diffable validation output.

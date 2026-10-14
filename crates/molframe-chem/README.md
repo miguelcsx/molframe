@@ -36,6 +36,17 @@ The same component graph powers:
 
 This keeps name-based heuristics out of geometry and analysis kernels.
 
+### Reference tables
+
+Radii, ionic radii, metal sites and bond reach are not compiled in. Each is a
+versioned text table (`vdw-radii`, `covalent-radii`, `ionic-radii`, `metals`,
+`bond-reach`) read through one `TableProvider`: a user file, else the cache
+entry the profile names, else a typed error. `TableStore::global()` loads each
+table once; lookups are indexed reads. A result carries the `TableIdentity`
+(name, version, source, licence) of every table it applied. A table that cannot
+be supplied raises `E7102` (absent) or `E7101` (missing entry); an unreadable or
+malformed one raises `E2201`. Nothing is fetched during a computation.
+
 ### Default bond perception
 
 `perceive_bonds` preserves deposited edges before adding polymer attachments

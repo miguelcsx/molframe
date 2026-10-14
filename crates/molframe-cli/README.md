@@ -27,6 +27,15 @@ The reporting layer supports human-readable output together with structured JSON
 
 If functionality is reusable outside the command line, it belongs in a library crate rather than here.
 
+## Reference tables
+
+`--radii <NAME|PATH>` selects the radius table: a cache entry by name or a table
+file by path; unset, the profile's `vdw-radii` line applies. The cache is
+`MOLFRAME_DATA_DIR` (else the user cache) and the profile is its `profile.txt`
+or `MOLFRAME_PROFILE`. A table that cannot be supplied exits with `E7102` or
+`E2201`, naming how to supply it. `molframe data list|verify|fetch --manifest
+<file>` manages the cache; `fetch` is the only command that uses the network.
+
 ## Explicit DSSP roles
 
 `sse` requires `--role-profile roles.toml` (or `.json`) as well as an explicit

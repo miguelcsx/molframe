@@ -24,3 +24,11 @@ Registration is split by domain so the Python surface mirrors the Rust architect
 Native structures cross extension boundaries through an explicit capsule protocol. NumPy, Arrow, and DLPack adapters own the ABI and lifetime-sensitive code; computational kernels stay in Rust.
 
 The crate links the full Rust facade and is built as the `_native` extension. It is implementation infrastructure for the Python package rather than a standalone Rust library.
+
+## Reference tables
+
+Table logic stays in Rust. `radii=<name|path>` on the radius-using functions
+selects a table; unset, the profile's entry applies, and a table that cannot be
+supplied raises `MolframeError` with `E7102` or `E2201`. The `molframe.data`
+module (`list`, `verify`, `fetch`, with the `data` feature) manages the cache
+from a manifest; only `fetch` touches the network.

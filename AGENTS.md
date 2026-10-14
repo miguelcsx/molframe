@@ -76,7 +76,17 @@ check scripts, git hooks, agent config — is tracked. Anything of that kind liv
 outside the repo, listed in `.git/info/exclude`. No outside dependency is needed
 for the loop.
 
-Two artifacts are committed data rather than code, and stay:
+Reference tables are data, not code. Radii, ionic radii, metal sites, bond
+reach, Ramachandran and rotamer classes and the like live in `data/` as
+versioned text tables, are resolved by name from the profile (`profile.txt` in
+`MOLFRAME_DATA_DIR`, or `MOLFRAME_PROFILE`) or by path, and are read through the
+one `TableProvider`/`TableStore` in `molframe-chem`. A missing table is a typed
+`E7102`/`E7101`/`E2201` error naming how to supply it; results carry the
+applied table identities; no computation touches the network
+(`molframe data fetch` and `molframe.data.fetch` are the only downloads). Tests
+use synthetic fixtures or the committed bench profile.
+
+Two artifacts are committed definitional data rather than code, and stay:
 `crates/molframe-chem/src/element_data.rs` (the 118-element table, consumed by
 `use crate::element_data::ELEMENTS`) and `crates/molframe-xtal/data/space-groups.bin`
 (the 530-Hall-setting catalogue, loaded by `include_bytes!`). Their provenance is
