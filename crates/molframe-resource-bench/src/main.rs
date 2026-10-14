@@ -6,6 +6,7 @@ mod generated_structure_bench;
 mod kernel_bench;
 mod modelcif_bench;
 mod mrc_bench;
+mod read_scaling_bench;
 mod stream_bench;
 mod table_bench;
 mod tng_bench;
@@ -216,6 +217,8 @@ fn run(name: &str) -> Result<ResourceRecord, String> {
             let structure = read_mmcif(bytes, "medium.cif")?;
             Ok(black_box(u64::from(structure.atom_count())))
         }),
+        "mmcif_read_200k" => read_scaling_bench::mmcif(),
+        "bcif_read_200k" => read_scaling_bench::bcif(),
         "bcif_read_medium" => measure_case("bcif_read_medium", || {
             let bytes = molframe_bench::Sample::Medium
                 .bcif()

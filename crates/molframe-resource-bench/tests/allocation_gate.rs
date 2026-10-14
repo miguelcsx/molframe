@@ -18,6 +18,11 @@ const CEILINGS: &[(&str, u64)] = &[
     // window, so the count moves by up to ~150 under a loaded machine (24_505 to
     // 24_650 observed); the ceiling sits about 1.5% above the quiet count.
     ("bcif_read_medium", 24_900),
+    // 200k-atom synthetic reads (35_643 and 35_675 observed, identical over
+    // repeated runs): a reader that allocates per value or per atom again
+    // would multiply these, whatever the machine load.
+    ("mmcif_read_200k", 37_500),
+    ("bcif_read_200k", 37_500),
     ("selection_medium", 63),
     ("contacts_medium", 65),
     ("sasa_medium", 527),
