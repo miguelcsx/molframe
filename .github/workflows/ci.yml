@@ -67,6 +67,15 @@ jobs:
             exit 1
           fi
 
+      # No lint suppression in source, tests included. Fix the cause; the
+      # permitted lint levels live in Cargo.toml and clippy.toml.
+      - name: No allow or expect attributes
+        run: |
+          if grep -rnE '#!?\[(allow|expect)\b|cfg_attr\(.*(allow|expect)' crates/ --include="*.rs"; then
+            echo "::error::lint suppression attribute in source"
+            exit 1
+          fi
+
       - name: File cap
         run: |
           find crates -name "*.rs" -print0 | xargs -0 wc -l \

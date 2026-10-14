@@ -170,6 +170,9 @@ done
 grep -rnE '\.(unwrap|expect)(_[A-Za-z0-9_]+)?\(' crates/ --include="*.rs" \
   | grep -v '_tests.rs' | grep -v '/tests/'   # must be empty
 
+# No lint suppression attributes anywhere, tests included. Fix the cause.
+grep -rnE '#!?\[(allow|expect)\b|cfg_attr\(.*(allow|expect)' crates/ --include="*.rs"   # must be empty
+
 # The file cap, .rs only. Nothing else in the tree is source.
 find crates -name "*.rs" -print0 | xargs -0 wc -l | awk '$1>500 && $2 != "total" {print}'   # must be empty
 ```
