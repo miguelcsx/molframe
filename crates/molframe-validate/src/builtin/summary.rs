@@ -58,8 +58,8 @@ pub fn percent(part: usize, whole: usize) -> f64 {
     if whole == 0 {
         return f64::NAN;
     }
-    #[allow(clippy::cast_precision_loss)]
-    let ratio = part as f64 / whole as f64;
+    let ratio =
+        molframe_core::numeric::usize_to_f64(part) / molframe_core::numeric::usize_to_f64(whole);
     100.0 * ratio
 }
 

@@ -31,13 +31,16 @@ pub(super) fn rama_bytes() -> Vec<u8> {
         }
         payload.extend_from_slice(&body);
     }
-    join_binary(
+    let joined = join_binary(
         *b"MFR2",
         &identity("synthetic-rama"),
         "favoured: 0.02\noutlier: 0.0005 0.001 0.001 0.002 0.001 0.001\n",
         &payload,
-    )
-    .unwrap_or_default()
+    );
+    match joined {
+        Some(bytes) => bytes,
+        None => Vec::new(),
+    }
 }
 
 /// One rotamer table named `val` with three 120 degree bins: outlier, favoured, allowed.
@@ -48,7 +51,10 @@ pub(super) fn rotamer_bytes() -> Vec<u8> {
     payload.extend_from_slice(&[3, 0, 0]);
     payload.extend_from_slice(&3u32.to_le_bytes());
     payload.extend_from_slice(&[4, 6, 5]);
-    join_binary(*b"MFT2", &identity("synthetic-rotamer"), "", &payload).unwrap_or_default()
+    match join_binary(*b"MFT2", &identity("synthetic-rotamer"), "", &payload) {
+        Some(bytes) => bytes,
+        None => Vec::new(),
+    }
 }
 
 pub(super) const GEOMETRY: &str = "name: synthetic-geometry\nversion: 1\n\
