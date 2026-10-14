@@ -68,6 +68,16 @@ where
         self.projection.end_row();
     }
 
+    fn bulk_rows(&mut self, _tags: &[(Box<str>, Box<str>)], rest: &'input str) -> Option<usize> {
+        // The projection sees no value of a category it does not accept, so
+        // only its row ends remain to be delivered.
+        if self.projection.accepts_category("atom_site") {
+            return None;
+        }
+        let projection = &mut self.projection;
+        self.direct.bulk_rows_with(rest, || projection.end_row())
+    }
+
     fn end_loop(&mut self) {
         self.direct.end_loop();
         self.projection.end_loop();

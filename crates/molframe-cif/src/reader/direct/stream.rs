@@ -1,5 +1,6 @@
 //! One-pass projection, coordinate lowering and ensemble classification.
 
+use super::bulk;
 use super::projection::{Projection, ProjectionSink};
 use super::row::AtomRow;
 use crate::document::CifValueRef;
@@ -30,18 +31,14 @@ pub(super) struct DirectSink<'options, 'input> {
     projection: ProjectionSink,
     options: &'options ReadOptions,
     row: AtomRow<'input>,
-    current_number: Option<i64>,
-    lowerer: Option<StreamModelBuilder<'options>>,
-    models: ModelCollector,
+    lowering: RowLowering<'options>,
     setup_errors: Vec<Diagnostic>,
     atom_loop: AtomLoopState,
-    has_unrepresented_items: bool,
-    accepting_rows: bool,
     first_capacity: usize,
     atom_columns: Vec<Option<Field>>,
 }
 
-impl<'options> DirectSink<'options, '_> {
+impl<'options, 'input> DirectSink<'options, 'input> {
     pub(super) fn new(
         options: &'options ReadOptions,
         keep_category: fn(&str) -> bool,
@@ -51,16 +48,48 @@ impl<'options> DirectSink<'options, '_> {
             projection: ProjectionSink::new(keep_category, options.categories.clone()),
             options,
             row: AtomRow::new(),
-            current_number: None,
-            lowerer: None,
-            models: ModelCollector::new(),
+            lowering: RowLowering::new(options),
             setup_errors: Vec::new(),
             atom_loop: AtomLoopState::Searching,
-            has_unrepresented_items: false,
-            accepting_rows: true,
             first_capacity: estimate_atom_rows(input_bytes),
             atom_columns: Vec::new(),
         }
+    }
+
+    /// Smallest remainder worth the cost of cutting it into pieces.
+    const BULK_MIN_BYTES: usize = 256 * 1024;
+
+    /// Takes whole `atom_site` rows from `rest` in parallel, calling `on_row`
+    /// once for each, and returns the bytes they cover.
+    pub(super) fn bulk_rows_with(
+        &mut self,
+        rest: &'input str,
+        mut on_row: impl FnMut(),
+    ) -> Option<usize> {
+        if self.atom_loop != AtomLoopState::Active
+            || !self.projection.can_bulk()
+            || rest.len() < Self::BULK_MIN_BYTES
+        {
+            return None;
+        }
+        let Self {
+            projection,
+            lowering,
+            row,
+            atom_columns,
+            ..
+        } = self;
+        let base = row.index();
+        let mut count = 0;
+        let consumed = bulk::run(rest, atom_columns, |mut next| {
+            next.set_index(base + count);
+            count += 1;
+            projection.bulk_row(next.integer(Field::ModelNum));
+            lowering.end_row(&next);
+            on_row();
+        });
+        row.set_index(base + count);
+        (consumed > 0).then_some(consumed)
     }
 
     fn begin_atom_loop(&mut self, tags: &[(Box<str>, Box<str>)]) {
@@ -77,7 +106,7 @@ impl<'options> DirectSink<'options, '_> {
                     None
                 }
             }));
-        self.has_unrepresented_items = tags
+        self.lowering.has_unrepresented_items = tags
             .iter()
             .any(|(category, item)| category.as_ref() == "atom_site" && !AtomRow::supports(item));
         match StreamModelBuilder::new(
@@ -85,13 +114,37 @@ impl<'options> DirectSink<'options, '_> {
             self.options,
             self.first_capacity,
         ) {
-            Ok(lowerer) => self.lowerer = Some(lowerer),
+            Ok(lowerer) => self.lowering.lowerer = Some(lowerer),
             Err(errors) => self.setup_errors.extend(errors),
         }
     }
+}
 
-    fn end_atom_row(&mut self) {
-        let number = model_or_one(self.row.integer(Field::ModelNum));
+/// Everything a finished `atom_site` row feeds: model boundaries, the lowering
+/// of the row itself, and the models that have closed.
+pub(super) struct RowLowering<'options> {
+    options: &'options ReadOptions,
+    current_number: Option<i64>,
+    lowerer: Option<StreamModelBuilder<'options>>,
+    models: ModelCollector,
+    has_unrepresented_items: bool,
+    accepting_rows: bool,
+}
+
+impl<'options> RowLowering<'options> {
+    fn new(options: &'options ReadOptions) -> Self {
+        Self {
+            options,
+            current_number: None,
+            lowerer: None,
+            models: ModelCollector::new(),
+            has_unrepresented_items: false,
+            accepting_rows: true,
+        }
+    }
+
+    pub(super) fn end_row(&mut self, row: &AtomRow<'_>) {
+        let number = model_or_one(row.integer(Field::ModelNum));
         if self.current_number != Some(number) {
             self.close_model();
             if self.options.only_first_model && self.models.has_model() {
@@ -108,9 +161,8 @@ impl<'options> DirectSink<'options, '_> {
         if self.accepting_rows
             && let Some(lowerer) = &mut self.lowerer
         {
-            lowerer.feed(&self.row);
+            lowerer.feed(row);
         }
-        self.row.advance();
     }
 
     fn close_model(&mut self) {
@@ -168,23 +220,28 @@ impl<'input> ValueSink<'input> for DirectSink<'_, 'input> {
     fn end_row(&mut self) {
         self.projection.end_row();
         if self.atom_loop == AtomLoopState::Active {
-            self.end_atom_row();
+            self.lowering.end_row(&self.row);
+            self.row.advance();
         }
+    }
+
+    fn bulk_rows(&mut self, _tags: &[(Box<str>, Box<str>)], rest: &'input str) -> Option<usize> {
+        self.bulk_rows_with(rest, || {})
     }
 
     fn end_loop(&mut self) {
         if self.atom_loop == AtomLoopState::Active {
-            self.close_model();
+            self.lowering.close_model();
             self.atom_loop = AtomLoopState::Finished;
         }
         self.projection.end_loop();
     }
 
     fn finish(mut self) -> Self::Output {
-        self.close_model();
+        self.lowering.close_model();
         DirectOutput {
             projection: self.projection.finish(),
-            models: self.models.finish(),
+            models: self.lowering.models.finish(),
             setup_errors: self.setup_errors,
         }
     }

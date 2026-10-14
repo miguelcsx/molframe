@@ -34,6 +34,14 @@ impl<'input> AtomRow<'input> {
         self.values.get(field.position()).copied().flatten()
     }
 
+    pub(super) const fn index(&self) -> usize {
+        self.row
+    }
+
+    pub(super) const fn set_index(&mut self, row: usize) {
+        self.row = row;
+    }
+
     pub(super) fn advance(&mut self) {
         self.values.fill(None);
         self.row += 1;

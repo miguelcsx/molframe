@@ -111,6 +111,28 @@ impl<'a> Lexer<'a> {
         })
     }
 
+    /// Creates a lexer over text already known to be valid.
+    ///
+    /// Positions are relative to the start of `input`.
+    pub(crate) const fn over(input: &'a str) -> Self {
+        Self {
+            input,
+            offset: 0,
+            line: 1,
+            line_start: 0,
+        }
+    }
+
+    /// The text that has not been read yet.
+    pub(crate) fn rest(&self) -> &'a str {
+        self.remaining()
+    }
+
+    /// Moves past `count` unread bytes, keeping line tracking exact.
+    pub(crate) fn skip(&mut self, count: usize) {
+        self.advance(count);
+    }
+
     /// Where the lexer has reached.
     #[must_use]
     pub fn position(&self) -> Position {

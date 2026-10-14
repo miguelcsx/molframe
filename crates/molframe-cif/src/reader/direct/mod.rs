@@ -4,6 +4,7 @@
 //! classification share one lexer traversal. The lossless coordinate document
 //! remains available only through the explicit `read_with_document` API.
 
+mod bulk;
 mod extra;
 mod projection;
 mod reader;

@@ -6,6 +6,8 @@ use molframe_core::structure::{
     AtomRef, ResidueRef, Structure, StructureDifferenceOptions, structure_difference,
 };
 
+#[path = "structure_bulk_tests.rs"]
+mod bulk_tests;
 #[path = "structure_model_tests.rs"]
 mod model_tests;
 

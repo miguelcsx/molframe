@@ -37,6 +37,7 @@ pub(super) struct ProjectionSink {
     layout: AtomLayout,
     blocks: usize,
     in_atom_loop: bool,
+    only_atom_site: bool,
     values_in_row: usize,
     row_model: Option<i64>,
     keep_category: fn(&str) -> bool,
@@ -54,6 +55,7 @@ impl ProjectionSink {
             },
             blocks: 0,
             in_atom_loop: false,
+            only_atom_site: false,
             values_in_row: 0,
             row_model: None,
             keep_category,
@@ -68,6 +70,30 @@ impl ProjectionSink {
 
     pub(super) const fn in_atom_loop(&self) -> bool {
         self.in_atom_loop
+    }
+
+    /// Whether whole rows may be fed through [`Self::bulk_row`] instead of
+    /// value by value: a loop of `atom_site` items only, in the first block,
+    /// none of whose values the metadata document would keep.
+    pub(super) fn can_bulk(&self) -> bool {
+        self.in_atom_loop
+            && self.only_atom_site
+            && self.in_first_block()
+            && self.values_in_row == 0
+            && !(keep_lowering_category("atom_site") && self.categories.keeps_category("atom_site"))
+            && !(self.keep_category)("atom_site")
+    }
+
+    /// Counts a finished row whose values were read in bulk.
+    pub(super) fn bulk_row(&mut self, model: Option<i64>) {
+        self.record_row(model_or_one(model));
+    }
+
+    fn record_row(&mut self, model: i64) {
+        self.layout.atom_rows += 1;
+        if self.layout.models.last().copied() != Some(model) {
+            self.layout.models.push(model);
+        }
     }
 
     pub(super) fn metadata(&self) -> &Document {
@@ -97,6 +123,7 @@ impl<'input> ValueSink<'input> for ProjectionSink {
         self.layout.has_atom_site = true;
         self.layout.atom_loops += 1;
         self.in_atom_loop = true;
+        self.only_atom_site = tags.iter().all(|(category, _)| &**category == "atom_site");
         let mut items = HashSet::with_capacity(tags.len());
         for (category, item) in tags {
             if &**category == "atom_site" && !items.insert(&**item) {
@@ -150,11 +177,7 @@ impl<'input> ValueSink<'input> for ProjectionSink {
         if !self.in_atom_loop || !self.in_first_block() {
             return;
         }
-        self.layout.atom_rows += 1;
-        let model = model_or_one(self.row_model);
-        if self.layout.models.last().copied() != Some(model) {
-            self.layout.models.push(model);
-        }
+        self.record_row(model_or_one(self.row_model));
         self.values_in_row = 0;
         self.row_model = None;
     }

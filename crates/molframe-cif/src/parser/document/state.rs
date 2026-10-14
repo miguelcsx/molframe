@@ -15,6 +15,10 @@ struct ParseState<'input, S> {
     /// True between `loop_` and its first value.
     collecting_tags: bool,
     loop_started: bool,
+    /// True once the sink has been offered the rows of the current loop.
+    bulk_offered: bool,
+    /// Set when the loop's first row ends, so the driver can make the offer.
+    offer_bulk: bool,
     /// The item a bare `tag value` pair is waiting on.
     pending_tag: Option<(Box<str>, Box<str>, ByteSpan)>,
     saw_block: bool,
@@ -34,6 +38,8 @@ where
             loop_cursor: 0,
             collecting_tags: false,
             loop_started: false,
+            bulk_offered: false,
+            offer_bulk: false,
             pending_tag: None,
             saw_block: false,
             input: PhantomData,
@@ -109,6 +115,10 @@ where
         if self.loop_cursor == self.loop_tags.len() {
             self.loop_cursor = 0;
             self.sink.end_row();
+            if !self.bulk_offered {
+                self.bulk_offered = true;
+                self.offer_bulk = true;
+            }
         }
     }
 
@@ -136,6 +146,8 @@ where
         self.loop_span = None;
         self.collecting_tags = false;
         self.loop_started = false;
+        self.bulk_offered = false;
+        self.offer_bulk = false;
     }
 
     fn finish(mut self) -> Result<(S::Output, Vec<Diagnostic>), Vec<Diagnostic>> {

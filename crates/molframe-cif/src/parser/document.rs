@@ -228,6 +228,16 @@ pub(crate) trait ValueSink<'input> {
 
     fn end_loop(&mut self) {}
 
+    /// Offers the text after the first row of a loop for bulk consumption.
+    ///
+    /// `rest` starts at a row boundary. A sink that takes rows from it returns
+    /// how many bytes it consumed, which must end on a row boundary too; the
+    /// parser resumes there as if it had read those rows value by value.
+    /// Declining is always correct.
+    fn bulk_rows(&mut self, _tags: &[(Box<str>, Box<str>)], _rest: &'input str) -> Option<usize> {
+        None
+    }
+
     fn finish(self) -> Self::Output;
 }
 
@@ -246,7 +256,16 @@ where
 
     loop {
         match lexer.next_token() {
-            Ok(Some(spanned)) => state.token(spanned),
+            Ok(Some(spanned)) => {
+                state.token(spanned);
+                if state.offer_bulk {
+                    state.offer_bulk = false;
+                    let consumed = state.sink.bulk_rows(&state.loop_tags, lexer.rest());
+                    if let Some(consumed) = consumed {
+                        lexer.skip(consumed);
+                    }
+                }
+            }
             Ok(None) => break,
             Err(error) => {
                 state.findings.push(lex_finding(error));
