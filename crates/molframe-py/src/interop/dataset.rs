@@ -37,7 +37,6 @@ impl PyManifestEntry {
         tags=Vec::new(),
         statistics=BTreeMap::new(),
     ))]
-    #[allow(clippy::too_many_arguments)]
     fn new(
         id: &str,
         path: PathBuf,

@@ -63,7 +63,7 @@ fn group_variance(
     let view = frames(&array)?;
     let policy = policy_of(policy);
     let analysis = py
-        .detach(|| analyse_group_coordinate_variance_view(view, &groups, &policy))
+        .detach(move || analyse_group_coordinate_variance_view(view, &groups, &policy))
         .map_err(crate::error::kernel)?;
     wrap(py, &analysis, |py, value| {
         let found: Vec<Py<PyGroupVariance>> = value
@@ -96,7 +96,7 @@ fn block_convergence(
     let remainder: RemainderPolicy = remainder.parse().map_err(crate::error::kernel)?;
     let policy = policy_of(policy);
     let analysis = py
-        .detach(|| analyse_block_convergence(&values, block_size, remainder, &policy))
+        .detach(move || analyse_block_convergence(&values, block_size, remainder, &policy))
         .map_err(crate::error::kernel)?;
     wrap(py, &analysis, |py, value| {
         Ok(Py::new(
@@ -150,7 +150,7 @@ fn population_similarity(
 ) -> PyResult<PyAnalysis> {
     let policy = policy_of(policy);
     let analysis = py
-        .detach(|| analyse_cluster_population_similarity(&first, &second, clusters, &policy))
+        .detach(move || analyse_cluster_population_similarity(&first, &second, clusters, &policy))
         .map_err(crate::error::kernel)?;
     wrap(py, &analysis, |py, value| {
         Ok(value.into_pyobject(py)?.into_any().unbind())

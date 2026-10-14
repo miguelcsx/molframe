@@ -200,9 +200,8 @@ impl PyMesh {
     }
 
     /// Writes Wavefront OBJ with vertex normals; an existing file is never replaced.
-    #[allow(clippy::needless_pass_by_value)]
     fn write_obj(&self, path: PathBuf) -> PyResult<()> {
-        write_obj(&path, &self.inner).map_err(|error| {
+        write_obj(path, &self.inner).map_err(|error| {
             crate::error::kernel(Diagnostic::new(Code::E7901).with_message(error.to_string()))
         })
     }

@@ -74,7 +74,6 @@ impl PyMolecule {
     /// `order` is the MDL order: 1, 2, 3, or 4 for aromatic. `formal_charges` is one integer
     /// per atom (0 for none). `properties` become SDF data fields.
     #[new]
-    #[allow(clippy::needless_pass_by_value)]
     #[pyo3(signature = (elements, coordinates, bonds=None, *, name="", formal_charges=None, properties=None))]
     fn construct(
         elements: Vec<String>,
@@ -92,11 +91,11 @@ impl PyMolecule {
             ));
         }
         let atoms = elements
-            .iter()
+            .into_iter()
             .zip(view.rows())
             .map(|(symbol, row)| {
                 Ok(MolAtom {
-                    element: element_of(symbol)?,
+                    element: element_of(&symbol)?,
                     position: [row[0], row[1], row[2]],
                 })
             })

@@ -2,7 +2,6 @@
 //! clusters, embeddings, displacement and convergence, each with its provenance.
 
 // pyo3 hands the functions below owned lists extracted from Python sequences.
-#![allow(clippy::needless_pass_by_value)]
 
 mod results;
 mod statistics;
@@ -133,7 +132,6 @@ fn pairwise_rmsd(
     memory_limit=MEMORY_LIMIT,
     policy=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 fn pca(
     py: Python<'_>,
     positions: &Bound<'_, PyAny>,
@@ -258,14 +256,16 @@ fn kmeans(
     let values = readonly.as_slice().map_err(|_| {
         crate::error::value("observations must be C-contiguous; call numpy.ascontiguousarray")
     })?;
-    let options = KMeansOptions {
-        initial_centres: &initial_centres,
-        maximum_iterations,
-        convergence_tolerance_squared: tolerance_squared,
-    };
     let policy = policy_of(policy);
     let analysis = py
-        .detach(|| analyse_kmeans_view(values, rows, columns, options, &policy))
+        .detach(move || {
+            let options = KMeansOptions {
+                initial_centres: &initial_centres,
+                maximum_iterations,
+                convergence_tolerance_squared: tolerance_squared,
+            };
+            analyse_kmeans_view(values, rows, columns, options, &policy)
+        })
         .map_err(crate::error::kernel)?;
     wrap(py, &analysis, |py, value| {
         Ok(Py::new(
@@ -340,7 +340,7 @@ fn medoid(
     let matrix = self::distances(distances)?;
     let policy = policy_of(policy);
     let analysis = py
-        .detach(|| analyse_medoid(&matrix, &members, &policy))
+        .detach(move || analyse_medoid(&matrix, &members, &policy))
         .map_err(crate::error::kernel)?;
     wrap(py, &analysis, |py, value| {
         Ok(value.into_pyobject(py)?.into_any().unbind())

@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use std::path::PathBuf;
 
 fn mapping_inputs(
-    components: &std::path::Path,
+    components: impl AsRef<std::path::Path>,
     version: &str,
 ) -> PyResult<molframe::chemistry::CifProvider> {
     molframe::read_component_dictionary(components, molframe::DictionaryVersion::new(version))
@@ -31,7 +31,6 @@ fn mapping_inputs(
     min_identity,
     chain_names="label",
 ))]
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 fn assign_chains(
     py: Python<'_>,
     reference: &PyStructure,
@@ -42,7 +41,7 @@ fn assign_chains(
     min_identity: f64,
     chain_names: &str,
 ) -> PyResult<PyChainAssignment> {
-    let provider = mapping_inputs(&components, components_version)?;
+    let provider = mapping_inputs(components, components_version)?;
     let namespace: Namespace = chain_names.parse().map_err(crate::error::kernel)?;
     let (reference, target) = (reference.inner.clone(), target.inner.clone());
     let scoring = scoring.0;
@@ -109,7 +108,6 @@ impl PyChainAssignment {
     scoring,
     chain_names="label",
 ))]
-#[allow(clippy::needless_pass_by_value)]
 fn map_sequence_to_structure(
     py: Python<'_>,
     query: &str,
@@ -119,7 +117,7 @@ fn map_sequence_to_structure(
     scoring: &PyScoring,
     chain_names: &str,
 ) -> PyResult<Vec<(usize, u32)>> {
-    let provider = mapping_inputs(&components, components_version)?;
+    let provider = mapping_inputs(components, components_version)?;
     let namespace: Namespace = chain_names.parse().map_err(crate::error::kernel)?;
     let structure = structure.inner.clone();
     let scoring = scoring.0;

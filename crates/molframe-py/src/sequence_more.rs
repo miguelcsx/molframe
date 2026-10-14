@@ -183,39 +183,37 @@ fn rows_of(distances: &Bound<'_, PyArray2<f64>>) -> PyResult<Vec<Vec<f64>>> {
 
 fn build(
     py: Python<'_>,
-    labels: &[String],
+    labels: Vec<String>,
     distances: &Bound<'_, PyArray2<f64>>,
     builder: fn(&[&str], &[Vec<f64>]) -> Option<Tree>,
 ) -> PyResult<PyTree> {
     let rows = rows_of(distances)?;
-    let names: Vec<&str> = labels.iter().map(String::as_str).collect();
-    py.detach(|| builder(&names, &rows))
-        .map(|inner| PyTree { inner })
-        .ok_or_else(|| {
-            crate::error::value("distances must be a square matrix with one row per label")
-        })
+    py.detach(move || {
+        let names: Vec<&str> = labels.iter().map(String::as_str).collect();
+        builder(&names, &rows)
+    })
+    .map(|inner| PyTree { inner })
+    .ok_or_else(|| crate::error::value("distances must be a square matrix with one row per label"))
 }
 
 /// Builds a neighbour-joining tree from taxon labels and a symmetric distance matrix.
 #[pyfunction]
-#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn neighbor_joining(
     py: Python<'_>,
     labels: Vec<String>,
     distances: &Bound<'_, PyArray2<f64>>,
 ) -> PyResult<PyTree> {
-    build(py, &labels, distances, seq::neighbor_joining)
+    build(py, labels, distances, seq::neighbor_joining)
 }
 
 /// Builds a UPGMA tree from taxon labels and a symmetric distance matrix.
 #[pyfunction]
-#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn upgma(
     py: Python<'_>,
     labels: Vec<String>,
     distances: &Bound<'_, PyArray2<f64>>,
 ) -> PyResult<PyTree> {
-    build(py, &labels, distances, seq::upgma)
+    build(py, labels, distances, seq::upgma)
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -47,7 +47,6 @@ impl PyReflectionTable {
         space_group_name=None,
         title="",
     ))]
-    #[allow(clippy::needless_pass_by_value)]
     fn new(
         hkl: &Bound<'_, PyArray2<i32>>,
         columns: BTreeMap<String, (String, Vec<f64>)>,

@@ -346,7 +346,6 @@ impl PyTrajectoryChunks {
 /// identical at every worker count, the read-ahead window is reserved from the
 /// context's memory budget, and the context's `cancel()` stops the workers.
 #[pyfunction]
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 #[pyo3(signature = (path, *, chunk_frames=256, format=None, frames=None, atoms=None, memory_limit=None, context=None))]
 fn read_chunks(
     py: Python<'_>,
@@ -378,7 +377,7 @@ fn read_chunks(
     let state = match parallel {
         Some((built, total)) => {
             drop(reader);
-            let opened = py.detach(|| {
+            let opened = py.detach(move || {
                 open_parallel(
                     &source,
                     slice,

@@ -184,7 +184,6 @@ impl PyScoring {
     gap_open=None,
     gap_extend=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 fn align(
     py: Python<'_>,
     left: &str,

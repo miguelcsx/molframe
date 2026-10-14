@@ -45,7 +45,6 @@ impl PyExecutionContext {
     /// Creates a context; omitted limits keep the library's bounded defaults.
     #[new]
     #[pyo3(signature = (*, workers=None, memory_budget=None, scratch_bytes=0, temp_directory=None, temp_bytes=0, image_limit=None))]
-    #[allow(clippy::too_many_arguments)]
     fn new(
         workers: Option<usize>,
         memory_budget: Option<usize>,

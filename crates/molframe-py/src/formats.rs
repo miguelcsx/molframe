@@ -48,7 +48,6 @@ fn to_mmcif(
 /// This is the lossless route: nothing is lowered to a structure, so nothing the
 /// structure model does not hold can be dropped.
 #[pyfunction]
-#[allow(clippy::needless_pass_by_value)]
 fn preserve_mmcif(py: Python<'_>, source: PathBuf, destination: PathBuf) -> PyResult<()> {
     let text = py
         .detach(move || {
@@ -56,7 +55,7 @@ fn preserve_mmcif(py: Python<'_>, source: PathBuf, destination: PathBuf) -> PyRe
                 .map(|document| molframe::formats::cif::write_preserving(&document))
         })
         .map_err(|findings| findings_error(&findings))?;
-    std::fs::write(&destination, text).map_err(|error| {
+    std::fs::write(&destination, text).map_err(move |error| {
         crate::error::kernel(
             molframe::Diagnostic::new(molframe::Code::E7101)
                 .with_message(format!("{}: {error}", destination.display())),
@@ -157,7 +156,6 @@ fn pdb_options(
 /// `generated_connections` are the `mmCIF` and `BinaryCIF` decisions of `to_mmcif`;
 /// `memory_limit` bounds, in bytes, the working memory the writer may keep.
 #[pyfunction]
-#[allow(clippy::too_many_arguments)]
 #[pyo3(signature = (structure, path, *, format=None, hybrid36=false, chain_map=None, namespace="auto", block_id=None, generated_connections=true, memory_limit=None))]
 fn write(
     py: Python<'_>,

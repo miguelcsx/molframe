@@ -208,7 +208,6 @@ impl PyMappedComparison {
     interface_scale=1.5,
     chain_names="label",
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn dockq(
     py: Python<'_>,
     model: &PyStructure,
@@ -276,7 +275,7 @@ struct Mapping {
 
 impl Mapping {
     fn load(
-        components: &std::path::Path,
+        components: impl AsRef<std::path::Path>,
         components_version: &str,
         chain_names: &str,
         scoring: &PyScoring,
@@ -336,7 +335,6 @@ fn compare_error(error: &molframe::compare::MappedCompareError) -> PyErr {
     interface_scale=1.5,
     chain_names="label",
 ))]
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 pub(crate) fn mapped_dockq(
     py: Python<'_>,
     model: &PyStructure,
@@ -354,7 +352,7 @@ pub(crate) fn mapped_dockq(
     chain_names: &str,
 ) -> PyResult<(PyDockQ, PyMappedComparison)> {
     let mapping = Mapping::load(
-        &components,
+        components,
         components_version,
         chain_names,
         scoring,
@@ -394,7 +392,6 @@ pub(crate) fn mapped_dockq(
     contact_distance=12.0,
     chain_names="label",
 ))]
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 pub(crate) fn mapped_qs_score(
     py: Python<'_>,
     model: &PyStructure,
@@ -410,7 +407,7 @@ pub(crate) fn mapped_qs_score(
     chain_names: &str,
 ) -> PyResult<(f64, PyMappedComparison)> {
     let mapping = Mapping::load(
-        &components,
+        components,
         components_version,
         chain_names,
         scoring,

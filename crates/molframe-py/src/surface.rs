@@ -320,7 +320,6 @@ fn buried_surface(
     max_cells=None,
     max_workspace_bytes=None,
 ))]
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 fn buried_solvent_excluded_surface(
     py: Python<'_>,
     coordinates: &Bound<'_, PyArray2<f32>>,
@@ -338,7 +337,7 @@ fn buried_solvent_excluded_surface(
         self::radii(&radii)?,
     );
     let roles = roles
-        .iter()
+        .into_iter()
         .map(|word| word.parse::<MoleculeRole>())
         .collect::<Result<Vec<_>, _>>()
         .map_err(crate::error::kernel)?;

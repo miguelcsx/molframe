@@ -210,7 +210,6 @@ pub(crate) fn water_bridges(
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn chain_interface(
     py: Python<'_>,
     structure: &PyStructure,
@@ -349,7 +348,6 @@ pub(crate) fn nucleic_torsions(
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn native_contacts(
     py: Python<'_>,
     reference: &PyStructure,

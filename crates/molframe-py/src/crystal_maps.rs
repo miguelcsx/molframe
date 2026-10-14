@@ -91,7 +91,6 @@ impl PyDensityMap {
         space_group=0,
         labels=Vec::new(),
     ))]
-    #[allow(clippy::needless_pass_by_value)]
     fn new(
         values: &Bound<'_, PyArray3<f32>>,
         cell: &PyUnitCell,

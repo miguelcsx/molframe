@@ -172,7 +172,6 @@ fn drain(
 
 type Outcome<T> = Result<T, PyErr>;
 
-#[allow(clippy::too_many_arguments)]
 fn plan_of(
     py: Python<'_>,
     structure: &PyStructure,
@@ -208,7 +207,6 @@ fn plan_of(
 /// `constrained=False` counts every structural mapping.
 #[pyfunction]
 #[pyo3(signature = (structure, specification, *, components=None, version="unversioned", constrained=true, policy=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 fn count(
     py: Python<'_>,
     structure: &PyStructure,
@@ -238,7 +236,6 @@ fn count(
 /// memory budget, or `limit` mappings, the call raises instead of allocating.
 #[pyfunction]
 #[pyo3(signature = (structure, specification, *, components=None, version="unversioned", constrained=true, limit=None, policy=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 fn matches(
     py: Python<'_>,
     structure: &PyStructure,
@@ -288,7 +285,6 @@ fn matches(
 /// The first `n` matches, in deterministic order, without counting the rest.
 #[pyfunction]
 #[pyo3(signature = (structure, specification, n, *, components=None, version="unversioned", constrained=true, policy=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 fn first(
     py: Python<'_>,
     structure: &PyStructure,
@@ -388,7 +384,6 @@ impl PyMatchIterator {
 /// against the context's memory budget on every step.
 #[pyfunction]
 #[pyo3(signature = (structure, specification, *, chunk_size=65536, components=None, version="unversioned", constrained=true, policy=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 fn iter_matches(
     py: Python<'_>,
     structure: &PyStructure,

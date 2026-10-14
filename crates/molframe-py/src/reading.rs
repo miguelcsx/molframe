@@ -77,7 +77,6 @@ impl PyReadOptions {
         perceive=true,
     ))]
     // The keywords are flags in the Python signature; an enum there would be a worse API.
-    #[allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
     fn new(
         format: &str,
         mode: &str,

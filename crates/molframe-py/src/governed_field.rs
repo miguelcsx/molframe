@@ -34,7 +34,6 @@ use pyo3::prelude::*;
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn linear_density(
     py: Python<'_>,
     structure: &PyStructure,
@@ -124,7 +123,6 @@ impl PyDensityGrid {
 /// `excluded_weight`, never dropped silently.
 #[pyfunction]
 #[pyo3(signature = (structure, *, origin, spacing, shape, weights=None, policy=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn density_map(
     py: Python<'_>,
     structure: &PyStructure,
@@ -191,7 +189,6 @@ pub(crate) fn density_map(
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn pore_profile(
     py: Python<'_>,
     structure: &PyStructure,
@@ -268,7 +265,6 @@ pub(crate) fn pore_profile(
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn surface_contacts(
     py: Python<'_>,
     structure: &PyStructure,
@@ -334,7 +330,6 @@ pub(crate) fn surface_contacts(
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn contacts_by_definition(
     py: Python<'_>,
     structure: &PyStructure,
@@ -390,7 +385,6 @@ pub(crate) fn contacts_by_definition(
 /// source and licence.
 #[pyfunction]
 #[pyo3(signature = (structure, *, probe=None, method=None, n_points=None, hetero=None, metals=None, radii=None, policy=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn sasa(
     py: Python<'_>,
     structure: &PyStructure,

@@ -138,11 +138,10 @@ fn operator_of(operator: &NcsOperator) -> PyNcsOperator {
 /// The NCS operators the structure records; empty when it records none.
 #[pyfunction]
 fn ncs_operators(structure: &PyStructure) -> Vec<PyNcsOperator> {
-    structure
-        .inner
-        .ncs_set()
-        .map(|set| set.operators().map(operator_of).collect())
-        .unwrap_or_default()
+    match structure.inner.ncs_set() {
+        Some(set) => set.operators().map(operator_of).collect(),
+        None => Vec::new(),
+    }
 }
 
 fn label_of(structure: &molframe::Structure, chain: molframe::ChainIndex) -> PyResult<String> {

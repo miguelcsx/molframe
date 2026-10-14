@@ -108,7 +108,6 @@ impl PyCeAlignment {
     significance=true,
     memory_limit=100_000_000,
 ))]
-#[allow(clippy::too_many_arguments)]
 fn ce_align(
     py: Python<'_>,
     reference: &Bound<'_, PyArray2<f32>>,

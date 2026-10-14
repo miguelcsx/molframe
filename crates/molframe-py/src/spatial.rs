@@ -181,7 +181,6 @@ type Neighbors<'py> = (Bound<'py, PyArray2<u32>>, Bound<'py, PyArray2<f32>>);
 /// false. Distances are float32 and, with a `cell`, minimum-image.
 #[pyfunction]
 #[pyo3(signature = (points, k, *, query=None, max_distance=None, cell=None, exclude_self=None, backend="auto", context=None))]
-#[allow(clippy::too_many_arguments)]
 fn knn<'py>(
     py: Python<'py>,
     points: &Bound<'py, PyArray2<f32>>,

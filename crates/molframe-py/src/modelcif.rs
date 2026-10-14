@@ -204,7 +204,6 @@ fn storage(quantise: Option<&str>) -> PyResult<PaeStorage> {
 /// layout that reproduces every value exactly. `max_bytes` bounds the matrix.
 #[pyfunction]
 #[pyo3(signature = (path, *, quantise=None, max_bytes=None))]
-#[allow(clippy::needless_pass_by_value)]
 fn read_pae_json(
     py: Python<'_>,
     path: PathBuf,

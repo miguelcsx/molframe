@@ -114,7 +114,6 @@ where
     periodic=false,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn graph(
     py: Python<'_>,
     structure: &PyStructure,

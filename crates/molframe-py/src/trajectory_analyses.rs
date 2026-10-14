@@ -138,7 +138,6 @@ fn reference_positions(
 /// `atoms` and `memory_limit` mean what they do for `read`.
 #[pyfunction]
 #[pyo3(signature = (path, reference, *, align=true, format=None, frames=None, atoms=None, memory_limit=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 #[pyo3(name = "rmsd_stream")]
 fn rmsd_stream_py(
     py: Python<'_>,
@@ -209,7 +208,6 @@ fn rmsf_stream_py<'py>(
 /// spatial search (`"auto"`, `"grid"`, ...).
 #[pyfunction]
 #[pyo3(signature = (path, cutoff, *, backend="auto", format=None, frames=None, atoms=None, memory_limit=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 #[pyo3(name = "contact_counts_stream")]
 fn contact_counts_stream_py(
     py: Python<'_>,
@@ -266,7 +264,6 @@ impl From<TrajectoryError> for Stop {
 #[pyfunction]
 #[pyo3(signature = (path, callback, *, format=None, frames=None, atoms=None, memory_limit=None, context=None))]
 #[pyo3(name = "run_analysis_stream")]
-#[allow(clippy::too_many_arguments)]
 fn run_analysis_stream_py(
     py: Python<'_>,
     path: PathBuf,

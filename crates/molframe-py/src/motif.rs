@@ -238,7 +238,6 @@ fn report(report: &EvaluationReport, components: Vec<String>) -> PyMotifReport {
     policy=None,
     context=None
 ))]
-#[allow(clippy::too_many_arguments)]
 fn evaluate(
     py: Python<'_>,
     structure: &PyStructure,

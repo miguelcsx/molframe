@@ -88,8 +88,7 @@ impl PyCoordinateTensor {
 
     /// `"float32"`.
     #[getter]
-    #[allow(clippy::unused_self)]
-    const fn dtype(&self) -> &'static str {
+    const fn dtype(_slf: &Bound<'_, Self>) -> &'static str {
         "float32"
     }
 
@@ -120,8 +119,7 @@ impl PyCoordinateTensor {
     }
 
     /// `(1, 0)`: host memory.
-    #[allow(clippy::unused_self)]
-    const fn __dlpack_device__(&self) -> (i32, i32) {
+    const fn __dlpack_device__(_slf: &Bound<'_, Self>) -> (i32, i32) {
         (CPU, 0)
     }
 

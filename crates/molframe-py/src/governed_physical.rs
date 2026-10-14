@@ -159,7 +159,6 @@ pub(crate) fn leaflets(
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn radial_distribution(
     py: Python<'_>,
     structure: &PyStructure,
@@ -223,7 +222,6 @@ pub(crate) fn radial_distribution(
     policy=None,
     context=None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn coordination_numbers(
     py: Python<'_>,
     structure: &PyStructure,

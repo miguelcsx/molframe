@@ -48,7 +48,6 @@ impl PyAnalysisPolicy {
         contact_def=None,
         float_tolerance=None,
     ))]
-    #[allow(clippy::too_many_arguments)]
     fn new(
         identifiers: Option<&str>,
         altloc: Option<&str>,

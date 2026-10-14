@@ -30,10 +30,6 @@ use pyo3::prelude::*;
     backend="auto",
     context=None,
 ))]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "every option is an independent keyword of the Python signature"
-)]
 fn heavy_atom_hydrogen_bonds_py(
     py: Python<'_>,
     structure: &PyStructure,

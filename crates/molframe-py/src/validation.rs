@@ -65,7 +65,6 @@ impl PyClashTable {
 /// covalent neighbours.
 #[pyfunction]
 #[pyo3(signature = (structure, *, tolerance=0.4, radii=None, backend="auto", exclude_one_four=true, perceive_bonds=true, policy=None, context=None))]
-#[allow(clippy::too_many_arguments)]
 fn clashes(
     py: Python<'_>,
     structure: &PyStructure,

@@ -1,0 +1,6 @@
+# Thresholds, not suppressions. A keyword-argument signature here is the
+# Python API itself, so a pyo3 entry point can carry more parameters (and
+# flag-style booleans) than a Rust-native function should.
+too-many-arguments-threshold = 20
+max-fn-params-bools = 8
+max-struct-bools = 8
