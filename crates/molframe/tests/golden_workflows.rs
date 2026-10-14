@@ -327,13 +327,13 @@ fn gw_023_rmsf_and_cartesian_pca_are_deterministic() {
 fn gw_028_structure_scores_are_perfect_for_identical_coordinates() {
     let structure = structure(Sample::Tiny);
     let coordinates = coordinates(&structure);
-    let lddt = molframe::compare::lddt(
+    let lddt = molframe::compare::distance_difference(
         &coordinates,
         &coordinates,
         15.0,
         &molframe_core::ExecutionContext::default(),
     )
-    .unwrap_or_else(|error| panic!("lDDT failed: {error}"));
+    .unwrap_or_else(|error| panic!("distance difference test failed: {error}"));
     let tm = molframe::compare::tm_score(&coordinates, &coordinates)
         .unwrap_or_else(|error| panic!("TM-score failed: {error}"));
     let ts = molframe::compare::gdt_ts(&coordinates, &coordinates)

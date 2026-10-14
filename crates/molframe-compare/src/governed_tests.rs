@@ -1,16 +1,16 @@
 use super::{
     governed_cad_score, governed_comparison_workflow, governed_contact_map_similarity,
-    governed_lddt,
+    governed_distance_difference,
 };
-use crate::{ContactArea, LddtOptions, PointMapping, PointMatch};
+use crate::{ContactArea, DistanceDifferenceOptions, PointMapping, PointMatch};
 use molframe_core::ExecutionContext;
 use molframe_core::contract::{AlignmentPolicy, AnalysisPolicy};
 
 #[test]
 fn governed_score_records_algorithm_parameters_and_coverage() {
     let coordinates = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
-    let options = LddtOptions::standard(15.0);
-    let Ok(result) = governed_lddt(
+    let options = DistanceDifferenceOptions::standard(15.0);
+    let Ok(result) = governed_distance_difference(
         &coordinates,
         &coordinates,
         &options,
@@ -30,7 +30,7 @@ fn governed_score_records_algorithm_parameters_and_coverage() {
             .algorithm
             .as_ref()
             .map(molframe_core::contract::AlgorithmId::name),
-        Some("lddt")
+        Some("distance-difference")
     );
     assert!(result.provenance.parameters.contains_key("tolerances"));
 }

@@ -1,10 +1,15 @@
-//! The local distance difference test.
+//! The distance-difference test over two corresponding coordinate lists.
 //!
-//! lDDT asks a superposition-free question: of all the interatomic distances a
-//! reference structure has within a neighbourhood, how many does the model
-//! reproduce? A distance is scored against four tolerances, and an atom pair's
-//! score is the fraction of tolerances it satisfies; the structure's lDDT is the
-//! mean of that over every reference distance short enough to be local.
+//! It asks a superposition-free question: of all the distances between points
+//! of the reference within a neighbourhood, how many does the model reproduce?
+//! A distance is scored against a set of tolerances, and a pair's score is the
+//! fraction it satisfies; the result is the mean over every pair of points
+//! within the radius.
+//!
+//! This is the arithmetic of lDDT and nothing more. It knows no residues, so it
+//! tests pairs inside one residue, cannot treat interchangeable atoms alike and
+//! cannot count a missing atom against the model. Use
+//! [`crate::residue_lddt`] when those definitions matter.
 //!
 //! Because it never fits one structure onto the other, no alignment can flatter
 //! the score, and a rigid-body motion of part of the structure is penalised
@@ -31,7 +36,7 @@ pub enum EmptyLddtPolicy {
 
 /// Explicit controls for the general local-distance preservation kernel.
 #[derive(Clone, Debug, PartialEq)]
-pub struct LddtOptions {
+pub struct DistanceDifferenceOptions {
     /// Largest reference distance included in the local domain, in ångström.
     pub inclusion_radius: f64,
     /// Reference distances at or below this value are excluded.
@@ -42,7 +47,7 @@ pub struct LddtOptions {
     pub empty_policy: EmptyLddtPolicy,
 }
 
-impl LddtOptions {
+impl DistanceDifferenceOptions {
     /// Standard global lDDT profile with 0.5/1/2/4 Å tolerances.
     #[must_use]
     pub fn standard(inclusion_radius: f64) -> Self {
@@ -65,16 +70,16 @@ impl LddtOptions {
 /// # Errors
 ///
 /// Returns [`CompareError::LengthMismatch`] when the two sets differ in length.
-pub fn lddt(
+pub fn distance_difference(
     model: &[[f32; 3]],
     reference: &[[f32; 3]],
     inclusion_radius: f32,
     context: &ExecutionContext,
 ) -> Result<f64, CompareError> {
-    lddt_with_options(
+    distance_difference_with_options(
         model,
         reference,
-        &LddtOptions::standard(f64::from(inclusion_radius)),
+        &DistanceDifferenceOptions::standard(f64::from(inclusion_radius)),
         context,
     )
 }
@@ -85,10 +90,10 @@ pub fn lddt(
 ///
 /// Returns an error for unequal lengths, invalid coordinates/options, or an
 /// empty domain when [`EmptyLddtPolicy::Error`] is selected.
-pub fn lddt_with_options(
+pub fn distance_difference_with_options(
     model: &[[f32; 3]],
     reference: &[[f32; 3]],
-    options: &LddtOptions,
+    options: &DistanceDifferenceOptions,
     context: &ExecutionContext,
 ) -> Result<f64, CompareError> {
     if model.len() != reference.len() {
@@ -111,7 +116,7 @@ struct PreservedCounts {
 fn spatial_counts(
     model: &[[f32; 3]],
     reference: &[[f32; 3]],
-    options: &LddtOptions,
+    options: &DistanceDifferenceOptions,
     execution: &ExecutionContext,
 ) -> Result<PreservedCounts, CompareError> {
     let count = u32::try_from(reference.len())
@@ -189,7 +194,10 @@ impl ScoringContext<'_> {
     }
 }
 
-fn finish_score(counts: PreservedCounts, options: &LddtOptions) -> Result<f64, CompareError> {
+fn finish_score(
+    counts: PreservedCounts,
+    options: &DistanceDifferenceOptions,
+) -> Result<f64, CompareError> {
     if counts.considered == 0 {
         return match options.empty_policy {
             EmptyLddtPolicy::Perfect => Ok(1.0),
@@ -201,7 +209,7 @@ fn finish_score(counts: PreservedCounts, options: &LddtOptions) -> Result<f64, C
     Ok(preserved / denominator)
 }
 
-fn conservative_f32(value: f64) -> Option<f32> {
+pub(crate) fn conservative_f32(value: f64) -> Option<f32> {
     let mut rounded = value.to_f32()?;
     if !rounded.is_finite() {
         return None;
@@ -233,7 +241,7 @@ fn squared_distance(left: [f32; 3], right: [f32; 3]) -> f64 {
 fn validate_options(
     model: &[[f32; 3]],
     reference: &[[f32; 3]],
-    options: &LddtOptions,
+    options: &DistanceDifferenceOptions,
 ) -> Result<(), CompareError> {
     let valid_tolerances = !options.tolerances.is_empty()
         && options
@@ -259,5 +267,5 @@ fn validate_options(
 }
 
 #[cfg(test)]
-#[path = "lddt_tests.rs"]
+#[path = "distance_difference_tests.rs"]
 mod tests;

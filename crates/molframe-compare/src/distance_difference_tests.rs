@@ -1,4 +1,7 @@
-use super::{EmptyLddtPolicy, LddtOptions, lddt, lddt_with_options};
+use super::{
+    DistanceDifferenceOptions, EmptyLddtPolicy, distance_difference,
+    distance_difference_with_options,
+};
 use crate::failure::CompareError;
 use molframe_core::ExecutionContext;
 
@@ -12,7 +15,7 @@ fn execution(workers: usize) -> ExecutionContext {
 #[test]
 fn an_identical_model_reproduces_every_distance() {
     let reference = [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [0.0, 4.0, 0.0]];
-    let score = match lddt(&reference, &reference, 15.0, &execution(1)) {
+    let score = match distance_difference(&reference, &reference, 15.0, &execution(1)) {
         Ok(score) => score,
         Err(error) => panic!("valid: {error}"),
     };
@@ -23,7 +26,7 @@ fn an_identical_model_reproduces_every_distance() {
 fn a_distance_broken_past_every_tolerance_scores_zero() {
     let reference = [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
     let model = [[0.0, 0.0, 0.0], [13.0, 0.0, 0.0]];
-    let score = match lddt(&model, &reference, 15.0, &execution(1)) {
+    let score = match distance_difference(&model, &reference, 15.0, &execution(1)) {
         Ok(score) => score,
         Err(error) => panic!("valid: {error}"),
     };
@@ -36,7 +39,7 @@ fn a_distance_off_by_one_and_a_half_keeps_half_the_tolerances() {
     // 2 Å and 4 Å tolerances but not 0.5 Å or 1 Å, so the pair scores 0.5.
     let reference = [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
     let model = [[0.0, 0.0, 0.0], [4.5, 0.0, 0.0]];
-    let score = match lddt(&model, &reference, 15.0, &execution(1)) {
+    let score = match distance_difference(&model, &reference, 15.0, &execution(1)) {
         Ok(score) => score,
         Err(error) => panic!("valid: {error}"),
     };
@@ -49,7 +52,7 @@ fn distances_beyond_the_inclusion_radius_do_not_count() {
     // score, which is treated as a perfect (vacuous) result.
     let reference = [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
     let model = [[0.0, 0.0, 0.0], [9.0, 0.0, 0.0]];
-    let score = match lddt(&model, &reference, 2.0, &execution(1)) {
+    let score = match distance_difference(&model, &reference, 2.0, &execution(1)) {
         Ok(score) => score,
         Err(error) => panic!("valid: {error}"),
     };
@@ -61,7 +64,7 @@ fn unequal_lengths_are_rejected() {
     let reference = [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
     let model = [[0.0, 0.0, 0.0]];
     assert!(matches!(
-        lddt(&model, &reference, 15.0, &execution(1)),
+        distance_difference(&model, &reference, 15.0, &execution(1)),
         Err(CompareError::LengthMismatch { .. })
     ));
 }
@@ -70,10 +73,10 @@ fn unequal_lengths_are_rejected() {
 fn general_kernel_uses_explicit_tolerances_and_empty_policy() {
     let reference = [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]];
     let model = [[0.0, 0.0, 0.0], [4.5, 0.0, 0.0]];
-    let score = lddt_with_options(
+    let score = distance_difference_with_options(
         &model,
         &reference,
-        &LddtOptions {
+        &DistanceDifferenceOptions {
             inclusion_radius: 10.0,
             minimum_reference_distance: 0.0,
             tolerances: Box::new([1.0, 2.0]),
@@ -85,10 +88,10 @@ fn general_kernel_uses_explicit_tolerances_and_empty_policy() {
     assert!((score - 0.5).abs() < 1.0e-12);
 
     assert!(matches!(
-        lddt_with_options(
+        distance_difference_with_options(
             &model,
             &reference,
-            &LddtOptions {
+            &DistanceDifferenceOptions {
                 inclusion_radius: 2.0,
                 minimum_reference_distance: 0.0,
                 tolerances: Box::new([1.0]),
@@ -120,13 +123,13 @@ fn indexed_scoring_matches_a_direct_pair_enumeration() {
             [x + offset, y - offset * 0.5, z + offset * 0.25]
         })
         .collect();
-    let options = LddtOptions {
+    let options = DistanceDifferenceOptions {
         inclusion_radius: 12.345_678_9,
         minimum_reference_distance: 0.75,
         tolerances: Box::new([0.05, 0.2, 0.7, 1.5]),
         empty_policy: EmptyLddtPolicy::Error,
     };
-    let indexed = lddt_with_options(&model, &reference, &options, &execution(1))
+    let indexed = distance_difference_with_options(&model, &reference, &options, &execution(1))
         .unwrap_or_else(|error| panic!("indexed lDDT failed: {error}"));
     let direct = direct_score(&model, &reference, &options);
     assert!((indexed - direct).abs() < 1.0e-15, "{indexed} != {direct}");
@@ -137,7 +140,7 @@ fn a_long_sparse_chain_uses_the_local_domain() {
     let reference: Vec<[f32; 3]> = (0_u16..10_000)
         .map(|index| [f32::from(index) * 3.8, 0.0, 0.0])
         .collect();
-    let score = lddt(&reference, &reference, 15.0, &execution(1))
+    let score = distance_difference(&reference, &reference, 15.0, &execution(1))
         .unwrap_or_else(|error| panic!("large local lDDT failed: {error}"));
     assert!((score - 1.0).abs() < 1.0e-12);
 }
@@ -149,19 +152,23 @@ fn candidate_rounding_does_not_drop_a_pair_on_the_exact_radius() {
         [0.102_757_365, 0.806_098_4, 0.605_264_9],
     ];
     let radius = test_squared_distance(reference[0], reference[1]).sqrt();
-    let options = LddtOptions {
+    let options = DistanceDifferenceOptions {
         inclusion_radius: radius,
         minimum_reference_distance: 0.0,
         tolerances: Box::new([0.5, 1.0, 2.0, 4.0]),
         empty_policy: EmptyLddtPolicy::Error,
     };
     assert!(matches!(
-        lddt_with_options(&reference, &reference, &options, &execution(1)),
+        distance_difference_with_options(&reference, &reference, &options, &execution(1)),
         Ok(score) if (score - 1.0).abs() < f64::EPSILON
     ));
 }
 
-fn direct_score(model: &[[f32; 3]], reference: &[[f32; 3]], options: &LddtOptions) -> f64 {
+fn direct_score(
+    model: &[[f32; 3]],
+    reference: &[[f32; 3]],
+    options: &DistanceDifferenceOptions,
+) -> f64 {
     let minimum_squared = options.minimum_reference_distance.powi(2);
     let inclusion_squared = options.inclusion_radius.powi(2);
     let mut considered = 0_u64;
@@ -215,13 +222,14 @@ fn the_score_is_identical_at_every_worker_count() {
         })
         .collect();
 
-    let options = LddtOptions::standard(4.0);
-    let serial =
-        lddt_with_options(&model, &reference, &options, &execution(1)).expect("serial score");
+    let options = DistanceDifferenceOptions::standard(4.0);
+    let serial = distance_difference_with_options(&model, &reference, &options, &execution(1))
+        .expect("serial score");
 
     for workers in [2, 3, 4, 8, 16] {
-        let parallel = lddt_with_options(&model, &reference, &options, &execution(workers))
-            .expect("parallel score");
+        let parallel =
+            distance_difference_with_options(&model, &reference, &options, &execution(workers))
+                .expect("parallel score");
         assert!(
             (parallel - serial).abs() < f64::EPSILON,
             "worker count {workers} changed the score from {serial} to {parallel}"

@@ -6,7 +6,7 @@ use crate::bindings::array::Array2;
 use crate::execution::PyExecutionContext;
 use crate::sequence::PyScoring;
 use molframe::compare::{
-    DockQ, DockQOptions, EmptyLddtPolicy, LddtOptions, MappingOptions, QsOptions,
+    DockQ, DockQOptions, DistanceDifferenceOptions, EmptyLddtPolicy, MappingOptions, QsOptions,
 };
 use molframe::{CompareExt, Namespace};
 use numpy::PyArrayMethods;
@@ -17,7 +17,12 @@ fn namespace(name: &str) -> PyResult<Namespace> {
     name.parse().map_err(crate::error::kernel)
 }
 
-/// The local distance difference test of a model against a reference.
+/// The coordinate distance-difference score of a model against a reference.
+///
+/// This is the coordinate kernel behind lDDT, not lDDT: it takes bare
+/// coordinates, so it cannot exclude distances inside a residue, resolve
+/// symmetric atom names or count a missing atom against the model. Use
+/// `lddt` for a structure-level score.
 ///
 /// Every reference distance up to `inclusion_radius` Å is tested, and a model
 /// distance counts as preserved at each tolerance in `tolerances` that it stays
@@ -34,7 +39,7 @@ fn namespace(name: &str) -> PyResult<Namespace> {
     minimum_reference_distance=0.0,
     context=None,
 ))]
-pub(crate) fn lddt(
+pub(crate) fn distance_difference(
     py: Python<'_>,
     model: Array2<'_, '_, f32>,
     reference: Array2<'_, '_, f32>,
@@ -48,14 +53,14 @@ pub(crate) fn lddt(
         crate::bindings::coordinates(&model)?,
         crate::bindings::coordinates(&reference)?,
     );
-    let options = LddtOptions {
+    let options = DistanceDifferenceOptions {
         inclusion_radius,
         minimum_reference_distance,
         tolerances: tolerances.into_boxed_slice(),
         empty_policy: EmptyLddtPolicy::Perfect,
     };
     crate::execution::run(py, context, |context| {
-        molframe::compare::lddt_with_options(model, reference, &options, context)
+        molframe::compare::distance_difference_with_options(model, reference, &options, context)
     })?
     .map_err(crate::error::kernel)
 }
@@ -433,7 +438,7 @@ pub(crate) fn mapped_qs_score(
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<PyDockQ>()?;
     module.add_class::<PyMappedComparison>()?;
-    module.add_function(wrap_pyfunction!(lddt, module)?)?;
+    module.add_function(wrap_pyfunction!(distance_difference, module)?)?;
     module.add_function(wrap_pyfunction!(dockq, module)?)?;
     module.add_function(wrap_pyfunction!(qs_score, module)?)?;
     module.add_function(wrap_pyfunction!(mapped_dockq, module)?)?;

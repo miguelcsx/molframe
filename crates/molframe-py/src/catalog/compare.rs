@@ -76,7 +76,7 @@ pub(super) const ROWS: &[Capability] = &[
         cost: molframe::Cost::Materialize,
     },
     Capability {
-        name: "lddt",
+        name: "distance_difference",
         domain: "compare",
         feature: "compare",
         inputs: "model,reference,inclusion_radius,tolerances,minimum_reference_distance",

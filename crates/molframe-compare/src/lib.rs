@@ -5,9 +5,10 @@
 //! number. Deciding which atom matches which is a separate problem; these
 //! measure a correspondence, they do not find one.
 //!
-//! The scores split into two kinds. lDDT is superposition-free: it compares the
-//! internal distances of each structure, so no fitting is needed and no fitting
-//! can bias it. TM-score and GDT first fit one structure onto the other with the
+//! The scores split into two kinds. The distance-difference test is
+//! superposition-free: it compares the internal distances of each structure, so
+//! no fitting is needed and no fitting can bias it. It is a coordinate kernel,
+//! not lDDT; [`residue_lddt`] is the residue-aware score built on it. TM-score and GDT first fit one structure onto the other with the
 //! shared superposition kernel, then score the residuals.
 
 #![forbid(unsafe_code)]
@@ -30,7 +31,7 @@ mod failure;
 mod gdt;
 mod governed_parameters;
 mod interface;
-#[path = "lddt.rs"]
+#[path = "distance_difference.rs"]
 mod local_distance;
 mod mapped;
 mod numeric;
@@ -39,6 +40,8 @@ mod policy_execution;
 #[path = "qs.rs"]
 mod quaternary;
 pub mod region;
+#[path = "residue_lddt/mod.rs"]
+mod residue_local_distance;
 mod seed_objective;
 mod seed_rows;
 mod seed_search;
@@ -63,14 +66,17 @@ pub use contact_overlap::{ContactSimilarity, contact_map_similarity};
 pub use correspondence::{
     AtomCorrespondence, AtomMappingAlternative, ChainAlternative, ChainAssignment, ChainMapping,
     ChainSequence, ResidueMatch, ResiduePair, assign_chains, chain_sequences, map_atoms,
-    map_chains, map_residues, map_sequence_to_structure, pair_chains,
+    map_chains, map_residues, map_sequence_to_structure, pair_chains, pair_residues_by_identifier,
 };
 pub use docking_quality::{
     AtomContactDockingOptions, AtomContactDockingScore, DockQ, DockQOptions,
     atom_contact_docking_score, atom_contact_docking_score_in_namespace, dockq, dockq_in_namespace,
 };
 pub use failure::CompareError;
-pub use local_distance::{EmptyLddtPolicy, LddtOptions, lddt, lddt_with_options};
+pub use local_distance::{
+    DistanceDifferenceOptions, EmptyLddtPolicy, distance_difference,
+    distance_difference_with_options,
+};
 pub use mapped::{
     MappedCompareError, MappedComparison, MappingOptions, mapped_dockq, mapped_dockq_for_chains,
     mapped_qs_score,
@@ -78,17 +84,21 @@ pub use mapped::{
 pub use policy_execution::{
     GovernedCompareError, governed_assign_chains, governed_cad_contact_areas, governed_cad_score,
     governed_ce_align, governed_ce_alignments, governed_comparison_workflow,
-    governed_contact_map_similarity, governed_dockq, governed_equivalent_atom_mappings,
-    governed_gdt_ha, governed_gdt_ts, governed_gdt_with_cutoffs, governed_interface_rmsd,
-    governed_lddt, governed_ligand_symmetry_rmsd, governed_map_chains,
-    governed_map_sequence_to_structure, governed_pocket_rmsd, governed_qs_score, governed_tm_score,
-    governed_weighted_rmsd,
+    governed_contact_map_similarity, governed_distance_difference, governed_dockq,
+    governed_equivalent_atom_mappings, governed_gdt_ha, governed_gdt_ts, governed_gdt_with_cutoffs,
+    governed_interface_rmsd, governed_ligand_symmetry_rmsd, governed_map_chains,
+    governed_map_sequence_to_structure, governed_pocket_rmsd, governed_qs_score,
+    governed_residue_lddt, governed_tm_score, governed_weighted_rmsd,
 };
 pub use quaternary::{
     AtomContactJaccardOptions, EmptyQsPolicy, QsOptions, atom_contact_jaccard,
     atom_contact_jaccard_in_namespace, qs_score, qs_score_in_namespace,
 };
 pub use region::{InterfaceRmsd, PocketRmsd, interface_rmsd, pocket_rmsd};
+pub use residue_local_distance::{
+    ResidueCorrespondence, ResidueLddt, ResidueLddtOptions, ResidueScore, SymmetryPolicy,
+    residue_lddt,
+};
 pub use superposed::{gdt_ha, gdt_ts, gdt_with_cutoffs, tm_score, weighted_rmsd};
 pub use tm_batch::{tm_score_all_pairs, tm_score_pairs};
 pub use tm_screen::{TmPrefilter, TmScreen, tm_screen_all_pairs, tm_screen_pairs};

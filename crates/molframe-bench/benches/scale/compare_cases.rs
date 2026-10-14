@@ -3,7 +3,7 @@
 use crate::harness::{Axis, Case, Outcome, Run};
 use molframe_bench::{Checksum, Tier, chain, perturbed, rotated};
 use molframe_compare::{
-    TmPrefilter, gdt_ts, lddt, tm_score, tm_score_all_pairs, tm_screen_all_pairs,
+    TmPrefilter, distance_difference, gdt_ts, tm_score, tm_score_all_pairs, tm_screen_all_pairs,
 };
 
 const ALL_TIERS: &[Tier] = &[
@@ -30,10 +30,10 @@ pub fn cases() -> Vec<Case> {
             run: gdt_case,
         },
         Case {
-            id: "compare.lddt",
+            id: "compare.distance_difference",
             axis: Axis::Atoms,
             tiers: ALL_TIERS,
-            run: lddt_case,
+            run: distance_difference_case,
         },
         Case {
             id: "compare.all_vs_all_tm.250_res",
@@ -98,10 +98,10 @@ fn gdt_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
     })
 }
 
-fn lddt_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
+fn distance_difference_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
     let (reference, model) = pair(atoms);
     let sample = run.measure(
-        || lddt(&model, &reference, 15.0, &run.context).map_err(|e| e.to_string()),
+        || distance_difference(&model, &reference, 15.0, &run.context).map_err(|e| e.to_string()),
         |value| crate::harness::real_fingerprint(*value),
     )?;
     Ok(Outcome {

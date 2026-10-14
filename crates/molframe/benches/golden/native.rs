@@ -253,7 +253,7 @@ fn bench_gw_028(group: &mut BenchmarkGroup<'_, criterion::measurement::WallTime>
     group.throughput(Throughput::Elements(coordinates.len() as u64));
     group.bench_function("GW-028", |b| {
         b.iter(|| {
-            let lddt = molframe::compare::lddt(
+            let lddt = molframe::compare::distance_difference(
                 &coordinates,
                 &coordinates,
                 15.0,

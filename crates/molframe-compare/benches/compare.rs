@@ -5,9 +5,9 @@ use molframe_bench::{Sample, coordinates, perturbed, structure};
 use molframe_chem::{Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider};
 use molframe_compare::{
     CeOptions, ComparisonAlignment, ContactArea, DockQOptions, PointMapping, PointMatch, QsOptions,
-    cad_score, ce_align, contact_map_similarity, dockq, equivalent_atom_mappings, gdt_ha, gdt_ts,
-    interface_rmsd, lddt, ligand_symmetry_rmsd, map_sequence_to_structure, measure_mapping,
-    pocket_rmsd, qs_score, tm_score, weighted_rmsd,
+    cad_score, ce_align, contact_map_similarity, distance_difference, dockq,
+    equivalent_atom_mappings, gdt_ha, gdt_ts, interface_rmsd, ligand_symmetry_rmsd,
+    map_sequence_to_structure, measure_mapping, pocket_rmsd, qs_score, tm_score, weighted_rmsd,
 };
 use molframe_core::contract::{DictionaryVersion, Namespace};
 use molframe_core::{BondOrder, Element, ExecutionContext};
@@ -33,8 +33,8 @@ fn bench_scores(c: &mut Criterion) {
     let model = perturbed(&reference, 0.02);
     let execution = ExecutionContext::default();
     let mut group = c.benchmark_group("compare_scores");
-    group.bench_function("lddt", |b| {
-        b.iter(|| black_box(lddt(&model, &reference, 15.0, &execution)));
+    group.bench_function("distance_difference", |b| {
+        b.iter(|| black_box(distance_difference(&model, &reference, 15.0, &execution)));
     });
     group.bench_function("tm_score", |b| {
         b.iter(|| black_box(tm_score(&model, &reference)));
@@ -55,8 +55,15 @@ fn bench_scores(c: &mut Criterion) {
         .map(|index| [f32::from(index) * 3.8, 0.0, 0.0])
         .collect();
     let local_model = perturbed(&local_reference, 0.02);
-    c.bench_function("compare_scores/lddt_local_10000", |b| {
-        b.iter(|| black_box(lddt(&local_model, &local_reference, 15.0, &execution)));
+    c.bench_function("compare_scores/distance_difference_local_10000", |b| {
+        b.iter(|| {
+            black_box(distance_difference(
+                &local_model,
+                &local_reference,
+                15.0,
+                &execution,
+            ))
+        });
     });
 
     let guide_count = reference.len().min(128);

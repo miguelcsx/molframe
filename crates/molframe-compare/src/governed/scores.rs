@@ -3,9 +3,10 @@
 use super::common::{GovernedCompareError, complete, float};
 use crate::governed_parameters::add_ce_parameters;
 use crate::{
-    CadScore, CeAlignment, CeOptions, CompareError, ContactArea, ContactSimilarity, LddtOptions,
-    cad_contact_areas, cad_score, ce_align, ce_alignments, contact_map_similarity, gdt_ha, gdt_ts,
-    gdt_with_cutoffs, lddt_with_options, tm_score, weighted_rmsd,
+    CadScore, CeAlignment, CeOptions, CompareError, ContactArea, ContactSimilarity,
+    DistanceDifferenceOptions, cad_contact_areas, cad_score, ce_align, ce_alignments,
+    contact_map_similarity, distance_difference_with_options, gdt_ha, gdt_ts, gdt_with_cutoffs,
+    tm_score, weighted_rmsd,
 };
 use molframe_core::ExecutionContext;
 use molframe_core::contract::{Analysis, AnalysisPolicy, ParameterValue};
@@ -43,20 +44,21 @@ pub fn governed_cad_contact_areas(
     Ok(result)
 }
 
-/// Computes governed lDDT for an explicit correspondence.
+/// Computes the governed coordinate distance-difference score (not lDDT) for
+/// an explicit atom correspondence.
 ///
 /// # Errors
 ///
 /// Returns a comparison error or a coverage overflow.
-pub fn governed_lddt(
+pub fn governed_distance_difference(
     model: &[[f32; 3]],
     reference: &[[f32; 3]],
-    options: &LddtOptions,
+    options: &DistanceDifferenceOptions,
     policy: &AnalysisPolicy,
     context: &ExecutionContext,
 ) -> Result<Analysis<f64>, GovernedCompareError> {
-    let value = lddt_with_options(model, reference, options, context)?;
-    let mut result = complete(value, reference.len(), policy, "lddt")?;
+    let value = distance_difference_with_options(model, reference, options, context)?;
+    let mut result = complete(value, reference.len(), policy, "distance-difference")?;
     result.provenance = result
         .provenance
         .with_parameter("inclusion_radius", float(options.inclusion_radius))

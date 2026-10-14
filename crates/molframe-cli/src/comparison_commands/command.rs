@@ -323,10 +323,10 @@ fn measure(
                 eprintln!("lDDT requires one or more --lddt-tolerances");
                 return Err(Exit::Usage);
             }
-            molframe::compare::lddt_with_options(
+            molframe::compare::distance_difference_with_options(
                 model.coordinates(),
                 reference.coordinates(),
-                &molframe::compare::LddtOptions {
+                &molframe::compare::DistanceDifferenceOptions {
                     inclusion_radius: f64::from(radius),
                     minimum_reference_distance: minimum,
                     tolerances: options.lddt_tolerances.into(),

@@ -28,7 +28,7 @@ self-contained: it is the whole contract for this repository.
 | `molframe-surface` | Solvent-accessible surface (Shrake–Rupley), buried surface, deterministic sphere sampling. |
 | `molframe-analysis` | Contacts, contact maps, native contacts (Q), hydrogen bonds, salt bridges, chain interfaces. |
 | `molframe-validate` | Steric clashes, cis-peptide detection, occupancy/B-factor sanity checks. |
-| `molframe-compare` | Superposition-free lDDT; TM-score, GDT-TS and GDT-HA over the shared superposition. |
+| `molframe-compare` | Residue-aware, superposition-free lDDT and its coordinate distance-difference kernel; TM-score, GDT-TS and GDT-HA over the shared superposition. |
 | `molframe-seq` | Pairwise alignment (global, local, semi-global) with affine gap costs. |
 | `molframe-interop` | Apache Arrow interop (C-stream export, extension types). |
 | `molframe-modelcif` | ModelCIF metadata and confidence metrics. |

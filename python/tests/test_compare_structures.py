@@ -15,7 +15,7 @@ CCD = ROOT / "crates" / "molframe-chem" / "data" / "CCD-amino-acids.cif"
 rng = np.random.default_rng(7)
 
 
-def reference_lddt(model, reference, radius, tolerances):
+def reference_distance_difference(model, reference, radius, tolerances):
     m, r = model.astype(np.float64), reference.astype(np.float64)
     kept, total = 0.0, 0
     for i, j in combinations(range(len(r)), 2):
@@ -27,25 +27,25 @@ def reference_lddt(model, reference, radius, tolerances):
     return kept / total if total else 1.0
 
 
-def test_lddt_equals_a_brute_force_local_distance_test():
+def test_distance_difference_equals_a_brute_force_local_distance_test():
     reference = (rng.normal(size=(60, 3)) * 6.0).astype(np.float32)
     model = reference + rng.normal(scale=0.8, size=reference.shape).astype(np.float32)
     for radius in (8.0, 15.0):
-        found = compare.lddt(model, reference, inclusion_radius=radius)
+        found = compare.distance_difference(model, reference, inclusion_radius=radius)
         assert found == pytest.approx(
-            reference_lddt(model, reference, radius, (0.5, 1.0, 2.0, 4.0)), abs=1e-9
+            reference_distance_difference(model, reference, radius, (0.5, 1.0, 2.0, 4.0)), abs=1e-9
         )
-    custom = compare.lddt(model, reference, inclusion_radius=10.0, tolerances=[1.0, 3.0])
-    assert custom == pytest.approx(reference_lddt(model, reference, 10.0, (1.0, 3.0)), abs=1e-9)
-    assert compare.lddt(reference, reference) == pytest.approx(1.0)
-    assert compare.lddt(model[:, :], reference[: len(model)]) <= 1.0
+    custom = compare.distance_difference(model, reference, inclusion_radius=10.0, tolerances=[1.0, 3.0])
+    assert custom == pytest.approx(reference_distance_difference(model, reference, 10.0, (1.0, 3.0)), abs=1e-9)
+    assert compare.distance_difference(reference, reference) == pytest.approx(1.0)
+    assert compare.distance_difference(model[:, :], reference[: len(model)]) <= 1.0
 
 
-def test_lddt_is_invariant_to_rigid_motion_unlike_rmsd():
+def test_distance_difference_is_invariant_to_rigid_motion_unlike_rmsd():
     reference = (rng.normal(size=(50, 3)) * 5.0).astype(np.float32)
     q, _ = np.linalg.qr(rng.normal(size=(3, 3)))
     moved = (reference @ (q * np.sign(np.linalg.det(q))).T + np.float32(11.0)).astype(np.float32)
-    assert compare.lddt(moved, reference) == pytest.approx(1.0, abs=1e-4)
+    assert compare.distance_difference(moved, reference) == pytest.approx(1.0, abs=1e-4)
     assert molframe.geometry.rmsd(moved, reference) > 1.0
 
 

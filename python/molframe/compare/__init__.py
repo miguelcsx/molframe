@@ -14,10 +14,10 @@ cad_score = _native.cad_score
 ce_align = _native.ce_align
 contact_areas = _native.contact_areas
 contact_similarity = _native.contact_similarity
+distance_difference = _native.distance_difference
 dockq = _native.dockq
 gdt_ha = _native.gdt_ha
 gdt_ts = _native.gdt_ts
-lddt = _native.lddt
 map_sequence_to_structure = _native.map_sequence_to_structure
 mapped_dockq = _native.mapped_dockq
 mapped_qs_score = _native.mapped_qs_score
@@ -40,10 +40,10 @@ __all__ = [
     "ce_align",
     "contact_areas",
     "contact_similarity",
+    "distance_difference",
     "dockq",
     "gdt_ha",
     "gdt_ts",
-    "lddt",
     "map_sequence_to_structure",
     "mapped_dockq",
     "mapped_qs_score",

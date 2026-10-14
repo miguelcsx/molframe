@@ -80,7 +80,7 @@ def tm_screen(
 def gdt_ts(model: Array, reference: Array) -> float: ...
 def gdt_ha(model: Array, reference: Array) -> float: ...
 def weighted_rmsd(model: Array, reference: Array, weights: Array) -> float: ...
-def lddt(
+def distance_difference(
     model: Array,
     reference: Array,
     *,
@@ -89,7 +89,12 @@ def lddt(
     minimum_reference_distance: float = 0.0,
     context: ExecutionContext | None = None,
 ) -> float:
-    """Score how well a model preserves the reference's local distances, in ``[0, 1]``."""
+    """Score how well coordinates preserve a reference's local distances, in ``[0, 1]``.
+
+    This is the coordinate kernel behind lDDT, not lDDT: bare coordinates carry no
+    residues, so it cannot skip distances inside a residue, resolve symmetric atom
+    names or count a missing atom against the model.
+    """
 
 def dockq(
     model: Structure,
