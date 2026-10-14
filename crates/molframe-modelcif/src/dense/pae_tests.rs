@@ -3,7 +3,7 @@ use crate::{PaeKind, PaePolicy, PaeStorage};
 
 fn quarter_steps(size: usize) -> Vec<f32> {
     (0..size * size)
-        .map(|index| (index % 127) as f32 * 0.25)
+        .map(|index| molframe_core::numeric::usize_to_f32(index % 127) * 0.25)
         .collect()
 }
 
@@ -20,7 +20,7 @@ fn stored_values_decode_to_exactly_the_supplied_values() {
 
 #[test]
 fn whole_number_matrices_are_one_byte_per_cell() {
-    let values: Vec<f32> = (0..16).map(|index| f32::from(index as u8)).collect();
+    let values: Vec<f32> = (0..16_u8).map(f32::from).collect();
     let matrix = PaeMatrix::from_values(4, &values, PaePolicy::new()).expect("matrix");
     assert_eq!(matrix.kind(), PaeKind::U8);
     assert_eq!(matrix.byte_len(), 16);
@@ -60,7 +60,10 @@ fn rows_and_blocks_are_decoded_in_place() {
     let matrix = PaeMatrix::from_values(4, &values, PaePolicy::new()).expect("matrix");
     let mut row = [0.0; 4];
     matrix.row_into(2, &mut row).expect("row");
-    assert_eq!(row, [values[8], values[9], values[10], values[11]]);
+    assert_eq!(
+        row.map(f32::to_bits),
+        [values[8], values[9], values[10], values[11]].map(f32::to_bits)
+    );
     let block = matrix.block_mean(0..2, 0..2).expect("block");
     let expected = f64::from(values[0] + values[1] + values[4] + values[5]) / 4.0;
     assert!((block - expected).abs() < 1e-9);

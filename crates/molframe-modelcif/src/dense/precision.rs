@@ -6,6 +6,7 @@
 //! largest scaled integer seen. Choosing a layout afterwards costs nothing.
 
 use super::half::{f16_bits_to_f32, f32_to_f16_bits};
+use molframe_core::numeric::{f32_eq, f64_eq, f64_to_f32, f64_to_u64, u64_to_f64};
 
 /// Largest number of decimals probed; confidence files carry at most two.
 pub(crate) const MAX_DECIMALS: usize = 4;
@@ -18,12 +19,12 @@ pub(crate) fn scaled(value: f32, denominator: u32) -> Option<u64> {
     if scaled < 0.0 || scaled > f64::from(u32::MAX) {
         return None;
     }
-    Some(scaled as u64)
+    Some(f64_to_u64(scaled))
 }
 
 /// The single-precision value a scaled integer stands for.
 pub(crate) fn unscaled(scaled: u64, denominator: u32) -> f32 {
-    (scaled as f64 / f64::from(denominator)) as f32
+    f64_to_f32(u64_to_f64(scaled) / f64::from(denominator))
 }
 
 /// Accumulates what storage widths can hold a value stream exactly.
@@ -69,7 +70,7 @@ impl PrecisionProbe {
         if value > self.maximum {
             self.maximum = value;
         }
-        if self.half_exact && f16_bits_to_f32(f32_to_f16_bits(value)) != value {
+        if self.half_exact && !f32_eq(f16_bits_to_f32(f32_to_f16_bits(value)), value) {
             self.half_exact = false;
         }
         for (slot, denominator) in POWERS.iter().enumerate() {
@@ -77,7 +78,7 @@ impl PrecisionProbe {
                 continue;
             }
             match scaled(value, *denominator) {
-                Some(integer) if unscaled(integer, *denominator) == value => {
+                Some(integer) if f32_eq(unscaled(integer, *denominator), value) => {
                     self.fixed_maximum[slot] = self.fixed_maximum[slot].max(integer);
                 }
                 _ => self.fixed_exact[slot] = false,
@@ -95,14 +96,14 @@ impl PrecisionProbe {
             self.non_finite = true;
             return;
         }
-        let single = value as f32;
+        let single = f64_to_f32(value);
         if single > self.maximum {
             self.maximum = single;
         }
-        if f64::from(single) != value {
+        if !f64_eq(f64::from(single), value) {
             self.single_exact = false;
         }
-        if self.half_exact && f64::from(f16_bits_to_f32(f32_to_f16_bits(single))) != value {
+        if self.half_exact && !f64_eq(f64::from(f16_bits_to_f32(f32_to_f16_bits(single))), value) {
             self.half_exact = false;
         }
         for (slot, denominator) in POWERS.iter().enumerate() {
@@ -112,9 +113,9 @@ impl PrecisionProbe {
             let integer = (value * f64::from(*denominator)).round();
             if integer >= 0.0
                 && integer <= f64::from(u32::MAX)
-                && integer / f64::from(*denominator) == value
+                && f64_eq(integer / f64::from(*denominator), value)
             {
-                self.fixed_maximum[slot] = self.fixed_maximum[slot].max(integer as u64);
+                self.fixed_maximum[slot] = self.fixed_maximum[slot].max(f64_to_u64(integer));
             } else {
                 self.fixed_exact[slot] = false;
             }
@@ -157,7 +158,7 @@ impl PrecisionProbe {
     pub fn exact_decimals(&self, ceiling: u64) -> Option<u8> {
         (0..=MAX_DECIMALS)
             .find(|slot| self.fixed_exact[*slot] && self.fixed_maximum[*slot] <= ceiling)
-            .map(|slot| slot as u8)
+            .and_then(|slot| u8::try_from(slot).ok())
     }
 
     /// Smallest decimal count at which every value is exact, however large.

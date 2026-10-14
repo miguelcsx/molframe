@@ -11,6 +11,7 @@ use super::pairwise_field::Field;
 use crate::dense::KNOWN_ITEMS;
 use crate::{DensePae, PaeMatrix, PaePolicy, PrecisionProbe, ResidueIndex};
 use molframe_cif::CifScalar;
+use molframe_core::numeric::f64_to_i64;
 use std::collections::HashSet;
 
 const ORDINAL: usize = 0;
@@ -26,7 +27,6 @@ type Key<'a> = (&'a str, i64, Option<&'a str>);
 
 /// Incremental dense reader for `ma_qa_metric_local_pairwise`.
 #[derive(Debug)]
-#[allow(clippy::struct_excessive_bools)]
 pub(super) struct PairwiseStream {
     slot: usize,
     policy: PaePolicy,
@@ -380,8 +380,7 @@ impl PairwiseStream {
         };
         match stored {
             Some(value) if self.saw_float => CifScalar::Float(value),
-            #[allow(clippy::cast_possible_truncation)]
-            Some(value) => CifScalar::Integer(value as i64),
+            Some(value) => CifScalar::Integer(f64_to_i64(value)),
             None => CifScalar::Unknown,
         }
     }

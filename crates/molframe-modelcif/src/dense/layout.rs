@@ -8,6 +8,7 @@
 use super::error::ConfidenceError;
 use super::half::{f16_bits_to_f32, f32_to_f16_bits};
 use super::precision::{PrecisionProbe, denominator, scaled, unscaled};
+use molframe_core::numeric::{f64_to_f32, f64_to_u32, low_u16, u64_to_f64, u64_to_u32};
 
 /// Element type of a stored matrix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -155,8 +156,8 @@ impl PaeLayout {
         match self.kind {
             PaeKind::U8 => clamp_fixed_f64(value, self.denominator, u64::from(u8::MAX)),
             PaeKind::U16 => clamp_fixed_f64(value, self.denominator, u64::from(u16::MAX)),
-            PaeKind::F16 => u32::from(f32_to_f16_bits(value as f32)),
-            PaeKind::F32 => (value as f32).to_bits(),
+            PaeKind::F16 => u32::from(f32_to_f16_bits(f64_to_f32(value))),
+            PaeKind::F32 => (f64_to_f32(value)).to_bits(),
         }
     }
 
@@ -166,7 +167,7 @@ impl PaeLayout {
     pub(crate) fn decode_f64(self, stored: u32) -> f64 {
         match self.kind {
             PaeKind::U8 | PaeKind::U16 => f64::from(stored) / f64::from(self.denominator),
-            PaeKind::F16 => f64::from(f16_bits_to_f32(stored as u16)),
+            PaeKind::F16 => f64::from(f16_bits_to_f32(low_u16(stored))),
             PaeKind::F32 => f64::from(f32::from_bits(stored)),
         }
     }
@@ -176,7 +177,7 @@ impl PaeLayout {
     pub(crate) fn decode(self, stored: u32) -> f32 {
         match self.kind {
             PaeKind::U8 | PaeKind::U16 => unscaled(u64::from(stored), self.denominator),
-            PaeKind::F16 => f16_bits_to_f32(stored as u16),
+            PaeKind::F16 => f16_bits_to_f32(low_u16(stored)),
             PaeKind::F32 => f32::from_bits(stored),
         }
     }
@@ -188,17 +189,17 @@ fn clamp_fixed(value: f32, denominator: u32, ceiling: u64) -> u32 {
         None if value > 0.0 => ceiling,
         None => 0,
     };
-    integer as u32
+    u64_to_u32(integer)
 }
 
 fn clamp_fixed_f64(value: f64, denominator: u32, ceiling: u64) -> u32 {
     let scaled = (value * f64::from(denominator)).round();
     if scaled < 0.0 {
         0
-    } else if scaled > ceiling as f64 {
-        ceiling as u32
+    } else if scaled > u64_to_f64(ceiling) {
+        u64_to_u32(ceiling)
     } else {
-        scaled as u32
+        f64_to_u32(scaled)
     }
 }
 
@@ -225,8 +226,8 @@ fn forced_layout(probe: &PrecisionProbe, kind: PaeKind) -> PaeLayout {
         return fixed(kind, decimals);
     }
     let maximum = f64::from(probe.maximum()).max(f64::MIN_POSITIVE);
-    let step = (ceiling as f64 / maximum).floor().clamp(1.0, 10_000.0);
-    let denominator = step as u32;
+    let step = (u64_to_f64(ceiling) / maximum).floor().clamp(1.0, 10_000.0);
+    let denominator = f64_to_u32(step);
     let decimals = match denominator {
         0..=1 => 0,
         2..=10 => 1,

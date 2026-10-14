@@ -8,6 +8,7 @@
 
 use super::scan::Scanner;
 use crate::{ConfidenceError, PaeMatrix, PaePolicy, PrecisionProbe};
+use molframe_core::numeric::f64_to_usize;
 
 #[derive(Default)]
 struct Located {
@@ -180,7 +181,7 @@ fn residue(scan: &mut Scanner<'_>) -> Result<usize, ConfidenceError> {
     let at = scan.offset();
     let value = scan.number()?;
     if value >= 1.0 && value.fract() == 0.0 {
-        Ok(value as usize)
+        Ok(f64_to_usize(value))
     } else {
         Err(Scanner::at(&[], at).fail("a one-based residue number"))
     }

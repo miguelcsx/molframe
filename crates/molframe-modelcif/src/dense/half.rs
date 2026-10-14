@@ -1,19 +1,21 @@
 //! IEEE binary16 conversion with round-to-nearest-even, kept local so the
 //! dense confidence storage needs no external half-float dependency.
 
+use molframe_core::numeric::{low_u8, low_u16};
+
 /// Converts a single-precision value to binary16 bits.
 ///
 /// Values beyond the binary16 range become signed infinity; NaN stays NaN.
-pub(crate) const fn f32_to_f16_bits(value: f32) -> u16 {
+pub(crate) fn f32_to_f16_bits(value: f32) -> u16 {
     let bits = value.to_bits();
-    let sign = ((bits >> 16) & 0x8000) as u16;
-    let exponent = ((bits >> 23) & 0xff) as i32;
+    let sign = low_u16((bits >> 16) & 0x8000);
+    let exponent = i32::from(low_u8(bits >> 23));
     let mantissa = bits & 0x007f_ffff;
     if exponent == 0xff {
         let payload = if mantissa == 0 {
             0
         } else {
-            0x0200 | (mantissa >> 13) as u16
+            0x0200 | low_u16(mantissa >> 13)
         };
         return sign | 0x7c00 | payload;
     }
@@ -26,7 +28,7 @@ pub(crate) const fn f32_to_f16_bits(value: f32) -> u16 {
             return sign;
         }
         let significand = mantissa | 0x0080_0000;
-        let shift = (14 - rebiased) as u32;
+        let shift = 14 + rebiased.unsigned_abs();
         let kept = significand >> shift;
         let remainder = significand & ((1 << shift) - 1);
         let halfway = 1 << (shift - 1);
@@ -35,16 +37,16 @@ pub(crate) const fn f32_to_f16_bits(value: f32) -> u16 {
         } else {
             kept
         };
-        return sign | rounded as u16;
+        return sign | low_u16(rounded);
     }
-    let combined = ((rebiased as u32) << 10) | (mantissa >> 13);
+    let combined = (rebiased.unsigned_abs() << 10) | (mantissa >> 13);
     let remainder = mantissa & 0x1fff;
     let rounded = if remainder > 0x1000 || (remainder == 0x1000 && combined & 1 == 1) {
         combined + 1
     } else {
         combined
     };
-    sign | rounded as u16
+    sign | low_u16(rounded)
 }
 
 /// Converts binary16 bits to a single-precision value exactly.

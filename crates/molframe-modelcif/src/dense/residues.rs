@@ -3,6 +3,8 @@
 //! Chain and component names are interned once, so each residue costs sixteen
 //! bytes regardless of how long its labels are.
 
+use molframe_core::numeric::usize_to_u32;
+
 const NO_COMPONENT: u32 = u32::MAX;
 
 /// One residue named by its label chain, label sequence number and component.
@@ -109,10 +111,10 @@ fn intern(names: &mut Vec<Box<str>>, name: &str) -> u32 {
         .iter()
         .rposition(|candidate| candidate.as_ref() == name)
     {
-        return position as u32;
+        return usize_to_u32(position);
     }
     names.push(name.into());
-    (names.len() - 1) as u32
+    usize_to_u32(names.len() - 1)
 }
 
 #[cfg(test)]

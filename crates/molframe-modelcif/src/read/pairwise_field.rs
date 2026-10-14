@@ -4,6 +4,7 @@
 //! reuses its text buffer instead of allocating per cell.
 
 use molframe_cif::CifScalar;
+use molframe_core::numeric::i64_to_f64;
 
 /// Largest integer a binary64 value holds exactly.
 const EXACT_INTEGER: i64 = 1 << 53;
@@ -100,8 +101,7 @@ impl Field {
     /// Finite numeric value, when binary64 holds it exactly.
     pub(super) fn number(&self) -> Option<f64> {
         match self.kind {
-            #[allow(clippy::cast_precision_loss)]
-            Kind::Integer if self.integer.abs() <= EXACT_INTEGER => Some(self.integer as f64),
+            Kind::Integer if self.integer.abs() <= EXACT_INTEGER => Some(i64_to_f64(self.integer)),
             Kind::Float if self.float.is_finite() => Some(self.float),
             _ => None,
         }

@@ -11,6 +11,7 @@
 use super::error::ConfidenceError;
 use super::layout::{PaeKind, PaeLayout, PaePolicy};
 use super::precision::PrecisionProbe;
+use molframe_core::numeric::{low_u8, low_u16, usize_to_f64};
 
 #[derive(Clone, Debug, PartialEq)]
 enum Cells {
@@ -155,8 +156,8 @@ impl PaeMatrix {
             self.max_error = error;
         }
         match &mut self.cells {
-            Cells::U8(cells) => cells[index] = encoded as u8,
-            Cells::U16(cells) | Cells::F16(cells) => cells[index] = encoded as u16,
+            Cells::U8(cells) => cells[index] = low_u8(encoded),
+            Cells::U16(cells) | Cells::F16(cells) => cells[index] = low_u16(encoded),
             Cells::F32(cells) => cells[index] = f32::from_bits(encoded),
         }
     }
@@ -312,7 +313,7 @@ impl PaeMatrix {
                 total += self.decode_f64_at(row * self.size + column);
             }
         }
-        Some(total / (rows.len() * columns.len()) as f64)
+        Some(total / usize_to_f64(rows.len() * columns.len()))
     }
 
     /// Mean over the whole matrix, or `None` for an empty one.
