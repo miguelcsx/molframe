@@ -212,7 +212,10 @@ fn screen(
     context: &ExecutionContext,
     pair_at: impl Fn(usize) -> Option<(usize, usize)> + Sync,
 ) -> Result<TmScreen, CompareError> {
-    let longest = structures.iter().map(|s| s.len()).max().unwrap_or(0);
+    let longest = match structures.iter().map(|s| s.len()).max() {
+        Some(longest) => longest,
+        None => 0,
+    };
     let (scores, tally) = run(
         structures,
         total,

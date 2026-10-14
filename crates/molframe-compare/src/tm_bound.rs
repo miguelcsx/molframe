@@ -98,7 +98,10 @@ impl TmBound {
 }
 
 fn to_link(point: usize) -> u32 {
-    u32::try_from(point).unwrap_or(NONE)
+    match u32::try_from(point) {
+        Ok(link) => link,
+        Err(_) => NONE,
+    }
 }
 
 /// The members of one group, newest first.

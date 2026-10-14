@@ -119,7 +119,10 @@ pub(crate) fn run<W: Default>(
     scores
         .try_reserve_exact(total)
         .map_err(|_| CompareError::Spatial(SpatialError::NumericRangeExceeded))?;
-    let longest = structures.iter().map(|s| s.len()).max().unwrap_or(0);
+    let longest = match structures.iter().map(|s| s.len()).max() {
+        Some(longest) => longest,
+        None => 0,
+    };
     let bytes_per_block = PAIRS_PER_BLOCK
         .saturating_mul(longest)
         .saturating_mul(BYTES_PER_COORDINATE)
