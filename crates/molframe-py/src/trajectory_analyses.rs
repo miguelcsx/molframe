@@ -22,7 +22,7 @@ use std::path::PathBuf;
     skip_from_py_object,
     module = "molframe.trajectory"
 )]
-struct PyFrameSeries {
+pub(crate) struct PyFrameSeries {
     frames: Py<PyArray1<u64>>,
     times: Py<PyArray1<f64>>,
     values: Py<PyAny>,
@@ -50,6 +50,23 @@ impl PyFrameSeries {
 
     fn __len__(&self, py: Python<'_>) -> usize {
         self.frames.bind(py).len()
+    }
+}
+
+impl PyFrameSeries {
+    /// A series whose values are one read-only `f64` per frame, moved from `Vec`s.
+    pub(crate) fn from_areas(
+        py: Python<'_>,
+        frames: Vec<u64>,
+        times: Vec<f64>,
+        values: Vec<f64>,
+    ) -> Self {
+        Collected {
+            frames,
+            times,
+            values,
+        }
+        .into_series(py, readonly_values)
     }
 }
 

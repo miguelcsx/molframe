@@ -2,7 +2,14 @@ from collections.abc import Callable, Sequence
 from os import PathLike
 from typing import Literal, Protocol, final
 
-from .. import Analysis, AnalysisPolicy, ExecutionContext, Float32Array, Float64Array
+from .. import (
+    Analysis,
+    AnalysisPolicy,
+    ExecutionContext,
+    Float32Array,
+    Float64Array,
+    Structure,
+)
 from ..crystal import UnitCell
 
 class Array(Protocol):
@@ -436,3 +443,30 @@ def path_similarity(
     memory_limit: int = 1073741824,
 ) -> PathSimilarity:
     """Return the Hausdorff and discrete Frechet distances between two paths of frames."""
+
+def sasa_stream(
+    path: str | PathLike[str],
+    topology: Structure,
+    *,
+    probe: float | None = None,
+    method: str | None = None,
+    n_points: int | None = None,
+    hetero: str | None = None,
+    metals: str | None = None,
+    radii: str | None = None,
+    policy: AnalysisPolicy | None = None,
+    format: Literal["xtc", "trr", "dcd", "tng", "gro", "xyz", "lammps_dump", "netcdf"]
+    | None = None,
+    frames: slice | None = None,
+    memory_limit: int | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[FrameSeries]:
+    """Total solvent-accessible area of every frame, in square angstroms, in constant memory.
+
+    ``topology`` supplies the atoms and their radii, so the trajectory must have its atoms in
+    the same order (a different count raises ``E5102``). The options, the radius rule and the
+    policy are those of :func:`molframe.analysis.sasa`, including ``E7103`` for a ``radii``
+    that conflicts with the policy; only the Shrake-Rupley method streams. The values are the
+    per-atom areas of the batch calculation summed over the same atoms; hydrogens, other
+    conformers and atoms with no radius are neither measured nor read from the trajectory.
+    """

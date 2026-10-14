@@ -88,6 +88,11 @@ impl Source {
         }
     }
 
+    /// Atoms per frame of the trajectory, as its container records them.
+    pub(crate) fn atom_count(&self) -> PyResult<usize> {
+        Ok(self.open_raw()?.n_atoms())
+    }
+
     /// The selection reader and the frame workspace the streaming analyses reserve.
     pub(crate) fn open(
         &self,

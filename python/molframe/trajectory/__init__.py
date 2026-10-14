@@ -31,6 +31,7 @@ rmsd = _native.rmsd
 FrameSeries = _native.FrameSeries
 TrajectoryChunks = _native.TrajectoryChunks
 contact_counts_stream = _native.contact_counts_stream
+sasa_stream = _native.sasa_stream
 read_chunks = _native.read_chunks
 rmsd_stream = _native.rmsd_stream
 rmsf_stream = _native.rmsf_stream
@@ -70,4 +71,5 @@ __all__ = [
     "rmsd_stream",
     "rmsf_stream",
     "run_analysis_stream",
+    "sasa_stream",
 ]

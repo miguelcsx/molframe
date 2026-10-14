@@ -397,19 +397,7 @@ pub(crate) fn sasa(
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
     let (selection, source) = crate::tables::radii_under(radii, policy.as_deref())?;
-    let options = molframe::SasaOptions::from_words(
-        method,
-        n_points,
-        probe,
-        hetero,
-        metals,
-        &source.request(),
-        &molframe::chemistry::TableStore::global(),
-    )
-    .map_err(|error| match error {
-        molframe::SasaWordError::Table(error) => crate::error::kernel(error),
-        other => crate::error::failure(other),
-    })?;
+    let options = sasa_options(method, n_points, probe, hetero, metals, &source)?;
     let kernel = molframe::analysis::sasa_kernel(options, selection);
     run(
         py,
@@ -423,6 +411,30 @@ pub(crate) fn sasa(
         },
         context,
     )
+}
+
+/// The SASA options the words name, with the radius table `source` supplies.
+pub(crate) fn sasa_options(
+    method: Option<&str>,
+    n_points: Option<u16>,
+    probe: Option<f32>,
+    hetero: Option<&str>,
+    metals: Option<&str>,
+    source: &molframe::chemistry::RadiusSource,
+) -> PyResult<molframe::SasaOptions> {
+    molframe::SasaOptions::from_words(
+        method,
+        n_points,
+        probe,
+        hetero,
+        metals,
+        &source.request(),
+        &molframe::chemistry::TableStore::global(),
+    )
+    .map_err(|error| match error {
+        molframe::SasaWordError::Table(error) => crate::error::kernel(error),
+        other => crate::error::failure(other),
+    })
 }
 
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {

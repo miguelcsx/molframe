@@ -80,6 +80,10 @@ mod query_aliases;
 mod query_cache;
 mod query_messages;
 mod reading;
+#[cfg(feature = "analysis")]
+mod sasa_residues;
+#[cfg(all(feature = "analysis", feature = "trajectory"))]
+mod sasa_stream;
 mod secondary;
 #[cfg(feature = "query")]
 mod selection_expr;

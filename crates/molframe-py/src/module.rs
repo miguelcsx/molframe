@@ -121,6 +121,7 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
         crate::governed_structure::register(&analysis)?;
         crate::governed_physical::register(&analysis)?;
         crate::governed_field::register(&analysis)?;
+        crate::sasa_residues::register(&analysis)?;
         analysis.add("ContactTable", module.getattr("ContactTable")?)?;
     }
     module.add_submodule(&analysis)?;
@@ -178,6 +179,8 @@ pub(super) fn register_namespaces(module: &Bound<'_, PyModule>) -> PyResult<()> 
     let trajectory = PyModule::new(py, "trajectory")?;
     #[cfg(feature = "trajectory")]
     trajectory::register(&trajectory)?;
+    #[cfg(all(feature = "analysis", feature = "trajectory"))]
+    crate::sasa_stream::register(&trajectory)?;
     module.add_submodule(&trajectory)?;
 
     let motif = PyModule::new(py, "motif")?;

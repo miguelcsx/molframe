@@ -292,6 +292,18 @@ pub(super) const ROWS: &[Capability] = &[
         cost: molframe::Cost::Materialize,
     },
     Capability {
+        name: "residue_sasa",
+        domain: "analysis",
+        feature: "analysis",
+        inputs: "structure,probe,method,n_points,hetero,metals",
+        result: "Analysis<ResidueAreas>",
+        policy: true,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,memory",
+        cost: molframe::Cost::Materialize,
+    },
+    Capability {
         name: "contacts_by_definition",
         domain: "analysis",
         feature: "analysis",

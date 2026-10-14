@@ -232,6 +232,18 @@ pub(super) const ROWS: &[Capability] = &[
         cost: molframe::Cost::Decode,
     },
     Capability {
+        name: "sasa_stream",
+        domain: "trajectory",
+        feature: "trajectory",
+        inputs: "path,topology,probe,n_points,hetero,metals",
+        result: "Analysis<FrameSeries>",
+        policy: true,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,memory",
+        cost: molframe::Cost::Decode,
+    },
+    Capability {
         name: "contact_counts_stream",
         domain: "trajectory",
         feature: "trajectory",

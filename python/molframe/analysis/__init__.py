@@ -32,12 +32,15 @@ pore_profile = _native.pore_profile
 surface_contacts = _native.surface_contacts
 contacts_by_definition = _native.contacts_by_definition
 sasa = _native.sasa
+residue_sasa = _native.residue_sasa
+ResidueAreas = _native.ResidueAreas
 
 __all__ = [
     "ContactTable",
     "DensityGrid",
     "GridSpec",
     "HydrogenBondCandidateOptions",
+    "ResidueAreas",
     "ScalarGrid",
     "atom_contacts",
     "cation_pi",
@@ -60,6 +63,7 @@ __all__ = [
     "pi_stacking",
     "pore_profile",
     "radial_distribution",
+    "residue_sasa",
     "salt_bridges",
     "sasa",
     "surface_contacts",

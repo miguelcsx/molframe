@@ -1,6 +1,6 @@
 import os
 from collections.abc import Sequence
-from typing import Literal, Protocol, Self
+from typing import Literal, Protocol, Self, final
 
 from .. import (
     Analysis,
@@ -8,9 +8,11 @@ from .. import (
     ExecutionContext,
     Float32Array,
     Float64Array,
+    Int32Array,
     Query,
     Structure,
     Table,
+    UInt64Array,
 )
 from .._structure import Selection
 
@@ -420,4 +422,52 @@ def sasa(
     supplied raises ``E7102`` (absent) or ``E2201`` (malformed), which name how to supply it. The
     result records the table that applied, by name, version, source and licence, in its
     ``vdw_radii`` assumption and its ``radii_table`` parameter.
+    """
+
+@final
+class ResidueAreas:
+    """Solvent-accessible area of every residue, one row per residue in chain order."""
+
+    @property
+    def chain(self) -> list[str]: ...
+    @property
+    def name(self) -> list[str]: ...
+    @property
+    def number(self) -> Int32Array: ...
+    @property
+    def area(self) -> Float64Array:
+        """Square angstroms: the sum of the residue's per-atom areas."""
+    @property
+    def atoms(self) -> UInt64Array:
+        """Measured atoms of every residue."""
+    @property
+    def excluded_hetero_residues(self) -> int: ...
+    @property
+    def skipped_atoms(self) -> int: ...
+    @property
+    def missing_radius(self) -> int:
+        """Included atoms the radius table has no radius for."""
+    def __len__(self) -> int: ...
+
+def residue_sasa(
+    structure: Structure,
+    *,
+    probe: float | None = None,
+    method: str | None = None,
+    n_points: int | None = None,
+    hetero: str | None = None,
+    metals: str | None = None,
+    radii: str | None = None,
+    policy: AnalysisPolicy | None = None,
+    context: ExecutionContext | None = None,
+) -> Analysis[ResidueAreas]:
+    """Return the solvent-accessible area of every residue, in square angstroms.
+
+    The options, the radius rule and the policy are those of :func:`sasa`: ``radii`` or else
+    the policy's ``vdw_radii``, ``E7102`` for an absent table and ``E7103`` (``PolicyError``)
+    for a table that conflicts with the policy. A residue's area is the sum of its atoms'
+    areas, measured without hydrogens (they do not occlude, so a file with hydrogens differs
+    from :func:`sasa`), other conformers beyond the first, or atoms with no radius. The result
+    records the table that applied in its ``vdw_radii`` assumption; included atoms with no
+    radius make it ``partial`` with a ``W6004`` warning.
     """
