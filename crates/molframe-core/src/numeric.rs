@@ -164,3 +164,10 @@ pub fn i64_to_f64(value: i64) -> f64 {
         None => f64::NAN,
     }
 }
+
+/// A 24-bit sample `bits` scaled to `[0, 1)`; exact in `f32`.
+#[must_use]
+#[inline]
+pub fn u64_to_f32_unit(bits: u64) -> f32 {
+    f64_to_f32(u64_to_f64(bits & 0x00ff_ffff) / 16_777_216.0)
+}
