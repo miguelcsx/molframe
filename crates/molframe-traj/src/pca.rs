@@ -1,16 +1,29 @@
 //! Deterministic Cartesian and circular-feature principal-component analysis.
+//!
+//! For `n` observations of `p = 3N` features the observation matrix is held
+//! once, row-major, in `f64` (`8 n p` bytes) and is never centred in place or
+//! transposed; products centre one block at a time on the worker pool.
+//!
+//! | route | chosen when | time | extra memory |
+//! |---|---|---|---|
+//! | covariance | `p <= n` | `O(n p^2 + p^3)` | `p^2` per in-flight block, `2 p^2` solver |
+//! | snapshot (Gram) | `p > n` | `O(n^2 p + n^3)` | `n^2` per in-flight block, `2 n^2` solver |
+//!
+//! The snapshot route recovers feature-space axes as `X^T v / sqrt((n-1) l)`
+//! in one parallel product, so the `p x p` covariance never exists when
+//! `n < p`. Eigenvalues agree with a dense covariance reference to a relative
+//! `1e-9` and axes to `1e-7` (unit vectors, after sign canonicalisation) on
+//! well-separated spectra; see `pca_reference_tests.rs`.
 
-use crate::pca_linalg::{covariance, gram, project};
-use molframe_core::ExecutionContext;
-use molframe_geom::{PeriodicAngle, superpose};
-use nalgebra::{DMatrix, SymmetricEigen};
-use std::{borrow::Cow, mem::size_of};
-
-use crate::ensemble::{EnsembleGeometryError, generalized_procrustes_mean_source, validate_frames};
+use crate::ensemble::{EnsembleGeometryError, validate_frames};
 use crate::frame_view::{FrameSource, FrameView};
 use crate::numeric::f64_from_usize;
-
-type Eigenvectors = (Vec<f64>, Vec<Box<[f64]>>);
+use crate::pca_fit::{column_means, fitted_observations};
+use crate::pca_linalg::{Observations, back_project, covariance, gram, project, top_eigenpairs};
+use crate::pca_memory::{FitMemory, check_pca_request, fit_memory};
+use faer::Mat;
+use molframe_core::ExecutionContext;
+use molframe_geom::PeriodicAngle;
 
 /// How Cartesian observations are aligned before PCA.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -72,7 +85,7 @@ pub fn cartesian_pca_view(
     cartesian_pca_source(&frames, fit, component_count, memory_limit)
 }
 
-fn cartesian_pca_source<S: FrameSource + ?Sized>(
+fn cartesian_pca_source<S: FrameSource + Sync + ?Sized>(
     frames: &S,
     fit: CartesianFit<'_>,
     component_count: usize,
@@ -97,8 +110,16 @@ fn cartesian_pca_source<S: FrameSource + ?Sized>(
     {
         return Err(EnsembleGeometryError::DimensionMismatch);
     }
-    let matrix = fitted_matrix(frames, fit, features)?;
-    principal_components(matrix, component_count)
+    let context = ExecutionContext::default();
+    let fitted = fitted_observations(frames, fit, features, &context)?;
+    principal_components(
+        &fitted.data,
+        &fitted.mean,
+        observations,
+        features,
+        component_count,
+        &context,
+    )
 }
 
 /// Runs dihedral PCA on `(cos θ, sin θ)` features.
@@ -130,281 +151,111 @@ pub fn dihedral_pca(
         memory_limit,
         FitMemory::NONE,
     )?;
-    let mut matrix = DMatrix::zeros(observations.len(), features);
-    for (row, angles) in observations.iter().enumerate() {
-        for (angle, columns) in angles.iter().zip((0..features).step_by(2)) {
-            matrix[(row, columns)] = angle.radians().cos();
-            matrix[(row, columns + 1)] = angle.radians().sin();
+    let mut data = Vec::with_capacity(observations.len() * features);
+    for angles in observations {
+        for angle in angles {
+            data.push(angle.radians().cos());
+            data.push(angle.radians().sin());
         }
     }
-    principal_components(matrix, component_count)
-}
-
-fn fitted_matrix<S: FrameSource + ?Sized>(
-    frames: &S,
-    fit: CartesianFit<'_>,
-    features: usize,
-) -> Result<DMatrix<f64>, EnsembleGeometryError> {
-    let reference = match fit {
-        CartesianFit::None => None,
-        CartesianFit::Reference(reference) => Some(Cow::Borrowed(reference)),
-        CartesianFit::IterativeMean {
-            tolerance,
-            max_iterations,
-        } => Some(Cow::Owned(generalized_procrustes_mean_source(
-            frames,
-            tolerance,
-            max_iterations,
-        )?)),
-    };
-    let mut matrix = DMatrix::zeros(frames.frame_count(), features);
-    for index in 0..frames.frame_count() {
-        let frame = frames
-            .frame(index)
-            .ok_or(EnsembleGeometryError::DimensionMismatch)?;
-        match reference.as_deref() {
-            Some(reference) => {
-                let fit = superpose(frame, reference)
-                    .map_err(|_| EnsembleGeometryError::DegenerateFit)?;
-                for (atom, &point) in frame.iter().enumerate() {
-                    write_point(&mut matrix, index, atom, fit.transform.apply(point));
-                }
-            }
-            None => {
-                for (atom, &point) in frame.iter().enumerate() {
-                    write_point(&mut matrix, index, atom, point);
-                }
-            }
-        }
-    }
-    Ok(matrix)
-}
-
-fn write_point(matrix: &mut DMatrix<f64>, row: usize, atom: usize, point: [f32; 3]) {
-    let column = atom * 3;
-    matrix[(row, column)] = f64::from(point[0]);
-    matrix[(row, column + 1)] = f64::from(point[1]);
-    matrix[(row, column + 2)] = f64::from(point[2]);
+    let mean = column_means(&data, features)?;
+    principal_components(
+        &data,
+        &mean,
+        observations.len(),
+        features,
+        component_count,
+        &ExecutionContext::default(),
+    )
 }
 
 fn principal_components(
-    mut centred: DMatrix<f64>,
+    data: &[f64],
+    mean: &[f64],
+    observations: usize,
+    features: usize,
     component_count: usize,
+    context: &ExecutionContext,
 ) -> Result<PcaResult, EnsembleGeometryError> {
-    let observations = centred.nrows();
-    let features = centred.ncols();
-    let mut mean = vec![0.0; features];
-    let inverse_count = f64_from_usize(observations)
-        .ok_or(EnsembleGeometryError::InvalidParameter)?
-        .recip();
-    for (column, mean_value) in mean.iter_mut().enumerate() {
-        let average = centred.column(column).iter().copied().sum::<f64>() * inverse_count;
-        *mean_value = average;
-        for value in centred.column_mut(column).iter_mut() {
-            *value -= average;
-        }
-    }
+    let matrix = Observations::new(data, observations, features, mean)?;
     let limit = component_count.min(observations - 1).min(features);
-    let context = ExecutionContext::default();
-    let (eigenvalues, components) = if features <= observations {
-        feature_eigenvectors(&centred, limit, &context)?
+    let divisor =
+        f64_from_usize(observations - 1).ok_or(EnsembleGeometryError::InvalidParameter)?;
+    let (eigenvalues, mut components) = if features <= observations {
+        feature_eigenvectors(matrix, divisor, limit, context)?
     } else {
-        snapshot_eigenvectors(&centred, limit, &context)?
+        snapshot_eigenvectors(matrix, divisor, limit, context)?
     };
-    let projections = project(&centred, &components, &context)?;
+    canonicalize_signs(&mut components);
+    let projections = project(matrix, components.as_ref(), context)?;
     Ok(PcaResult {
-        mean: mean.into_boxed_slice(),
+        mean: mean.into(),
         eigenvalues: eigenvalues.into_boxed_slice(),
-        components: components.into_boxed_slice(),
+        components: (0..components.ncols())
+            .map(|column| (0..features).map(|row| components[(row, column)]).collect())
+            .collect(),
         projections,
     })
 }
 
 fn feature_eigenvectors(
-    matrix: &DMatrix<f64>,
+    matrix: Observations<'_>,
+    divisor: f64,
     limit: usize,
     context: &ExecutionContext,
-) -> Result<Eigenvectors, EnsembleGeometryError> {
-    let divisor = observation_divisor(matrix)?;
-    let covariance = covariance(matrix, divisor, context)?;
-    Ok(selected_eigenvectors(
-        &SymmetricEigen::new(covariance),
-        limit,
+) -> Result<(Vec<f64>, Mat<f64>), EnsembleGeometryError> {
+    let (values, vectors) = top_eigenpairs(&covariance(matrix, divisor, context)?, limit)?;
+    Ok((
+        values.into_iter().map(|value| value.max(0.0)).collect(),
+        vectors,
     ))
 }
 
 fn snapshot_eigenvectors(
-    matrix: &DMatrix<f64>,
+    matrix: Observations<'_>,
+    divisor: f64,
     limit: usize,
     context: &ExecutionContext,
-) -> Result<Eigenvectors, EnsembleGeometryError> {
-    let divisor = observation_divisor(matrix)?;
-    let decomposition = SymmetricEigen::new(gram(matrix, divisor, context)?);
-    let indices = sorted_indices(decomposition.eigenvalues.as_slice(), limit);
-    let mut values = Vec::with_capacity(indices.len());
-    let mut vectors = Vec::with_capacity(indices.len());
-    for index in indices {
-        let value = decomposition.eigenvalues[index].max(0.0);
-        if value <= f64::EPSILON {
-            continue;
-        }
-        let snapshot = decomposition.eigenvectors.column(index);
-        // Inside the component loop, so materialising the transpose here would
-        // allocate a full copy of the matrix once per component.
-        let mut vector = matrix.tr_mul(&snapshot);
-        vector /= (divisor * value).sqrt();
-        let mut feature_vector: Vec<f64> = vector.iter().copied().collect();
-        canonicalize_sign(&mut feature_vector);
-        values.push(value);
-        vectors.push(feature_vector.into_boxed_slice());
-    }
-    Ok((values, vectors))
-}
-
-fn observation_divisor(matrix: &DMatrix<f64>) -> Result<f64, EnsembleGeometryError> {
-    matrix
-        .nrows()
-        .checked_sub(1)
-        .and_then(f64_from_usize)
-        .ok_or(EnsembleGeometryError::InvalidParameter)
-}
-
-fn selected_eigenvectors(
-    decomposition: &SymmetricEigen<f64, nalgebra::Dyn>,
-    limit: usize,
-) -> (Vec<f64>, Vec<Box<[f64]>>) {
-    let indices = sorted_indices(decomposition.eigenvalues.as_slice(), limit);
-    let mut values = Vec::with_capacity(indices.len());
-    let mut vectors = Vec::with_capacity(indices.len());
-    for index in indices {
-        let value = decomposition.eigenvalues[index].max(0.0);
-        let mut vector: Vec<f64> = decomposition
-            .eigenvectors
-            .column(index)
-            .iter()
-            .copied()
-            .collect();
-        canonicalize_sign(&mut vector);
-        values.push(value);
-        vectors.push(vector.into_boxed_slice());
-    }
-    (values, vectors)
-}
-
-fn sorted_indices(values: &[f64], limit: usize) -> Vec<usize> {
-    let mut indices: Vec<usize> = (0..values.len()).collect();
-    indices.sort_by(|&left, &right| {
-        values[right]
-            .total_cmp(&values[left])
-            .then(left.cmp(&right))
-    });
-    indices.truncate(limit);
-    indices
-}
-
-fn canonicalize_sign(vector: &mut [f64]) {
-    let pivot = vector
-        .iter()
-        .enumerate()
-        .max_by(|(left_index, left), (right_index, right)| {
-            left.abs()
-                .total_cmp(&right.abs())
-                .then(right_index.cmp(left_index))
-        });
-    if pivot.is_some_and(|(_, value)| *value < 0.0) {
-        for value in vector {
-            *value = -*value;
+) -> Result<(Vec<f64>, Mat<f64>), EnsembleGeometryError> {
+    let (values, snapshots) = top_eigenpairs(&gram(matrix, divisor, context)?, limit)?;
+    let values: Vec<f64> = values
+        .into_iter()
+        .map(|value| value.max(0.0))
+        .take_while(|&value| value > f64::EPSILON)
+        .collect();
+    let kept = snapshots.as_ref().subcols(0, values.len());
+    let mut axes = back_project(matrix, kept, context)?;
+    for (column, value) in values.iter().enumerate() {
+        let scale = (divisor * value).sqrt().recip();
+        for row in 0..matrix.cols() {
+            axes[(row, column)] *= scale;
         }
     }
+    Ok((values, axes))
 }
 
-fn check_pca_request(
-    observations: usize,
-    features: usize,
-    component_count: usize,
-    memory_limit: usize,
-    fit_memory: FitMemory,
-) -> Result<(), EnsembleGeometryError> {
-    if observations < 2 || features == 0 || component_count == 0 {
-        return Err(EnsembleGeometryError::InvalidParameter);
+fn canonicalize_signs(components: &mut Mat<f64>) {
+    for column in 0..components.ncols() {
+        let mut pivot: Option<(usize, f64)> = None;
+        for row in 0..components.nrows() {
+            let value = components[(row, column)];
+            // Largest magnitude wins; the earliest index wins ties.
+            if pivot.is_none_or(|(_, best)| value.abs().total_cmp(&best.abs()).is_gt()) {
+                pivot = Some((row, value));
+            }
+        }
+        if pivot.is_some_and(|(_, value)| value < 0.0) {
+            for row in 0..components.nrows() {
+                components[(row, column)] = -components[(row, column)];
+            }
+        }
     }
-    let components = component_count.min(observations - 1).min(features);
-    let square = observations.min(features);
-    let data = observations
-        .checked_mul(features)
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    let eigensolver = square
-        .checked_mul(square)
-        .and_then(|entries| entries.checked_mul(2))
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    let result = features
-        .checked_mul(components)
-        .and_then(|component_entries| {
-            observations
-                .checked_mul(components)
-                .and_then(|projection_entries| component_entries.checked_add(projection_entries))
-        })
-        .and_then(|entries| entries.checked_add(features))
-        .and_then(|entries| entries.checked_add(components))
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    let pca_bytes = data
-        .checked_add(eigensolver)
-        .and_then(|entries| entries.checked_add(result))
-        .and_then(|entries| entries.checked_mul(size_of::<f64>()))
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    let matrix_bytes = data
-        .checked_mul(size_of::<f64>())
-        .and_then(|bytes| bytes.checked_add(fit_memory.retained_bytes))
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    let required = pca_bytes
-        .max(matrix_bytes)
-        .max(fit_memory.construction_peak);
-    if required > memory_limit {
-        return Err(EnsembleGeometryError::MemoryLimit);
-    }
-    Ok(())
-}
-
-#[derive(Clone, Copy)]
-struct FitMemory {
-    retained_bytes: usize,
-    construction_peak: usize,
-}
-
-impl FitMemory {
-    const NONE: Self = Self {
-        retained_bytes: 0,
-        construction_peak: 0,
-    };
-}
-
-fn fit_memory(atoms: usize, fit: CartesianFit<'_>) -> Result<FitMemory, EnsembleGeometryError> {
-    let CartesianFit::IterativeMean {
-        tolerance,
-        max_iterations,
-    } = fit
-    else {
-        return Ok(FitMemory::NONE);
-    };
-    if !tolerance.is_finite() || tolerance <= 0.0 || max_iterations == 0 {
-        return Err(EnsembleGeometryError::InvalidParameter);
-    }
-    let retained_bytes = atoms
-        .checked_mul(size_of::<[f32; 3]>())
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    let accumulator_bytes = atoms
-        .checked_mul(size_of::<[f64; 3]>())
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    let construction_peak = retained_bytes
-        .checked_mul(2)
-        .and_then(|bytes| bytes.checked_add(accumulator_bytes))
-        .ok_or(EnsembleGeometryError::MemoryLimit)?;
-    Ok(FitMemory {
-        retained_bytes,
-        construction_peak,
-    })
 }
 
 #[cfg(test)]
 #[path = "pca_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "pca_reference_tests.rs"]
+mod reference_tests;
