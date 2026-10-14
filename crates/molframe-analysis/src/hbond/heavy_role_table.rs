@@ -117,11 +117,12 @@ impl HeavyRoleTable {
             return None;
         }
         let find = |residue: &str| self.rule(residue, atom, starts_chain, weak);
-        Some(
-            find(component)
-                .or_else(|| (parent != component).then(|| find(parent)).flatten())
-                .unwrap_or(0),
-        )
+        let rule =
+            find(component).or_else(|| (parent != component).then(|| find(parent)).flatten());
+        Some(match rule {
+            Some(rule) => rule,
+            None => 0,
+        })
     }
 
     fn rule(&self, residue: &str, atom: &str, starts_chain: bool, weak: bool) -> Option<u8> {

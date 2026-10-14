@@ -29,10 +29,6 @@ use crate::numeric::f64_to_f32;
 use crate::salt_bridge_groups::{Sign, titratable_atoms};
 
 /// Explicit policy for salt-bridge detection.
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "each flag is an independent, documented switch"
-)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SaltBridgeOptions {
     /// Largest anion–cation distance in ångström (about 4 Å typically).

@@ -233,7 +233,6 @@ pub fn visit_atom_contacts_between(
     visit_contacts(structure, left, right, cutoff, backend, None, context, emit)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn visit_contacts(
     structure: &Structure,
     left: &AtomSelection,

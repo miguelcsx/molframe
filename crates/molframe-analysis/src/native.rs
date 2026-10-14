@@ -168,7 +168,6 @@ pub fn native_contact_fraction_matched(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 fn count_kept(
     reference: &Structure,
     selection: &AtomSelection,
