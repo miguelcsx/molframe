@@ -326,7 +326,10 @@ fn metadata(block: &DataBlock) -> Result<SymmetrySet, Vec<Diagnostic>> {
         None => None,
     };
     let Some(category) = block.category("space_group") else {
-        return Ok(legacy.unwrap_or_default());
+        return Ok(match legacy {
+            Some(legacy) => legacy,
+            None => SymmetrySet::default(),
+        });
     };
     let mut set = modern_metadata(category)?;
     // A file may name the group in both categories, each carrying what the

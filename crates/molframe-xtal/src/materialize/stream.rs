@@ -60,7 +60,10 @@ impl AssemblyChunks {
 
     fn expand(&mut self, end: usize) -> Result<Structure, Vec<Diagnostic>> {
         let piece = self.view.slice(self.cursor..end);
-        let labels = self.labels.take().unwrap_or_default();
+        let labels = match self.labels.take() {
+            Some(labels) => labels,
+            None => LabelLedger::default(),
+        };
         let (structure, labels) = Materializer::new(&piece, labels, self.atom_base)
             .map_err(single)?
             .build()?;

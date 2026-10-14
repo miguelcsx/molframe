@@ -98,9 +98,13 @@ fn backbones(structure: &Structure) -> Vec<Backbone> {
         return out;
     };
     for chain in model.chains() {
+        let label = match chain.label() {
+            Some(label) => label,
+            None => "",
+        };
         let mut backbone = Backbone {
             chain: chain.index(),
-            label: chain.label().unwrap_or_default().into(),
+            label: label.into(),
             names: Vec::new(),
             seq_ids: Vec::new(),
             positions: Vec::new(),

@@ -24,7 +24,10 @@ impl LabelLedger {
         source_symbol: SymbolId,
         source: &str,
     ) -> Result<SymbolId, Diagnostic> {
-        let mut count = self.counts.get(&source_symbol).copied().unwrap_or(0);
+        let mut count = match self.counts.get(&source_symbol) {
+            Some(&count) => count,
+            None => 0,
+        };
         loop {
             count = count
                 .checked_add(1)

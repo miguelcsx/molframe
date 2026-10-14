@@ -119,7 +119,7 @@ pub(crate) fn lower_domains(document: &Document) -> Result<NcsDomains, Vec<Diagn
             match text(category, "id", row) {
                 Some(id) => out.domains.push(NcsDomain {
                     id,
-                    ensemble: text(category, "pdbx_ens_id", row).unwrap_or_default(),
+                    ensemble: text_or_empty(category, "pdbx_ens_id", row),
                     details: text(category, "details", row),
                     limits: Vec::new(),
                 }),
@@ -142,7 +142,7 @@ pub(crate) fn lower_domains(document: &Document) -> Result<NcsDomains, Vec<Diagn
                 continue;
             };
             out.pairings.push(NcsPairing {
-                ensemble: text(category, "ens_id", row).unwrap_or_default(),
+                ensemble: text_or_empty(category, "ens_id", row),
                 domain_1,
                 domain_2,
                 operator,
@@ -197,6 +197,13 @@ fn text(category: &Category, item: &str, row: usize) -> Option<Box<str>> {
         .identifier(item, row)
         .filter(|value| !value.trim().is_empty())
         .map(|value| value.into_owned().into_boxed_str())
+}
+
+fn text_or_empty(category: &Category, item: &str, row: usize) -> Box<str> {
+    match text(category, item, row) {
+        Some(value) => value,
+        None => Box::from(""),
+    }
 }
 
 fn integer(category: &Category, item: &str, row: usize) -> Option<i32> {
