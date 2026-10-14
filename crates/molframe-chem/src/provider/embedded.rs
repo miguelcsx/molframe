@@ -99,7 +99,13 @@ impl EmbeddedProvider {
             findings = one_finding(
                 Diagnostic::new(Code::E2005)
                     .in_category("chem_comp")
-                    .with_context("id", duplicate.map(|id| id.to_string()).unwrap_or_default()),
+                    .with_context(
+                        "id",
+                        match duplicate {
+                            Some(id) => id.to_string(),
+                            None => String::new(),
+                        },
+                    ),
             );
         }
         Err(findings)

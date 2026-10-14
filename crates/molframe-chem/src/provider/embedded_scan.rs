@@ -65,7 +65,10 @@ impl Source {
         bonds: Option<Category>,
     ) -> Option<Self> {
         let atom_runs = runs(&atoms);
-        let bond_runs = bonds.as_ref().map(runs).unwrap_or_default();
+        let bond_runs = match bonds.as_ref() {
+            Some(bonds) => runs(bonds),
+            None => Vec::new(),
+        };
         let mut entries = Vec::new();
         for row in 0..metadata.row_count() {
             let Some(id) = shared_id(&metadata, "id", row) else {
@@ -122,11 +125,9 @@ impl Source {
             bonds,
             true,
         )
-        .map_err(|found| {
-            found
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| Diagnostic::new(Code::W3206).in_category(self.atoms.name()))
+        .map_err(|found| match found.into_iter().next() {
+            Some(finding) => finding,
+            None => Diagnostic::new(Code::W3206).in_category(self.atoms.name()),
         })
     }
 
@@ -216,7 +217,7 @@ impl Source {
 
     fn report(&self, row: usize, atom_rows: &[usize], bond_rows: &[usize]) -> Vec<Diagnostic> {
         let bonds = self.bonds.as_ref().filter(|_| !bond_rows.is_empty());
-        component_from(
+        match component_from(
             &self.metadata,
             row,
             Some(Rows {
@@ -228,9 +229,10 @@ impl Source {
                 rows: bond_rows,
             }),
             true,
-        )
-        .err()
-        .unwrap_or_default()
+        ) {
+            Err(findings) => findings,
+            Ok(_) => Vec::new(),
+        }
     }
 }
 

@@ -4,7 +4,7 @@
 //! consulted once per component id per thread; outputs are merged later in
 //! file order, which keeps the result independent of thread count.
 
-use super::atom_chemistry::{AtomChemistry, observed_stereo};
+use super::atom_chemistry::{AtomChemistry, HbondRoles, observed_stereo};
 use super::component_bonds::add_component_bonds;
 use super::component_index::ComponentIndex;
 use super::resolver::{Resolved, Resolver};
@@ -171,9 +171,11 @@ fn annotate_atoms(
                 kind: component.kind,
                 aromatic: expected.aromatic,
                 charge: expected.charge,
-                donor: index.is_donor(name),
-                acceptor: index.is_acceptor(name),
-                weak_acceptor: index.is_weak_acceptor(name),
+                roles: HbondRoles {
+                    donor: index.is_donor(name),
+                    acceptor: index.is_acceptor(name),
+                    weak_acceptor: index.is_weak_acceptor(name),
+                },
                 stereo: observed_stereo(component, atoms, *atom, expected.stereo),
             },
         ));

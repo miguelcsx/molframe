@@ -12,17 +12,22 @@ use molframe_core::structure::{AtomRef, StructureData};
 /// from the conventional acceptor annotation.
 pub const HBOND_WEAK_ACCEPTOR_ANNOTATION: &str = "hbond_weak_acceptor";
 
+/// The hydrogen-bond roles an atom plays.
 #[derive(Clone, Copy)]
-#[allow(clippy::struct_excessive_bools)] // one flag per independent boolean atom annotation column
+pub(super) struct HbondRoles {
+    pub(super) donor: bool,
+    pub(super) acceptor: bool,
+    pub(super) weak_acceptor: bool,
+}
+
+#[derive(Clone, Copy)]
 pub(super) struct AtomChemistry {
     pub(super) element: molframe_core::Element,
     pub(super) carbonyl: bool,
     pub(super) kind: crate::ComponentKind,
     pub(super) aromatic: bool,
     pub(super) charge: i8,
-    pub(super) donor: bool,
-    pub(super) acceptor: bool,
-    pub(super) weak_acceptor: bool,
+    pub(super) roles: HbondRoles,
     pub(super) stereo: Option<StereoConfiguration>,
 }
 
@@ -203,9 +208,9 @@ pub(super) fn attach_annotations(
             kinds.push((annotation.kind.code(), Presence::Present));
             aromatic.push((annotation.aromatic, Presence::Present));
             charges.push((i64::from(annotation.charge), Presence::Present));
-            donors.push((annotation.donor, Presence::Present));
-            acceptors.push((annotation.acceptor, Presence::Present));
-            weak.push((annotation.weak_acceptor, Presence::Present));
+            donors.push((annotation.roles.donor, Presence::Present));
+            acceptors.push((annotation.roles.acceptor, Presence::Present));
+            weak.push((annotation.roles.weak_acceptor, Presence::Present));
             match annotation.stereo {
                 Some(configuration) => {
                     let symbol = data

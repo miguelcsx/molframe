@@ -226,7 +226,11 @@ pub fn split_binary<'a, L: TableLines>(
         return Err(whole("truncated inside the header"));
     };
     let identity = read_table(what, text_of(what, header)?, lines)?;
-    Ok((identity, bytes.get(6 + length..).unwrap_or_default()))
+    let payload = match bytes.get(6 + length..) {
+        Some(payload) => payload,
+        None => &[],
+    };
+    Ok((identity, payload))
 }
 
 /// The inverse of [`split_binary`]: `payload` behind a header declaring `identity`

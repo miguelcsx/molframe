@@ -33,7 +33,7 @@ pub(super) fn refine_linked_acceptors(
             if let Some(Some(atom)) = chemistry.get_mut(nitrogen.as_usize())
                 && atom.element == Element::NITROGEN
             {
-                atom.acceptor = false;
+                atom.roles.acceptor = false;
             }
         }
     }
