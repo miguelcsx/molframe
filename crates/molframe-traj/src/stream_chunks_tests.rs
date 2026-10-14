@@ -1,9 +1,9 @@
 //! Parallel chunks must equal sequential chunks, in order, within bounds.
-#![allow(clippy::cast_precision_loss)]
 
 use super::*;
 use crate::{DcdReader, DcdWriteOptions, XtcReader, XtcWriteOptions, write_dcd, write_xtc};
 use molframe_core::CancellationToken;
+use molframe_core::numeric::{usize_to_f32 as f32_of, usize_to_f64 as f64_of};
 use std::path::{Path, PathBuf};
 
 const FRAMES: usize = 700;
@@ -19,9 +19,9 @@ fn files() -> (tempfile::TempDir, PathBuf, PathBuf) {
     let steps: Vec<Timestep> = (0..FRAMES)
         .map(|i| Timestep {
             frame: i,
-            time: Some(i as f64 * 0.5),
+            time: Some(f64_of(i) * 0.5),
             positions: (0..6)
-                .map(|a| [i as f32 * 0.25 + a as f32, a as f32, (i % 7) as f32])
+                .map(|a| [f32_of(i) * 0.25 + f32_of(a), f32_of(a), f32_of(i % 7)])
                 .collect(),
             ..Timestep::default()
         })

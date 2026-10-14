@@ -1,12 +1,8 @@
 //! Parallel range decoding must match sequential reads and respect its bounds.
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap
-)]
 
 use super::*;
 use crate::{DcdReader, DcdWriteOptions, XtcReader, XtcWriteOptions, write_dcd, write_xtc};
+use molframe_core::numeric::{usize_to_f32 as f32_of, usize_to_f64 as f64_of};
 use std::path::{Path, PathBuf};
 
 const FRAMES: usize = 1500;
@@ -22,9 +18,9 @@ fn frames() -> Vec<Timestep> {
     (0..FRAMES)
         .map(|i| Timestep {
             frame: i,
-            time: Some(i as f64),
+            time: Some(f64_of(i)),
             positions: (0..5)
-                .map(|a| [i as f32 * 0.25, a as f32, (i % 7) as f32])
+                .map(|a| [f32_of(i) * 0.25, f32_of(a), f32_of(i % 7)])
                 .collect(),
             ..Timestep::default()
         })
@@ -68,7 +64,7 @@ fn collect<R: TrajectoryReader>(
         },
     )
     .expect("ranges");
-    assert_eq!(count as usize, out.len());
+    assert_eq!(usize::try_from(count).expect("small"), out.len());
     assert_eq!(context.reserved_bytes(), 0);
     out
 }

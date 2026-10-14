@@ -1,6 +1,6 @@
 //! Index scan, sharing and cache for the XTC reader.
-#![allow(clippy::cast_precision_loss)]
 
+use molframe_core::numeric::{usize_to_f32 as f32_of, usize_to_f64 as f64_of};
 use std::path::PathBuf;
 
 use super::XtcReader;
@@ -15,11 +15,11 @@ fn fixture(name: &str, frames: usize) -> (tempfile::TempDir, PathBuf) {
     let steps: Vec<Timestep> = (0..frames)
         .map(|frame| Timestep {
             frame,
-            time: Some(frame as f64 * 0.5),
+            time: Some(f64_of(frame) * 0.5),
             positions: (0..40)
                 .map(|atom| {
-                    let wild = ((frame * 37 + atom * 11) % 17) as f32 * (frame % 5) as f32;
-                    [atom as f32 * 0.1 + wild, (frame % 9) as f32, atom as f32]
+                    let wild = f32_of((frame * 37 + atom * 11) % 17) * f32_of(frame % 5);
+                    [f32_of(atom) * 0.1 + wild, f32_of(frame % 9), f32_of(atom)]
                 })
                 .collect(),
             ..Timestep::default()

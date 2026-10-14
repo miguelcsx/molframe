@@ -1,16 +1,16 @@
 //! Index scan, seek and sharing for the TRR reader.
-#![allow(clippy::cast_precision_loss)]
 
 use super::*;
 use crate::{FrameIndex, TrrWriteOptions, write_trr};
+use molframe_core::numeric::{usize_to_f32 as f32_of, usize_to_f64 as f64_of};
 
 /// Frames alternate between position-only and position-plus-velocity records.
 fn fixture(frames: usize) -> (tempfile::TempDir, std::path::PathBuf) {
     let steps: Vec<Timestep> = (0..frames)
         .map(|i| Timestep {
             frame: i,
-            time: Some(i as f64 * 0.25),
-            positions: vec![[i as f32, 2.0, 3.0]; 9],
+            time: Some(f64_of(i) * 0.25),
+            positions: vec![[f32_of(i), 2.0, 3.0]; 9],
             velocities: (i % 3 == 0).then(|| vec![[0.5; 3]; 9]),
             ..Timestep::default()
         })

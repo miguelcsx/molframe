@@ -1,12 +1,8 @@
 //! Seeking a DCD frame must decode exactly what a sequential read yields.
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap
-)]
 
 use super::DcdReader;
 use crate::{DcdWriteOptions, Timestep, TrajectoryReader, write_dcd};
+use molframe_core::numeric::{usize_to_f32 as f32_of, usize_to_f64 as f64_of};
 use molframe_core::structure::UnitCell;
 use std::path::PathBuf;
 
@@ -16,12 +12,12 @@ fn written(frames: usize, cell: bool) -> (tempfile::TempDir, PathBuf, Vec<Timest
     let steps: Vec<Timestep> = (0..frames)
         .map(|frame| Timestep {
             frame,
-            time: Some(frame as f64),
+            time: Some(f64_of(frame)),
             positions: (0..7)
-                .map(|atom| [frame as f32, atom as f32, (frame * atom) as f32])
+                .map(|atom| [f32_of(frame), f32_of(atom), f32_of(frame * atom)])
                 .collect(),
             cell: cell.then_some(UnitCell {
-                lengths: [10.0 + frame as f64, 11.0, 12.0],
+                lengths: [10.0 + f64_of(frame), 11.0, 12.0],
                 angles: [90.0; 3],
             }),
             ..Timestep::default()
@@ -78,7 +74,7 @@ fn seeking_a_fixed_atom_file_restores_the_frame_zero_atoms() {
 }
 
 fn record(out: &mut Vec<u8>, payload: &[u8]) {
-    let length = (payload.len() as i32).to_le_bytes();
+    let length = i32::try_from(payload.len()).expect("small").to_le_bytes();
     out.extend_from_slice(&length);
     out.extend_from_slice(payload);
     out.extend_from_slice(&length);
@@ -109,8 +105,8 @@ fn fixed_file() -> (tempfile::TempDir, PathBuf) {
     for axis in [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]] {
         record(&mut bytes, &floats(&axis));
     }
-    for step in 1..3 {
-        let shift = step as f32 * 10.0;
+    for step in 1..3_u8 {
+        let shift = f32::from(step) * 10.0;
         for axis in [[20.0, 30.0], [50.0, 60.0], [80.0, 90.0]] {
             record(&mut bytes, &floats(&[axis[0] + shift, axis[1] + shift]));
         }
