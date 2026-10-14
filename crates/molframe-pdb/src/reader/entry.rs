@@ -1,9 +1,11 @@
 //! The entry point: bytes in, structure and findings out.
 
 use super::ensemble::{CommonRecords, read_ragged};
-use super::lines::Lines;
+use super::lines::{Line, Lines};
+use super::numbers::decode_window;
 use super::state::ReadState;
 use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::execution::ExecutionContext;
 use molframe_core::io::{Format, InputBuffer, ReadOptions, ReadResult, Reader};
 
 /// The reader for the legacy fixed-column format.
@@ -48,6 +50,9 @@ pub fn read_pdbqt(input: &InputBuffer, options: &ReadOptions) -> ReadResult {
     read_as(input, options, Format::Pdbqt)
 }
 
+/// Lines decoded ahead of the sequential walk, which bounds the extra memory.
+const WINDOW_LINES: usize = 1 << 15;
+
 fn read_as(input: &InputBuffer, options: &ReadOptions, variant: Format) -> ReadResult {
     let Ok(text) = str::from_utf8(input.as_bytes()) else {
         return Err(vec![
@@ -57,10 +62,36 @@ fn read_as(input: &InputBuffer, options: &ReadOptions, variant: Format) -> ReadR
 
     let mut common = CommonRecords::new();
     let mut state = ReadState::new(options, variant);
-    for line in Lines::new(text) {
-        let line = line.map_err(|finding| vec![finding])?;
-        common.observe(&line);
-        state.line(&line);
+    let context = ExecutionContext::default();
+    let mut lines = Lines::new(text);
+    let mut window = Vec::with_capacity(WINDOW_LINES);
+    loop {
+        window.clear();
+        let mut failure = None;
+        for line in lines.by_ref().take(WINDOW_LINES) {
+            match line {
+                Ok(line) => window.push(line),
+                Err(finding) => {
+                    failure = Some(finding);
+                    break;
+                }
+            }
+        }
+        let decoded = decode_window(&window, &context);
+        for (index, line) in window.iter().enumerate() {
+            common.observe(line);
+            let line = Line {
+                numbers: decoded.get(index).and_then(Option::as_ref),
+                ..*line
+            };
+            state.line(&line);
+        }
+        if let Some(finding) = failure {
+            return Err(vec![finding]);
+        }
+        if window.len() < WINDOW_LINES {
+            break;
+        }
     }
     if state.requires_ragged() {
         drop(state);

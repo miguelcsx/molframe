@@ -3,6 +3,8 @@
 //! The position is a by-product of the walk rather than something reconstructed
 //! afterwards, so attaching an exact location to a finding costs nothing.
 
+use super::numbers::AtomNumbers;
+use crate::fixed;
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::span::Position;
 
@@ -11,6 +13,24 @@ use molframe_core::span::Position;
 pub(super) struct Line<'a> {
     pub(super) text: &'a str,
     pub(super) at: Position,
+    /// The row's numbers when a window decoded them ahead of the walk.
+    pub(super) numbers: Option<&'a AtomNumbers>,
+}
+
+impl Line<'_> {
+    pub(super) fn occupancy(&self) -> Option<f64> {
+        self.numbers.map_or_else(
+            || fixed::real(self.text, 55, 60),
+            |numbers| numbers.occupancy,
+        )
+    }
+
+    pub(super) fn b_factor(&self) -> Option<f64> {
+        self.numbers.map_or_else(
+            || fixed::real(self.text, 61, 66),
+            |numbers| numbers.b_factor,
+        )
+    }
 }
 
 /// Walks the lines of a file, tracking where each began.
@@ -56,6 +76,7 @@ impl<'a> Iterator for Lines<'a> {
         Some(Ok(Line {
             text: line.trim_end_matches('\r'),
             at,
+            numbers: None,
         }))
     }
 }

@@ -150,8 +150,8 @@ impl ReadState<'_> {
 
     pub(super) fn later_atom(&mut self, line: &Line<'_>, signature: AtomIdentity) {
         let position = self.position_of(line);
-        let occupancy = self.optional_real(line, 55, 60, "occupancy", 1.0);
-        let b_factor = self.optional_real(line, 61, 66, "B factor", 0.0);
+        let occupancy = self.optional_real(line, line.occupancy(), "occupancy", 1.0);
+        let b_factor = self.optional_real(line, line.b_factor(), "B factor", 0.0);
         let serial = super::serial_of(line);
         let standard_matches = self.stored_atom_matches(signature, occupancy, b_factor, serial);
         let variant_matches = self.variant_atom_matches(line);

@@ -197,3 +197,33 @@ END
 
 #[path = "entry_models_tests.rs"]
 mod models;
+
+#[test]
+fn a_file_spanning_several_decode_windows_keeps_row_order_and_findings() {
+    let rows = WINDOW_LINES * 2 + 17;
+    let text = (0..rows)
+        .map(|index| {
+            let x = if index == WINDOW_LINES + 3 {
+                "bad"
+            } else {
+                "27.340"
+            };
+            let serial = index % 90_000 + 1;
+            let residue = index % 9_000 + 1;
+            format!(
+                "ATOM  {serial:>5}  CA  GLY A{residue:>4}    {x:>8}  24.430   2.614  1.00 10.00           C\n"
+            )
+        })
+        .collect::<Vec<_>>()
+        .concat();
+    let input = InputBuffer::from_bytes(text.into_bytes());
+    let Err(findings) = read(&input, &ReadOptions::new()) else {
+        panic!("a malformed coordinate must fail the read");
+    };
+    assert_eq!(findings.len(), 1);
+    let line = findings
+        .first()
+        .and_then(molframe_core::Diagnostic::span)
+        .map(|span| span.start.line);
+    assert_eq!(line, u64::try_from(WINDOW_LINES + 4).ok());
+}

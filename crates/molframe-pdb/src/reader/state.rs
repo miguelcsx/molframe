@@ -14,7 +14,7 @@ mod rows;
 mod secondary;
 mod variants;
 
-pub(super) use rows::{charge_of, serial_of, starts_with_coordinate_keyword};
+pub(super) use rows::{charge_in, charge_of, serial_in, serial_of, starts_with_coordinate_keyword};
 
 use models::{AtomIdentity, ModelRead};
 
@@ -262,8 +262,8 @@ impl<'a> ReadState<'a> {
             ((1.0, Presence::Unknown), (0.0, Presence::Unknown))
         } else {
             (
-                self.optional_real(line, 55, 60, "occupancy", 1.0),
-                self.optional_real(line, 61, 66, "B factor", 0.0),
+                self.optional_real(line, line.occupancy(), "occupancy", 1.0),
+                self.optional_real(line, line.b_factor(), "B factor", 0.0),
             )
         };
         let alternate_component_id = self.alternate_component_of(line, residue, component_id);
@@ -299,8 +299,11 @@ impl<'a> ReadState<'a> {
 
     /// The element a row declares, or the one its name implies.
     fn element_of(&mut self, line: &Line<'_>, raw_name: &str) -> Element {
-        let declared = fixed::text(line.text, 77, 78);
-        if let Some(element) = Element::from_symbol(declared) {
+        let declared = match line.numbers {
+            Some(numbers) => numbers.declared,
+            None => Element::from_symbol(fixed::text(line.text, 77, 78)),
+        };
+        if let Some(element) = declared {
             return element;
         }
         let inferred = match self.options.missing_element_policy {
@@ -317,15 +320,22 @@ impl<'a> ReadState<'a> {
     }
 
     fn position_of(&mut self, line: &Line<'_>) -> Option<[f32; 3]> {
-        if let (Some(x), Some(y), Some(z)) = (
-            fixed::real(line.text, 31, 38),
-            fixed::real(line.text, 39, 46),
-            fixed::real(line.text, 47, 54),
-        ) && let Some(position) = x
-            .to_f32()
-            .zip(y.to_f32())
-            .zip(z.to_f32())
-            .map(|((x, y), z)| [x, y, z])
+        let [x, y, z] = line.numbers.map_or_else(
+            || {
+                [
+                    fixed::real(line.text, 31, 38),
+                    fixed::real(line.text, 39, 46),
+                    fixed::real(line.text, 47, 54),
+                ]
+            },
+            |numbers| numbers.position,
+        );
+        if let (Some(x), Some(y), Some(z)) = (x, y, z)
+            && let Some(position) = x
+                .to_f32()
+                .zip(y.to_f32())
+                .zip(z.to_f32())
+                .map(|((x, y), z)| [x, y, z])
         {
             return Some(position);
         }
@@ -340,12 +350,11 @@ impl<'a> ReadState<'a> {
     fn optional_real(
         &mut self,
         line: &Line<'_>,
-        start: usize,
-        end: usize,
+        value: Option<f64>,
         field: &'static str,
         when_absent: f32,
     ) -> (f32, Presence) {
-        let Some(value) = fixed::real(line.text, start, end) else {
+        let Some(value) = value else {
             return (when_absent, Presence::Unknown);
         };
         if let Some(value) = value.to_f32() {

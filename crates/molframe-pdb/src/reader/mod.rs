@@ -13,6 +13,7 @@
 mod ensemble;
 mod entry;
 mod lines;
+mod numbers;
 mod state;
 
 pub use entry::{PdbReader, read, read_pdbqt, read_pqr};

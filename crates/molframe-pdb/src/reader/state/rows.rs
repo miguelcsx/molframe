@@ -51,8 +51,14 @@ pub(crate) fn sequence_identifier(sequence: i64) -> OptionalI32 {
 /// decode is reported as unlabeled rather than guessed at.
 #[must_use]
 pub(crate) fn serial_of(line: &Line<'_>) -> u32 {
-    let Some(serial) = hybrid36::decode(fixed::raw(line.text, 7, 11), 5)
-        .and_then(|serial| u32::try_from(serial).ok())
+    line.numbers
+        .map_or_else(|| serial_in(line.text), |numbers| numbers.serial)
+}
+
+/// [`serial_of`] for the text of a row.
+pub(crate) fn serial_in(text: &str) -> u32 {
+    let Some(serial) =
+        hybrid36::decode(fixed::raw(text, 7, 11), 5).and_then(|serial| u32::try_from(serial).ok())
     else {
         return 0;
     };
@@ -66,7 +72,13 @@ mod tests;
 /// Columns 79-80 as a formal charge: a digit and a sign in either order.
 /// Blank means the file does not say, not that the atom is neutral.
 pub(in crate::reader) fn charge_of(line: &Line<'_>) -> (i8, Presence) {
-    let field = fixed::text(line.text, 79, 80);
+    line.numbers
+        .map_or_else(|| charge_in(line.text), |numbers| numbers.charge)
+}
+
+/// [`charge_of`] for the text of a row.
+pub(in crate::reader) fn charge_in(text: &str) -> (i8, Presence) {
+    let field = fixed::text(text, 79, 80);
     let mut magnitude = None;
     let mut sign = None;
     for character in field.chars() {
