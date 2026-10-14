@@ -119,14 +119,12 @@ impl MemoryBudget {
         };
         let value: f64 = number.parse().map_err(|_| MemoryBudgetError::Unparsable)?;
         let bytes = value * multiplier;
-        #[allow(clippy::cast_precision_loss)]
-        let ceiling = usize::MAX as f64;
+        let ceiling = crate::numeric::usize_to_f64(usize::MAX);
         if !bytes.is_finite() || bytes >= ceiling {
             return Err(MemoryBudgetError::Unparsable);
         }
         // Truncation is the intent: a fractional byte is not a byte.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        Self::new(bytes as usize)
+        Self::new(crate::numeric::f64_to_usize(bytes))
     }
 }
 

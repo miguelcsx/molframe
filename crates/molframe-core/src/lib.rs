@@ -17,6 +17,7 @@
 //! - [`span`] — where in a source file something was.
 //! - [`diagnostic`] — findings about data, returned alongside success.
 //! - [`symbol`] — interned identifiers, so no kernel compares strings.
+//! - [`numeric`] — the one home of every lossy numeric conversion.
 
 #![forbid(unsafe_code)]
 
@@ -34,6 +35,7 @@ pub mod hashing;
 pub mod index;
 pub mod io;
 pub mod limits;
+pub mod numeric;
 pub mod optional;
 pub mod parallel;
 pub mod provider;

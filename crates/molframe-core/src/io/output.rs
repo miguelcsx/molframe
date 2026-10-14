@@ -277,21 +277,23 @@ fn compression_for(path: &Path) -> OutputCompression {
     }
 }
 
-// Every arm is compiled out when both codecs are enabled, leaving a function
-// that cannot fail. The signature stays uniform across feature sets so the call
-// site does not change shape with the build.
-#[cfg_attr(
-    all(feature = "gzip", feature = "zstd"),
-    allow(clippy::unnecessary_wraps)
-)]
-fn ensure_available(path: &Path, compression: OutputCompression) -> Result<(), Diagnostic> {
-    let _ = path;
+// The codec a build leaves out, if `compression` names one. Every arm is
+// compiled out when both codecs are enabled, so this answers `None` there and
+// `ensure_available` keeps one signature across feature sets.
+fn missing_codec(compression: OutputCompression) -> Option<&'static str> {
     match compression {
         #[cfg(not(feature = "gzip"))]
-        OutputCompression::Gzip => Err(unavailable(path, "gzip")),
+        OutputCompression::Gzip => Some("gzip"),
         #[cfg(not(feature = "zstd"))]
-        OutputCompression::Zstd => Err(unavailable(path, "zstandard")),
-        _ => Ok(()),
+        OutputCompression::Zstd => Some("zstandard"),
+        _ => None,
+    }
+}
+
+fn ensure_available(path: &Path, compression: OutputCompression) -> Result<(), Diagnostic> {
+    match missing_codec(compression) {
+        Some(codec) => Err(unavailable(path, codec)),
+        None => Ok(()),
     }
 }
 

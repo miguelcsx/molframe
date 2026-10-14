@@ -117,8 +117,6 @@ macro_rules! closed_vocabulary {
             pub const fn name(&self) -> &'static str {
                 match self {
                     $($variant => $name,)+
-                    #[allow(unreachable_patterns)]
-                    _ => "custom",
                 }
             }
         }
