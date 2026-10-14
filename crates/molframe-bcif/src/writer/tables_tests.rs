@@ -8,8 +8,7 @@ struct Grid {
 }
 
 impl ColumnTable for Grid {
-    #[allow(clippy::unnecessary_literal_bound)]
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "grid"
     }
     fn row_count(&self) -> usize {

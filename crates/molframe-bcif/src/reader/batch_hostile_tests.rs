@@ -2,7 +2,6 @@
 //! absurd declared sizes in every column encoding, truncation and bit flips.
 //! Each must end in an error or a bounded batch, never a panic, and the
 //! source's reservations must stay inside the execution budget throughout.
-#![allow(clippy::cast_precision_loss, clippy::cast_possible_wrap)]
 
 use super::BcifBatchSource;
 use crate::container::{EncodedBlock, EncodedCategory, EncodedColumn, EncodedFile};
@@ -61,8 +60,10 @@ fn drive(bytes: Vec<u8>) -> Result<usize, StructureBatchError> {
 }
 
 fn valid_columns(rows: usize) -> Vec<EncodedColumn> {
-    let ints = (1..=rows as i64).collect::<Vec<_>>();
-    let floats = (1..=rows).map(|row| row as f64).collect::<Vec<_>>();
+    let ints = (1..=i64::try_from(rows).expect("small")).collect::<Vec<_>>();
+    let floats = (1..=rows)
+        .map(molframe_core::numeric::usize_to_f64)
+        .collect::<Vec<_>>();
     let words = |word: &str| vec![word.to_owned(); rows];
     let text = |word: &str| column(encode_strings(&words(word)).expect("strings"));
     vec![
