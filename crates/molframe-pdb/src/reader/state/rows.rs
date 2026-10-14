@@ -51,8 +51,10 @@ pub(crate) fn sequence_identifier(sequence: i64) -> OptionalI32 {
 /// decode is reported as unlabeled rather than guessed at.
 #[must_use]
 pub(crate) fn serial_of(line: &Line<'_>) -> u32 {
-    line.numbers
-        .map_or_else(|| serial_in(line.text), |numbers| numbers.serial)
+    match line.numbers {
+        Some(numbers) => numbers.serial,
+        None => serial_in(line.text),
+    }
 }
 
 /// [`serial_of`] for the text of a row.
@@ -72,8 +74,10 @@ mod tests;
 /// Columns 79-80 as a formal charge: a digit and a sign in either order.
 /// Blank means the file does not say, not that the atom is neutral.
 pub(in crate::reader) fn charge_of(line: &Line<'_>) -> (i8, Presence) {
-    line.numbers
-        .map_or_else(|| charge_in(line.text), |numbers| numbers.charge)
+    match line.numbers {
+        Some(numbers) => numbers.charge,
+        None => charge_in(line.text),
+    }
 }
 
 /// [`charge_of`] for the text of a row.

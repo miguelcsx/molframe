@@ -320,16 +320,14 @@ impl<'a> ReadState<'a> {
     }
 
     fn position_of(&mut self, line: &Line<'_>) -> Option<[f32; 3]> {
-        let [x, y, z] = line.numbers.map_or_else(
-            || {
-                [
-                    fixed::real(line.text, 31, 38),
-                    fixed::real(line.text, 39, 46),
-                    fixed::real(line.text, 47, 54),
-                ]
-            },
-            |numbers| numbers.position,
-        );
+        let [x, y, z] = match line.numbers {
+            Some(numbers) => numbers.position,
+            None => [
+                fixed::real(line.text, 31, 38),
+                fixed::real(line.text, 39, 46),
+                fixed::real(line.text, 47, 54),
+            ],
+        };
         if let (Some(x), Some(y), Some(z)) = (x, y, z)
             && let Some(position) = x
                 .to_f32()

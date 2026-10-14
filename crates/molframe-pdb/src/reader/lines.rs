@@ -19,17 +19,17 @@ pub(super) struct Line<'a> {
 
 impl Line<'_> {
     pub(super) fn occupancy(&self) -> Option<f64> {
-        self.numbers.map_or_else(
-            || fixed::real(self.text, 55, 60),
-            |numbers| numbers.occupancy,
-        )
+        match self.numbers {
+            Some(numbers) => numbers.occupancy,
+            None => fixed::real(self.text, 55, 60),
+        }
     }
 
     pub(super) fn b_factor(&self) -> Option<f64> {
-        self.numbers.map_or_else(
-            || fixed::real(self.text, 61, 66),
-            |numbers| numbers.b_factor,
-        )
+        match self.numbers {
+            Some(numbers) => numbers.b_factor,
+            None => fixed::real(self.text, 61, 66),
+        }
     }
 }
 

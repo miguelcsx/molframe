@@ -55,9 +55,10 @@ pub(super) fn decode_window(
 ) -> Vec<Option<AtomNumbers>> {
     let plan = BlockPlan::new(lines.len(), BLOCK_LINES);
     let blocks = map_blocks_in(plan, context, |_, range| {
-        lines
-            .get(range)
-            .unwrap_or_default()
+        let Some(block) = lines.get(range) else {
+            return Vec::new();
+        };
+        block
             .iter()
             .map(|line| {
                 matches!(fixed::record(line.text), "ATOM" | "HETATM")
