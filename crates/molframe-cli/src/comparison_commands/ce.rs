@@ -86,7 +86,6 @@ pub(super) fn measure(
     Ok(rows)
 }
 
-#[allow(clippy::cast_precision_loss)]
-const fn count(value: usize) -> f64 {
-    value as f64
+fn count(value: usize) -> f64 {
+    molframe_core::numeric::usize_to_f64(value)
 }

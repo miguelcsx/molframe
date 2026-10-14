@@ -102,9 +102,8 @@ pub(super) fn contact_similarity(
     ])
 }
 
-#[allow(clippy::cast_precision_loss)]
-const fn count(value: usize) -> f64 {
-    value as f64
+fn count(value: usize) -> f64 {
+    molframe_core::numeric::usize_to_f64(value)
 }
 
 /// Per-atom radii and residue identifiers, which the contact-area surface needs.
