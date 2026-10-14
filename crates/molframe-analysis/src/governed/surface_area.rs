@@ -9,7 +9,7 @@
 use super::common::{descriptor, float};
 use super::definition::DefinitionError;
 use super::{FrameKernelResult, StructureKernel, structure_kernel};
-use molframe_chem::included_atoms;
+use molframe_chem::{RadiusSelection, included_atoms};
 use molframe_core::contract::{
     AnalysisPolicy, Assumption, AssumptionSource, Coverage, Impact, ParameterValue, PolicyField,
     Quality,
@@ -24,10 +24,14 @@ use std::collections::BTreeMap;
 /// `options` is the one option set every front end shares: the sampling method and its
 /// density, the probe radius, which heteroatom classes take part (`hetero`, the polymer
 /// alone by default) and where a metal the radius set lacks takes its radius (`metals`).
-/// The radii are `options.radii`, a table the caller resolved. The result records the
-/// table that was applied (name, version, source, licence) as a `vdw_radii` assumption,
-/// which is a profile default when it carries the name the policy's `vdw_radii` gives and
-/// explicit otherwise. An atom the options
+/// The radii are `options.radii`, a table the caller resolved under `selection`, the
+/// one rule every consumer of van der Waals radii shares ([`RadiusSelection`]): the
+/// table asked for, else the one the policy's `vdw_radii` names. The kernel checks, when
+/// it runs, that the table it was handed is the one the policy permits, so a table
+/// resolved under another policy is a typed `E7103` error and not a silent answer.
+/// The result records the table that was applied (name, version, source, licence) as a
+/// `vdw_radii` assumption, which is a profile default when it carries the name the
+/// policy's `vdw_radii` gives and explicit otherwise. An atom the options
 /// leave out, or whose element has no radius in the set, has no area (`NaN`) and does not
 /// occlude its neighbours. A left-out heteroatom is a choice and not a gap; an included
 /// atom with no radius is reported as missing coverage, so the policy's `missing_atoms`
@@ -37,6 +41,7 @@ use std::collections::BTreeMap;
 #[must_use]
 pub fn sasa_kernel(
     options: SasaOptions,
+    selection: RadiusSelection,
 ) -> impl StructureKernel<Output = Vec<f64>, Error = DefinitionError> {
     structure_kernel(
         descriptor("solvent-accessible-surface")
@@ -48,6 +53,9 @@ pub fn sasa_kernel(
             .with_parameter("metals", text(&options.metals.to_string()))
             .with_parameter("radii_table", radii_parameter(&options)),
         move |structure: &Structure, policy: &AnalysisPolicy, context: &ExecutionContext| {
+            selection
+                .verify(&options.radii.identity(), policy.vdw_radii)
+                .map_err(DefinitionError::Radii)?;
             let origin = if options.radii.identity().name == policy.vdw_radii.name() {
                 AssumptionSource::ProfileDefault
             } else {

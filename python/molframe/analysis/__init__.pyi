@@ -412,8 +412,11 @@ def sasa(
     under ``bondi`` with ``metals="none"``) makes the result ``partial`` with a ``W6004``
     warning naming the element and ``vdw_radii``.
 
-    ``radii`` names the radius table: a cache entry (``<name>.radii``) or a file path; ``None``
-    takes the profile's ``vdw-radii`` line. Rust parses and validates it; a table that cannot be
+    ``radii`` names the radius table: a cache entry (``<name>.radii``) or a file path. ``None``
+    takes the table the ``policy``'s ``vdw_radii`` names, found by that name in the table cache
+    (absent: ``E7102``, never a quiet fall back to the profile); with no policy either it takes
+    the profile's ``vdw-radii`` line. A ``radii`` that names another table than the policy
+    raises ``PolicyError`` (``E7103``). Rust parses and validates it; a table that cannot be
     supplied raises ``E7102`` (absent) or ``E2201`` (malformed), which name how to supply it. The
     result records the table that applied, by name, version, source and licence, in its
     ``vdw_radii`` assumption and its ``radii_table`` parameter.

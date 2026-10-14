@@ -82,9 +82,10 @@ fn clashes(
         ));
     }
     let backend = crate::backend::parse(backend)?;
+    let (_, source) = crate::tables::radii_under(radii, policy.as_deref())?;
     let mut options = molframe::validation::ClashOptions::resolve(
         tolerance,
-        &molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(radii),
+        &source.request(),
         backend,
         &molframe::chemistry::TableStore::global(),
     )

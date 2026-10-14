@@ -205,10 +205,8 @@ pub(crate) fn pore_profile(
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
-    let radii = molframe::chemistry::atom_radii(
-        structure.inner.engine(),
-        &crate::tables::radius_source(radii)?,
-    );
+    let (_, source) = crate::tables::radii_under(radii, policy.as_deref())?;
+    let radii = molframe::chemistry::atom_radii(structure.inner.engine(), &source);
     let kernel = molframe::analysis::pore_profile_kernel(
         &radii,
         PoreProfileOptions::new(
@@ -277,10 +275,8 @@ pub(crate) fn surface_contacts(
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
-    let radii = molframe::chemistry::atom_radii(
-        structure.inner.engine(),
-        &crate::tables::radius_source(radii)?,
-    );
+    let (_, source) = crate::tables::radii_under(radii, policy.as_deref())?;
+    let radii = molframe::chemistry::atom_radii(structure.inner.engine(), &source);
     let kernel = molframe::analysis::surface_contacts_kernel(
         &radii,
         SurfaceContactOptions {
@@ -378,9 +374,12 @@ pub(crate) fn contacts_by_definition(
 /// (square ångström) per analysed atom, `NaN` where an atom is left out; use
 /// `atom_origin` to tie it to the input.
 ///
-/// `radii` names the radius table: a cache entry name or a file path; unset, the profile's
-/// `vdw-radii` line. Rust parses and validates it, and a table that cannot be supplied raises
-/// the typed `E7102` or `E2201` error naming how to supply it. The result's `vdw_radii`
+/// `radii` names the radius table: a cache entry name or a file path. Unset, the table is
+/// the one the policy's `vdw_radii` names, found by that name in the table cache (a policy
+/// table the cache lacks raises `E7102`, never a quiet fall back to the profile); with no
+/// policy either, the profile's `vdw-radii` line. A `radii` that names another table than
+/// the policy raises the typed `E7103` error. Rust resolves and validates it, and a table
+/// that cannot be supplied raises `E7102` or `E2201` naming how to supply it. The result's `vdw_radii`
 /// assumption and its `radii_table` parameter name the table that applied, by name, version,
 /// source and licence.
 #[pyfunction]
@@ -397,20 +396,21 @@ pub(crate) fn sasa(
     policy: Option<PyRef<'_, PyAnalysisPolicy>>,
     context: Option<&PyExecutionContext>,
 ) -> PyResult<PyAnalysis> {
+    let (selection, source) = crate::tables::radii_under(radii, policy.as_deref())?;
     let options = molframe::SasaOptions::from_words(
         method,
         n_points,
         probe,
         hetero,
         metals,
-        &molframe::chemistry::TableRequest::<molframe::chemistry::VdwRadii>::choose(radii),
+        &source.request(),
         &molframe::chemistry::TableStore::global(),
     )
     .map_err(|error| match error {
         molframe::SasaWordError::Table(error) => crate::error::kernel(error),
         other => crate::error::failure(other),
     })?;
-    let kernel = molframe::analysis::sasa_kernel(options);
+    let kernel = molframe::analysis::sasa_kernel(options, selection);
     run(
         py,
         structure,

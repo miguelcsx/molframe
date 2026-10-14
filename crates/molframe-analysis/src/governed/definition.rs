@@ -8,7 +8,7 @@
 use super::common::{backend, descriptor, float};
 use super::{FrameKernelResult, StructureKernel, structure_kernel};
 use crate::{Contact, ContactTable, SurfaceContactOptions, atom_contacts, surface_contacts};
-use molframe_chem::{RadiusSource, TableError, TableRequest, TableStore, atom_radii};
+use molframe_chem::{RadiusSelection, TableError, TableStore, atom_radii};
 use molframe_core::contract::{AnalysisPolicy, ContactDefinition, Coverage, PolicyField, Quality};
 use molframe_core::{ExecutionContext, Structure};
 use molframe_spatial::{SpatialBackend, SpatialError};
@@ -99,7 +99,7 @@ fn evaluate(
     context: &ExecutionContext,
 ) -> Result<FrameKernelResult<ContactTable>, DefinitionError> {
     let set = policy.vdw_radii.name();
-    let source = RadiusSource::resolve(&TableRequest::named(set), store)?;
+    let source = RadiusSelection::Policy.resolve(policy.vdw_radii, store)?;
     let radii = atom_radii(structure, &source);
     let unknown = radii.iter().filter(|radius| !radius.is_finite()).count();
     let atoms = structure.atom_count();

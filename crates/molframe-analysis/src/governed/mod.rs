@@ -61,5 +61,9 @@ pub use surface_area::sasa_kernel;
 mod adapters_tests;
 
 #[cfg(test)]
+#[path = "surface_area_tests.rs"]
+mod surface_area_tests;
+
+#[cfg(test)]
 #[path = "requirements_tests.rs"]
 mod requirements_tests;

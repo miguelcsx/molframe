@@ -50,3 +50,25 @@ def test_a_malformed_or_absent_table_is_refused_with_its_code(tmp_path: Path):
         analysis.sasa(crambin, radii=str(bad))
     with pytest.raises(molframe.MolframeError, match="E7102"):
         analysis.sasa(crambin, radii="no-such-table")
+
+
+def test_the_policy_picks_the_radius_table_and_the_result_says_so():
+    crambin = molframe.read(BENCH / "1crn.cif")
+    by_set = {}
+    for name in ("bondi", "charmm", "alvarez", "amber_united"):
+        policy = molframe.AnalysisPolicy(vdw_radii=name)
+        result = analysis.sasa(crambin, policy=policy)
+        by_set[name] = result.value
+        assert any(name.replace("_", "-") in note for note in result.assumptions)
+    assert not np.array_equal(by_set["bondi"], by_set["charmm"], equal_nan=True)
+    explicit = analysis.sasa(crambin, radii="charmm")
+    assert np.array_equal(explicit.value, by_set["charmm"], equal_nan=True)
+
+
+def test_a_radii_argument_must_agree_with_the_policy():
+    crambin = molframe.read(BENCH / "1crn.cif")
+    policy = molframe.AnalysisPolicy(vdw_radii="charmm")
+    agreed = analysis.sasa(crambin, radii="charmm", policy=policy)
+    assert np.array_equal(agreed.value, analysis.sasa(crambin, policy=policy).value, equal_nan=True)
+    with pytest.raises(molframe.PolicyError, match="E7103"):
+        analysis.sasa(crambin, radii="bondi", policy=policy)

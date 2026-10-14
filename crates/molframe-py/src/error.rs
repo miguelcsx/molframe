@@ -23,6 +23,7 @@ pub(crate) const fn class_name(code: Code) -> &'static str {
         1902 | 7001 => "MemoryBudgetError",
         1904 => "Cancelled",
         7101 | 7901 => "MolframeIOError",
+        7103 => "PolicyError",
         1901 | 1903 => "ResourceError",
         _ => match code.class() {
             Class::Syntax => "ParseError",
