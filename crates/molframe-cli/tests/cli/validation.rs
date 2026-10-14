@@ -1,7 +1,6 @@
 //! End-to-end validation checks with outcomes that are known in advance.
 
-mod common;
-use common::{
+use crate::common::{
     amino_acid_ccd, atom_records, backbone_roles, hydrogenated_peptide, mirrored_peptide,
     rows_with_status,
 };
@@ -180,7 +179,7 @@ fn tls_predicts_the_b_factor_of_every_atom_of_its_group() {
 fn a_check_refuses_to_run_without_its_thresholds() {
     let directory = tempfile::tempdir().expect("scratch directory");
     let peptide = hydrogenated_peptide(directory.path());
-    let output = common::run(
+    let output = crate::common::run(
         directory.path(),
         &[
             "validate",

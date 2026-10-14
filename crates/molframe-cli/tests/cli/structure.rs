@@ -1,7 +1,6 @@
 //! End-to-end contact maps, native contacts and normal modes.
 
-mod common;
-use common::{haemoglobin_dimer, hydrogenated_peptide, rigidly_moved_peptide, rows, run};
+use crate::common::{haemoglobin_dimer, hydrogenated_peptide, rigidly_moved_peptide, rows, run};
 
 #[test]
 fn a_wider_cutoff_only_adds_residue_contacts_and_each_respects_its_cutoff() {

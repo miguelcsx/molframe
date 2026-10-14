@@ -1,8 +1,7 @@
 //! End-to-end `sasa --radii <PATH>`: a caller table replaces the profile's, a copy
 //! of the default reproduces it, and the applied table is printed.
 
-mod common;
-use common::{bench_data, run};
+use crate::common::{bench_data, run};
 
 fn sasa(directory: &std::path::Path, radii: &str) -> std::process::Output {
     let input = bench_data("1crn.cif").display().to_string();

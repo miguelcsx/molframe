@@ -1,7 +1,6 @@
 //! End-to-end runs of the table-backed validation checks.
 
-mod common;
-use common::{bench_data, rows_with_status};
+use crate::common::{bench_data, rows_with_status};
 
 fn run(structure: &str, checks: &str, extra: &[&str]) -> (i32, Vec<Vec<String>>) {
     let directory = tempfile::tempdir().expect("scratch directory");

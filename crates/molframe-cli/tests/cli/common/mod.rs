@@ -3,8 +3,6 @@
 //! Each test runs the built binary in a private directory against bundled real
 //! data and reads the rows it prints, so what is asserted is what a user sees.
 
-#![allow(dead_code)]
-
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -109,11 +107,6 @@ pub fn hydrogenated_peptide(directory: &Path) -> PathBuf {
     let path = directory.join("peptide.pdb");
     std::fs::write(&path, text).expect("write peptide");
     path
-}
-
-/// The columns of `table`'s header, which must be the first row.
-pub fn header(table: &[Vec<String>]) -> &[String] {
-    &table[0]
 }
 
 pub fn column(table: &[Vec<String>], name: &str) -> usize {

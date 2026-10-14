@@ -1,7 +1,6 @@
 //! End-to-end comparison metrics with outcomes known in advance.
 
-mod common;
-use common::{
+use crate::common::{
     amino_acid_ccd, haemoglobin_dimer, hydrogenated_peptide, rigidly_moved_peptide,
     ring_flipped_peptide, rows,
 };
@@ -224,7 +223,7 @@ fn ce_aligns_a_chain_with_itself_atom_for_atom() {
 fn a_metric_refuses_to_run_without_its_parameters() {
     let directory = tempfile::tempdir().expect("scratch directory");
     let native = hydrogenated_peptide(directory.path());
-    let output = common::run(
+    let output = crate::common::run(
         directory.path(),
         &[
             "compare",

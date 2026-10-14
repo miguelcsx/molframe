@@ -1,7 +1,6 @@
 //! End-to-end streaming trajectory analysis on files written with known motion.
 
-mod common;
-use common::rows;
+use crate::common::rows;
 use molframe::trajectory::{DcdWriteOptions, Timestep, write_dcd};
 use std::path::{Path, PathBuf};
 
@@ -41,7 +40,7 @@ fn a_trajectory_in_another_format_is_refused() {
     let directory = tempfile::tempdir().expect("scratch directory");
     let other = directory.path().join("frames.gro");
     std::fs::write(&other, "").expect("write file");
-    let output = common::run(
+    let output = crate::common::run(
         directory.path(),
         &["trajectory", "rmsf", other.to_str().expect("path")],
     );

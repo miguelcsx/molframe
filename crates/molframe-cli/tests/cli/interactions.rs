@@ -1,7 +1,6 @@
 //! End-to-end interaction commands on real hydrogenated peptide chemistry.
 
-mod common;
-use common::{amino_acid_ccd, column, hydrogenated_peptide, rows};
+use crate::common::{amino_acid_ccd, column, hydrogenated_peptide, rows};
 
 fn ccd() -> Vec<String> {
     vec![
@@ -173,7 +172,7 @@ fn cation_pi_and_water_bridge_tables_have_their_documented_shape() {
 fn every_threshold_is_required() {
     let directory = tempfile::tempdir().expect("scratch directory");
     let peptide = hydrogenated_peptide(directory.path());
-    let output = common::run(
+    let output = crate::common::run(
         directory.path(),
         &["interactions", "hbonds", peptide.to_str().expect("path")],
     );

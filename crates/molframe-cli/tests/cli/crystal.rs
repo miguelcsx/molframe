@@ -1,7 +1,6 @@
 //! End-to-end crystallographic data commands on files built with known contents.
 
-mod common;
-use common::{bench_data, rows, rows_with_status};
+use crate::common::{bench_data, rows, rows_with_status};
 use molframe::crystal::{
     DensityMap, ReflectionColumn, ReflectionColumnType, ReflectionDataset, ReflectionTable,
     ReflectionValue, write_mtz,
@@ -254,7 +253,7 @@ fn haemoglobin_has_symmetry_mates_within_the_stated_cutoff() {
 #[test]
 fn a_structure_without_a_recorded_space_group_has_no_mates() {
     let directory = tempfile::tempdir().expect("scratch directory");
-    let peptide = common::hydrogenated_peptide(directory.path())
+    let peptide = crate::common::hydrogenated_peptide(directory.path())
         .display()
         .to_string();
     let (status, table) = rows_with_status(

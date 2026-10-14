@@ -1,7 +1,6 @@
 //! End-to-end small-molecule chemistry on the standard amino-acid dictionary.
 
-mod common;
-use common::{amino_acid_ccd, atom_records, haemoglobin_dimer, rows};
+use crate::common::{amino_acid_ccd, atom_records, haemoglobin_dimer, rows};
 use std::collections::BTreeSet;
 
 fn ccd() -> [String; 4] {
@@ -70,7 +69,7 @@ fn a_malformed_pattern_is_refused_with_its_position() {
     let ccd = ccd();
     let mut arguments = vec!["chem", "smarts", "TRP", "--component", "--pattern", "C(("];
     arguments.extend(ccd.iter().map(String::as_str));
-    let output = common::run(directory.path(), &arguments);
+    let output = crate::common::run(directory.path(), &arguments);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("byte"));
 }
@@ -129,7 +128,7 @@ fn peoe_assigns_every_atom_a_finite_charge_and_conserves_the_total() {
 #[test]
 fn peoe_refuses_hydrogen_names_the_dictionary_does_not_define() {
     let directory = tempfile::tempdir().expect("scratch directory");
-    let peptide = common::hydrogenated_peptide(directory.path())
+    let peptide = crate::common::hydrogenated_peptide(directory.path())
         .display()
         .to_string();
     let ccd = ccd();
@@ -149,7 +148,7 @@ fn peoe_refuses_hydrogen_names_the_dictionary_does_not_define() {
         "gasteiger-marsili",
     ];
     arguments.extend(ccd.iter().map(String::as_str));
-    let output = common::run(directory.path(), &arguments);
+    let output = crate::common::run(directory.path(), &arguments);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("UnknownAtom"));
 }
