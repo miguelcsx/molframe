@@ -1,12 +1,6 @@
 //! Corrupt, truncated and hostile crystallographic inputs must error, never
 //! panic or allocate what they merely claim.
 
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss
-)]
-
 use molframe_cif::parse;
 use molframe_core::io::InputBuffer;
 use molframe_xtal::{
@@ -27,7 +21,8 @@ fn mrc_header(dims: [i32; 3], mode: i32, extra: usize) -> Vec<u8> {
     }
     for slot in 0..3 {
         bytes[40 + slot * 4..44 + slot * 4].copy_from_slice(&1.0_f32.to_le_bytes());
-        bytes[64 + slot * 4..68 + slot * 4].copy_from_slice(&(slot as i32 + 1).to_le_bytes());
+        bytes[64 + slot * 4..68 + slot * 4]
+            .copy_from_slice(&(i32::try_from(slot).expect("three slots") + 1).to_le_bytes());
         bytes[52 + slot * 4..56 + slot * 4].copy_from_slice(&90.0_f32.to_le_bytes());
     }
     bytes[208..212].copy_from_slice(b"MAP ");
@@ -63,10 +58,28 @@ impl Rng {
         self.next() % bound.max(1)
     }
 
+    fn below_usize(&mut self, bound: usize) -> usize {
+        let bound = u64::try_from(bound).expect("bound fits");
+        usize::try_from(self.below(bound)).expect("below a usize")
+    }
+
+    fn below_i32(&mut self, bound: u64) -> i32 {
+        i32::try_from(self.below(bound)).expect("small bound")
+    }
+
+    fn low_i32(&mut self) -> i32 {
+        let bytes = self.next().to_le_bytes();
+        i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+    }
+
+    fn low_u8(&mut self) -> u8 {
+        self.next().to_le_bytes()[0]
+    }
+
     fn text(&mut self, alphabet: &[u8], max: u64) -> String {
         let len = self.below(max);
         (0..len)
-            .map(|_| char::from(alphabet[self.below(alphabet.len() as u64) as usize]))
+            .map(|_| char::from(alphabet[self.below_usize(alphabet.len())]))
             .collect()
     }
 }
@@ -77,13 +90,13 @@ const PRINTABLE: &[u8] = b" abcxyz0123456789,()-:+*/'.;_\n#?";
 fn mrc_headers_never_panic() {
     let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
     for _ in 0..600 {
-        let dims = [0, 1, 2].map(|_| rng.next() as i32);
-        let mode = rng.below(22) as i32 - 2;
-        let mut bytes = mrc_header(dims, mode, rng.below(128) as usize);
+        let dims = [0, 1, 2].map(|_| rng.low_i32());
+        let mode = rng.below_i32(22) - 2;
+        let mut bytes = mrc_header(dims, mode, rng.below_usize(128));
         for _ in 0..rng.below(12) {
-            let at = rng.below(1100) as usize;
+            let at = rng.below_usize(1100);
             if at < bytes.len() {
-                bytes[at] = rng.next() as u8;
+                bytes[at] = rng.low_u8();
             }
         }
         let _ = DensityMap::from_mrc_bytes(&bytes);
@@ -97,11 +110,11 @@ fn mtz_bytes_never_panic() {
     let mut rng = Rng(0x1234_5678_9abc_def1);
     for _ in 0..600 {
         let mut bytes = b"MTZ ".to_vec();
-        let word = rng.below(402) as i32 - 1;
+        let word = rng.below_i32(402) - 1;
         bytes.extend_from_slice(&word.to_le_bytes());
         bytes.extend_from_slice(&[0x44, 0x41, 0, 0]);
         for _ in 0..rng.below(1500) {
-            bytes.push(rng.next() as u8);
+            bytes.push(rng.low_u8());
         }
         let _ = read_mtz(&bytes);
     }
