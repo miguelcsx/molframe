@@ -134,7 +134,10 @@ impl SasaStreamPlan {
             |frame, time, area| {
                 let frame = u64::try_from(frame).map_err(|_| TrajectoryError::IdentityOverflow)?;
                 series.frames.push(frame);
-                series.times.push(time.unwrap_or(f64::NAN));
+                series.times.push(match time {
+                    Some(time) => time,
+                    None => f64::NAN,
+                });
                 series.areas.push(area);
                 Ok(())
             },
