@@ -1,5 +1,3 @@
-#![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
-
 use super::{crowding, knn_within};
 use crate::{KnnOptions, KnnResult, PeriodicBox, SpatialBackend, pairs_within};
 use molframe_core::structure::UnitCell;
@@ -11,7 +9,7 @@ fn points(count: usize, seed: u64, scale: f32) -> Vec<[f32; 3]> {
         state = state
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
-        ((state >> 40) as f32) / ((1_u64 << 24) as f32) * scale
+        molframe_core::numeric::u64_to_f32_unit(state >> 40) * scale
     };
     (0..count).map(|_| [next(), next(), next()]).collect()
 }
@@ -134,7 +132,11 @@ fn crowding_probe_flags_dense_cores_only() {
     assert!(!crowding::is_crowded(&uniform, &atoms, 5.0));
     let mut dense = points(20_000, 5, 200.0);
     for (index, point) in dense.iter_mut().enumerate().take(10_000) {
-        *point = [index as f32 * 1.0e-4, 0.0, 0.0];
+        *point = [
+            molframe_core::numeric::usize_to_f32(index) * 1.0e-4,
+            0.0,
+            0.0,
+        ];
     }
     assert!(crowding::is_crowded(&dense, &atoms, 5.0));
     assert!(!crowding::is_crowded(&dense, &atoms[..100], 5.0));
@@ -144,7 +146,11 @@ fn crowding_probe_flags_dense_cores_only() {
 fn auto_on_crowded_data_matches_the_cell_list() {
     let mut positions = points(6_000, 9, 120.0);
     for (index, point) in positions.iter_mut().enumerate().take(3_000) {
-        *point = [index as f32 * 2.0e-3, 0.0, 1.0];
+        *point = [
+            molframe_core::numeric::usize_to_f32(index) * 2.0e-3,
+            0.0,
+            1.0,
+        ];
     }
     let all = AtomSelection::All(6_000);
     let ctx = ExecutionContext::default();

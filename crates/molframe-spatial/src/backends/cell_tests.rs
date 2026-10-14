@@ -97,19 +97,17 @@ fn arbitrary_periodic_points_include_wrapped_targets_once() {
 }
 
 /// Deterministic scatter in a cube of `extent` ångström, no external RNG.
-#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 fn scatter(count: usize, extent: f32, seed: u64) -> Vec<[f32; 3]> {
     let mut state = seed;
     let mut next = move || {
         state = state
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
-        ((state >> 40) as f32 / (1u64 << 24) as f32) * extent
+        (molframe_core::numeric::u64_to_f32_unit(state >> 40)) * extent
     };
     (0..count).map(|_| [next(), next(), next()]).collect()
 }
 
-#[allow(clippy::cast_possible_truncation)]
 fn brute_pairs(positions: &[[f32; 3]], cutoff: f32) -> Vec<(u32, u32)> {
     let mut found = Vec::new();
     for left in 0..positions.len() {
@@ -118,16 +116,18 @@ fn brute_pairs(positions: &[[f32; 3]], cutoff: f32) -> Vec<(u32, u32)> {
                 .map(|axis| (positions[left][axis] - positions[right][axis]).powi(2))
                 .sum();
             if squared <= cutoff * cutoff {
-                found.push((left as u32, right as u32));
+                found.push((
+                    molframe_core::numeric::usize_to_u32(left),
+                    molframe_core::numeric::usize_to_u32(right),
+                ));
             }
         }
     }
     found
 }
 
-#[allow(clippy::cast_possible_truncation)]
 fn listed_pairs(list: &CellList<'_>, count: usize, cutoff: f32) -> Vec<(u32, u32)> {
-    let all: Vec<u32> = (0..count as u32).collect();
+    let all: Vec<u32> = (0..molframe_core::numeric::usize_to_u32(count)).collect();
     let mut pairs: Vec<(u32, u32)> = list
         .pairs(&all, cutoff)
         .unwrap()
@@ -140,14 +140,14 @@ fn listed_pairs(list: &CellList<'_>, count: usize, cutoff: f32) -> Vec<(u32, u32
 }
 
 #[test]
-#[allow(clippy::cast_possible_truncation)]
 fn a_far_outlier_selects_the_sparse_layout_and_changes_no_pair() {
     let mut positions = scatter(1500, 30.0, 7);
     let near = brute_pairs(&positions, 3.5);
     for outlier in [1.0e4_f32, 1.0e6, 1.0e9] {
         positions.push([outlier, -outlier, outlier]);
         positions.push([outlier + 1.0, -outlier, outlier]);
-        let targets: Vec<u32> = (0..positions.len() as u32).collect();
+        let targets: Vec<u32> =
+            (0..molframe_core::numeric::usize_to_u32(positions.len())).collect();
         let list = CellList::build(&positions, &targets, 3.5, None).unwrap();
         let Some(CellGrid::Cartesian(grid)) = &list.grid else {
             panic!("a Cartesian grid");
@@ -164,10 +164,9 @@ fn a_far_outlier_selects_the_sparse_layout_and_changes_no_pair() {
 }
 
 #[test]
-#[allow(clippy::cast_possible_truncation)]
 fn sparse_and_dense_layouts_agree_with_brute_force() {
     let positions = scatter(1200, 60.0, 11);
-    let targets: Vec<u32> = (0..positions.len() as u32).collect();
+    let targets: Vec<u32> = (0..molframe_core::numeric::usize_to_u32(positions.len())).collect();
     let dense = CellList::build(&positions, &targets, 4.0, None).unwrap();
     let Some(CellGrid::Cartesian(dense_grid)) = &dense.grid else {
         panic!("a Cartesian grid");
@@ -200,12 +199,11 @@ fn sparse_and_dense_layouts_agree_with_brute_force() {
 }
 
 #[test]
-#[allow(clippy::cast_possible_truncation)]
 fn a_huge_extent_index_fits_a_small_execution_budget() {
     use molframe_core::{ExecutionContext, MemoryBudget, ScratchPolicy};
     let mut positions = scatter(2000, 40.0, 3);
     positions.push([5.0e7, 5.0e7, 5.0e7]);
-    let targets: Vec<u32> = (0..positions.len() as u32).collect();
+    let targets: Vec<u32> = (0..molframe_core::numeric::usize_to_u32(positions.len())).collect();
     let context = ExecutionContext::builder()
         .memory_budget(MemoryBudget::new(1 << 20).unwrap())
         .scratch_policy(ScratchPolicy::new(0))
