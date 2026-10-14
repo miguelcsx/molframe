@@ -23,10 +23,24 @@ impl AtomColumns {
         }
     }
 
-    pub(super) fn insert(
+    /// Decodes one column of the atom table, independent of every other.
+    pub(super) fn decode_item(
+        &self,
+        item: &str,
+        encoded: &DirectColumn<'_>,
+    ) -> Option<Result<DecodedColumn, Diagnostic>> {
+        let index = field_index(item)?;
+        Some(DecodedColumn::decode(
+            encoded,
+            self.row_count,
+            (14..=18).contains(&index),
+        ))
+    }
+
+    pub(super) fn insert_decoded(
         &mut self,
         item: &str,
-        encoded: DirectColumn<'_>,
+        column: DecodedColumn,
     ) -> Result<(), Diagnostic> {
         let Some(index) = field_index(item) else {
             return Ok(());
@@ -34,11 +48,7 @@ impl AtomColumns {
         if self.columns[index].is_some() {
             return Err(duplicate_item(item));
         }
-        self.columns[index] = Some(DecodedColumn::decode(
-            encoded,
-            self.row_count,
-            (14..=18).contains(&index),
-        )?);
+        self.columns[index] = Some(column);
         Ok(())
     }
 
@@ -80,7 +90,7 @@ pub(super) struct DecodedColumn {
 
 impl DecodedColumn {
     pub(super) fn decode(
-        encoded: DirectColumn<'_>,
+        encoded: &DirectColumn<'_>,
         row_count: usize,
         compact_float: bool,
     ) -> Result<Self, Diagnostic> {
@@ -94,8 +104,8 @@ impl DecodedColumn {
         if values.len() != row_count {
             return Err(length_error(values.len(), row_count));
         }
-        let mask = match encoded.mask {
-            Some(encoded) => Some(decode_mask(&encoded, row_count)?),
+        let mask = match &encoded.mask {
+            Some(encoded) => Some(decode_mask(encoded, row_count)?),
             None => None,
         };
         Ok(Self { values, mask })

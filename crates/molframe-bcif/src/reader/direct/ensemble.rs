@@ -67,7 +67,7 @@ pub(super) fn classify(
         if is_frame_coordinate(&encoded.name) {
             continue;
         }
-        let column = DecodedColumn::decode(encoded, atoms.row_count(), false)?;
+        let column = DecodedColumn::decode(&encoded, atoms.row_count(), false)?;
         if !same_models(&column, &ranges) {
             return Ok(EnsembleLayout {
                 model_count: ranges.len(),

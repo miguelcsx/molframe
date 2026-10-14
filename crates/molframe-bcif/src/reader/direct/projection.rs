@@ -1,11 +1,13 @@
 //! First-block metadata projection and selected coordinate decoding.
 
-use super::column::{AtomColumns, field_index};
+use super::column::AtomColumns;
 use super::container::{DirectCategory, DirectColumn, DirectFile, decode_category};
 use super::external::{feed_decoded, feed_encoded};
 use molframe_cif::{CifEventSink, CifScalar, DataBlock, Document};
 use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::execution::ExecutionContext;
 use molframe_core::io::ReadOptions;
+use molframe_core::parallel::{BlockPlan, map_blocks_in};
 use molframe_core::span::ByteSpan;
 use std::collections::HashSet;
 
@@ -100,19 +102,30 @@ fn decode_atom_site(
     encoded: DirectCategory<'_>,
 ) -> Result<(AtomColumns, Vec<DirectColumn<'_>>), Diagnostic> {
     let mut atoms = AtomColumns::new(encoded.row_count);
+    // Columns decode independently, so the expensive part runs on the shared
+    // pool; the results are then applied in column order so the first error
+    // reported is the one a sequential decode would have reported.
+    let columns = encoded.columns;
+    let context = ExecutionContext::default();
+    let mut decoded = map_blocks_in(BlockPlan::new(columns.len(), 1), &context, |index, _| {
+        columns
+            .get(index)
+            .and_then(|column| atoms.decode_item(&column.name, column))
+    })
+    .map_err(|_| Diagnostic::new(Code::E9001).with_message("a column decoder panicked"))?
+    .into_iter();
     let mut extras = Vec::new();
-    let mut names = HashSet::with_capacity(encoded.columns.len());
-    for column in encoded.columns {
+    let mut names = HashSet::with_capacity(columns.len());
+    for column in columns {
+        let result = decoded.next().flatten();
         if !names.insert(column.name.clone()) {
             return Err(Diagnostic::new(Code::E1401)
                 .with_message("a BinaryCIF category contains a duplicate item")
                 .with_context("item", column.name));
         }
-        if field_index(&column.name).is_some() {
-            let name = column.name.clone();
-            atoms.insert(&name, column)?;
-        } else {
-            extras.push(column);
+        match result {
+            Some(result) => atoms.insert_decoded(&column.name, result?)?,
+            None => extras.push(column),
         }
     }
     Ok((atoms, extras))
