@@ -139,7 +139,7 @@ impl MappingPlan {
                 .iter()
                 .enumerate()
                 .flat_map(|(index, candidate)| {
-                    let index = u32::try_from(index).unwrap_or(u32::MAX);
+                    let index = molframe_core::numeric::usize_to_u32(index);
                     site_points(structure, candidate, later_site)
                         .into_iter()
                         .map(move |(_, point)| (index, point))

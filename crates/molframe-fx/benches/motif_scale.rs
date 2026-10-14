@@ -24,7 +24,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
         state = state
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
-        f64::from(u32::try_from(state >> 40).unwrap_or(0)) / 16_777_216.0 * edge
+        f64::from(molframe_core::numeric::u64_to_u32(state >> 40)) / 16_777_216.0 * edge
     };
     let mut serial = 0;
     for residue in 1..=residues {
@@ -69,15 +69,17 @@ fn chain_motif() -> Motif {
             tolerance: 1.0,
         },
     };
-    Motif::new(specs, [constraint("d0", 0, 1), constraint("d1", 1, 2)])
-        .unwrap_or_else(|error| panic!("motif failed: {error}"))
+    match Motif::new(specs, [constraint("d0", 0, 1), constraint("d1", 1, 2)]) {
+        Ok(motif) => motif,
+        Err(error) => panic!("motif failed: {error}"),
+    }
 }
 
 fn build(structure: &Structure, motif: &Motif) -> Arc<MappingPlan> {
-    Arc::new(
-        MappingPlan::build(structure, motif, None, &AnalysisPolicy::default(), true)
-            .unwrap_or_else(|error| panic!("plan failed: {error}")),
-    )
+    match MappingPlan::build(structure, motif, None, &AnalysisPolicy::default(), true) {
+        Ok(plan) => Arc::new(plan),
+        Err(error) => panic!("plan failed: {error}"),
+    }
 }
 
 fn stream_all(plan: &Arc<MappingPlan>) -> u64 {
@@ -85,11 +87,12 @@ fn stream_all(plan: &Arc<MappingPlan>) -> u64 {
     let mut stream = plan.stream();
     let mut tuple = vec![0u32; plan.width()];
     let mut seen = 0u64;
-    while stream
-        .next_into(&mut tuple, &cancel)
-        .unwrap_or_else(|error| panic!("stream failed: {error}"))
-    {
-        seen += 1;
+    loop {
+        match stream.next_into(&mut tuple, &cancel) {
+            Ok(true) => seen += 1,
+            Ok(false) => break,
+            Err(error) => panic!("stream failed: {error}"),
+        }
     }
     seen
 }
@@ -98,14 +101,17 @@ fn stream_all(plan: &Arc<MappingPlan>) -> u64 {
 fn report_minimum(residues: u32, structure: &Structure, motif: &Motif, plan: &Arc<MappingPlan>) {
     let cancel = CancellationToken::new();
     let fastest = |mut run: Box<dyn FnMut() + '_>| {
-        (0..25)
+        let shortest = (0..25)
             .map(|_| {
                 let start = std::time::Instant::now();
                 run();
                 start.elapsed()
             })
-            .min()
-            .unwrap_or_default()
+            .min();
+        match shortest {
+            Some(duration) => duration,
+            None => std::time::Duration::ZERO,
+        }
     };
     let built = fastest(Box::new(|| drop(black_box(build(structure, motif)))));
     let counted = fastest(Box::new(|| drop(black_box(plan.count(&cancel)))));
@@ -123,9 +129,10 @@ fn bench_scale(c: &mut Criterion) {
         let structure = scatter(residues, edge);
         let plan = build(&structure, &motif);
         let cancel = CancellationToken::new();
-        let total = plan
-            .count(&cancel)
-            .unwrap_or_else(|error| panic!("count failed: {error}"));
+        let total = match plan.count(&cancel) {
+            Ok(total) => total,
+            Err(error) => panic!("count failed: {error}"),
+        };
         eprintln!("residues {residues}: {total} mappings");
         report_minimum(residues, &structure, &motif, &plan);
         group.bench_function(format!("build_{residues}"), |b| {

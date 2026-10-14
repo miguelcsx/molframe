@@ -58,11 +58,8 @@ impl Grid {
 
     pub(crate) fn key(&self, point: Point) -> Cell {
         let scaled = |value: f32| {
-            let cell = (f64::from(value) / self.cell).floor();
-            // Saturating cast: a coordinate this far out cannot be near anything.
-            #[allow(clippy::cast_possible_truncation)]
-            let cell = cell as i64;
-            cell
+            // Saturating: a coordinate this far out cannot be near anything.
+            molframe_core::numeric::f64_to_i64((f64::from(value) / self.cell).floor())
         };
         [scaled(point[0]), scaled(point[1]), scaled(point[2])]
     }
@@ -98,8 +95,13 @@ impl Grid {
                 .ok()
                 .and_then(|id| Some((*offsets.get(id)?, *offsets.get(id + 1)?))),
         };
-        span.and_then(|(start, end)| self.entries.get(start as usize..end as usize))
-            .unwrap_or(&[])
+        let Some((start, end)) = span else {
+            return &[];
+        };
+        match self.entries.get(start as usize..end as usize) {
+            Some(slice) => slice,
+            None => &[],
+        }
     }
 }
 
@@ -137,7 +139,10 @@ fn index_of(sorted: &[(Cell, u32, Point)]) -> Index {
         .saturating_mul(extent(1))
         .saturating_mul(extent(2));
     let budget = (DENSE_CELLS_PER_ENTRY * sorted.len() as u128).max(DENSE_CELL_FLOOR);
-    let dims = [extent(0), extent(1), extent(2)].map(|value| usize::try_from(value).unwrap_or(0));
+    let dims = [extent(0), extent(1), extent(2)].map(|value| match usize::try_from(value) {
+        Ok(dim) => dim,
+        Err(_) => 0,
+    });
     if cells <= budget && dims.iter().all(|&dim| dim > 0) {
         let mut offsets = vec![0u32; dims[0] * dims[1] * dims[2] + 1];
         for (key, ..) in sorted {
@@ -155,10 +160,10 @@ fn index_of(sorted: &[(Cell, u32, Point)]) -> Index {
     for (position, (key, ..)) in sorted.iter().enumerate() {
         if keys.last() != Some(key) {
             keys.push(*key);
-            offsets.push(u32::try_from(position).unwrap_or(u32::MAX));
+            offsets.push(molframe_core::numeric::usize_to_u32(position));
         }
     }
-    offsets.push(u32::try_from(sorted.len()).unwrap_or(u32::MAX));
+    offsets.push(molframe_core::numeric::usize_to_u32(sorted.len()));
     Index::Sparse { keys, offsets }
 }
 
