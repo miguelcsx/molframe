@@ -67,7 +67,10 @@ fn render_canonical(
     // mmCIF keys a chain by its normalised label, so chains that repeat one
     // must be told apart or they merge when the file is read back.
     let distinct = structure.with_distinct_labels();
-    let structure = distinct.as_ref().unwrap_or(structure);
+    let structure = match distinct.as_ref() {
+        Some(distinct) => distinct,
+        None => structure,
+    };
     let projection = canonical_projection(structure, options)?;
     let _ = writeln!(out, "data_{}", projection.block_id());
     let _ = out.write_str("#\n");
@@ -365,8 +368,7 @@ impl Display for ChargeCell<'_> {
 /// read back to the same value, never fewer than `minimum`.
 fn write_shortest(formatter: &mut Formatter<'_>, number: f64, minimum: usize) -> fmt::Result {
     // The value was widened from single precision, so narrowing is exact.
-    #[allow(clippy::cast_possible_truncation)]
-    let stored = number as f32;
+    let stored = molframe_core::numeric::f64_to_f32(number);
     if !stored.is_finite() {
         return write!(formatter, "{number:.minimum$}");
     }
@@ -396,7 +398,10 @@ struct Probe {
 
 impl Probe {
     fn text(&self) -> &str {
-        std::str::from_utf8(&self.bytes[..self.length]).unwrap_or("")
+        match std::str::from_utf8(&self.bytes[..self.length]) {
+            Ok(text) => text,
+            Err(_) => "",
+        }
     }
 }
 
