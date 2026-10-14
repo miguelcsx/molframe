@@ -24,9 +24,9 @@ impl SplitMix64 {
 
     /// A uniform value in `[0, 1)` with 24 bits of resolution.
     pub fn unit(&mut self) -> f32 {
-        let bits = u32::try_from(self.next_u64() >> 40).unwrap_or(0);
-        let numerator = f32::from(u16::try_from(bits >> 8).unwrap_or(0)) * 256.0
-            + f32::from(u16::try_from(bits & 0xFF).unwrap_or(0));
+        let bits = molframe_core::numeric::u64_to_u32(self.next_u64() >> 40);
+        let numerator = f32::from(molframe_core::numeric::low_u16(bits >> 8)) * 256.0
+            + f32::from(molframe_core::numeric::low_u16(bits & 0xFF));
         numerator / 16_777_216.0
     }
 

@@ -91,7 +91,11 @@ impl Run<'_> {
             best,
             reps,
             peak_bytes: alloc::peak().saturating_sub(baseline),
-            allocations: (alloc::count() - allocations_before) / usize::try_from(reps).unwrap_or(1),
+            allocations: (alloc::count() - allocations_before)
+                / match usize::try_from(reps) {
+                    Ok(reps) => reps,
+                    Err(_) => 1,
+                },
             checksum: if stable { checksum } else { u64::MAX },
         })
     }
@@ -221,21 +225,13 @@ pub fn run(cases: &[&Case], settings: &Settings) -> Vec<Row> {
 }
 
 /// Fingerprint for kernels whose result is one real number.
-#[allow(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "fingerprint closures receive the result by reference"
-)]
-pub fn real_fingerprint(value: &f64) -> u64 {
+pub fn real_fingerprint(value: f64) -> u64 {
     let mut sum = molframe_bench::Checksum::default();
-    sum.real(*value);
+    sum.real(value);
     sum.value()
 }
 
 /// Converts a count to a real for rates and ratios.
-#[allow(
-    clippy::cast_precision_loss,
-    reason = "reported rates tolerate rounding above 2^52 items"
-)]
 pub fn real(count: u64) -> f64 {
-    count as f64
+    molframe_core::numeric::u64_to_f64(count)
 }

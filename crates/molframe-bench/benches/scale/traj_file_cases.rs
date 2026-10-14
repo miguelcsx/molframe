@@ -52,13 +52,12 @@ impl Drop for Scratch {
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
 fn timesteps(frames: usize) -> Vec<Timestep> {
     let ens = ensemble(ATOMS, frames, 0.8, 5);
     (0..frames)
         .map(|frame| Timestep {
             frame,
-            time: Some(frame as f64 * 0.5),
+            time: Some(molframe_core::numeric::usize_to_f64(frame) * 0.5),
             positions: ens.frame(frame).to_vec(),
             ..Timestep::default()
         })

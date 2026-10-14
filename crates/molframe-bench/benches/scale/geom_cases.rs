@@ -66,7 +66,7 @@ fn rmsd_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
     let (reference, model) = pair(atoms);
     let sample = run.measure(
         || rmsd(&model, &reference).map_err(|e| format!("{e:?}")),
-        crate::harness::real_fingerprint,
+        |value| crate::harness::real_fingerprint(*value),
     )?;
     Ok(Outcome {
         sample,
@@ -78,7 +78,7 @@ fn superpose_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
     let (reference, model) = pair(atoms);
     let sample = run.measure(
         || rmsd_after_fit(&model, &reference).map_err(|e| format!("{e:?}")),
-        crate::harness::real_fingerprint,
+        |value| crate::harness::real_fingerprint(*value),
     )?;
     let _ = superpose;
     Ok(Outcome {

@@ -78,7 +78,7 @@ fn tm_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
     let (reference, model) = pair(atoms);
     let sample = run.measure(
         || tm_score(&model, &reference).map_err(|e| e.to_string()),
-        crate::harness::real_fingerprint,
+        |value| crate::harness::real_fingerprint(*value),
     )?;
     Ok(Outcome {
         sample,
@@ -90,7 +90,7 @@ fn gdt_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
     let (reference, model) = pair(atoms);
     let sample = run.measure(
         || gdt_ts(&model, &reference).map_err(|e| e.to_string()),
-        crate::harness::real_fingerprint,
+        |value| crate::harness::real_fingerprint(*value),
     )?;
     Ok(Outcome {
         sample,
@@ -102,7 +102,7 @@ fn lddt_case(run: &Run<'_>, atoms: usize) -> Result<Outcome, String> {
     let (reference, model) = pair(atoms);
     let sample = run.measure(
         || lddt(&model, &reference, 15.0, &run.context).map_err(|e| e.to_string()),
-        crate::harness::real_fingerprint,
+        |value| crate::harness::real_fingerprint(*value),
     )?;
     Ok(Outcome {
         sample,
