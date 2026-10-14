@@ -1,0 +1,8 @@
+# Thresholds, not suppressions: the lints stay on everywhere and fire past
+# these counts. Eight covers the explicit-policy signatures of the analysis and
+# spatial entry points (positions, two selections, k, options, backend,
+# periodic box, context). The Python crate carries its own, higher figure in
+# `crates/molframe-py/clippy.toml`, because a keyword-argument signature there
+# is the Python API itself.
+too-many-arguments-threshold = 8
+max-struct-bools = 6
