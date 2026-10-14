@@ -298,6 +298,9 @@ registry! {
     E7102 = Error 7102, Invalidating,
         "no reference table is available for the computation",
         "pass a table file, select a cache entry by name, or store one with `molframe data fetch <entry> --manifest <file>`; the library compiles in no table and never fetches during a computation";
+    E7103 = Error 7103, Invalidating,
+        "the reference table asked for conflicts with the one the policy names",
+        "drop the table argument so the policy's table applies, or set the policy field to the table you pass";
     E7901 = Error 7901, Invalidating,
         "output could not be written",
         "check the destination, permissions and available storage, then retry";

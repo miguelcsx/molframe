@@ -28,6 +28,7 @@ mod provider;
 mod radius_policy;
 mod radius_policy_text;
 mod radius_report;
+mod radius_selection;
 mod radius_source;
 mod roles;
 mod secondary;
@@ -100,6 +101,7 @@ pub use radius_policy::{
 };
 pub use radius_policy_text::PolicyWordError;
 pub use radius_report::AppliedRadiusPolicy;
+pub use radius_selection::RadiusSelection;
 pub use radius_source::RadiusSource;
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,

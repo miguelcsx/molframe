@@ -94,6 +94,16 @@ pub enum TableError {
         /// The operating system's reason.
         reason: String,
     },
+    /// A table was asked for twice, by an argument and by the policy, and the two
+    /// name different tables.
+    Conflict {
+        /// The kind of table.
+        kind: &'static str,
+        /// The table the argument selected.
+        requested: String,
+        /// The table the policy names.
+        policy: String,
+    },
     /// The bytes are not a well-formed table.
     Malformed {
         /// The path, or the label of the in-memory or baked data.
@@ -117,6 +127,15 @@ impl fmt::Display for TableError {
                  by name, or run `molframe data fetch <entry> --manifest <file>` to store one \
                  in the cache"
             ),
+            Self::Conflict {
+                kind,
+                requested,
+                policy,
+            } => write!(
+                out,
+                "the {kind} table `{requested}` was asked for, but the policy names `{policy}`; \
+                 drop the argument to use the policy's table, or set the policy to `{requested}`"
+            ),
             Self::Unreadable { path, reason } => write!(out, "cannot read {path}: {reason}"),
             Self::Malformed { path, error } => write!(out, "{path}: {error}"),
         }
@@ -127,6 +146,7 @@ impl core::error::Error for TableError {}
 
 molframe_core::diagnostic_from!(TableError, |error| match error {
     TableError::Absent { .. } | TableError::Missing { .. } => molframe_core::Code::E7102,
+    TableError::Conflict { .. } => molframe_core::Code::E7103,
     TableError::Unreadable { .. } => molframe_core::Code::E7101,
     TableError::Malformed { .. } => molframe_core::Code::E2201,
 });

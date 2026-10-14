@@ -44,6 +44,12 @@ impl RadiusSource {
         request.resolve(store, "--radii").map(Self::from)
     }
 
+    /// The request that selects exactly this table again.
+    #[must_use]
+    pub fn request(&self) -> TableRequest<VdwRadii> {
+        TableRequest::Given(Arc::clone(&self.table))
+    }
+
     /// The radius of `element` in ångström, or `None` when the table lists none.
     #[must_use]
     pub fn radius(&self, element: Element) -> Option<f32> {
