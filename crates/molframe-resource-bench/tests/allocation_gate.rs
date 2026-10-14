@@ -14,7 +14,10 @@ use std::sync::{Mutex, PoisonError};
 /// Case name and the most allocations the case may perform.
 const CEILINGS: &[(&str, u64)] = &[
     ("mmcif_read_medium", 15_827),
-    ("bcif_read_medium", 24_602),
+    // The decoder runs on pool threads whose start-up can land inside the measured
+    // window, so the count moves by up to ~150 under a loaded machine (24_505 to
+    // 24_650 observed); the ceiling sits about 1.5% above the quiet count.
+    ("bcif_read_medium", 24_900),
     ("selection_medium", 63),
     ("contacts_medium", 65),
     ("sasa_medium", 527),
