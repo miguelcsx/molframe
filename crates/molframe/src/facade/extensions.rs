@@ -139,7 +139,10 @@ fn attach_embedded_components(
                     .with_context("problems", values.len().to_string())
                     .with_context(
                         "first",
-                        values.first().map(ToString::to_string).unwrap_or_default(),
+                        match values.first() {
+                            Some(first) => first.to_string(),
+                            None => String::new(),
+                        },
                     ),
             ),
         }

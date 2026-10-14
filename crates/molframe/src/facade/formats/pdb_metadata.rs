@@ -58,14 +58,12 @@ fn mtrix_records(set: &molframe_xtal::NcsSet) -> String {
         .operators()
         .enumerate()
         .map(|(position, operator)| {
-            let fallback = u32::try_from(position + 1).unwrap_or(u32::MAX);
-            (
-                numeric
-                    .as_ref()
-                    .and_then(|ids| ids.get(position).copied())
-                    .unwrap_or(fallback),
-                operator,
-            )
+            let recorded = numeric.as_ref().and_then(|ids| ids.get(position).copied());
+            let id = match recorded {
+                Some(id) => id,
+                None => molframe_core::numeric::usize_to_u32(position + 1),
+            };
+            (id, operator)
         })
         .collect();
     ordered.sort_by_key(|(serial, _)| *serial);

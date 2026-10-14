@@ -76,7 +76,6 @@ pub(crate) fn uncarried_extensions(
 /// The extensions the CIF family writes back out.
 #[cfg(feature = "mmcif")]
 pub(crate) fn cif_carried() -> Vec<&'static str> {
-    #[allow(unused_mut)]
     let mut carried = vec![molframe_core::structure::SEQUENCE_REFERENCES_EXTENSION];
     #[cfg(feature = "crystal")]
     carried.extend([
@@ -93,7 +92,6 @@ pub(crate) fn cif_carried() -> Vec<&'static str> {
 /// records, so they count only when those are present.
 #[cfg(feature = "pdb")]
 pub(crate) fn pdb_carried(structure: &Structure) -> Vec<&'static str> {
-    #[allow(unused_mut)]
     let mut carried = vec![molframe_pdb::PDB_HEADERS_EXTENSION];
     #[cfg(feature = "crystal")]
     {
