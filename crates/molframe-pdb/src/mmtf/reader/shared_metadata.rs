@@ -1,11 +1,20 @@
-// Shared per-file metadata for MMTF models, with identifiers interned once.
-//
-// Complexity: O(atoms + residues + chains) time and space, paid once rather than per model.
+//! Shared per-file metadata for MMTF models, with identifiers interned once.
+//!
+//! Complexity: O(atoms + residues + chains) time and space, paid once rather than per model.
+
+use super::Decoded;
+use super::records::build_entities;
+use super::validation::{char_symbol, intern, schema_error, unit_cell};
+use molframe_core::diagnostic::Diagnostic;
+use molframe_core::index::EntityIndex;
+use molframe_core::structure::StructureData;
 
 /// Builds metadata shared by every model and interns the complete finite set
 /// of identifiers once. Model builders then clone only copy-on-write handles;
 /// repeated symbol lookups do not detach the shared dictionary.
-fn base_data(decoded: &Decoded) -> Result<(StructureData, Vec<EntityIndex>), Diagnostic> {
+pub(super) fn base_data(
+    decoded: &Decoded,
+) -> Result<(StructureData, Vec<EntityIndex>), Diagnostic> {
     let mut data = StructureData::empty();
     data.entry.id = decoded.file.structure_id.clone().map(Into::into);
     data.entry.title = decoded.file.title.clone().map(Into::into);
@@ -22,7 +31,7 @@ fn base_data(decoded: &Decoded) -> Result<(StructureData, Vec<EntityIndex>), Dia
 }
 
 /// Interns identifiers referenced by any model before the dictionary is shared.
-fn intern_model_identifiers(
+pub(super) fn intern_model_identifiers(
     data: &mut StructureData,
     decoded: &Decoded,
 ) -> Result<(), Diagnostic> {

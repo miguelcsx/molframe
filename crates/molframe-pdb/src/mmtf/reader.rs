@@ -4,21 +4,38 @@
 //! and lowering; each model is built once from shared base metadata.
 
 use super::codec::{decode_chars, decode_f32, decode_i32, decode_strings};
-use super::schema::{Entity, File, Group};
+use super::schema::File;
 use super::{
     MMTF_METADATA_EXTENSION, MmtfEntityMetadata, MmtfGroupMetadata, MmtfMetadata, MmtfOptionalField,
 };
-use molframe_core::chunk::{AtomRecord, ChunkBuilder};
-use molframe_core::column::Presence;
-use molframe_core::coords::CoordinateBlock;
+use molframe_core::BondTableBuilder;
+use molframe_core::chunk::ChunkBuilder;
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::index::{AtomIndex, EntityIndex, ResidueIndex};
 use molframe_core::io::{InputBuffer, ReadOptions, ReadResult};
-use molframe_core::optional::{OptionalI32, OptionalSymbol};
-use molframe_core::structure::{CoordinateStore, Structure, StructureData, UnitCell};
-use molframe_core::symbol::{AltId, SymbolId};
-use molframe_core::topology::{ChainRecord, EntityKind, PolymerKind, ResidueRecord};
-use molframe_core::{BondOrder, BondProvenance, BondRecord, BondTableBuilder, Element};
+use molframe_core::optional::OptionalSymbol;
+use molframe_core::structure::{CoordinateStore, Structure, StructureData};
+use molframe_core::topology::{ChainRecord, EntityKind, PolymerKind};
+
+mod bonds;
+mod ensemble;
+mod group_bonds;
+mod records;
+mod shared_metadata;
+mod topology;
+mod validation;
+use self::bonds::{GlobalBond, partition_global_bonds};
+use self::ensemble::{build_ragged_after_mismatch, dense_ensemble, take_frame};
+use self::group_bonds::{
+    add_global_bonds, add_group_bonds, atoms_in_groups, group_at, group_element,
+};
+use self::records::{atom_record, residue_record};
+use self::shared_metadata::base_data;
+use self::topology::same_topology;
+use self::validation::{
+    intern, schema_error, u32_of, usize_of, validate_declared_counts, validate_decoded_lengths,
+    validate_version,
+};
 
 /// Reads an MMTF `MessagePack` structure through all standard codecs.
 ///
@@ -476,15 +493,3 @@ fn ragged_ensemble(models: Vec<Structure>) -> Result<Structure, Diagnostic> {
     data.coords = CoordinateStore::Ragged { models };
     Ok(Structure::new(data))
 }
-
-include!("reader/ensemble.rs");
-include!("reader/base.rs");
-include!("reader/bonds.rs");
-
-fn u32_of(value: usize, field: &'static str) -> Result<u32, Diagnostic> {
-    u32::try_from(value).map_err(|_| {
-        schema_error("MMTF index exceeds unsigned 32-bit range").with_context("field", field)
-    })
-}
-
-include!("reader/helpers.rs");

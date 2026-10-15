@@ -1,12 +1,21 @@
-// Validation of MMTF versions, declared counts and decoded array lengths, plus small value conversions.
-//
-// Complexity: O(1) per check, O(arrays) for the length checks; no allocation beyond diagnostics.
+//! Validation of MMTF versions, declared counts and decoded array lengths, plus small value conversions.
+//!
+//! Complexity: O(1) per check, O(arrays) for the length checks; no allocation beyond diagnostics.
+
+use super::Decoded;
+use crate::mmtf::schema::{Entity, File};
+use molframe_core::column::Presence;
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::io::ReadOptions;
+use molframe_core::structure::{StructureData, UnitCell};
+use molframe_core::symbol::SymbolId;
+use molframe_core::topology::EntityKind;
 
 /// Validates that an MMTF version belongs to a supported major version.
 ///
 /// Major versions zero and one are accepted; malformed or newer major versions
 /// produce a schema diagnostic carrying the original version string.
-fn validate_version(version: &str) -> Result<(), Diagnostic> {
+pub(super) fn validate_version(version: &str) -> Result<(), Diagnostic> {
     let major = version
         .split('.')
         .next()
@@ -23,7 +32,10 @@ fn validate_version(version: &str) -> Result<(), Diagnostic> {
 ///
 /// Every declared atom, group, chain, and model count must be positive,
 /// representable as `usize`, and permitted by the configured row limit.
-fn validate_declared_counts(file: &File, options: &ReadOptions) -> Result<(), Diagnostic> {
+pub(super) fn validate_declared_counts(
+    file: &File,
+    options: &ReadOptions,
+) -> Result<(), Diagnostic> {
     for (name, value) in [
         ("numAtoms", file.num_atoms),
         ("numGroups", file.num_groups),
@@ -40,7 +52,7 @@ fn validate_declared_counts(file: &File, options: &ReadOptions) -> Result<(), Di
 ///
 /// Converts the count into a platform index, applies the configured row limit,
 /// and rejects zero for fields required by the normalized hierarchy.
-fn validate_declared_count(
+pub(super) fn validate_declared_count(
     name: &'static str,
     value: i32,
     row_limit: u64,
@@ -62,7 +74,7 @@ fn validate_declared_count(
 ///
 /// Coordinates, group fields, chain identifiers, and group-per-chain entries
 /// must exactly match their corresponding declared dimensions.
-fn validate_decoded_lengths(decoded: &Decoded) -> Result<(), Diagnostic> {
+pub(super) fn validate_decoded_lengths(decoded: &Decoded) -> Result<(), Diagnostic> {
     let atoms = usize_of(decoded.file.num_atoms)?;
     let groups = usize_of(decoded.file.num_groups)?;
     let chains = usize_of(decoded.file.num_chains)?;
@@ -90,7 +102,7 @@ fn validate_decoded_lengths(decoded: &Decoded) -> Result<(), Diagnostic> {
 ///
 /// Length mismatches include the field name and both dimensions in the emitted
 /// schema diagnostic.
-fn validate_exact_length(
+pub(super) fn validate_exact_length(
     name: &'static str,
     actual: usize,
     expected: usize,
@@ -111,7 +123,7 @@ fn validate_exact_length(
 ///
 /// Each axis is independently bounds-checked so truncated coordinate arrays
 /// yield a schema diagnostic instead of a panic.
-fn position(decoded: &Decoded, atom: usize) -> Result<[f32; 3], Diagnostic> {
+pub(super) fn position(decoded: &Decoded, atom: usize) -> Result<[f32; 3], Diagnostic> {
     let x = decoded
         .x
         .get(atom)
@@ -135,7 +147,11 @@ fn position(decoded: &Decoded, atom: usize) -> Result<[f32; 3], Diagnostic> {
 ///
 /// Missing lists or missing entries yield the supplied default and mark the
 /// field as inapplicable; existing entries retain their source value.
-fn optional_float(values: Option<&Vec<f32>>, atom: usize, default: f32) -> (f32, Presence) {
+pub(super) fn optional_float(
+    values: Option<&Vec<f32>>,
+    atom: usize,
+    default: f32,
+) -> (f32, Presence) {
     match values.and_then(|values| values.get(atom)).copied() {
         Some(value) => (value, Presence::Present),
         None => (default, Presence::Inapplicable),
@@ -146,7 +162,7 @@ fn optional_float(values: Option<&Vec<f32>>, atom: usize, default: f32) -> (f32,
 ///
 /// The source sequence must contain exactly three lengths followed by three
 /// angles when present.
-fn unit_cell(values: Option<&[f32]>) -> Result<Option<UnitCell>, Diagnostic> {
+pub(super) fn unit_cell(values: Option<&[f32]>) -> Result<Option<UnitCell>, Diagnostic> {
     let Some(values) = values else {
         return Ok(None);
     };
@@ -165,7 +181,7 @@ fn unit_cell(values: Option<&[f32]>) -> Result<Option<UnitCell>, Diagnostic> {
 ///
 /// Known MMTF aliases are normalized, while unsupported entity types are
 /// reported with their original textual value.
-fn entity_kind(entity: &Entity) -> Result<EntityKind, Diagnostic> {
+pub(super) fn entity_kind(entity: &Entity) -> Result<EntityKind, Diagnostic> {
     match entity.kind.as_str() {
         "polymer" => Ok(EntityKind::Polymer),
         "non-polymer" | "macrolide" => Ok(EntityKind::NonPolymer),
@@ -180,7 +196,7 @@ fn entity_kind(entity: &Entity) -> Result<EntityKind, Diagnostic> {
 ///
 /// Zero and absent values represent no symbol. ASCII values are interned
 /// directly from a stack buffer; non-ASCII bytes are rejected.
-fn char_symbol(
+pub(super) fn char_symbol(
     data: &mut StructureData,
     value: Option<u8>,
 ) -> Result<Option<SymbolId>, Diagnostic> {
@@ -199,7 +215,7 @@ fn char_symbol(
 ///
 /// Dictionary-capacity failures are translated into the reader's standard
 /// resource-limit diagnostic.
-fn intern(data: &mut StructureData, text: &str) -> Result<SymbolId, Diagnostic> {
+pub(super) fn intern(data: &mut StructureData, text: &str) -> Result<SymbolId, Diagnostic> {
     data.dictionary
         .intern(text)
         .map_err(|_| molframe_core::io::Limits::exceeded("identifier dictionary", text))
@@ -209,7 +225,7 @@ fn intern(data: &mut StructureData, text: &str) -> Result<SymbolId, Diagnostic> 
 ///
 /// Negative source values are treated as malformed schema data rather than
 /// being reinterpreted through a lossy cast.
-fn usize_of(value: i32) -> Result<usize, Diagnostic> {
+pub(super) fn usize_of(value: i32) -> Result<usize, Diagnostic> {
     usize::try_from(value).map_err(|_| schema_error("MMTF count or index is negative"))
 }
 
@@ -217,6 +233,12 @@ fn usize_of(value: i32) -> Result<usize, Diagnostic> {
 ///
 /// The supplied static message is attached to the parser's canonical schema
 /// error code.
-fn schema_error(message: &'static str) -> Diagnostic {
+pub(super) fn schema_error(message: &'static str) -> Diagnostic {
     Diagnostic::new(Code::E1102).with_message(message)
+}
+
+pub(super) fn u32_of(value: usize, field: &'static str) -> Result<u32, Diagnostic> {
+    u32::try_from(value).map_err(|_| {
+        schema_error("MMTF index exceeds unsigned 32-bit range").with_context("field", field)
+    })
 }

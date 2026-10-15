@@ -1,18 +1,24 @@
-// Splits MMTF inter-group bonds and maps bond endpoints onto each model's atoms.
-//
-// Complexity: O(bonds) time and space; O(1) per endpoint lookup.
+//! Splits MMTF inter-group bonds and maps bond endpoints onto each model's atoms.
+//!
+//! Complexity: O(bonds) time and space; O(1) per endpoint lookup.
+
+use super::group_bonds::decoded_order;
+use super::validation::{schema_error, usize_of};
+use super::{Decoded, ModelRange};
+use molframe_core::BondOrder;
+use molframe_core::diagnostic::Diagnostic;
 
 /// One global MMTF bond translated to model-local atom indices.
 #[derive(Clone, Copy)]
-struct GlobalBond {
-    atom_a: u32,
-    atom_b: u32,
-    order: BondOrder,
+pub(super) struct GlobalBond {
+    pub(super) atom_a: u32,
+    pub(super) atom_b: u32,
+    pub(super) order: BondOrder,
 }
 
 /// Partitions global bonds once instead of scanning the complete bond table for
 /// every model. Cross-model bonds retain the previous behavior and are ignored.
-fn partition_global_bonds(
+pub(super) fn partition_global_bonds(
     decoded: &mut Decoded,
     ranges: &[ModelRange],
 ) -> Result<Vec<Vec<GlobalBond>>, Diagnostic> {
@@ -52,7 +58,7 @@ fn partition_global_bonds(
 }
 
 /// Resolves both global endpoints and returns their common model and offsets.
-fn local_bond_endpoints(
+pub(super) fn local_bond_endpoints(
     pair: &[i32],
     ranges: &[ModelRange],
 ) -> Result<Option<(usize, u32, u32)>, Diagnostic> {
@@ -72,7 +78,7 @@ fn local_bond_endpoints(
 }
 
 /// Binary-searches the disjoint, ascending model atom ranges.
-fn model_atom(
+pub(super) fn model_atom(
     atom: usize,
     ranges: &[ModelRange],
 ) -> Result<Option<(usize, u32)>, Diagnostic> {
@@ -91,7 +97,7 @@ fn model_atom(
         return Ok(None);
     }
     let local = atom - range.atom_start;
-    let local = u32::try_from(local)
-        .map_err(|_| schema_error("MMTF local atom index exceeds u32"))?;
+    let local =
+        u32::try_from(local).map_err(|_| schema_error("MMTF local atom index exceeds u32"))?;
     Ok(Some((model, local)))
 }

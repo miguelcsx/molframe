@@ -1,9 +1,16 @@
-// Assembles per-model structures into a dense or ragged ensemble.
-//
-// Complexity: O(models x atoms) time and space; models with identical topology share it.
+//! Assembles per-model structures into a dense or ragged ensemble.
+//!
+//! Complexity: O(models x atoms) time and space; models with identical topology share it.
+
+use super::bonds::GlobalBond;
+use super::validation::{schema_error, u32_of};
+use super::{DecodeContext, ModelRange, build_model_data, ragged_ensemble};
+use molframe_core::coords::CoordinateBlock;
+use molframe_core::diagnostic::Diagnostic;
+use molframe_core::structure::{CoordinateStore, Structure, StructureData};
 
 /// Moves the single coordinate frame out of a just-built model.
-fn take_frame(data: &mut StructureData) -> Result<CoordinateBlock, Diagnostic> {
+pub(super) fn take_frame(data: &mut StructureData) -> Result<CoordinateBlock, Diagnostic> {
     let coordinates = std::mem::replace(
         &mut data.coords,
         CoordinateStore::Single(CoordinateBlock::new()),
@@ -17,7 +24,7 @@ fn take_frame(data: &mut StructureData) -> Result<CoordinateBlock, Diagnostic> {
 }
 
 /// Finishes a dense ensemble without copying any coordinate frame.
-fn dense_ensemble(
+pub(super) fn dense_ensemble(
     mut template: StructureData,
     frames: Vec<CoordinateBlock>,
 ) -> Result<Structure, Diagnostic> {
@@ -33,7 +40,7 @@ fn dense_ensemble(
 /// Switches from the tentative dense path to ragged storage at the first
 /// topology mismatch. Earlier equal models reuse the template's copy-on-write
 /// topology and move their coordinate frames, so no model is reparsed.
-fn build_ragged_after_mismatch(
+pub(super) fn build_ragged_after_mismatch(
     context: DecodeContext<'_>,
     model_bonds: &[Vec<GlobalBond>],
     ranges: &[ModelRange],
@@ -62,7 +69,7 @@ fn build_ragged_after_mismatch(
 }
 
 /// Creates one independent ragged model over a shared copy-on-write topology.
-fn model_from_template(
+pub(super) fn model_from_template(
     template: &StructureData,
     frame: CoordinateBlock,
     model: usize,
@@ -76,7 +83,7 @@ fn model_from_template(
 }
 
 /// Adds one model row with validated indices.
-fn push_model(
+pub(super) fn push_model(
     data: &mut StructureData,
     model: usize,
     chain_count: u32,
