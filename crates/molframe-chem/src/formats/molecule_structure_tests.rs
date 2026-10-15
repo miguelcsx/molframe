@@ -132,8 +132,8 @@ fn sdf_formal_charges_and_annotations_agree_including_neutral_atoms() {
 #[test]
 fn benzene_fixtures_match_aromatic_atoms_and_bonds_without_rewriting_bonds() {
     for text in [
-        include_str!("../tests/fixtures/benzene-aromatic.sdf"),
-        include_str!("../tests/fixtures/benzene-kekulized.sdf"),
+        include_str!("../../tests/fixtures/benzene-aromatic.sdf"),
+        include_str!("../../tests/fixtures/benzene-kekulized.sdf"),
     ] {
         let record = crate::parse_sdf_records(text).expect("parses").remove(0);
         let structure = mol_record_to_structure(&record).expect("lowers");
@@ -164,9 +164,10 @@ fn benzene_fixtures_match_aromatic_atoms_and_bonds_without_rewriting_bonds() {
 
 #[test]
 fn a_kekulized_pyrrole_matches_its_implicit_nitrogen_hydrogen() {
-    let record = crate::parse_sdf_records(include_str!("../tests/fixtures/pyrrole-kekulized.sdf"))
-        .expect("parses")
-        .remove(0);
+    let record =
+        crate::parse_sdf_records(include_str!("../../tests/fixtures/pyrrole-kekulized.sdf"))
+            .expect("parses")
+            .remove(0);
     let structure = mol_record_to_structure(&record).expect("lowers");
     let matches = crate::SmartsPattern::parse("[nH]")
         .expect("pattern")

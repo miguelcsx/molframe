@@ -5,48 +5,38 @@
 mod annotate;
 mod aromaticity;
 pub mod base_pair;
-mod bond_reach;
 mod bonds;
 mod carbohydrates;
 mod coverage;
 mod diagnostics;
 mod element;
 mod element_data;
-mod element_radii;
 mod equivalence;
+mod formats;
 mod grid;
-mod ionic;
 mod library;
-mod metal;
 mod model;
-mod mol;
-mod mol2;
-mod molecule_structure;
 mod numeric;
+mod pattern;
 mod peoe;
 mod provider;
-mod radius_policy;
-mod radius_policy_text;
-mod radius_report;
-mod radius_selection;
-mod radius_source;
+mod radii;
 mod roles;
 mod secondary;
 mod side_chain;
-mod smarts;
-mod smarts_match;
-mod smarts_parse;
-mod standard_bonds;
-mod standard_components;
-mod standard_roles;
-mod table_identity;
-mod table_provider;
-mod table_request;
-mod table_row;
-mod table_store;
-mod table_text;
+mod standard;
+mod tables;
 #[cfg(test)]
 mod test_data;
+
+use formats::{mol, mol2, molecule_structure};
+use pattern::{smarts, smarts_match, smarts_parse};
+use radii::{
+    bond_reach, element_radii, ionic, metal, radius_policy, radius_policy_text, radius_report,
+    radius_selection, radius_source,
+};
+use standard::{standard_bonds, standard_components, standard_roles};
+use tables::{table_identity, table_provider, table_request, table_row, table_store, table_text};
 
 pub use annotate::{
     ChemistryProvenance, ChemistryReport, FormalChargeSource, HBOND_WEAK_ACCEPTOR_ANNOTATION,
