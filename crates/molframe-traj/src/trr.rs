@@ -104,7 +104,7 @@ pub fn parse_trr(bytes: &[u8]) -> Result<TrrTrajectory, TrrError> {
     if let Some(error) = scan_error {
         return Err(error);
     }
-    populate_dt(&mut frames);
+    Timestep::backfill_dt(&mut frames);
     Ok(TrrTrajectory {
         frames,
         steps,
@@ -378,17 +378,6 @@ fn double_vector(chunk: &[u8; 24], scale: f32) -> Result<[f32; 3], TrrError> {
         }
     }
     Ok(vector)
-}
-
-fn populate_dt(frames: &mut [Timestep]) {
-    for index in 1..frames.len() {
-        if let (Some(previous), Some(current)) = (frames[index - 1].time, frames[index].time) {
-            frames[index].dt = Some(current - previous);
-        }
-    }
-    if frames.len() > 1 {
-        frames[0].dt = frames[1].dt;
-    }
 }
 
 fn exact_div(value: usize, divisor: usize) -> Result<usize, TrrError> {

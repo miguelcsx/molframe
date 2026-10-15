@@ -85,6 +85,18 @@ impl Timestep {
         self.cell = None;
         self.data.clear();
     }
+
+    /// Fills `dt` from consecutive times; the first frame takes the second's.
+    pub(crate) fn backfill_dt(frames: &mut [Self]) {
+        for index in 1..frames.len() {
+            if let (Some(previous), Some(current)) = (frames[index - 1].time, frames[index].time) {
+                frames[index].dt = Some(current - previous);
+            }
+        }
+        if frames.len() > 1 {
+            frames[0].dt = frames[1].dt;
+        }
+    }
 }
 
 /// Reader or topology-pairing failure.

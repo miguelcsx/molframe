@@ -65,7 +65,7 @@ pub fn parse_trz(bytes: &[u8]) -> Result<TrzTrajectory, TrzError> {
     while !input.is_empty() {
         frames.push(read_frame(&mut input, frames.len(), has_forces)?);
     }
-    populate_dt(&mut frames);
+    Timestep::backfill_dt(&mut frames);
     Ok(TrzTrajectory {
         title,
         has_forces,
@@ -199,17 +199,6 @@ fn read_f64_array<const N: usize>(input: &mut Input<'_>) -> Result<[f64; N], Trz
         *value = input.f64()?;
     }
     Ok(values)
-}
-
-fn populate_dt(frames: &mut [Timestep]) {
-    for index in 1..frames.len() {
-        if let (Some(previous), Some(current)) = (frames[index - 1].time, frames[index].time) {
-            frames[index].dt = Some(current - previous);
-        }
-    }
-    if frames.len() > 1 {
-        frames[0].dt = frames[1].dt;
-    }
 }
 
 fn invalid(offset: usize) -> TrzError {

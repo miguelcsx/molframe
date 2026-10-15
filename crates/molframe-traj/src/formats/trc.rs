@@ -178,7 +178,7 @@ fn build_trajectory(title: Box<str>, drafts: Vec<Draft>) -> Result<GromosTraject
         });
         boundaries.push(boundary);
     }
-    populate_dt(&mut frames);
+    Timestep::backfill_dt(&mut frames);
     Ok(GromosTrajectory {
         title,
         frames,
@@ -327,17 +327,6 @@ fn parse_three(line: &str, block: &'static str) -> Result<[f64; 3], GromosError>
         Err(invalid(block))
     } else {
         Ok(result)
-    }
-}
-
-fn populate_dt(frames: &mut [Timestep]) {
-    for index in 1..frames.len() {
-        if let (Some(previous), Some(current)) = (frames[index - 1].time, frames[index].time) {
-            frames[index].dt = Some(current - previous);
-        }
-    }
-    if frames.len() > 1 {
-        frames[0].dt = frames[1].dt;
     }
 }
 
