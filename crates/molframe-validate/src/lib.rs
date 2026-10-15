@@ -7,52 +7,24 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "planarity.rs"]
-mod aromatic_planarity;
-mod backbone;
-#[path = "ramachandran.rs"]
-mod backbone_conformation;
-#[path = "builtin/mod.rs"]
 mod builtin_validation;
-#[path = "completeness.rs"]
-mod chain_integrity;
-#[path = "ccd_completeness.rs"]
-mod component_completeness;
-#[path = "occupancy.rs"]
-mod conformer_occupancy;
-#[path = "valence.rs"]
-mod coordination_valence;
-mod covalent;
-#[path = "bond_length.rs"]
-mod covalent_length;
 mod diagnostics;
-#[path = "reference.rs"]
-mod distributions;
-#[path = "plane_restraint.rs"]
-mod explicit_planes;
-#[path = "reference_geometry.rs"]
-mod geometric_reference;
-#[path = "ligand.rs"]
-mod ligand_geometry;
-#[path = "real_space.rs"]
-mod map_correlation;
-#[path = "nucleic.rs"]
-mod nucleic_geometry;
 mod numeric;
-#[path = "peptide.rs"]
-mod peptide_geometry;
-#[path = "governed/mod.rs"]
 mod policy_execution;
-#[path = "quality.rs"]
-mod scalar_quality;
-#[path = "rotamer.rs"]
-mod sidechain_conformation;
-#[path = "chirality.rs"]
-mod stereocentre;
-#[path = "clash.rs"]
-mod steric_overlap;
-#[path = "bfactor/mod.rs"]
-mod thermal_motion;
+mod polymer;
+use polymer::{
+    backbone, backbone_conformation, chain_integrity, nucleic_geometry, peptide_geometry,
+    sidechain_conformation, stereocentre,
+};
+mod geometry;
+use geometry::{
+    aromatic_planarity, coordination_valence, covalent, covalent_length, distributions,
+    explicit_planes, geometric_reference, ligand_geometry, steric_overlap,
+};
+mod experimental;
+use experimental::{
+    component_completeness, conformer_occupancy, map_correlation, scalar_quality, thermal_motion,
+};
 
 pub use aromatic_planarity::{
     PlanarityError, PlanarityFlag, PlanarityOptions, nonplanar_aromatic_rings,
