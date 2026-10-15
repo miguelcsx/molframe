@@ -3,4 +3,5 @@
 mod model;
 mod number;
 
-pub use model::*;
+pub(crate) use model::CifValueRef;
+pub use model::{Category, CifValue, Column, DataBlock, Document};
