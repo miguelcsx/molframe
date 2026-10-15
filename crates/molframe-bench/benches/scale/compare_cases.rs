@@ -146,7 +146,12 @@ fn models(count: usize) -> Vec<Vec<[f32; 3]>> {
 
 /// The same pairs through the batch API, parallel across pairs.
 fn all_pairs_batch(run: &Run<'_>, count: usize) -> Result<Outcome, String> {
-    let owned = models(count);
+    exhaustive_batch(run, &models(count))
+}
+
+/// Scores every pair of `owned` through the batch API.
+fn exhaustive_batch(run: &Run<'_>, owned: &[Vec<[f32; 3]>]) -> Result<Outcome, String> {
+    let count = owned.len();
     let views: Vec<&[[f32; 3]]> = owned.iter().map(Vec::as_slice).collect();
     let pairs = (count * (count - 1) / 2) as u64;
     let sample = run.measure(
@@ -176,21 +181,7 @@ fn mixed_models(count: usize) -> Vec<Vec<[f32; 3]>> {
 
 /// The exhaustive batch over the mixed library: the reference to screen.
 fn mixed_unfiltered(run: &Run<'_>, count: usize) -> Result<Outcome, String> {
-    let owned = mixed_models(count);
-    let views: Vec<&[[f32; 3]]> = owned.iter().map(Vec::as_slice).collect();
-    let pairs = (count * (count - 1) / 2) as u64;
-    let sample = run.measure(
-        || tm_score_all_pairs(&views, &run.context).map_err(|e| e.to_string()),
-        |values: &Vec<f64>| {
-            let mut sum = Checksum::default();
-            sum.reals(values);
-            sum.value()
-        },
-    )?;
-    Ok(Outcome {
-        sample,
-        items: pairs,
-    })
+    exhaustive_batch(run, &mixed_models(count))
 }
 
 fn mixed_exact(run: &Run<'_>, count: usize) -> Result<Outcome, String> {
