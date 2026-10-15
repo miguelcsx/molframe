@@ -104,7 +104,7 @@ crystal = ["dep:molframe-xtal", "spatial", "molframe-engine/crystal"]
 # Analysis domains over the kernels above.
 surface = ["spatial", "dep:molframe-surface", "molframe-engine/surface"]
 # Pulls in faer.
-analysis = ["spatial", "geometry", "chemistry", "dep:molframe-analysis", "dep:molframe-surface", "molframe-engine/analysis"]
+analysis = ["spatial", "geometry", "chemistry", "dep:molframe-analysis", "surface", "molframe-engine/analysis"]
 validation = ["spatial", "geometry", "chemistry", "dep:molframe-validate", "molframe-engine/validation"]
 sequence = ["chemistry", "dep:molframe-seq", "molframe-engine/sequence"]
 compare = ["geometry", "chemistry", "sequence", "dep:molframe-compare", "molframe-engine/compare"]
