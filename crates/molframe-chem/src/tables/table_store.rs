@@ -183,7 +183,13 @@ impl TableStore {
     fn profile_line(&self, kind: &str) -> Result<Result<String, String>, TableError> {
         let text = match std::fs::read_to_string(&self.profile) {
             Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // A target without a filesystem (wasm) has no profile, as an absent file has none.
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::Unsupported
+                ) =>
+            {
                 return Ok(Err(format!(
                     "no request was made and there is no profile at {}",
                     self.profile.display()
