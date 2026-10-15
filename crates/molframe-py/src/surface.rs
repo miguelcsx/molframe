@@ -11,6 +11,19 @@ fn radii<'a>(array: &'a numpy::PyReadonlyArray1<'_, f32>) -> PyResult<&'a [f32]>
     })
 }
 
+/// Binds `positions` and `radii` to the contiguous slices behind the two
+/// arrays, refusing a layout the kernels cannot read in place.
+macro_rules! atoms {
+    ($coordinates:ident, $radii:ident => $positions:ident) => {
+        let $positions = $coordinates.readonly();
+        let $radii = $radii.readonly();
+        let ($positions, $radii) = (
+            crate::bindings::coordinates(&$positions)?,
+            self::radii(&$radii)?,
+        );
+    };
+}
+
 /// Per-atom solvent-accessible area in square ångström (Shrake–Rupley).
 #[pyfunction]
 #[pyo3(signature = (coordinates, radii, *, probe=1.4, points=960, context=None))]
@@ -22,12 +35,7 @@ fn sasa<'py>(
     points: u16,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
-    let positions = coordinates.readonly();
-    let radii = radii.readonly();
-    let (positions, radii) = (
-        crate::bindings::coordinates(&positions)?,
-        self::radii(&radii)?,
-    );
+    atoms!(coordinates, radii => positions);
     let areas = crate::execution::run(py, context, |context| {
         molframe::surface::shrake_rupley(positions, radii, probe, points, context)
     })?
@@ -46,12 +54,7 @@ fn lee_richards<'py>(
     slices: u16,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Bound<'py, PyArray1<f64>>> {
-    let positions = coordinates.readonly();
-    let radii = radii.readonly();
-    let (positions, radii) = (
-        crate::bindings::coordinates(&positions)?,
-        self::radii(&radii)?,
-    );
+    atoms!(coordinates, radii => positions);
     let areas = crate::execution::run(py, context, |context| {
         molframe::surface::lee_richards(positions, radii, probe, slices, context)
     })?
@@ -69,12 +72,7 @@ fn cavities(
     probe: f32,
     resolution: f32,
 ) -> PyResult<Vec<(f64, [f32; 3], usize)>> {
-    let positions = coordinates.readonly();
-    let radii = radii.readonly();
-    let (positions, radii) = (
-        crate::bindings::coordinates(&positions)?,
-        self::radii(&radii)?,
-    );
+    atoms!(coordinates, radii => positions);
     let found = py
         .detach(|| molframe::surface::cavities(positions, radii, probe, resolution))
         .map_err(crate::error::kernel)?;
@@ -159,12 +157,7 @@ fn surface_points(
     samples: u16,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<PySurfacePoints> {
-    let positions = coordinates.readonly();
-    let radii = radii.readonly();
-    let (positions, radii) = (
-        crate::bindings::coordinates(&positions)?,
-        self::radii(&radii)?,
-    );
+    atoms!(coordinates, radii => positions);
     let points = crate::execution::run(py, context, |context| {
         molframe::surface::surface_points(positions, radii, probe, samples, context)
     })?
@@ -183,12 +176,7 @@ fn surface_points_at_density(
     density: f32,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<PySurfacePoints> {
-    let positions = coordinates.readonly();
-    let radii = radii.readonly();
-    let (positions, radii) = (
-        crate::bindings::coordinates(&positions)?,
-        self::radii(&radii)?,
-    );
+    atoms!(coordinates, radii => positions);
     let points = crate::execution::run(py, context, |context| {
         molframe::surface::surface_points_at_density(positions, radii, probe, density, context)
     })?
@@ -218,12 +206,7 @@ fn solvent_excluded_surface(
     max_cells: Option<usize>,
     max_workspace_bytes: Option<usize>,
 ) -> PyResult<crate::surface_mesh::PyMesh> {
-    let positions = coordinates.readonly();
-    let radii = radii.readonly();
-    let (positions, radii) = (
-        crate::bindings::coordinates(&positions)?,
-        self::radii(&radii)?,
-    );
+    atoms!(coordinates, radii => positions);
     let options = grid(resolution, max_cells, max_workspace_bytes);
     let surface = py
         .detach(|| {
@@ -331,12 +314,7 @@ fn buried_solvent_excluded_surface(
     max_cells: Option<usize>,
     max_workspace_bytes: Option<usize>,
 ) -> PyResult<PyBuriedSurface> {
-    let positions = coordinates.readonly();
-    let radii = radii.readonly();
-    let (positions, radii) = (
-        crate::bindings::coordinates(&positions)?,
-        self::radii(&radii)?,
-    );
+    atoms!(coordinates, radii => positions);
     let roles = roles
         .into_iter()
         .map(|word| word.parse::<MoleculeRole>())
