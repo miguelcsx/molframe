@@ -230,6 +230,7 @@ pub(crate) fn native_failure(number: u32, message: &str) -> PyErr {
 }
 
 /// A failure raised as the named `molframe.errors` class with a caller-written message.
+#[cfg(feature = "motif")]
 pub(crate) fn named(name: &str, message: impl AsRef<str>) -> PyErr {
     plain(name, message.as_ref())
 }

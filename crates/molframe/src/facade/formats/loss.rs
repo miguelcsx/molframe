@@ -76,23 +76,27 @@ pub(crate) fn uncarried_extensions(
 /// The extensions the CIF family writes back out.
 #[cfg(feature = "mmcif")]
 pub(crate) fn cif_carried() -> Vec<&'static str> {
-    let mut carried = vec![molframe_core::structure::SEQUENCE_REFERENCES_EXTENSION];
-    #[cfg(feature = "crystal")]
-    carried.extend([
+    vec![
+        molframe_core::structure::SEQUENCE_REFERENCES_EXTENSION,
+        #[cfg(feature = "crystal")]
         molframe_xtal::SYMMETRY_EXTENSION,
+        #[cfg(feature = "crystal")]
         molframe_xtal::ASSEMBLIES_EXTENSION,
+        #[cfg(feature = "crystal")]
         molframe_xtal::NCS_EXTENSION,
-    ]);
-    #[cfg(feature = "modelcif")]
-    carried.push(molframe_modelcif::MODEL_CIF_EXTENSION);
-    carried
+        #[cfg(feature = "modelcif")]
+        molframe_modelcif::MODEL_CIF_EXTENSION,
+    ]
 }
 
 /// The extensions a PDB write carries; assemblies ride on the retained header
 /// records, so they count only when those are present.
 #[cfg(feature = "pdb")]
 pub(crate) fn pdb_carried(structure: &Structure) -> Vec<&'static str> {
+    #[cfg(feature = "crystal")]
     let mut carried = vec![molframe_pdb::PDB_HEADERS_EXTENSION];
+    #[cfg(not(feature = "crystal"))]
+    let carried = vec![molframe_pdb::PDB_HEADERS_EXTENSION];
     #[cfg(feature = "crystal")]
     {
         carried.extend([
