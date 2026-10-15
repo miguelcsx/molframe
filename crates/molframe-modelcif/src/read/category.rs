@@ -4,6 +4,7 @@
 //! O(cells) space, checked against the ceiling on every push.
 
 use super::column::{ColumnBuilder, PushMemory};
+use super::packed::table_bytes;
 use super::pairwise::PairwiseStream;
 use crate::dense::PAIRWISE;
 use crate::{CompactColumn, ModelCategory, ModelCif, ModelCifError, identifier_item};
@@ -374,14 +375,6 @@ fn maximum_rows(columns: &[ColumnBuilder]) -> usize {
         return 0;
     };
     rows
-}
-
-fn table_bytes<K, V>(values: &HashMap<K, V>) -> usize {
-    values.capacity().saturating_mul(
-        size_of::<(K, V)>()
-            .saturating_add(size_of::<usize>())
-            .saturating_add(1),
-    )
 }
 
 /// Installs the streamed matrix, or restores the compact table for a non-PAE metric.

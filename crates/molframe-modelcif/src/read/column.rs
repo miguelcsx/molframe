@@ -3,7 +3,7 @@
 //! Complexity: amortised O(1) time per value; O(rows + distinct values) space, with
 //! an O(rows) copy each time a column is promoted.
 
-use super::packed::{GrowingIndices, GrowingIntegers, push, reserved};
+use super::packed::{GrowingIndices, GrowingIntegers, push, reserved, table_bytes};
 use crate::{
     CompactColumn, DictionaryColumn, DictionaryEntry, IntegerColumn, ModelCifError, NumberColumn,
 };
@@ -436,12 +436,4 @@ fn payload_bits(values: &[u64], row: usize) -> u64 {
         return 0;
     };
     *value
-}
-
-fn table_bytes<K, V>(values: &HashMap<K, V>) -> usize {
-    values.capacity().saturating_mul(
-        size_of::<(K, V)>()
-            .saturating_add(size_of::<usize>())
-            .saturating_add(1),
-    )
 }

@@ -4,6 +4,7 @@
 //! per buffer; O(n) space.
 
 use crate::{ModelCifError, PackedIndices, PackedIntegers};
+use std::collections::HashMap;
 use std::mem::size_of;
 
 pub(super) enum GrowingIndices {
@@ -233,4 +234,12 @@ pub(super) fn reserved<T>(capacity: usize) -> Result<Vec<T>, ModelCifError> {
         .try_reserve_exact(capacity)
         .map_err(|_| ModelCifError::Allocation)?;
     Ok(values)
+}
+
+pub(super) fn table_bytes<K, V>(values: &HashMap<K, V>) -> usize {
+    values.capacity().saturating_mul(
+        size_of::<(K, V)>()
+            .saturating_add(size_of::<usize>())
+            .saturating_add(1),
+    )
 }
