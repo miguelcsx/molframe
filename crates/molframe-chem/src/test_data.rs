@@ -7,13 +7,19 @@ use crate::{
 use molframe_core::{BondOrder, Element};
 use std::sync::{Arc, OnceLock};
 
+/// The bytes of `data/<name>`, panicking with the reason when unreadable.
+pub(crate) fn shipped_bytes(name: &str) -> Vec<u8> {
+    let path = format!("{}/../../data/{name}", env!("CARGO_MANIFEST_DIR"));
+    match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("{path}: {error}"),
+    }
+}
+
 /// Decodes `data/<name>`, panicking with the reason when it is refused.
 pub(crate) fn shipped<T: TableKind>(name: &str) -> Provided<T> {
     let path = format!("{}/../../data/{name}", env!("CARGO_MANIFEST_DIR"));
-    let bytes = match std::fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(error) => panic!("{path}: {error}"),
-    };
+    let bytes = shipped_bytes(name);
     match T::decode(&bytes, TableIdentity::supplied("x", "x", "x", "x")) {
         Ok(provided) => provided,
         Err(error) => panic!("{path}: {error}"),

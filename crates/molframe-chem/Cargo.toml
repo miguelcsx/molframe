@@ -18,9 +18,11 @@ criterion.workspace = true
 molframe-bench.workspace = true
 
 [features]
-# Compiles in the bonding reach table and a profile naming it, as the last
-# layer of every `TableStore`, so a target without a filesystem perceives
-# bonds on read. Off by default: without it the library compiles in no table.
+# Compiles in the tables the default flows read (bonding reach, covalent
+# radii, Bondi radii, metal sites; about 3 KB) and a profile naming them, as
+# the last layer of every `TableStore`, so a clean machine or a target
+# without a filesystem perceives bonds, infers them and measures surface
+# area. Off by default: without it the library compiles in no table.
 embedded-tables = []
 
 [[bench]]

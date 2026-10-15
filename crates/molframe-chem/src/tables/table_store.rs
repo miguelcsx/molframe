@@ -17,8 +17,9 @@
 //!    [`TableStore::insert_table`], [`TableStore::insert_entry`]);
 //! 2. the disk: the profile file and `<directory>/<name>.<extension>`;
 //! 3. the tables compiled into the library, present only with the
-//!    `embedded-tables` feature: the bonding reach table and a profile line
-//!    naming it.
+//!    `embedded-tables` feature: the bonding reach, covalent radii, Bondi van
+//!    der Waals radii and metal sites the default flows read, and a profile
+//!    naming each.
 //!
 //! A layer that names nothing for a kind defers to the next. A target without
 //! a filesystem (wasm) reads the disk as empty, so memory and the compiled-in

@@ -93,9 +93,11 @@ ic = ["geometry", "dep:molframe-ic", "molframe-engine/ic"]
 query = ["dep:molframe-query", "molframe-engine/query"]
 spatial = ["query", "dep:molframe-spatial", "molframe-engine/spatial"]
 chemistry = ["dep:molframe-chem", "molframe-engine/chemistry"]
-# The bonding reach table compiled in as the table store's last layer, so a
-# read perceives bonds with no profile and no filesystem (wasm, a clean
-# machine). Registered tables and the profile on disk still win over it.
+# The default-flow tables (bonding reach, covalent radii, Bondi radii, metal
+# sites) compiled in as the table store's last layer, so a read perceives
+# bonds, and bonds and surface area resolve, with no profile and no
+# filesystem (wasm, a clean machine). Registered tables and the profile on
+# disk still win over them.
 embedded-tables = ["chemistry", "molframe-chem/embedded-tables"]
 # Arrow and Parquet together — pulls in molframe-interop (not separable without
 # splitting that crate).

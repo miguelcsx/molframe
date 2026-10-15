@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MIT
+format: 1
+name: bondi
+version: 1964
+source: Bondi A (1964) J. Phys. Chem. 68, 441, as distributed in mendeleev 1.1.0
+licence: MIT
+
+# element van-der-Waals-radius-in-angstrom
+H 1.2
+He 1.4
+Li 1.81
+C 1.7
+N 1.55
+O 1.52
+F 1.47
+Ne 1.54
+Na 2.27
+Mg 1.73
+Si 2.1
+P 1.8
+S 1.8
+Cl 1.75
+Ar 1.88
+K 2.75
+Ga 1.87
+As 1.85
+Se 1.9
+Br 1.83
+Kr 2.02
+In 1.93
+Sn 2.17
+Te 2.06
+I 1.98
+Xe 2.16
+Tl 1.96
+Pb 2.02

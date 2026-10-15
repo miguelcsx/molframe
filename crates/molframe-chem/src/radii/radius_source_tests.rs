@@ -21,7 +21,9 @@ fn a_source_answers_from_its_table_and_reports_its_identity() {
 
 #[test]
 fn a_request_resolves_through_the_store_and_never_picks_silently() {
-    let store = TableStore::new(std::env::temp_dir().join("molframe-radius-source-empty"));
+    // No compiled-in layer either: nothing may answer for the profile.
+    let store = TableStore::new(std::env::temp_dir().join("molframe-radius-source-empty"))
+        .with_bundled(None);
     let request = TableRequest::given(given("held", 1.5));
     let Ok(source) = RadiusSource::resolve(&request, &store) else {
         panic!("a given table resolves");

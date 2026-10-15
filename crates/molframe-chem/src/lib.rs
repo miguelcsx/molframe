@@ -4,8 +4,9 @@
 //! layers in turn: tables and a profile registered in memory
 //! ([`TableStore::insert_profile`], [`TableStore::insert_table`]), then the
 //! profile and cache directory on disk, then the tables the `embedded-tables`
-//! feature compiles in (the bonding reach alone). Without that feature nothing
-//! is compiled in.
+//! feature compiles in (the bonding reach, covalent radii, Bondi radii and
+//! metal sites that bond inference, perception and surface area default to).
+//! Without that feature nothing is compiled in.
 
 #![forbid(unsafe_code)]
 

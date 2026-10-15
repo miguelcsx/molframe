@@ -57,12 +57,23 @@ https://files.wwpdb.org/pub/pdb/data/monomers/components.cif.gz into the cache
 with `molframe data fetch` and a manifest, or point `--ccd` at a file. A
 component none of these layers defines is reported (W3201), never guessed.
 
-## Embedded bonding reach
+## Embedded default tables
 
-`macromolecular-reach.reach` is a byte-identical copy of the repository's
-`data/macromolecular-reach.reach` (MIT), kept beside the crate so the published
-package carries it. The opt-in `embedded-tables` feature compiles it in with
-`include_bytes!` as the table store's last layer; without the feature it is
-never read. A test in `src/tables/table_bundled_tests.rs` keeps the two copies
-equal. SHA-256:
-`81ed2c2c55bd1b6d98280ef66a376cdb23f4068f5c86260dea24ee51d504190e`.
+Four files here are byte-identical copies of the repository's `data/` tables
+(all MIT), kept beside the crate so the published package carries them. The
+opt-in `embedded-tables` feature compiles them in with `include_bytes!` as the
+table store's last layer, with a profile naming each; without the feature they
+are never read. They are the tables the default flows select when nothing else
+does: bond perception on read, bond inference, and surface area and clash
+scoring under the default radius policy and metal fallback.
+
+| File | Kind | Bytes | SHA-256 |
+| --- | --- | ---: | --- |
+| `macromolecular-reach.reach` | `bond-reach` | 664 | `81ed2c2c55bd1b6d98280ef66a376cdb23f4068f5c86260dea24ee51d504190e` |
+| `pyykko-covalent.covalent` | `covalent-radii` | 1154 | `733ddda0d7cc7d8698d688c39fdf05a75ead78d78e79221810ce3a260f4a8710` |
+| `bondi.radii` | `vdw-radii` | 413 | `6ac4e602e667b62ce7597f75b1367c38fbcecf0d53c4680be9edefd00c22d844` |
+| `macromolecular-metals.metals` | `metals` | 636 | `c1b08c545099c6368fc0baeb2127bf1463cbaf685e80efd1a143bdfd99ec865f` |
+
+`src/tables/table_bundled_tests.rs` keeps every copy equal to its source and
+every compiled-in entry equal to the file it names. Edit the root `data/` file,
+then copy it here.

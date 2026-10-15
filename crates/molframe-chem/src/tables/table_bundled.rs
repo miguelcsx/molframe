@@ -1,16 +1,29 @@
 //! The tables compiled into the library, when the `embedded-tables` feature asks.
 //!
-//! A read perceives bonds only when a bond-reach table is selected, and a
-//! target without a filesystem (a browser) or a clean machine has no profile
-//! to select one from. With the feature, the store's last layer is this set: the
-//! minimum the default read-time perception needs, which is the bonding reach
-//! table alone, and a profile naming it. Standard-component annotation and
-//! secondary-structure assignment read no table.
+//! A clean machine, or a target without a filesystem (a browser), has no
+//! profile to select a table from, so without help the common flows refuse:
+//! a read perceives no bonds, and bond inference, surface area and clash
+//! scoring raise a missing-table error. With the feature, the store's last
+//! layer is the minimum those default flows read, and a profile naming it:
 //!
-//! The bytes are the repository's `data/macromolecular-reach.reach`, copied
-//! beside this crate so a published package carries them; a test keeps the two
-//! identical. They decode through the same path as the cache file, so every
-//! target that selects them perceives the same bonds.
+//! - `bond-reach: macromolecular-reach`, the reach read-time perception and
+//!   crystal links use;
+//! - `covalent-radii: pyykko-covalent`, the radii bond inference and the
+//!   bond-length checks use;
+//! - `vdw-radii: bondi`, the set the default analysis policy names, which
+//!   surface area and clash scoring use;
+//! - `metals: macromolecular-metals`, the sites surface area's default metal
+//!   fallback reads.
+//!
+//! Standard-component annotation, selection and secondary-structure assignment
+//! read no table. Everything else (other radius sets, ionic radii, validation
+//! references, substitution matrices, component dictionaries) is not compiled
+//! in: it is a choice a caller makes, and the profile or a registration makes it.
+//!
+//! The bytes are the repository's `data/` tables, copied beside this crate so a
+//! published package carries them; a test keeps every copy identical to its
+//! source. They decode through the same path as a cache file, once per process
+//! on first selection, so every target that selects them gets the same tables.
 //!
 //! Without the feature the layer is absent and nothing is compiled in.
 
@@ -18,14 +31,35 @@ use crate::table_memory::MemoryTables;
 use std::sync::Arc;
 
 #[cfg(feature = "embedded-tables")]
-const PROFILE: &str = "bond-reach: macromolecular-reach\n";
+const PROFILE: &str = "bond-reach: macromolecular-reach
+covalent-radii: pyykko-covalent
+vdw-radii: bondi
+metals: macromolecular-metals
+";
 
 #[cfg(feature = "embedded-tables")]
-const ENTRIES: [(&str, &str, &[u8]); 1] = [(
-    "macromolecular-reach",
-    <crate::BondReach as crate::TableKind>::EXTENSION,
-    include_bytes!("../../data/macromolecular-reach.reach"),
-)];
+const ENTRIES: [(&str, &str, &[u8]); 4] = [
+    (
+        "macromolecular-reach",
+        <crate::BondReach as crate::TableKind>::EXTENSION,
+        include_bytes!("../../data/macromolecular-reach.reach"),
+    ),
+    (
+        "pyykko-covalent",
+        <crate::CovalentRadii as crate::TableKind>::EXTENSION,
+        include_bytes!("../../data/pyykko-covalent.covalent"),
+    ),
+    (
+        "bondi",
+        <crate::VdwRadii as crate::TableKind>::EXTENSION,
+        include_bytes!("../../data/bondi.radii"),
+    ),
+    (
+        "macromolecular-metals",
+        <crate::MetalSites as crate::TableKind>::EXTENSION,
+        include_bytes!("../../data/macromolecular-metals.metals"),
+    ),
+];
 
 /// The compiled-in layer, built once per process.
 #[cfg(feature = "embedded-tables")]
