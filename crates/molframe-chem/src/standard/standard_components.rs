@@ -16,7 +16,7 @@ use crate::standard_bonds::{is_amino_acid_component, is_nucleotide_component};
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::column::Presence;
 use molframe_core::diagnostic::{Code, Diagnostic};
-use molframe_core::structure::Structure;
+use molframe_core::structure::{ResidueRef, Structure};
 
 /// The role the built-in tables assign to a residue named `component`:
 /// amino acid, nucleotide or curated saccharide, unknown otherwise.
@@ -30,6 +30,28 @@ pub fn standard_component_kind(component: &str) -> ComponentKind {
         ComponentKind::Saccharide
     } else {
         ComponentKind::Unknown
+    }
+}
+
+/// Reads the role a dictionary declared for a residue, when the structure
+/// carries a component-kind column; the first atom of the residue decides.
+pub(crate) fn declared_kind_reader(
+    structure: &Structure,
+) -> impl Fn(&ResidueRef<'_>) -> Option<ComponentKind> + '_ {
+    let kinds = match structure
+        .annotations()
+        .get(molframe_core::COMPONENT_KIND_ANNOTATION)
+    {
+        Some(AtomAnnotation::Integer(column)) => Some(column),
+        _ => None,
+    };
+    move |residue| {
+        let column = kinds?;
+        let first = residue.atoms().next()?;
+        match column.get(first.index().get()) {
+            Some((code, Presence::Present)) => ComponentKind::from_code(code),
+            _ => None,
+        }
     }
 }
 

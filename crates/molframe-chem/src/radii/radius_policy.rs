@@ -17,11 +17,10 @@
 
 use crate::metal::MetalRadiusKind;
 use crate::standard_bonds::{is_amino_acid_component, is_water_component};
+use crate::standard_components::declared_kind_reader;
 use crate::{
     ComponentKind, MetalTables, RadiusSource, TableError, TableRequest, TableStore, VdwRadii,
 };
-use molframe_core::annotation::AtomAnnotation;
-use molframe_core::column::Presence;
 use molframe_core::structure::{ResidueRef, Structure};
 
 /// What a residue is, for the purpose of deciding whether it is measured.
@@ -186,22 +185,10 @@ pub fn classify_residue(residue: &ResidueRef<'_>, kind: Option<ComponentKind>) -
 #[must_use]
 pub fn included_atoms(structure: &Structure, hetero: HeteroPolicy) -> Vec<bool> {
     let mut included = vec![false; structure.atom_count() as usize];
-    let kinds = match structure
-        .annotations()
-        .get(molframe_core::COMPONENT_KIND_ANNOTATION)
-    {
-        Some(AtomAnnotation::Integer(column)) => Some(column),
-        _ => None,
-    };
+    let declared_kind = declared_kind_reader(structure);
     for chain in structure.data().chains() {
         for residue in chain.residues() {
-            let declared = kinds.and_then(|column| {
-                let first = residue.atoms().next()?;
-                match column.get(first.index().get()) {
-                    Some((code, Presence::Present)) => ComponentKind::from_code(code),
-                    _ => None,
-                }
-            });
+            let declared = declared_kind(&residue);
             if !hetero.includes(classify_residue(&residue, declared)) {
                 continue;
             }

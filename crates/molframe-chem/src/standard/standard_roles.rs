@@ -14,6 +14,7 @@
 //! One pass over the residues, `O(N)` in atoms, allocating a single column.
 
 use crate::standard_bonds::is_amino_acid_component;
+use crate::standard_components::declared_kind_reader;
 use crate::{ComponentKind, PolymerAtomRole};
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::column::Presence;
@@ -52,24 +53,12 @@ pub fn annotate_standard_protein_roles(structure: &Structure) -> Result<Structur
     {
         return Ok(structure.clone());
     }
-    let kinds = match structure
-        .annotations()
-        .get(molframe_core::COMPONENT_KIND_ANNOTATION)
-    {
-        Some(AtomAnnotation::Integer(column)) => Some(column),
-        _ => None,
-    };
+    let declared_kind = declared_kind_reader(structure);
     let mut entries =
         vec![(PolymerAtomRole::UNKNOWN.code(), Presence::Unknown); structure.atom_count() as usize];
     for chain in structure.data().chains() {
         for residue in chain.residues() {
-            let declared = kinds.and_then(|column| {
-                let first = residue.atoms().next()?;
-                match column.get(first.index().get()) {
-                    Some((code, Presence::Present)) => ComponentKind::from_code(code),
-                    _ => None,
-                }
-            });
+            let declared = declared_kind(&residue);
             let amino = match declared {
                 Some(kind) => kind == ComponentKind::AminoAcid,
                 None => residue.name().is_some_and(is_amino_acid_component),
