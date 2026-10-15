@@ -13,13 +13,10 @@ fn plan() -> crate::AuditPlan {
                 "prepared files add hydrogens that deposited ones lack",
                 "PDBbind v2020 protein files",
             );
-    match PolicySpace::new(AnalysisPolicy::default())
+    PolicySpace::new(AnalysisPolicy::default())
         .vary(dimension)
         .plan()
-    {
-        Ok(plan) => plan,
-        Err(error) => panic!("plan failed: {error}"),
-    }
+        .expect("plan failed")
 }
 
 fn run(digest: Option<ContentDigest>) -> String {

@@ -4,16 +4,13 @@ use molframe_core::contract::{AnalysisPolicy, MissingPolicy, PolicyField};
 use std::collections::BTreeSet;
 
 fn plan() -> crate::AuditPlan {
-    match PolicySpace::new(AnalysisPolicy::default())
+    PolicySpace::new(AnalysisPolicy::default())
         .vary(PolicyDimension::missing_atoms([
             MissingPolicy::Report,
             MissingPolicy::Indeterminate,
         ]))
         .plan()
-    {
-        Ok(plan) => plan,
-        Err(error) => panic!("plan failed: {error}"),
-    }
+        .expect("plan failed")
 }
 
 #[test]

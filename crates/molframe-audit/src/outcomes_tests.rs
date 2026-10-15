@@ -17,10 +17,7 @@ fn plan() -> AuditPlan {
             AltlocPolicy::ConformerConsistent,
             AltlocPolicy::First,
         ]));
-    match space.plan() {
-        Ok(plan) => plan,
-        Err(error) => panic!("plan failed: {error}"),
-    }
+    space.plan().expect("plan failed")
 }
 
 fn close(left: f64, right: f64) -> bool {
