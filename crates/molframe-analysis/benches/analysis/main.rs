@@ -12,17 +12,13 @@ use molframe_core::ExecutionContext;
 use molframe_core::selection::AtomSelection;
 use molframe_spatial::SpatialBackend;
 
-#[path = "analysis/extended.rs"]
 mod extended;
 use extended::{bench_extended_kernels, bench_hydrogen_bonds};
 use potential::bench_contact_potential;
 
-#[path = "analysis/gnm.rs"]
 mod gnm;
 use gnm::{dense_gnm_reference, grid as gnm_grid};
-#[path = "analysis/pore.rs"]
 mod pore;
-#[path = "analysis/potential.rs"]
 mod potential;
 
 fn context() -> ExecutionContext {

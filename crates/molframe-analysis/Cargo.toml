@@ -27,6 +27,7 @@ molframe-bench.workspace = true
 
 [[bench]]
 name = "analysis"
+path = "benches/analysis/main.rs"
 harness = false
 
 [lints]
