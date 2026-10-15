@@ -249,7 +249,9 @@ impl ReflectionTable {
             return Ok(());
         }
         let setting = match (&self.space_group_name, self.space_group_number) {
-            (Some(name), _) => crate::space_group_by_hermann_mauguin(name)?,
+            (Some(name), _) => {
+                crate::space_group_by_hermann_mauguin_in_cell(name, self.cell.as_ref())?
+            }
             (None, Some(number)) => {
                 let number = u16::try_from(number)
                     .map_err(|_| molframe_core::Diagnostic::new(molframe_core::Code::E6018))?;

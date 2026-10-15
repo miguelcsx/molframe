@@ -1,4 +1,9 @@
-use super::{settings, space_group_by_hall, space_group_setting, space_group_settings};
+use super::{
+    settings, space_group_by_hall, space_group_by_hermann_mauguin_in_cell, space_group_setting,
+    space_group_settings,
+};
+use crate::SymmetrySet;
+use molframe_core::structure::UnitCell;
 use std::collections::BTreeSet;
 
 #[test]
@@ -82,4 +87,72 @@ fn hermann_mauguin_lookup_accepts_pdb_and_catalogue_spellings() {
     };
     assert_eq!(&*unique_c.hall_symbol, "P 2c");
     assert!(super::space_group_by_hermann_mauguin("Q 9 9 9").is_err());
+}
+
+#[test]
+fn hall_change_of_basis_resolves_to_the_catalogue_setting() {
+    for (symbol, hall_number) in [
+        ("P 61 2 (x,y,z+5/12)", 472),
+        ("P 61 2 (0 0 5)", 472),
+        ("P 65 2 (x,y,z+1/12)", 473),
+        ("P 2 2ab (y,z,x)", 114),
+    ] {
+        assert_eq!(
+            space_group_by_hall(symbol).map(|setting| setting.hall_number),
+            Ok(hall_number),
+            "{symbol}"
+        );
+    }
+    assert!(space_group_by_hall("P 2 2ab (y,z").is_err());
+    assert!(space_group_by_hall("Q 9 (0 0 1)").is_err());
+}
+
+#[test]
+fn hermann_mauguin_choices_and_pdb_rhombohedral_spellings() {
+    let hall = |symbol: &str| {
+        super::space_group_by_hermann_mauguin(symbol).map(|setting| setting.hall_number)
+    };
+    assert_eq!(hall("I 1 2 1"), Ok(11));
+    assert_eq!(hall("H 3"), Ok(433));
+    assert_eq!(hall("H 3 2"), Ok(444));
+    assert_eq!(hall("R 3 :R"), Ok(434));
+    assert_eq!(hall("R 3 :H"), Ok(433));
+    let rhombohedral = UnitCell {
+        lengths: [50.0; 3],
+        angles: [80.0; 3],
+    };
+    let hexagonal = UnitCell {
+        lengths: [50.0, 50.0, 120.0],
+        angles: [90.0, 90.0, 120.0],
+    };
+    let in_cell = |symbol: &str, cell: &UnitCell| {
+        space_group_by_hermann_mauguin_in_cell(symbol, Some(cell))
+            .map(|setting| setting.hall_number)
+    };
+    assert_eq!(in_cell("R 3 2", &rhombohedral), Ok(445));
+    assert_eq!(in_cell("R 3 2", &hexagonal), Ok(444));
+    assert_eq!(in_cell("H 3 2", &rhombohedral), Ok(444));
+}
+
+#[test]
+fn metadata_resolution_uses_each_symbol_for_what_it_fixes() {
+    let resolve = |number: Option<u16>, hermann_mauguin: Option<&str>, hall: Option<&str>| {
+        let mut set = SymmetrySet {
+            international_number: number,
+            hermann_mauguin: hermann_mauguin.map(Into::into),
+            hall: hall.map(Into::into),
+            ..SymmetrySet::default()
+        };
+        super::resolve_metadata_operations(&mut set, None).map(|()| set)
+    };
+    // The number alone would mean C 1 2 1; the symbol says the body-centred cell.
+    let body_centred = resolve(Some(5), Some("I 1 2 1"), None);
+    assert!(body_centred.is_ok_and(|set| set.hall_number == Some(11)));
+    let screw = resolve(Some(178), None, Some(" P 61 2 (x,y,z+5/12)"));
+    assert!(screw.is_ok_and(|set| set.hall_number == Some(472) && set.operations().len() == 12));
+    // A number that contradicts the symbol is reported, not overridden.
+    assert!(resolve(Some(4), Some("I 1 2 1"), None).is_err());
+    // An unknown spelling of a type with several settings stays unresolved.
+    assert!(resolve(Some(5), Some("C 2 weird"), None).is_ok_and(|set| set.operations().is_empty()));
+    assert!(resolve(Some(19), Some("unknown"), None).is_ok_and(|set| set.hall_number == Some(115)));
 }

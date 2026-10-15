@@ -91,8 +91,8 @@ pub use restraints::{
 };
 pub use scattering::GaussianFormFactor;
 pub use space_group::{
-    SpaceGroupSetting, space_group_by_hall, space_group_by_hermann_mauguin, space_group_setting,
-    space_group_settings,
+    SpaceGroupSetting, space_group_by_hall, space_group_by_hermann_mauguin,
+    space_group_by_hermann_mauguin_in_cell, space_group_setting, space_group_settings,
 };
 pub use structure_factor::{
     Complex64, Displacement, ScatteringSite, StructureFactorCalculator, StructureFactorError,

@@ -10,6 +10,12 @@ use crate::{Rational, SymmetryOperation, SymmetrySet};
 use molframe_core::{Code, Diagnostic};
 use std::sync::OnceLock;
 
+#[path = "space_group_resolve.rs"]
+mod resolve;
+
+pub(crate) use resolve::resolve_metadata_operations;
+pub use resolve::space_group_by_hermann_mauguin_in_cell;
+
 const CATALOGUE: &[u8] = include_bytes!("../data/space-groups.bin");
 const MAGIC: &[u8; 8] = b"PDBXSG01";
 const SETTING_COUNT: usize = 530;
@@ -63,27 +69,34 @@ pub fn space_group_setting(hall_number: u16) -> Result<&'static SpaceGroupSettin
     settings()?.get(index).ok_or_else(catalogue_error)
 }
 
-/// Looks up a setting by its unique Hall symbol.
+/// Looks up a setting by its Hall symbol.
 ///
-/// ASCII whitespace is collapsed before comparison.
+/// ASCII whitespace is collapsed before comparison. A change-of-basis suffix,
+/// as an algebraic triplet (`P 61 2 (x,y,z+5/12)`) or as shifts in twelfths
+/// (`P 61 2 (0 0 5)`), is applied to the base symbol and the result found in
+/// the catalogue whichever way the file spells it.
 ///
 /// # Errors
 ///
-/// Returns `E6018` when the symbol is absent or bundled data is invalid.
+/// Returns `E6018` when the symbol is absent, its change of basis leads to a
+/// setting outside the catalogue, or bundled data is invalid.
 pub fn space_group_by_hall(symbol: &str) -> Result<&'static SpaceGroupSetting, Diagnostic> {
-    let requested = normalized(symbol);
-    settings()?
-        .iter()
-        .find(|setting| normalized(&setting.hall_symbol) == requested)
-        .ok_or_else(catalogue_error)
+    match resolve::resolve_hall(symbol)? {
+        resolve::HallResolution::Setting(setting) => Ok(setting),
+        resolve::HallResolution::Derived { .. } => Err(catalogue_error()),
+    }
 }
 
 /// Looks up a setting by its Hermann–Mauguin symbol, short or full.
 ///
 /// Case, whitespace and screw-axis underscores are ignored, so the spelling of
-/// a PDB `CRYST1` record (`P 21 21 21`) resolves like the catalogue's. When a
-/// symbol belongs to several settings the first catalogue entry, the standard
-/// setting of that type, is returned.
+/// a PDB `CRYST1` record (`P 21 21 21`) resolves like the catalogue's. A
+/// `:choice` suffix (`R 3 :H`, `P 4/n :2`) selects among settings sharing the
+/// symbol, and the PDB's `H` lattice letter (`H 3 2`) is the rhombohedral type
+/// on hexagonal axes. Otherwise, when a symbol belongs to several settings the
+/// first catalogue entry, the standard setting of that type, is returned; use
+/// [`space_group_by_hermann_mauguin_in_cell`] to let the cell decide the axes
+/// of a rhombohedral group.
 ///
 /// # Errors
 ///
@@ -91,12 +104,26 @@ pub fn space_group_by_hall(symbol: &str) -> Result<&'static SpaceGroupSetting, D
 pub fn space_group_by_hermann_mauguin(
     symbol: &str,
 ) -> Result<&'static SpaceGroupSetting, Diagnostic> {
-    let requested = symbol_key(symbol);
+    let key = symbol_key(symbol);
+    let (name, mut choice) = match key.split_once(':') {
+        Some((name, choice)) => (name.to_owned(), Some(choice.to_owned())),
+        None => (key, None),
+    };
+    let name = match name.strip_prefix('H') {
+        Some(rest) => {
+            choice.get_or_insert_with(|| "H".to_owned());
+            format!("R{rest}")
+        }
+        None => name,
+    };
     settings()?
         .iter()
         .find(|setting| {
-            symbol_key(&setting.international_full) == requested
-                || symbol_key(&setting.international_short) == requested
+            (symbol_key(&setting.international_full) == name
+                || symbol_key(&setting.international_short) == name)
+                && choice
+                    .as_deref()
+                    .is_none_or(|wanted| setting.choice.to_ascii_uppercase() == wanted)
         })
         .ok_or_else(catalogue_error)
 }
@@ -126,30 +153,6 @@ pub fn space_group_settings(
         .iter()
         .filter(|setting| setting.international_number == international_number)
         .collect())
-}
-
-pub(crate) fn resolve_metadata_operations(set: &mut SymmetrySet) -> Result<(), Diagnostic> {
-    let setting = if let Some(hall) = set.hall.as_deref() {
-        Some(space_group_by_hall(hall)?)
-    } else if let Some(number) = set.international_number {
-        space_group_settings(number)?.into_iter().next()
-    } else {
-        None
-    };
-    let Some(setting) = setting else {
-        return Ok(());
-    };
-    set.hall_number = Some(setting.hall_number);
-    set.international_number = Some(setting.international_number);
-    if set.hermann_mauguin.is_none() {
-        set.hermann_mauguin = Some(setting.international_short.clone());
-    }
-    if set.hall.is_none() {
-        set.hall = Some(setting.hall_symbol.clone());
-    }
-    set.choice = (!setting.choice.is_empty()).then(|| setting.choice.clone());
-    set.operations = setting.operations.to_vec();
-    Ok(())
 }
 
 fn settings() -> Result<&'static [SpaceGroupSetting], Diagnostic> {

@@ -1,6 +1,7 @@
 //! Exact crystallographic symmetry operations from CIF algebraic notation.
 
 use molframe_cif::{Category, DataBlock, Document};
+use molframe_core::structure::UnitCell;
 use molframe_core::{Code, Diagnostic, ModelIndex, Structure};
 use std::collections::BTreeSet;
 
@@ -252,7 +253,7 @@ pub fn lower_symmetry(document: &Document) -> Result<SymmetrySet, Vec<Diagnostic
         set.operations = lower_operations(category, item)?;
     }
     if set.operations.is_empty() {
-        crate::space_group::resolve_metadata_operations(&mut set)
+        crate::space_group::resolve_metadata_operations(&mut set, document_cell(block).as_ref())
             .map_err(|finding| vec![finding])?;
     }
     Ok(set)
@@ -341,6 +342,21 @@ fn metadata(block: &DataBlock) -> Result<SymmetrySet, Vec<Diagnostic>> {
         set.crystal_system = set.crystal_system.or(legacy.crystal_system);
     }
     Ok(set)
+}
+
+/// The cell of the block, which decides the axes of a rhombohedral group
+/// whose symbol does not; an incomplete cell decides nothing.
+fn document_cell(block: &DataBlock) -> Option<UnitCell> {
+    let category = block.category("cell")?;
+    let read = |item: &str| category.value(item, 0)?.as_float();
+    Some(UnitCell {
+        lengths: [read("length_a")?, read("length_b")?, read("length_c")?],
+        angles: [
+            read("angle_alpha")?,
+            read("angle_beta")?,
+            read("angle_gamma")?,
+        ],
+    })
 }
 
 fn legacy_metadata(category: &Category) -> Result<SymmetrySet, Vec<Diagnostic>> {

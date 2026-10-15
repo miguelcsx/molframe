@@ -75,7 +75,8 @@ fn attach_space_group(
     let Some(symbol) = structure.data().entry.space_group.clone() else {
         return (structure, findings);
     };
-    match molframe_xtal::space_group_by_hermann_mauguin(&symbol) {
+    let cell = structure.data().cell;
+    match molframe_xtal::space_group_by_hermann_mauguin_in_cell(&symbol, cell.as_ref()) {
         Ok(setting) => {
             // The file's own spelling stays the name; the catalogue only
             // supplies the operations and the numbers.
