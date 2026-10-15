@@ -9,14 +9,16 @@
 //! the reader to work it out.
 
 use crate::document::{Category, CifValue, CifValueRef, DataBlock, Document};
-use crate::lexer::{LexError, Lexer, Quoting, Spanned, Token};
-use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
+use crate::lexer::{LexError, Lexer, Quoting};
+use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::io::InputBuffer;
 use molframe_core::span::{ByteSpan, Position};
 use std::borrow::Cow;
 use std::collections::HashSet;
-use std::marker::PhantomData;
 use std::sync::Arc;
+
+mod state;
+use self::state::ParseState;
 
 /// A document and everything that was wrong with the file it came from.
 pub type ParseResult = Result<(Document, Vec<Diagnostic>), Vec<Diagnostic>>;
@@ -367,8 +369,6 @@ pub fn split_tag(tag: &str) -> (&str, &str) {
         None => (body, body),
     }
 }
-
-include!("document/state.rs");
 
 #[derive(Default)]
 struct TextInterner {

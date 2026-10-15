@@ -1,13 +1,19 @@
-// Parse state that turns CIF tokens into sink events and tracks loop columns.
-//
-// Complexity: O(1) amortised per token; O(columns) space for the open loop header.
+//! Parse state that turns CIF tokens into sink events and tracks loop columns.
+//!
+//! Complexity: O(1) amortised per token; O(columns) space for the open loop header.
+
+use super::{ColumnId, ValueSink, split_tag};
+use crate::lexer::{Quoting, Spanned, Token};
+use molframe_core::diagnostic::{Code, Diagnostic, Diagnostics};
+use molframe_core::span::ByteSpan;
+use std::marker::PhantomData;
 
 /// What the parser is in the middle of.
-struct ParseState<'input, S> {
-    sink: S,
-    findings: Diagnostics,
+pub(super) struct ParseState<'input, S> {
+    pub(super) sink: S,
+    pub(super) findings: Diagnostics,
     /// Item names of the loop being read, in column order.
-    loop_tags: Vec<(Box<str>, Box<str>)>,
+    pub(super) loop_tags: Vec<(Box<str>, Box<str>)>,
     /// Where the loop header began.
     loop_span: Option<ByteSpan>,
     /// How many values of the current loop row have been read.
@@ -18,7 +24,7 @@ struct ParseState<'input, S> {
     /// True once the sink has been offered the rows of the current loop.
     bulk_offered: bool,
     /// Set when the loop's first row ends, so the driver can make the offer.
-    offer_bulk: bool,
+    pub(super) offer_bulk: bool,
     /// The item a bare `tag value` pair is waiting on.
     pending_tag: Option<(Box<str>, Box<str>, ByteSpan)>,
     saw_block: bool,
@@ -29,7 +35,7 @@ impl<'input, S> ParseState<'input, S>
 where
     S: ValueSink<'input>,
 {
-    fn new(sink: S) -> Self {
+    pub(super) fn new(sink: S) -> Self {
         Self {
             sink,
             findings: Diagnostics::new(),
@@ -46,7 +52,7 @@ where
         }
     }
 
-    fn token(&mut self, spanned: Spanned<'input>) {
+    pub(super) fn token(&mut self, spanned: Spanned<'input>) {
         match spanned.token {
             Token::Block(name) => self.block(name),
             Token::FrameStart(_) | Token::FrameEnd => self.end_loop(),
@@ -150,7 +156,7 @@ where
         self.offer_bulk = false;
     }
 
-    fn finish(mut self) -> Result<(S::Output, Vec<Diagnostic>), Vec<Diagnostic>> {
+    pub(super) fn finish(mut self) -> Result<(S::Output, Vec<Diagnostic>), Vec<Diagnostic>> {
         self.end_loop();
         if self.pending_tag.is_some() {
             self.findings.push(
