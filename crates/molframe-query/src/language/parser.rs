@@ -5,15 +5,12 @@ use crate::lexer::{Token, TokenKind, lex};
 use molframe_chem::SmartsPattern;
 use molframe_core::diagnostic::{Code, Diagnostic};
 
-#[path = "parser_helpers.rs"]
-mod helpers;
-use helpers::{canonical_name, mixes_boolean_precedence, namespaced_membership, unescape};
+mod syntax;
 use molframe_core::span::ByteSpan;
-#[path = "parser_cursor.rs"]
+use syntax::{canonical_name, mixes_boolean_precedence, namespaced_membership, unescape};
 mod cursor;
-#[path = "parser_geometric.rs"]
 mod geometric;
-pub(crate) use helpers::{is_boundary, is_query_name};
+pub(crate) use syntax::{is_boundary, is_query_name};
 
 pub(crate) struct Parsed {
     pub(crate) expr: Expr,
@@ -191,7 +188,7 @@ impl Parser {
         }
 
         if let Some(name) = value.strip_prefix('$') {
-            if helpers::is_query_name(name) {
+            if syntax::is_query_name(name) {
                 return Ok(Expr::Group(name.into()));
             }
             return Err(Diagnostic::new(Code::E4001)

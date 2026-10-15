@@ -1,10 +1,7 @@
 //! Column predicates, ranges, macros and same-column expansion.
 
-#[path = "predicate_helpers.rs"]
-mod helpers;
-#[path = "predicate_scan.rs"]
+mod columns;
 mod scan;
-#[path = "predicate_values.rs"]
 mod values;
 
 use crate::ast::{Column, Operator};
@@ -13,7 +10,7 @@ use crate::predicate_pattern::{
     NumericMatcher, NumericPattern, ResidueMatcher, ResiduePattern, residue_insertion,
     residue_number,
 };
-use helpers::{
+use columns::{
     compare, is_residue_id_column, require_namespace, require_numeric, residue_symbol, same_by_key,
     symbol_residue_level, symbol_value,
 };
@@ -26,7 +23,7 @@ use scan::{SelectionCursor, scan_residues, selection_from_sorted, visit};
 use std::collections::{BTreeSet, HashMap, hash_map::Entry};
 use values::{numeric, radius_source, residue_level, residue_text, text_resolved};
 
-pub(crate) use helpers::atom_selector;
+pub(crate) use columns::atom_selector;
 pub(crate) use scan::scan;
 pub(crate) use values::resolved_column;
 

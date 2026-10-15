@@ -10,9 +10,7 @@ use molframe_core::selection::AtomSelection;
 use molframe_core::structure::Structure;
 use std::collections::BTreeMap;
 
-#[path = "eval_geometric.rs"]
 mod geometric;
-#[path = "eval_query.rs"]
 mod query;
 
 /// Named selections supplied to `group <name>` expressions.

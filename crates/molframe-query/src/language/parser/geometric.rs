@@ -1,6 +1,6 @@
 //! Geometric selection productions: `within`, `around`, zones and layers.
 
-use super::helpers::geometric_keyword;
+use super::syntax::geometric_keyword;
 use super::{GeometricKeyword, Parser};
 use crate::ast::GeometricExpr;
 use molframe_core::diagnostic::Diagnostic;

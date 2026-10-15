@@ -1,4 +1,4 @@
-//! Shared validation, comparison and expansion helpers for predicates.
+//! Shared validation, comparison and expansion of columns for predicates.
 
 use super::{AtomContext, resolved_column, scan, visit};
 use crate::ast::{Column, Operator};

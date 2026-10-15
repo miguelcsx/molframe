@@ -96,7 +96,7 @@ pub(super) fn residue_text<'a>(
             .entity()
             .and_then(|entity| structure.data().topology.entities.id(entity))
             .and_then(|symbol| structure.resolve(symbol)),
-        Column::EntityType => Some(super::helpers::entity_type(structure, chain)),
+        Column::EntityType => Some(super::columns::entity_type(structure, chain)),
         Column::InsertionCode => residue.ins_code().or(Some("")),
         Column::RecordType => Some(if residue.is_het() { "HETATM" } else { "ATOM" }),
         _ => None,

@@ -1,4 +1,4 @@
-//! Allocation-conscious lexical helpers for the selection parser.
+//! Allocation-conscious lexical and syntax support for the selection parser.
 
 use super::GeometricKeyword;
 use crate::ast::{Column, Expr};
