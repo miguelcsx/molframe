@@ -19,7 +19,6 @@ use molframe_core::structure::{AtomRef, ChainRef, ResidueRef, Structure};
 use std::collections::HashMap;
 use std::fmt;
 
-#[path = "identity.rs"]
 mod identity;
 use super::columns::terminus_fields;
 pub(crate) use super::columns::{atom_name_field, element_column};
