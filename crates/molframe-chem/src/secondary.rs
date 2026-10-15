@@ -13,13 +13,9 @@ use molframe_core::structure::ResidueRef;
 use molframe_core::structure::Structure;
 use molframe_core::{SecondaryAssignment, SecondarySource, SecondaryStructure as Ss};
 
-#[path = "secondary/bridges.rs"]
 mod bridges;
-#[path = "secondary/classify.rs"]
 mod classify;
-#[path = "secondary/geometry.rs"]
 mod geometry;
-#[path = "secondary/options.rs"]
 mod options;
 use geometry::{bond_energy, squared_distance};
 pub use options::{DsspBackbone, DsspOptions, InvalidDsspOptions};

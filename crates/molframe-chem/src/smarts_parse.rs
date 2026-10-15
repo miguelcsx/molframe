@@ -11,7 +11,6 @@ use crate::smarts::{
 use molframe_core::{BondOrder, Element};
 use std::collections::BTreeMap;
 
-#[path = "smarts_parse/nesting.rs"]
 mod nesting;
 use nesting::split_top_level;
 
