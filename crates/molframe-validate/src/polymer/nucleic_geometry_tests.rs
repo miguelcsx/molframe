@@ -1,11 +1,11 @@
 use super::*;
+use crate::cif_fixture::read_cif;
 use molframe_chem::{
     Component, ComponentAtom, ComponentKind, MemoryProvider, PolymerAtomRole, PolymerRoleProfile,
     PolymerRoleRule, apply_polymer_role_profile,
 };
 use molframe_core::Element;
 use molframe_core::contract::DictionaryVersion;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use std::sync::Arc;
 
 const HEADER: &str = "data_n\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
@@ -70,11 +70,7 @@ fn thresholds_have_no_hidden_default_or_reversal() {
 }
 
 fn context(atoms: &str) -> (molframe_core::Structure, MemoryProvider, PolymerRoleProfile) {
-    let input = InputBuffer::from_bytes(format!("{HEADER}{atoms}").into_bytes());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(&format!("{HEADER}{atoms}"));
     let provider = MemoryProvider::new(DictionaryVersion::new("ccd-test"), [component()])
         .expect("component fixture is unique");
     let profile = profile();

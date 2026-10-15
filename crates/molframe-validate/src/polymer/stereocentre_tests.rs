@@ -1,9 +1,9 @@
 use super::{ChiralityIssue, ChiralityOptions, chirality_outliers};
+use crate::cif_fixture::read_cif;
 use molframe_chem::{
     Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider, StereoConfiguration,
 };
 use molframe_core::contract::DictionaryVersion;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{AnalysisPolicy, BondOrder, Element, Structure};
 use std::sync::Arc;
 
@@ -20,11 +20,7 @@ const REFERENCE: [[f32; 3]; 4] = [
 ];
 
 fn structure(rows: &str) -> Structure {
-    let input = InputBuffer::from_bytes(format!("{HEADER}{rows}").into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(&format!("{HEADER}{rows}"))
 }
 
 fn provider() -> MemoryProvider {

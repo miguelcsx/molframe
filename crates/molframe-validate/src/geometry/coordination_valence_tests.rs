@@ -1,14 +1,5 @@
 use super::overvalent_atoms;
-use molframe_core::io::{InputBuffer, ReadOptions};
-use molframe_core::structure::Structure;
-
-fn structure(source: &str) -> Structure {
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
-}
+use crate::cif_fixture::read_cif;
 
 const ATOMS: &str = "data_v\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
@@ -34,7 +25,7 @@ fn an_oxygen_with_three_bonds_is_over_coordinated() {
 2 covale A 1 LIG O1 A 1 LIG C2 SING\n\
 3 covale A 1 LIG O1 A 1 LIG C3 SING\n"
     );
-    let errors = overvalent_atoms(&structure(&source));
+    let errors = overvalent_atoms(&read_cif(&source));
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].atom.get(), 0);
     assert_eq!((errors[0].bonds, errors[0].maximum), (3, 2));
@@ -47,10 +38,10 @@ fn an_oxygen_with_two_bonds_is_fine() {
 1 covale A 1 LIG O1 A 1 LIG C1 SING\n\
 2 covale A 1 LIG O1 A 1 LIG C2 SING\n"
     );
-    assert!(overvalent_atoms(&structure(&source)).is_empty());
+    assert!(overvalent_atoms(&read_cif(&source)).is_empty());
 }
 
 #[test]
 fn without_bonds_nothing_is_checked() {
-    assert!(overvalent_atoms(&structure(ATOMS)).is_empty());
+    assert!(overvalent_atoms(&read_cif(ATOMS)).is_empty());
 }

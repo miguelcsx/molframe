@@ -1,8 +1,8 @@
 use super::{RotamerDefinition, RotamerOptions, RotamerProfile, rotamer_outliers};
+use crate::cif_fixture::read_cif;
 use crate::{ReferenceDistribution, ReferenceLibrary};
 use molframe_chem::{Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider};
 use molframe_core::contract::DictionaryVersion;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{AnalysisPolicy, BondOrder, Element, Structure};
 
 fn structure() -> Structure {
@@ -14,11 +14,7 @@ _atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 2 C Q2 CMP A 1 0 0 0\n\
 3 C Q3 CMP A 1 0 1 0\n\
 4 C Q4 CMP A 1 0 1 1\n";
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(source)
 }
 
 fn provider() -> MemoryProvider {
@@ -157,11 +153,7 @@ _atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 2 C Q2 CMP A 1 . 1.0 0 0 0\n\
 3 C Q3 CMP A 1 . 1.0 0 1 0\n{tail}"
     );
-    let input = InputBuffer::from_bytes(source.into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(&source)
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use super::completeness;
+use crate::cif_fixture::read_cif;
 use molframe_core::contract::Namespace;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 
 // Entity A-G-S is declared; only A (position 1) and S (position 3) are modelled,
@@ -33,11 +33,7 @@ _atom_site.Cartn_z
 ";
 
 fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(SOURCE)
 }
 
 #[test]

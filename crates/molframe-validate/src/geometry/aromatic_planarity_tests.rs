@@ -1,5 +1,5 @@
 use super::nonplanar_aromatic_rings;
-use molframe_core::io::{InputBuffer, ReadOptions};
+use crate::cif_fixture::read_cif;
 use molframe_core::optional::OptionalSymbol;
 use molframe_core::structure::Structure;
 
@@ -7,14 +7,6 @@ const HEADER: &str = "data_s\n\
 loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
-
-fn structure(source: &str) -> Structure {
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
-}
 
 /// Bonds closing a cycle over six consecutive atoms starting at `first`.
 fn ring_bonds(first: u32) -> Vec<(u32, u32)> {
@@ -26,7 +18,7 @@ fn aromatic_structure(source: &str) -> Structure {
 }
 
 fn bonded_structure(source: &str, bonds: &[(u32, u32)]) -> Structure {
-    let structure = structure(source);
+    let structure = read_cif(source);
     let mut data = structure.data().clone();
     data.annotations.insert(
         molframe_core::AROMATIC_ATOM_ANNOTATION,
@@ -103,7 +95,7 @@ fn a_non_aromatic_residue_is_ignored() {
 ATOM 1 C CA ALA A 1 0.0 0.0 0\n\
 ATOM 2 C CB ALA A 1 1.5 0.0 0\n"
     );
-    let flags = flags(&structure(&source));
+    let flags = flags(&read_cif(&source));
     assert!(flags.is_empty());
 }
 

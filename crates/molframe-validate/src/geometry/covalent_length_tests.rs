@@ -1,7 +1,6 @@
 use super::bond_length_deviations;
+use crate::cif_fixture::read_cif;
 use molframe_chem::{CovalentRadii, Provided, TableRequest};
-use molframe_core::io::{InputBuffer, ReadOptions};
-use molframe_core::structure::Structure;
 use std::sync::Arc;
 
 fn radii() -> Arc<Provided<CovalentRadii>> {
@@ -10,14 +9,6 @@ fn radii() -> Arc<Provided<CovalentRadii>> {
     {
         Ok(radii) => radii,
         Err(error) => panic!("bench profile resolves: {error}"),
-    }
-}
-
-fn structure(source: &str) -> Structure {
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
     }
 }
 
@@ -44,13 +35,13 @@ ATOM 2 C C2 LIG A 1 {separation} 0 0\n\
 #[test]
 fn a_normal_carbon_carbon_bond_is_not_flagged() {
     // ~1.54 Å is a standard C-C bond; the covalent-radii sum is ~1.5 Å.
-    let deviations = bond_length_deviations(&structure(&two_carbons(1.54)), &radii().table, 0.3);
+    let deviations = bond_length_deviations(&read_cif(&two_carbons(1.54)), &radii().table, 0.3);
     assert!(deviations.is_empty(), "normal bond flagged: {deviations:?}");
 }
 
 #[test]
 fn a_stretched_bond_is_flagged() {
-    let deviations = bond_length_deviations(&structure(&two_carbons(3.0)), &radii().table, 0.3);
+    let deviations = bond_length_deviations(&read_cif(&two_carbons(3.0)), &radii().table, 0.3);
     assert_eq!(deviations.len(), 1);
     assert_eq!(
         (deviations[0].atom_a.get(), deviations[0].atom_b.get()),
@@ -67,12 +58,12 @@ _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 1 3 0 0\n";
-    assert!(bond_length_deviations(&structure(no_conn), &radii().table, 0.3).is_empty());
+    assert!(bond_length_deviations(&read_cif(no_conn), &radii().table, 0.3).is_empty());
 }
 
 #[test]
 fn invalid_tolerances_are_rejected_not_silently_empty() {
-    let structure = structure(&two_carbons(2.5));
+    let structure = read_cif(&two_carbons(2.5));
     assert_eq!(
         super::bond_length_deviations(&structure, &radii().table, 0.2).len(),
         1

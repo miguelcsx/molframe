@@ -8,6 +8,8 @@
 #![forbid(unsafe_code)]
 
 mod builtin_validation;
+#[cfg(test)]
+mod cif_fixture;
 mod diagnostics;
 mod numeric;
 mod policy_execution;

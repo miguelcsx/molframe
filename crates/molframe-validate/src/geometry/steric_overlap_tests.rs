@@ -1,8 +1,8 @@
 use super::{ClashOptions, clashes_with};
+use crate::cif_fixture::read_cif;
 use molframe_chem::{MetalFallback, TableRequest, VdwRadii};
 use molframe_core::bond::{BondProvenance, BondRecord, BondTableBuilder};
 use molframe_core::index::AtomIndex;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_core::{BondOrder, ExecutionContext, OptionalSymbol};
 
@@ -14,14 +14,6 @@ loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
 
-fn structure(source: &str) -> Structure {
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
-}
-
 #[test]
 fn two_carbons_deep_inside_each_other_clash() {
     // Bondi carbon radius is 1.70 Å; at 2.0 Å apart they overlap by 1.4 Å.
@@ -31,7 +23,7 @@ ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 2 2 0 0\n"
     );
     let Ok(found) = clashes_with(
-        &structure(&source),
+        &read_cif(&source),
         &options(0.4, SpatialBackend::BruteForce),
         &ExecutionContext::default(),
     ) else {
@@ -52,7 +44,7 @@ ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 2 3.2 0 0\n"
     );
     let Ok(found) = clashes_with(
-        &structure(&source),
+        &read_cif(&source),
         &options(0.4, SpatialBackend::BruteForce),
         &ExecutionContext::default(),
     ) else {
@@ -69,7 +61,7 @@ ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 2 2 0 0\n\
 ATOM 3 C C3 LIG A 3 2 2 0\n"
     );
-    let structure = structure(&source);
+    let structure = read_cif(&source);
     let Ok(baseline) = clashes_with(
         &structure,
         &options(0.4, SpatialBackend::BruteForce),
@@ -111,7 +103,7 @@ fn the_clash_list_is_identical_at_every_worker_count() {
             }
         }
     }
-    let structure = structure(&source);
+    let structure = read_cif(&source);
 
     let serial = clashes_with(
         &structure,
@@ -140,7 +132,7 @@ fn the_clash_list_is_identical_at_every_worker_count() {
 }
 
 fn bonded(source: &str, pairs: &[(u32, u32)]) -> Structure {
-    let mut data = structure(source).data().clone();
+    let mut data = read_cif(source).data().clone();
     let mut bonds = BondTableBuilder::new();
     for &(a, b) in pairs {
         bonds.push(BondRecord {
@@ -261,13 +253,13 @@ fn a_crystal_peptide_without_a_bond_table_has_no_clashes() {
     // Without bond information, 1-2, 1-3 and 1-4 neighbours inside residues, the
     // peptide links between them and the ring carbons of the phenylalanine all
     // sit well inside their summed van der Waals radii.
-    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
+    let structure = read_cif(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
     assert!(pairs(&structure, &defaults()).is_empty());
 }
 
 #[test]
 fn without_perceived_bonds_the_same_peptide_is_flooded_with_covalent_pairs() {
-    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
+    let structure = read_cif(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
     let raw = ClashOptions {
         perceive_bonds: false,
         ..defaults()
@@ -283,7 +275,7 @@ fn without_perceived_bonds_the_same_peptide_is_flooded_with_covalent_pairs() {
 fn a_phenylalanine_ring_needs_the_one_four_exclusion() {
     // CD1 and CE2 (atoms 32 and 35, zero-based 31 and 34) are 1-4 across the
     // ring and 2.4 Å apart, far inside the 3.4 Å carbon contact distance.
-    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
+    let structure = read_cif(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}"));
     let keeps_one_four = ClashOptions {
         exclude_one_four: false,
         ..defaults()
@@ -298,7 +290,7 @@ fn a_real_overlap_between_non_neighbours_is_still_reported() {
     // A water oxygen placed 2.0 Å from the Met1 CB, which is 1.4 Å inside the
     // 3.22 Å C...O contact distance, with nothing bonded to it.
     let intruder = "ATOM 37 O O HOH B 5 25.112 24.880 5.649\n";
-    let structure = structure(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}{intruder}"));
+    let structure = read_cif(&format!("{HEADER}{UBIQUITIN_N_TERMINUS}{intruder}"));
     let found = pairs(&structure, &defaults());
     assert!(found.contains(&(4, 36)), "{found:?}");
     assert!(
@@ -318,7 +310,7 @@ fn a_close_contact_between_unbonded_residues_is_not_mistaken_for_a_bond() {
 ATOM 1 C CA ALA A 1 0 0 0\n\
 ATOM 2 C CA ALA A 2 1.6 0 0\n"
     );
-    assert_eq!(pairs(&structure(&source), &defaults()), vec![(0, 1)]);
+    assert_eq!(pairs(&read_cif(&source), &defaults()), vec![(0, 1)]);
 }
 
 #[test]
@@ -331,7 +323,7 @@ _atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
     let run = |a: &str, b: &str| {
         let source =
             format!("{header}ATOM 1 C C1 LIG A 1 {a} 0 0 0\nATOM 2 C C2 LIG A 2 {b} 2 0 0\n");
-        pairs(&structure(&source), &defaults())
+        pairs(&read_cif(&source), &defaults())
     };
     assert!(run("A", "B").is_empty());
     assert_eq!(run("A", "A"), vec![(0, 1)]);
@@ -344,7 +336,7 @@ fn a_coordinated_metal_clashes_by_its_ionic_radius_unless_told_otherwise() {
     // 0.60 Å and sulfur 1.80 Å, so the overlap is 0.07 Å: not a clash. The
     // Alvarez sphere of 2.39 Å would call the same distance a 1.86 Å overlap.
     let at = |distance: f32| {
-        structure(&format!(
+        read_cif(&format!(
             "{HEADER}\
 ATOM 1 S SG CYS A 1 0 0 0\n\
 HETATM 2 ZN ZN ZN B 1 {distance} 0 0\n"

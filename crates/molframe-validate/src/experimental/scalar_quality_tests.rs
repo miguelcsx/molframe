@@ -1,5 +1,5 @@
 use super::{QualityIssue, quality_flags};
-use molframe_core::io::{InputBuffer, ReadOptions};
+use crate::cif_fixture::read_cif;
 use molframe_core::structure::Structure;
 
 // Atom 0 is clean; atom 1 has zero occupancy, atom 2 occupancy above one, atom 3
@@ -15,11 +15,7 @@ ATOM 3 C CG GLY A 3 2 0 0 1.5 20.0\n\
 ATOM 4 C CD GLY A 4 3 0 0 1.0 -5.0\n";
 
 fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(SOURCE)
 }
 
 #[test]
