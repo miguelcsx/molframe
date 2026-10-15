@@ -5,6 +5,7 @@
 
 use crate::BenchRequired as _;
 use crate::synthetic_frames;
+use crate::usize_to_u16;
 use crate::usize_to_u32;
 use criterion::{Criterion, Throughput, black_box};
 use molframe_bench::{Sample, coordinates, structure};
@@ -82,10 +83,10 @@ pub(crate) fn bench_decode_large(c: &mut Criterion) {
             time: Some(f64::from(usize_to_u32(frame))),
             positions: (0..atoms)
                 .map(|atom| {
-                    let phase = f32::from(u16::try_from(atom % 4_096).unwrap_or(0)) * 0.013;
+                    let phase = f32::from(usize_to_u16(atom % 4_096)) * 0.013;
                     [
                         phase,
-                        phase.sin() + 0.01 * f32::from(u16::try_from(frame).unwrap_or(0)),
+                        phase.sin() + 0.01 * f32::from(usize_to_u16(frame)),
                         phase.cos(),
                     ]
                 })

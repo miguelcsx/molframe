@@ -13,7 +13,7 @@ pub(crate) fn low_rank_frames(frames: usize, atoms: usize) -> Vec<Vec<[f32; 3]>>
         state = state
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
-        f32::from(u16::try_from(state >> 48).unwrap_or(0)) / 65_536.0 - 0.5
+        f32::from(top_sixteen_bits(state)) / 65_536.0 - 0.5
     };
     let base: Vec<[f32; 3]> = (0..atoms).map(|_| [next(), next(), next()]).collect();
     let modes: Vec<Vec<[f32; 3]>> = (0..4)
@@ -50,4 +50,10 @@ pub(crate) fn bench_pca_scale(c: &mut Criterion) {
         });
     }
     group.finish();
+}
+
+/// The high sixteen bits of `state`, read as bytes so no conversion can fail.
+fn top_sixteen_bits(state: u64) -> u16 {
+    let bytes = state.to_le_bytes();
+    u16::from_le_bytes([bytes[6], bytes[7]])
 }

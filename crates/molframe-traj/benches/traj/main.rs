@@ -451,7 +451,7 @@ pub(crate) fn usize_to_u32(value: usize) -> u32 {
     value
 }
 
-fn usize_to_u16(value: usize) -> u16 {
+pub(crate) fn usize_to_u16(value: usize) -> u16 {
     let Ok(value) = u16::try_from(value) else {
         return u16::MAX;
     };
