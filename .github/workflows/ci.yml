@@ -28,8 +28,9 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
-      # The compiled-in table layer is off in every other build here; its
-      # precedence and determinism tests run only with it on.
+      # The compiled-in table layer is off in every other cargo build here;
+      # its precedence and determinism tests run only with it on. The Python
+      # job's extension has it on, as the wheel does, through pyproject.toml.
       - name: Embedded tables
         run: cargo test -p molframe-chem -p molframe --features molframe/embedded-tables --lib
 
@@ -52,15 +53,15 @@ jobs:
             cargo check -p molframe --no-default-features ${f:+--features "$f"}
           done
 
-      # The stable ABI, which is what maturin builds by default. It costs one
-      # compilation here, and it is the only check that would notice a binding
-      # that stopped being abi3-compatible.
+      # The stable ABI with the compiled-in tables: the feature set the wheel
+      # is built with. It costs one compilation here, and it is the only
+      # check that would notice a binding that stopped being abi3-compatible.
       #
       - name: Stable ABI
         env:
           PYO3_NO_PYTHON: "1"
           PYO3_BUILD_EXTENSION_MODULE: "1"
-        run: cargo check -p molframe-py --features pyo3/abi3-py312
+        run: cargo check -p molframe-py --features pyo3/abi3-py312,embedded-tables
 
       # The two greps. No `unwrap` or `expect` outside test code, and no source
       # file over 500 lines.
