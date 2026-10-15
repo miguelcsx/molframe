@@ -5,6 +5,7 @@
 //! annotation on it: 163, 163A and 163B are three residues, and an antibody
 //! numbering scheme depends on that entirely.
 
+use super::csr::stored_range;
 use crate::column::BitVec;
 use crate::index::ResidueIndex;
 use crate::limits::{CapacityError, TableError};
@@ -210,11 +211,4 @@ impl ResidueTable {
 
         Some(ResidueIndex::new(position))
     }
-}
-
-fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u32>> {
-    let start = *starts.get(index)?;
-    let count = *counts.get(index)?;
-
-    Some(start..start.checked_add(count)?)
 }

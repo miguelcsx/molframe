@@ -1,5 +1,6 @@
 //! The models of a structure, in deposition order.
 
+use super::csr::stored_range;
 use crate::index::ModelIndex;
 use crate::limits::{CapacityError, TableError};
 use std::ops::Range;
@@ -68,11 +69,4 @@ impl ModelTable {
             .enumerate()
             .filter_map(|(position, _)| u32::try_from(position).ok().map(ModelIndex::new))
     }
-}
-
-fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u32>> {
-    let start = *starts.get(index)?;
-    let count = *counts.get(index)?;
-
-    Some(start..start.checked_add(count)?)
 }

@@ -213,6 +213,17 @@ impl<T: Clone + Default + Ord> CsrBuilder<T> {
     }
 }
 
+pub(super) fn stored_range(
+    starts: &[u32],
+    counts: &[u32],
+    index: usize,
+) -> Option<std::ops::Range<u32>> {
+    let start = *starts.get(index)?;
+    let count = *counts.get(index)?;
+
+    Some(start..start.checked_add(count)?)
+}
+
 #[cfg(test)]
 #[path = "csr_tests.rs"]
 mod tests;

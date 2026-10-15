@@ -6,6 +6,7 @@
 //! makes a result impossible to trace back to either the file or the paper, so
 //! nothing here chooses.
 
+use super::csr::stored_range;
 use crate::index::{ChainIndex, EntityIndex};
 use crate::limits::{CapacityError, TableError};
 use crate::optional::OptionalSymbol;
@@ -250,11 +251,4 @@ impl ChainTable {
             .enumerate()
             .filter_map(|(position, _)| u32::try_from(position).ok().map(ChainIndex::new))
     }
-}
-
-fn stored_range(starts: &[u32], counts: &[u32], index: usize) -> Option<Range<u32>> {
-    let start = *starts.get(index)?;
-    let count = *counts.get(index)?;
-
-    Some(start..start.checked_add(count)?)
 }
