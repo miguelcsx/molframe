@@ -34,11 +34,8 @@ fn distance_matrix_requires_a_square_body() {
 
 #[test]
 fn alignment_projection_preserves_native_correspondence() {
-    let alignment =
-        match molframe::sequence::global(b"AC", b"A", molframe::sequence::Scoring::simple()) {
-            Ok(alignment) => alignment,
-            Err(error) => panic!("alignment failed: {error}"),
-        };
+    let alignment = molframe::sequence::global(b"AC", b"A", molframe::sequence::Scoring::simple())
+        .expect("alignment failed");
     let (left, right) = aligned_sequences(b"AC", b"A", &alignment)
         .unwrap_or_else(|error| panic!("projection failed: {error}"));
     assert_eq!(left.len(), right.len());
