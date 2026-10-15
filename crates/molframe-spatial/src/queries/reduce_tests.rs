@@ -1,17 +1,6 @@
 use super::*;
 use crate::SpatialBackend;
-
-fn lattice(side: u16) -> Vec<[f32; 3]> {
-    let mut positions = Vec::new();
-    for x in 0..side {
-        for y in 0..side {
-            for z in 0..side {
-                positions.push([f32::from(x), f32::from(y), f32::from(z)]);
-            }
-        }
-    }
-    positions
-}
+use crate::queries::lattice_fixture::lattice;
 
 fn counted(positions: &[[f32; 3]], workers: usize, backend: SpatialBackend) -> usize {
     let context = ExecutionContext::builder()

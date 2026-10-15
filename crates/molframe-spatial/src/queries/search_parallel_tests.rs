@@ -1,4 +1,5 @@
 use super::*;
+use crate::queries::lattice_fixture::lattice;
 use molframe_core::ExecutionContext;
 
 fn context() -> ExecutionContext {
@@ -7,20 +8,6 @@ fn context() -> ExecutionContext {
 
 fn pair_indices(pairs: &[NeighborPair]) -> Vec<(u32, u32)> {
     pairs.iter().map(|pair| (pair.first, pair.second)).collect()
-}
-
-// A dense cubic lattice forces the cell-list backend and many non-empty cells,
-// so the parallel partition spans multiple cells per worker.
-fn lattice(side: u8) -> Vec<[f32; 3]> {
-    let mut positions = Vec::new();
-    for x in 0..side {
-        for y in 0..side {
-            for z in 0..side {
-                positions.push([f32::from(x), f32::from(y), f32::from(z)]);
-            }
-        }
-    }
-    positions
 }
 
 #[test]

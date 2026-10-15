@@ -25,4 +25,7 @@ pub use within::{within, within_with_options};
 mod knn_tests;
 
 #[cfg(test)]
+pub(crate) mod lattice_fixture;
+
+#[cfg(test)]
 mod knn_between_tests;
