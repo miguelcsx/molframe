@@ -3,31 +3,22 @@ use molframe_core::{ExecutionContext, MemoryBudget, ScratchPolicy};
 
 fn arithmetic_workflow() -> (crate::CompiledWorkflow, crate::Output<i64>) {
     let mut workflow = Workflow::new();
-    let left = match workflow.input::<i64>("left", Cost::Borrow) {
-        Ok(value) => value,
-        Err(error) => panic!("input failed: {error}"),
-    };
-    let right = match workflow.input::<i64>("right", Cost::Borrow) {
-        Ok(value) => value,
-        Err(error) => panic!("input failed: {error}"),
-    };
-    let sum = match workflow.map2(
-        left,
-        right,
-        OperationMetadata::new("add", Cost::Materialize).with_cse_key("add"),
-        |left, right, _| Ok(left + right),
-    ) {
-        Ok(value) => value,
-        Err(error) => panic!("operation failed: {error}"),
-    };
-    let output = match workflow.output("sum", sum) {
-        Ok(value) => value,
-        Err(error) => panic!("output failed: {error}"),
-    };
-    let compiled = match workflow.compile() {
-        Ok(value) => value,
-        Err(error) => panic!("compile failed: {error}"),
-    };
+    let left = workflow
+        .input::<i64>("left", Cost::Borrow)
+        .expect("input failed");
+    let right = workflow
+        .input::<i64>("right", Cost::Borrow)
+        .expect("input failed");
+    let sum = workflow
+        .map2(
+            left,
+            right,
+            OperationMetadata::new("add", Cost::Materialize).with_cse_key("add"),
+            |left, right, _| Ok(left + right),
+        )
+        .expect("operation failed");
+    let output = workflow.output("sum", sum).expect("output failed");
+    let compiled = workflow.compile().expect("compile failed");
     (compiled, output)
 }
 
@@ -38,10 +29,9 @@ fn compiled_workflow_is_reusable_and_typed() {
         let mut inputs = WorkflowInputs::new();
         inputs.insert("left", value);
         inputs.insert("right", 3_i64);
-        let results = match compiled.run(&inputs, &ExecutionContext::default()) {
-            Ok(value) => value,
-            Err(error) => panic!("run failed: {error}"),
-        };
+        let results = compiled
+            .run(&inputs, &ExecutionContext::default())
+            .expect("run failed");
         match results.get(&output) {
             Ok(result) => assert_eq!(*result, value + 3),
             Err(error) => panic!("typed result failed: {error}"),
@@ -74,36 +64,24 @@ fn missing_input_is_reported_by_name() {
 #[test]
 fn multiple_outputs_keep_their_types_and_names() {
     let mut workflow = Workflow::new();
-    let input = match workflow.input::<u64>("value", Cost::Borrow) {
-        Ok(value) => value,
-        Err(error) => panic!("input failed: {error}"),
-    };
-    let doubled = match workflow.map(
-        input,
-        OperationMetadata::new("double", Cost::Materialize),
-        |value, _| Ok(value * 2),
-    ) {
-        Ok(value) => value,
-        Err(error) => panic!("operation failed: {error}"),
-    };
-    let source = match workflow.output("source", input) {
-        Ok(value) => value,
-        Err(error) => panic!("output failed: {error}"),
-    };
-    let result = match workflow.output("doubled", doubled) {
-        Ok(value) => value,
-        Err(error) => panic!("output failed: {error}"),
-    };
-    let compiled = match workflow.compile() {
-        Ok(value) => value,
-        Err(error) => panic!("compile failed: {error}"),
-    };
+    let input = workflow
+        .input::<u64>("value", Cost::Borrow)
+        .expect("input failed");
+    let doubled = workflow
+        .map(
+            input,
+            OperationMetadata::new("double", Cost::Materialize),
+            |value, _| Ok(value * 2),
+        )
+        .expect("operation failed");
+    let source = workflow.output("source", input).expect("output failed");
+    let result = workflow.output("doubled", doubled).expect("output failed");
+    let compiled = workflow.compile().expect("compile failed");
     let mut inputs = WorkflowInputs::new();
     inputs.insert("value", 7_u64);
-    let outputs = match compiled.run(&inputs, &ExecutionContext::default()) {
-        Ok(value) => value,
-        Err(error) => panic!("run failed: {error}"),
-    };
+    let outputs = compiled
+        .run(&inputs, &ExecutionContext::default())
+        .expect("run failed");
     match outputs.get(&source) {
         Ok(value) => assert_eq!(*value, 7),
         Err(error) => panic!("source output failed: {error}"),
@@ -118,18 +96,16 @@ fn multiple_outputs_keep_their_types_and_names() {
 #[test]
 fn compile_rejects_cycles_even_in_a_corrupt_graph() {
     let mut workflow = Workflow::new();
-    let input = match workflow.input::<u64>("value", Cost::Borrow) {
-        Ok(value) => value,
-        Err(error) => panic!("input failed: {error}"),
-    };
-    let node = match workflow.map(
-        input,
-        OperationMetadata::new("identity", Cost::Borrow),
-        |value, _| Ok(*value),
-    ) {
-        Ok(value) => value,
-        Err(error) => panic!("operation failed: {error}"),
-    };
+    let input = workflow
+        .input::<u64>("value", Cost::Borrow)
+        .expect("input failed");
+    let node = workflow
+        .map(
+            input,
+            OperationMetadata::new("identity", Cost::Borrow),
+            |value, _| Ok(*value),
+        )
+        .expect("operation failed");
     workflow.nodes[input.index].dependencies.push(node.index);
     workflow.nodes[input.index]
         .expected_inputs
@@ -143,37 +119,30 @@ fn compile_rejects_cycles_even_in_a_corrupt_graph() {
 #[test]
 fn compile_eliminates_common_and_dead_nodes() {
     let mut workflow = Workflow::new();
-    let input = match workflow.input::<usize>("value", Cost::Borrow) {
-        Ok(value) => value,
-        Err(error) => panic!("input failed: {error}"),
-    };
+    let input = workflow
+        .input::<usize>("value", Cost::Borrow)
+        .expect("input failed");
     let metadata = OperationMetadata::new("double", Cost::Materialize).with_cse_key("double");
-    let first = match workflow.map(input, metadata.clone(), |value, _| Ok(value * 2)) {
-        Ok(value) => value,
-        Err(error) => panic!("operation failed: {error}"),
-    };
-    let second = match workflow.map(input, metadata, |value, _| Ok(value * 2)) {
-        Ok(value) => value,
-        Err(error) => panic!("operation failed: {error}"),
-    };
-    let _dead = match workflow.map(
-        input,
-        OperationMetadata::new("dead", Cost::Copy),
-        |value, _| Ok(value + 1),
-    ) {
-        Ok(value) => value,
-        Err(error) => panic!("operation failed: {error}"),
-    };
+    let first = workflow
+        .map(input, metadata.clone(), |value, _| Ok(value * 2))
+        .expect("operation failed");
+    let second = workflow
+        .map(input, metadata, |value, _| Ok(value * 2))
+        .expect("operation failed");
+    let _dead = workflow
+        .map(
+            input,
+            OperationMetadata::new("dead", Cost::Copy),
+            |value, _| Ok(value + 1),
+        )
+        .expect("operation failed");
     if let Err(error) = workflow.output("first", first) {
         panic!("output failed: {error}");
     }
     if let Err(error) = workflow.output("second", second) {
         panic!("output failed: {error}");
     }
-    let compiled = match workflow.compile() {
-        Ok(value) => value,
-        Err(error) => panic!("compile failed: {error}"),
-    };
+    let compiled = workflow.compile().expect("compile failed");
     assert_eq!(compiled.explain().common_subexpressions_eliminated, 1);
     assert_eq!(compiled.explain().dead_nodes_eliminated, 1);
 }
@@ -181,37 +150,26 @@ fn compile_eliminates_common_and_dead_nodes() {
 #[test]
 fn cancellation_and_memory_admission_happen_before_kernels() {
     let mut workflow = Workflow::new();
-    let input = match workflow.input::<usize>("value", Cost::Borrow) {
-        Ok(value) => value,
-        Err(error) => panic!("input failed: {error}"),
-    };
-    let result = match workflow.map(
-        input,
-        OperationMetadata::new("large", Cost::Materialize).with_estimated_output_bytes(1024),
-        |value, _| Ok(*value),
-    ) {
-        Ok(value) => value,
-        Err(error) => panic!("operation failed: {error}"),
-    };
+    let input = workflow
+        .input::<usize>("value", Cost::Borrow)
+        .expect("input failed");
+    let result = workflow
+        .map(
+            input,
+            OperationMetadata::new("large", Cost::Materialize).with_estimated_output_bytes(1024),
+            |value, _| Ok(*value),
+        )
+        .expect("operation failed");
     if let Err(error) = workflow.output("result", result) {
         panic!("output failed: {error}");
     }
-    let compiled = match workflow.compile() {
-        Ok(value) => value,
-        Err(error) => panic!("compile failed: {error}"),
-    };
-    let budget = match MemoryBudget::new(32) {
-        Ok(value) => value,
-        Err(error) => panic!("budget failed: {error}"),
-    };
-    let context = match ExecutionContext::builder()
+    let compiled = workflow.compile().expect("compile failed");
+    let budget = MemoryBudget::new(32).expect("budget failed");
+    let context = ExecutionContext::builder()
         .memory_budget(budget)
         .scratch_policy(ScratchPolicy::new(0))
         .build()
-    {
-        Ok(value) => value,
-        Err(error) => panic!("context failed: {error}"),
-    };
+        .expect("context failed");
     let mut inputs = WorkflowInputs::new();
     inputs.insert("value", 1_usize);
     assert!(matches!(
