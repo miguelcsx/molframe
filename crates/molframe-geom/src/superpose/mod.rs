@@ -8,4 +8,7 @@ mod fit;
 mod qcp;
 
 pub use deviation::{rmsd, rmsd_flat};
-pub use fit::*;
+pub use fit::{
+    SuperposeError, SuperposeOptions, Superposition, rmsd_after_fit, superpose, superpose_weighted,
+    superpose_weighted_with_options, superpose_with_options,
+};
