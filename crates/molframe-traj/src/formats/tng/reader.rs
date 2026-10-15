@@ -12,7 +12,7 @@ use crate::Timestep;
 use crate::cell::cell_from_vectors;
 use crate::numeric::{f32_triplet, f64_from_i64};
 
-use super::{TngCompression, TngError, TngTrajectory};
+use super::{TngCompression, TngError, TngTrajectory, length_to_angstrom};
 
 const SECONDS_TO_PICOSECONDS: f64 = 1.0e12;
 const VECTOR_WIDTH: usize = 3;
@@ -418,17 +418,6 @@ fn optional_time(
     let seconds = first_seconds + time_per_frame * delta;
     if seconds.is_finite() {
         Ok(Some(seconds * SECONDS_TO_PICOSECONDS))
-    } else {
-        Err(TngError::InvalidValue)
-    }
-}
-
-fn length_to_angstrom(exponent: i64) -> Result<f64, TngError> {
-    let power = i32::try_from(exponent.checked_add(10).ok_or(TngError::InvalidValue)?)
-        .map_err(|_| TngError::InvalidValue)?;
-    let scale = 10.0_f64.powi(power);
-    if scale.is_finite() && scale > 0.0 {
-        Ok(scale)
     } else {
         Err(TngError::InvalidValue)
     }

@@ -11,7 +11,7 @@ use crate::Timestep;
 use crate::cell::vectors_from_cell;
 use crate::numeric::{f32_from_f64, f64_from_i64, f64_from_usize};
 
-use super::{TngCompression, TngError, TngWriteOptions};
+use super::{TngCompression, TngError, TngWriteOptions, length_to_angstrom};
 
 const PICOSECONDS_TO_SECONDS: f64 = 1.0e-12;
 const VALUES_PER_VECTOR: i64 = 3;
@@ -322,16 +322,5 @@ fn compression(value: TngCompression) -> Result<(Compression, f64), TngError> {
             Ok((Compression::TNG, precision))
         }
         TngCompression::Lossy { .. } => Err(TngError::InvalidValue),
-    }
-}
-
-fn length_to_angstrom(exponent: i64) -> Result<f64, TngError> {
-    let power = i32::try_from(exponent.checked_add(10).ok_or(TngError::InvalidValue)?)
-        .map_err(|_| TngError::InvalidValue)?;
-    let scale = 10.0_f64.powi(power);
-    if scale.is_finite() && scale > 0.0 {
-        Ok(scale)
-    } else {
-        Err(TngError::InvalidValue)
     }
 }

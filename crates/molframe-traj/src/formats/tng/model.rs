@@ -1,5 +1,6 @@
 //! Public TNG trajectory metadata and encoder choices.
 
+use super::TngError;
 use crate::Timestep;
 
 /// Compression applied to positions and velocities.
@@ -51,4 +52,16 @@ pub struct TngTrajectory {
     pub compression_precision: f64,
     /// Coordinate block codec retained for faithful rewriting.
     pub compression: TngCompression,
+}
+
+/// Multiplier taking a TNG length exponent (metres) to angstrom.
+pub(super) fn length_to_angstrom(exponent: i64) -> Result<f64, TngError> {
+    let power = i32::try_from(exponent.checked_add(10).ok_or(TngError::InvalidValue)?)
+        .map_err(|_| TngError::InvalidValue)?;
+    let scale = 10.0_f64.powi(power);
+    if scale.is_finite() && scale > 0.0 {
+        Ok(scale)
+    } else {
+        Err(TngError::InvalidValue)
+    }
 }
