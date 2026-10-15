@@ -1,9 +1,12 @@
 # Data
 
-Small permissive tables that molframe reads at run time. Only one is ever
-compiled into a binary: `macromolecular-reach.reach`, copied to
-`crates/molframe-chem/data/` and compiled in by the opt-in `embedded-tables`
-feature (a test keeps the copies identical). Each is a file in the shared text format (a `# SPDX` header,
+Small permissive tables that molframe reads at run time. Four are compiled
+into a binary by the opt-in `embedded-tables` feature, which the Python wheel
+enables: `macromolecular-reach.reach`, `pyykko-covalent.covalent`,
+`bondi.radii` and `macromolecular-metals.metals`, the tables the default flows
+select. Each is copied to `crates/molframe-chem/data/` so the published crate
+carries it, and a test keeps every copy identical to the file here: edit this
+directory, then copy. Each is a file in the shared text format (a `# SPDX` header,
 `format: 1`, `name`, `version`, `source`, `licence`, then rows) or the binary
 form of it (`MFR2`/`MFT2` magic, a header, a payload).
 
@@ -43,8 +46,9 @@ as the full bond and angle geometry, come from a manifest:
 A table is selected by name from the profile (`kind: name`, kinds `vdw-radii`,
 `covalent-radii`, `ionic-radii`, `metals`, `bond-reach`) or by passing a file
 path, or registered in memory with `TableStore::insert_profile` and
-`insert_table`. There is no built-in default except the bonding reach under
-`embedded-tables`, which a registration or a profile on disk overrides; a
+`insert_table`. There is no built-in default except the four tables under
+`embedded-tables` (`bond-reach`, `covalent-radii`, `vdw-radii: bondi`,
+`metals`), which a registration or a profile on disk overrides; any other
 missing table is an `E7102` error.
 `crates/molframe-bench/data/profile.txt` is the profile the tests and benches
 use: it names the tables in this directory, and `.cargo/config.toml` points

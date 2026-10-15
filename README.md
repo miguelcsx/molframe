@@ -52,6 +52,14 @@ pip install molframe
 import molframe
 ```
 
+The wheel compiles in the reference tables the default flows read (bonding
+reach, covalent radii, Bondi van der Waals radii and metal sites, about 3 KB),
+so reading, bond inference, selection, surface area and secondary structure
+work on a clean machine with no data directory or profile. A profile or a
+table registered in memory still takes precedence; every other table (other
+radius sets, ionic radii, validation references, matrices, component
+dictionaries) is chosen through the profile.
+
 ### Rust
 
 ```bash
@@ -706,6 +714,8 @@ motif
 
 The default configuration enables mmCIF and PDB only. Applications opt into
 analysis domains individually, and `full` is available for complete builds.
+`embedded-tables` is separate from `full`: it compiles in the tables the
+Python wheel ships with, for an application with no filesystem or profile.
 
 ## Project status
 
