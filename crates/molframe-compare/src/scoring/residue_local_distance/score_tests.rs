@@ -155,9 +155,8 @@ fn build(
 
 const CHAIN: [(&str, &[Atom]); 3] = [("ASP", &ASP), ("ALA", &ALA), ("VAL", &VAL)];
 
-#[allow(clippy::unnecessary_wraps)]
-fn untouched(_: usize, _: &str, position: [f32; 3]) -> Option<[f32; 3]> {
-    Some(position)
+fn intact(residues: &[(&str, &[Atom])]) -> Structure {
+    build(residues, |_, _, position| Some(position))
 }
 
 fn shift(index: usize) -> f32 {
@@ -199,7 +198,7 @@ fn without_symmetry() -> ResidueLddtOptions {
 
 #[test]
 fn a_model_identical_to_the_reference_scores_one() {
-    let reference = build(&CHAIN, untouched);
+    let reference = intact(&CHAIN);
     let result = score(&reference, &reference, &ResidueLddtOptions::standard());
     assert!((result.score - 1.0).abs() < 1e-12);
     assert!(result.considered > 0);
@@ -229,7 +228,7 @@ fn swap_pair(first: &'static str, second: &'static str, residue: usize) -> Struc
 
 #[test]
 fn swapped_carboxylate_oxygens_are_not_penalised() {
-    let reference = build(&CHAIN, untouched);
+    let reference = intact(&CHAIN);
     let model = swap_pair("OD1", "OD2", 0);
     let resolved = score(&reference, &model, &ResidueLddtOptions::standard());
     assert!((resolved.score - 1.0).abs() < 1e-12, "{}", resolved.score);
@@ -240,7 +239,7 @@ fn swapped_carboxylate_oxygens_are_not_penalised() {
 
 #[test]
 fn the_two_methyls_of_valine_are_not_interchangeable() {
-    let reference = build(&CHAIN, untouched);
+    let reference = intact(&CHAIN);
     let model = swap_pair("CG1", "CG2", 2);
     let result = score(&reference, &model, &ResidueLddtOptions::standard());
     assert!(result.score < 1.0, "{}", result.score);
@@ -249,7 +248,7 @@ fn the_two_methyls_of_valine_are_not_interchangeable() {
 
 #[test]
 fn a_missing_model_atom_lowers_the_score_of_its_residue() {
-    let reference = build(&CHAIN, untouched);
+    let reference = intact(&CHAIN);
     let model = build(&CHAIN, |index, name, position| {
         (index != 1 || name != "CB").then_some(position)
     });
@@ -261,8 +260,8 @@ fn a_missing_model_atom_lowers_the_score_of_its_residue() {
 
 #[test]
 fn a_missing_residue_counts_against_the_model() {
-    let reference = build(&CHAIN, untouched);
-    let model = build(&CHAIN[..2], untouched);
+    let reference = intact(&CHAIN);
+    let model = intact(&CHAIN[..2]);
     let result = score(&reference, &model, &ResidueLddtOptions::standard());
     assert_eq!(result.residues[2].model, None);
     assert_eq!(result.residues[2].score, Some(0.0));
@@ -271,7 +270,7 @@ fn a_missing_residue_counts_against_the_model() {
 
 #[test]
 fn distances_inside_one_residue_are_never_tested() {
-    let reference = build(&CHAIN[..1], untouched);
+    let reference = intact(&CHAIN[..1]);
     let model = build(&CHAIN[..1], |_, name, position| {
         (name == "OD1")
             .then_some([position[0] + 9.0, position[1], position[2]])
@@ -303,7 +302,7 @@ fn distances_inside_one_residue_are_never_tested() {
 
 #[test]
 fn sequence_separation_removes_pairs_between_nearby_residues() {
-    let reference = build(&CHAIN, untouched);
+    let reference = intact(&CHAIN);
     let near = score(&reference, &reference, &ResidueLddtOptions::standard());
     let far = score(
         &reference,
@@ -318,8 +317,8 @@ fn sequence_separation_removes_pairs_between_nearby_residues() {
 
 #[test]
 fn identifier_pairing_leaves_an_absent_residue_unpaired() {
-    let reference = build(&CHAIN, untouched);
-    let model = build(&CHAIN[..2], untouched);
+    let reference = intact(&CHAIN);
+    let model = intact(&CHAIN[..2]);
     let pairs = pair_residues_by_identifier(&reference, &model, &provider(), Namespace::Label)
         .expect("pairing");
     assert_eq!(pairs.len(), 3);
@@ -328,7 +327,7 @@ fn identifier_pairing_leaves_an_absent_residue_unpaired() {
 
 #[test]
 fn a_coordinate_scramble_scores_far_below_a_faithful_model() {
-    let reference = build(&CHAIN, untouched);
+    let reference = intact(&CHAIN);
     let model = build(&CHAIN, |index, _, position| {
         Some([
             position[0] * 2.0 + shift(index),
@@ -342,8 +341,8 @@ fn a_coordinate_scramble_scores_far_below_a_faithful_model() {
 
 #[test]
 fn the_governed_score_reports_coverage_and_every_convention() {
-    let reference = build(&CHAIN, untouched);
-    let model = build(&CHAIN[..2], untouched);
+    let reference = intact(&CHAIN);
+    let model = intact(&CHAIN[..2]);
     let provider = provider();
     let pairs = pair_residues_by_identifier(&reference, &model, &provider, Namespace::Label)
         .expect("pairing");

@@ -13,7 +13,7 @@ use super::resolve::{Outcome, resolve};
 use super::table::{ResidueCorrespondence, Table};
 use crate::local_distance::conservative_f32;
 use crate::mapped::MappedCompareError;
-use crate::numeric::{u64_to_f64, usize_to_f64};
+use crate::numeric::{f64_to_f32, u64_to_f64, usize_to_f64};
 use crate::{CompareError, EmptyLddtPolicy};
 use molframe_chem::ComponentProvider;
 use molframe_core::{AtomSelection, ExecutionContext};
@@ -128,8 +128,7 @@ pub(super) fn eligible_pairs(
         |rows, first, second, d| {
             if keep(first, second) {
                 // Stored narrow on purpose: rows only feed per-residue tallies.
-                #[allow(clippy::cast_possible_truncation)]
-                rows.push((first, second, d as f32));
+                rows.push((first, second, f64_to_f32(d)));
             }
         },
     )?;
