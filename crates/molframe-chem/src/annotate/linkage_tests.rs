@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::test_data::plain_component;
 use crate::{Component, ComponentAtom, ComponentBond, MemoryProvider, StereoConfiguration};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::io::{InputBuffer, ReadOptions};
@@ -10,30 +11,7 @@ _atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n\
 _atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
 
 fn comp(id: &str, kind: ComponentKind, atoms: &[(&str, Element)]) -> Component {
-    Component {
-        id: id.into(),
-        name: id.into(),
-        kind,
-        parent: None,
-        one_letter_code: None,
-        formula: None,
-        atoms: atoms
-            .iter()
-            .map(|(name, element)| ComponentAtom {
-                name: (*name).into(),
-                alternate_name: None,
-                element: *element,
-                charge: 0,
-                aromatic: false,
-                leaving: false,
-                stereo: None,
-            })
-            .collect::<Vec<_>>()
-            .into(),
-        bonds: Vec::<ComponentBond>::new().into(),
-        ideal_coordinates: None,
-        model_coordinates: None,
-    }
+    plain_component(id, kind, atoms, &[])
 }
 
 fn gly() -> Component {

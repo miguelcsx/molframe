@@ -1,21 +1,5 @@
 use super::*;
-use crate::{Provided, TableIdentity, TableTextError};
-
-#[derive(Debug, PartialEq)]
-struct Words(Vec<String>);
-
-impl TableKind for Words {
-    const KIND: &'static str = "words";
-    const EXTENSION: &'static str = "txt";
-
-    fn decode(bytes: &[u8], fallback: TableIdentity) -> Result<Provided<Self>, TableTextError> {
-        let text = crate::text_of("words table", bytes)?;
-        Ok(Provided {
-            identity: fallback,
-            table: Self(text.split_whitespace().map(str::to_owned).collect()),
-        })
-    }
-}
+use crate::test_data::Words;
 
 fn store(name: &str) -> TableStore {
     let dir = std::env::temp_dir().join(format!("molframe-store-{name}-{}", std::process::id()));

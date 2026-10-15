@@ -1,29 +1,8 @@
 use super::*;
-use crate::{ComponentAtom, ComponentKind};
+use crate::ComponentKind;
+use crate::test_data::{plain_atom as atom, plain_bond as bond};
 use molframe_core::{BondOrder, Element};
 use std::collections::BTreeMap;
-
-fn atom(name: &str, element: Element) -> ComponentAtom {
-    ComponentAtom {
-        name: name.into(),
-        alternate_name: None,
-        element,
-        charge: 0,
-        aromatic: false,
-        leaving: false,
-        stereo: None,
-    }
-}
-
-fn bond(atom_a: &str, atom_b: &str, order: BondOrder) -> ComponentBond {
-    ComponentBond {
-        atom_a: atom_a.into(),
-        atom_b: atom_b.into(),
-        order,
-        aromatic: order == BondOrder::Aromatic,
-        stereo: None,
-    }
-}
 
 fn component() -> Component {
     Component {

@@ -1,7 +1,8 @@
 use super::{
     PeoeAtom, PeoeAtomType, PeoeBond, PeoeError, PeoeOptions, component_peoe_charges, peoe_charges,
 };
-use crate::{Component, ComponentAtom, ComponentBond, ComponentKind};
+use crate::test_data::plain_component;
+use crate::{Component, ComponentKind};
 use molframe_core::{BondOrder, Element};
 
 fn charges(atom_types: &[PeoeAtomType], bonds: &[(usize, usize)]) -> Vec<f64> {
@@ -92,38 +93,5 @@ fn default_parameter_profile_has_stable_provenance_identity() {
 }
 
 fn component(atoms: &[(&str, Element)], bonds: &[(&str, &str, BondOrder)]) -> Component {
-    Component {
-        id: "TEST".into(),
-        name: "test component".into(),
-        kind: ComponentKind::NonPolymer,
-        parent: None,
-        one_letter_code: None,
-        formula: None,
-        atoms: atoms
-            .iter()
-            .map(|(name, element)| ComponentAtom {
-                name: (*name).into(),
-                alternate_name: None,
-                element: *element,
-                charge: 0,
-                aromatic: false,
-                leaving: false,
-                stereo: None,
-            })
-            .collect::<Vec<_>>()
-            .into(),
-        bonds: bonds
-            .iter()
-            .map(|(atom_a, atom_b, order)| ComponentBond {
-                atom_a: (*atom_a).into(),
-                atom_b: (*atom_b).into(),
-                order: *order,
-                aromatic: *order == BondOrder::Aromatic,
-                stereo: None,
-            })
-            .collect::<Vec<_>>()
-            .into(),
-        ideal_coordinates: None,
-        model_coordinates: None,
-    }
+    plain_component("TEST", ComponentKind::NonPolymer, atoms, bonds)
 }

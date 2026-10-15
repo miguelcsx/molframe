@@ -1,5 +1,6 @@
 use super::*;
-use crate::{ComponentAtom, ComponentBond, ComponentKind, MemoryProvider};
+use crate::test_data::plain_atom;
+use crate::{ComponentBond, ComponentKind, MemoryProvider};
 use molframe_core::annotation::AnnotationColumn;
 use molframe_core::bond::{BondOrder, BondTableBuilder};
 use molframe_core::io::{InputBuffer, ReadOptions};
@@ -18,15 +19,7 @@ fn component() -> Component {
             ("H", molframe_core::Element::HYDROGEN),
         ]
         .into_iter()
-        .map(|(name, element)| ComponentAtom {
-            name: name.into(),
-            alternate_name: None,
-            element,
-            charge: 0,
-            aromatic: false,
-            leaving: false,
-            stereo: None,
-        })
+        .map(|(name, element)| plain_atom(name, element))
         .collect::<Vec<_>>()
         .into(),
         bonds: [("C", "O"), ("O", "H")]

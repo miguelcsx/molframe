@@ -1,5 +1,6 @@
 use super::*;
 use crate::Component;
+use crate::test_data::plain_atom;
 use crate::{ComponentAtom, ComponentBond, LazyCifProvider, MemoryProvider, StereoConfiguration};
 use molframe_core::bond::{BondProvenance, BondRecord};
 use molframe_core::contract::DictionaryVersion;
@@ -66,15 +67,7 @@ fn carbonyl_component() -> Component {
     atoms[0].charge = 0;
     atoms[0].aromatic = false;
     for (name, element) in [("O", Element::OXYGEN), ("H", Element::HYDROGEN)] {
-        atoms.push(ComponentAtom {
-            name: name.into(),
-            alternate_name: None,
-            element,
-            charge: 0,
-            aromatic: false,
-            leaving: false,
-            stereo: None,
-        });
+        atoms.push(plain_atom(name, element));
     }
     component.atoms = atoms.into();
     let mut bonds = component.bonds.to_vec();
@@ -261,13 +254,8 @@ HETATM 2 N A LIG A 1 1 0 0\n\
 HETATM 3 O B LIG A 1 0 1 0\n\
 HETATM 4 S C LIG A 1 0 0 -1\n";
     let atom = |name: &str, element, stereo| ComponentAtom {
-        name: name.into(),
-        alternate_name: None,
-        element,
-        charge: 0,
-        aromatic: false,
-        leaving: false,
         stereo,
+        ..plain_atom(name, element)
     };
     let bond = |other: &str| ComponentBond {
         atom_a: "CTR".into(),

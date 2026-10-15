@@ -1,23 +1,5 @@
 use super::*;
-
-#[derive(Debug, PartialEq)]
-struct Words(Vec<String>);
-
-impl TableKind for Words {
-    const KIND: &'static str = "words";
-    const EXTENSION: &'static str = "txt";
-
-    fn decode(bytes: &[u8], fallback: TableIdentity) -> Result<Provided<Self>, TableTextError> {
-        let text = crate::text_of("words table", bytes)?;
-        if text.contains("bad") {
-            return Err(TableTextError::at("words table", 1, "bad word"));
-        }
-        Ok(Provided {
-            identity: fallback,
-            table: Self(text.split_whitespace().map(str::to_owned).collect()),
-        })
-    }
-}
+use crate::test_data::Words;
 
 fn directory(name: &str) -> PathBuf {
     let path =

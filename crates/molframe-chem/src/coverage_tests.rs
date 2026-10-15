@@ -1,5 +1,6 @@
 use super::component_coverage;
-use crate::{Component, ComponentAtom, ComponentKind, MemoryProvider};
+use crate::test_data::plain_atom as atom;
+use crate::{Component, ComponentKind, MemoryProvider};
 use molframe_core::contract::{AltlocPolicy, AnalysisPolicy, DictionaryVersion, HydrogenPolicy};
 use molframe_core::{Element, InputBuffer, ReadOptions};
 use std::sync::Arc;
@@ -81,16 +82,4 @@ fn provider() -> MemoryProvider {
         }],
     )
     .expect("component fixture is unique")
-}
-
-fn atom(name: &str, element: Element) -> ComponentAtom {
-    ComponentAtom {
-        name: name.into(),
-        alternate_name: None,
-        element,
-        charge: 0,
-        aromatic: false,
-        leaving: false,
-        stereo: None,
-    }
 }

@@ -1,5 +1,6 @@
 use super::{PolymerRoleProfile, PolymerRoleRule, apply_polymer_role_profile};
-use crate::{Component, ComponentAtom, ComponentKind, MemoryProvider, PolymerAtomRole};
+use crate::test_data::plain_atom;
+use crate::{Component, ComponentKind, MemoryProvider, PolymerAtomRole};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{AtomAnnotation, Element, Presence};
@@ -48,15 +49,7 @@ fn component() -> Component {
         parent: None,
         one_letter_code: Some(b'G'),
         formula: None,
-        atoms: Arc::from([ComponentAtom {
-            name: "Q".into(),
-            alternate_name: None,
-            element: Element::NITROGEN,
-            charge: 0,
-            aromatic: false,
-            leaving: false,
-            stereo: None,
-        }]),
+        atoms: Arc::from([plain_atom("Q", Element::NITROGEN)]),
         bonds: Arc::from([]),
         ideal_coordinates: None,
         model_coordinates: None,
