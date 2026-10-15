@@ -290,32 +290,18 @@ fn next_parse<'a, T: std::str::FromStr>(
         .parse()
         .map_err(|_| ReflectionError::InvalidMtz)
 }
-fn parse_i64_array<const N: usize>(text: &str) -> Result<[i64; N], ReflectionError> {
+fn parse_array<T: std::str::FromStr, const N: usize>(
+    text: &str,
+) -> Result<[T; N], ReflectionError> {
     let values = text
         .split_whitespace()
         .map(str::parse)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| ReflectionError::InvalidMtz)?;
-    values.try_into().map_err(|_| ReflectionError::InvalidMtz)
-}
-fn parse_i32_array<const N: usize>(text: &str) -> Result<[i32; N], ReflectionError> {
-    let values = text
-        .split_whitespace()
-        .map(str::parse)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|_| ReflectionError::InvalidMtz)?;
-    values.try_into().map_err(|_| ReflectionError::InvalidMtz)
-}
-fn parse_f64_array<const N: usize>(text: &str) -> Result<[f64; N], ReflectionError> {
-    let values = text
-        .split_whitespace()
-        .map(str::parse)
-        .collect::<Result<Vec<_>, _>>()
+        .collect::<Result<Vec<T>, _>>()
         .map_err(|_| ReflectionError::InvalidMtz)?;
     values.try_into().map_err(|_| ReflectionError::InvalidMtz)
 }
 fn parse_cell(text: &str) -> Result<UnitCell, ReflectionError> {
-    let values = parse_f64_array::<6>(text)?;
+    let values = parse_array::<f64, 6>(text)?;
     if values[..3]
         .iter()
         .any(|value| !value.is_finite() || *value <= 0.0)

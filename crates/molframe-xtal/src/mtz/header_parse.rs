@@ -2,8 +2,7 @@
 
 use super::{
     BTreeMap, ColumnHeader, DatasetHeader, Header, RECORD_BYTES, ReflectionError, next_parse,
-    parse_cell, parse_f64_array, parse_i32_array, parse_i64_array, parse_missing, record,
-    split_keyword,
+    parse_array, parse_cell, parse_missing, record, split_keyword,
 };
 
 pub(super) fn parse_header(bytes: &[u8], mut offset: usize) -> Result<Header, ReflectionError> {
@@ -19,10 +18,10 @@ pub(super) fn parse_header(bytes: &[u8], mut offset: usize) -> Result<Header, Re
             "TITLE" => output.title = arguments.into(),
             "NCOL" => parse_ncol(arguments, &mut output)?,
             "CELL" => output.cell = Some(parse_cell(arguments)?),
-            "SORT" => output.sort_order = parse_i32_array::<5>(arguments)?,
+            "SORT" => output.sort_order = parse_array::<i32, 5>(arguments)?,
             "SYMINF" => parse_syminf(arguments, &mut output)?,
             "SYMM" => output.symmetry_operations.push(arguments.into()),
-            "RESO" => output.resolution_range = Some(parse_f64_array::<2>(arguments)?),
+            "RESO" => output.resolution_range = Some(parse_array::<f64, 2>(arguments)?),
             "VALM" => output.missing_value = parse_missing(arguments)?,
             "COLUMN" => output.columns.push(parse_column(arguments)?),
             "PROJECT" => update_dataset(arguments, &mut output.datasets, DatasetField::Project)?,
@@ -41,7 +40,7 @@ pub(super) fn parse_header(bytes: &[u8], mut offset: usize) -> Result<Header, Re
 }
 
 fn parse_ncol(arguments: &str, header: &mut Header) -> Result<(), ReflectionError> {
-    let values = parse_i64_array::<3>(arguments)?;
+    let values = parse_array::<i64, 3>(arguments)?;
     header.reflection_count =
         usize::try_from(values[1]).map_err(|_| ReflectionError::InvalidMtz)?;
     header.batch_count = usize::try_from(values[2]).map_err(|_| ReflectionError::InvalidMtz)?;
