@@ -6,6 +6,25 @@ change the public API.
 
 ## Unreleased
 
+- **`compare.lddt` is now a real, residue-aware lDDT; the coordinate kernel
+  is `compare.distance_difference`.** The old `lddt(model, reference)` took
+  bare coordinates, so it counted distances inside a residue, could not
+  recognise a model that named the two carboxylate oxygens the other way
+  round, and could not count a missing atom against the model. It is renamed
+  `distance_difference` (Rust `distance_difference`, `DistanceDifferenceOptions`;
+  its governed provenance name is `distance-difference`) and documented as a
+  coordinate kernel. The new `lddt(model, reference, *, components,
+  components_version, ...)` scores structures: reference distances within
+  15 A between atoms of different residues, tolerances 0.5/1/2/4 A, a missing
+  model atom or residue counts as not preserved, each pair is tallied from
+  both of its atoms, and per-residue scores are reported. Interchangeable
+  atoms (ASP/GLU oxygens, PHE/TYR ring carbons, ARG nitrogens, phosphate
+  oxygens) are renamed to the better naming using the bond graph with bond
+  orders ignored and a planar-centre guard, so the two methyls of valine or
+  leucine are never swapped. Residues are paired by chain and sequence
+  position; `symmetry=False` scores names as given. The result carries the
+  parameters and conventions it was computed under, and Rust has
+  `governed_residue_lddt`.
 - **A wrong array dtype or rank is a clear `MolframeTypeError`.** Passing a
   `float64` array where `float32` is expected used to fail with
   `'ndarray' object is not an instance of 'ndarray'`, because PyO3's own

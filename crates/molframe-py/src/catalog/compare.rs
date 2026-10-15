@@ -112,6 +112,18 @@ pub(super) const ROWS: &[Capability] = &[
         cost: molframe::Cost::Materialize,
     },
     Capability {
+        name: "lddt",
+        domain: "compare",
+        feature: "compare",
+        inputs: "model,reference,components,components_version,inclusion_radius,tolerances,sequence_separation,symmetry,automorphism_limit",
+        result: "Lddt",
+        policy: false,
+        eager: true,
+        workflow: false,
+        execution_needs: "cpu,spatial,memory",
+        cost: molframe::Cost::Materialize,
+    },
+    Capability {
         name: "mapped_dockq",
         domain: "compare",
         feature: "compare",

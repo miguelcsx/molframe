@@ -6,7 +6,7 @@ use crate::bindings::array::Array2;
 use crate::execution::PyExecutionContext;
 use crate::sequence::PyScoring;
 use molframe::compare::{
-    DockQ, DockQOptions, DistanceDifferenceOptions, EmptyLddtPolicy, MappingOptions, QsOptions,
+    DistanceDifferenceOptions, DockQ, DockQOptions, EmptyLddtPolicy, MappingOptions, QsOptions,
 };
 use molframe::{CompareExt, Namespace};
 use numpy::PyArrayMethods;

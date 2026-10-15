@@ -7,6 +7,7 @@ CeAlignment = _native.CeAlignment
 ChainAssignment = _native.ChainAssignment
 ContactSimilarity = _native.ContactSimilarity
 DockQ = _native.DockQ
+Lddt = _native.Lddt
 MappedComparison = _native.MappedComparison
 TmScreen = _native.TmScreen
 assign_chains = _native.assign_chains
@@ -18,6 +19,7 @@ distance_difference = _native.distance_difference
 dockq = _native.dockq
 gdt_ha = _native.gdt_ha
 gdt_ts = _native.gdt_ts
+lddt = _native.lddt
 map_sequence_to_structure = _native.map_sequence_to_structure
 mapped_dockq = _native.mapped_dockq
 mapped_qs_score = _native.mapped_qs_score
@@ -33,6 +35,7 @@ __all__ = [
     "ChainAssignment",
     "ContactSimilarity",
     "DockQ",
+    "Lddt",
     "MappedComparison",
     "TmScreen",
     "assign_chains",
@@ -44,6 +47,7 @@ __all__ = [
     "dockq",
     "gdt_ha",
     "gdt_ts",
+    "lddt",
     "map_sequence_to_structure",
     "mapped_dockq",
     "mapped_qs_score",

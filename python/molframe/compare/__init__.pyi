@@ -25,6 +25,35 @@ class DockQ:
     @property
     def score(self) -> float: ...
 
+@final
+class Lddt:
+    """A residue-aware lDDT and the choices it was computed under."""
+
+    @property
+    def score(self) -> float:
+        """Fraction of tolerance tests passed over every tested distance, in ``[0, 1]``."""
+    @property
+    def considered(self) -> int:
+        """Reference distances tested, each pair counted once."""
+    @property
+    def renamed_residues(self) -> int:
+        """Residues whose interchangeable atoms were renamed to a better naming."""
+    @property
+    def unresolved_symmetry(self) -> int:
+        """Residues whose symmetry exceeded ``automorphism_limit`` and was left alone."""
+    @property
+    def residue_scores(self) -> Array:
+        """float64 score of each reference residue; ``nan`` where nothing was tested."""
+    @property
+    def reference_residues(self) -> Array:
+        """uint32 reference residue indices, in the order of ``residue_scores``."""
+    @property
+    def model_residues(self) -> Array:
+        """int64 model residue compared with each reference residue; ``-1`` where absent."""
+    @property
+    def parameters(self) -> dict[str, object]:
+        """The parameters and fixed conventions the score was computed under."""
+
 class MappedComparison:
     """What corresponded when chains and atoms were mapped before scoring."""
 
@@ -94,6 +123,30 @@ def distance_difference(
     This is the coordinate kernel behind lDDT, not lDDT: bare coordinates carry no
     residues, so it cannot skip distances inside a residue, resolve symmetric atom
     names or count a missing atom against the model.
+    """
+
+def lddt(
+    model: Structure,
+    reference: Structure,
+    *,
+    components: str | PathLike[str],
+    components_version: str,
+    inclusion_radius: float = 15.0,
+    tolerances: Sequence[float] = (0.5, 1.0, 2.0, 4.0),
+    sequence_separation: int = 0,
+    symmetry: bool = True,
+    automorphism_limit: int = 64,
+    chain_names: _Names = "label",
+    context: ExecutionContext | None = None,
+) -> Lddt:
+    """Return the residue-aware lDDT of ``model`` against ``reference``.
+
+    Reference distances up to ``inclusion_radius`` between atoms of different
+    residues are tested at each tolerance. A reference atom or residue the model lacks
+    counts as not preserved. Residues correspond by chain and sequence position under
+    ``chain_names``. With ``symmetry``, interchangeable atoms (a carboxylate's two
+    oxygens, a ring's two ortho carbons) take the naming that preserves the most
+    distances; the two methyls of valine are never exchanged.
     """
 
 def dockq(

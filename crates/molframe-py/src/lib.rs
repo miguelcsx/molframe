@@ -25,6 +25,8 @@ mod compare;
 #[cfg(feature = "compare")]
 mod compare_alignment;
 #[cfg(feature = "compare")]
+mod compare_lddt;
+#[cfg(feature = "compare")]
 mod compare_mapping;
 #[cfg(feature = "compare")]
 mod compare_screen;

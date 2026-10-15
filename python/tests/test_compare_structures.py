@@ -1,4 +1,4 @@
-"""lDDT, DockQ and QS, checked against NumPy and against their own invariances."""
+"""lDDT, distance difference, DockQ and QS, checked against NumPy and their own invariances."""
 
 from itertools import combinations
 from pathlib import Path
@@ -35,8 +35,12 @@ def test_distance_difference_equals_a_brute_force_local_distance_test():
         assert found == pytest.approx(
             reference_distance_difference(model, reference, radius, (0.5, 1.0, 2.0, 4.0)), abs=1e-9
         )
-    custom = compare.distance_difference(model, reference, inclusion_radius=10.0, tolerances=[1.0, 3.0])
-    assert custom == pytest.approx(reference_distance_difference(model, reference, 10.0, (1.0, 3.0)), abs=1e-9)
+    custom = compare.distance_difference(
+        model, reference, inclusion_radius=10.0, tolerances=[1.0, 3.0]
+    )
+    assert custom == pytest.approx(
+        reference_distance_difference(model, reference, 10.0, (1.0, 3.0)), abs=1e-9
+    )
     assert compare.distance_difference(reference, reference) == pytest.approx(1.0)
     assert compare.distance_difference(model[:, :], reference[: len(model)]) <= 1.0
 
@@ -220,3 +224,79 @@ def test_qs_score_matches_the_published_shared_contact_normalisation(hemoglobin)
         contact_distance=12.0,
     )
     assert 0.0 < score <= 1.0
+
+
+def lddt(model, reference, **options: float | bool | str):
+    return compare.lddt(
+        model,
+        reference,
+        components=CCD,
+        components_version="wwPDB-2026-10-03",
+        **options,
+    )
+
+
+def with_swapped_atoms(structure, first, second):
+    """Exchange the coordinates of two atom names in every residue that has both."""
+    scoped = structure.edit().coordinates()
+    positions = scoped.positions()
+    one = np.asarray(structure.select(first).indices, dtype=np.int64)
+    two = np.asarray(structure.select(second).indices, dtype=np.int64)
+    assert len(one) == len(two) > 0
+    positions[one], positions[two] = positions[two].copy(), positions[one].copy()
+    return scoped.commit()
+
+
+def test_lddt_of_a_structure_with_itself_is_perfect(hemoglobin):
+    found = lddt(hemoglobin, hemoglobin)
+    assert found.score == pytest.approx(1.0)
+    assert found.considered > 0
+    assert found.renamed_residues == 0
+    assert np.nanmin(found.residue_scores) == pytest.approx(1.0)
+    assert (found.model_residues >= 0).all()
+    assert found.parameters["missing_model_atoms"] == "not-preserved"
+
+
+def test_lddt_does_not_penalise_a_swapped_carboxylate(hemoglobin):
+    model = with_swapped_atoms(hemoglobin, "resname ASP and name OD1", "resname ASP and name OD2")
+    resolved = lddt(model, hemoglobin)
+    literal = lddt(model, hemoglobin, symmetry=False)
+    assert resolved.score == pytest.approx(1.0)
+    assert resolved.renamed_residues > 0
+    assert literal.score < resolved.score
+    assert literal.renamed_residues == 0
+
+
+def test_lddt_does_not_exchange_the_methyls_of_valine(hemoglobin):
+    model = with_swapped_atoms(hemoglobin, "resname VAL and name CG1", "resname VAL and name CG2")
+    found = lddt(model, hemoglobin)
+    assert found.score < 1.0
+    assert found.renamed_residues == 0
+
+
+def test_lddt_counts_a_missing_residue_against_the_model(hemoglobin):
+    editor = hemoglobin.edit()
+    editor.clear_extensions()
+    editor.delete(hemoglobin.select("chain B"))
+    model = editor.finish()
+    found = lddt(model, hemoglobin)
+    assert found.score < 1.0
+    assert (found.model_residues == -1).any()
+    lost = found.residue_scores[found.model_residues == -1]
+    assert np.nanmax(lost) == pytest.approx(0.0)
+
+
+def test_lddt_falls_as_a_chain_moves_and_ignores_rigid_motion(hemoglobin):
+    near = lddt(displaced(hemoglobin, "B", (1.0, 0.0, 0.0)), hemoglobin)
+    far = lddt(displaced(hemoglobin, "B", (20.0, 0.0, 0.0)), hemoglobin)
+    assert 1.0 > near.score > far.score
+    assert len(near.residue_scores) == len(near.reference_residues)
+    separated = lddt(hemoglobin, hemoglobin, sequence_separation=5)
+    assert separated.considered < lddt(hemoglobin, hemoglobin).considered
+
+
+def test_lddt_refuses_nonsense_parameters(hemoglobin):
+    with pytest.raises(molframe.MolframeError):
+        lddt(hemoglobin, hemoglobin, tolerances=[2.0, 1.0])
+    with pytest.raises(molframe.PolicyError):
+        lddt(hemoglobin, hemoglobin, chain_names="both")
