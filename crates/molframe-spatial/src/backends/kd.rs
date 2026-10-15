@@ -29,19 +29,14 @@ use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockPlan, map_blocks_in};
 use std::sync::Mutex;
 
-#[path = "kd_batch.rs"]
 mod batch;
-#[path = "kd_heap.rs"]
 mod heap;
-#[path = "kd_periodic.rs"]
-mod periodic_helpers;
-#[path = "kd_search.rs"]
+mod periodic;
 mod search;
-#[path = "kd_stream.rs"]
 mod stream;
 
 pub use batch::{KnnOptions, KnnResult, NO_NEIGHBOR};
-use periodic_helpers::{for_each_shift, periodic_image_limits, validate_image_budget};
+use periodic::{for_each_shift, periodic_image_limits, validate_image_budget};
 
 /// Largest leaf bucket. Leaves hold `LEAF_MAX / 2 ..= LEAF_MAX` points.
 pub(super) const LEAF_MAX: usize = 32;

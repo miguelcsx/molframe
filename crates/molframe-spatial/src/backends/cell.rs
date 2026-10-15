@@ -3,31 +3,22 @@
 use crate::brute::{canonicalise, finite};
 use crate::{CellGridOptions, NeighborPair, PeriodicBox, SpatialError};
 
-#[path = "cell/budget.rs"]
 mod budget;
-#[path = "cell/build.rs"]
 mod build;
 use build::build_grid;
-#[path = "cell/coords.rs"]
 mod coords;
 use coords::{cell_of, linear, linear_index, members_of_cell, neighbour_cell, raw_cell};
-#[path = "cell/geometry.rs"]
 mod geometry;
-#[path = "cell/ordered_merge.rs"]
 mod ordered_merge;
-#[path = "cell/owned.rs"]
 mod owned;
 use geometry::{Layout, choose_layout, finite_bounds};
-#[path = "cell/periodic.rs"]
 mod periodic_grid;
 use periodic_grid::PeriodicGrid;
-#[path = "cell/unique.rs"]
 mod unique;
 pub(crate) use unique::{
     for_each_pairs_same_selection_unordered, pairs_same_selection, pairs_same_selection_parallel,
     pairs_same_selection_unordered, reduce_pairs_same_selection_parallel,
 };
-#[path = "cell/visit.rs"]
 mod visit;
 use visit::grid_for_each_pair;
 

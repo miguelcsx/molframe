@@ -55,5 +55,5 @@ impl<'a> KdTree<'a> {
 }
 
 #[cfg(test)]
-#[path = "kd_stream_tests.rs"]
+#[path = "stream_tests.rs"]
 mod tests;
