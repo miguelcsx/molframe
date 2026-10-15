@@ -98,7 +98,9 @@ pub use motion_statistics::{
     dielectric_from_dipoles, water_dynamics,
 };
 pub use native_match::match_atoms_by_name;
-pub use nucleic_torsion::{NucleicTorsionError, NucleicTorsions, nucleic_torsions};
+pub use nucleic_torsion::{
+    NucleicTorsionError, NucleicTorsions, nucleic_torsions, nucleic_torsions_with_policy,
+};
 pub use pair_distribution::{
     CentreGroup, CoordinationOptions, RadialBin, RadialDistributionOptions, RadialError,
     centre_of_mass_radial_distribution, coordination_numbers, radial_distribution,
