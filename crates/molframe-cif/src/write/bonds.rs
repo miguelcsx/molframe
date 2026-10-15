@@ -2,7 +2,7 @@
 
 use super::options::{CifWriteError, CifWriteOptions};
 use super::value::{Quoted, quoted};
-use molframe_core::bond::{BondOrder, BondProvenance};
+use molframe_core::bond::{BondOrder, BondProvenance, BondRecord};
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
 use std::fmt::{self, Display, Formatter};
 
@@ -16,21 +16,20 @@ _struct_conn.ptnr2_label_comp_id\n_struct_conn.ptnr2_label_atom_id\n\
 _struct_conn.pdbx_ptnr2_label_alt_id\n_struct_conn.ptnr2_auth_seq_id\n\
 _struct_conn.pdbx_value_order\n_struct_conn.details\n";
 
+fn connection_bonds(structure: &Structure) -> impl Iterator<Item = BondRecord> + '_ {
+    structure
+        .data()
+        .bonds
+        .iter()
+        .filter(|bond| bond.provenance != BondProvenance::InferredDistance)
+}
+
 pub(super) fn preflight(
     structure: &Structure,
     options: &CifWriteOptions,
 ) -> Result<(), CifWriteError> {
-    let bonds = structure
-        .data()
-        .bonds
-        .iter()
-        .filter(|bond| bond.provenance != BondProvenance::InferredDistance);
-    if !structure
-        .data()
-        .bonds
-        .iter()
-        .any(|bond| bond.provenance != BondProvenance::InferredDistance)
-    {
+    let mut bonds = connection_bonds(structure).peekable();
+    if bonds.peek().is_none() {
         return Ok(());
     }
     if !options.generates_connection_ids() {
@@ -46,17 +45,8 @@ pub(super) fn preflight(
 }
 
 pub(super) fn write(out: &mut impl fmt::Write, structure: &Structure) -> Result<(), CifWriteError> {
-    let bonds = structure
-        .data()
-        .bonds
-        .iter()
-        .filter(|bond| bond.provenance != BondProvenance::InferredDistance);
-    if !structure
-        .data()
-        .bonds
-        .iter()
-        .any(|bond| bond.provenance != BondProvenance::InferredDistance)
-    {
+    let mut bonds = connection_bonds(structure).peekable();
+    if bonds.peek().is_none() {
         return Ok(());
     }
     let _ = out.write_str(HEADER);
