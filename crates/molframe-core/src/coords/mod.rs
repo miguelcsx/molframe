@@ -4,4 +4,4 @@ mod sample;
 mod storage;
 
 pub use sample::{CoordinateSample, CoordinateSampleError};
-pub use storage::*;
+pub use storage::{Aabb, CoordinateBlock, CoordinateGeneration};

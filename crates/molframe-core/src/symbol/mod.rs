@@ -19,5 +19,5 @@ mod altloc;
 mod canonical;
 mod interner;
 
-pub use altloc::*;
-pub use interner::*;
+pub use altloc::AltId;
+pub use interner::{DictionaryFull, Interner, SymbolId};

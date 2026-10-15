@@ -2,4 +2,4 @@
 
 mod query;
 
-pub use query::*;
+pub use query::{AtomSelection, SelectionIter};

@@ -2,4 +2,4 @@
 
 mod location;
 
-pub use location::*;
+pub use location::{ByteSpan, Position};

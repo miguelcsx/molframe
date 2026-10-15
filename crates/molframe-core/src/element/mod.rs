@@ -2,4 +2,4 @@
 
 mod table;
 
-pub use table::*;
+pub use table::Element;

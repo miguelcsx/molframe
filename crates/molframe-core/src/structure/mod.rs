@@ -29,15 +29,22 @@ mod sequence;
 mod validate;
 mod view;
 
-pub use data::*;
-pub use diff::*;
+pub use data::{CoordinateStore, EntryMetadata, Structure, StructureData, UnitCell};
+pub use diff::{
+    CountDifference, DifferenceError, MetadataDifference, StructureDifference,
+    StructureDifferenceOptions, ValueDifference, structure_difference,
+};
 pub use disorder::{altloc_compatible, compatible_pairs};
-pub use edit::*;
+pub use edit::CoordinateEditor;
 pub use ensemble::EnsembleBlock;
-pub use extensions::*;
-pub use handle::*;
+pub use extensions::ExtensionStore;
+pub use handle::{AtomRef, ChainRef, ModelRef, ResidueRef};
 pub use label_rewrites::LabelRewrites;
-pub use overlay::*;
-pub use sequence::*;
-pub use validate::*;
-pub use view::*;
+pub use overlay::StructureEditor;
+pub use sequence::{
+    ChainSequenceExt, MissingResidue, ReferenceAlignment, ReferenceSequence,
+    SEQUENCE_REFERENCES_EXTENSION, SequenceMapping, SequenceReferences,
+};
+pub use validate::validate;
+pub(crate) use validate::validate_coordinate_edit;
+pub use view::StructureView;

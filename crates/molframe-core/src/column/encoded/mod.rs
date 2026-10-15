@@ -3,5 +3,5 @@
 mod iter;
 mod model;
 
-pub use iter::*;
-pub use model::*;
+pub use iter::ColumnIter;
+pub use model::{ColumnValue, EncodedColumn};

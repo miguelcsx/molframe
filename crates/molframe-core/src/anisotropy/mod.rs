@@ -2,4 +2,4 @@
 
 mod model;
 
-pub use model::*;
+pub use model::{AnisotropicDisplacement, AnisotropyTable, AnisotropyTableBuilder};
