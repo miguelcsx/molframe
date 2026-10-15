@@ -359,7 +359,7 @@ impl Structure {
     ///
     /// # Errors
     ///
-    /// Returns [`Code::E6003`] for a ragged ensemble, with the model count as
+    /// Returns [`Code::E6003`](crate::diagnostic::Code::E6003) for a ragged ensemble, with the model count as
     /// context.
     pub fn require_resolved_model(&self) -> Result<&Self, crate::diagnostic::Diagnostic> {
         if self.is_ragged_ensemble() {

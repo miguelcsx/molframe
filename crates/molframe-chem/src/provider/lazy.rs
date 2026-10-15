@@ -13,11 +13,11 @@ use std::sync::Arc;
 
 /// A component dictionary that lowers a block only when it is asked for.
 ///
-/// [`read_ccd`] parses and lowers every block of a dictionary even when a
+/// `read_ccd` parses and lowers every block of a dictionary even when a
 /// structure uses a few dozen components. This provider scans the raw bytes
 /// once for `data_` headers, then parses and lowers just the requested blocks
 /// and caches them. A malformed block is reported when it is first requested,
-/// not at open time, so use [`read_ccd`] when whole-dictionary validation is the
+/// not at open time, so use `read_ccd` when whole-dictionary validation is the
 /// goal.
 pub struct LazyCifProvider {
     input: InputBuffer,
