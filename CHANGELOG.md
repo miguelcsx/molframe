@@ -4,6 +4,24 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## 0.6.4 — 2026-10-15
+
+- **`pip install molframe` works on a clean machine.** The wheel now
+  compiles in the reference tables the default flows read, so reading,
+  `infer_bonds()`, selection, `sasa`/`residue_sasa` (with or without the
+  default policy) and secondary structure need no data directory, profile
+  or environment variable. Before, bond inference and surface area raised
+  `E7102` and a read perceived no bonds.
+- **`embedded-tables` compiles in four tables, not one**: the bonding reach,
+  Pyykkö covalent radii, Bondi van der Waals radii and the macromolecular
+  metal sites (about 3 KB), with a profile naming each. Ionic radii, other
+  radius sets, validation references, substitution matrices and component
+  dictionaries stay a profile choice. A registration or a profile on disk
+  still wins over every compiled-in table.
+- **`molframe-py` gains an `embedded-tables` feature**, which the wheel
+  enables through `[tool.maturin] features`. The Rust facade keeps it
+  opt-in and outside `full`; a pure-Rust build is unchanged.
+
 ## 0.6.3 — 2026-10-15
 
 - **Reference tables can be held in memory.** `TableStore::insert_profile`,
