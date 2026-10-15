@@ -10,7 +10,7 @@ use molframe_chem::CovalentRadii;
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::{AtomRef, Structure};
 
-use crate::covalent::covalent_deviation;
+use crate::covalent::bond_deviation;
 use crate::covalent_length::BondDeviation;
 
 /// Ligand-bond outliers and explicit assessment coverage.
@@ -49,19 +49,8 @@ pub fn ligand_geometry(
             continue;
         }
         report.intended += 1;
-        let (Some(element_a), Some(element_b)) = (
-            element_of(structure, bond.atom_a),
-            element_of(structure, bond.atom_b),
-        ) else {
-            continue;
-        };
-        let (Some(&a), Some(&b)) = (
-            positions.get(bond.atom_a.as_usize()),
-            positions.get(bond.atom_b.as_usize()),
-        ) else {
-            continue;
-        };
-        let Some(deviation) = covalent_deviation(radii, a, element_a, b, element_b) else {
+        let Some(deviation) = bond_deviation(structure, positions, radii, bond.atom_a, bond.atom_b)
+        else {
             continue;
         };
         report.assessed += 1;
@@ -99,10 +88,6 @@ fn is_het(structure: &Structure, atom: AtomIndex) -> bool {
 }
 
 /// The element of an atom by index, if recorded.
-fn element_of(structure: &Structure, atom: AtomIndex) -> Option<molframe_core::element::Element> {
-    structure.data().atom(atom)?.element()
-}
-
 #[cfg(test)]
 #[path = "ligand_geometry_tests.rs"]
 mod tests;

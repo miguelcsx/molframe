@@ -10,6 +10,7 @@
 use molframe_chem::CovalentRadii;
 use molframe_core::element::Element;
 use molframe_core::index::AtomIndex;
+use molframe_core::structure::Structure;
 
 use crate::covalent_length::BondDeviation;
 use crate::numeric::f64_to_f32;
@@ -66,4 +67,22 @@ pub(crate) fn covalent_deviation(
         expected,
         delta: observed - expected,
     })
+}
+
+/// The covalent-radius deviation of the bond between two atoms of `structure`.
+///
+/// Returns `None` when either atom lacks an element, a tabulated radius or a
+/// coordinate, so callers skip the bond rather than guess.
+pub(crate) fn bond_deviation(
+    structure: &Structure,
+    positions: &[[f32; 3]],
+    radii: &CovalentRadii,
+    atom_a: AtomIndex,
+    atom_b: AtomIndex,
+) -> Option<CovalentMeasurement> {
+    let element_a = structure.data().atom(atom_a)?.element()?;
+    let element_b = structure.data().atom(atom_b)?.element()?;
+    let a = *positions.get(atom_a.as_usize())?;
+    let b = *positions.get(atom_b.as_usize())?;
+    covalent_deviation(radii, a, element_a, b, element_b)
 }

@@ -10,6 +10,7 @@
 //! Needs a bond table and elements with known covalent radii; bonds missing
 //! either are skipped rather than guessed at.
 
+use crate::covalent::bond_deviation;
 use molframe_chem::CovalentRadii;
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::Structure;
@@ -73,20 +74,7 @@ fn deviations(structure: &Structure, radii: &CovalentRadii, tolerance: f32) -> V
     let positions = structure.positions();
     let mut deviations = Vec::new();
     for bond in structure.data().bonds.iter() {
-        let (Some(element_a), Some(element_b)) = (
-            element_of(structure, bond.atom_a),
-            element_of(structure, bond.atom_b),
-        ) else {
-            continue;
-        };
-        let (Some(&a), Some(&b)) = (
-            positions.get(bond.atom_a.as_usize()),
-            positions.get(bond.atom_b.as_usize()),
-        ) else {
-            continue;
-        };
-        let Some(deviation) =
-            crate::covalent::covalent_deviation(radii, a, element_a, b, element_b)
+        let Some(deviation) = bond_deviation(structure, positions, radii, bond.atom_a, bond.atom_b)
         else {
             continue;
         };
@@ -98,10 +86,6 @@ fn deviations(structure: &Structure, radii: &CovalentRadii, tolerance: f32) -> V
 }
 
 /// The element of an atom by index, if it is recorded.
-fn element_of(structure: &Structure, atom: AtomIndex) -> Option<molframe_core::element::Element> {
-    structure.data().atom(atom)?.element()
-}
-
 #[cfg(test)]
 #[path = "covalent_length_tests.rs"]
 mod tests;
