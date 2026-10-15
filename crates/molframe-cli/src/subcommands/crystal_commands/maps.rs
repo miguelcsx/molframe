@@ -1,6 +1,6 @@
 //! Density-map statistics and map-to-map correlation.
 
-use super::super::args::HistogramArguments;
+use crate::args::HistogramArguments;
 use crate::exit::Exit;
 use crate::report::{Context, emit_rows};
 use molframe::crystal::DensityMap;

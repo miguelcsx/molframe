@@ -2,7 +2,7 @@
 
 mod command;
 
-pub(super) use command::{copy, info};
+pub(crate) use command::{copy, info};
 
 #[cfg(test)]
 #[path = "system_tests.rs"]

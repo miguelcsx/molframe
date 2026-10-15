@@ -7,10 +7,10 @@ mod streaming;
 mod summary;
 mod surface;
 
-pub(super) use command::{convert, extract, info, rmsd};
-pub(super) use contacts::contacts;
-pub(super) use rmsf::rmsf;
-pub(super) use surface::sasa;
+pub(crate) use command::{convert, extract, info, rmsd};
+pub(crate) use contacts::contacts;
+pub(crate) use rmsf::rmsf;
+pub(crate) use surface::sasa;
 
 #[cfg(test)]
 #[path = "trajectory_tests.rs"]

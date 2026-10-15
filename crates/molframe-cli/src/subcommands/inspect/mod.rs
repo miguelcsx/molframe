@@ -2,7 +2,7 @@
 
 mod command;
 
-pub(super) use command::{assemblies, categories, sequence, show};
+pub(crate) use command::{assemblies, categories, sequence, show};
 
 #[cfg(test)]
 #[path = "inspect_tests.rs"]

@@ -12,7 +12,7 @@ use molframe::{ModelIndex, Structure};
 use std::fmt::Write as _;
 use std::path::Path;
 
-pub(super) fn torsions(path: &Path, ccd: &Path, ccd_version: &str, context: Context) -> Exit {
+pub(crate) fn torsions(path: &Path, ccd: &Path, ccd_version: &str, context: Context) -> Exit {
     let structure = match open(path, context) {
         Ok(value) => value,
         Err(exit) => return exit,
@@ -48,7 +48,7 @@ pub(super) fn torsions(path: &Path, ccd: &Path, ccd_version: &str, context: Cont
     Exit::Success
 }
 
-pub(super) fn helix(
+pub(crate) fn helix(
     path: &Path,
     ccd: &Path,
     ccd_version: &str,
@@ -104,17 +104,17 @@ pub(super) fn helix(
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct SurfaceOptions<'a> {
-    pub(super) probe: f32,
-    pub(super) resolution: f32,
-    pub(super) max_cells: usize,
-    pub(super) radii: Option<&'a str>,
-    pub(super) source_vertex: Option<u32>,
-    pub(super) patch_radius: Option<f64>,
-    pub(super) output: Option<&'a Path>,
+pub(crate) struct SurfaceOptions<'a> {
+    pub(crate) probe: f32,
+    pub(crate) resolution: f32,
+    pub(crate) max_cells: usize,
+    pub(crate) radii: Option<&'a str>,
+    pub(crate) source_vertex: Option<u32>,
+    pub(crate) patch_radius: Option<f64>,
+    pub(crate) output: Option<&'a Path>,
 }
 
-pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context) -> Exit {
+pub(crate) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context) -> Exit {
     let patch_request = match (options.source_vertex, options.patch_radius) {
         (Some(source), Some(radius)) => Some((source, radius)),
         (None, None) => None,
@@ -213,7 +213,7 @@ pub(super) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
     Exit::Success
 }
 
-pub(super) fn pca(
+pub(crate) fn pca(
     path: &Path,
     components: usize,
     memory_limit: usize,
@@ -260,7 +260,7 @@ pub(super) fn pca(
     Exit::Success
 }
 
-pub(super) fn torsion_pca(
+pub(crate) fn torsion_pca(
     path: &Path,
     components: usize,
     memory_limit: usize,
@@ -327,7 +327,7 @@ pub(super) fn torsion_pca(
     Exit::Success
 }
 
-pub(super) fn diffusion(
+pub(crate) fn diffusion(
     path: &Path,
     epsilon: f64,
     time: u32,

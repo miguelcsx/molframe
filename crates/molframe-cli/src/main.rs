@@ -9,40 +9,28 @@
 
 #![forbid(unsafe_code)]
 
-mod analysis_commands;
 mod args;
-mod audit_commands;
-mod batch_commands;
-mod chem_commands;
 mod chemistry;
 mod choices;
 mod commands;
-mod comparison_commands;
-mod crystal_commands;
-mod data_commands;
-mod diff_commands;
 mod dispatch;
 mod exit;
-mod fx_commands;
 mod global;
-mod inspect;
-mod interaction_commands;
-mod intrinsic_commands;
-mod man_commands;
-mod network_commands;
 mod report;
 mod role_profile;
-mod selection_commands;
-mod sequence_commands;
-mod structure_commands;
-mod system;
+mod subcommands;
 mod tables;
-mod trajectory;
-mod validation_commands;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::process::ExitCode;
+
+use subcommands::{
+    analysis_commands, audit_commands, batch_commands, chem_commands, comparison_commands,
+    crystal_commands, data_commands, diff_commands, fx_commands, inspect, interaction_commands,
+    intrinsic_commands, man_commands, network_commands, selection_commands, sequence_commands,
+    structure_commands, system, trajectory, validation_commands,
+};
 
 pub(crate) use args::{
     AltlocArgument, AssemblyArgument, AuditArguments, BatchCommand, CcdArguments, ChemCommand,

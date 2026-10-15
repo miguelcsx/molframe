@@ -2,7 +2,7 @@
 
 mod command;
 
-pub(super) use command::{
+pub(crate) use command::{
     SasaWords, SseOptions, contacts, interfaces, neighbors, sasa, sse, sse_standard,
 };
 
