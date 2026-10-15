@@ -140,15 +140,11 @@ struct DefinitionColumns<'a> {
 
 /// Iterator over metric-definition rows.
 #[derive(Clone, Debug)]
-pub struct MetricDefinitions<'a> {
-    columns: Option<DefinitionColumns<'a>>,
-    row: usize,
-    rows: usize,
-}
+pub struct MetricDefinitions<'a>(Cursor<DefinitionColumns<'a>>);
 
 impl<'a> MetricDefinitions<'a> {
     fn new(category: Option<&'a ModelCategory>) -> Self {
-        let columns = category.and_then(|category| {
+        Self(Cursor::new(category, |category| {
             Some(DefinitionColumns {
                 id: category.column("id")?,
                 name: category.column("name"),
@@ -156,12 +152,7 @@ impl<'a> MetricDefinitions<'a> {
                 mode: category.column("mode")?,
                 software_group_id: category.column("software_group_id"),
             })
-        });
-        Self {
-            columns,
-            row: 0,
-            rows: category.map_or(0, ModelCategory::row_count),
-        }
+        }))
     }
 }
 
@@ -169,15 +160,7 @@ impl<'a> Iterator for MetricDefinitions<'a> {
     type Item = MetricDefinition<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let columns = self.columns?;
-        while self.row < self.rows {
-            let row = self.row;
-            self.row += 1;
-            if let Some(parsed) = definition_at(columns, row) {
-                return Some(parsed);
-            }
-        }
-        None
+        self.0.next_with(definition_at)
     }
 }
 
@@ -190,26 +173,17 @@ struct GlobalColumns<'a> {
 
 /// Iterator over model-level metric rows.
 #[derive(Clone, Debug)]
-pub struct GlobalMetrics<'a> {
-    columns: Option<GlobalColumns<'a>>,
-    row: usize,
-    rows: usize,
-}
+pub struct GlobalMetrics<'a>(Cursor<GlobalColumns<'a>>);
 
 impl<'a> GlobalMetrics<'a> {
     fn new(category: Option<&'a ModelCategory>) -> Self {
-        let columns = category.and_then(|category| {
+        Self(Cursor::new(category, |category| {
             Some(GlobalColumns {
                 model_id: category.column("model_id")?,
                 metric_id: category.column("metric_id")?,
                 value: category.column("metric_value")?,
             })
-        });
-        Self {
-            columns,
-            row: 0,
-            rows: category.map_or(0, ModelCategory::row_count),
-        }
+        }))
     }
 }
 
@@ -217,15 +191,7 @@ impl<'a> Iterator for GlobalMetrics<'a> {
     type Item = GlobalMetric<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let columns = self.columns?;
-        while self.row < self.rows {
-            let row = self.row;
-            self.row += 1;
-            if let Some(parsed) = global_at(columns, row) {
-                return Some(parsed);
-            }
-        }
-        None
+        self.0.next_with(global_at)
     }
 }
 
@@ -241,15 +207,11 @@ struct LocalColumns<'a> {
 
 /// Iterator over residue-level metric rows.
 #[derive(Clone, Debug)]
-pub struct LocalMetrics<'a> {
-    columns: Option<LocalColumns<'a>>,
-    row: usize,
-    rows: usize,
-}
+pub struct LocalMetrics<'a>(Cursor<LocalColumns<'a>>);
 
 impl<'a> LocalMetrics<'a> {
     fn new(category: Option<&'a ModelCategory>) -> Self {
-        let columns = category.and_then(|category| {
+        Self(Cursor::new(category, |category| {
             Some(LocalColumns {
                 model_id: category.column("model_id")?,
                 chain_id: category.column("label_asym_id")?,
@@ -258,12 +220,7 @@ impl<'a> LocalMetrics<'a> {
                 metric_id: category.column("metric_id")?,
                 value: category.column("metric_value")?,
             })
-        });
-        Self {
-            columns,
-            row: 0,
-            rows: category.map_or(0, ModelCategory::row_count),
-        }
+        }))
     }
 }
 
@@ -271,15 +228,7 @@ impl<'a> Iterator for LocalMetrics<'a> {
     type Item = LocalMetric<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let columns = self.columns?;
-        while self.row < self.rows {
-            let row = self.row;
-            self.row += 1;
-            if let Some(parsed) = local_at(columns, row) {
-                return Some(parsed);
-            }
-        }
-        None
+        self.0.next_with(local_at)
     }
 }
 
@@ -296,15 +245,11 @@ struct PairwiseColumns<'a> {
 
 /// Iterator over residue-pair metric rows.
 #[derive(Clone, Debug)]
-pub struct PairwiseMetrics<'a> {
-    columns: Option<PairwiseColumns<'a>>,
-    row: usize,
-    rows: usize,
-}
+pub struct PairwiseMetrics<'a>(Cursor<PairwiseColumns<'a>>);
 
 impl<'a> PairwiseMetrics<'a> {
     fn new(category: Option<&'a ModelCategory>) -> Self {
-        let columns = category.and_then(|category| {
+        Self(Cursor::new(category, |category| {
             Some(PairwiseColumns {
                 model_id: category.column("model_id")?,
                 first_chain_id: category.column("label_asym_id_1")?,
@@ -314,12 +259,7 @@ impl<'a> PairwiseMetrics<'a> {
                 metric_id: category.column("metric_id")?,
                 value: category.column("metric_value")?,
             })
-        });
-        Self {
-            columns,
-            row: 0,
-            rows: category.map_or(0, ModelCategory::row_count),
-        }
+        }))
     }
 }
 
@@ -327,11 +267,36 @@ impl<'a> Iterator for PairwiseMetrics<'a> {
     type Item = PairwiseMetric<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.0.next_with(pairwise_at)
+    }
+}
+
+/// Cursor over the rows of one category with its resolved columns.
+#[derive(Clone, Debug)]
+struct Cursor<C> {
+    columns: Option<C>,
+    row: usize,
+    rows: usize,
+}
+
+impl<'a, C: Copy> Cursor<C> {
+    fn new(
+        category: Option<&'a ModelCategory>,
+        resolve: impl FnOnce(&'a ModelCategory) -> Option<C>,
+    ) -> Self {
+        Self {
+            columns: category.and_then(resolve),
+            row: 0,
+            rows: category.map_or(0, ModelCategory::row_count),
+        }
+    }
+
+    fn next_with<T>(&mut self, at: fn(C, usize) -> Option<T>) -> Option<T> {
         let columns = self.columns?;
         while self.row < self.rows {
             let row = self.row;
             self.row += 1;
-            if let Some(parsed) = pairwise_at(columns, row) {
+            if let Some(parsed) = at(columns, row) {
                 return Some(parsed);
             }
         }
