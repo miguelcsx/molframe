@@ -4,6 +4,12 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## 0.6.2 — 2026-10-15
+
+- **The table store treats a target without a filesystem as having no
+  profile.** On wasm reading `profile.txt` failed with `E7101` instead of
+  skipping enrichment like an absent file, so browser loads errored.
+
 ## 0.6.1 — 2026-10-15
 
 - **PyPI now carries the 0.6.0 content.** The 0.6.0 wheels uploaded on
