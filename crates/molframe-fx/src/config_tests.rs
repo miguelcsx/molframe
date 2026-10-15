@@ -2,10 +2,10 @@ use super::*;
 
 #[test]
 fn complete_toml_specification_builds_native_types() {
-    let file = match tempfile::Builder::new().suffix(".toml").tempfile() {
-        Ok(file) => file,
-        Err(error) => panic!("temporary file failed: {error}"),
-    };
+    let file = tempfile::Builder::new()
+        .suffix(".toml")
+        .tempfile()
+        .expect("temporary file failed");
     let text = r#"
 [components.site]
 role = "residue"
@@ -32,10 +32,8 @@ values = [1.2, 1.6]
     if let Err(error) = std::fs::write(file.path(), text) {
         panic!("specification write failed: {error}")
     }
-    let specification = match read_evaluation_specification(file.path()) {
-        Ok(specification) => specification,
-        Err(error) => panic!("specification read failed: {error}"),
-    };
+    let specification =
+        read_evaluation_specification(file.path()).expect("specification read failed");
     assert_eq!(specification.motif.constraints().len(), 1);
     assert_eq!(specification.profile.id(), "example-1.0");
 }
