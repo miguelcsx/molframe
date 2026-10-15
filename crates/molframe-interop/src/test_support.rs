@@ -1,7 +1,10 @@
 //! Shared fixtures for the unit tests of this crate.
 
+use crate::dataset::ManifestEntry;
 use molframe_core::Structure;
 use molframe_core::io::{InputBuffer, ReadOptions};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 const TWO_ATOMS: &str = "data_t\nloop_\n_atom_site.group_PDB\n_atom_site.id\n\
 _atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n\
@@ -21,4 +24,26 @@ pub(crate) fn read_cif(text: &str) -> Structure {
 /// Two alanine atoms at (1, 2, 3) and (4, 5, 6).
 pub(crate) fn two_atoms() -> Structure {
     read_cif(TWO_ATOMS)
+}
+
+/// A ten-atom X-ray manifest entry with the given identity and metadata.
+pub(crate) fn manifest_entry(
+    id: &str,
+    sequence: &str,
+    cluster: &str,
+    date: &str,
+    resolution: f32,
+) -> ManifestEntry {
+    ManifestEntry {
+        id: id.into(),
+        path: PathBuf::from(format!("{id}.cif")),
+        atom_count: 10,
+        resolution: Some(resolution),
+        method: Some("X-RAY".into()),
+        deposition_date: Some(date.into()),
+        sequence: Some(sequence.into()),
+        structure_cluster: Some(cluster.into()),
+        tags: vec!["test".into()],
+        statistics: BTreeMap::new(),
+    }
 }

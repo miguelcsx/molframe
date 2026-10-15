@@ -1,8 +1,5 @@
-// The `entry` fixture is shared with `manifest_tests.rs`; test fixtures stay
-// self-contained per file.
-use crate::dataset::{Dataset, ManifestEntry};
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use crate::dataset::Dataset;
+use crate::test_support::manifest_entry as entry;
 
 use super::*;
 
@@ -120,19 +117,4 @@ fn temporal_split_is_chronological() {
         split.test.entries().next().map(|entry| entry.id.as_ref()),
         Some("latest")
     );
-}
-
-fn entry(id: &str, sequence: &str, cluster: &str, date: &str, resolution: f32) -> ManifestEntry {
-    ManifestEntry {
-        id: id.into(),
-        path: PathBuf::from(format!("{id}.cif")),
-        atom_count: 10,
-        resolution: Some(resolution),
-        method: Some("X-RAY".into()),
-        deposition_date: Some(date.into()),
-        sequence: Some(sequence.into()),
-        structure_cluster: Some(cluster.into()),
-        tags: vec!["test".into()],
-        statistics: BTreeMap::new(),
-    }
 }
