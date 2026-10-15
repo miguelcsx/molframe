@@ -12,13 +12,13 @@ use crate::{Timestep, TrajectoryReaderOptions};
 
 use super::{NM_TO_ANGSTROM, XtcError, cell_from_box};
 
-mod support;
+mod bounded;
 
 mod index;
 
 mod traits;
 
-use support::{BoundedBuffer, FrameLayout, guarded_record, memory_error, reserve_exact};
+use bounded::{BoundedBuffer, FrameLayout, guarded_record, memory_error, reserve_exact};
 
 const INPUT_BUFFER_BYTES: usize = 64 * 1024;
 const OFFSET_INITIAL_CAPACITY: usize = 1_024;
@@ -236,7 +236,7 @@ impl XtcReader {
         } else {
             self.source.file.seek_relative(32)?;
             let count = molly::reader::read_nbytes(&mut self.source.file, header.magic)
-                .map_err(support::record_io)?;
+                .map_err(bounded::record_io)?;
             let padded = count
                 .checked_add(molly::padding(count))
                 .ok_or(XtcError::InvalidFrame)?;
@@ -322,7 +322,7 @@ impl XtcReader {
             }
         }))
         .map_err(|_| XtcError::InconsistentRecord)?;
-        decoded.map_err(support::record_io)?;
+        decoded.map_err(bounded::record_io)?;
         self.source_frame.step = layout.header.step;
         self.source_frame.time = layout.header.time;
         self.source_frame.boxvec = layout.header.boxvec;

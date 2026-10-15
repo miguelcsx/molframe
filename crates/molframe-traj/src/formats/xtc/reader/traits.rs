@@ -2,7 +2,7 @@
 
 use super::{
     FORMAT, XtcReader,
-    support::{guarded_record, trajectory_error},
+    bounded::{guarded_record, trajectory_error},
 };
 use crate::{RandomAccess, Timestep, TrajectoryError, TrajectoryReader, Units};
 use std::io::{Seek, SeekFrom};

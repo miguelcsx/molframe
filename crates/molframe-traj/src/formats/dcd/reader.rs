@@ -17,9 +17,9 @@ use super::{
     AKMA_TO_PS, DcdEndian, DcdError, DcdHeader, f32_at, i32_at, nonnegative, parse_cell,
     parse_free_indices, parse_titles,
 };
+mod records;
 mod seek;
-mod support;
-use support::{
+use records::{
     build_fixed_indices, estimated_bytes, header_heap_bytes, io_error, marker_length, memory_error,
     read_marker, reserve_exact, trajectory_error,
 };
