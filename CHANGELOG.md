@@ -4,6 +4,24 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## 0.6.3 — 2026-10-15
+
+- **Reference tables can be held in memory.** `TableStore::insert_profile`,
+  `insert_table` and `insert_entry` register a profile and table bytes
+  (`TableBytes`: a `&'static [u8]`, `Arc<[u8]>`, `Vec<u8>` or string) under
+  the names a cache directory uses. A registration wins over the profile and
+  cache on disk; each entry is decoded once and shared, and a lookup
+  allocates nothing.
+- **Opt-in `embedded-tables` feature.** It compiles in the bonding reach
+  table and a profile naming it as the store's last layer, so a read
+  perceives bonds with no profile and no filesystem: on wasm, on a clean
+  machine, wherever `W3207` used to skip them. A registration or a profile
+  on disk still wins, and every target perceives the same bonds. Off by
+  default; nothing changes without it.
+- **The bonding reach is selected once per read**, not once per model.
+- **A cache path through a plain file is absent, not an error**, and a
+  profile that exists but cannot be read is still `E7101`.
+
 ## 0.6.2 — 2026-10-15
 
 - **The table store treats a target without a filesystem as having no
