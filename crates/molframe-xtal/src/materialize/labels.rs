@@ -1,14 +1,18 @@
-// Chain-label ledger that keeps generated labels unique across whole and chunked expansion.
-//
-// Complexity: amortised O(1) time per label assigned; O(labels) space.
+//! Chain-label ledger that keeps generated labels unique across whole and chunked expansion.
+//!
+//! Complexity: amortised O(1) time per label assigned; O(labels) space.
+
+use super::errors::capacity;
+use molframe_core::Diagnostic;
+use molframe_core::hashing::IdentityHashMap;
+use molframe_core::symbol::SymbolId;
 
 /// Chain-label bookkeeping shared by whole and chunked expansion.
 ///
 /// Labels are tracked as text so a ledger carried from one chunk to the next
 /// stays valid even though every chunk owns its own dictionary.
-#[derive(Default)]
-#[derive(Debug)]
-struct LabelLedger {
+#[derive(Debug, Default)]
+pub(super) struct LabelLedger {
     used: std::collections::HashSet<Box<str>>,
     counts: IdentityHashMap<SymbolId, u32>,
 }
@@ -18,7 +22,7 @@ impl LabelLedger {
     ///
     /// The first copy of a source chain keeps the source symbol; later copies
     /// are suffixed `-2`, `-3`, ... and interned only when a collision requires.
-    fn assign(
+    pub(super) fn assign(
         &mut self,
         dictionary: &mut molframe_core::symbol::Interner,
         source_symbol: SymbolId,

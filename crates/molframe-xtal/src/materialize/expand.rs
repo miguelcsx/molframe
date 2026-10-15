@@ -1,7 +1,30 @@
-// Whole-assembly materialisation: copies topology and transformed coordinates into one structure.
-//
-// Complexity: O(instances x atoms + bonds) time and space for the expanded
-// structure; the source snapshot is read, never modified.
+//! Whole-assembly materialisation: copies topology and transformed coordinates into one structure.
+//!
+//! Complexity: O(instances x atoms + bonds) time and space for the expanded
+//! structure; the source snapshot is read, never modified.
+
+use super::CopySpan;
+use super::copy::{
+    atom_chain, atom_record, chain_pair_key, copy_annotation, copy_groups, expanded_atom_count,
+    expanded_residue_count, groups_for_pair, optional, remap_bond, reserved, secondary_storage,
+};
+use super::errors::{capacity, invariant, missing_model_number, single};
+use super::labels::LabelLedger;
+use crate::AssemblyView;
+use molframe_core::annotation::{
+    AnnotationColumn, AtomAnnotation, AtomAnnotations, INSTANCE_ID_ANNOTATION,
+};
+use molframe_core::bond::BondTableBuilder;
+use molframe_core::chunk::ChunkBuilder;
+use molframe_core::optional::OptionalSymbol;
+use molframe_core::structure::CoordinateStore;
+use molframe_core::topology::{ChainRecord, ResidueRecord};
+use molframe_core::{
+    AtomIndex, Code, CoordinateBlock, CoordinateGeneration, Diagnostic, ModelIndex, ResidueIndex,
+    Structure, StructureData,
+};
+use molframe_geom::Rigid;
+use std::collections::BTreeMap;
 
 impl AssemblyView {
     /// Explicitly copies topology and transformed coordinates into a structure.
@@ -27,7 +50,7 @@ impl AssemblyView {
 }
 
 /// Transactional builder for an explicitly materialized assembly.
-struct Materializer<'a> {
+pub(super) struct Materializer<'a> {
     view: &'a AssemblyView,
     data: StructureData,
     chunks: ChunkBuilder,
@@ -54,7 +77,7 @@ impl<'a> Materializer<'a> {
     ///
     /// Source metadata that remains valid after expansion is shared or cloned
     /// into the independent output snapshot.
-    fn new(
+    pub(super) fn new(
         view: &'a AssemblyView,
         labels: LabelLedger,
         atom_base: u32,
@@ -73,20 +96,11 @@ impl<'a> Materializer<'a> {
         data.cell = source.cell;
         data.topology.entities = source.topology.entities.clone();
 
-        let mut copies = Vec::new();
-        copies
-            .try_reserve_exact(view.instance_count())
-            .map_err(|_| capacity("assembly instances"))?;
+        let copies = reserved(view.instance_count(), "assembly instances")?;
 
-        let mut source_atoms = Vec::new();
-        source_atoms
-            .try_reserve_exact(total_atoms)
-            .map_err(|_| capacity("atoms"))?;
+        let source_atoms = reserved(total_atoms, "atoms")?;
 
-        let mut instance_ids = Vec::new();
-        instance_ids
-            .try_reserve_exact(total_atoms)
-            .map_err(|_| capacity("atoms"))?;
+        let instance_ids = reserved(total_atoms, "atoms")?;
 
         Ok(Self {
             view,
@@ -103,7 +117,7 @@ impl<'a> Materializer<'a> {
     }
 
     /// Builds and validates the fully independent assembly structure.
-    fn build(mut self) -> Result<(Structure, LabelLedger), Vec<Diagnostic>> {
+    pub(super) fn build(mut self) -> Result<(Structure, LabelLedger), Vec<Diagnostic>> {
         self.chunks.start_model(0);
 
         for instance in self.view.instances.as_ref() {
@@ -448,6 +462,32 @@ impl<'a> Materializer<'a> {
                 .map_err(|error| capacity("models").with_context("cause", error.to_string()))?;
         }
 
+        Ok(())
+    }
+}
+
+impl Materializer<'_> {
+    fn append_secondary(
+        &mut self,
+        source: &Structure,
+        residue: ResidueIndex,
+    ) -> Result<(), Diagnostic> {
+        if !source.secondary_structure().is_empty() {
+            self.secondary_states.push(
+                *source
+                    .secondary_structure()
+                    .get(residue.as_usize())
+                    .ok_or_else(invariant)?,
+            );
+        }
+        if !source.secondary_source().is_empty() {
+            self.secondary_sources.push(
+                *source
+                    .secondary_source()
+                    .get(residue.as_usize())
+                    .ok_or_else(invariant)?,
+            );
+        }
         Ok(())
     }
 }

@@ -1,10 +1,22 @@
-// Counting, copying and remapping helpers for assembly materialisation.
-//
-// Complexity: O(instances) for the counts; O(atoms) per annotation or coordinate
-// column copied; O(1) per atom or bond remap.
+//! Counting, copying and remapping for assembly materialisation.
+//!
+//! Complexity: O(instances) for the counts; O(atoms) per annotation or coordinate
+//! column copied; O(1) per atom or bond remap.
+
+use super::errors::{capacity, invariant};
+use super::{CopyGroup, CopySpan, TransformKey};
+use crate::AssemblyView;
+use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
+use molframe_core::bond::BondRecord;
+use molframe_core::chunk::AtomRecord;
+use molframe_core::optional::OptionalSymbol;
+use molframe_core::symbol::SymbolId;
+use molframe_core::{AtomIndex, ChainIndex, Code, Diagnostic, Structure};
+use molframe_geom::Rigid;
+use std::collections::BTreeMap;
 
 /// Computes the expected expanded atom count with overflow checking.
-fn expanded_atom_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
+pub(super) fn expanded_atom_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
     view.instances.iter().try_fold(0usize, |total, instance| {
         total
             .checked_add(instance.atoms.len())
@@ -12,18 +24,11 @@ fn expanded_atom_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
     })
 }
 
-/// Creates a diagnostic for a missing explicit source model number.
-fn missing_model_number(model: usize) -> Diagnostic {
-    Diagnostic::new(Code::E4105)
-        .with_context("model", model.to_string())
-        .with_context("required", "explicit source model number")
-}
-
 /// Reconstructs one source atom record using a monotonic chunk cursor.
 ///
 /// Assembly instance atoms are copied in source order, allowing chunk lookup to
 /// advance linearly instead of binary-searching the chunk table for every atom.
-fn atom_record(
+pub(super) fn atom_record(
     source: &Structure,
     atom: AtomIndex,
     chunk_cursor: &mut usize,
@@ -54,7 +59,7 @@ fn atom_record(
 }
 
 /// Copies one annotation column according to the output-to-source atom mapping.
-fn copy_annotation(
+pub(super) fn copy_annotation(
     annotation: &AtomAnnotation,
     source_atoms: &[u32],
 ) -> Result<AtomAnnotation, Diagnostic> {
@@ -77,7 +82,7 @@ fn copy_annotation(
 }
 
 /// Copies entries from one physical annotation column in output atom order.
-fn copy_column<T: Copy>(
+pub(super) fn copy_column<T: Copy>(
     column: &AnnotationColumn<T>,
     source_atoms: &[u32],
 ) -> Result<AnnotationColumn<T>, Diagnostic> {
@@ -95,7 +100,7 @@ fn copy_column<T: Copy>(
 }
 
 /// Groups assembly copies sharing an exactly identical rigid transform.
-fn copy_groups(copies: &[CopySpan]) -> Vec<CopyGroup> {
+pub(super) fn copy_groups(copies: &[CopySpan]) -> Vec<CopyGroup> {
     let mut grouped = BTreeMap::<TransformKey, CopyGroup>::new();
 
     for (position, copy) in copies.iter().enumerate() {
@@ -111,7 +116,7 @@ fn copy_groups(copies: &[CopySpan]) -> Vec<CopyGroup> {
 }
 
 /// Finds transform groups containing both source chains of a bond.
-fn groups_for_pair(groups: &[CopyGroup], chain_a: u32, chain_b: u32) -> Vec<usize> {
+pub(super) fn groups_for_pair(groups: &[CopyGroup], chain_a: u32, chain_b: u32) -> Vec<usize> {
     groups
         .iter()
         .enumerate()
@@ -122,7 +127,7 @@ fn groups_for_pair(groups: &[CopyGroup], chain_a: u32, chain_b: u32) -> Vec<usiz
 }
 
 /// Produces an orientation-independent cache key for a source-chain pair.
-fn chain_pair_key(left: ChainIndex, right: ChainIndex) -> (u32, u32) {
+pub(super) fn chain_pair_key(left: ChainIndex, right: ChainIndex) -> (u32, u32) {
     let left = left.get();
     let right = right.get();
 
@@ -134,7 +139,7 @@ fn chain_pair_key(left: ChainIndex, right: ChainIndex) -> (u32, u32) {
 }
 
 /// Produces an exact deterministic key for a rigid transform.
-fn transform_key(transform: Rigid) -> TransformKey {
+pub(super) fn transform_key(transform: Rigid) -> TransformKey {
     let mut key = [0_u64; 12];
 
     for row in 0..3 {
@@ -149,7 +154,7 @@ fn transform_key(transform: Rigid) -> TransformKey {
 }
 
 /// Resolves the source chain owning one atom.
-fn atom_chain(source: &Structure, atom: AtomIndex) -> Result<ChainIndex, Diagnostic> {
+pub(super) fn atom_chain(source: &Structure, atom: AtomIndex) -> Result<ChainIndex, Diagnostic> {
     let residue = source
         .data()
         .topology
@@ -169,7 +174,7 @@ fn atom_chain(source: &Structure, atom: AtomIndex) -> Result<ChainIndex, Diagnos
 ///
 /// The assembly shares the source structure's dictionary, so the connection's
 /// own classification stays valid and is copied with the rest of the record.
-fn remap_bond(
+pub(super) fn remap_bond(
     bond: BondRecord,
     left: &CopySpan,
     right: &CopySpan,
@@ -182,7 +187,7 @@ fn remap_bond(
 }
 
 /// Remaps one source atom into the output span of a copied chain.
-fn remap_atom(atom: AtomIndex, copy: &CopySpan) -> Result<AtomIndex, Diagnostic> {
+pub(super) fn remap_atom(atom: AtomIndex, copy: &CopySpan) -> Result<AtomIndex, Diagnostic> {
     if !copy.source_atoms.contains(&atom.get()) {
         return Err(invariant());
     }
@@ -199,29 +204,14 @@ fn remap_atom(atom: AtomIndex, copy: &CopySpan) -> Result<AtomIndex, Diagnostic>
 }
 
 /// Converts an optional symbol into its compact topology representation.
-fn optional(symbol: Option<SymbolId>) -> OptionalSymbol {
+pub(super) fn optional(symbol: Option<SymbolId>) -> OptionalSymbol {
     match symbol {
         Some(symbol) => OptionalSymbol::some(symbol),
         None => OptionalSymbol::NONE,
     }
 }
 
-/// Creates the internal-invariant diagnostic used for impossible assembly state.
-fn invariant() -> Diagnostic {
-    Diagnostic::new(Code::E9001)
-}
-
-/// Creates a representational-capacity diagnostic for the named resource.
-fn capacity(name: &str) -> Diagnostic {
-    Diagnostic::new(Code::E1901).with_context("limit", name)
-}
-
-/// Wraps one diagnostic for APIs that report a collection of findings.
-fn single(finding: Diagnostic) -> Vec<Diagnostic> {
-    vec![finding]
-}
-
-fn expanded_residue_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
+pub(super) fn expanded_residue_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
     view.instances.iter().try_fold(0usize, |total, instance| {
         let residues = view
             .source()
@@ -236,38 +226,19 @@ fn expanded_residue_count(view: &AssemblyView) -> Result<usize, Diagnostic> {
     })
 }
 
-fn secondary_storage<T>(count: usize, present: bool) -> Result<Vec<T>, Diagnostic> {
+/// Allocates an empty vector with fallible exact capacity for the named resource.
+pub(super) fn reserved<T>(count: usize, name: &str) -> Result<Vec<T>, Diagnostic> {
     let mut values = Vec::new();
-    if present {
-        values
-            .try_reserve_exact(count)
-            .map_err(|_| capacity("secondary rows"))?;
-    }
+    values
+        .try_reserve_exact(count)
+        .map_err(|_| capacity(name))?;
     Ok(values)
 }
 
-impl Materializer<'_> {
-    fn append_secondary(
-        &mut self,
-        source: &Structure,
-        residue: ResidueIndex,
-    ) -> Result<(), Diagnostic> {
-        if !source.secondary_structure().is_empty() {
-            self.secondary_states.push(
-                *source
-                    .secondary_structure()
-                    .get(residue.as_usize())
-                    .ok_or_else(invariant)?,
-            );
-        }
-        if !source.secondary_source().is_empty() {
-            self.secondary_sources.push(
-                *source
-                    .secondary_source()
-                    .get(residue.as_usize())
-                    .ok_or_else(invariant)?,
-            );
-        }
-        Ok(())
+pub(super) fn secondary_storage<T>(count: usize, present: bool) -> Result<Vec<T>, Diagnostic> {
+    if present {
+        reserved(count, "secondary rows")
+    } else {
+        Ok(Vec::new())
     }
 }

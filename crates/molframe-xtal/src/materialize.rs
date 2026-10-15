@@ -1,20 +1,6 @@
 //! Explicit expansion of a lazy biological assembly.
 
-use crate::AssemblyView;
-use molframe_core::annotation::{
-    AnnotationColumn, AtomAnnotation, AtomAnnotations, INSTANCE_ID_ANNOTATION,
-};
-use molframe_core::bond::{BondRecord, BondTableBuilder};
-use molframe_core::chunk::{AtomRecord, ChunkBuilder};
-use molframe_core::hashing::IdentityHashMap;
-use molframe_core::optional::OptionalSymbol;
-use molframe_core::structure::CoordinateStore;
-use molframe_core::symbol::SymbolId;
-use molframe_core::topology::{ChainRecord, ResidueRecord};
-use molframe_core::{
-    AtomIndex, ChainIndex, Code, CoordinateBlock, CoordinateGeneration, Diagnostic, ModelIndex,
-    ResidueIndex, Structure, StructureData,
-};
+use molframe_core::ChainIndex;
 use molframe_geom::Rigid;
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -34,13 +20,16 @@ type CopyGroup = BTreeMap<u32, Vec<usize>>;
 /// Exact bit representation of a rigid transform used for deterministic grouping.
 type TransformKey = [u64; 12];
 
+mod copy;
+mod errors;
+mod expand;
+mod labels;
 mod stream;
 
+use errors::{capacity, single};
+use expand::Materializer;
+use labels::LabelLedger;
 pub use stream::AssemblyChunks;
-
-include!("materialize/labels.rs");
-include!("materialize/impl.rs");
-include!("materialize/helpers.rs");
 
 #[cfg(test)]
 #[path = "materialize_tests.rs"]
