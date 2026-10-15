@@ -1,4 +1,10 @@
 //! Deposited-component chemistry and versioned reference data.
+//!
+//! Reference tables are selected through a [`TableStore`], which consults three
+//! layers in turn: tables and a profile registered in memory
+//! ([`TableStore::insert_profile`], [`TableStore::insert_table`]), then the
+//! profile and cache directory on disk, then a layer of defaults compiled into
+//! the library, which is empty.
 
 #![forbid(unsafe_code)]
 
@@ -36,7 +42,10 @@ use radii::{
     radius_selection, radius_source,
 };
 use standard::{standard_bonds, standard_components, standard_roles};
-use tables::{table_identity, table_provider, table_request, table_row, table_store, table_text};
+use tables::{
+    table_bundled, table_bytes, table_identity, table_memory, table_provider, table_request,
+    table_row, table_store, table_text,
+};
 
 pub use annotate::{
     ChemistryProvenance, ChemistryReport, FormalChargeSource, HBOND_WEAK_ACCEPTOR_ANNOTATION,
@@ -109,9 +118,10 @@ pub use standard_components::{annotate_standard_components, standard_component_k
 pub use standard_roles::{
     STANDARD_PROTEIN_ROLE_PROFILE, annotate_standard_protein_roles, standard_protein_atom_role,
 };
+pub use table_bytes::TableBytes;
 pub use table_identity::TableIdentity;
 pub use table_provider::{
-    Cache, InMemory, Provided, Source, TableError, TableKind, TableProvider, UserFile,
+    Cache, InMemory, MemoryFile, Provided, Source, TableError, TableKind, TableProvider, UserFile,
 };
 pub use table_request::TableRequest;
 pub use table_row::Row;

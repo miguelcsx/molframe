@@ -3,17 +3,18 @@
 //! A [`TableProvider`] hands out a table together with the [`TableIdentity`] that
 //! describes it, by reference: the table is decoded at most once per provider and
 //! every later call borrows it (or shares it as an `Arc`), so a lookup never
-//! copies a table. The library compiles in no table. The providers differ only in
-//! where the bytes come from: [`UserFile`] (a path, read and validated once),
-//! [`Cache`] (a directory file stored by an explicit fetch command) and
-//! [`InMemory`] (built by the caller). Choosing among them is the job of the
+//! copies a table. The providers differ only in where the bytes come from:
+//! [`UserFile`] (a path, read and validated once), [`Cache`] (a directory file
+//! stored by an explicit fetch command), [`MemoryFile`] (the bytes of such a
+//! file, held in memory and decoded the same way) and [`InMemory`] (a table
+//! the caller already built). Choosing among them is the job of the
 //! [`TableStore`](crate::TableStore), which never substitutes one source for
 //! another silently and never touches the network.
 //!
 //! Cost: decoding is linear in the table size and happens once per provider;
 //! `provide` afterwards is a pointer read.
 
-use crate::{TableIdentity, TableTextError};
+use crate::{TableBytes, TableIdentity, TableTextError};
 use core::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -51,7 +52,8 @@ pub enum Source {
     User,
     /// A cache entry, stored there by an explicit fetch.
     Cache,
-    /// A table the caller built in memory.
+    /// A table held in memory: built or registered by the caller, or compiled
+    /// into the library.
     Memory,
 }
 
@@ -222,13 +224,25 @@ fn decode_file<T: TableKind>(
             });
         }
     };
+    decode_bytes(&bytes, shown, label)
+}
+
+/// Decodes the bytes of one table, naming `shown` as where they came from.
+///
+/// The one decoding path every byte-backed provider shares, so a table reads
+/// identically from a file and from memory.
+fn decode_bytes<T: TableKind>(
+    bytes: &[u8],
+    shown: String,
+    label: &str,
+) -> Result<Provided<T>, TableError> {
     let fallback = TableIdentity::supplied(
         &format!("{label}-{}", T::KIND),
         "supplied",
         &shown,
         "unspecified",
     );
-    T::decode(&bytes, fallback).map_err(|error| TableError::Malformed { path: shown, error })
+    T::decode(bytes, fallback).map_err(|error| TableError::Malformed { path: shown, error })
 }
 
 impl<T: TableKind> TableProvider<T> for UserFile<T> {
@@ -286,6 +300,51 @@ impl<T: TableKind> TableProvider<T> for Cache<T> {
     }
 }
 
+/// The bytes of a table file held in memory, decoded on first use.
+///
+/// The bytes are exactly what a cache file of the same kind would hold, and
+/// they decode through the same path, so a table compiled into the binary or
+/// received over a channel yields the same table as the file it came from.
+pub struct MemoryFile<T> {
+    label: String,
+    bytes: TableBytes,
+    cell: Cell<T>,
+}
+
+impl<T> MemoryFile<T> {
+    /// Holds `bytes` under `label`, the name reports use for them; nothing is
+    /// decoded until the table is first asked for.
+    #[must_use]
+    pub fn new(label: &str, bytes: TableBytes) -> Self {
+        Self {
+            label: label.to_owned(),
+            bytes,
+            cell: OnceLock::new(),
+        }
+    }
+
+    fn decode(&self) -> Result<Provided<T>, TableError>
+    where
+        T: TableKind,
+    {
+        decode_bytes(self.bytes.as_bytes(), self.label.clone(), "memory")
+    }
+}
+
+impl<T: TableKind> TableProvider<T> for MemoryFile<T> {
+    fn provide(&self) -> Result<&Provided<T>, TableError> {
+        Ok(load(&self.cell, || self.decode())?)
+    }
+
+    fn shared(&self) -> Result<Arc<Provided<T>>, TableError> {
+        Ok(Arc::clone(load(&self.cell, || self.decode())?))
+    }
+
+    fn source(&self) -> Source {
+        Source::Memory
+    }
+}
+
 /// A table the caller built.
 pub struct InMemory<T> {
     provided: Arc<Provided<T>>,
@@ -327,6 +386,15 @@ impl<T> fmt::Debug for Cache<T> {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         out.debug_struct("Cache")
             .field("path", &self.path)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T> fmt::Debug for MemoryFile<T> {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        out.debug_struct("MemoryFile")
+            .field("label", &self.label)
+            .field("bytes", &self.bytes)
             .finish_non_exhaustive()
     }
 }
