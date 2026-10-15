@@ -82,17 +82,9 @@ impl PeriodicGrid {
     where
         F: FnMut(u32, u32, f32),
     {
-        for &atom in query {
-            let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-            let Some(position) = positions.get(index).copied() else {
-                continue;
-            };
-            if !finite(position) {
-                continue;
-            }
-            self.append_pairs(positions, atom, position, cutoff_squared, periodic, emit)?;
-        }
-        Ok(())
+        for_each_query_position(positions, query, |atom, position| {
+            self.append_pairs(positions, atom, position, cutoff_squared, periodic, emit)
+        })
     }
 
     pub(super) fn pairs_same_selection(
@@ -104,24 +96,13 @@ impl PeriodicGrid {
         sort_result: bool,
     ) -> Result<Vec<NeighborPair>, SpatialError> {
         let mut found = Vec::new();
-
-        for &atom in query {
-            let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-            let Some(position) = positions.get(index).copied() else {
-                continue;
-            };
-            if !finite(position) {
-                continue;
-            }
-            self.append_pairs_same_selection(
-                positions,
-                atom,
-                position,
-                cutoff_squared,
-                periodic,
-                &mut |pair| found.push(pair),
-            )?;
-        }
+        self.for_each_pairs_same_selection(
+            positions,
+            query,
+            cutoff_squared,
+            periodic,
+            &mut |pair| found.push(pair),
+        )?;
 
         if sort_result {
             canonicalise(&mut found);
@@ -140,14 +121,7 @@ impl PeriodicGrid {
     where
         F: FnMut(NeighborPair),
     {
-        for &atom in query {
-            let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-            let Some(position) = positions.get(index).copied() else {
-                continue;
-            };
-            if !finite(position) {
-                continue;
-            }
+        for_each_query_position(positions, query, |atom, position| {
             self.append_pairs_same_selection(
                 positions,
                 atom,
@@ -155,9 +129,8 @@ impl PeriodicGrid {
                 cutoff_squared,
                 periodic,
                 emit,
-            )?;
-        }
-        Ok(())
+            )
+        })
     }
 
     fn append_pairs<F>(
@@ -382,4 +355,22 @@ pub(super) fn cell_count(dims: [usize; 3]) -> Result<usize, SpatialError> {
         .checked_mul(dims[1])
         .and_then(|value| value.checked_mul(dims[2]))
         .ok_or(SpatialError::NumericRangeExceeded)
+}
+
+/// Calls `visit` with each in-range, finite query atom and its position.
+fn for_each_query_position(
+    positions: &[[f32; 3]],
+    query: &[u32],
+    mut visit: impl FnMut(u32, [f32; 3]) -> Result<(), SpatialError>,
+) -> Result<(), SpatialError> {
+    for &atom in query {
+        let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
+        let Some(position) = positions.get(index).copied() else {
+            continue;
+        };
+        if finite(position) {
+            visit(atom, position)?;
+        }
+    }
+    Ok(())
 }
