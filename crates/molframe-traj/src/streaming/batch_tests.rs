@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::budget_context as context;
+use crate::shared_tests::budget_context as context;
 use crate::{Frame, StreamingReader};
 
 #[test]

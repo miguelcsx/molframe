@@ -28,7 +28,7 @@ pub mod trr;
 mod words;
 
 #[cfg(test)]
-mod test_support;
+mod shared_tests;
 
 pub use ensembles::{
     clustering, dielectric, diffusion, ensemble, ensemble_similarity, ensemble_statistics,

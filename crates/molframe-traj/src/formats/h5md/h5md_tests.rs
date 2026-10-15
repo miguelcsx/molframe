@@ -1,4 +1,4 @@
-use crate::test_support::{assert_close, assert_vector_close};
+use crate::shared_tests::{assert_close, assert_vector_close};
 use molframe_core::structure::UnitCell;
 
 use crate::Timestep;

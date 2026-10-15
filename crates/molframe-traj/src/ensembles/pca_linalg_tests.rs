@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::worker_context as context;
+use crate::shared_tests::worker_context as context;
 use nalgebra::DMatrix;
 
 fn real(value: usize) -> f64 {

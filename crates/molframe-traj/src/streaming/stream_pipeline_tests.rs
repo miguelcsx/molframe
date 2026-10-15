@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::worker_context as context;
+use crate::shared_tests::worker_context as context;
 use crate::{Frame, StreamingReader};
 
 fn reader(frames: usize) -> StreamingReader<impl Iterator<Item = Frame>> {
