@@ -11,7 +11,7 @@ mod worker;
 
 use component_bonds::alt_compatible;
 use linkage::link_polymer;
-use rayon::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use resolver::Resolver;
 use tally::Tally;
 use worker::{SugarCounts, UnitOutput, Worker};
