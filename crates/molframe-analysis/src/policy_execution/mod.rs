@@ -1,0 +1,72 @@
+//! Governed adapters from structure kernels to deterministic frame execution.
+
+mod altloc_note;
+mod definition;
+mod descriptor;
+mod descriptor_parameters;
+mod dynamics;
+mod error;
+mod execute;
+mod helical;
+mod interactions;
+mod kernel;
+mod models;
+mod native;
+mod physical;
+mod requirements;
+mod residue_surface;
+mod source;
+mod standalone;
+mod structure;
+mod surface_area;
+mod system;
+
+pub use definition::{DefinitionError, SurfaceSampling, definition_contacts_kernel};
+pub use descriptor::AnalysisDescriptor;
+pub use dynamics::{governed_dielectric_from_dipoles, governed_water_dynamics};
+pub use error::GovernedAnalysisError;
+pub use execute::{FrameRecord, GovernedStructureAnalysis, analyse_trajectory};
+pub use helical::{governed_helical_parameters, governed_helical_steps};
+pub use interactions::{
+    base_pairs_kernel, cation_pi_kernel, contact_map_kernel, contacts_kernel,
+    hydrogen_bonds_kernel, pi_stacking_kernel, salt_bridges_kernel, surface_contacts_kernel,
+    water_bridges_kernel,
+};
+pub use kernel::{
+    FrameKernelResult, MappedClosureStructureKernel, StructureKernel, mapped_structure_kernel,
+    structure_kernel,
+};
+pub use models::{analyse_models, analyse_structure};
+pub use native::{
+    GovernedNativeError, NativeCorrespondence, native_contact_fraction_kernel,
+    native_contact_fraction_kernel_with,
+};
+pub use physical::{
+    PhysicalKernelError, centre_of_mass_radial_distribution_kernel, coordination_numbers_kernel,
+    density_map_kernel, leaflets_kernel, linear_density_kernel, pore_profile_kernel,
+    radial_distribution_kernel,
+};
+pub use requirements::{ForbiddenResolution, Requirement};
+pub use residue_surface::{ResidueKernelError, residue_sasa_kernel};
+pub use standalone::{
+    StandaloneAnalysisError, governed_fragment_mapping, governed_polymer_statistics,
+    governed_sugar_pucker,
+};
+pub use structure::{
+    chain_interface_kernel, gnm_kernel, half_sphere_exposure_kernel, nucleic_torsions_kernel,
+    secondary_structure_kernel,
+};
+pub(crate) use surface_area::radii_assumption;
+pub use surface_area::sasa_kernel;
+
+#[cfg(test)]
+#[path = "adapters_tests.rs"]
+mod adapters_tests;
+
+#[cfg(test)]
+#[path = "surface_area_tests.rs"]
+mod surface_area_tests;
+
+#[cfg(test)]
+#[path = "requirements_tests.rs"]
+mod requirements_tests;

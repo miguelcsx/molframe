@@ -13,77 +13,32 @@
 #[macro_use]
 mod tables;
 
-#[path = "anm.rs"]
-mod anisotropic_network;
-mod aromatic_rings;
-#[path = "pi_stacking.rs"]
-mod aromatic_stacking;
-#[path = "contacts.rs"]
-mod atom_pairs;
-#[path = "cation_pi.rs"]
-mod cation_aromatic;
-#[path = "interface.rs"]
-mod chain_boundary;
-#[path = "polymer.rs"]
-mod chain_statistics;
-#[path = "pore.rs"]
-mod channel_profile;
-mod chemistry;
-mod density_names;
 mod diagnostics;
-#[path = "gnm.rs"]
-mod elastic_network;
-mod electrostatics;
-#[path = "dssp_binary.rs"]
-mod external_secondary_structure;
-#[path = "fragment.rs"]
-mod fragment_mapping;
-#[path = "hse.rs"]
-mod half_sphere;
-pub mod hbond;
-#[path = "helical.rs"]
-mod helix_geometry;
-mod max_area_table;
-#[path = "leaflet.rs"]
-mod membrane_layers;
-#[path = "nmd.rs"]
-mod mode_interchange;
-#[path = "dynamics.rs"]
-mod motion_statistics;
-mod native_match;
-mod network;
-#[path = "nucleic.rs"]
-mod nucleic_torsion;
 mod numeric;
-#[path = "radial.rs"]
-mod pair_distribution;
-#[path = "base_pair.rs"]
-mod paired_bases;
-#[path = "governed/mod.rs"]
 mod policy_execution;
-mod protonation;
-#[path = "native.rs"]
-mod reference_contacts;
-#[path = "contact_map.rs"]
-mod residue_contacts;
-mod residue_sasa;
-pub mod salt_bridge;
-pub(crate) mod salt_bridge_groups;
-mod sasa_atoms;
-#[path = "dssp.rs"]
-mod secondary_structure_assignment;
-#[path = "density.rs"]
-mod spatial_density;
-mod stream_plan;
-mod stream_surface;
-#[path = "pucker.rs"]
-mod sugar_conformation;
-pub mod surface_contacts;
-#[path = "ensemble.rs"]
-mod trajectory_ensemble;
-mod vector_field;
-#[path = "water_bridge.rs"]
-mod water_mediation;
+
+mod elastic;
+use elastic::{anisotropic_network, elastic_network, mode_interchange, network, vector_field};
+mod interaction;
+pub use interaction::hbond;
+pub use interaction::salt_bridge;
+pub use interaction::surface_contacts;
+use interaction::{
+    aromatic_rings, aromatic_stacking, atom_pairs, cation_aromatic, chain_boundary,
+    channel_profile, chemistry, electrostatics, fragment_mapping, half_sphere, native_match,
+    protonation, reference_contacts, residue_contacts, salt_bridge_groups, water_mediation,
+};
+mod nucleotide;
+use nucleotide::{helix_geometry, nucleic_torsion, paired_bases, sugar_conformation};
+mod trajectory;
+use trajectory::{
+    chain_statistics, membrane_layers, motion_statistics, pair_distribution, spatial_density,
+    trajectory_ensemble,
+};
+mod secondary;
+use secondary::{external_secondary_structure, secondary_structure_assignment};
+mod area;
+use area::{max_area_table, residue_sasa, sasa_atoms, stream_plan, stream_surface};
 
 #[cfg(test)]
 mod chemistry_test_support;
