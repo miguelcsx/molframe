@@ -5,6 +5,7 @@
 //! is copied. The consumer converts endpoints to compact local indices only
 //! after locating the corresponding resident atom pages.
 
+use super::source::validate_atom_endpoint_range;
 use super::{ChunkDescriptor, DatasetId, LocalRow, LogicalRow, ProviderError};
 use crate::optional::OptionalSymbol;
 use crate::{BondIndex, BondOrder, BondProvenance, BondRecord, Structure};
@@ -111,7 +112,7 @@ impl BondChunk {
                 rows: table_rows,
             });
         }
-        validate_atom_span(
+        validate_atom_endpoint_range(
             descriptor.dataset(),
             atom_logical_start,
             structure.atom_count(),
@@ -205,24 +206,6 @@ impl BondChunk {
             })?;
         Ok(AtomEndpoint::new(self.atom_dataset, LogicalRow::new(row)))
     }
-}
-
-fn validate_atom_span(
-    dataset: DatasetId,
-    first: LogicalRow,
-    rows: u32,
-) -> Result<(), ProviderError> {
-    if rows == 0 {
-        return Ok(());
-    }
-    first
-        .get()
-        .checked_add(u64::from(rows - 1))
-        .map(|_| ())
-        .ok_or(ProviderError::IdentityOverflow {
-            dataset,
-            field: "atom endpoint range",
-        })
 }
 
 #[cfg(test)]

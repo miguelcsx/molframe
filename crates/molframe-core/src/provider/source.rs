@@ -116,7 +116,31 @@ impl BondChunkProvider {
     }
 }
 
-fn validate_atom_endpoint_range(
+fn storage_descriptor(
+    dataset: &DatasetDescriptor,
+    structure: &Structure,
+    chunk: ChunkId,
+) -> Result<(usize, ChunkDescriptor), ProviderError> {
+    let ordinal = dataset.chunk_ordinal(chunk)?;
+    let index = usize::try_from(ordinal).map_err(|_| ProviderError::IdentityOverflow {
+        dataset: dataset.id(),
+        field: "storage chunk index",
+    })?;
+    let storage = structure
+        .data()
+        .chunks
+        .get(index)
+        .ok_or(ProviderError::StorageChunkUnavailable { index })?;
+    let descriptor = ChunkDescriptor::new(
+        dataset.id(),
+        chunk,
+        LogicalRow::new(u64::from(storage.atoms().start)),
+        storage.len(),
+    )?;
+    Ok((index, descriptor))
+}
+
+pub(super) fn validate_atom_endpoint_range(
     dataset: DatasetId,
     first: LogicalRow,
     rows: u32,
@@ -184,23 +208,7 @@ impl StructureChunkProvider {
     ///
     /// Rejects chunk identities outside this provider.
     pub fn chunk(&self, chunk: ChunkId) -> Result<StructureChunk, ProviderError> {
-        let ordinal = self.dataset.chunk_ordinal(chunk)?;
-        let index = usize::try_from(ordinal).map_err(|_| ProviderError::IdentityOverflow {
-            dataset: self.dataset.id(),
-            field: "storage chunk index",
-        })?;
-        let storage = self
-            .structure
-            .data()
-            .chunks
-            .get(index)
-            .ok_or(ProviderError::StorageChunkUnavailable { index })?;
-        let descriptor = ChunkDescriptor::new(
-            self.dataset.id(),
-            chunk,
-            super::LogicalRow::new(u64::from(storage.atoms().start)),
-            storage.len(),
-        )?;
+        let (index, descriptor) = storage_descriptor(&self.dataset, &self.structure, chunk)?;
         StructureChunk::shared(descriptor, self.structure.clone(), index)
     }
 }
@@ -289,23 +297,7 @@ impl PropertyChunkProvider {
     ///
     /// Rejects chunk identities outside this provider.
     pub fn chunk(&self, chunk: ChunkId) -> Result<PropertyChunk, ProviderError> {
-        let ordinal = self.dataset.chunk_ordinal(chunk)?;
-        let index = usize::try_from(ordinal).map_err(|_| ProviderError::IdentityOverflow {
-            dataset: self.dataset.id(),
-            field: "storage chunk index",
-        })?;
-        let storage = self
-            .structure
-            .data()
-            .chunks
-            .get(index)
-            .ok_or(ProviderError::StorageChunkUnavailable { index })?;
-        let descriptor = ChunkDescriptor::new(
-            self.dataset.id(),
-            chunk,
-            super::LogicalRow::new(u64::from(storage.atoms().start)),
-            storage.len(),
-        )?;
+        let (index, descriptor) = storage_descriptor(&self.dataset, &self.structure, chunk)?;
         PropertyChunk::shared(
             descriptor,
             self.structure.clone(),
