@@ -1,4 +1,4 @@
-//! Small shared conversions used by hierarchy handles.
+//! Lookups over chunk rows used by hierarchy handles.
 
 use crate::chunk::AtomChunk;
 use crate::column::Presence;
@@ -58,5 +58,5 @@ pub(super) fn find_named(chunks: &[AtomChunk], range: Range<u32>, wanted: Symbol
 }
 
 #[cfg(test)]
-#[path = "handle_helpers_tests.rs"]
+#[path = "handle_lookup_tests.rs"]
 mod tests;

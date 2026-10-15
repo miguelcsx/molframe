@@ -1,6 +1,6 @@
 //! Transactional copy-on-write edits over immutable structure snapshots.
 
-mod helpers;
+mod remap;
 
 use super::materialize::compact_hierarchy;
 use super::{Structure, StructureData, validate, validate_coordinate_edit};
@@ -12,7 +12,7 @@ use crate::index::ChainIndex;
 #[cfg(test)]
 use crate::index::{AtomIndex, ResidueIndex};
 use crate::selection::AtomSelection;
-use helpers::{delete_from, require_no_extensions, transform_store, validate_selection};
+use remap::{delete_from, require_no_extensions, transform_store, validate_selection};
 
 const DELETED_ATOM: u32 = u32::MAX;
 

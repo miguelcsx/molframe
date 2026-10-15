@@ -37,5 +37,5 @@ pub fn compatible_pairs(labels: &[AltId]) -> impl Iterator<Item = (usize, usize)
 }
 
 #[cfg(test)]
-#[path = "disorder_compat_tests.rs"]
+#[path = "compat_tests.rs"]
 mod tests;

@@ -1,4 +1,4 @@
-//! Internal coordinate, hierarchy, and bond remapping helpers for edits.
+//! Internal coordinate, hierarchy, and bond remapping for edits.
 
 use super::super::{CoordinateStore, StructureData};
 use super::DELETED_ATOM;

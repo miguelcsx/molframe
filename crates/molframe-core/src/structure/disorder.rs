@@ -3,7 +3,6 @@
 //! Reading never collapses disorder. This module turns a declared analysis
 //! policy into an atom selection while leaving the stored rows untouched.
 
-#[path = "disorder_compat.rs"]
 mod compat;
 
 use super::{AtomRef, ResidueRef, Structure};

@@ -19,7 +19,7 @@ mod extensions;
 #[cfg(test)]
 mod extensions_tests;
 mod handle;
-mod handle_helpers;
+mod handle_lookup;
 mod label_rewrites;
 mod materialize;
 mod merge;

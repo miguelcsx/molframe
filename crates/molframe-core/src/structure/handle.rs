@@ -9,7 +9,7 @@
 //! handles are how it is computed.
 
 use super::data::StructureData;
-use super::handle_helpers::{find_named, range_or_empty, recorded_value};
+use super::handle_lookup::{find_named, range_or_empty, recorded_value};
 use crate::chunk::AtomChunk;
 use crate::element::Element;
 use crate::index::{AtomIndex, ChainIndex, EntityIndex, ModelIndex, ResidueIndex};
