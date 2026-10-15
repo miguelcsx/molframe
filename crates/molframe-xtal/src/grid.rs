@@ -11,9 +11,7 @@
 //! angstroms. Reading is `O(values)` with one value-sized allocation rather
 //! than retaining both file-order and canonical volumes.
 
-#[path = "grid/cube.rs"]
 mod cube;
-#[path = "grid/dx.rs"]
 mod dx;
 
 pub use cube::{CubeAtom, CubeGrid, read_cube};

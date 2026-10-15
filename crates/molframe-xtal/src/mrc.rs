@@ -3,16 +3,11 @@
 use crate::numeric::i32_to_usize;
 use molframe_core::structure::UnitCell;
 const HEADER_BYTES: usize = 1024;
-#[path = "mrc_affine.rs"]
 mod affine;
-#[path = "mrc_block.rs"]
 mod block;
-#[path = "mrc_brick.rs"]
 mod brick;
-#[path = "mrc_sampling.rs"]
 mod sampling;
 pub use sampling::DensitySampler;
-#[path = "mrc_values.rs"]
 mod values;
 use values::{
     f64_triplet_to_f32, half_to_f32, statistics, to_i32, usize_triplet_to_i32, write_f32,

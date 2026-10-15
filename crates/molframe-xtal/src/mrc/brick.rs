@@ -465,5 +465,5 @@ const fn overflow(field: &'static str) -> MrcBrickError {
 }
 
 #[cfg(test)]
-#[path = "mrc_brick_tests.rs"]
+#[path = "brick_tests.rs"]
 mod tests;

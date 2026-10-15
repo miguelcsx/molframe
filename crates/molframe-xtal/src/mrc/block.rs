@@ -13,7 +13,6 @@ use molframe_core::structure::UnitCell;
 
 use super::{Endian, HEADER_BYTES, MrcError, product};
 
-#[path = "mrc_block_support.rs"]
 mod support;
 use support::{
     axis_index, clamp_padding, decode_row_value, encoded_span, maximum_encoded_row_bytes,
@@ -331,5 +330,5 @@ impl<R: Read + Seek> MrcBlockReader<R> {
 }
 
 #[cfg(test)]
-#[path = "mrc_block_tests.rs"]
+#[path = "block_tests.rs"]
 mod tests;

@@ -86,5 +86,5 @@ fn affine(
 }
 
 #[cfg(test)]
-#[path = "mrc_affine_tests.rs"]
+#[path = "affine_tests.rs"]
 mod tests;

@@ -9,10 +9,8 @@ use std::collections::BTreeMap;
 
 use crate::numeric::{f32_to_i64, f64_to_f32, i64_to_f32};
 
-#[path = "mtz_header_parse.rs"]
 mod header_parse;
 use header_parse::{parse_header, parse_history};
-#[path = "mtz_header_write.rs"]
 mod header_write;
 use header_write::{
     write_column_headers, write_crystal_header, write_dataset_headers, write_header_tail,
