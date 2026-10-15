@@ -24,10 +24,7 @@ use stubs::{
 fn with_native<T>(check: impl FnOnce(&Bound<'_, PyModule>) -> T) -> T {
     Python::initialize();
     Python::attach(|py| {
-        let module = match PyModule::new(py, "_native") {
-            Ok(module) => module,
-            Err(error) => panic!("the test module should be created: {error}"),
-        };
+        let module = PyModule::new(py, "_native").expect("the test module should be created");
         if let Err(error) = crate::module::native(&module) {
             panic!("the extension module should register: {error}");
         }

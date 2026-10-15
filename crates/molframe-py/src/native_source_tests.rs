@@ -39,46 +39,26 @@ fn native_source_retains_coordinates_and_evaluates_queries() {
     Python::attach(|py| {
         let structure = structure();
         let expected = structure.coordinates().as_ptr();
-        let object = match Bound::new(py, PyStructure::new(structure)) {
-            Ok(value) => value,
-            Err(error) => panic!("structure should bind: {error}"),
-        };
-        let source = match NativeStructureSource::from_python(object.as_any()) {
-            Ok(value) => value,
-            Err(error) => panic!("native source should import: {error}"),
-        };
+        let object = Bound::new(py, PyStructure::new(structure)).expect("structure should bind");
+        let source = NativeStructureSource::from_python(object.as_any())
+            .expect("native source should import");
 
         assert_eq!(source.coordinates().as_ptr(), expected);
         assert_eq!(source.coordinates().len(), 2);
         assert_eq!(source.topology().atoms.len(), 2);
         assert_eq!(source.topology().residue_atom_start, [0, 2]);
-        let rows = match source.select("all") {
-            Ok(value) => value,
-            Err(error) => panic!("query should evaluate: {error}"),
-        };
+        let rows = source.select("all").expect("query should evaluate");
         assert_eq!(rows, [0, 1]);
-        let first = match source.encode_bcif() {
-            Ok(value) => value,
-            Err(error) => panic!("BCIF should encode: {error}"),
-        };
-        let second = match source.encode_bcif() {
-            Ok(value) => value,
-            Err(error) => panic!("cached BCIF should encode: {error}"),
-        };
+        let first = source.encode_bcif().expect("BCIF should encode");
+        let second = source.encode_bcif().expect("cached BCIF should encode");
         assert!(!first.is_empty());
         assert_eq!(first, second);
     });
 }
 
 fn imported(py: Python<'_>) -> NativeStructureSource {
-    let object = match Bound::new(py, PyStructure::new(structure())) {
-        Ok(value) => value,
-        Err(error) => panic!("structure should bind: {error}"),
-    };
-    match NativeStructureSource::from_python(object.as_any()) {
-        Ok(value) => value,
-        Err(error) => panic!("native source should import: {error}"),
-    }
+    let object = Bound::new(py, PyStructure::new(structure())).expect("structure should bind");
+    NativeStructureSource::from_python(object.as_any()).expect("native source should import")
 }
 
 #[test]
@@ -86,16 +66,10 @@ fn a_sparse_selection_allocates_only_the_selected_rows() {
     Python::initialize();
     Python::attach(|py| {
         let source = imported(py);
-        let rows = match source.select("index 1") {
-            Ok(value) => value,
-            Err(error) => panic!("query should evaluate: {error}"),
-        };
+        let rows = source.select("index 1").expect("query should evaluate");
         assert_eq!(rows, [1]);
         assert_eq!(rows.capacity(), 1);
-        let none = match source.select("none") {
-            Ok(value) => value,
-            Err(error) => panic!("query should evaluate: {error}"),
-        };
+        let none = source.select("none").expect("query should evaluate");
         assert!(none.is_empty());
         assert_eq!(none.capacity(), 0);
     });
@@ -153,14 +127,9 @@ _struct_conn.pdbx_value_order\n1 covale A 1 GLY CA A 1 GLY N SING\n";
         };
     Python::initialize();
     Python::attach(|py| {
-        let object = match Bound::new(py, PyStructure::new(structure)) {
-            Ok(value) => value,
-            Err(error) => panic!("structure should bind: {error}"),
-        };
-        let source = match NativeStructureSource::from_python(object.as_any()) {
-            Ok(value) => value,
-            Err(error) => panic!("native source should import: {error}"),
-        };
+        let object = Bound::new(py, PyStructure::new(structure)).expect("structure should bind");
+        let source = NativeStructureSource::from_python(object.as_any())
+            .expect("native source should import");
         let bonds = source.topology().bonds;
         assert_eq!(bonds.len(), 1);
         assert_eq!(bonds[0].order, NativeBond::ORDER_SINGLE);

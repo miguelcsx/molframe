@@ -10,10 +10,7 @@ type Scorer = fn(&[[f32; 3]], &[[f32; 3]]) -> Result<f64, molframe::compare::Com
 fn curated_module_and_catalog_are_bidirectionally_consistent() {
     Python::initialize();
     Python::attach(|py| {
-        let module = match PyModule::new(py, "_native") {
-            Ok(module) => module,
-            Err(error) => panic!("test module should be created: {error}"),
-        };
+        let module = PyModule::new(py, "_native").expect("test module should be created");
         if let Err(error) = crate::module::native(&module) {
             panic!("the extension module should register: {error}");
         }
