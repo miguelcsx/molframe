@@ -130,17 +130,14 @@ pub(crate) fn rmsd(
 ) -> Exit {
     let mobile_structure = or_exit!(open(mobile, context));
     let reference_structure = or_exit!(open(reference, context));
-    let (moving, fixed) = match comparison_points(
+    let (moving, fixed) = or_exit!(comparison_points(
         &mobile_structure,
         &reference_structure,
         mobile,
         reference,
         query,
         context,
-    ) {
-        Ok(points) => points,
-        Err(exit) => return exit,
-    };
+    ));
     if moving.len() != fixed.len() {
         eprintln!(
             "the selected structures hold {} and {} atoms; they must correspond one to one",
@@ -236,17 +233,14 @@ pub(crate) fn compare(
     let reference = or_exit!(open(reference, context));
     let mut rows = Vec::new();
     for metric in options.metrics {
-        let measured = match measure(
+        let measured = or_exit!(measure(
             *metric,
             &model,
             &reference,
             &options,
             context,
             context.execution,
-        ) {
-            Ok(value) => value,
-            Err(exit) => return exit,
-        };
+        ));
         rows.extend(measured);
     }
     emit_metrics(context, &rows);

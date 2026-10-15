@@ -39,20 +39,18 @@ pub(crate) fn validate(options: ValidationOptions<'_>, context: Context) -> Exit
     let mut context = context;
     let mut structure = or_exit!(open(input, context));
     if wants_annotation(options) {
-        let source = match crate::chemistry::resolve_ccd(
+        let source = or_exit!(crate::chemistry::resolve_ccd(
             options.chemistry.ccd.as_deref(),
             options.chemistry.ccd_version.as_deref(),
             context,
-        ) {
-            Ok(source) => source,
-            Err(exit) => return exit,
-        };
+        ));
         context = source.context;
-        structure =
-            match crate::chemistry::annotate(&structure, source.path, source.version, context) {
-                Ok(structure) => structure,
-                Err(exit) => return exit,
-            };
+        structure = or_exit!(crate::chemistry::annotate(
+            &structure,
+            source.path,
+            source.version,
+            context
+        ));
     }
     let subject = Subject {
         structure: &structure,
