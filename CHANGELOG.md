@@ -4,8 +4,12 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
-## Unreleased
+## 0.6.1 — 2026-10-15
 
+- **PyPI now carries the 0.6.0 content.** The 0.6.0 wheels uploaded on
+  2026-10-10 predate the changes below and the crate published on
+  2026-10-15, so a registry version cannot be reused; this release ships
+  them together to both registries.
 - **`compare.lddt` is now a real, residue-aware lDDT; the coordinate kernel
   is `compare.distance_difference`.** The old `lddt(model, reference)` took
   bare coordinates, so it counted distances inside a residue, could not
