@@ -14,6 +14,8 @@
 #![forbid(unsafe_code)]
 
 mod alignment;
+#[cfg(test)]
+mod cif_fixture;
 mod diagnostics;
 mod failure;
 mod governed_parameters;

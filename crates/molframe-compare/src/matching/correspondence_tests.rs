@@ -1,9 +1,9 @@
 use super::assignment::optimal_pairs;
 use super::{chain_sequences, map_chains, map_sequence_to_structure};
+use crate::cif_fixture::read_cif;
 use molframe_chem::{Component, ComponentKind, MemoryProvider};
 use molframe_core::contract::DictionaryVersion;
 use molframe_core::contract::Namespace;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_seq::Scoring;
 use std::sync::Arc;
@@ -14,11 +14,7 @@ _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n";
 
 fn structure(body: &str) -> Structure {
-    let input = InputBuffer::from_bytes(format!("{HEADER}{body}").into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(&format!("{HEADER}{body}"))
 }
 
 fn provider() -> MemoryProvider {

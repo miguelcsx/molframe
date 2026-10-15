@@ -1,9 +1,9 @@
 use super::{ResidueCorrespondence, ResidueLddtOptions, SymmetryPolicy, residue_lddt};
+use crate::cif_fixture::read_cif;
 use crate::pair_residues_by_identifier;
 use molframe_chem::{Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider};
 use molframe_core::contract::{DictionaryVersion, Namespace};
 use molframe_core::element::Element;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_core::{BondOrder, ExecutionContext};
 use std::fmt::Write;
@@ -146,11 +146,7 @@ fn build(
             );
         }
     }
-    let input = InputBuffer::from_bytes(format!("{HEADER}{body}").into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(&format!("{HEADER}{body}"))
 }
 
 const CHAIN: [(&str, &[Atom]); 3] = [("ASP", &ASP), ("ALA", &ALA), ("VAL", &VAL)];
