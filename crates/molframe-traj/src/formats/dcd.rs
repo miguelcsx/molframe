@@ -111,7 +111,7 @@ pub enum DcdError {
 pub fn parse_dcd(bytes: &[u8]) -> Result<DcdTrajectory, DcdError> {
     let endian = detect_endian(bytes)?;
     let mut records = Records::new(bytes, endian);
-    let (mut header, free_indices) = parse_header(&mut records, endian)?;
+    let (mut header, free_indices) = parse_header(&mut records)?;
     if let Some(count) = stored_frame_count(&header, bytes.len() - records.cursor) {
         header.frame_count = count;
     }
@@ -124,11 +124,28 @@ pub fn parse_dcd(bytes: &[u8]) -> Result<DcdTrajectory, DcdError> {
     Ok(DcdTrajectory { header, frames })
 }
 
-fn parse_header(
-    records: &mut Records<'_>,
-    endian: DcdEndian,
+/// A forward-only source of framed DCD records, borrowed or file-backed.
+pub(crate) trait RecordSource {
+    fn endian(&self) -> DcdEndian;
+    fn next_record(&mut self) -> Result<Option<&[u8]>, DcdError>;
+}
+
+impl RecordSource for Records<'_> {
+    fn endian(&self) -> DcdEndian {
+        self.endian
+    }
+
+    fn next_record(&mut self) -> Result<Option<&[u8]>, DcdError> {
+        self.next()
+    }
+}
+
+/// Reads the header, title and atom-count records and any free-atom index list.
+pub(crate) fn parse_header<R: RecordSource>(
+    records: &mut R,
 ) -> Result<(DcdHeader, Vec<usize>), DcdError> {
-    let header_record = records.next()?.ok_or(DcdError::InvalidHeader)?;
+    let endian = records.endian();
+    let header_record = records.next_record()?.ok_or(DcdError::InvalidHeader)?;
     if header_record.len() != 84 || header_record.get(0..4) != Some(b"CORD") {
         return Err(DcdError::InvalidHeader);
     }
@@ -147,9 +164,9 @@ fn parse_header(
     if save_interval <= 0 || !delta_akma.is_finite() || delta_akma <= 0.0 {
         return Err(DcdError::InvalidControls);
     }
-    let title_record = records.next()?.ok_or(DcdError::InvalidHeader)?;
+    let title_record = records.next_record()?.ok_or(DcdError::InvalidHeader)?;
     let titles = parse_titles(title_record, endian)?;
-    let atom_record = records.next()?.ok_or(DcdError::InvalidHeader)?;
+    let atom_record = records.next_record()?.ok_or(DcdError::InvalidHeader)?;
     if atom_record.len() != 4 {
         return Err(DcdError::InvalidControls);
     }
@@ -161,7 +178,7 @@ fn parse_header(
         Vec::new()
     } else {
         parse_free_indices(
-            records.next()?.ok_or(DcdError::InvalidControls)?,
+            records.next_record()?.ok_or(DcdError::InvalidControls)?,
             endian,
             atom_count,
             atom_count - fixed_atom_count,

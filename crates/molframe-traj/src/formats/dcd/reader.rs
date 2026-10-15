@@ -14,8 +14,7 @@ use crate::{
 };
 
 use super::{
-    AKMA_TO_PS, DcdEndian, DcdError, DcdHeader, f32_at, i32_at, nonnegative, parse_cell,
-    parse_free_indices, parse_titles,
+    AKMA_TO_PS, DcdEndian, DcdError, DcdHeader, RecordSource, f32_at, parse_cell, parse_header,
 };
 mod records;
 mod seek;
@@ -72,7 +71,7 @@ impl DcdReader {
         let file = File::open(path).map_err(|error| io_error(&error))?;
         let file_bytes = file.metadata().map_err(|error| io_error(&error))?.len();
         let mut records = FileRecords::new(file, memory_limit_bytes)?;
-        let (mut header, free_indices) = read_header(&mut records)?;
+        let (mut header, free_indices) = parse_header(&mut records)?;
         let payload = usize::try_from(file_bytes)
             .ok()
             .and_then(|total| total.checked_sub(records.offset()));
@@ -410,59 +409,14 @@ impl FileRecords {
     }
 }
 
-fn read_header(records: &mut FileRecords) -> Result<(DcdHeader, Vec<usize>), DcdError> {
-    let endian = records.endian;
-    let header_record = records.next()?.ok_or(DcdError::InvalidHeader)?;
-    if header_record.len() != 84 || header_record.get(0..4) != Some(b"CORD") {
-        return Err(DcdError::InvalidHeader);
+impl RecordSource for FileRecords {
+    fn endian(&self) -> DcdEndian {
+        self.endian
     }
-    let frame_count = nonnegative(i32_at(header_record, 4, endian)?)?;
-    let start_step = i32_at(header_record, 8, endian)?;
-    let save_interval = i32_at(header_record, 12, endian)?;
-    let fixed_atom_count = nonnegative(i32_at(header_record, 36, endian)?)?;
-    let charmm = i32_at(header_record, 80, endian)? != 0;
-    let has_unit_cell = charmm && i32_at(header_record, 44, endian)? != 0;
-    let has_fourth_dimension = charmm && i32_at(header_record, 48, endian)? == 1;
-    let delta_akma = if charmm {
-        f64::from(f32_at(header_record, 40, endian)?)
-    } else {
-        super::f64_at(header_record, 40, endian)?
-    };
-    if save_interval <= 0 || !delta_akma.is_finite() || delta_akma <= 0.0 {
-        return Err(DcdError::InvalidControls);
+
+    fn next_record(&mut self) -> Result<Option<&[u8]>, DcdError> {
+        self.next()
     }
-    let title_record = records.next()?.ok_or(DcdError::InvalidHeader)?;
-    let titles = parse_titles(title_record, endian)?;
-    let atom_record = records.next()?.ok_or(DcdError::InvalidHeader)?;
-    if atom_record.len() != 4 {
-        return Err(DcdError::InvalidControls);
-    }
-    let atom_count = nonnegative(i32_at(atom_record, 0, endian)?)?;
-    if atom_count == 0 || fixed_atom_count > atom_count {
-        return Err(DcdError::InvalidControls);
-    }
-    let free_indices = if fixed_atom_count == 0 {
-        Vec::new()
-    } else {
-        let record = records.next()?.ok_or(DcdError::InvalidControls)?;
-        parse_free_indices(record, endian, atom_count, atom_count - fixed_atom_count)?
-    };
-    Ok((
-        DcdHeader {
-            frame_count,
-            atom_count,
-            start_step,
-            save_interval,
-            delta_akma,
-            fixed_atom_count,
-            titles,
-            endian,
-            charmm,
-            has_unit_cell,
-            has_fourth_dimension,
-        },
-        free_indices,
-    ))
 }
 
 fn decode_axis(
