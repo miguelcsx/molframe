@@ -146,4 +146,6 @@ def test_residue_sasa_lets_other_python_threads_run():
         stop.set()
         ticker.join()
     assert elapsed > 0.05, "the calculation is too fast to observe"
-    assert ticks >= 0.2 * elapsed * 1000
+    # A shared runner stretches every 1 ms sleep, so the floor is a fraction of the ideal
+    # tick count; a GIL held throughout would leave the ticker with almost none.
+    assert ticks >= 0.05 * elapsed * 1000

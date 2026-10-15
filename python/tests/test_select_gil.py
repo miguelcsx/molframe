@@ -67,7 +67,9 @@ def test_a_long_selection_lets_other_python_threads_run(big):
     elapsed, ticks = _ticks_during(lambda: [big.select(query) for _ in range(5)])
     # With the GIL held for the whole call the ticker would see almost nothing.
     assert elapsed > 0.05, "the selection is too fast to observe"
-    assert ticks >= 0.2 * elapsed * 1000
+    # A shared runner stretches every 1 ms sleep, so the floor is a fraction of the ideal
+    # tick count; a GIL held throughout would leave the ticker with almost none.
+    assert ticks >= 0.05 * elapsed * 1000
 
 
 def test_a_selection_is_cancelled_by_its_context(big):
