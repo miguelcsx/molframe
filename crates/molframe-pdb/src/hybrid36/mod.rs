@@ -2,9 +2,5 @@
 
 mod codec;
 
-mod compatibility {
-    pub use super::codec::needs_encoding as needs_hybrid36;
-}
-
-pub use codec::*;
-pub use compatibility::*;
+pub use codec::needs_encoding as needs_hybrid36;
+pub use codec::{decode, encode, needs_encoding};

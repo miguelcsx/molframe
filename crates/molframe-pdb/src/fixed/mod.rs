@@ -2,4 +2,4 @@
 
 mod fields;
 
-pub use fields::*;
+pub use fields::{integer, raw, real, record, text};
