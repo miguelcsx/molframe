@@ -6,24 +6,15 @@
 //! sorts it independently; ranges are appended in ascending order. The result
 //! depends only on the pair set, never on the worker count.
 
+use crate::backends::errors::block_error;
 use crate::brute::canonicalise;
 use crate::{NeighborPair, SpatialError};
 use molframe_core::ExecutionContext;
-use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
+use molframe_core::parallel::{BlockPlan, try_for_each_block_in};
 use std::mem::size_of;
 
 /// First-atom indices covered by one merge range.
 const ATOMS_PER_RANGE: usize = 8_192;
-
-/// Maps a block-execution failure onto the spatial error vocabulary.
-pub(super) fn spatial_error(error: &BlockExecutionError<SpatialError>) -> SpatialError {
-    match error {
-        BlockExecutionError::Memory(error) => SpatialError::Memory(*error),
-        BlockExecutionError::Cancelled => SpatialError::Cancelled,
-        BlockExecutionError::Worker(_) => SpatialError::WorkerPanicked,
-        BlockExecutionError::Operation(error) => *error,
-    }
-}
 
 /// Merges individually sorted blocks into one sorted, duplicate-free vector.
 ///
@@ -59,7 +50,7 @@ pub(super) fn merge_sorted_blocks(
             Ok(())
         },
     )
-    .map_err(|error| spatial_error(&error))?;
+    .map_err(|error| block_error(&error))?;
     Ok(merged)
 }
 

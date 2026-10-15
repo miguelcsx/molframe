@@ -1,7 +1,8 @@
 //! Pair enumeration specialised for identical query and target selections.
 
-use super::ordered_merge::{merge_sorted_blocks, spatial_error};
+use super::ordered_merge::merge_sorted_blocks;
 use super::{CellGrid, CellList, Grid, NEIGHBOUR_OFFSETS};
+use crate::backends::errors::block_error;
 use crate::brute::{canonicalise, distance_squared};
 use crate::{NeighborPair, SpatialError};
 use molframe_core::ExecutionContext;
@@ -223,7 +224,7 @@ pub(crate) fn pairs_same_selection_parallel(
             Ok(())
         },
     )
-    .map_err(|error| spatial_error(&error))?;
+    .map_err(|error| block_error(&error))?;
 
     if sort_result {
         return merge_sorted_blocks(&sorted_blocks, positions.len(), context);

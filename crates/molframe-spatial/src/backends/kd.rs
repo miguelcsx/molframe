@@ -23,6 +23,7 @@
 //! the context's workers. Queries are independent and run in blocks on the
 //! same workers; no query allocates (scratch is owned per block).
 
+use super::errors::{validate_cutoff, validate_indices};
 use crate::brute::finite;
 use crate::{KdPeriodicOptions, NeighborPair, PeriodicBox, SpatialError};
 use molframe_core::ExecutionContext;
@@ -346,31 +347,6 @@ fn build_splits(
         splits.append(&mut block);
     }
     Ok(splits)
-}
-
-/// Validates a finite non-negative cutoff.
-///
-/// Runtime and auxiliary space are `O(1)`.
-fn validate_cutoff(cutoff: f32) -> Result<(), SpatialError> {
-    if cutoff.is_finite() && cutoff >= 0.0 {
-        Ok(())
-    } else {
-        Err(SpatialError::InvalidCutoff)
-    }
-}
-
-/// Validates atom indices against a coordinate-array length.
-///
-/// Runtime is `O(N)` and requires no allocation.
-fn validate_indices(atoms: &[u32], position_count: usize) -> Result<(), SpatialError> {
-    for &atom in atoms {
-        let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-        if index >= position_count {
-            return Err(SpatialError::AtomOutOfBounds(atom));
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

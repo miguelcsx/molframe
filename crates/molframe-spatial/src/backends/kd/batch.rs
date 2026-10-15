@@ -1,10 +1,11 @@
 //! Parallel batch queries over a k-d tree: nearest neighbours and pair lists.
 
-use super::{KdTree, validate_cutoff, validate_indices};
+use super::KdTree;
+use crate::backends::errors::{block_error, validate_cutoff, validate_indices};
 use crate::brute::canonicalise;
 use crate::{NeighborPair, SpatialError};
 use molframe_core::ExecutionContext;
-use molframe_core::parallel::{BlockExecutionError, BlockPlan, try_for_each_block_in};
+use molframe_core::parallel::{BlockPlan, try_for_each_block_in};
 
 /// Queries handled per scheduled block.
 const QUERY_BLOCK: usize = 1024;
@@ -72,15 +73,6 @@ impl KnnResult {
             Some(rows) => rows,
             None => 0,
         }
-    }
-}
-
-fn block_error(error: &BlockExecutionError<SpatialError>) -> SpatialError {
-    match error {
-        BlockExecutionError::Memory(error) => SpatialError::Memory(*error),
-        BlockExecutionError::Cancelled => SpatialError::Cancelled,
-        BlockExecutionError::Worker(_) => SpatialError::WorkerPanicked,
-        BlockExecutionError::Operation(error) => *error,
     }
 }
 

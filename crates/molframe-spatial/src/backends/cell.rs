@@ -1,5 +1,6 @@
 //! Contiguous fixed-radius cell list.
 
+use super::errors::{validate_cutoff, validate_indices};
 use crate::brute::{canonicalise, finite};
 use crate::{CellGridOptions, NeighborPair, PeriodicBox, SpatialError};
 
@@ -238,17 +239,6 @@ impl<'a> CellList<'a> {
     }
 }
 
-/// Validates a non-negative finite cutoff.
-///
-/// Runtime and auxiliary space are `O(1)`.
-fn validate_cutoff(cutoff: f32) -> Result<(), SpatialError> {
-    if cutoff.is_finite() && cutoff >= 0.0 {
-        Ok(())
-    } else {
-        Err(SpatialError::InvalidCutoff)
-    }
-}
-
 /// Validates a query cutoff against the cutoff used to construct the grid.
 ///
 /// Runtime and auxiliary space are `O(1)`.
@@ -258,20 +248,6 @@ fn validate_query_cutoff(cutoff: f32, build_cutoff: f32) -> Result<(), SpatialEr
     } else {
         Err(SpatialError::InvalidCutoff)
     }
-}
-
-/// Validates atom indices against a coordinate-array length.
-///
-/// Runtime is `O(N)` and no allocation is performed.
-fn validate_indices(atoms: &[u32], position_count: usize) -> Result<(), SpatialError> {
-    for &atom in atoms {
-        let index = usize::try_from(atom).map_err(|_| SpatialError::NumericRangeExceeded)?;
-        if index >= position_count {
-            return Err(SpatialError::AtomOutOfBounds(atom));
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
