@@ -8,106 +8,93 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "kmeans.rs"]
-pub mod centroid_clustering;
-#[path = "clustering.rs"]
-pub mod cluster_algorithms;
-#[path = "governed/mod.rs"]
-pub mod contract_workflows;
+pub mod analysis;
+mod cell;
 mod diagnostics;
-#[path = "pca.rs"]
-pub mod dimensionality;
-#[path = "msd.rs"]
-pub mod displacement_statistics;
-#[path = "selection.rs"]
-pub mod dynamic_query;
-#[path = "dielectric.rs"]
-pub mod electrostatics;
-#[path = "dcd_write.rs"]
-mod encoder_dcd;
-#[path = "dlpoly_write.rs"]
-mod encoder_dlpoly;
-#[path = "trr_write.rs"]
-mod encoder_trr;
-#[path = "trz_write.rs"]
-mod encoder_trz;
-#[path = "analysis.rs"]
-pub mod execution;
-#[path = "aims.rs"]
-pub mod format_aims;
-#[path = "amber.rs"]
-pub mod format_amber;
-#[path = "amber_netcdf/mod.rs"]
-pub mod format_amber_netcdf;
-#[path = "amber_restart/mod.rs"]
-mod format_amber_restart;
-#[path = "charmm.rs"]
-pub mod format_charmm;
-#[path = "dcd.rs"]
-pub mod format_dcd;
-#[path = "dlpoly.rs"]
-pub mod format_dlpoly;
-#[path = "dms/mod.rs"]
-pub mod format_dms;
-#[path = "gamess.rs"]
-pub mod format_gamess;
-#[path = "gro.rs"]
-pub mod format_gro;
-#[path = "gromacs_itp.rs"]
-pub mod format_gromacs_itp;
-#[path = "gsd.rs"]
-pub mod format_gsd;
-#[path = "h5md/mod.rs"]
-pub mod format_h5md;
-#[path = "hoomd_xml.rs"]
-pub mod format_hoomd_xml;
-#[path = "lammps.rs"]
-pub mod format_lammps;
-#[path = "lammps_data.rs"]
-pub mod format_lammps_data;
-#[path = "namd.rs"]
-pub mod format_namd;
-#[path = "psf.rs"]
-pub mod format_psf;
-#[path = "tng/mod.rs"]
-pub mod format_tng;
-#[path = "tpr/mod.rs"]
-pub mod format_tpr;
-#[path = "trc.rs"]
-pub mod format_trc;
-#[path = "trr.rs"]
-pub mod format_trr;
-#[path = "trz.rs"]
-pub mod format_trz;
-#[path = "txyz.rs"]
-pub mod format_txyz;
-#[path = "xtc.rs"]
-pub mod format_xtc;
-#[path = "xvg.rs"]
-pub mod format_xvg;
-#[path = "xyz.rs"]
-pub mod format_xyz;
+pub mod dispatch;
+mod ensembles;
+mod formats;
 mod frame_index;
-#[path = "transform.rs"]
-pub mod frame_ops;
-#[path = "trajectory.rs"]
-pub mod frame_store;
-#[path = "frame_view.rs"]
 mod frame_view;
-#[path = "ensemble.rs"]
-pub mod geometry_ensemble;
+pub mod imd;
 mod interpolation;
-mod ordered_blocks;
-mod pca_fit;
-mod pca_linalg;
-mod pca_memory;
-mod selected;
-mod stream_chunks;
-mod stream_consume;
-mod stream_contacts;
-mod stream_metrics;
-mod stream_pipeline;
-mod stream_ranges;
+mod numeric;
+pub mod periodic_transform;
+pub mod selection;
+mod streaming;
+pub mod trajectory;
+pub mod transform;
+pub mod trr;
+mod words;
+
+pub use ensembles::{
+    clustering, dielectric, diffusion, ensemble, ensemble_similarity, ensemble_statistics,
+    governed, kmeans, msd, neighbors, path_similarity, pca, water_dynamics,
+};
+use ensembles::{pca_fit, pca_linalg, pca_memory};
+pub use formats::{
+    aims, amber, amber_netcdf, amber_topology, charmm, dcd, dlpoly, dms, gamess, gro, gromacs_itp,
+    gsd, h5md, hoomd_xml, lammps, lammps_data, minimal, namd, psf, tng, tpr, trc, trz, txyz, xtc,
+    xvg, xyz,
+};
+use formats::{amber_restart, dcd_write, dlpoly_write, trr_write, trz_write};
+pub use streaming::reader;
+use streaming::{
+    batch, ordered_blocks, selected, stream_chunks, stream_consume, stream_contacts,
+    stream_metrics, stream_pipeline, stream_ranges,
+};
+
+// Former module names, kept so every existing path still resolves.
+pub use analysis as execution;
+pub use dispatch as io_dispatch;
+pub use ensembles::clustering as cluster_algorithms;
+pub use ensembles::dielectric as electrostatics;
+pub use ensembles::diffusion as manifold;
+pub use ensembles::ensemble as geometry_ensemble;
+pub use ensembles::ensemble_similarity as similarity_ensemble;
+pub use ensembles::ensemble_statistics as statistics_ensemble;
+pub use ensembles::governed as contract_workflows;
+pub use ensembles::kmeans as centroid_clustering;
+pub use ensembles::msd as displacement_statistics;
+pub use ensembles::neighbors as spatial_frames;
+pub use ensembles::path_similarity as similarity_path;
+pub use ensembles::pca as dimensionality;
+pub use ensembles::water_dynamics as solvent_dynamics;
+pub use formats::aims as format_aims;
+pub use formats::amber as format_amber;
+pub use formats::amber_netcdf as format_amber_netcdf;
+pub use formats::amber_topology as topology_amber;
+pub use formats::charmm as format_charmm;
+pub use formats::dcd as format_dcd;
+pub use formats::dlpoly as format_dlpoly;
+pub use formats::dms as format_dms;
+pub use formats::gamess as format_gamess;
+pub use formats::gro as format_gro;
+pub use formats::gromacs_itp as format_gromacs_itp;
+pub use formats::gsd as format_gsd;
+pub use formats::h5md as format_h5md;
+pub use formats::hoomd_xml as format_hoomd_xml;
+pub use formats::lammps as format_lammps;
+pub use formats::lammps_data as format_lammps_data;
+pub use formats::minimal as topology_minimal;
+pub use formats::namd as format_namd;
+pub use formats::psf as format_psf;
+pub use formats::tng as format_tng;
+pub use formats::tpr as format_tpr;
+pub use formats::trc as format_trc;
+pub use formats::trz as format_trz;
+pub use formats::txyz as format_txyz;
+pub use formats::xtc as format_xtc;
+pub use formats::xvg as format_xvg;
+pub use formats::xyz as format_xyz;
+pub use imd as protocol_imd;
+pub use periodic_transform as periodic_ops;
+pub use selection as dynamic_query;
+pub use streaming::reader as trajectory_stream;
+pub use trajectory as frame_store;
+pub use transform as frame_ops;
+pub use trr as format_trr;
+
 pub use format_trr::TrrReader;
 pub use selected::{DenseChunk, FrameSlice, SelectedReader, count_frames, read_dense_chunk};
 pub use stream_chunks::ParallelChunks;
@@ -116,92 +103,6 @@ pub use stream_contacts::contact_counts_stream;
 pub use stream_metrics::{rmsd_stream, rmsf_stream};
 pub use stream_pipeline::run_frame_pipeline;
 pub use stream_ranges::run_frame_ranges;
-#[path = "dispatch/mod.rs"]
-pub mod io_dispatch;
-#[path = "diffusion.rs"]
-pub mod manifold;
-mod numeric;
-#[path = "cell.rs"]
-mod periodic_box;
-#[path = "periodic_transform.rs"]
-pub mod periodic_ops;
-#[path = "imd/mod.rs"]
-pub mod protocol_imd;
-#[path = "ensemble_similarity.rs"]
-pub mod similarity_ensemble;
-#[path = "path_similarity.rs"]
-pub mod similarity_path;
-#[path = "water_dynamics.rs"]
-pub mod solvent_dynamics;
-#[path = "neighbors.rs"]
-pub mod spatial_frames;
-#[path = "ensemble_statistics.rs"]
-pub mod statistics_ensemble;
-#[path = "amber_topology.rs"]
-pub mod topology_amber;
-#[path = "minimal.rs"]
-pub mod topology_minimal;
-#[path = "batch.rs"]
-mod trajectory_batch;
-#[path = "reader.rs"]
-pub mod trajectory_stream;
-mod words;
-
-pub use centroid_clustering as kmeans;
-pub use cluster_algorithms as clustering;
-pub use contract_workflows as governed;
-pub use dimensionality as pca;
-pub use displacement_statistics as msd;
-pub use dynamic_query as selection;
-pub use electrostatics as dielectric;
-use encoder_dcd as dcd_write;
-use encoder_dlpoly as dlpoly_write;
-use encoder_trr as trr_write;
-use encoder_trz as trz_write;
-pub use execution as analysis;
-pub use format_aims as aims;
-pub use format_amber as amber;
-pub use format_amber_netcdf as amber_netcdf;
-use format_amber_restart as amber_restart;
-pub use format_charmm as charmm;
-pub use format_dcd as dcd;
-pub use format_dlpoly as dlpoly;
-pub use format_dms as dms;
-pub use format_gamess as gamess;
-pub use format_gro as gro;
-pub use format_gromacs_itp as gromacs_itp;
-pub use format_gsd as gsd;
-pub use format_h5md as h5md;
-pub use format_hoomd_xml as hoomd_xml;
-pub use format_lammps as lammps;
-pub use format_lammps_data as lammps_data;
-pub use format_namd as namd;
-pub use format_psf as psf;
-pub use format_tng as tng;
-pub use format_tpr as tpr;
-pub use format_trc as trc;
-pub use format_trr as trr;
-pub use format_trz as trz;
-pub use format_txyz as txyz;
-pub use format_xtc as xtc;
-pub use format_xvg as xvg;
-pub use format_xyz as xyz;
-pub use frame_ops as transform;
-pub use frame_store as trajectory;
-pub use geometry_ensemble as ensemble;
-pub use io_dispatch as dispatch;
-pub use manifold as diffusion;
-use periodic_box as cell;
-pub use periodic_ops as periodic_transform;
-pub use protocol_imd as imd;
-pub use similarity_ensemble as ensemble_similarity;
-pub use similarity_path as path_similarity;
-pub use solvent_dynamics as water_dynamics;
-pub use spatial_frames as neighbors;
-pub use statistics_ensemble as ensemble_statistics;
-pub use topology_amber as amber_topology;
-pub use topology_minimal as minimal;
-pub use trajectory_stream as reader;
 
 pub use aims::{AimsAtom, AimsError, AimsGeometry, parse_aims_geometry, write_aims_geometry};
 pub use amber::{
@@ -218,6 +119,7 @@ pub use amber_topology::{
     AmberTopologyDihedral, AmberTopologyError, AmberTopologyResidue, parse_amber_topology,
 };
 pub use analysis::{FrameAnalysis, run_analysis};
+pub use batch::{TrajectoryBatch, TrajectoryBatchSource};
 pub use charmm::{
     CharmmAtom, CharmmCard, CharmmCardFormat, CharmmError, parse_charmm_record, write_charmm_card,
 };
@@ -319,7 +221,6 @@ pub use selection::{UpdatingSelection, UpdatingSelectionError};
 pub use tng::{TngCompression, TngError, TngTrajectory, TngWriteOptions, parse_tng, write_tng};
 pub use tpr::{TprAtom, TprBond, TprError, TprHeader, TprResidue, TprTopology, parse_tpr};
 pub use trajectory::{Frame, FrameRef, Trajectory, TrajectoryBuildError};
-pub use trajectory_batch::{TrajectoryBatch, TrajectoryBatchSource};
 pub use transform::{Center, Fit, FrameTransform, PipelineReader, RigidTransform};
 pub use trc::{GromosBoundary, GromosError, GromosTrajectory, parse_gromos11_trc};
 pub use trr::{TrrError, TrrPrecision, TrrTrajectory, parse_trr};
