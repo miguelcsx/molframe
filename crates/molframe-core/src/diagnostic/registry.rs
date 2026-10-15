@@ -297,7 +297,7 @@ registry! {
         "check the path, permissions and that the file is complete and in the expected format";
     E7102 = Error 7102, Invalidating,
         "no reference table is available for the computation",
-        "pass a table file, select a cache entry by name, or store one with `molframe data fetch <entry> --manifest <file>`; the library compiles in no table and never fetches during a computation";
+        "pass a table file, select a cache entry by name, or store one with `molframe data fetch <entry> --manifest <file>`; the library never fetches during a computation and compiles in only the bonding reach, under the `embedded-tables` feature";
     E7103 = Error 7103, Invalidating,
         "the reference table asked for conflicts with the one the policy names",
         "drop the table argument so the policy's table applies, or set the policy field to the table you pass";
@@ -363,7 +363,7 @@ registry! {
         "the component is resolved from a dictionary instead; fix the chem_comp_atom and chem_comp_bond rows in the file, or supply a full dictionary";
     W3207 = Warning 3207, Loose,
         "bonds were not perceived because the profile names no bond-reach table",
-        "add a `bond-reach: <name>` line to the profile with a `<name>.reach` table in the cache, or perceive explicitly with a table file; the library compiles in no reach table";
+        "add a `bond-reach: <name>` line to the profile with a `<name>.reach` table in the cache, register one in memory with `TableStore::insert_table`, build with the `embedded-tables` feature, or perceive explicitly with a table file";
     W3301 = Warning 3301, Info,
         "atoms expected by the component definition are absent from the model",
         "no action needed; the shortfall is reported as coverage rather than hidden";

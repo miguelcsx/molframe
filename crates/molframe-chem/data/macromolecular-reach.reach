@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MIT
+format: 1
+name: macromolecular-reach
+version: 1
+source: per-element bonding reach used for inferred bonds in macromolecular structures; a pair is bonded within (reach_a + reach_b) / 1.95
+licence: MIT
+
+# element reach-in-angstrom [metal]; a metal is coordinated, not covalently bonded
+H 1.42
+Li 2.80 metal
+C 1.75
+N 1.60
+O 1.52
+F 1.80
+Na 3.30 metal
+Mg 3.00 metal
+Al 2.80 metal
+P 2.00
+S 1.90
+Cl 1.80
+K 3.90 metal
+Ca 3.40 metal
+V 2.90 metal
+Cr 2.90 metal
+Mn 2.90 metal
+Fe 2.90 metal
+Co 2.90 metal
+Ni 2.90 metal
+Cu 2.90 metal
+Zn 2.85 metal
+Br 1.80
+Mo 3.10 metal
+Ag 3.10 metal
+Cd 3.10 metal
+I 1.80
+W 3.10 metal
+Au 2.90 metal
+Hg 3.00 metal

@@ -1,7 +1,9 @@
 # Data
 
-Small permissive tables that molframe reads at run time. None is compiled
-into a binary; each is a file in the shared text format (a `# SPDX` header,
+Small permissive tables that molframe reads at run time. Only one is ever
+compiled into a binary: `macromolecular-reach.reach`, copied to
+`crates/molframe-chem/data/` and compiled in by the opt-in `embedded-tables`
+feature (a test keeps the copies identical). Each is a file in the shared text format (a `# SPDX` header,
 `format: 1`, `name`, `version`, `source`, `licence`, then rows) or the binary
 form of it (`MFR2`/`MFT2` magic, a header, a payload).
 
@@ -40,7 +42,10 @@ as the full bond and angle geometry, come from a manifest:
 
 A table is selected by name from the profile (`kind: name`, kinds `vdw-radii`,
 `covalent-radii`, `ionic-radii`, `metals`, `bond-reach`) or by passing a file
-path; there is no built-in default, and a missing table is an `E7102` error.
+path, or registered in memory with `TableStore::insert_profile` and
+`insert_table`. There is no built-in default except the bonding reach under
+`embedded-tables`, which a registration or a profile on disk overrides; a
+missing table is an `E7102` error.
 `crates/molframe-bench/data/profile.txt` is the profile the tests and benches
 use: it names the tables in this directory, and `.cargo/config.toml` points
 `MOLFRAME_DATA_DIR` here and `MOLFRAME_PROFILE` at it.

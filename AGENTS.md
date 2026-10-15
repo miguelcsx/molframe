@@ -89,12 +89,14 @@ applied table identities; no computation touches the network
 (`molframe data fetch` and `molframe.data.fetch` are the only downloads). Tests
 use synthetic fixtures or the committed bench profile.
 
-Two artifacts are committed definitional data rather than code, and stay:
+Three artifacts are committed definitional data rather than code, and stay:
 `crates/molframe-chem/src/element_data.rs` (the 118-element table, consumed by
-`use crate::element_data::ELEMENTS`) and `crates/molframe-xtal/data/space-groups.bin`
-(the 530-Hall-setting catalogue, loaded by `include_bytes!`). Their provenance is
-recorded in the `data/README.md` beside each; there is no script to regenerate
-them from.
+`use crate::element_data::ELEMENTS`), `crates/molframe-xtal/data/space-groups.bin`
+(the 530-Hall-setting catalogue, loaded by `include_bytes!`), and
+`crates/molframe-chem/data/macromolecular-reach.reach` (a byte-identical copy of
+the root `data/` table, compiled in by the opt-in `embedded-tables` feature; a
+test keeps the two equal). Their provenance is recorded in the `data/README.md`
+beside each; there is no script to regenerate them from.
 
 ---
 

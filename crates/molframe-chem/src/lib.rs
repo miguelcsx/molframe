@@ -3,8 +3,9 @@
 //! Reference tables are selected through a [`TableStore`], which consults three
 //! layers in turn: tables and a profile registered in memory
 //! ([`TableStore::insert_profile`], [`TableStore::insert_table`]), then the
-//! profile and cache directory on disk, then a layer of defaults compiled into
-//! the library, which is empty.
+//! profile and cache directory on disk, then the tables the `embedded-tables`
+//! feature compiles in (the bonding reach alone). Without that feature nothing
+//! is compiled in.
 
 #![forbid(unsafe_code)]
 
