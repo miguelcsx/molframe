@@ -8,7 +8,6 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-#[path = "trr_reader_seek.rs"]
 mod seek;
 
 const BUFFER: usize = 8192;
@@ -366,9 +365,9 @@ fn memory(required: usize, limit: usize) -> TrajectoryError {
 }
 
 #[cfg(test)]
-#[path = "trr_reader_tests.rs"]
+#[path = "reader_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "trr_reader_seek_tests.rs"]
+#[path = "reader/seek_tests.rs"]
 mod seek_tests;

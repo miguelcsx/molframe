@@ -6,7 +6,6 @@ use crate::numeric::f32_from_f64;
 use molframe_core::ExecutionContext;
 use molframe_core::parallel::{BlockPlan, map_blocks_in};
 
-#[path = "trr_reader.rs"]
 mod reader;
 pub use reader::TrrReader;
 
