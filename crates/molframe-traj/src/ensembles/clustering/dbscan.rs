@@ -83,3 +83,109 @@ pub fn dbscan_clustering(
         medoids,
     })
 }
+
+/// Collects every observation within `epsilon` of `point` into reusable storage.
+fn collect_neighbourhood(
+    distances: &EnsembleDistanceMatrix,
+    point: usize,
+    epsilon: f64,
+    output: &mut Vec<usize>,
+) -> Result<(), EnsembleGeometryError> {
+    output.clear();
+
+    let row = matrix_row(distances, point)?;
+
+    for (other, &distance) in row.iter().enumerate() {
+        if distance <= epsilon {
+            output.push(other);
+        }
+    }
+
+    Ok(())
+}
+
+/// State required to expand one DBSCAN cluster.
+struct ClusterExpansion<'a> {
+    distances: &'a EnsembleDistanceMatrix,
+    epsilon: f64,
+    minimum_points: usize,
+    label: usize,
+    visited: &'a mut [bool],
+    labels: &'a mut [Option<usize>],
+    queued_epoch: &'a mut [usize],
+}
+
+impl ClusterExpansion<'_> {
+    /// Expands one core neighbourhood and assigns previously unlabeled points.
+    fn run(
+        &mut self,
+        neighbours: &[usize],
+        queue: &mut Vec<usize>,
+        scratch: &mut Vec<usize>,
+    ) -> Result<(), EnsembleGeometryError> {
+        queue.clear();
+
+        for &point in neighbours {
+            self.enqueue(point, queue)?;
+        }
+
+        let mut head = 0usize;
+
+        while let Some(&point) = queue.get(head) {
+            head += 1;
+
+            let was_visited = self
+                .visited
+                .get(point)
+                .copied()
+                .ok_or(EnsembleGeometryError::InvalidParameter)?;
+
+            if !was_visited {
+                let visited = self
+                    .visited
+                    .get_mut(point)
+                    .ok_or(EnsembleGeometryError::InvalidParameter)?;
+                *visited = true;
+
+                collect_neighbourhood(self.distances, point, self.epsilon, scratch)?;
+
+                if scratch.len() >= self.minimum_points {
+                    for &neighbour in scratch.iter() {
+                        self.enqueue(neighbour, queue)?;
+                    }
+                }
+            }
+
+            let label = self
+                .labels
+                .get_mut(point)
+                .ok_or(EnsembleGeometryError::InvalidParameter)?;
+
+            if label.is_none() {
+                *label = Some(self.label);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Adds a point once to the current cluster's expansion queue.
+    fn enqueue(
+        &mut self,
+        point: usize,
+        queue: &mut Vec<usize>,
+    ) -> Result<(), EnsembleGeometryError> {
+        let epoch = self
+            .queued_epoch
+            .get_mut(point)
+            .ok_or(EnsembleGeometryError::InvalidParameter)?;
+
+        if *epoch == self.label {
+            return Ok(());
+        }
+
+        *epoch = self.label;
+        queue.push(point);
+        Ok(())
+    }
+}

@@ -37,7 +37,9 @@ struct PairDistances {
 
 impl PairDistances {
     /// Copies the source matrix's upper triangle into mutable packed storage.
-    fn from_matrix(distances: &EnsembleDistanceMatrix) -> Result<Self, EnsembleGeometryError> {
+    fn from_matrix(
+        distances: &EnsembleDistanceMatrix,
+    ) -> Result<Self, EnsembleGeometryError> {
         let size = distances.size;
         let pair_count = checked_pair_count(size).ok_or(EnsembleGeometryError::InvalidParameter)?;
 
@@ -84,7 +86,12 @@ impl PairDistances {
     }
 
     /// Replaces the current distance between two distinct cluster identifiers.
-    fn set(&mut self, left: usize, right: usize, value: f64) -> Result<(), EnsembleGeometryError> {
+    fn set(
+        &mut self,
+        left: usize,
+        right: usize,
+        value: f64,
+    ) -> Result<(), EnsembleGeometryError> {
         let index = self
             .index(left, right)
             .ok_or(EnsembleGeometryError::InvalidParameter)?;

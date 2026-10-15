@@ -9,7 +9,7 @@ include!("clustering/types.rs");
 include!("clustering/agglomerative.rs");
 include!("clustering/dbscan.rs");
 include!("clustering/medoid.rs");
-include!("clustering/helpers.rs");
+include!("clustering/matrix.rs");
 
 #[cfg(test)]
 #[path = "clustering_tests.rs"]
