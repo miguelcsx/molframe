@@ -1,66 +1,45 @@
 //! Catalogued operations of the `motif` namespace.
 
-use super::Capability;
+use super::{Capability, Domain};
+use molframe::Cost;
+
+const D: Domain = Domain("motif");
 
 pub(super) const ROWS: &[Capability] = &[
-    Capability {
-        name: "evaluate",
-        domain: "motif",
-        feature: "motif",
-        inputs: "structure,specification,components,version,limits",
-        result: "MotifReport",
-        policy: true,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "count",
-        domain: "motif",
-        feature: "motif",
-        inputs: "structure,specification,components,version",
-        result: "int",
-        policy: true,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Borrow,
-    },
-    Capability {
-        name: "matches",
-        domain: "motif",
-        feature: "motif",
-        inputs: "structure,specification,components,version",
-        result: "MotifMatches",
-        policy: true,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "first",
-        domain: "motif",
-        feature: "motif",
-        inputs: "structure,specification,components,version",
-        result: "MotifMatches",
-        policy: true,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "iter_matches",
-        domain: "motif",
-        feature: "motif",
-        inputs: "structure,specification,components,version",
-        result: "MatchIterator",
-        policy: true,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
+    D.row(
+        "evaluate",
+        "structure,specification,components,version,limits",
+        "MotifReport",
+        "cpu,memory",
+    )
+    .policy(),
+    D.row(
+        "count",
+        "structure,specification,components,version",
+        "int",
+        "cpu,memory",
+    )
+    .cost(Cost::Borrow)
+    .policy(),
+    D.row(
+        "matches",
+        "structure,specification,components,version",
+        "MotifMatches",
+        "cpu,memory",
+    )
+    .policy(),
+    D.row(
+        "first",
+        "structure,specification,components,version",
+        "MotifMatches",
+        "cpu,memory",
+    )
+    .policy(),
+    D.row(
+        "iter_matches",
+        "structure,specification,components,version",
+        "MatchIterator",
+        "cpu,memory",
+    )
+    .policy(),
 ];

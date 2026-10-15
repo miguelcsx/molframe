@@ -1,54 +1,12 @@
 //! Catalogued operations of the `interop` namespace.
 
-use super::Capability;
+use super::{Capability, Domain};
+
+const D: Domain = Domain("interop");
 
 pub(super) const ROWS: &[Capability] = &[
-    Capability {
-        name: "coordinates",
-        domain: "interop",
-        feature: "interop",
-        inputs: "structure",
-        result: "CoordinateTensor",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "graph",
-        domain: "interop",
-        feature: "interop",
-        inputs: "structure,nodes,edges,direction,cutoff,neighbors,node_features,edge_features,missing,backend,periodic",
-        result: "Graph",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,spatial,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "write_atoms_ipc",
-        domain: "interop",
-        feature: "interop",
-        inputs: "structure,path,metadata",
-        result: "None",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,io",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "write_atoms_parquet",
-        domain: "interop",
-        feature: "interop",
-        inputs: "structure,path,metadata",
-        result: "None",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,io",
-        cost: molframe::Cost::Materialize,
-    },
+    D.row("coordinates", "structure", "CoordinateTensor", "cpu"),
+    D.row("graph", "structure,nodes,edges,direction,cutoff,neighbors,node_features,edge_features,missing,backend,periodic", "Graph", "cpu,spatial,memory"),
+    D.row("write_atoms_ipc", "structure,path,metadata", "None", "cpu,io"),
+    D.row("write_atoms_parquet", "structure,path,metadata", "None", "cpu,io"),
 ];

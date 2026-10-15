@@ -1,126 +1,32 @@
 //! Catalogued operations of the `formats` namespace.
 
-use super::Capability;
+use super::{Capability, Domain};
+use molframe::Cost;
+
+const D: Domain = Domain("formats");
 
 pub(super) const ROWS: &[Capability] = &[
-    Capability {
-        name: "to_mmcif",
-        domain: "formats",
-        feature: "formats",
-        inputs: "structure",
-        result: "text",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "to_pdb",
-        domain: "formats",
-        feature: "formats",
-        inputs: "structure",
-        result: "text",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "to_bcif",
-        domain: "formats",
-        feature: "formats",
-        inputs: "structure",
-        result: "bytes",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "write",
-        domain: "formats",
-        feature: "formats",
-        inputs: "structure, path",
-        result: "file",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "preserve_mmcif",
-        domain: "formats",
-        feature: "formats",
-        inputs: "path, path",
-        result: "file",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Copy,
-    },
-    Capability {
-        name: "pae",
-        domain: "modelcif",
-        feature: "formats",
-        inputs: "structure",
-        result: "PaeMatrix",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu",
-        cost: molframe::Cost::Borrow,
-    },
-    Capability {
-        name: "plddt_band_colors",
-        domain: "modelcif",
-        feature: "formats",
-        inputs: "none",
-        result: "uint8[4,3]",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "plddt_band_names",
-        domain: "modelcif",
-        feature: "formats",
-        inputs: "none",
-        result: "str[]",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "plddt_bands",
-        domain: "modelcif",
-        feature: "formats",
-        inputs: "structure",
-        result: "uint8[]",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "read_pae_json",
-        domain: "modelcif",
-        feature: "formats",
-        inputs: "path",
-        result: "PaeMatrix",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,memory",
-        cost: molframe::Cost::Decode,
-    },
+    D.row("to_mmcif", "structure", "text", "cpu,memory"),
+    D.row("to_pdb", "structure", "text", "cpu,memory"),
+    D.row("to_bcif", "structure", "bytes", "cpu,memory"),
+    D.row("write", "structure, path", "file", "cpu,memory"),
+    D.row("preserve_mmcif", "path, path", "file", "cpu,memory")
+        .cost(Cost::Copy),
+    Domain("modelcif")
+        .row("pae", "structure", "PaeMatrix", "cpu")
+        .cost(Cost::Borrow)
+        .feature("formats"),
+    Domain("modelcif")
+        .row("plddt_band_colors", "none", "uint8[4,3]", "cpu")
+        .feature("formats"),
+    Domain("modelcif")
+        .row("plddt_band_names", "none", "str[]", "cpu")
+        .feature("formats"),
+    Domain("modelcif")
+        .row("plddt_bands", "structure", "uint8[]", "cpu")
+        .feature("formats"),
+    Domain("modelcif")
+        .row("read_pae_json", "path", "PaeMatrix", "cpu,memory")
+        .cost(Cost::Decode)
+        .feature("formats"),
 ];

@@ -1,54 +1,27 @@
 //! Catalogued operations of the `spatial` namespace.
 
-use super::Capability;
+use super::{Capability, Domain};
+
+const D: Domain = Domain("spatial");
 
 pub(super) const ROWS: &[Capability] = &[
-    Capability {
-        name: "cross_pairs",
-        domain: "spatial",
-        feature: "spatial",
-        inputs: "coordinates,coordinates",
-        result: "arrays",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,spatial,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "knn",
-        domain: "spatial",
-        feature: "spatial",
-        inputs: "coordinates",
-        result: "arrays",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,spatial,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "neighbor_pairs",
-        domain: "spatial",
-        feature: "spatial",
-        inputs: "coordinates",
-        result: "arrays",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,spatial,memory",
-        cost: molframe::Cost::Materialize,
-    },
-    Capability {
-        name: "neighbor_pairs_chunks",
-        domain: "spatial",
-        feature: "spatial",
-        inputs: "coordinates",
-        result: "arrays",
-        policy: false,
-        eager: true,
-        workflow: false,
-        execution_needs: "cpu,spatial,memory",
-        cost: molframe::Cost::Materialize,
-    },
+    D.row(
+        "cross_pairs",
+        "coordinates,coordinates",
+        "arrays",
+        "cpu,spatial,memory",
+    ),
+    D.row("knn", "coordinates", "arrays", "cpu,spatial,memory"),
+    D.row(
+        "neighbor_pairs",
+        "coordinates",
+        "arrays",
+        "cpu,spatial,memory",
+    ),
+    D.row(
+        "neighbor_pairs_chunks",
+        "coordinates",
+        "arrays",
+        "cpu,spatial,memory",
+    ),
 ];
