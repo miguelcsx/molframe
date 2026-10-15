@@ -1,20 +1,10 @@
 use super::table::TABLE_BATCH_ROWS;
 use super::*;
+use crate::test_support::two_atoms as structure;
 use arrow::error::Result;
 use arrow::record_batch::RecordBatch;
 use molframe_core::Structure;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::optional::OptionalSymbol;
-
-const SOURCE: &str = "data_t\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\nATOM 1 C CA ALA A 1 1 2 3\nATOM 2 N N ALA A 1 4 5 6\n";
-
-fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
-}
 
 #[test]
 fn every_normalised_table_exports_a_c_stream() {

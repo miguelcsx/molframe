@@ -1,5 +1,4 @@
 use super::*;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_spatial::SpatialBackend;
 
 fn context() -> molframe_core::ExecutionContext {
@@ -20,11 +19,7 @@ _struct_conn.ptnr2_label_comp_id\n_struct_conn.ptnr2_label_atom_id\n\
 _struct_conn.pdbx_value_order\n1 covale A 1 GLY CA A 1 GLY N SING\n";
 
 fn structure() -> molframe_core::Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    crate::test_support::read_cif(SOURCE)
 }
 
 fn options(edges: EdgeKind) -> GraphOptions {

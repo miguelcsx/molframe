@@ -1,21 +1,10 @@
 use crate::columnar::ipc::{write_atom_ipc, write_atom_ipc_with_metadata};
 use crate::columnar::parquet::write_atom_parquet;
+use crate::test_support::two_atoms as structure;
 use arrow::ipc::reader::FileReader;
-use molframe_core::Structure;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use std::collections::BTreeMap;
 use std::fs::File;
-
-const SOURCE: &str = "data_t\nloop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n_atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n_atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\nATOM 1 C CA ALA A 1 1 2 3\nATOM 2 N N ALA A 1 4 5 6\n";
-
-fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
-}
 
 #[test]
 fn arrow_ipc_round_trip_preserves_atom_rows() {

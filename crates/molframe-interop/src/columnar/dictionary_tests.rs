@@ -3,7 +3,6 @@ use crate::columnar::AtomTable;
 use arrow::array::{Array, AsArray};
 use arrow::datatypes::Int32Type;
 use arrow::record_batch::RecordBatch;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use std::fmt::Write as _;
 
 const ATOMS: usize = 10_000;
@@ -39,11 +38,7 @@ fn structure() -> Structure {
             atom % 100
         );
     }
-    let input = InputBuffer::from_bytes(source.into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    crate::test_support::read_cif(&source)
 }
 
 fn batches(structure: &Structure) -> Vec<RecordBatch> {

@@ -12,6 +12,8 @@ mod diagnostics;
 mod graph;
 mod numeric;
 mod tensor;
+#[cfg(test)]
+mod test_support;
 
 pub use columnar::{
     ArrowStream, AtomTable, BondTable, ChainTable, Column, ColumnTable, ColumnTableError,
