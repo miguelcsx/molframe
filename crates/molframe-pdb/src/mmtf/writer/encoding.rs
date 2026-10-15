@@ -1,8 +1,15 @@
-// Field encoders and presence checks for the MMTF writer.
-//
-// Complexity: O(n) time and space for n values per column; O(1) for scalar helpers.
+//! Field encoders and presence checks for the MMTF writer.
+//!
+//! Complexity: O(n) time and space for n values per column; O(1) for scalar checks.
 
-fn encoded_order(order: BondOrder) -> (i32, i32) {
+use crate::mmtf::codec::{encode_chars, encode_f32, encode_i32};
+use crate::mmtf::{MMTF_METADATA_EXTENSION, MmtfMetadata};
+use molframe_core::BondOrder;
+use molframe_core::diagnostic::{Code, Diagnostic};
+use molframe_core::structure::Structure;
+use num_traits::ToPrimitive;
+
+pub(super) fn encoded_order(order: BondOrder) -> (i32, i32) {
     match order {
         BondOrder::Single | BondOrder::Polymeric => (1, 0),
         BondOrder::Double => (2, 0),
@@ -13,13 +20,13 @@ fn encoded_order(order: BondOrder) -> (i32, i32) {
     }
 }
 
-type OptionalEncodedBonds = (
+pub(super) type OptionalEncodedBonds = (
     Option<serde_bytes::ByteBuf>,
     Option<serde_bytes::ByteBuf>,
     Option<serde_bytes::ByteBuf>,
 );
 
-fn encode_bond_columns(
+pub(super) fn encode_bond_columns(
     atoms: &[i32],
     orders: &[i32],
     resonance: &[i32],
@@ -35,7 +42,10 @@ fn encode_bond_columns(
     ))
 }
 
-fn required_text(value: Option<&str>, field: &'static str) -> Result<String, Diagnostic> {
+pub(super) fn required_text(
+    value: Option<&str>,
+    field: &'static str,
+) -> Result<String, Diagnostic> {
     let value = value.ok_or_else(|| refusal("MMTF required identifier is absent"))?;
     if !value.is_ascii() {
         return Err(refusal("MMTF identifiers must be ASCII").with_context("field", field));
@@ -43,7 +53,7 @@ fn required_text(value: Option<&str>, field: &'static str) -> Result<String, Dia
     Ok(value.to_string())
 }
 
-fn single_ascii(value: Option<&str>, field: &'static str) -> Result<u8, Diagnostic> {
+pub(super) fn single_ascii(value: Option<&str>, field: &'static str) -> Result<u8, Diagnostic> {
     let Some(value) = value else { return Ok(0) };
     let [byte] = value.as_bytes() else {
         return Err(refusal("MMTF character field must contain one ASCII byte")
@@ -55,34 +65,34 @@ fn single_ascii(value: Option<&str>, field: &'static str) -> Result<u8, Diagnost
     Ok(*byte)
 }
 
-fn i32_of(value: usize, field: &'static str) -> Result<i32, Diagnostic> {
+pub(super) fn i32_of(value: usize, field: &'static str) -> Result<i32, Diagnostic> {
     i32::try_from(value)
         .map_err(|_| refusal("MMTF count exceeds signed 32-bit range").with_context("field", field))
 }
 
-fn source_metadata(structure: &Structure) -> Result<&MmtfMetadata, Diagnostic> {
+pub(super) fn source_metadata(structure: &Structure) -> Result<&MmtfMetadata, Diagnostic> {
     structure
         .extensions()
         .get::<MmtfMetadata>(MMTF_METADATA_EXTENSION)
         .ok_or_else(|| refusal("MMTF chemistry metadata is absent"))
 }
 
-fn encoded_cell(structure: &Structure) -> Result<Option<Vec<f32>>, Diagnostic> {
+pub(super) fn encoded_cell(structure: &Structure) -> Result<Option<Vec<f32>>, Diagnostic> {
     structure.data().cell.map_or(Ok(None), |cell| {
         cell.lengths
             .into_iter()
             .chain(cell.angles)
             .map(|value| {
-                value.to_f32().ok_or_else(|| {
-                    refusal("unit-cell value exceeds the MMTF floating-point range")
-                })
+                value
+                    .to_f32()
+                    .ok_or_else(|| refusal("unit-cell value exceeds the MMTF floating-point range"))
             })
             .collect::<Result<Vec<_>, _>>()
             .map(Some)
     })
 }
 
-fn experimental_methods(structure: &Structure) -> Option<Vec<String>> {
+pub(super) fn experimental_methods(structure: &Structure) -> Option<Vec<String>> {
     structure
         .data()
         .entry
@@ -91,7 +101,7 @@ fn experimental_methods(structure: &Structure) -> Option<Vec<String>> {
         .map(|method| vec![method.to_string()])
 }
 
-fn required_presence<'a, T>(
+pub(super) fn required_presence<'a, T>(
     values: Option<&'a [T]>,
     expected: bool,
     field: &'static str,
@@ -103,7 +113,7 @@ fn required_presence<'a, T>(
     }
 }
 
-fn encode_optional_f32(
+pub(super) fn encode_optional_f32(
     values: Option<&[f32]>,
     expected: bool,
     field: &'static str,
@@ -113,7 +123,7 @@ fn encode_optional_f32(
         .transpose()
 }
 
-fn encode_optional_i32(
+pub(super) fn encode_optional_i32(
     values: Option<&[i32]>,
     expected: bool,
     field: &'static str,
@@ -123,7 +133,7 @@ fn encode_optional_i32(
         .transpose()
 }
 
-fn chars_with_presence(
+pub(super) fn chars_with_presence(
     values: &[u8],
     expected: bool,
     field: &'static str,
@@ -137,7 +147,7 @@ fn chars_with_presence(
     }
 }
 
-fn validate_elements(
+pub(super) fn validate_elements(
     atoms: &[molframe_core::structure::AtomRef<'_>],
     elements: &[Box<str>],
 ) -> Result<Vec<String>, Diagnostic> {
@@ -154,6 +164,6 @@ fn validate_elements(
     Ok(elements.iter().map(ToString::to_string).collect())
 }
 
-fn refusal(message: &'static str) -> Diagnostic {
+pub(super) fn refusal(message: &'static str) -> Diagnostic {
     Diagnostic::new(Code::E4105).with_message(message)
 }

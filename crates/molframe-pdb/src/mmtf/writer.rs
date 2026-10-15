@@ -3,18 +3,23 @@
 //! Complexity: O(atoms + bonds + residues) time and space; the group dictionary is
 //! built with hashed lookups.
 
-use super::codec::{encode_chars, encode_f32, encode_i32, encode_strings};
+use super::codec::{encode_f32, encode_i32, encode_strings};
 use super::schema::{Entity, File, Group};
-use super::{MMTF_METADATA_EXTENSION, MmtfMetadata, MmtfOptionalField};
-use molframe_core::BondOrder;
+use super::{MmtfMetadata, MmtfOptionalField};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::index::{EntityIndex, ModelIndex};
 use molframe_core::structure::Structure;
-use num_traits::ToPrimitive;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::io::Write;
+
+mod encoding;
+use self::encoding::{
+    chars_with_presence, encode_bond_columns, encode_optional_f32, encode_optional_i32,
+    encoded_cell, encoded_order, experimental_methods, i32_of, refusal, required_presence,
+    required_text, single_ascii, source_metadata, validate_elements,
+};
 
 const VERSION: &str = "1.0.0";
 const PRODUCER: &str = "molframe 0.1.2";
@@ -487,5 +492,3 @@ fn entities(
         })
         .collect()
 }
-
-include!("writer/helpers.rs");
