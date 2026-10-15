@@ -56,3 +56,13 @@ stem is the recorded version). Fetch the full wwPDB dictionary from
 https://files.wwpdb.org/pub/pdb/data/monomers/components.cif.gz into the cache
 with `molframe data fetch` and a manifest, or point `--ccd` at a file. A
 component none of these layers defines is reported (W3201), never guessed.
+
+## Embedded bonding reach
+
+`macromolecular-reach.reach` is a byte-identical copy of the repository's
+`data/macromolecular-reach.reach` (MIT), kept beside the crate so the published
+package carries it. The opt-in `embedded-tables` feature compiles it in with
+`include_bytes!` as the table store's last layer; without the feature it is
+never read. A test in `src/tables/table_bundled_tests.rs` keeps the two copies
+equal. SHA-256:
+`81ed2c2c55bd1b6d98280ef66a376cdb23f4068f5c86260dea24ee51d504190e`.
