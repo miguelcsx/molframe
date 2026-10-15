@@ -25,10 +25,7 @@ fn structure_text_selection_connects_query_and_spatial_execution() {
         ..AnalysisPolicy::default()
     };
     let selected = structure().select_text("within 1.1 of name C1", &policy);
-    let selected = match selected {
-        Ok(selected) => selected,
-        Err(findings) => panic!("select failed: {findings:?}"),
-    };
+    let selected = selected.expect("select failed");
     assert_eq!(selected.selection.iter().collect::<Vec<_>>(), vec![0, 1]);
 }
 

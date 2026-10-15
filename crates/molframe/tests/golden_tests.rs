@@ -77,10 +77,7 @@ fn gw_001_reports_the_complete_normalised_hierarchy() {
 #[test]
 fn gw_002_round_trips_mmcif_through_binary_cif_semantically() {
     let source = read_fixture(NAMESPACED_CIF, "golden.cif");
-    let bytes = match write_bcif(&source) {
-        Ok(bytes) => bytes,
-        Err(findings) => panic!("BinaryCIF write failed: {findings:?}"),
-    };
+    let bytes = write_bcif(&source).expect("BinaryCIF write failed");
     let round_tripped = match read_bytes(bytes, Some("golden.bcif"), &ReadOptions::new()) {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("BinaryCIF read failed: {findings:?}"),
@@ -201,21 +198,16 @@ fn gw_009_keeps_both_chain_namespaces_addressable() {
 fn gw_011_superposes_and_applies_the_reported_rigid_transform() {
     let fixed = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
     let mobile = [[2.0, 3.0, 4.0], [3.0, 3.0, 4.0], [2.0, 4.0, 4.0]];
-    let fit = match superpose(&mobile, &fixed) {
-        Ok(fit) => fit,
-        Err(error) => panic!("fit failed: {error:?}"),
-    };
+    let fit = superpose(&mobile, &fixed).expect("fit failed");
     assert!(fit.rmsd < 1.0e-6);
 
     let structure = read_fixture(NAMESPACED_CIF, "golden.cif");
-    let moved = match transform(
+    let moved = transform(
         &structure,
         &AtomSelection::All(structure.atom_count()),
         &Rigid::translation([1.0, 2.0, 3.0]),
-    ) {
-        Ok(structure) => structure,
-        Err(findings) => panic!("transform failed: {findings:?}"),
-    };
+    )
+    .expect("transform failed");
     assert_eq!(
         moved.engine().generation().get(),
         structure

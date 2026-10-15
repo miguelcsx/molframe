@@ -3,10 +3,10 @@ use crate::validation_inputs::ValidationInputError;
 use molframe_validate::RotamerError;
 
 fn write(text: &str) -> tempfile::NamedTempFile {
-    let file = match tempfile::Builder::new().suffix(".toml").tempfile() {
-        Ok(file) => file,
-        Err(error) => panic!("temporary file failed: {error}"),
-    };
+    let file = tempfile::Builder::new()
+        .suffix(".toml")
+        .tempfile()
+        .expect("temporary file failed");
     if let Err(error) = std::fs::write(file.path(), text) {
         panic!("write failed: {error}")
     }
@@ -28,10 +28,7 @@ distribution = \"ser-chi1\"
 #[test]
 fn a_profile_round_trips_into_the_kernels_type() {
     let file = write(PROFILE);
-    let read = match read_rotamer_profile(file.path()) {
-        Ok(profile) => profile,
-        Err(error) => panic!("profile read failed: {error}"),
-    };
+    let read = read_rotamer_profile(file.path()).expect("profile read failed");
     let expected = RotamerProfile::new(
         "chi-wells",
         "2026-10",

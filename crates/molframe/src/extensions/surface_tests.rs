@@ -28,10 +28,8 @@ END
 ";
 
 fn bondi() -> SasaOptions {
-    match SasaOptions::resolve(&TableRequest::profile(), molframe_bench::table_store()) {
-        Ok(options) => options,
-        Err(error) => panic!("bench profile resolves: {error}"),
-    }
+    SasaOptions::resolve(&TableRequest::profile(), molframe_bench::table_store())
+        .expect("bench profile resolves")
 }
 
 fn read(text: &str) -> crate::Structure {

@@ -3,10 +3,10 @@ use crate::validation_inputs::ValidationInputError;
 use molframe_validate::ReferenceError;
 
 fn write(suffix: &str, text: &str) -> tempfile::NamedTempFile {
-    let file = match tempfile::Builder::new().suffix(suffix).tempfile() {
-        Ok(file) => file,
-        Err(error) => panic!("temporary file failed: {error}"),
-    };
+    let file = tempfile::Builder::new()
+        .suffix(suffix)
+        .tempfile()
+        .expect("temporary file failed");
     if let Err(error) = std::fs::write(file.path(), text) {
         panic!("write failed: {error}")
     }
@@ -33,10 +33,7 @@ weights = [1.0, 2.0, 3.0, 4.0]
 #[test]
 fn a_toml_library_builds_the_same_set_as_the_constructors() {
     let file = write(".toml", LIBRARY);
-    let read = match read_reference_library(file.path()) {
-        Ok(library) => library,
-        Err(error) => panic!("library read failed: {error}"),
-    };
+    let read = read_reference_library(file.path()).expect("library read failed");
     let expected = ReferenceLibrary::new(
         "reference",
         "2026-10",
@@ -63,10 +60,7 @@ fn a_json_library_is_the_same_document() {
         r#"{"library":{"id":"reference","version":"2026-10"},
             "distribution":[{"name":"c-n","edges":[-0.1,0.0,0.1],"weights":[1.0,3.0]}]}"#,
     );
-    let library = match read_reference_library(file.path()) {
-        Ok(library) => library,
-        Err(error) => panic!("library read failed: {error}"),
-    };
+    let library = read_reference_library(file.path()).expect("library read failed");
     assert_eq!(library.id(), "reference");
     assert_eq!(library.version(), "2026-10");
 }

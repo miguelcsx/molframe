@@ -15,10 +15,8 @@ const CRAMBIN: &[u8] = include_bytes!("../../../molframe-bench/data/1crn.pdb");
 const HEMOGLOBIN: &[u8] = include_bytes!("../../../molframe-bench/data/4hhb.pdb");
 
 fn bondi() -> SasaOptions {
-    match SasaOptions::resolve(&TableRequest::profile(), molframe_bench::table_store()) {
-        Ok(options) => options,
-        Err(error) => panic!("bench profile resolves: {error}"),
-    }
+    SasaOptions::resolve(&TableRequest::profile(), molframe_bench::table_store())
+        .expect("bench profile resolves")
 }
 
 fn read(bytes: &[u8]) -> crate::Structure {

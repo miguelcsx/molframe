@@ -19,10 +19,10 @@ fn structure() -> Structure {
 }
 
 fn write(text: &str) -> tempfile::NamedTempFile {
-    let file = match tempfile::Builder::new().suffix(".toml").tempfile() {
-        Ok(file) => file,
-        Err(error) => panic!("temporary file failed: {error}"),
-    };
+    let file = tempfile::Builder::new()
+        .suffix(".toml")
+        .tempfile()
+        .expect("temporary file failed");
     if let Err(error) = std::fs::write(file.path(), text) {
         panic!("write failed: {error}")
     }
@@ -42,11 +42,8 @@ fn planes_resolve_their_selections_in_the_structure() {
     let file = write(
         "[[plane]]\nid = 'a'\nselection = 'chain A'\n[[plane]]\nid = 'b'\nselection = 'chain B'\n",
     );
-    let planes = match read_plane_restraints(file.path(), &structure(), &AnalysisPolicy::default())
-    {
-        Ok(planes) => planes,
-        Err(error) => panic!("planes failed: {error}"),
-    };
+    let planes = read_plane_restraints(file.path(), &structure(), &AnalysisPolicy::default())
+        .expect("planes failed");
     assert_eq!(planes.len(), 2);
     assert_eq!(planes[0].id, "a");
     assert_eq!(planes[0].atoms.len(), 3);
@@ -89,10 +86,8 @@ fn tls_groups_carry_the_declared_model() {
         group("A", "chain A"),
         group("B", "chain B")
     ));
-    let groups = match read_tls_groups(file.path(), &structure(), &AnalysisPolicy::default()) {
-        Ok(groups) => groups,
-        Err(error) => panic!("groups failed: {error}"),
-    };
+    let groups = read_tls_groups(file.path(), &structure(), &AnalysisPolicy::default())
+        .expect("groups failed");
     assert_eq!(groups.len(), 2);
     assert_eq!(groups[0].id, "A");
     assert_eq!(groups[0].atoms.len(), 3);
@@ -145,21 +140,17 @@ END
     let file = write(
         "[[plane]]\nid = 'flat'\nselection = 'chain A'\n[[plane]]\nid = 'bent'\nselection = 'chain B'\n",
     );
-    let restraints =
-        match read_plane_restraints(file.path(), &structure, &AnalysisPolicy::default()) {
-            Ok(restraints) => restraints,
-            Err(error) => panic!("planes failed: {error}"),
-        };
-    let report = match structure.plane_restraint_outliers(
-        &restraints,
-        PlanarityOptions {
-            maximum_deviation: 0.1,
-            plane_fit: molframe_geom::EigenOptions::standard(),
-        },
-    ) {
-        Ok(report) => report,
-        Err(error) => panic!("planarity failed: {error}"),
-    };
+    let restraints = read_plane_restraints(file.path(), &structure, &AnalysisPolicy::default())
+        .expect("planes failed");
+    let report = structure
+        .plane_restraint_outliers(
+            &restraints,
+            PlanarityOptions {
+                maximum_deviation: 0.1,
+                plane_fit: molframe_geom::EigenOptions::standard(),
+            },
+        )
+        .expect("planarity failed");
     assert_eq!(report.assessed, 2);
     assert_eq!(report.flags.len(), 1);
     assert_eq!(report.flags[0].id, "bent");

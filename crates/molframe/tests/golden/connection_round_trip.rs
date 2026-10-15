@@ -67,17 +67,12 @@ fn the_four_deposited_metal_sites_keep_their_own_connection_class() {
     );
     assert_eq!(classes, ["metalc", "metalc", "metalc", "metalc"]);
 
-    let text = match molframe::write_mmcif_with_options(&original, &options()) {
-        Ok(text) => text,
-        Err(findings) => panic!("4HHB must write: {findings:?}"),
-    };
+    let text = molframe::write_mmcif_with_options(&original, &options()).expect("4HHB must write");
     let copy = read(text.into_bytes(), "copy.cif");
     assert_eq!(deposited_kinds(&copy), classes);
 
-    let binary = match molframe::write_bcif_with_options(&original, &options()) {
-        Ok(binary) => binary,
-        Err(findings) => panic!("4HHB must write BinaryCIF: {findings:?}"),
-    };
+    let binary = molframe::write_bcif_with_options(&original, &options())
+        .expect("4HHB must write BinaryCIF");
     let copy = read(binary, "copy.bcif");
     assert_eq!(deposited_kinds(&copy), classes);
 }
@@ -86,10 +81,7 @@ fn the_four_deposited_metal_sites_keep_their_own_connection_class() {
 fn bonds_to_a_ligand_survive_a_written_mmcif() {
     let original = read(FOUR_HHB.to_vec(), "4hhb.bcif");
     assert!(!bonds(&original).is_empty(), "4HHB carries explicit bonds");
-    let text = match molframe::write_mmcif_with_options(&original, &options()) {
-        Ok(text) => text,
-        Err(findings) => panic!("4HHB must write: {findings:?}"),
-    };
+    let text = molframe::write_mmcif_with_options(&original, &options()).expect("4HHB must write");
     let copy = read(text.into_bytes(), "copy.cif");
     assert_eq!(bonds(&copy), bonds(&original));
     assert_eq!(copy.coordinates().len(), original.coordinates().len());
@@ -98,10 +90,7 @@ fn bonds_to_a_ligand_survive_a_written_mmcif() {
 #[test]
 fn bonds_to_a_ligand_survive_a_written_binary_cif() {
     let original = read(FOUR_HHB.to_vec(), "4hhb.bcif");
-    let binary = match molframe::write_bcif_with_options(&original, &options()) {
-        Ok(binary) => binary,
-        Err(findings) => panic!("4HHB must write: {findings:?}"),
-    };
+    let binary = molframe::write_bcif_with_options(&original, &options()).expect("4HHB must write");
     let copy = read(binary, "copy.bcif");
     assert_eq!(bonds(&copy), bonds(&original));
     assert_eq!(copy.coordinates().len(), original.coordinates().len());

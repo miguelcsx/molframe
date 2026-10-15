@@ -85,10 +85,8 @@ fn read_fixture(text: &str, name: &str) -> molframe::Structure {
 fn gw_004_preserves_unknown_categories_while_coordinates_are_edited() {
     let input = InputBuffer::from_bytes(UNKNOWN_CATEGORY_CIF.as_bytes().to_vec());
     let (document, structure, findings) =
-        match molframe::formats::cif::read_with_document(&input, &ReadOptions::new()) {
-            Ok(result) => result,
-            Err(findings) => panic!("document read failed: {findings:?}"),
-        };
+        molframe::formats::cif::read_with_document(&input, &ReadOptions::new())
+            .expect("document read failed");
     assert!(findings.is_empty());
     assert!(molframe::formats::cif::write_preserving(&document).contains("_custom.note"));
     let structure: molframe::Structure = structure.into();

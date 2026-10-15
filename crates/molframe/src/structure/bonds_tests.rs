@@ -9,12 +9,9 @@ ATOM 1 C C1 LIG A 1 0 0 0\nATOM 2 O O1 LIG A 1 1.3 0 0\n\
 ATOM 3 C C2 LIG A 1 5 0 0\n";
 
 fn radii() -> std::sync::Arc<molframe_chem::Provided<molframe_chem::CovalentRadii>> {
-    match molframe_chem::TableRequest::profile()
+    molframe_chem::TableRequest::profile()
         .resolve(molframe_bench::table_store(), "--covalent-radii")
-    {
-        Ok(radii) => radii,
-        Err(error) => panic!("bench profile resolves: {error}"),
-    }
+        .expect("bench profile resolves")
 }
 
 #[test]

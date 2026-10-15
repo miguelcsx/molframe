@@ -28,11 +28,8 @@ fn structure_projection_delegates_all_chi_geometry_to_the_path_kernel() {
         Err(findings) => panic!("fixture failed: {findings:?}"),
     };
     let structure = annotated(&structure);
-    let report =
-        match structure_side_chain_torsions(&structure, &provider(), &AnalysisPolicy::default()) {
-            Ok(report) => report,
-            Err(finding) => panic!("torsions failed: {finding}"),
-        };
+    let report = structure_side_chain_torsions(&structure, &provider(), &AnalysisPolicy::default())
+        .expect("torsions failed");
     assert_eq!(report.records.len(), 1);
     assert_eq!(report.records[0].torsions.len(), 4);
     assert!(report.records[0].torsions.iter().all(Option::is_some));

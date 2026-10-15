@@ -43,10 +43,10 @@ fn a_cancelled_context_stops_perception_instead_of_skipping_it() {
     let structure = Structure::from(molframe_bench::structure(molframe_bench::Sample::Medium));
     let token = molframe_core::CancellationToken::new();
     token.cancel();
-    let context = match ExecutionContext::builder().cancellation(token).build() {
-        Ok(context) => context,
-        Err(error) => panic!("context should build: {error}"),
-    };
+    let context = ExecutionContext::builder()
+        .cancellation(token)
+        .build()
+        .expect("context should build");
     match perceive_in(&structure, &context) {
         Ok(_) => panic!("a cancelled perception must not return a structure"),
         Err(findings) => assert_eq!(

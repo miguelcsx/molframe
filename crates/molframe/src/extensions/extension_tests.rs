@@ -88,10 +88,7 @@ fn analysis_methods_agree_with_their_explicit_forms() {
 #[test]
 fn the_visitor_form_emits_what_the_collecting_form_returns() {
     let structure = dipeptide();
-    let collected = match structure.atom_contacts(4.5) {
-        Ok(rows) => rows,
-        Err(error) => panic!("contacts failed: {error}"),
-    };
+    let collected = structure.atom_contacts(4.5).expect("contacts failed");
     let mut streamed = Vec::new();
     if let Err(error) = structure.visit_atom_contacts(4.5, |contact| streamed.push(contact)) {
         panic!("contact stream failed: {error}");

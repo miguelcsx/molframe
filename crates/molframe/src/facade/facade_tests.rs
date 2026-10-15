@@ -124,14 +124,12 @@ fn structured_text_is_dispatched_to_the_reader_its_content_names() {
 fn mmcif_read_attaches_assemblies_from_the_same_document_parse() {
     use crate::crystal::{AssemblyExt, NcsExt, SymmetryExt};
 
-    let (structure, direct_findings) = match read_bytes(
+    let (structure, direct_findings) = read_bytes(
         MMCIF_XTAL.as_bytes().to_vec(),
         Some("entry.cif"),
         &ReadOptions::new(),
-    ) {
-        Ok(result) => result,
-        Err(findings) => panic!("read failed: {findings:?}"),
-    };
+    )
+    .expect("read failed");
 
     let input = InputBuffer::from_bytes(MMCIF_XTAL.as_bytes().to_vec());
     let options = ReadOptions::new();
@@ -220,14 +218,9 @@ fn assert_bcif_roundtrip_matches(
         Ok((document, _)) => document,
         Err(findings) => panic!("fixture parse failed: {findings:?}"),
     };
-    let bytes = match molframe_bcif::write_document(&document) {
-        Ok(bytes) => bytes,
-        Err(finding) => panic!("fixture BCIF write failed: {finding}"),
-    };
-    let (binary, binary_findings) = match read_bytes(bytes, Some("entry.bcif"), options) {
-        Ok(result) => result,
-        Err(findings) => panic!("BCIF read failed: {findings:?}"),
-    };
+    let bytes = molframe_bcif::write_document(&document).expect("fixture BCIF write failed");
+    let (binary, binary_findings) =
+        read_bytes(bytes, Some("entry.bcif"), options).expect("BCIF read failed");
     let difference = crate::structure_difference(
         &binary,
         lossless,
@@ -285,10 +278,7 @@ _chem_comp_atom.pdbx_aromatic_flag\n_chem_comp_atom.pdbx_leaving_atom_flag\nO O 
     }
     let read = read_component_dictionary(&path, DictionaryVersion::new("test"));
     let _removed = std::fs::remove_file(path);
-    let (provider, findings) = match read {
-        Ok(result) => result,
-        Err(findings) => panic!("CCD read failed: {findings:?}"),
-    };
+    let (provider, findings) = read.expect("CCD read failed");
     assert!(findings.is_empty());
     assert_eq!(provider.version().as_str(), "test");
     assert!(
@@ -327,10 +317,7 @@ fn a_generic_write_dispatches_by_name_and_reads_back() {
     }
     let round_tripped = read(&path);
     let _removed = std::fs::remove_file(path);
-    let round_tripped = match round_tripped {
-        Ok(structure) => structure,
-        Err(findings) => panic!("round trip failed: {findings:?}"),
-    };
+    let round_tripped = round_tripped.expect("round trip failed");
     assert_eq!(round_tripped.atom_count(), structure.atom_count());
 }
 
@@ -398,14 +385,12 @@ fn a_rigid_transform_reuses_coordinate_transactions_and_preserves_the_source() {
         Ok((structure, _)) => structure,
         Err(findings) => panic!("read failed: {findings:?}"),
     };
-    let moved = match transform(
+    let moved = transform(
         &structure,
         &AtomSelection::from_sorted(vec![0]),
         &molframe_geom::Rigid::translation([1.0, 2.0, 3.0]),
-    ) {
-        Ok(structure) => structure,
-        Err(findings) => panic!("transform failed: {findings:?}"),
-    };
+    )
+    .expect("transform failed");
 
     assert_eq!(structure.engine().generation().get(), 0);
     assert_eq!(moved.engine().generation().get(), 1);
