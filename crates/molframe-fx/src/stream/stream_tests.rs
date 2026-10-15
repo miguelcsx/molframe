@@ -236,5 +236,5 @@ fn the_limit_message_speaks_of_mappings() {
     assert!(error.contains("limit of 5 mappings"), "{error}");
 }
 
-#[path = "stream_property_tests.rs"]
+#[path = "property_tests.rs"]
 mod property;

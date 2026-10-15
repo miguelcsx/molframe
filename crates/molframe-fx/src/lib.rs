@@ -12,9 +12,6 @@ mod numeric;
 mod profile;
 mod specification;
 mod stream;
-mod stream_cells;
-mod stream_constrain;
-mod stream_grid;
 mod verdict;
 
 pub use alignment::{AlignedMotif, AlignmentKind, align_intrinsic, align_with_transform};

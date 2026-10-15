@@ -168,5 +168,5 @@ fn index_of(sorted: &[(Cell, u32, Point)]) -> Index {
 }
 
 #[cfg(test)]
-#[path = "stream_cells_tests.rs"]
+#[path = "cells_tests.rs"]
 mod tests;

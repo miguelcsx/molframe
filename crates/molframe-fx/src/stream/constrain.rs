@@ -5,9 +5,9 @@
 //! within reach. Constraints between two sites of one component filter that
 //! component's candidates directly.
 
+use super::grid::{Grid, Link, Window, site_points};
 use crate::Comparison;
 use crate::stream::MappingPlan;
-use crate::stream_grid::{Grid, Link, Window, site_points};
 use crate::{AtomSite, Constraint, Motif, NamedConstraint, VerdictProfile, VerdictRule};
 use molframe_core::structure::Structure;
 

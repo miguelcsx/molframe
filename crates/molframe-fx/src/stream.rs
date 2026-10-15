@@ -14,9 +14,13 @@
 //! each window to what the verdict profile accepts, which makes the admitted set
 //! a superset of every mapping the profile passes.
 
+mod cells;
+mod constrain;
+mod grid;
+
+use self::grid::{Link, intersect};
 use crate::mapping::{Candidate, MappingError, component_candidates, referenced_sites};
 use crate::numeric::usize_to_u32;
-use crate::stream_grid::{Link, intersect};
 use crate::{MappedMotif, Motif, VerdictProfile};
 use molframe_chem::ComponentProvider;
 use molframe_core::contract::AnalysisPolicy;
@@ -343,5 +347,5 @@ impl MappingStream {
 }
 
 #[cfg(test)]
-#[path = "stream_tests.rs"]
+#[path = "stream/stream_tests.rs"]
 mod tests;

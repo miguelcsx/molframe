@@ -1,8 +1,8 @@
 //! Cell grid over candidate site positions for pairwise distance pruning.
 
+pub(crate) use super::cells::{Grid, Point};
 use crate::AtomSite;
 use crate::mapping::Candidate;
-pub(crate) use crate::stream_cells::{Grid, Point};
 use molframe_core::index::AtomIndex;
 use molframe_core::structure::Structure;
 
