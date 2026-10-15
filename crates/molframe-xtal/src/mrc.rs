@@ -131,14 +131,7 @@ impl DensityMap {
         let lengths = read_f32_triplet(bytes, 40, endian)?.map(f64::from);
         let angles = read_f32_triplet(bytes, 52, endian)?.map(f64::from);
         let axes = read_i32_triplet(bytes, 64, endian)?;
-        if !is_axis_permutation(axes)
-            || lengths
-                .iter()
-                .any(|value| !value.is_finite() || *value <= 0.0)
-            || angles
-                .iter()
-                .any(|value| !value.is_finite() || !(0.0..180.0).contains(value))
-        {
+        if !valid_geometry(axes, lengths, angles) {
             return Err(MrcError::InvalidHeader);
         }
         let extended_length =
@@ -161,17 +154,7 @@ impl DensityMap {
             dimensions,
             axes,
         )?;
-        let label_count = usize::try_from(read_i32(bytes, 220, endian)?)
-            .map_err(|_| MrcError::InvalidHeader)?
-            .min(10);
-        let labels = (0..label_count)
-            .filter_map(|index| {
-                let start = 224 + index * 80;
-                let label = String::from_utf8_lossy(&bytes[start..start + 80]);
-                let trimmed = label.trim_end_matches(['\0', ' ']);
-                (!trimmed.is_empty()).then(|| Box::<str>::from(trimmed))
-            })
-            .collect();
+        let labels = read_labels(bytes, endian)?;
         Ok(Self {
             dimensions,
             starts,
@@ -429,6 +412,32 @@ fn read_u16(bytes: &[u8], offset: usize, endian: Endian) -> Result<u16, MrcError
         Endian::Big => u16::from_be_bytes(raw),
     })
 }
+/// Reports whether the axis map and unit-cell edges and angles are usable.
+fn valid_geometry(axes: [i32; 3], lengths: [f64; 3], angles: [f64; 3]) -> bool {
+    is_axis_permutation(axes)
+        && lengths
+            .iter()
+            .all(|value| value.is_finite() && *value > 0.0)
+        && angles
+            .iter()
+            .all(|value| value.is_finite() && (0.0..180.0).contains(value))
+}
+
+/// Reads up to ten non-empty 80-byte header labels.
+fn read_labels(bytes: &[u8], endian: Endian) -> Result<Vec<Box<str>>, MrcError> {
+    let label_count = usize::try_from(read_i32(bytes, 220, endian)?)
+        .map_err(|_| MrcError::InvalidHeader)?
+        .min(10);
+    Ok((0..label_count)
+        .filter_map(|index| {
+            let start = 224 + index * 80;
+            let label = String::from_utf8_lossy(&bytes[start..start + 80]);
+            let trimmed = label.trim_end_matches(['\0', ' ']);
+            (!trimmed.is_empty()).then(|| Box::<str>::from(trimmed))
+        })
+        .collect())
+}
+
 fn is_axis_permutation(axes: [i32; 3]) -> bool {
     axes.into_iter().all(|axis| (1..=3).contains(&axis))
         && axes[0] != axes[1]

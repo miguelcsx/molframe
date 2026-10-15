@@ -6,9 +6,9 @@ use molframe_core::structure::UnitCell;
 
 use super::MrcMapDescriptor;
 use crate::mrc::{
-    Endian, HEADER_BYTES, MrcError, detect_endian, half_to_f32, is_axis_permutation, permute_i32,
-    permute_usize, product, read_f32, read_f32_triplet, read_i16, read_i32, read_i32_triplet,
-    read_positive_triplet, read_u16,
+    Endian, HEADER_BYTES, MrcError, detect_endian, half_to_f32, permute_i32, permute_usize,
+    product, read_f32, read_f32_triplet, read_i16, read_i32, read_i32_triplet, read_labels,
+    read_positive_triplet, read_u16, valid_geometry,
 };
 
 pub(super) struct ParsedHeader {
@@ -38,14 +38,7 @@ pub(super) fn parse_header(bytes: &[u8; HEADER_BYTES]) -> Result<ParsedHeader, M
     let lengths = read_f32_triplet(bytes, 40, endian)?.map(f64::from);
     let angles = read_f32_triplet(bytes, 52, endian)?.map(f64::from);
     let axes = read_i32_triplet(bytes, 64, endian)?;
-    if !is_axis_permutation(axes)
-        || lengths
-            .iter()
-            .any(|value| !value.is_finite() || *value <= 0.0)
-        || angles
-            .iter()
-            .any(|value| !value.is_finite() || !(0.0..180.0).contains(value))
-    {
+    if !valid_geometry(axes, lengths, angles) {
         return Err(MrcError::InvalidHeader);
     }
     let extended_header_bytes =
@@ -53,17 +46,7 @@ pub(super) fn parse_header(bytes: &[u8; HEADER_BYTES]) -> Result<ParsedHeader, M
     let data_offset = HEADER_BYTES
         .checked_add(extended_header_bytes)
         .ok_or(MrcError::SizeOverflow)?;
-    let label_count = usize::try_from(read_i32(bytes, 220, endian)?)
-        .map_err(|_| MrcError::InvalidHeader)?
-        .min(10);
-    let labels = (0..label_count)
-        .filter_map(|index| {
-            let start = 224 + index * 80;
-            let label = String::from_utf8_lossy(&bytes[start..start + 80]);
-            let trimmed = label.trim_end_matches(['\0', ' ']);
-            (!trimmed.is_empty()).then(|| Box::<str>::from(trimmed))
-        })
-        .collect();
+    let labels = read_labels(bytes, endian)?;
     Ok(ParsedHeader {
         descriptor: MrcMapDescriptor {
             dimensions: permute_usize(stored_dimensions, axes),
