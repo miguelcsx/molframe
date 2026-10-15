@@ -3,6 +3,7 @@
 //! Bridge finding is linear in bonds; ring extraction walks only the
 //! non-bridge bonds, so acyclic molecules cost one pass.
 
+use crate::aromaticity::{self, Aromaticity};
 use crate::mol::MolRecord;
 use molframe_core::BondOrder;
 
@@ -117,7 +118,25 @@ pub(super) fn implicit_hydrogens(
     Some(out)
 }
 
-pub(super) fn bond_order(order: u8) -> BondOrder {
+/// Perceives the aromatic atoms and bonds of the heavy-atom graph of `record`.
+pub(super) fn perceive_aromaticity(record: &MolRecord, g: &Graph) -> Aromaticity {
+    aromaticity::perceive(
+        &record
+            .molecule
+            .atoms
+            .iter()
+            .filter(|a| a.element.atomic_number() != 1)
+            .map(|a| a.element)
+            .collect::<Vec<_>>(),
+        &g.charge.iter().map(|c| Some(*c)).collect::<Vec<_>>(),
+        &g.bonds
+            .iter()
+            .map(|&(a, b, o)| (a, b, bond_order(o)))
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn bond_order(order: u8) -> BondOrder {
     match order {
         2 => BondOrder::Double,
         3 => BondOrder::Triple,

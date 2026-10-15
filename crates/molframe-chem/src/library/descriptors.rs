@@ -4,8 +4,7 @@
 //! what it rests on, and a quantity that cannot be established is absent
 //! rather than guessed.
 
-use super::graph::{bond_order, bridge_is_ring, bridges, graph, rings};
-use crate::aromaticity;
+use super::graph::{bridge_is_ring, bridges, graph, perceive_aromaticity, rings};
 use crate::mol::MolRecord;
 
 /// Mass of a hydrogen, standard atomic weight.
@@ -81,20 +80,7 @@ pub fn describe(record: &MolRecord) -> LigandDescriptors {
     let n = g.z.len();
     let bridge = bridges(&g);
     let ring_set = rings(&g, &bridge);
-    let arom = aromaticity::perceive(
-        &record
-            .molecule
-            .atoms
-            .iter()
-            .filter(|a| a.element.atomic_number() != 1)
-            .map(|a| a.element)
-            .collect::<Vec<_>>(),
-        &g.charge.iter().map(|c| Some(*c)).collect::<Vec<_>>(),
-        &g.bonds
-            .iter()
-            .map(|&(a, b, o)| (a, b, bond_order(o)))
-            .collect::<Vec<_>>(),
-    );
+    let arom = perceive_aromaticity(record, &g);
     let aromatic_rings = ring_set
         .iter()
         .filter(|r| r.iter().all(|b| arom.bonds[*b]))

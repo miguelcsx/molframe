@@ -3,8 +3,7 @@
 //! Fingerprint construction is linear in atoms times radius; clustering builds
 //! the full neighbour table, so it is quadratic in the number of molecules.
 
-use super::graph::{bond_order, bridges, graph};
-use crate::aromaticity;
+use super::graph::{bridges, graph, perceive_aromaticity};
 use crate::mol::MolRecord;
 
 /// Bits in a [`Fingerprint`].
@@ -44,20 +43,7 @@ pub fn fingerprint(record: &MolRecord) -> Fingerprint {
     let g = graph(record);
     let n = g.z.len();
     let bridge = bridges(&g);
-    let arom = aromaticity::perceive(
-        &record
-            .molecule
-            .atoms
-            .iter()
-            .filter(|a| a.element.atomic_number() != 1)
-            .map(|a| a.element)
-            .collect::<Vec<_>>(),
-        &g.charge.iter().map(|c| Some(*c)).collect::<Vec<_>>(),
-        &g.bonds
-            .iter()
-            .map(|&(a, b, o)| (a, b, bond_order(o)))
-            .collect::<Vec<_>>(),
-    );
+    let arom = perceive_aromaticity(record, &g);
     let in_ring: Vec<bool> = (0..n)
         .map(|i| g.adjacency[i].iter().any(|&(_, e)| !bridge[e]))
         .collect();
