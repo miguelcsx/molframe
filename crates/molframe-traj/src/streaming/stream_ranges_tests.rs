@@ -1,18 +1,12 @@
 //! Parallel range decoding must match sequential reads and respect its bounds.
 
 use super::*;
+use crate::test_support::worker_context as context;
 use crate::{DcdReader, DcdWriteOptions, XtcReader, XtcWriteOptions, write_dcd, write_xtc};
 use molframe_core::numeric::{usize_to_f32 as f32_of, usize_to_f64 as f64_of};
 use std::path::{Path, PathBuf};
 
 const FRAMES: usize = 1500;
-
-fn context(workers: usize) -> ExecutionContext {
-    ExecutionContext::builder()
-        .worker_budget(workers)
-        .build()
-        .expect("context")
-}
 
 fn frames() -> Vec<Timestep> {
     (0..FRAMES)

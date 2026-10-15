@@ -1,3 +1,4 @@
+use crate::test_support::{assert_close, assert_vector_close};
 use molframe_core::structure::UnitCell;
 
 use crate::Timestep;
@@ -65,17 +66,6 @@ fn roundtrips_all_supported_streams_in_both_precisions() {
                 .all(|(a, b)| (a - b).abs() < 1.0e-6)
         );
     }
-}
-
-fn assert_close(actual: f32, expected: f32) {
-    assert!((actual - expected).abs() < 1.0e-5);
-}
-
-fn assert_vector_close(actual: [f32; 3], expected: [f32; 3]) {
-    actual
-        .into_iter()
-        .zip(expected)
-        .for_each(|(actual, expected)| assert_close(actual, expected));
 }
 
 #[test]

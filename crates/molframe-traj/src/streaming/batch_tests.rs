@@ -1,14 +1,6 @@
 use super::*;
+use crate::test_support::budget_context as context;
 use crate::{Frame, StreamingReader};
-use molframe_core::{MemoryBudget, ScratchPolicy};
-
-fn context(bytes: usize) -> ExecutionContext {
-    ExecutionContext::builder()
-        .memory_budget(MemoryBudget::new(bytes).expect("non-zero budget"))
-        .scratch_policy(ScratchPolicy::new(0))
-        .build()
-        .expect("valid context")
-}
 
 #[test]
 fn pull_honours_demand_and_stable_identity() {

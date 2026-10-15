@@ -1,3 +1,4 @@
+use crate::test_support::{assert_close, assert_vector_close};
 use molframe_core::structure::UnitCell;
 
 use crate::Timestep;
@@ -82,17 +83,6 @@ fn applies_only_explicit_noncanonical_units() {
     assert_vector_close(decoded[1].positions[1], [4.5, 5.5, 6.5]);
     assert_eq!(decoded[0].time, Some(2.0));
     assert_close(decoded[0].forces.as_ref().expect("forces")[1][1], 50.0);
-}
-
-fn assert_close(actual: f32, expected: f32) {
-    assert!((actual - expected).abs() < 1.0e-5);
-}
-
-fn assert_vector_close(actual: [f32; 3], expected: [f32; 3]) {
-    actual
-        .into_iter()
-        .zip(expected)
-        .for_each(|(actual, expected)| assert_close(actual, expected));
 }
 
 #[test]

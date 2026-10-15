@@ -1,12 +1,6 @@
 use super::*;
+use crate::test_support::worker_context as context;
 use crate::{Frame, StreamingReader};
-
-fn context(workers: usize) -> ExecutionContext {
-    ExecutionContext::builder()
-        .worker_budget(workers)
-        .build()
-        .expect("context")
-}
 
 fn reader(frames: usize) -> StreamingReader<impl Iterator<Item = Frame>> {
     StreamingReader::new(

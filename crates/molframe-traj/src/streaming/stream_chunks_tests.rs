@@ -1,19 +1,13 @@
 //! Parallel chunks must equal sequential chunks, in order, within bounds.
 
 use super::*;
+use crate::test_support::worker_context as context;
 use crate::{DcdReader, DcdWriteOptions, XtcReader, XtcWriteOptions, write_dcd, write_xtc};
 use molframe_core::CancellationToken;
 use molframe_core::numeric::{usize_to_f32 as f32_of, usize_to_f64 as f64_of};
 use std::path::{Path, PathBuf};
 
 const FRAMES: usize = 700;
-
-fn context(workers: usize) -> ExecutionContext {
-    ExecutionContext::builder()
-        .worker_budget(workers)
-        .build()
-        .expect("context")
-}
 
 fn files() -> (tempfile::TempDir, PathBuf, PathBuf) {
     let steps: Vec<Timestep> = (0..FRAMES)

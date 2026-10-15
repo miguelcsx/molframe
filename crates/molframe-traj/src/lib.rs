@@ -27,6 +27,9 @@ pub mod transform;
 pub mod trr;
 mod words;
 
+#[cfg(test)]
+mod test_support;
+
 pub use ensembles::{
     clustering, dielectric, diffusion, ensemble, ensemble_similarity, ensemble_statistics,
     governed, kmeans, msd, neighbors, path_similarity, pca, water_dynamics,

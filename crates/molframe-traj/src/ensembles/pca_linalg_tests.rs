@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::worker_context as context;
 use nalgebra::DMatrix;
 
 fn real(value: usize) -> f64 {
@@ -24,13 +25,6 @@ fn means(values: &[f64], rows: usize, columns: usize) -> Vec<f64> {
                 / real(rows)
         })
         .collect()
-}
-
-fn context(workers: usize) -> ExecutionContext {
-    ExecutionContext::builder()
-        .worker_budget(workers)
-        .build()
-        .expect("context")
 }
 
 fn centred_dense(values: &[f64], rows: usize, columns: usize, mean: &[f64]) -> DMatrix<f64> {

@@ -1,13 +1,5 @@
 use super::*;
-use molframe_core::{MemoryBudget, ScratchPolicy};
-
-fn context(bytes: usize) -> ExecutionContext {
-    ExecutionContext::builder()
-        .memory_budget(MemoryBudget::new(bytes).expect("budget"))
-        .scratch_policy(ScratchPolicy::new(0))
-        .build()
-        .expect("context")
-}
+use crate::test_support::budget_context as context;
 
 #[test]
 fn admission_failure_precedes_opening_the_input() {
