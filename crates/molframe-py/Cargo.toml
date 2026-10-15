@@ -44,4 +44,9 @@ compare = ["geometry", "molframe/compare"]
 motif = ["chemistry", "molframe/motif"]
 audit = ["analysis", "molframe/audit"]
 analysis = ["geometry", "chemistry", "molframe/analysis", "molframe/interop"]
+# The default-flow tables compiled in (about 3 KB), so a wheel infers bonds
+# and measures surface area on a clean machine. Not in `default`: features
+# unify across the workspace, and every other build keeps the layer off. The
+# wheel turns it on through `[tool.maturin] features` in pyproject.toml.
+embedded-tables = ["chemistry", "molframe/embedded-tables"]
 full = ["base", "data", "analysis", "crystal", "surface", "compare", "sequence", "validation", "spatial", "trajectory", "motif", "audit", "molframe/full"]

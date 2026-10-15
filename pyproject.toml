@@ -169,4 +169,10 @@ profile = "release"
 # when it produces the wheel, and alternating it with the default feature set
 # rebuilds pyo3 on every green run.
 # The floor is 3.12 because that is what Google Colab runs.
-features = ["pyo3/abi3-py312"]
+# `embedded-tables` compiles in the tables the default flows read (bonding
+# reach, covalent radii, Bondi radii, metal sites; about 3 KB), so a wheel
+# installed on a clean machine infers bonds and measures surface area with no
+# data directory and no profile. A profile or a registered table still wins.
+# It is set here rather than in the crate's `default` so the workspace's cargo
+# builds, whose features unify, keep the layer off as the Rust facade does.
+features = ["pyo3/abi3-py312", "embedded-tables"]
