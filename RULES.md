@@ -289,7 +289,7 @@ is what keeps §9's gates honest:
 cargo check -p molframe
 for f in "" pdb mmcif bcif modelcif geometry ic query spatial chemistry interop crystal \
          surface analysis validation sequence compare trajectory audit motif adapters \
-         gzip zstd mmap; do
+         gzip zstd mmap embedded-tables; do
   cargo check -p molframe --no-default-features ${f:+--features "$f"} || exit 1
 done
 ```

@@ -28,6 +28,11 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
+      # The compiled-in table layer is off in every other build here; its
+      # precedence and determinism tests run only with it on.
+      - name: Embedded tables
+        run: cargo test -p molframe-chem -p molframe --features molframe/embedded-tables --lib
+
       - name: Doc tests
         run: cargo test -p molframe --doc --features full
 
@@ -43,7 +48,7 @@ jobs:
           set -e
           for f in "" pdb mmcif bcif modelcif geometry ic query spatial chemistry interop crystal \
                    surface analysis validation sequence compare trajectory audit motif adapters \
-                   gzip zstd mmap; do
+                   gzip zstd mmap embedded-tables; do
             cargo check -p molframe --no-default-features ${f:+--features "$f"}
           done
 

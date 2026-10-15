@@ -164,7 +164,7 @@ uv run pyright --verifytypes molframe --ignoreexternal
 cargo check -p molframe
 for f in "" pdb mmcif bcif modelcif geometry ic query spatial chemistry interop crystal \
          surface analysis validation sequence compare trajectory audit motif adapters \
-         gzip zstd mmap; do
+         gzip zstd mmap embedded-tables; do
   if [ -z "$f" ]; then cargo check -p molframe --no-default-features || exit 1; \
   else cargo check -p molframe --no-default-features --features "$f" || exit 1; fi
 done
