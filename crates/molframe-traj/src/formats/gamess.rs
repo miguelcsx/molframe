@@ -194,7 +194,7 @@ fn parse_optimization(
             return Err(GamessError::InvalidCoordinate { line: header + 1 });
         };
         let start = header + 2 + separator_offset;
-        let (atoms, positions) = read_optimization_atoms(lines, start, atom_count, scale)?;
+        let (atoms, positions) = read_atoms(lines, start, atom_count, true, scale)?;
         accept_topology(&mut topology, atoms)?;
         frames.push(GamessFrame {
             step,
@@ -222,12 +222,16 @@ fn optimization_energies(lines: &[&str]) -> BTreeMap<i64, f64> {
     values
 }
 
-fn read_optimization_atoms(
+/// Reads `count` atom lines; `charged` rows carry a nuclear charge before the
+/// coordinates, uncharged rows start the coordinates right after the name.
+fn read_atoms(
     lines: &[&str],
     start: usize,
     count: usize,
+    charged: bool,
     scale: f32,
 ) -> Result<(Vec<GamessAtom>, Vec<[f32; 3]>), GamessError> {
+    let first = if charged { 2 } else { 1 };
     let mut atoms = Vec::with_capacity(count);
     let mut positions = Vec::with_capacity(count);
     for index in 0..count {
@@ -237,17 +241,21 @@ fn read_optimization_atoms(
             .ok_or(GamessError::InvalidCoordinate { line: line_number })?
             .split_whitespace()
             .collect();
-        if fields.len() < 5 {
+        if fields.len() < first + 3 {
             return Err(GamessError::InvalidCoordinate { line: line_number });
         }
         atoms.push(GamessAtom {
             name: fields[0].into(),
-            nuclear_charge: Some(number(fields[1], line_number)?),
+            nuclear_charge: if charged {
+                Some(number(fields[1], line_number)?)
+            } else {
+                None
+            },
         });
         positions.push([
-            coordinate(fields[2], scale, line_number)?,
-            coordinate(fields[3], scale, line_number)?,
-            coordinate(fields[4], scale, line_number)?,
+            coordinate(fields[first], scale, line_number)?,
+            coordinate(fields[first + 1], scale, line_number)?,
+            coordinate(fields[first + 2], scale, line_number)?,
         ]);
     }
     Ok((atoms, positions))
@@ -281,7 +289,7 @@ fn parse_surface(
                 line: energy_line + 1,
             })?;
         let start = cursor + 2;
-        let (atoms, positions) = read_surface_atoms(lines, start, atom_count)?;
+        let (atoms, positions) = read_atoms(lines, start, atom_count, false, 1.0)?;
         accept_topology(&mut topology, atoms)?;
         let step = i64::try_from(frames.len())
             .map_err(|_| GamessError::InvalidCoordinate { line: cursor + 1 })?;
@@ -301,36 +309,6 @@ fn topology_or_empty(topology: Option<Vec<GamessAtom>>) -> Vec<GamessAtom> {
         return Vec::new();
     };
     atoms
-}
-
-fn read_surface_atoms(
-    lines: &[&str],
-    start: usize,
-    count: usize,
-) -> Result<(Vec<GamessAtom>, Vec<[f32; 3]>), GamessError> {
-    let mut atoms = Vec::with_capacity(count);
-    let mut positions = Vec::with_capacity(count);
-    for index in 0..count {
-        let line_number = start + index + 1;
-        let fields: Vec<_> = lines
-            .get(start + index)
-            .ok_or(GamessError::InvalidCoordinate { line: line_number })?
-            .split_whitespace()
-            .collect();
-        if fields.len() < 4 {
-            return Err(GamessError::InvalidCoordinate { line: line_number });
-        }
-        atoms.push(GamessAtom {
-            name: fields[0].into(),
-            nuclear_charge: None,
-        });
-        positions.push([
-            coordinate(fields[1], 1.0, line_number)?,
-            coordinate(fields[2], 1.0, line_number)?,
-            coordinate(fields[3], 1.0, line_number)?,
-        ]);
-    }
-    Ok((atoms, positions))
 }
 
 fn accept_topology(
