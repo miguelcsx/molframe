@@ -13,13 +13,10 @@ use molframe_core::structure::Structure;
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-#[path = "resolver_helpers.rs"]
-mod helpers;
-#[path = "resolver_dispatch.rs"]
-mod resolver_dispatch;
-#[path = "resolver_visit.rs"]
-mod resolver_visit;
-use helpers::{
+mod dispatch;
+mod matching;
+mod visit;
+use matching::{
     atom_out_of_bounds, backend_key, cacheable_backend, collect_selection_indices, collect_within,
     index_cutoff_key, mark_pair_match, periodic_box, radial_squared, select_iso_layer,
     spatial_diagnostic, update_nearest_distance, validate_shell, z_matches,
@@ -143,7 +140,7 @@ impl<'a> StructureSpatial<'a> {
         let inner_squared = inner * inner;
         let outer_squared = outer * outer;
         let cylindrical = z.is_some();
-        let mut selected = Vec::with_capacity(helpers::selection_capacity(universe));
+        let mut selected = Vec::with_capacity(matching::selection_capacity(universe));
 
         for atom in universe {
             let position = self.position(atom)?;

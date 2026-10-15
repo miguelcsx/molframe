@@ -1,6 +1,6 @@
 //! Streaming pair dispatch for structure-bound spatial reductions.
 
-use super::helpers::{
+use super::matching::{
     backend_key, cacheable_backend, collect_selection_indices, index_cutoff_key, spatial_diagnostic,
 };
 use super::{CachedIndex, IndexKey, StructureSpatial};

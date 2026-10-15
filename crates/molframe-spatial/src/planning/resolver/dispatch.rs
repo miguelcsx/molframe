@@ -1,7 +1,7 @@
 //! Query-language request dispatch for a structure-bound spatial resolver.
 
 use super::StructureSpatial;
-use super::helpers::{resolve_beyond_request, resolve_within_request};
+use super::matching::{resolve_beyond_request, resolve_within_request};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::selection::AtomSelection;
 use molframe_query::{GeometricRequest, SpatialResolver};

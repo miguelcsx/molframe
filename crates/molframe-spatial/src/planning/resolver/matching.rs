@@ -1,4 +1,4 @@
-//! Focused request, distance and cache helpers for structure-bound queries.
+//! Focused request, distance and cache keys and matching for structure-bound queries.
 
 use super::StructureSpatial;
 use crate::{NeighborPair, PeriodicBox, SpatialBackend, SpatialError, SpatialSearchOptions};
