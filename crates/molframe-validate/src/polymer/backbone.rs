@@ -28,23 +28,35 @@ pub(crate) fn role_atom<'a>(
     residue: ResidueRef<'a>,
     required: PolymerAtomRole,
 ) -> Result<Option<AtomRef<'a>>, Diagnostic> {
+    unique_role_atom(structure, residue, required, || {
+        Diagnostic::new(Code::E4002)
+            .with_context("residue", residue.index().to_string())
+            .with_context(
+                "required",
+                format!("unique polymer role {}", required.code()),
+            )
+    })
+}
+
+/// The residue's only atom carrying `required`, or `ambiguous()` when several do.
+pub(crate) fn unique_role_atom<'a, E>(
+    structure: &'a Structure,
+    residue: ResidueRef<'a>,
+    required: PolymerAtomRole,
+    ambiguous: impl FnOnce() -> E,
+) -> Result<Option<AtomRef<'a>>, E> {
     let mut matching = residue
         .atoms()
         .filter(|atom| atom_role(structure, *atom).is_some_and(|role| role.intersects(required)));
     let first = matching.next();
     if matching.next().is_some() {
-        Err(Diagnostic::new(Code::E4002)
-            .with_context("residue", residue.index().to_string())
-            .with_context(
-                "required",
-                format!("unique polymer role {}", required.code()),
-            ))
+        Err(ambiguous())
     } else {
         Ok(first)
     }
 }
 
-fn atom_role(structure: &Structure, atom: AtomRef<'_>) -> Option<PolymerAtomRole> {
+pub(crate) fn atom_role(structure: &Structure, atom: AtomRef<'_>) -> Option<PolymerAtomRole> {
     let AtomAnnotation::Integer(column) = structure
         .annotations()
         .get(molframe_core::POLYMER_ATOM_ROLE_ANNOTATION)?

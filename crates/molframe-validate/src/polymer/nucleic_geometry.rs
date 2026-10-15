@@ -1,12 +1,13 @@
 //! Per-residue nucleic geometry from CCD components and explicit atom roles.
 
+use super::backbone::{atom_role, unique_role_atom};
 use molframe_analysis::{
     NucleicTorsionError, NucleicTorsions, Pucker, nucleic_torsions, sugar_pucker,
 };
 use molframe_chem::{ComponentProvider, PolymerAtomRole, PolymerRoleProfile};
+use molframe_core::Diagnostic;
 use molframe_core::index::ResidueIndex;
 use molframe_core::structure::{AtomRef, ResidueRef, Structure};
-use molframe_core::{AtomAnnotation, Diagnostic, Presence};
 
 /// Explicit thresholds for nucleotide geometry validation.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -302,31 +303,12 @@ fn role_atom<'a>(
     residue: ResidueRef<'a>,
     required: PolymerAtomRole,
 ) -> Result<Option<AtomRef<'a>>, NucleicGeometryError> {
-    let mut matching = residue
-        .atoms()
-        .filter(|atom| atom_role(structure, *atom).is_some_and(|role| role.intersects(required)));
-    let first = matching.next();
-    if matching.next().is_some() {
-        Err(NucleicGeometryError::AmbiguousRole {
+    unique_role_atom(structure, residue, required, || {
+        NucleicGeometryError::AmbiguousRole {
             residue: residue.index(),
             role: required.code(),
-        })
-    } else {
-        Ok(first)
-    }
-}
-
-fn atom_role(structure: &Structure, atom: AtomRef<'_>) -> Option<PolymerAtomRole> {
-    let AtomAnnotation::Integer(column) = structure
-        .annotations()
-        .get(molframe_core::POLYMER_ATOM_ROLE_ANNOTATION)?
-    else {
-        return None;
-    };
-    column
-        .get(atom.index().get())
-        .filter(|(_, presence)| *presence == Presence::Present)
-        .and_then(|(code, _)| PolymerAtomRole::from_code(code))
+        }
+    })
 }
 
 fn inside(value: f64, range: [f64; 2]) -> bool {
