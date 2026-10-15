@@ -104,3 +104,104 @@ fn skipping_perception_returns_the_structure_as_the_file_states_it() {
         &[molframe_core::SecondaryStructure::AlphaHelix; 4]
     );
 }
+
+/// The perception fixture read without perception, then enriched against
+/// `store` alone: no environment, no global store.
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+fn enriched_with(
+    store: &molframe_chem::TableStore,
+) -> (
+    Vec<(molframe_core::AtomIndex, molframe_core::AtomIndex)>,
+    Vec<Diagnostic>,
+) {
+    let mut options = ReadOptions::new();
+    options.perception = molframe_core::io::Perception::Skip;
+    let Ok((raw, _)) = read_bytes(
+        DEFAULT_PERCEPTION.as_bytes().to_vec(),
+        Some("perception.pdb"),
+        &options,
+    ) else {
+        panic!("perception fixture must parse")
+    };
+    let Ok((structure, findings)) = super::enrich::enrich_read_with(
+        Ok((raw.engine().clone(), Vec::new())),
+        &ReadOptions::new(),
+        &ExecutionContext::default(),
+        store,
+    ) else {
+        panic!("the fixture enriches")
+    };
+    let bonds = structure
+        .data()
+        .bonds
+        .iter()
+        .map(|bond| (bond.atom_a, bond.atom_b))
+        .collect();
+    (bonds, findings)
+}
+
+/// A store over an empty directory with no profile file, so only what the
+/// store holds in memory or compiles in can answer.
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+fn empty_store(name: &str) -> molframe_chem::TableStore {
+    let dir = std::env::temp_dir().join(format!("molframe-facade-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::create_dir_all(&dir);
+    molframe_chem::TableStore::new(dir.clone()).with_profile(dir.join("profile.txt"))
+}
+
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+fn shipped_reach() -> Vec<u8> {
+    let path = format!(
+        "{}/../../data/macromolecular-reach.reach",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) => panic!("{path}: {error}"),
+    }
+}
+
+#[cfg(all(feature = "chemistry", feature = "spatial", feature = "pdb"))]
+#[test]
+fn a_reach_table_registered_in_memory_perceives_bonds_with_no_files() {
+    let store = empty_store("memory");
+    store.insert_profile("bond-reach: held\n");
+    store.insert_table::<molframe_chem::BondReach>("held", shipped_reach());
+    let (bonds, findings) = enriched_with(&store);
+    assert!(bonds.len() >= 3, "bonds: {bonds:?}");
+    assert!(findings.iter().all(|finding| finding.code() != Code::W3207));
+}
+
+#[cfg(all(
+    feature = "chemistry",
+    feature = "spatial",
+    feature = "pdb",
+    not(feature = "embedded-tables")
+))]
+#[test]
+fn a_store_with_nothing_to_offer_skips_bonds_and_says_so() {
+    let (bonds, findings) = enriched_with(&empty_store("nothing"));
+    assert!(bonds.is_empty());
+    assert!(findings.iter().any(|finding| finding.code() == Code::W3207));
+}
+
+#[cfg(all(feature = "embedded-tables", feature = "spatial", feature = "pdb"))]
+#[test]
+fn embedded_tables_perceive_bonds_with_no_profile_or_cache() {
+    let store = empty_store("embedded");
+    assert!(store.has_embedded_tables());
+    let (bonds, findings) = enriched_with(&store);
+    assert!(bonds.len() >= 3, "bonds: {bonds:?}");
+    assert!(findings.iter().all(|finding| finding.code() != Code::W3207));
+}
+
+#[cfg(all(feature = "embedded-tables", feature = "spatial", feature = "pdb"))]
+#[test]
+fn embedded_tables_perceive_the_bonds_the_cache_file_does() {
+    let embedded = enriched_with(&empty_store("embedded-same")).0;
+    let store = empty_store("cache-same");
+    let _ = std::fs::write(store.directory().join("profile.txt"), "bond-reach: lab\n");
+    let _ = std::fs::write(store.directory().join("lab.reach"), shipped_reach());
+    assert_eq!(embedded, enriched_with(&store).0);
+}

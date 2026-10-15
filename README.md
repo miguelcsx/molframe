@@ -690,6 +690,7 @@ geometry
 query
 spatial
 chemistry
+embedded-tables
 crystal
 
 surface

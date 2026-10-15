@@ -9,7 +9,6 @@ use formats::{cif_write_findings, write_mmcif_to_with_options};
 use molframe_core::ExecutionContext;
 use molframe_core::diagnostic::{Code, Diagnostic, Findings};
 use molframe_core::io::{Format, InputBuffer, OutputOptions, OutputSink, ReadOptions};
-use molframe_core::structure::Structure as CoreStructure;
 use std::io::Write;
 use std::path::Path;
 
@@ -372,100 +371,13 @@ pub fn perceive_in(
 }
 
 #[cfg(all(feature = "chemistry", feature = "spatial"))]
-fn enrich_model(
-    structure: CoreStructure,
-    findings: &mut Vec<Diagnostic>,
-    context: &ExecutionContext,
-) -> Result<CoreStructure, Findings> {
-    let structure = match molframe_chem::TableStore::global()
-        .select_optional::<molframe_chem::BondReach>("--bond-reach")
-    {
-        Ok(Some(reach)) => {
-            match molframe_chem::perceive_bonds_in(&structure, &reach.provided.table, context) {
-                Ok(structure) => structure,
-                // A cancellation or an exhausted budget is the caller's own limit
-                // taking effect, not a defect of the file: the read stops.
-                Err(finding)
-                    if matches!(finding.code(), Code::E1902 | Code::E1904 | Code::E7001) =>
-                {
-                    return Err(Findings::from(finding));
-                }
-                Err(finding) => {
-                    findings.push(finding);
-                    structure
-                }
-            }
-        }
-        Ok(None) => {
-            findings.push(Diagnostic::new(Code::W3207));
-            structure
-        }
-        Err(error) => {
-            findings.push(Diagnostic::from(error));
-            structure
-        }
-    };
-    let structure = match molframe_chem::annotate_standard_components(&structure) {
-        Ok(structure) => structure,
-        Err(finding) => {
-            findings.push(finding);
-            structure
-        }
-    };
-    let (states, sources) = merge_secondary(
-        structure.data(),
-        molframe_chem::assign_secondary_structure_in(&structure, context),
-    );
-    let mut data = structure.data().clone();
-    data.secondary_structure = states.into();
-    data.secondary_source = sources.into();
-    Ok(CoreStructure::new(data))
-}
-
-/// Keeps, per residue, whichever assignment has the higher source rank, so a
-/// deposited state always survives and analysis fills only what the file left
-/// unassigned.
-#[cfg(all(feature = "chemistry", feature = "spatial"))]
-fn merge_secondary(
-    data: &molframe_core::StructureData,
-    inferred: Vec<molframe_core::SecondaryAssignment>,
-) -> (
-    Vec<molframe_core::SecondaryStructure>,
-    Vec<molframe_core::SecondarySource>,
-) {
-    inferred
-        .into_iter()
-        .enumerate()
-        .map(|(residue, inferred)| {
-            let current = match (
-                data.secondary_structure.get(residue),
-                data.secondary_source.get(residue),
-            ) {
-                (Some(state), Some(source)) => molframe_core::SecondaryAssignment {
-                    state: *state,
-                    source: *source,
-                },
-                _ => molframe_core::SecondaryAssignment::default(),
-            };
-            let kept = if inferred.source.rank() > current.source.rank() {
-                inferred
-            } else {
-                current
-            };
-            (kept.state, kept.source)
-        })
-        .unzip()
-}
-
-#[cfg(all(feature = "chemistry", feature = "spatial"))]
 use enrich::enrich_read;
 
 #[cfg(not(all(feature = "chemistry", feature = "spatial")))]
-fn enrich_read(
-    result: Result<(CoreStructure, Vec<Diagnostic>), Findings>,
-    _options: &ReadOptions,
-    _context: &ExecutionContext,
-) -> Result<(CoreStructure, Vec<Diagnostic>), Findings> {
+type CoreRead = Result<(molframe_core::structure::Structure, Vec<Diagnostic>), Findings>;
+
+#[cfg(not(all(feature = "chemistry", feature = "spatial")))]
+fn enrich_read(result: CoreRead, _options: &ReadOptions, _context: &ExecutionContext) -> CoreRead {
     result
 }
 
