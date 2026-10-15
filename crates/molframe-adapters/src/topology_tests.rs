@@ -18,10 +18,7 @@ fn projection_is_columnar_and_preserves_hierarchy() {
         ModelIndex::new(0),
         molframe_core::contract::Namespace::Label,
     );
-    let batch = match batch {
-        Ok(batch) => batch,
-        Err(error) => panic!("projection failed: {error}"),
-    };
+    let batch = batch.expect("projection failed");
     assert_eq!(batch.string(batch.chain_ids[0]), Some("A"));
     assert_eq!(batch.chain_residue_offsets, [0, 2]);
     assert_eq!(batch.string(batch.residue_names[1]), Some("ALA"));
@@ -49,18 +46,13 @@ fn unavailable_model_is_explicit() {
 #[test]
 fn columnar_projection_round_trips() {
     let source = structure();
-    let batch = match TopologyBatch::from_model(
+    let batch = TopologyBatch::from_model(
         &source,
         ModelIndex::new(0),
         molframe_core::contract::Namespace::Auth,
-    ) {
-        Ok(batch) => batch,
-        Err(error) => panic!("projection failed: {error}"),
-    };
-    let imported = match batch.into_structure() {
-        Ok(structure) => structure,
-        Err(error) => panic!("import failed: {error}"),
-    };
+    )
+    .expect("projection failed");
+    let imported = batch.into_structure().expect("import failed");
     assert_eq!(imported.chain_count(), 1);
     assert_eq!(imported.residue_count(), 2);
     assert_eq!(imported.atom_count(), 3);
@@ -72,14 +64,12 @@ fn columnar_projection_round_trips() {
 
 #[test]
 fn import_rejects_a_misaligned_column() {
-    let mut batch = match TopologyBatch::from_model(
+    let mut batch = TopologyBatch::from_model(
         &structure(),
         ModelIndex::new(0),
         molframe_core::contract::Namespace::Label,
-    ) {
-        Ok(batch) => batch,
-        Err(error) => panic!("projection failed: {error}"),
-    };
+    )
+    .expect("projection failed");
     batch.position_z.pop();
     assert!(matches!(
         batch.into_structure(),
