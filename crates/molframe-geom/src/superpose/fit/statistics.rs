@@ -344,5 +344,5 @@ fn exact_len(count: usize) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "fit_statistics_tests.rs"]
+#[path = "statistics_tests.rs"]
 mod tests;

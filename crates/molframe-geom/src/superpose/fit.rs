@@ -19,7 +19,6 @@ use crate::eigen;
 pub(super) use crate::numeric::exact_count;
 use crate::transform::Rigid;
 
-#[path = "fit_statistics.rs"]
 mod statistics;
 
 use statistics::{FitStatistics, fit_statistics, fit_statistics_weighted};
