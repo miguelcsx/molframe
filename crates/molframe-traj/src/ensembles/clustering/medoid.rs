@@ -1,6 +1,10 @@
-// Representative member of a group: the one with least total distance to the rest.
-//
-// Complexity: O(n^2) validation of the matrix, then O(m^2) time and O(m) space for m members.
+//! Representative member of a group: the one with least total distance to the rest.
+//!
+//! Complexity: O(n^2) validation of the matrix, then O(m^2) time and O(m) space for m members.
+
+use super::matrix::{matrix_row, validate_matrix};
+use crate::{EnsembleDistanceMatrix, EnsembleGeometryError};
+use std::cmp::Ordering;
 
 /// Returns the member minimizing total within-group distance.
 ///
@@ -16,7 +20,7 @@ pub fn medoid(
 }
 
 /// Computes every cluster medoid without revalidating the same matrix.
-fn cluster_medoids(
+pub(super) fn cluster_medoids(
     distances: &EnsembleDistanceMatrix,
     members: &[Vec<usize>],
 ) -> Result<Vec<usize>, EnsembleGeometryError> {

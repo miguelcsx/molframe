@@ -1,7 +1,9 @@
-// Matrix validation and pair-index helpers shared by the clustering routines.
+//! Matrix validation and pair-index helpers shared by the clustering routines.
+
+use crate::{EnsembleDistanceMatrix, EnsembleGeometryError};
 
 /// Validates matrix dimensions, finite distances, non-negativity, and symmetry.
-fn validate_matrix(
+pub(super) fn validate_matrix(
     distances: &EnsembleDistanceMatrix,
 ) -> Result<(), EnsembleGeometryError> {
     let size = distances.size;
@@ -52,7 +54,7 @@ fn valid_distance(value: f64) -> bool {
 
 /// Returns one complete row from the dense distance matrix.
 #[inline]
-fn matrix_row(
+pub(super) fn matrix_row(
     distances: &EnsembleDistanceMatrix,
     row: usize,
 ) -> Result<&[f64], EnsembleGeometryError> {
@@ -84,13 +86,13 @@ fn matrix_value(
 }
 
 /// Returns the number of unordered pairs representable for `size` observations.
-fn checked_pair_count(size: usize) -> Option<usize> {
+pub(super) fn checked_pair_count(size: usize) -> Option<usize> {
     size.checked_mul(size.checked_sub(1)?)?.checked_div(2)
 }
 
 /// Orders an unordered pair from the lexicographically smaller identifier.
 #[inline]
-fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
+pub(super) fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
     if left <= right {
         (left, right)
     } else {
@@ -100,12 +102,12 @@ fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
 
 /// Normalizes signed zero while retaining every other floating representation.
 #[inline]
-fn canonical_distance(distance: f64) -> f64 {
+pub(super) fn canonical_distance(distance: f64) -> f64 {
     if distance == 0.0 { 0.0 } else { distance }
 }
 
 /// Creates a reusable index buffer sized for one complete matrix row.
-fn reusable_index_buffer(size: usize) -> Result<Vec<usize>, EnsembleGeometryError> {
+pub(super) fn reusable_index_buffer(size: usize) -> Result<Vec<usize>, EnsembleGeometryError> {
     let mut buffer = Vec::new();
     buffer
         .try_reserve_exact(size)

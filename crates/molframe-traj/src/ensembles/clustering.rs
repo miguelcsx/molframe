@@ -1,15 +1,15 @@
 //! Deterministic clustering and representatives over ensemble distance matrices.
 
-use crate::numeric::f64_from_usize;
-use crate::{EnsembleDistanceMatrix, EnsembleGeometryError};
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+mod agglomerative;
+mod dbscan;
+mod matrix;
+mod medoid;
+mod types;
 
-include!("clustering/types.rs");
-include!("clustering/agglomerative.rs");
-include!("clustering/dbscan.rs");
-include!("clustering/medoid.rs");
-include!("clustering/matrix.rs");
+pub use agglomerative::agglomerative_clustering;
+pub use dbscan::dbscan_clustering;
+pub use medoid::medoid;
+pub use types::{Clustering, Linkage};
 
 #[cfg(test)]
 #[path = "clustering_tests.rs"]

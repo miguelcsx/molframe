@@ -1,7 +1,11 @@
-// Linkage, clustering result and condensed pair-distance types for clustering.
-//
-// Complexity: condensed pair storage is O(n^2) space for n frames, built in
-// O(n^2) time; lookups and updates are O(1).
+//! Linkage, clustering result and condensed pair-distance types for clustering.
+//!
+//! Complexity: condensed pair storage is O(n^2) space for n frames, built in
+//! O(n^2) time; lookups and updates are O(1).
+
+use super::matrix::{canonical_distance, checked_pair_count, matrix_row, ordered_pair};
+use crate::{EnsembleDistanceMatrix, EnsembleGeometryError};
+use std::cmp::Ordering;
 
 /// Agglomerative inter-cluster distance definition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,15 +33,15 @@ pub struct Clustering {
 ///
 /// Only the upper triangle is stored because the validated source matrix is
 /// symmetric and cluster-linkage updates preserve symmetry.
-struct PairDistances {
-    size: usize,
-    offsets: Vec<usize>,
-    values: Vec<f64>,
+pub(super) struct PairDistances {
+    pub(super) size: usize,
+    pub(super) offsets: Vec<usize>,
+    pub(super) values: Vec<f64>,
 }
 
 impl PairDistances {
     /// Copies the source matrix's upper triangle into mutable packed storage.
-    fn from_matrix(
+    pub(super) fn from_matrix(
         distances: &EnsembleDistanceMatrix,
     ) -> Result<Self, EnsembleGeometryError> {
         let size = distances.size;
@@ -74,7 +78,7 @@ impl PairDistances {
     }
 
     /// Returns the current distance between two distinct cluster identifiers.
-    fn get(&self, left: usize, right: usize) -> Result<f64, EnsembleGeometryError> {
+    pub(super) fn get(&self, left: usize, right: usize) -> Result<f64, EnsembleGeometryError> {
         let index = self
             .index(left, right)
             .ok_or(EnsembleGeometryError::InvalidParameter)?;
@@ -86,7 +90,7 @@ impl PairDistances {
     }
 
     /// Replaces the current distance between two distinct cluster identifiers.
-    fn set(
+    pub(super) fn set(
         &mut self,
         left: usize,
         right: usize,
@@ -106,7 +110,7 @@ impl PairDistances {
     }
 
     /// Resolves an unordered cluster pair into packed upper-triangle storage.
-    fn index(&self, left: usize, right: usize) -> Option<usize> {
+    pub(super) fn index(&self, left: usize, right: usize) -> Option<usize> {
         if left == right || left >= self.size || right >= self.size {
             return None;
         }
@@ -124,17 +128,17 @@ impl PairDistances {
 /// Version fields make candidates involving an already-merged cluster lazily
 /// detectable without deleting arbitrary entries from the binary heap.
 #[derive(Clone, Copy, Debug)]
-struct MergeCandidate {
-    distance: f64,
-    left: usize,
-    right: usize,
-    left_version: usize,
-    right_version: usize,
+pub(super) struct MergeCandidate {
+    pub(super) distance: f64,
+    pub(super) left: usize,
+    pub(super) right: usize,
+    pub(super) left_version: usize,
+    pub(super) right_version: usize,
 }
 
 impl MergeCandidate {
     /// Creates a candidate with a canonical zero representation.
-    fn new(
+    pub(super) fn new(
         distance: f64,
         left: usize,
         right: usize,

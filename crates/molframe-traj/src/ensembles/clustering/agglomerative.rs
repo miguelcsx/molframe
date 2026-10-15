@@ -1,7 +1,14 @@
-// Agglomerative clustering to a fixed cluster count over a distance matrix.
-//
-// Complexity: O(n^2 log n) time and O(n^2) space for n frames, using a lazily
-// invalidated merge heap; ties break deterministically.
+//! Agglomerative clustering to a fixed cluster count over a distance matrix.
+//!
+//! Complexity: O(n^2 log n) time and O(n^2) space for n frames, using a lazily
+//! invalidated merge heap; ties break deterministically.
+
+use super::matrix::{checked_pair_count, ordered_pair, validate_matrix};
+use super::medoid::cluster_medoids;
+use super::types::{Clustering, Linkage, MergeCandidate, PairDistances};
+use crate::numeric::f64_from_usize;
+use crate::{EnsembleDistanceMatrix, EnsembleGeometryError};
+use std::collections::BinaryHeap;
 
 /// Agglomerative clustering to an explicit number of clusters.
 ///

@@ -1,6 +1,11 @@
-// Density-based clustering over a distance matrix.
-//
-// Complexity: O(n^2) time from neighbourhood scans over n frames; O(n) extra space.
+//! Density-based clustering over a distance matrix.
+//!
+//! Complexity: O(n^2) time from neighbourhood scans over n frames; O(n) extra space.
+
+use super::matrix::{matrix_row, reusable_index_buffer, validate_matrix};
+use super::medoid::cluster_medoids;
+use super::types::Clustering;
+use crate::{EnsembleDistanceMatrix, EnsembleGeometryError};
 
 /// Density-based clustering with explicit neighbourhood and core-size policy.
 ///
