@@ -1,16 +1,14 @@
 //! Catalogued operations of the `audit` namespace.
 
-use super::Capability;
+use super::{Capability, Domain};
 
-pub(super) const ROWS: &[Capability] = &[Capability {
-    name: "run",
-    domain: "audit",
-    feature: "audit",
-    inputs: "plan,analyse,metric,project",
-    result: "AuditResult",
-    policy: true,
-    eager: true,
-    workflow: false,
-    execution_needs: "cpu,memory",
-    cost: molframe::Cost::Materialize,
-}];
+const D: Domain = Domain("audit");
+
+pub(super) const ROWS: &[Capability] = &[D
+    .row(
+        "run",
+        "plan,analyse,metric,project",
+        "AuditResult",
+        "cpu,memory",
+    )
+    .policy()];

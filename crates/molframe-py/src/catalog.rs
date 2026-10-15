@@ -32,6 +32,57 @@ pub(crate) struct Capability {
     pub(crate) cost: molframe::Cost,
 }
 
+/// The namespace a block of catalogue rows belongs to.
+#[derive(Clone, Copy)]
+struct Domain(&'static str);
+
+impl Domain {
+    /// An eager, materialising, non-policy, non-workflow operation gated by the feature named
+    /// after its domain.
+    const fn row(
+        self,
+        name: &'static str,
+        inputs: &'static str,
+        result: &'static str,
+        execution_needs: &'static str,
+    ) -> Capability {
+        Capability {
+            name,
+            domain: self.0,
+            feature: self.0,
+            inputs,
+            result,
+            policy: false,
+            eager: true,
+            workflow: false,
+            execution_needs,
+            cost: molframe::Cost::Materialize,
+        }
+    }
+}
+
+impl Capability {
+    const fn cost(mut self, cost: molframe::Cost) -> Self {
+        self.cost = cost;
+        self
+    }
+
+    const fn feature(mut self, feature: &'static str) -> Self {
+        self.feature = feature;
+        self
+    }
+
+    const fn policy(mut self) -> Self {
+        self.policy = true;
+        self
+    }
+
+    const fn workflow(mut self) -> Self {
+        self.workflow = true;
+        self
+    }
+}
+
 /// Every catalogued operation, grouped by what it operates on.
 const GROUPS: [&[Capability]; 15] = [
     analysis::ROWS,
