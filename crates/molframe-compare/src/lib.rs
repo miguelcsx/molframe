@@ -13,43 +13,26 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "equivalent.rs"]
-mod atom_equivalence;
-#[path = "ce.rs"]
-mod combinatorial_extension;
-#[path = "cad.rs"]
-mod contact_area_difference;
-#[path = "similarity.rs"]
-mod contact_overlap;
-#[path = "mapping/mod.rs"]
-mod correspondence;
+mod alignment;
 mod diagnostics;
-#[path = "dockq.rs"]
-mod docking_quality;
-#[path = "error.rs"]
 mod failure;
-mod gdt;
 mod governed_parameters;
-mod interface;
-#[path = "distance_difference.rs"]
-mod local_distance;
-mod mapped;
 mod numeric;
-#[path = "governed/mod.rs"]
 mod policy_execution;
-#[path = "qs.rs"]
-mod quaternary;
 pub mod region;
-#[path = "residue_lddt/mod.rs"]
-mod residue_local_distance;
-mod seed_objective;
-mod seed_rows;
-mod seed_search;
 pub mod superposed;
-mod tm_batch;
-mod tm_bound;
-mod tm_screen;
 pub mod workflow;
+use alignment::{
+    combinatorial_extension, gdt, seed_objective, seed_rows, seed_search, tm_batch, tm_bound,
+    tm_screen,
+};
+mod scoring;
+use scoring::{
+    contact_area_difference, contact_overlap, docking_quality, interface, local_distance,
+    quaternary, residue_local_distance,
+};
+mod matching;
+use matching::{atom_equivalence, correspondence, mapped};
 
 pub use atom_equivalence::{
     EquivalentAtomMapping, LigandRmsd, component_fragment, equivalent_atom_mappings,

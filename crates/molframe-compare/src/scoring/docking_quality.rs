@@ -37,7 +37,6 @@ use crate::failure::CompareError;
 use crate::interface::{AtomInfo, UNANNOTATED, atom_infos, chain_atoms};
 use crate::numeric::usize_to_f64;
 
-#[path = "dockq_atom_contact.rs"]
 mod atom_contact;
 
 pub use atom_contact::{
@@ -331,5 +330,5 @@ fn gather(positions: &[[f32; 3]], indices: &[usize]) -> Vec<[f32; 3]> {
 }
 
 #[cfg(test)]
-#[path = "dockq_tests.rs"]
+#[path = "docking_quality_tests.rs"]
 mod tests;

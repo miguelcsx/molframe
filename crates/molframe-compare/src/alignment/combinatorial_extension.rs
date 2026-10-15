@@ -4,11 +4,8 @@
 //! pairwise matrices. The `R x M` fragment-similarity table is cached only when
 //! it fits beside the complete search workspace under the caller's ceiling.
 
-#[path = "ce/finish.rs"]
 mod finish;
-#[path = "ce/search.rs"]
 mod search;
-#[path = "ce/workspace.rs"]
 mod workspace;
 
 use molframe_geom::SuperposeError;
@@ -217,9 +214,9 @@ fn original_window_eight_z_score(candidate: &search::Candidate) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "ce_tests.rs"]
+#[path = "combinatorial_extension_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "ce_reference_tests.rs"]
+#[path = "combinatorial_extension_reference_tests.rs"]
 mod reference_tests;

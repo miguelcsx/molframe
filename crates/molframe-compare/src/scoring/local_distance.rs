@@ -267,5 +267,5 @@ fn validate_options(
 }
 
 #[cfg(test)]
-#[path = "distance_difference_tests.rs"]
+#[path = "local_distance_tests.rs"]
 mod tests;

@@ -138,5 +138,5 @@ pub(crate) fn atom_contact_jaccard_on_positions(
 }
 
 #[cfg(test)]
-#[path = "qs_atom_contact_tests.rs"]
+#[path = "atom_contact_tests.rs"]
 mod tests;

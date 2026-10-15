@@ -1,6 +1,6 @@
 //! Governed interface-comparison scores.
 
-use super::common::{GovernedCompareError, complete, float};
+use super::descriptor_parameters::{GovernedCompareError, complete, float};
 use crate::{DockQ, DockQOptions, QsOptions, dockq_in_namespace, qs_score_in_namespace};
 use molframe_core::Structure;
 use molframe_core::contract::{Analysis, AnalysisPolicy, ParameterValue};

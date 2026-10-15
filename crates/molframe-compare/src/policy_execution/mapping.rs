@@ -1,6 +1,6 @@
 //! Governed chain, sequence and explicit point-mapping workflows.
 
-use super::common::{GovernedCompareError, complete, covered, float};
+use super::descriptor_parameters::{GovernedCompareError, complete, covered, float};
 use crate::{
     ChainAssignment, ChainMapping, ComparisonAlignment, ComparisonVerdict, DistanceMeasurement,
     InterfaceRmsd, PocketRmsd, PointMapping, ResidueMatch, align_mapping, assign_chains,

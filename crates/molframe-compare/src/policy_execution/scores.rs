@@ -1,6 +1,6 @@
 //! Governed coordinate, contact-area, CE and contact-map scores.
 
-use super::common::{GovernedCompareError, complete, float};
+use super::descriptor_parameters::{GovernedCompareError, complete, float};
 use crate::governed_parameters::add_ce_parameters;
 use crate::{
     CadScore, CeAlignment, CeOptions, CompareError, ContactArea, ContactSimilarity,

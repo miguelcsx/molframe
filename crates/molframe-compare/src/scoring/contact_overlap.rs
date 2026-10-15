@@ -53,5 +53,5 @@ fn normalise(pairs: &[(u32, u32)]) -> BTreeSet<(u32, u32)> {
 }
 
 #[cfg(test)]
-#[path = "similarity_tests.rs"]
+#[path = "contact_overlap_tests.rs"]
 mod tests;

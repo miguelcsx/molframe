@@ -164,5 +164,5 @@ pub fn named_ligand_rmsd(
 }
 
 #[cfg(test)]
-#[path = "equivalent_tests.rs"]
+#[path = "atom_equivalence_tests.rs"]
 mod tests;

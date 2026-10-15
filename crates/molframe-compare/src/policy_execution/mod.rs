@@ -1,13 +1,13 @@
 //! Policy-bound comparison entry points with complete provenance.
 
-mod common;
+mod descriptor_parameters;
 mod equivalence;
 mod interfaces;
 mod mapping;
 mod residue_lddt;
 mod scores;
 
-pub use common::GovernedCompareError;
+pub use descriptor_parameters::GovernedCompareError;
 pub use equivalence::{governed_equivalent_atom_mappings, governed_ligand_symmetry_rmsd};
 pub use interfaces::{governed_dockq, governed_qs_score};
 pub use mapping::{
@@ -22,5 +22,5 @@ pub use scores::{
 };
 
 #[cfg(test)]
-#[path = "../governed_tests.rs"]
+#[path = "../policy_execution_tests.rs"]
 mod tests;

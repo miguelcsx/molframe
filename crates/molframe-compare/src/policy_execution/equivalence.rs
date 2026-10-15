@@ -1,6 +1,6 @@
 //! Governed chemistry-aware atom equivalence and ligand comparison.
 
-use super::common::{GovernedCompareError, complete};
+use super::descriptor_parameters::{GovernedCompareError, complete};
 use crate::governed_parameters::integer;
 use crate::{EquivalentAtomMapping, LigandRmsd, equivalent_atom_mappings, ligand_symmetry_rmsd};
 use molframe_chem::Component;

@@ -1,6 +1,6 @@
 //! Governed residue-aware lDDT.
 
-use super::common::{GovernedCompareError, covered, float};
+use super::descriptor_parameters::{GovernedCompareError, covered, float};
 use crate::mapped::MappedCompareError;
 use crate::{ResidueCorrespondence, ResidueLddt, ResidueLddtOptions, SymmetryPolicy, residue_lddt};
 use molframe_chem::ComponentProvider;

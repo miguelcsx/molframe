@@ -244,5 +244,5 @@ fn gather(positions: &[[f32; 3]], indices: &[usize]) -> Vec<[f32; 3]> {
 }
 
 #[cfg(test)]
-#[path = "dockq_atom_contact_tests.rs"]
+#[path = "atom_contact_tests.rs"]
 mod tests;

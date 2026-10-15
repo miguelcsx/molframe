@@ -15,5 +15,5 @@ pub use residue::{ResiduePair, map_residues};
 pub use sequence::{ResidueMatch, map_sequence_to_structure};
 
 #[cfg(test)]
-#[path = "../mapping_tests.rs"]
+#[path = "../correspondence_tests.rs"]
 mod tests;

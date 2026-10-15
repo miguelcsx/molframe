@@ -211,5 +211,5 @@ fn normalized(reference: f64, lost: f64) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "cad_tests.rs"]
+#[path = "contact_area_difference_tests.rs"]
 mod tests;

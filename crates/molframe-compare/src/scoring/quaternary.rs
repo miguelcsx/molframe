@@ -57,7 +57,6 @@ use molframe_core::structure::Structure;
 use crate::CompareError;
 use crate::interface::{AtomInfo, UNANNOTATED, atom_infos, chain_atoms};
 
-#[path = "qs_atom_contact.rs"]
 mod atom_contact;
 
 pub use atom_contact::{
@@ -296,5 +295,5 @@ fn contact_distances(
 }
 
 #[cfg(test)]
-#[path = "qs_tests.rs"]
+#[path = "quaternary_tests.rs"]
 mod tests;
