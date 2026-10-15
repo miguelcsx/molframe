@@ -4,7 +4,6 @@ use crate::{Frame, Trajectory, TrajectoryBuildError};
 use molframe_core::structure::UnitCell;
 use std::collections::BTreeMap;
 
-#[path = "reader/chained.rs"]
 mod chained;
 pub use chained::ChainedReader;
 

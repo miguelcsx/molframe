@@ -17,9 +17,7 @@ use super::{
     AKMA_TO_PS, DcdEndian, DcdError, DcdHeader, f32_at, i32_at, nonnegative, parse_cell,
     parse_free_indices, parse_titles,
 };
-#[path = "reader_seek.rs"]
 mod seek;
-#[path = "reader_support.rs"]
 mod support;
 use support::{
     build_fixed_indices, estimated_bytes, header_heap_bytes, io_error, marker_length, memory_error,

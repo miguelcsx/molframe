@@ -85,5 +85,5 @@ impl XtcReader {
 }
 
 #[cfg(test)]
-#[path = "reader_index_tests.rs"]
+#[path = "index_tests.rs"]
 mod tests;

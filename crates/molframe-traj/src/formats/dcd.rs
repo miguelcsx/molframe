@@ -4,7 +4,6 @@ use crate::Timestep;
 use molframe_core::structure::UnitCell;
 use std::collections::BTreeSet;
 
-#[path = "dcd/reader.rs"]
 mod reader;
 
 pub use reader::DcdReader;

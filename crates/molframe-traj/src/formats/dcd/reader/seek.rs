@@ -90,5 +90,5 @@ impl DcdReader {
 }
 
 #[cfg(test)]
-#[path = "reader_seek_tests.rs"]
+#[path = "seek_tests.rs"]
 mod tests;

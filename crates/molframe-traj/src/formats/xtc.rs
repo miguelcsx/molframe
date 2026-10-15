@@ -11,9 +11,7 @@ use crate::numeric::f32_from_f64;
 const NM_TO_ANGSTROM: f32 = 10.0;
 const ANGSTROM_TO_NM: f32 = 1.0 / NM_TO_ANGSTROM;
 
-#[path = "xtc/parallel.rs"]
 mod parallel;
-#[path = "xtc/reader.rs"]
 mod reader;
 
 pub use reader::XtcReader;

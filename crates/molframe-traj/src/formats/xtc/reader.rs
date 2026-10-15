@@ -12,14 +12,11 @@ use crate::{Timestep, TrajectoryReaderOptions};
 
 use super::{NM_TO_ANGSTROM, XtcError, cell_from_box};
 
-#[path = "reader_support.rs"]
 mod support;
 
-#[path = "reader_index.rs"]
-mod reader_index;
+mod index;
 
-#[path = "reader_trait.rs"]
-mod reader_trait;
+mod traits;
 
 use support::{BoundedBuffer, FrameLayout, guarded_record, memory_error, reserve_exact};
 
