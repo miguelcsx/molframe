@@ -21,7 +21,6 @@ use crate::sampling::fibonacci_sphere;
 use crate::sampling_plan::SasaSampler;
 use std::collections::BTreeMap;
 
-#[path = "sasa/contact.rs"]
 mod contact;
 pub use contact::{
     AtomContactArea, ExcludedSurfacePoint, atom_contact_areas, surface_points_excluding_pairs,
@@ -492,5 +491,5 @@ pub(crate) fn prepare<'a>(
 }
 
 #[cfg(test)]
-#[path = "sasa_tests.rs"]
+#[path = "accessible_area_tests.rs"]
 mod tests;

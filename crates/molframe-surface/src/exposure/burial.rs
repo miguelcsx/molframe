@@ -259,5 +259,5 @@ fn total(
 }
 
 #[cfg(test)]
-#[path = "buried_tests.rs"]
+#[path = "burial_tests.rs"]
 mod tests;

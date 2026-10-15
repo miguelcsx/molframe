@@ -293,5 +293,5 @@ pub(crate) fn triangle_cross(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f64; 3] 
 }
 
 #[cfg(test)]
-#[path = "mesh_tests.rs"]
+#[path = "triangulation_tests.rs"]
 mod tests;

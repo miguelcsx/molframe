@@ -17,11 +17,9 @@ use crate::numeric::{f32_to_usize, usize_to_f32};
 use molframe_core::{CancellationToken, Cancelled};
 use thiserror::Error;
 
-#[path = "pocket_grid.rs"]
 mod grid;
 use grid::{Grid, buried, components, paint, reachable};
 
-#[path = "pocket_points.rs"]
 mod points;
 pub use points::PointProximity;
 

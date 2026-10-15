@@ -60,5 +60,5 @@ fn fibonacci_direction(index: u16, total: f64, golden_angle: f64) -> [f64; 3] {
 }
 
 #[cfg(test)]
-#[path = "sphere_tests.rs"]
+#[path = "sampling_tests.rs"]
 mod tests;

@@ -151,5 +151,5 @@ fn transform_z(grid: &Grid, field: &mut [f32], scratch: &mut DistanceScratch) {
 }
 
 #[cfg(test)]
-#[path = "ses_distance_tests.rs"]
+#[path = "distance_tests.rs"]
 mod tests;

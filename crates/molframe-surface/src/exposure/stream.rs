@@ -15,7 +15,6 @@ use molframe_core::{
 use molframe_spatial::{CellGridOptions, CellList, PeriodicBox, SpatialError};
 use occlude_simd::NeighbourTile;
 
-#[path = "stream/occlude_simd.rs"]
 mod occlude_simd;
 
 const BLOCK_ATOMS: usize = 64;

@@ -14,7 +14,6 @@ use crate::SurfaceGridOptions;
 use crate::accessible_area::SasaError;
 use crate::numeric::{f64_to_usize, usize_to_f64};
 
-#[path = "cavity_flood.rs"]
 mod flood;
 pub(crate) use flood::FloodWorkspace;
 

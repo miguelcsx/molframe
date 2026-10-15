@@ -7,40 +7,28 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "sasa.rs"]
-mod accessible_area;
-#[path = "buried.rs"]
-mod burial;
-pub mod cavity;
-mod cavity_geometry;
-mod collect;
-mod components;
-pub mod depth;
 mod diagnostics;
-pub mod geodesic;
+mod exposure;
 mod grid_options;
 mod io;
-pub mod lee_richards;
-#[path = "curvature.rs"]
-mod local_shape;
-mod mesh_diagnostics;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native_solver;
-mod neighbourhood;
 mod numeric;
-pub mod pocket;
-#[path = "sphere.rs"]
-mod sampling;
-mod sampling_plan;
-pub mod ses;
 mod solver_output;
-mod stream;
-mod structure_sasa;
-#[path = "mesh.rs"]
-mod triangulation;
-#[path = "governed.rs"]
 mod workflow_policy;
 mod workspace;
+pub use exposure::lee_richards;
+use exposure::{
+    accessible_area, burial, collect, neighbourhood, sampling, sampling_plan, stream,
+    structure_sasa,
+};
+mod shape;
+pub use shape::cavity;
+pub use shape::depth;
+pub use shape::geodesic;
+pub use shape::pocket;
+pub use shape::ses;
+use shape::{cavity_geometry, components, local_shape, mesh_diagnostics, triangulation};
 
 pub use accessible_area::{
     AtomContactArea, ExcludedSurfacePoint, SasaError, SurfacePoint, atom_contact_areas,

@@ -229,5 +229,5 @@ fn angle_between(left: [f64; 3], right: [f64; 3]) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "curvature_tests.rs"]
+#[path = "local_shape_tests.rs"]
 mod tests;

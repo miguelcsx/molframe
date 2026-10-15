@@ -11,9 +11,7 @@ use crate::SurfaceGridOptions;
 use crate::accessible_area::SasaError;
 use crate::cavity::{FloodWorkspace, Grid};
 
-#[path = "ses_distance.rs"]
 mod distance;
-#[path = "ses_mesh.rs"]
 mod mesh;
 
 /// One triangle of a solvent-excluded surface mesh.
