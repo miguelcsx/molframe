@@ -12,6 +12,7 @@
 
 use crate::SurfaceGridOptions;
 use crate::accessible_area::SasaError;
+use crate::neighbourhood::{validate_lengths, validate_radii};
 use crate::numeric::{f64_to_usize, usize_to_f64};
 
 mod flood;
@@ -71,7 +72,8 @@ pub fn cavities_with_options(
     grid_options: SurfaceGridOptions,
 ) -> Result<Vec<Cavity>, SasaError> {
     let grid_options = grid_options.validate()?;
-    validate_inputs(positions, radii, probe)?;
+    validate_lengths(positions, radii)?;
+    validate_radii(radii, probe)?;
 
     if positions.is_empty() {
         return Ok(Vec::new());
@@ -94,43 +96,14 @@ pub fn cavities_with_options(
     grid.collect_cavities(&mut state, &mut flood)
 }
 
-/// Validates cavity-analysis input dimensions and scalar parameters.
-///
-/// Runtime is `O(R)` for `R` radii and requires no allocation.
-fn validate_inputs(positions: &[[f32; 3]], radii: &[f32], probe: f32) -> Result<(), SasaError> {
-    if positions.len() != radii.len() {
-        return Err(SasaError::LengthMismatch {
-            positions: positions.len(),
-            radii: radii.len(),
-        });
-    }
-
-    if !probe.is_finite() || probe < 0.0 {
-        return Err(SasaError::InvalidProbe);
-    }
-
-    if radii
-        .iter()
-        .any(|radius| !radius.is_finite() || *radius < 0.0)
-    {
-        return Err(SasaError::InvalidRadius);
-    }
-
-    Ok(())
-}
-
 /// Converts bare radii to double-precision probe-grown radii.
 ///
 /// Runtime and output space are `O(R)`.
-fn expanded_radii(radii: &[f32], probe: f32) -> Result<Vec<f64>, SasaError> {
+pub(crate) fn expanded_radii(radii: &[f32], probe: f32) -> Result<Vec<f64>, SasaError> {
     let probe = f64::from(probe);
     let mut expanded = crate::workspace::empty_with_capacity(radii.len())?;
 
     for &radius in radii {
-        if !radius.is_finite() || radius < 0.0 {
-            return Err(SasaError::InvalidRadius);
-        }
-
         expanded.push(f64::from(radius) + probe);
     }
 

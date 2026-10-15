@@ -9,7 +9,8 @@
 
 use crate::SurfaceGridOptions;
 use crate::accessible_area::SasaError;
-use crate::cavity::{FloodWorkspace, Grid};
+use crate::cavity::{FloodWorkspace, Grid, expanded_radii};
+use crate::neighbourhood::{validate_lengths, validate_radii};
 
 mod distance;
 mod mesh;
@@ -74,7 +75,8 @@ pub fn solvent_excluded_surface_with_options(
     grid_options: SurfaceGridOptions,
 ) -> Result<SolventExcludedSurface, SasaError> {
     let grid_options = grid_options.validate()?;
-    validate(positions, radii, probe)?;
+    validate_lengths(positions, radii)?;
+    validate_radii(radii, probe)?;
 
     if positions.is_empty() {
         return Ok(SolventExcludedSurface::default());
@@ -112,43 +114,6 @@ pub fn solvent_excluded_surface_with_options(
     )?;
 
     mesh::polygonise(&grid, &distance, level, triangle_capacity)
-}
-
-/// Validates solvent-excluded-surface input.
-///
-/// Runtime is `O(R)` for radius validation and requires no allocation.
-fn validate(positions: &[[f32; 3]], radii: &[f32], probe: f32) -> Result<(), SasaError> {
-    if positions.len() != radii.len() {
-        return Err(SasaError::LengthMismatch {
-            positions: positions.len(),
-            radii: radii.len(),
-        });
-    }
-
-    if !probe.is_finite() || probe < 0.0 {
-        return Err(SasaError::InvalidProbe);
-    }
-
-    if radii
-        .iter()
-        .any(|radius| !radius.is_finite() || *radius < 0.0)
-    {
-        return Err(SasaError::InvalidRadius);
-    }
-
-    Ok(())
-}
-
-/// Builds double-precision probe-grown radii.
-///
-/// Runtime and output space are `O(R)`.
-fn expanded_radii(radii: &[f32], probe: f32) -> Result<Vec<f64>, SasaError> {
-    let probe = f64::from(probe);
-    let mut expanded = crate::workspace::empty_with_capacity(radii.len())?;
-    for &radius in radii {
-        expanded.push(f64::from(radius) + probe);
-    }
-    Ok(expanded)
 }
 
 #[cfg(test)]

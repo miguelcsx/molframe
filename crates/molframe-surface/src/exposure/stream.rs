@@ -6,7 +6,7 @@
 //! × samples), even when every atom occupies one dense cell.
 
 use crate::accessible_area::{SasaError, point_on_sphere};
-use crate::neighbourhood::{point_inside_sphere, squared_distance};
+use crate::neighbourhood::{point_inside_sphere, squared_distance, validate_lengths};
 use crate::sampling_plan::SasaSampler;
 use molframe_core::{
     ExecutionContext,
@@ -58,12 +58,7 @@ impl SasaSampler<'_> {
         periodic: Option<&PeriodicBox>,
         mut emit: impl FnMut(usize, f64) -> Result<(), SasaError>,
     ) -> Result<(), SasaError> {
-        if positions.len() != self.radii.len() {
-            return Err(SasaError::LengthMismatch {
-                positions: positions.len(),
-                radii: self.radii.len(),
-            });
-        }
+        validate_lengths(positions, self.radii)?;
         let context = &self.context;
         if context.cancellation().is_cancelled() {
             return Err(SpatialError::Cancelled.into());

@@ -1,5 +1,6 @@
 //! Explicit materialization of bounded sampled atom areas.
 
+use crate::neighbourhood::validate_lengths;
 use crate::{SasaError, SasaSampler};
 use molframe_core::{ExecutionContext, execution::Retained};
 use molframe_spatial::{PeriodicBox, SpatialError};
@@ -34,12 +35,7 @@ impl SasaSampler<'_> {
         positions: &[[f32; 3]],
         periodic: Option<&PeriodicBox>,
     ) -> Result<Retained<Vec<f64>>, SasaError> {
-        if positions.len() != self.radii.len() {
-            return Err(SasaError::LengthMismatch {
-                positions: positions.len(),
-                radii: self.radii.len(),
-            });
-        }
+        validate_lengths(positions, self.radii)?;
         let bytes = positions
             .len()
             .checked_mul(size_of::<f64>())

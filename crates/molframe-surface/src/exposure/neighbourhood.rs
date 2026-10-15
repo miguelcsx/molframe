@@ -132,15 +132,21 @@ pub(crate) fn validate_input(
     radii: &[f32],
     probe: f32,
 ) -> Result<(), SasaError> {
-    if positions.len() != radii.len() {
-        return Err(SasaError::LengthMismatch {
-            positions: positions.len(),
-            radii: radii.len(),
-        });
-    }
-
+    validate_lengths(positions, radii)?;
     validate_radii(radii, probe)?;
     validate_positions(positions)
+}
+
+/// Rejects a radius column that does not pair one-to-one with the positions.
+pub(crate) fn validate_lengths(positions: &[[f32; 3]], radii: &[f32]) -> Result<(), SasaError> {
+    if positions.len() == radii.len() {
+        Ok(())
+    } else {
+        Err(SasaError::LengthMismatch {
+            positions: positions.len(),
+            radii: radii.len(),
+        })
+    }
 }
 
 /// Rejects NaN and infinite coordinates.
