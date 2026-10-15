@@ -28,6 +28,37 @@ fn columns(py: Python<'_>, columns: PairColumns) -> Pairs<'_> {
     )
 }
 
+/// Every unique unordered pair within `cutoff`, minimum-image when a `cell` is given.
+fn all_pairs(
+    py: Python<'_>,
+    coordinates: Array2<'_, '_, f32>,
+    cutoff: f32,
+    cell: Option<&PyUnitCell>,
+    backend: &str,
+    context: Option<&crate::execution::PyExecutionContext>,
+) -> PyResult<Vec<NeighborPair>> {
+    let backend = crate::backend::parse(backend)?;
+    let periodic = periodic_box(cell)?;
+    let array = coordinates.readonly();
+    let positions = crate::bindings::coordinates(&array)?;
+    let everything = molframe::engine::core::AtomSelection::All(
+        u32::try_from(positions.len())
+            .map_err(|_| crate::error::value("too many atoms for a 32-bit index"))?,
+    );
+    crate::execution::run(py, context, |context| {
+        molframe::spatial::pairs_within(
+            positions,
+            &everything,
+            &everything,
+            cutoff,
+            backend,
+            periodic.as_ref(),
+            context,
+        )
+    })?
+    .map_err(crate::error::kernel)
+}
+
 /// Unique unordered pairs no further apart than `cutoff`, sorted by index.
 ///
 /// Returns `(first, second, distance)` arrays with `first < second`. With a
@@ -42,26 +73,7 @@ fn neighbor_pairs<'py>(
     backend: &str,
     context: Option<&crate::execution::PyExecutionContext>,
 ) -> PyResult<Pairs<'py>> {
-    let backend = crate::backend::parse(backend)?;
-    let periodic = periodic_box(cell)?;
-    let array = coordinates.readonly();
-    let positions = crate::bindings::coordinates(&array)?;
-    let everything = molframe::engine::core::AtomSelection::All(
-        u32::try_from(positions.len())
-            .map_err(|_| crate::error::value("too many atoms for a 32-bit index"))?,
-    );
-    let pairs = crate::execution::run(py, context, |context| {
-        molframe::spatial::pairs_within(
-            positions,
-            &everything,
-            &everything,
-            cutoff,
-            backend,
-            periodic.as_ref(),
-            context,
-        )
-    })?
-    .map_err(crate::error::kernel)?;
+    let pairs = all_pairs(py, coordinates, cutoff, cell, backend, context)?;
     Ok(columns(py, PairColumns::from_pairs(&pairs)))
 }
 
@@ -144,26 +156,7 @@ fn neighbor_pairs_chunks(
     if chunk_size == 0 {
         return Err(crate::error::value("chunk_size must be positive"));
     }
-    let backend = crate::backend::parse(backend)?;
-    let periodic = periodic_box(cell)?;
-    let array = coordinates.readonly();
-    let positions = crate::bindings::coordinates(&array)?;
-    let everything = molframe::engine::core::AtomSelection::All(
-        u32::try_from(positions.len())
-            .map_err(|_| crate::error::value("too many atoms for a 32-bit index"))?,
-    );
-    let pairs = crate::execution::run(py, context, |context| {
-        molframe::spatial::pairs_within(
-            positions,
-            &everything,
-            &everything,
-            cutoff,
-            backend,
-            periodic.as_ref(),
-            context,
-        )
-    })?
-    .map_err(crate::error::kernel)?;
+    let pairs = all_pairs(py, coordinates, cutoff, cell, backend, context)?;
     Ok(PairChunks {
         pairs,
         cursor: 0,
