@@ -2,4 +2,4 @@
 
 mod model;
 
-pub use model::*;
+pub use model::{LadderDirection, NewickError, RerootError, TraversalOrder, Tree};

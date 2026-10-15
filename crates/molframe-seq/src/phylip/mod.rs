@@ -2,4 +2,4 @@
 
 mod codec;
 
-pub use codec::*;
+pub use codec::{parse_phylip, write_phylip};

@@ -2,4 +2,4 @@
 
 mod search;
 
-pub use search::*;
+pub use search::seed_and_extend;

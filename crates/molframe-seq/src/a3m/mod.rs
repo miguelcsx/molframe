@@ -2,4 +2,4 @@
 
 mod codec;
 
-pub use codec::*;
+pub use codec::{a3m_match_columns, parse_a3m, write_a3m};

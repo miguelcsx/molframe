@@ -2,4 +2,4 @@
 
 mod codec;
 
-pub use codec::*;
+pub use codec::{FastaRecord, parse_fasta, write_fasta};

@@ -5,7 +5,7 @@ mod similar;
 mod spaced;
 mod table;
 
-pub use counts::*;
-pub use similar::*;
-pub use spaced::*;
-pub use table::*;
+pub use counts::{kmer_counts, minimizers};
+pub use similar::{SimilarKmer, SimilarKmerError, SimilarKmerOptions, similar_kmers};
+pub use spaced::{SeedPattern, SeedPatternError};
+pub use table::{KmerHit, KmerStorage, KmerTable, KmerTableError, KmerTableOptions};

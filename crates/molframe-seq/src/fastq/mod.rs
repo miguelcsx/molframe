@@ -2,4 +2,4 @@
 
 mod codec;
 
-pub use codec::*;
+pub use codec::{FastqError, FastqRecord, parse_fastq, write_fastq};

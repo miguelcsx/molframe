@@ -5,5 +5,5 @@ mod guide;
 mod profile;
 mod types;
 
-pub use algorithm::*;
-pub use types::*;
+pub use algorithm::{msa, progressive_msa};
+pub use types::{MsaError, MsaOptions};

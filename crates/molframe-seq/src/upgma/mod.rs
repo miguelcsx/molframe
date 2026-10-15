@@ -2,4 +2,4 @@
 
 mod algorithm;
 
-pub use algorithm::*;
+pub use algorithm::upgma;
