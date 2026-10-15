@@ -2,7 +2,7 @@
 
 use super::container::{DirectColumn, DirectData};
 use super::values::{ColumnValues, ValueRef};
-use crate::codec::{Decoded, decode_borrowed, decode_f32_borrowed_into};
+use crate::codec::{Decoded, decode_borrowed, decode_f32_borrowed_into, length_error};
 use molframe_cif::{AtomSiteRow, Field, RowFeeder};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use num_traits::ToPrimitive;
@@ -283,12 +283,6 @@ fn duplicate_item(item: &str) -> Diagnostic {
     Diagnostic::new(Code::E1401)
         .with_message("a BinaryCIF category contains a duplicate item")
         .with_context("item", item)
-}
-
-fn length_error(actual: usize, declared: usize) -> Diagnostic {
-    Diagnostic::new(Code::E1401)
-        .with_context("actual", actual.to_string())
-        .with_context("declared", declared.to_string())
 }
 
 const FIELD_NAMES: [&str; FIELD_COUNT] = [

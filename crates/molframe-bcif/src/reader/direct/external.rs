@@ -1,7 +1,7 @@
 //! Column-at-a-time delivery to an external compact projection.
 
 use super::container::{DirectCategory, DirectData};
-use crate::codec::{Decoded, decode_borrowed};
+use crate::codec::{Decoded, decode_borrowed, decoded_len, length_error};
 use molframe_cif::{Category, CifEventSink, CifScalar, CifValue};
 use molframe_core::diagnostic::{Code, Diagnostic};
 use molframe_core::span::ByteSpan;
@@ -127,18 +127,4 @@ fn scalar_from_value(value: &CifValue) -> CifScalar<'_> {
         CifValue::Integer(value) => CifScalar::Integer(*value),
         CifValue::Float(value) => CifScalar::Float(*value),
     }
-}
-
-fn decoded_len(values: &Decoded) -> usize {
-    match values {
-        Decoded::Integers(values) => values.len(),
-        Decoded::Floats(values) => values.len(),
-        Decoded::Strings(values) => values.len(),
-    }
-}
-
-fn length_error(actual: usize, declared: usize) -> Diagnostic {
-    Diagnostic::new(Code::E1401)
-        .with_context("actual", actual.to_string())
-        .with_context("declared", declared.to_string())
 }

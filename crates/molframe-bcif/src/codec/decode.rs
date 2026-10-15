@@ -435,7 +435,7 @@ const fn is_float(data_type: DataType) -> bool {
     matches!(data_type, DataType::Float32 | DataType::Float64)
 }
 
-pub(super) fn length_error(actual: usize, declared: usize) -> Diagnostic {
+pub(crate) fn length_error(actual: usize, declared: usize) -> Diagnostic {
     Diagnostic::new(Code::E1401)
         .with_context("actual", actual.to_string())
         .with_context("declared", declared.to_string())
@@ -443,6 +443,15 @@ pub(super) fn length_error(actual: usize, declared: usize) -> Diagnostic {
 
 pub(super) fn type_error(message: &'static str) -> Diagnostic {
     Diagnostic::new(Code::E1403).with_message(message)
+}
+
+/// Number of values in a decoded column.
+pub(crate) fn decoded_len(values: &Decoded) -> usize {
+    match values {
+        Decoded::Integers(values) => values.len(),
+        Decoded::Floats(values) => values.len(),
+        Decoded::Strings(values) => values.len(),
+    }
 }
 
 #[cfg(test)]
