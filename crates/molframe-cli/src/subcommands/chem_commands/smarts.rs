@@ -2,7 +2,7 @@
 
 use crate::args::SmartsArguments;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::chemistry::{ComponentProvider as _, SmartsMatch, SmartsPattern};
 use std::path::Path;
@@ -57,14 +57,8 @@ fn structure(
     version: &str,
     context: Context,
 ) -> Exit {
-    let opened = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let annotated = match crate::chemistry::annotate(&opened, ccd, version, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let opened = or_exit!(open(input, context));
+    let annotated = or_exit!(crate::chemistry::annotate(&opened, ccd, version, context));
     match pattern.find_structure_matches(annotated.engine()) {
         Ok(matches) => emit(matches, context, |atom| atom.to_string()),
         Err(error) => {
@@ -81,10 +75,7 @@ fn component(
     version: &str,
     context: Context,
 ) -> Exit {
-    let provider = match crate::chemistry::load_ccd(ccd, version, context) {
-        Ok(provider) => provider,
-        Err(exit) => return exit,
-    };
+    let provider = or_exit!(crate::chemistry::load_ccd(ccd, version, context));
     let component = match provider.get(id) {
         Ok(Some(component)) => component,
         Ok(None) => {

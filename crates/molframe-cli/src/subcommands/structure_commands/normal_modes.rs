@@ -2,7 +2,7 @@
 
 use crate::args::{ModeTable, NetworkModel, NormalModeArguments};
 use crate::commands::{open, select_text};
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::analysis::{AnmOptions, GnmOptions};
 use molframe::spatial::SpatialBackend;
@@ -87,10 +87,7 @@ fn anm(
 }
 
 pub(crate) fn normal_modes(args: &NormalModeArguments, context: Context) -> Exit {
-    let structure = match open(&args.input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(&args.input, context));
     let origin = args.input.display().to_string();
     let sites = match select_text(&structure, &args.sites, context.policy, context.execution) {
         Ok(evaluation) => {
@@ -106,10 +103,7 @@ pub(crate) fn normal_modes(args: &NormalModeArguments, context: Context) -> Exit
         NetworkModel::Gnm => gnm(args, structure.coordinates(), &sites, context),
         NetworkModel::Anm => anm(args, structure.coordinates(), &sites, context),
     };
-    let solved = match solved {
-        Ok(solved) => solved,
-        Err(exit) => return exit,
-    };
+    let solved = or_exit!(solved);
     eprintln!("zero modes: {}", solved.zero_modes);
     match args.table {
         ModeTable::Modes => emit_rows(

@@ -1,7 +1,7 @@
 //! Density-map statistics and map-to-map correlation.
 
 use crate::args::HistogramArguments;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::crystal::DensityMap;
 use std::path::Path;
@@ -18,10 +18,7 @@ fn read(path: &Path) -> Result<DensityMap, Exit> {
 }
 
 pub(super) fn statistics(path: &Path, histogram: &HistogramArguments, context: Context) -> Exit {
-    let map = match read(path) {
-        Ok(map) => map,
-        Err(exit) => return exit,
-    };
+    let map = or_exit!(read(path));
     let stats = match map.statistics() {
         Ok(stats) => stats,
         Err(error) => {

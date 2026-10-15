@@ -3,7 +3,7 @@
 use super::render::{emit_mappings, emit_metrics, emit_rmsd};
 use crate::MetricChoice;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json};
 use molframe::sequence::Scoring;
 use std::path::Path;
@@ -16,14 +16,8 @@ pub(crate) fn superpose(
     options: molframe::geometry::SuperposeOptions,
     context: Context,
 ) -> Exit {
-    let mobile_structure = match open(mobile, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let reference_structure = match open(reference, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let mobile_structure = or_exit!(open(mobile, context));
+    let reference_structure = or_exit!(open(reference, context));
     let mobile_selection = match crate::commands::select_text(
         &mobile_structure,
         query,
@@ -134,14 +128,8 @@ pub(crate) fn rmsd(
     query: Option<&str>,
     context: Context,
 ) -> Exit {
-    let mobile_structure = match open(mobile, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let reference_structure = match open(reference, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let mobile_structure = or_exit!(open(mobile, context));
+    let reference_structure = or_exit!(open(reference, context));
     let (moving, fixed) = match comparison_points(
         &mobile_structure,
         &reference_structure,
@@ -244,14 +232,8 @@ pub(crate) fn compare(
     if let Err(exit) = check_controls_have_metrics(&options) {
         return exit;
     }
-    let model = match open(model, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let reference = match open(reference, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let model = or_exit!(open(model, context));
+    let reference = or_exit!(open(reference, context));
     let mut rows = Vec::new();
     for metric in options.metrics {
         let measured = match measure(
@@ -382,18 +364,9 @@ pub(crate) fn map_chains(
         return Exit::Usage;
     }
     let reference_origin = reference.display().to_string();
-    let model = match open(model, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let reference = match open(reference, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let provider = match crate::chemistry::load_ccd(ccd, ccd_version, context) {
-        Ok(provider) => provider,
-        Err(exit) => return exit,
-    };
+    let model = or_exit!(open(model, context));
+    let reference = or_exit!(open(reference, context));
+    let provider = or_exit!(crate::chemistry::load_ccd(ccd, ccd_version, context));
     let assignment = match molframe::compare::assign_chains(
         reference.engine(),
         model.engine(),

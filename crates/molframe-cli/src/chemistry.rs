@@ -6,7 +6,7 @@
 //! dictionary"; the layering itself is Rust's
 //! [`molframe::chemistry::resolution_stack`].
 
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::Context;
 use molframe::chemistry::{ComponentProvider, LayeredProvider, TableStore};
 use std::path::Path;
@@ -73,10 +73,7 @@ pub(crate) fn with_ccd(
 }
 
 pub(crate) fn component(path: &Path, version: &str, id: &str, context: Context) -> Exit {
-    let provider = match load_ccd(path, version, context) {
-        Ok(provider) => provider,
-        Err(exit) => return exit,
-    };
+    let provider = or_exit!(load_ccd(path, version, context));
     let component = match provider.get(id) {
         Ok(Some(component)) => component,
         Ok(None) => {

@@ -1,7 +1,7 @@
 //! Thin rendering over native analysis kernels.
 
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, RowWriter, emit_rows, finish_rows, output_error};
 use molframe::SasaWordError;
 use molframe::SurfaceExt;
@@ -15,14 +15,8 @@ pub(crate) fn contacts(
     cutoff: f32,
     context: Context,
 ) -> Exit {
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let filters = match contact_filters(&structure, between, input, context) {
-        Ok(filters) => filters,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
+    let filters = or_exit!(contact_filters(&structure, between, input, context));
     let mut output =
         match RowWriter::new(context, &["first_atom", "second_atom", "distance_angstrom"]) {
             Ok(output) => output,
@@ -100,10 +94,7 @@ fn contact_filters(
 }
 
 pub(crate) fn neighbors(input: &Path, query: &str, cutoff: f32, context: Context) -> Exit {
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
     let evaluation =
         match crate::commands::select_text(&structure, query, context.policy, context.execution) {
             Ok(evaluation) => evaluation,
@@ -161,10 +152,7 @@ pub(crate) fn sse_standard(
     dssp: &molframe::analysis::DsspOptions,
     context: Context,
 ) -> Exit {
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
     emit_sse(structure.engine(), dssp, context)
 }
 
@@ -176,14 +164,12 @@ pub(crate) fn sse(input: &Path, options: &SseOptions<'_>, context: Context) -> E
             return Exit::Policy;
         }
     };
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let provider = match crate::chemistry::load_ccd(options.ccd, options.ccd_version, context) {
-        Ok(provider) => provider,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
+    let provider = or_exit!(crate::chemistry::load_ccd(
+        options.ccd,
+        options.ccd_version,
+        context
+    ));
     let roles = match molframe::chemistry::apply_polymer_role_profile(
         structure.engine(),
         &provider,
@@ -234,10 +220,7 @@ pub(crate) fn interfaces(input: &Path, between: &[String], cutoff: f32, context:
         eprintln!("--between requires exactly two chain identifiers");
         return Exit::Usage;
     };
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
     let residues = match molframe::analysis::chain_interface(
         structure.engine(),
         first,
@@ -303,10 +286,7 @@ pub(crate) fn sasa(
     if !context.quiet {
         eprintln!("# radius policy: {}", options.applied_policy());
     }
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
     let areas = match structure.sasa_with(&options, context.execution) {
         Ok(areas) => areas,
         Err(error) => {

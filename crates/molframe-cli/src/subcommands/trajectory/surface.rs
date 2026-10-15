@@ -1,6 +1,6 @@
 //! Bounded topology/radius projection and frame-ordered surface output.
 
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, RowWriter};
 use molframe_core::{Backpressure, BatchDemand, BatchSource, execution::Retained};
 use std::path::Path;
@@ -18,18 +18,9 @@ pub(crate) fn sasa(
         return Exit::Refused;
     }
     let bytes = context.execution.memory_budget().bytes() / 4;
-    let mut reader = match super::streaming::open(path, bytes, context.execution) {
-        Ok(reader) => reader,
-        Err(exit) => return exit,
-    };
-    let source = match crate::tables::radius_source(radii, &context) {
-        Ok(source) => source,
-        Err(exit) => return exit,
-    };
-    let radii = match read_radii(topology, reader.n_atoms(), &source, context) {
-        Ok(radii) => radii,
-        Err(exit) => return exit,
-    };
+    let mut reader = or_exit!(super::streaming::open(path, bytes, context.execution));
+    let source = or_exit!(crate::tables::radius_source(radii, &context));
+    let radii = or_exit!(read_radii(topology, reader.n_atoms(), &source, context));
     let mut sink = match RowWriter::new(
         context,
         &["frame", "sasa_angstrom_squared", "time_picosecond"],

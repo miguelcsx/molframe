@@ -2,7 +2,7 @@
 
 use crate::AuditArguments;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table};
 use std::collections::BTreeSet;
 
@@ -25,10 +25,7 @@ pub(crate) fn audit_selection(args: &AuditArguments, context: Context) -> Exit {
         eprintln!("audit requires at least one explicit policy-value dimension");
         return Exit::Usage;
     }
-    let structure = match open(&args.input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(&args.input, context));
     let space = match policy_space(args, context.policy) {
         Ok(space) => space,
         Err(error) => {

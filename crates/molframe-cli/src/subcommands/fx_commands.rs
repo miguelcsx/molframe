@@ -2,7 +2,7 @@
 
 use crate::FxCommand;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table};
 
 pub(crate) fn execute(command: FxCommand, context: Context) -> Exit {
@@ -53,19 +53,18 @@ fn evaluate(
         eprintln!("functional evaluation limits must be positive");
         return Exit::Usage;
     }
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let source = match crate::chemistry::resolve_ccd(ccd_path, ccd_version, context) {
-        Ok(source) => source,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
+    let source = or_exit!(crate::chemistry::resolve_ccd(
+        ccd_path,
+        ccd_version,
+        context
+    ));
     let context = source.context;
-    let provider = match crate::chemistry::load_ccd(source.path, source.version, context) {
-        Ok(provider) => provider,
-        Err(exit) => return exit,
-    };
+    let provider = or_exit!(crate::chemistry::load_ccd(
+        source.path,
+        source.version,
+        context
+    ));
     let specification = match molframe::motif::read_evaluation_specification(motif_path) {
         Ok(specification) => specification,
         Err(error) => {

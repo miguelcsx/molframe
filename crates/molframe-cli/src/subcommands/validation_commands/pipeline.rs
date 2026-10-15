@@ -5,7 +5,7 @@ use super::types::{Row, Subject, ValidationOptions};
 use super::{basic, builtin, reference, structural};
 use crate::ValidationChoice;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table};
 
 /// Whether a check reads CCD-derived roles, charges, bonds or stereochemistry.
@@ -37,10 +37,7 @@ fn wants_annotation(options: ValidationOptions<'_>) -> bool {
 pub(crate) fn validate(options: ValidationOptions<'_>, context: Context) -> Exit {
     let input = options.input.as_path();
     let mut context = context;
-    let mut structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let mut structure = or_exit!(open(input, context));
     if wants_annotation(options) {
         let source = match crate::chemistry::resolve_ccd(
             options.chemistry.ccd.as_deref(),

@@ -1,17 +1,14 @@
 //! CLI rendering over lossless documents and native sequence projection.
 
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table};
 use std::fmt::Write as _;
 use std::path::Path;
 
 pub(crate) fn assemblies(input: &Path, context: Context) -> Exit {
     use molframe::crystal::AssemblyExt as _;
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
     let rows = structure
         .assembly_set()
         .into_iter()
@@ -137,14 +134,8 @@ pub(crate) fn categories(input: &Path, context: Context) -> Exit {
 }
 
 pub(crate) fn sequence(input: &Path, ccd: &Path, ccd_version: &str, context: Context) -> Exit {
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let provider = match crate::chemistry::load_ccd(ccd, ccd_version, context) {
-        Ok(provider) => provider,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
+    let provider = or_exit!(crate::chemistry::load_ccd(ccd, ccd_version, context));
     let chains = match molframe::compare::chain_sequences(
         structure.engine(),
         &provider,

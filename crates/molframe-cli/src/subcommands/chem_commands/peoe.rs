@@ -2,7 +2,7 @@
 
 use crate::args::PeoeArguments;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::chemistry::{ChargeSource, PeoeOptions};
 
@@ -12,18 +12,11 @@ pub(crate) fn peoe(args: &PeoeArguments, context: Context) -> Exit {
         args.chemistry.ccd_version.as_deref(),
         context,
         |ccd, version, context| {
-            let structure = match open(&args.input, context) {
-                Ok(structure) => structure,
-                Err(exit) => return exit,
-            };
-            let provider = match crate::chemistry::load_ccd(ccd, version, context) {
-                Ok(provider) => provider,
-                Err(exit) => return exit,
-            };
-            let structure = match crate::chemistry::annotate(&structure, ccd, version, context) {
-                Ok(structure) => structure,
-                Err(exit) => return exit,
-            };
+            let structure = or_exit!(open(&args.input, context));
+            let provider = or_exit!(crate::chemistry::load_ccd(ccd, version, context));
+            let structure = or_exit!(crate::chemistry::annotate(
+                &structure, ccd, version, context
+            ));
             let charges = match molframe::chemistry::partial_charges(
                 structure.engine(),
                 &provider,

@@ -2,19 +2,13 @@
 
 use crate::args::{AtomMatch, NativeContactArguments};
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::spatial::SpatialBackend;
 
 pub(crate) fn native_contacts(args: &NativeContactArguments, context: Context) -> Exit {
-    let reference = match open(&args.reference, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let target = match open(&args.target, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let reference = or_exit!(open(&args.reference, context));
+    let target = or_exit!(open(&args.target, context));
     let scored = match args.atom_match {
         AtomMatch::Index => molframe::analysis::native_contact_fraction(
             reference.engine(),

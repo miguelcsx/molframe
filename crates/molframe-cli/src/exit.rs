@@ -86,6 +86,18 @@ impl Exit {
     }
 }
 
+/// Unwraps an `Ok`, or returns the `Exit` the `Err` already is from the
+/// enclosing function.
+macro_rules! or_exit {
+    ($result:expr) => {
+        match $result {
+            Ok(value) => value,
+            Err(exit) => return exit,
+        }
+    };
+}
+pub(crate) use or_exit;
+
 #[cfg(test)]
 #[path = "exit_tests.rs"]
 mod tests;

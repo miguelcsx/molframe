@@ -1,25 +1,19 @@
 //! DMS command execution over the native system model.
 
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table};
 use molframe::trajectory::{DmsSystem, read_dms, write_dms};
 use std::fmt::Write as _;
 use std::path::Path;
 
 pub(crate) fn info(input: &Path, context: Context) -> Exit {
-    let system = match read(input) {
-        Ok(system) => system,
-        Err(exit) => return exit,
-    };
+    let system = or_exit!(read(input));
     emit(context, &system);
     Exit::Success
 }
 
 pub(crate) fn copy(input: &Path, output: &Path, context: Context) -> Exit {
-    let system = match read(input) {
-        Ok(system) => system,
-        Err(exit) => return exit,
-    };
+    let system = or_exit!(read(input));
     match write_dms(output, &system) {
         Ok(()) => {
             emit_copy(context, input, output);

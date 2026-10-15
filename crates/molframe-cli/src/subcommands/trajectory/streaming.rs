@@ -1,6 +1,6 @@
 //! Incremental CLI trajectory summaries and RMSD output.
 
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, RowWriter};
 use molframe::trajectory::{
     FrameAlignment, Timestep, TrajectoryFormat, TrajectoryReader, TrajectoryReaderOptions,
@@ -36,15 +36,9 @@ pub(super) fn open(
 
 pub(super) fn info(path: &Path, topology: Option<&Path>, context: Context) -> Exit {
     let bytes = context.execution.memory_budget().bytes() / 2;
-    let mut reader = match open(path, bytes, context.execution) {
-        Ok(reader) => reader,
-        Err(exit) => return exit,
-    };
+    let mut reader = or_exit!(open(path, bytes, context.execution));
     if let Some(path) = topology {
-        let structure = match crate::commands::open(path, context) {
-            Ok(value) => value,
-            Err(exit) => return exit,
-        };
+        let structure = or_exit!(crate::commands::open(path, context));
         if structure.atom_count() as usize != reader.n_atoms() {
             eprintln!("topology and trajectory atom counts differ");
             return Exit::Consistency;
@@ -81,10 +75,7 @@ pub(super) fn info(path: &Path, topology: Option<&Path>, context: Context) -> Ex
 
 pub(super) fn rmsd(path: &Path, reference_index: usize, no_fit: bool, context: Context) -> Exit {
     let bytes = context.execution.memory_budget().bytes() / 3;
-    let mut reader = match open(path, bytes, context.execution) {
-        Ok(reader) => reader,
-        Err(exit) => return exit,
-    };
+    let mut reader = or_exit!(open(path, bytes, context.execution));
     let _reference_reservation = match context.execution.try_reserve(bytes) {
         Ok(value) => value,
         Err(error) => {
@@ -107,10 +98,7 @@ pub(super) fn rmsd(path: &Path, reference_index: usize, no_fit: bool, context: C
         }
     }
     drop(reader);
-    let mut reader = match open(path, bytes, context.execution) {
-        Ok(reader) => reader,
-        Err(exit) => return exit,
-    };
+    let mut reader = or_exit!(open(path, bytes, context.execution));
     let mut sink = match RowWriter::new(context, &["frame", "rmsd_angstrom", "time_picosecond"]) {
         Ok(sink) => sink,
         Err(error) => {

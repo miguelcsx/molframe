@@ -1,7 +1,7 @@
 //! CLI projection over intrinsic geometry and ensemble library workflows.
 
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json};
 use molframe::geometry::PeriodicAngle;
 use molframe::surface::{edge_geodesic_distances, surface_curvatures, surface_patch};
@@ -13,14 +13,13 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 pub(crate) fn torsions(path: &Path, ccd: &Path, ccd_version: &str, context: Context) -> Exit {
-    let structure = match open(path, context) {
-        Ok(value) => value,
-        Err(exit) => return exit,
-    };
-    let structure = match crate::chemistry::annotate(&structure, ccd, ccd_version, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
+    let structure = or_exit!(crate::chemistry::annotate(
+        &structure,
+        ccd,
+        ccd_version,
+        context
+    ));
     let values = match molframe::structure_backbone_torsions(structure.engine()) {
         Ok(values) => values,
         Err(findings) => {
@@ -55,14 +54,13 @@ pub(crate) fn helix(
     eigen: molframe::geometry::EigenOptions,
     context: Context,
 ) -> Exit {
-    let structure = match open(path, context) {
-        Ok(value) => value,
-        Err(exit) => return exit,
-    };
-    let structure = match crate::chemistry::annotate(&structure, ccd, ccd_version, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
+    let structure = or_exit!(crate::chemistry::annotate(
+        &structure,
+        ccd,
+        ccd_version,
+        context
+    ));
     let mut alpha_count = 0usize;
     let mut frame_count = 0usize;
     let mut helix_count = 0usize;
@@ -123,14 +121,8 @@ pub(crate) fn surface(path: &Path, options: SurfaceOptions<'_>, context: Context
             return Exit::Usage;
         }
     };
-    let structure = match open(path, context) {
-        Ok(value) => value,
-        Err(exit) => return exit,
-    };
-    let source = match crate::tables::radius_source(options.radii, &context) {
-        Ok(source) => source,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
+    let source = or_exit!(crate::tables::radius_source(options.radii, &context));
     let mut positions = Vec::new();
     let mut radii = Vec::new();
     for index in 0..structure.atom_count() {
@@ -222,10 +214,7 @@ pub(crate) fn pca(
     fit_iterations: Option<usize>,
     context: Context,
 ) -> Exit {
-    let structure = match open(path, context) {
-        Ok(value) => value,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
     let Some(frames) = dense_frames(&structure) else {
         eprintln!("ensemble input must be a dense multi-model structure");
         return Exit::Consistency;
@@ -268,14 +257,13 @@ pub(crate) fn torsion_pca(
     ccd_version: &str,
     context: Context,
 ) -> Exit {
-    let structure = match open(path, context) {
-        Ok(value) => value,
-        Err(exit) => return exit,
-    };
-    let structure = match crate::chemistry::annotate(&structure, ccd, ccd_version, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
+    let structure = or_exit!(crate::chemistry::annotate(
+        &structure,
+        ccd,
+        ccd_version,
+        context
+    ));
     let mut observations = Vec::new();
     for model in 0..structure.model_count() {
         let Ok(model) = u32::try_from(model) else {
@@ -335,10 +323,7 @@ pub(crate) fn diffusion(
     memory_limit: usize,
     context: Context,
 ) -> Exit {
-    let structure = match open(path, context) {
-        Ok(value) => value,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
     let Some(frames) = dense_frames(&structure) else {
         return Exit::Consistency;
     };

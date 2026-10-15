@@ -5,7 +5,7 @@
 //! table. Nothing is computed here.
 
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::analysis::{CationPiOptions, HydrogenBondOptions, PiStackingOptions};
 use molframe::spatial::SpatialBackend;
@@ -30,10 +30,7 @@ fn failed(what: &str, error: &dyn std::fmt::Display) -> Exit {
 }
 
 pub(crate) fn hbonds(source: Source<'_>, options: HydrogenBondOptions, context: Context) -> Exit {
-    let structure = match annotated(source, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(annotated(source, context));
     let table =
         match molframe::analysis::hydrogen_bonds(structure.engine(), options, context.execution) {
             Ok(table) => table,
@@ -64,10 +61,7 @@ pub(crate) fn hbonds(source: Source<'_>, options: HydrogenBondOptions, context: 
 }
 
 pub(crate) fn salt_bridges(source: Source<'_>, max_distance: f32, context: Context) -> Exit {
-    let structure = match annotated(source, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(annotated(source, context));
     let table = match molframe::analysis::salt_bridges(
         structure.engine(),
         max_distance,
@@ -96,10 +90,7 @@ pub(crate) fn pi_stacking(
     options: PiStackingOptions,
     context: Context,
 ) -> Exit {
-    let structure = match annotated(source, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(annotated(source, context));
     let table = match molframe::analysis::pi_stacking(structure.engine(), options) {
         Ok(table) => table,
         Err(error) => return failed("pi-stacking search", &error),
@@ -134,10 +125,7 @@ const fn stacking_name(kind: molframe::analysis::StackingKind) -> &'static str {
 }
 
 pub(crate) fn cation_pi(source: Source<'_>, options: CationPiOptions, context: Context) -> Exit {
-    let structure = match annotated(source, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(annotated(source, context));
     let table = match molframe::analysis::cation_pi(structure.engine(), options) {
         Ok(table) => table,
         Err(error) => return failed("cation-pi search", &error),
@@ -161,10 +149,7 @@ pub(crate) fn water_bridges(
     options: HydrogenBondOptions,
     context: Context,
 ) -> Exit {
-    let structure = match annotated(source, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(annotated(source, context));
     let table = match molframe::analysis::water_bridges(
         structure.engine(),
         molframe::analysis::WaterBridgeOptions {

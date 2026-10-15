@@ -2,16 +2,13 @@
 
 use crate::args::MatesArguments;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::crystal::{CrystalNeighborOptions, SymmetryExt as _};
 use molframe::spatial::SpatialBackend;
 
 pub(super) fn mates(args: &MatesArguments, context: Context) -> Exit {
-    let structure = match open(&args.input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(&args.input, context));
     let Some(symmetry) = structure.engine().symmetry_set() else {
         eprintln!(
             "{} records no space group this catalogue knows, so it has no symmetry mates",

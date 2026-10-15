@@ -1,6 +1,6 @@
 //! Incremental contact-count rows from native trajectory readers.
 
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, RowWriter};
 use std::path::Path;
 
@@ -12,10 +12,7 @@ pub(crate) fn contacts(path: &Path, cutoff: f32, context: Context) -> Exit {
     // Leave the majority of the shared account for the spatial index and its
     // admitted workers. Reader and frame allowances remain subordinate limits.
     let bytes = context.execution.memory_budget().bytes() / 4;
-    let mut reader = match super::streaming::open(path, bytes, context.execution) {
-        Ok(reader) => reader,
-        Err(exit) => return exit,
-    };
+    let mut reader = or_exit!(super::streaming::open(path, bytes, context.execution));
     let mut sink = match RowWriter::new(context, &["frame", "contacts", "time_picosecond"]) {
         Ok(sink) => sink,
         Err(error) => {

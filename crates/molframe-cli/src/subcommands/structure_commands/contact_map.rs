@@ -2,15 +2,12 @@
 
 use crate::args::ContactMapArguments;
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use molframe::spatial::SpatialBackend;
 
 pub(crate) fn contact_map(args: &ContactMapArguments, context: Context) -> Exit {
-    let structure = match open(&args.input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(&args.input, context));
     let map = match molframe::analysis::residue_contact_map(
         structure.engine(),
         args.cutoff,

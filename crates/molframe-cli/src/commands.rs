@@ -4,7 +4,7 @@
 //! returns an exit code. None of them computes anything: a convenience worth
 //! having belongs in the library, where the Rust callers get it too.
 
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table, json_array};
 use molframe::formats::pdb::{PdbIdentifierNamespace, PdbOptions};
 use molframe::query::{Evaluation, Groups};
@@ -46,10 +46,7 @@ pub(super) fn open(path: &Path, context: Context) -> Result<Structure, Exit> {
 
 /// Summarises a structure.
 pub fn info(path: &Path, detail: bool, context: Context) -> Exit {
-    let structure = match open(path, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
     let namespace = match context.policy.identifiers {
         Namespace::Label => Namespace::Label,
         Namespace::Auth => Namespace::Auth,
@@ -221,10 +218,7 @@ pub fn convert(
     if preserve {
         return preserving_convert(input, output, context);
     }
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
 
     // The output's name decides the format, because that is what the caller
     // wrote down; nothing is inferred from the input.
@@ -342,10 +336,7 @@ fn preserving_convert(input: &Path, output: &Path, context: Context) -> Exit {
 
 /// Measures a structure's overall shape.
 pub fn measure(path: &Path, context: Context) -> Exit {
-    let structure = match open(path, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(path, context));
     let positions = structure.coordinates();
 
     let Some(centre) = molframe::geometry::centroid(positions) else {

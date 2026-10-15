@@ -1,6 +1,6 @@
 //! Per-atom fluctuation rows from a bounded trajectory stream.
 
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, emit_rows};
 use std::path::Path;
 
@@ -10,10 +10,7 @@ pub(crate) fn rmsf(path: &Path, context: Context) -> Exit {
         return Exit::Refused;
     }
     let bytes = context.execution.memory_budget().bytes() / 3;
-    let mut reader = match super::streaming::open(path, bytes, context.execution) {
-        Ok(reader) => reader,
-        Err(exit) => return exit,
-    };
+    let mut reader = or_exit!(super::streaming::open(path, bytes, context.execution));
     let values = match molframe::trajectory::rmsf_stream(&mut *reader, context.execution, bytes) {
         Ok(values) => values,
         Err(error) => {

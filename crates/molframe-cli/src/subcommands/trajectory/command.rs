@@ -2,7 +2,7 @@
 
 use super::summary::{Summary, canonical_length_unit, canonical_time_unit, format_name};
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table};
 use molframe::trajectory::{
     FrameAlignment, GsdOptions, TrajectoryData, TrajectoryFormat, TrajectoryReadOptions,
@@ -21,15 +21,9 @@ pub(crate) fn info(
     if super::streaming::supported(input) {
         return super::streaming::info(input, topology, context);
     }
-    let data = match read(input, gsd_length_scale) {
-        Ok(data) => data,
-        Err(exit) => return exit,
-    };
+    let data = or_exit!(read(input, gsd_length_scale));
     if let Some(path) = topology {
-        let structure = match open(path, context) {
-            Ok(structure) => structure,
-            Err(exit) => return exit,
-        };
+        let structure = or_exit!(open(path, context));
         let atoms = data.frames.first().map_or(0, |frame| frame.positions.len());
         if structure.atom_count() as usize != atoms {
             eprintln!(
@@ -51,10 +45,7 @@ pub(crate) fn convert(
     trz_title: Option<&str>,
     context: Context,
 ) -> Exit {
-    let mut data = match read(input, gsd_length_scale) {
-        Ok(data) => data,
-        Err(exit) => return exit,
-    };
+    let mut data = or_exit!(read(input, gsd_length_scale));
     apply_stride(&mut data, stride);
     write_data(input, output, &data, gsd_length_scale, trz_title, context)
 }
@@ -67,10 +58,7 @@ pub(crate) fn extract(
     trz_title: Option<&str>,
     context: Context,
 ) -> Exit {
-    let data = match read(input, gsd_length_scale) {
-        Ok(data) => data,
-        Err(exit) => return exit,
-    };
+    let data = or_exit!(read(input, gsd_length_scale));
     let selected = match data.select_frames(frames) {
         Ok(selected) => selected,
         Err(error) => {
@@ -98,10 +86,7 @@ pub(crate) fn rmsd(
     if super::streaming::supported(input) {
         return super::streaming::rmsd(input, reference, no_fit, context);
     }
-    let data = match read(input, gsd_length_scale) {
-        Ok(data) => data,
-        Err(exit) => return exit,
-    };
+    let data = or_exit!(read(input, gsd_length_scale));
     let alignment = if no_fit {
         FrameAlignment::None
     } else {
@@ -158,10 +143,7 @@ fn write_data(
     trz_title: Option<&str>,
     context: Context,
 ) -> Exit {
-    let gsd = match gsd_options(gsd_length_scale) {
-        Ok(options) => options,
-        Err(exit) => return exit,
-    };
+    let gsd = or_exit!(gsd_options(gsd_length_scale));
     let options = TrajectoryWriteOptions {
         gsd,
         trz: trz_title.map(|title| TrzWriteOptions {

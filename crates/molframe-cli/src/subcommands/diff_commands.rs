@@ -1,7 +1,7 @@
 //! Rendering for the native semantic structure comparison.
 
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, Table};
 use molframe::{CountDifference, StructureDifference, ValueDifference};
 use std::fmt::Write as _;
@@ -13,14 +13,8 @@ pub(crate) fn diff(
     coordinate_tolerance: f32,
     context: Context,
 ) -> Exit {
-    let left = match open(left_path, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
-    let right = match open(right_path, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let left = or_exit!(open(left_path, context));
+    let right = or_exit!(open(right_path, context));
     let result = molframe::structure_difference(
         &left,
         &right,

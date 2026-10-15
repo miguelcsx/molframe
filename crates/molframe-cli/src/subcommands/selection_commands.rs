@@ -1,7 +1,7 @@
 //! Declarative selection evaluation and native structure materialisation.
 
 use crate::commands::open;
-use crate::exit::Exit;
+use crate::exit::{Exit, or_exit};
 use crate::report::{Context, Json, OutputKind, Table};
 use molframe::AtomIndex;
 use std::path::Path;
@@ -13,10 +13,7 @@ pub(crate) fn select(
     count_only: bool,
     context: Context,
 ) -> Exit {
-    let structure = match open(input, context) {
-        Ok(structure) => structure,
-        Err(exit) => return exit,
-    };
+    let structure = or_exit!(open(input, context));
     let evaluation =
         match crate::commands::select_text(&structure, query, context.policy, context.execution) {
             Ok(evaluation) => evaluation,
