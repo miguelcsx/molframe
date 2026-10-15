@@ -59,3 +59,63 @@ fn insufficient_frame_budget_can_be_retried_without_losing_a_frame() {
     assert_eq!(frame.frame, 0);
     assert_eq!(frame.positions.len(), 100);
 }
+
+#[test]
+fn pull_trr_decodes_frames_longer_than_one_read_block_in_both_precisions() {
+    for precision in [TrrPrecision::Single, TrrPrecision::Double] {
+        let atoms = 2 * BLOCK_ATOMS + 37;
+        let ramp = |scale: f32| -> Vec<[f32; 3]> {
+            (0_u16..)
+                .take(atoms)
+                .map(|i| {
+                    let i = f32::from(i);
+                    [i * scale, -i * scale, 0.5 * i * scale]
+                })
+                .collect()
+        };
+        let frames: Vec<_> = (0_u16..2)
+            .map(|i| Timestep {
+                frame: usize::from(i),
+                time: Some(f64::from(i)),
+                positions: ramp(0.25 + f32::from(i)),
+                velocities: Some(ramp(0.125)),
+                forces: Some(ramp(2.0)),
+                ..Timestep::default()
+            })
+            .collect();
+        let bytes = write_trr(&frames, TrrWriteOptions { precision }).expect("encode");
+        let expected = parse_trr(&bytes).expect("parse");
+        let directory = tempfile::tempdir().expect("directory");
+        let path = directory.path().join("long.trr");
+        std::fs::write(&path, &bytes).expect("write");
+        let mut reader = TrrReader::open(&path, 1 << 20).expect("open");
+        let mut frame = Timestep::default();
+        for expected in &expected.frames {
+            assert!(reader.read_next(&mut frame).expect("frame"));
+            assert_eq!(frame.positions, expected.positions);
+            assert_eq!(frame.velocities, expected.velocities);
+            assert_eq!(frame.forces, expected.forces);
+        }
+        assert!(!reader.read_next(&mut frame).expect("eof"));
+    }
+}
+
+#[test]
+fn pull_trr_refuses_a_last_frame_cut_inside_its_positions() {
+    let frames: Vec<_> = (0_u16..2)
+        .map(|i| Timestep {
+            frame: usize::from(i),
+            time: Some(f64::from(i)),
+            positions: vec![[1.0, 2.0, 3.0]; 300],
+            ..Timestep::default()
+        })
+        .collect();
+    let bytes = write_trr(&frames, TrrWriteOptions::default()).expect("encode");
+    let directory = tempfile::tempdir().expect("directory");
+    let path = directory.path().join("cut.trr");
+    std::fs::write(&path, &bytes[..bytes.len() - 100]).expect("write");
+    let mut reader = TrrReader::open(&path, 1 << 20).expect("open");
+    let mut frame = Timestep::default();
+    assert!(reader.read_next(&mut frame).expect("whole first frame"));
+    assert!(reader.read_next(&mut frame).is_err());
+}

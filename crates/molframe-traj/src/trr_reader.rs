@@ -13,6 +13,9 @@ mod seek;
 
 const BUFFER: usize = 8192;
 
+/// Atoms decoded per block read; a double-precision block is 6 KiB on the stack.
+const BLOCK_ATOMS: usize = 256;
+
 /// A forward-only TRR reader preserving positions, velocities, forces and cell.
 #[derive(Debug)]
 pub struct TrrReader {
@@ -316,16 +319,30 @@ fn fill(
             .map_err(|_| memory(usize::MAX, limit))?;
     }
     values.clear();
-    for _ in 0..atoms {
-        let mut point = [0.0; 3];
-        for value in &mut point {
-            *value =
-                crate::numeric::f32_from_f64(real(input, precision)?).ok_or_else(invalid)? * scale;
-            if !value.is_finite() {
-                return Err(invalid());
+    // Whole blocks of atoms per read: one copy out of the buffered input and a
+    // tight decode loop, instead of a bounds-checked read per coordinate.
+    let width = 3 * precision.bytes();
+    let mut raw = [0_u8; BLOCK_ATOMS * 24];
+    let mut remaining = atoms;
+    while remaining > 0 {
+        let block = remaining.min(BLOCK_ATOMS);
+        let bytes = &mut raw[..block * width];
+        input.read_exact(bytes).map_err(|error| io_error(&error))?;
+        match precision {
+            TrrPrecision::Single => {
+                let (chunks, _) = bytes.as_chunks::<12>();
+                for chunk in chunks {
+                    values.push(super::single_vector(chunk, scale).map_err(|_| invalid())?);
+                }
+            }
+            TrrPrecision::Double => {
+                let (chunks, _) = bytes.as_chunks::<24>();
+                for chunk in chunks {
+                    values.push(super::double_vector(chunk, scale).map_err(|_| invalid())?);
+                }
             }
         }
-        values.push(point);
+        remaining -= block;
     }
     Ok(())
 }
