@@ -1,8 +1,8 @@
 use super::{ResidueSasaError, residue_areas};
+use crate::cif_fixture::read_cif;
 use molframe_chem::HeteroPolicy;
 use molframe_chem::TableRequest;
 use molframe_core::ExecutionContext;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_surface::SasaOptions;
 
@@ -29,11 +29,7 @@ fn structure(rows: &[(&str, &str, &str, &str, u32, f32)]) -> Structure {
             i + 1
         );
     }
-    let input = InputBuffer::from_bytes(text.into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(&text)
 }
 
 fn areas(structure: &Structure) -> Result<super::ResidueAreas, ResidueSasaError> {

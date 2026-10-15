@@ -1,4 +1,5 @@
 use super::{NucleicTorsionError, nucleic_torsions, nucleic_torsions_with_policy};
+use crate::cif_fixture::read_cif;
 use molframe_chem::PolymerAtomRole;
 use molframe_core::contract::{AltlocPolicy, AnalysisPolicy};
 use molframe_core::io::{InputBuffer, ReadOptions};
@@ -59,11 +60,7 @@ loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 ATOM 1 C CA ALA A 1 0 0 0\n";
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok(result) => result,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(source);
     let structure = with_roles(&structure, &[PolymerAtomRole::UNKNOWN]);
     let Ok(records) = nucleic_torsions(&structure) else {
         panic!("explicit non-nucleic role should be valid");
@@ -95,11 +92,7 @@ ATOM 2 O O5' . G A 1 0 0 0\n\
 ATOM 3 C C5' A G A 1 1.33 0 0\n\
 ATOM 4 C C5' B G A 1 1.33 0.1 0\n\
 ATOM 5 C C4' . G A 1 1.83 -1 0\n";
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (parsed, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok(result) => result,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let parsed = read_cif(source);
     let structure = with_roles(
         &parsed,
         &[

@@ -1,11 +1,11 @@
 use super::{BasePairOptions, WatsonCrickGeometry, base_pairs};
 use crate::HydrogenBondOptions;
+use crate::cif_fixture::read_cif;
 use molframe_chem::{
     Component, ComponentAtom, ComponentBond, ComponentKind, MemoryProvider, PolymerLinkPolicy,
     apply_component_chemistry,
 };
 use molframe_core::contract::DictionaryVersion;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{BondOrder, Element, ExecutionContext};
 use molframe_spatial::SpatialBackend;
 use std::fmt::Write as _;
@@ -65,11 +65,7 @@ fn supporting_bond_count_is_an_explicit_policy() {
 }
 
 fn annotated_structure() -> molframe_core::Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(SOURCE);
     match apply_component_chemistry(&structure, &provider(b'U'), PolymerLinkPolicy::Disabled) {
         Ok(report) => report.structure,
         Err(error) => panic!("chemistry failed: {error}"),
@@ -288,11 +284,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
         [component("ADE", b'A'), component("URA", b'U')],
     )
     .expect("component fixtures are unique");
-    let input = InputBuffer::from_bytes(source.into_bytes());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(&source);
     let structure =
         match apply_component_chemistry(&structure, &provider, PolymerLinkPolicy::Disabled) {
             Ok(report) => report.structure,

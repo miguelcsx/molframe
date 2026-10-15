@@ -1,4 +1,5 @@
 use super::{ForbiddenResolution, GovernedAnalysisError, Requirement, analyse_structure};
+use crate::cif_fixture::read_cif;
 use crate::policy_execution::{AnalysisDescriptor, FrameKernelResult, structure_kernel};
 use molframe_core::ExecutionContext;
 use molframe_core::contract::{AnalysisPolicy, HydrogenPolicy, PolicyField};
@@ -16,11 +17,7 @@ fn structure(with_hydrogen: bool) -> Structure {
     if with_hydrogen {
         source.push_str("ATOM 2 H H1 LIG A 1 1 0 0\n");
     }
-    let input = InputBuffer::from_bytes(source.into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(&source)
 }
 
 fn atoms_kernel(

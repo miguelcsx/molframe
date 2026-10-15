@@ -1,6 +1,6 @@
 use super::{atom_contacts, visit_atom_contacts};
+use crate::cif_fixture::read_cif;
 use molframe_core::ExecutionContext;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_spatial::SpatialBackend;
 
@@ -16,11 +16,7 @@ ATOM 3 C C3 LIG A 2 1.5 0 0\n\
 ATOM 4 C C4 LIG A 2 10 0 0\n";
 
 fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(SOURCE)
 }
 
 #[test]

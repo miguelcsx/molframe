@@ -1,4 +1,5 @@
 use super::analyse_trajectory;
+use crate::cif_fixture::read_cif;
 use crate::numeric::usize_to_f32;
 use crate::policy_execution::analyse_structure;
 use crate::policy_execution::{AnalysisDescriptor, FrameKernelResult, structure_kernel};
@@ -7,7 +8,6 @@ use molframe_core::contract::{
     AnalysisPolicy, AssemblyChoice, Coverage, MissingPolicy, ParameterValue, Quality, Status,
 };
 use molframe_core::diagnostic::{Code, Diagnostic};
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_traj::{Frame, Trajectory};
 use std::convert::Infallible;
@@ -20,11 +20,7 @@ ATOM 1 C C1 LIG A 1 0 0 0\n\
 ATOM 2 C C2 LIG A 1 1 0 0\n";
 
 fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(SOURCE)
 }
 
 fn x_sum_kernel() -> impl crate::policy_execution::StructureKernel<Output = f64, Error = Infallible>

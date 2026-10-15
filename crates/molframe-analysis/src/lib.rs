@@ -13,6 +13,8 @@
 #[macro_use]
 mod tables;
 
+#[cfg(test)]
+mod cif_fixture;
 mod diagnostics;
 mod numeric;
 mod policy_execution;

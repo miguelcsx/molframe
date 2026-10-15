@@ -1,10 +1,10 @@
+use crate::cif_fixture::read_cif;
 use std::fmt::Write;
 
 use super::{HeavyAtomHydrogenBondOptions, HeavyAtomHydrogenBondTable, heavy_atom_hydrogen_bonds};
 use crate::hbond::{HeavyRoleTable, HydrogenBondError};
 use molframe_bench::{Sample, structure};
 use molframe_chem::{TableIdentity, TableKind};
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{
     AnnotationColumn, AtomAnnotation, AtomIndex, ExecutionContext, Presence, Structure,
 };
@@ -36,11 +36,7 @@ fn build(rows: &[Row]) -> Structure {
             serial + 1
         );
     }
-    let input = InputBuffer::from_bytes(source.into_bytes());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(&source)
 }
 
 /// The role table shipped under `data/`, decoded once; the repository carries it.

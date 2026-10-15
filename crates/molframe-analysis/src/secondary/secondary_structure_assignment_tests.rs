@@ -1,6 +1,7 @@
 use super::{
     DsspError, DsspOptions, can_donate, secondary_structure, secondary_structure_with_policy,
 };
+use crate::cif_fixture::read_cif;
 use molframe_bench::{Sample, structure};
 use molframe_chem::{PolymerAtomRole, assign_secondary_structure};
 use molframe_core::Presence;
@@ -132,11 +133,7 @@ ATOM 2 N N B ALA A 1 0 0.1 0\n\
 ATOM 3 C CA . ALA A 1 1.4 0 0\n\
 ATOM 4 C C . ALA A 1 2 1.2 0\n\
 ATOM 5 O O . ALA A 1 1.5 2.3 0\n";
-    let input = molframe_core::io::InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (parsed, _) = match molframe_cif::read(&input, &molframe_core::io::ReadOptions::new()) {
-        Ok(result) => result,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let parsed = read_cif(source);
     let structure = with_roles(&parsed);
     assert!(secondary_structure(&structure, &DsspOptions::default()).is_ok());
     let keep_all = AnalysisPolicy::default().with_altloc(AltlocPolicy::KeepAll);

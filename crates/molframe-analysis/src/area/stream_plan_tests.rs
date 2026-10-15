@@ -1,9 +1,9 @@
 use super::{SasaStreamError, SasaStreamPlan};
+use crate::cif_fixture::read_cif;
 use molframe_chem::{RadiusSelection, TableRequest, TableStore, VdwRadii};
 use molframe_core::ExecutionContext;
 use molframe_core::contract::{AnalysisPolicy, PolicyField, RadiiSet};
 use molframe_core::diagnostic::{Code, Diagnostic};
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_surface::{SasaOptions, measure_atoms};
 use molframe_traj::{Frame, StreamingReader};
@@ -17,11 +17,7 @@ ATOM 3 H H ALA A 1 0.5 1 0\nATOM 4 C C GLY A 2 3.0 0 0\n\
 HETATM 5 O O HOH B 3 2.0 2 0\n";
 
 fn topology() -> Structure {
-    let input = InputBuffer::from_bytes(TEXT.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(TEXT)
 }
 
 fn store() -> &'static TableStore {

@@ -1,9 +1,9 @@
 use super::{ResidueKernelError, residue_sasa_kernel};
+use crate::cif_fixture::read_cif;
 use crate::{GovernedAnalysisError, analyse_structure};
 use molframe_chem::{RadiusSelection, TableRequest, VdwRadii};
 use molframe_core::contract::{AnalysisPolicy, PolicyField, RadiiSet};
 use molframe_core::diagnostic::{Code, Diagnostic};
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::{ExecutionContext, Structure};
 use molframe_surface::SasaOptions;
 
@@ -15,11 +15,7 @@ ATOM 1 N N ALA A 1 0 0 0\nATOM 2 C CA ALA A 1 1.5 0 0\n\
 ATOM 3 C C GLY A 2 3.0 0 0\n";
 
 fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(TEXT.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(TEXT)
 }
 
 fn run(

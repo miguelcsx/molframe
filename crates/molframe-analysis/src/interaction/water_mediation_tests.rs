@@ -3,7 +3,7 @@ use super::{
     water_bridges_with_policy,
 };
 use crate::HydrogenBondOptions;
-use molframe_core::io::{InputBuffer, ReadOptions};
+use crate::cif_fixture::read_cif;
 use molframe_core::optional::OptionalSymbol;
 use molframe_core::{
     AnnotationColumn, AtomAnnotation, BondOrder, BondProvenance, BondRecord, BondTableBuilder,
@@ -42,11 +42,7 @@ fn two_oriented_hydrogen_bonds_form_one_water_bridge() {
 }
 
 fn annotated_structure() -> molframe_core::Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(SOURCE);
     let mut data = structure.data().clone();
     data.annotations.insert(
         molframe_core::HBOND_DONOR_ANNOTATION,
@@ -121,11 +117,7 @@ fn custom(
     acceptors: &[u32],
     bonds: &[(u32, u32)],
 ) -> molframe_core::Structure {
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(source);
     let count = structure.atom_count();
     let mut data = structure.data().clone();
     data.annotations.insert(

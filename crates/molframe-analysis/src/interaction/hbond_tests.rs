@@ -2,7 +2,7 @@ use super::{
     HydrogenBondError, HydrogenBondOptions, HydrogenBondPolicy, HydrogenBondTable,
     hydrogen_bonds as hydrogen_bonds_native, hydrogen_bonds_with_policy,
 };
-use molframe_core::io::{InputBuffer, ReadOptions};
+use crate::cif_fixture::read_cif;
 use molframe_core::optional::OptionalSymbol;
 use molframe_core::{
     AnnotationColumn, AtomAnnotation, BondOrder, BondProvenance, BondRecord, BondTableBuilder,
@@ -51,11 +51,7 @@ fn angular_policy_filters_a_bent_geometry() {
 
 #[test]
 fn absent_ccd_roles_are_an_error_not_a_heavy_atom_fallback() {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(SOURCE);
     assert!(matches!(
         hydrogen_bonds(&structure, options(150.0)),
         Err(HydrogenBondError::MissingChemistry)
@@ -72,11 +68,7 @@ fn options(minimum_angle_degrees: f64) -> HydrogenBondOptions {
 }
 
 pub(super) fn annotated_structure(source: &str) -> molframe_core::Structure {
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(source);
     let mut data = structure.data().clone();
     let roles = |selected: u32| {
         AnnotationColumn::from_entries((0..3).map(|atom| {
@@ -144,11 +136,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
         }
     }
 
-    let input = InputBuffer::from_bytes(source.into_bytes());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(&source);
     let count = structure.atom_count();
     let mut data = structure.data().clone();
 

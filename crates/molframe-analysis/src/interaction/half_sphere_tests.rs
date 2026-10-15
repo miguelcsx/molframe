@@ -1,4 +1,5 @@
 use super::half_sphere_exposure;
+use crate::cif_fixture::read_cif;
 use molframe_chem::PolymerAtomRole;
 use molframe_core::annotation::{AnnotationColumn, AtomAnnotation};
 use molframe_core::io::{InputBuffer, ReadOptions};
@@ -72,11 +73,7 @@ loop_\n_atom_site.group_PDB\n_atom_site.id\n_atom_site.type_symbol\n\
 _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 ATOM 1 C CA GLY A 1 0 0 0\n";
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok(result) => result,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(source);
     let Ok(exposure) = half_sphere_exposure(
         &with_roles(&structure),
         13.0,
@@ -112,11 +109,7 @@ ATOM 2 C CB ALA A 1 1 0 0\n\
 ATOM 3 C CA ALA A 2 5 0 0\n\
 ATOM 4 C CB ALA A 2 6 0 0\n\
 ATOM 5 C CA GLY A 3 9 0 0\n";
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok(result) => result,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(source);
     let annotated = with_roles(&structure);
     // Two of the three residues carry a direction; the glycine does not.
     let kernel = half_sphere_exposure_kernel(13.0, SpatialBackend::BruteForce);
@@ -155,11 +148,7 @@ _atom_site.label_atom_id\n_atom_site.label_comp_id\n_atom_site.label_asym_id\n\
 _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cartn_z\n\
 ATOM 1 C CA ALA A 1 0 0 0\n\
 ATOM 2 C CA ALA A 2 5 0 0\n";
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok(result) => result,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(source);
     let annotated = with_roles(&structure);
     assert!(
         !crate::policy_execution::Requirement::PolymerSideChainDirection.satisfied_by(&annotated),
@@ -202,11 +191,7 @@ ATOM 3 C CA ALA A 2 5 0 0\n\
 ATOM 4 C CB ALA A 2 6 0 0\n\
 HETATM 5 O HOH B 3 20 0 0 0\n\
 HETATM 6 ZN ZN C 4 30 0 0 0\n";
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    let (structure, _) = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok(result) => result,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(source);
     // The profile names CA and CB, so the two alanines are the protein domain. The
     // water and the zinc carry no protein role and are outside it.
     let annotated = with_roles(&structure);

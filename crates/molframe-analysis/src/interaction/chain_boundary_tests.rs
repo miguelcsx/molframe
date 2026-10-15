@@ -1,5 +1,5 @@
+use crate::cif_fixture::read_cif;
 use molframe_core::ExecutionContext;
-use molframe_core::io::{InputBuffer, ReadOptions};
 use molframe_core::structure::Structure;
 use molframe_spatial::SpatialBackend;
 use std::fmt::Write;
@@ -15,11 +15,7 @@ ATOM 2 C CA GLY B 1 3 0 0\n\
 ATOM 3 C CA GLY B 2 100 0 0\n";
 
 fn structure() -> Structure {
-    let input = InputBuffer::from_bytes(SOURCE.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
+    read_cif(SOURCE)
 }
 
 #[test]
@@ -100,11 +96,7 @@ _atom_site.label_seq_id\n_atom_site.Cartn_x\n_atom_site.Cartn_y\n_atom_site.Cart
         }
     }
 
-    let input = InputBuffer::from_bytes(source.into_bytes());
-    let structure = match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    };
+    let structure = read_cif(&source);
     let Ok(serial) = chain_interface(
         &structure,
         "A",
@@ -143,14 +135,6 @@ use super::{
     ChainSelector, InterfaceError, InterfaceOptions, chain_interface, chain_interface_with_options,
 };
 
-fn read(source: &str) -> Structure {
-    let input = InputBuffer::from_bytes(source.as_bytes().to_vec());
-    match molframe_cif::read(&input, &ReadOptions::new()) {
-        Ok((structure, _)) => structure,
-        Err(findings) => panic!("fixture failed: {findings:?}"),
-    }
-}
-
 // Label A is author B and label B is author A, so the bare name "A" means two
 // different chains depending on the namespace.
 const SWAPPED: &str = "data_s\n\
@@ -179,7 +163,7 @@ fn run(structure: &Structure, options: &InterfaceOptions<'_>) -> Result<Vec<u32>
 
 #[test]
 fn a_name_that_means_different_chains_per_namespace_is_rejected() {
-    let structure = read(SWAPPED);
+    let structure = read_cif(SWAPPED);
     let result = chain_interface(
         &structure,
         "A",
@@ -193,7 +177,7 @@ fn a_name_that_means_different_chains_per_namespace_is_rejected() {
 
 #[test]
 fn an_explicit_namespace_resolves_swapped_identifiers() {
-    let structure = read(SWAPPED);
+    let structure = read_cif(SWAPPED);
     let by_label = run(
         &structure,
         &options(ChainSelector::label("A"), ChainSelector::label("B")),
@@ -214,7 +198,7 @@ fn an_explicit_namespace_resolves_swapped_identifiers() {
 
 #[test]
 fn an_interface_of_a_chain_with_itself_is_rejected() {
-    let structure = read(SWAPPED);
+    let structure = read_cif(SWAPPED);
     let same_name = run(
         &structure,
         &options(ChainSelector::label("A"), ChainSelector::label("A")),
@@ -242,7 +226,7 @@ ATOM 2 C CA GLY B 1 9.5 0 0\n"
 
 #[test]
 fn periodic_interface_finds_contacts_across_the_cell_boundary() {
-    let structure = read(&cell_source(10.0));
+    let structure = read_cif(&cell_source(10.0));
     let mut request = options(ChainSelector::label("A"), ChainSelector::label("B"));
     request.cutoff = 2.0;
     assert!(matches!(run(&structure, &request), Ok(ref found) if found.is_empty()));
@@ -252,7 +236,7 @@ fn periodic_interface_finds_contacts_across_the_cell_boundary() {
 
 #[test]
 fn periodic_interface_rejects_a_placeholder_cell() {
-    let structure = read(&cell_source(1.0));
+    let structure = read_cif(&cell_source(1.0));
     let mut request = options(ChainSelector::label("A"), ChainSelector::label("B"));
     request.periodic = true;
     assert!(matches!(
@@ -263,7 +247,7 @@ fn periodic_interface_rejects_a_placeholder_cell() {
 
 #[test]
 fn periodic_interface_requires_a_cell() {
-    let structure = read(SOURCE);
+    let structure = read_cif(SOURCE);
     let mut request = options(ChainSelector::label("A"), ChainSelector::label("B"));
     request.periodic = true;
     assert!(matches!(
@@ -274,7 +258,7 @@ fn periodic_interface_requires_a_cell() {
 
 #[test]
 fn a_prefixed_chain_name_picks_its_namespace_in_the_plain_entry_point() {
-    let structure = read(SWAPPED);
+    let structure = read_cif(SWAPPED);
     let context = ExecutionContext::default();
     let by_label = chain_interface(
         &structure,
@@ -298,7 +282,7 @@ fn a_prefixed_chain_name_picks_its_namespace_in_the_plain_entry_point() {
 
 #[test]
 fn the_ambiguity_message_names_the_prefixes_that_resolve_it() {
-    let structure = read(SWAPPED);
+    let structure = read_cif(SWAPPED);
     let result = chain_interface(
         &structure,
         "A",
