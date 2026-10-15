@@ -4,66 +4,56 @@ use molframe::SecondarySource as Source;
 use molframe::SecondaryStructure as Ss;
 use pyo3::prelude::*;
 
-/// Per-residue secondary state; integer values are the native wire codes.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[pyclass(
-    name = "SecondaryStructure",
-    eq,
-    eq_int,
-    hash,
-    frozen,
-    skip_from_py_object,
-    module = "molframe"
-)]
-pub(crate) enum PySecondaryStructure {
-    Unknown = Ss::Unknown.code() as isize,
-    Coil = Ss::Coil.code() as isize,
-    AlphaHelix = Ss::AlphaHelix.code() as isize,
-    Strand = Ss::Strand.code() as isize,
-    Turn = Ss::Turn.code() as isize,
-    ThreeTenHelix = Ss::ThreeTenHelix.code() as isize,
-    PiHelix = Ss::PiHelix.code() as isize,
-    OtherHelix = Ss::OtherHelix.code() as isize,
-    BetaBridge = Ss::BetaBridge.code() as isize,
-    Bend = Ss::Bend.code() as isize,
-    PolyProline = Ss::PolyProline.code() as isize,
+/// Declares the Python enum mirroring `Ss` and both conversions from one
+/// variant list, so the three can never disagree.
+macro_rules! mirror {
+    ($($variant:ident),+ $(,)?) => {
+        /// Per-residue secondary state; integer values are the native wire codes.
+        #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+        #[pyclass(
+            name = "SecondaryStructure",
+            eq,
+            eq_int,
+            hash,
+            frozen,
+            skip_from_py_object,
+            module = "molframe"
+        )]
+        pub(crate) enum PySecondaryStructure {
+            $($variant = Ss::$variant.code() as isize,)+
+        }
+
+        impl From<Ss> for PySecondaryStructure {
+            fn from(value: Ss) -> Self {
+                match value {
+                    $(Ss::$variant => Self::$variant,)+
+                }
+            }
+        }
+
+        impl PySecondaryStructure {
+            const fn native(&self) -> Ss {
+                match self {
+                    $(Self::$variant => Ss::$variant,)+
+                }
+            }
+        }
+    };
 }
 
-impl From<Ss> for PySecondaryStructure {
-    fn from(value: Ss) -> Self {
-        match value {
-            Ss::Unknown => Self::Unknown,
-            Ss::Coil => Self::Coil,
-            Ss::AlphaHelix => Self::AlphaHelix,
-            Ss::Strand => Self::Strand,
-            Ss::Turn => Self::Turn,
-            Ss::ThreeTenHelix => Self::ThreeTenHelix,
-            Ss::PiHelix => Self::PiHelix,
-            Ss::OtherHelix => Self::OtherHelix,
-            Ss::BetaBridge => Self::BetaBridge,
-            Ss::Bend => Self::Bend,
-            Ss::PolyProline => Self::PolyProline,
-        }
-    }
-}
-
-impl PySecondaryStructure {
-    const fn native(&self) -> Ss {
-        match self {
-            Self::Unknown => Ss::Unknown,
-            Self::Coil => Ss::Coil,
-            Self::AlphaHelix => Ss::AlphaHelix,
-            Self::Strand => Ss::Strand,
-            Self::Turn => Ss::Turn,
-            Self::ThreeTenHelix => Ss::ThreeTenHelix,
-            Self::PiHelix => Ss::PiHelix,
-            Self::OtherHelix => Ss::OtherHelix,
-            Self::BetaBridge => Ss::BetaBridge,
-            Self::Bend => Ss::Bend,
-            Self::PolyProline => Ss::PolyProline,
-        }
-    }
-}
+mirror!(
+    Unknown,
+    Coil,
+    AlphaHelix,
+    Strand,
+    Turn,
+    ThreeTenHelix,
+    PiHelix,
+    OtherHelix,
+    BetaBridge,
+    Bend,
+    PolyProline,
+);
 
 #[pymethods]
 impl PySecondaryStructure {

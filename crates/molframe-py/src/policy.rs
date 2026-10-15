@@ -18,6 +18,17 @@ where
     value.parse().map_err(crate::error::kernel)
 }
 
+/// Replaces `slot` with the parsed decision, when one was named.
+fn set<T>(slot: &mut T, value: Option<&str>) -> PyResult<()>
+where
+    T: std::str::FromStr<Err = molframe::PolicyParseError>,
+{
+    if let Some(value) = value {
+        *slot = parse(value)?;
+    }
+    Ok(())
+}
+
 /// A decision's canonical spelling in the underscore form Python uses; a
 /// `name:payload` value keeps its payload as written.
 pub(crate) fn snake(canonical: &str) -> String {
@@ -65,24 +76,12 @@ impl PyAnalysisPolicy {
         float_tolerance: Option<(f64, f64)>,
     ) -> PyResult<Self> {
         let mut policy = AnalysisPolicy::default();
-        if let Some(value) = assembly {
-            policy.assembly = parse(value)?;
-        }
-        if let Some(value) = model {
-            policy.model = parse(value)?;
-        }
-        if let Some(value) = atom_equivalence {
-            policy.atom_equivalence = parse(value)?;
-        }
-        if let Some(value) = alignment {
-            policy.alignment = parse(value)?;
-        }
-        if let Some(value) = periodic {
-            policy.periodic = parse(value)?;
-        }
-        if let Some(value) = contact_def {
-            policy.contact_def = parse(value)?;
-        }
+        set(&mut policy.assembly, assembly)?;
+        set(&mut policy.model, model)?;
+        set(&mut policy.atom_equivalence, atom_equivalence)?;
+        set(&mut policy.alignment, alignment)?;
+        set(&mut policy.periodic, periodic)?;
+        set(&mut policy.contact_def, contact_def)?;
         if let Some((relative, absolute)) = float_tolerance {
             if !(relative.is_finite() && absolute.is_finite() && relative >= 0.0 && absolute >= 0.0)
             {
@@ -92,27 +91,13 @@ impl PyAnalysisPolicy {
             }
             policy.float_tolerance = molframe::Tolerance { relative, absolute };
         }
-        if let Some(value) = identifiers {
-            policy.identifiers = parse(value)?;
-        }
-        if let Some(value) = altloc {
-            policy.altloc = parse(value)?;
-        }
-        if let Some(value) = missing_atoms {
-            policy.missing_atoms = parse(value)?;
-        }
-        if let Some(value) = hydrogens {
-            policy.hydrogens = parse(value)?;
-        }
-        if let Some(value) = symmetry {
-            policy.symmetry = parse(value)?;
-        }
-        if let Some(value) = vdw_radii {
-            policy.vdw_radii = parse(value)?;
-        }
-        if let Some(value) = precision {
-            policy.precision = parse(value)?;
-        }
+        set(&mut policy.identifiers, identifiers)?;
+        set(&mut policy.altloc, altloc)?;
+        set(&mut policy.missing_atoms, missing_atoms)?;
+        set(&mut policy.hydrogens, hydrogens)?;
+        set(&mut policy.symmetry, symmetry)?;
+        set(&mut policy.vdw_radii, vdw_radii)?;
+        set(&mut policy.precision, precision)?;
         Ok(Self(policy))
     }
 
