@@ -1,7 +1,7 @@
 //! One-pass projection, coordinate lowering and ensemble classification.
 
 use super::bulk;
-use super::projection::{Projection, ProjectionSink};
+use super::projection::{Projection, ProjectionSink, model_or_one};
 use super::row::AtomRow;
 use crate::document::CifValueRef;
 use crate::lexer::Quoting;
@@ -173,13 +173,6 @@ impl<'options> RowLowering<'options> {
         }
         self.current_number = None;
     }
-}
-
-fn model_or_one(model: Option<i64>) -> i64 {
-    let Some(model) = model else {
-        return 1;
-    };
-    model
 }
 
 impl<'input> ValueSink<'input> for DirectSink<'_, 'input> {

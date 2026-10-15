@@ -199,7 +199,7 @@ impl<'input> ValueSink<'input> for ProjectionSink {
     }
 }
 
-fn model_or_one(model: Option<i64>) -> i64 {
+pub(super) fn model_or_one(model: Option<i64>) -> i64 {
     let Some(model) = model else {
         return 1;
     };
