@@ -286,6 +286,12 @@ assert_eq!(query.source(), \"nonpolar_hydrogen\");
         ColumnBuilder(Column::ResidueName, "resname")
     }
 
+    /// Element symbol column, compared case-insensitively against a symbol such as `S`.
+    #[must_use]
+    pub const fn element() -> ColumnBuilder {
+        ColumnBuilder(Column::Element, "element")
+    }
+
     /// Chain identifier column.
     #[must_use]
     pub const fn chain() -> ColumnBuilder {

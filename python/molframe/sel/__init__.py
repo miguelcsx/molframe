@@ -16,6 +16,7 @@ turn = _native.turn
 bend = _native.bend
 coil = _native.coil
 atom = _native.atom
+element = _native.element
 backbone = _native.backbone
 chain = _native.chain
 glycans = _native.glycans
@@ -50,6 +51,7 @@ __all__ = [
     "bridge",
     "chain",
     "coil",
+    "element",
     "glycans",
     "heavy",
     "helix",

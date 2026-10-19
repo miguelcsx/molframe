@@ -294,6 +294,12 @@ class Entities:
     def __getitem__(self, index: int) -> Entity: ...
 
 class Selection:
+    @staticmethod
+    def from_indices(structure: Structure, indices: UInt32Array) -> Selection:
+        """Atoms at these positions, in any order; a repeated position counts once."""
+    @staticmethod
+    def from_mask(structure: Structure, mask: BoolArray) -> Selection:
+        """Atoms whose mask entry is true; the mask has one entry per atom of ``structure``."""
     def __len__(self) -> int: ...
     @property
     def indices(self) -> UInt32Array: ...

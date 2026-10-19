@@ -5,7 +5,9 @@
 //! linear in its source text.
 
 use super::PyStructure;
+use crate::bindings::array::Array1;
 use crate::hierarchy::PyResidueSelection;
+use molframe::engine::core::AtomSelection;
 use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::prelude::*;
 
@@ -68,6 +70,48 @@ impl PySelection {
         ))
     }
 
+    /// The atoms at these positions, in any order; a repeated position counts once.
+    #[staticmethod]
+    fn from_indices(structure: &PyStructure, indices: Array1<'_, '_, u32>) -> PyResult<Self> {
+        let count = structure.inner.engine().atom_count();
+        let readonly = indices.readonly();
+        let mut atoms = readonly
+            .as_slice()
+            .map_err(|_| crate::error::value("indices must be a contiguous uint32 array"))?
+            .to_vec();
+        atoms.sort_unstable();
+        atoms.dedup();
+        if atoms.last().is_some_and(|&last| last >= count) {
+            return Err(crate::error::value(
+                "an index is outside the structure's atoms",
+            ));
+        }
+        Ok(Self::of_atoms(structure, AtomSelection::from_sorted(atoms)))
+    }
+
+    /// The atoms whose entry in `mask` is true; the mask has one entry per atom.
+    #[staticmethod]
+    fn from_mask(structure: &PyStructure, mask: Array1<'_, '_, bool>) -> PyResult<Self> {
+        let readonly = mask.readonly();
+        let flags = readonly
+            .as_slice()
+            .map_err(|_| crate::error::value("mask must be a contiguous boolean array"))?;
+        if usize::try_from(structure.inner.engine().atom_count()) != Ok(flags.len()) {
+            return Err(crate::error::value(
+                "mask length must equal the structure's atom count",
+            ));
+        }
+        let mut atoms = Vec::new();
+        for (index, &selected) in flags.iter().enumerate() {
+            if selected {
+                let atom = u32::try_from(index)
+                    .map_err(|_| crate::error::value("mask is longer than u32 atoms"))?;
+                atoms.push(atom);
+            }
+        }
+        Ok(Self::of_atoms(structure, AtomSelection::from_sorted(atoms)))
+    }
+
     fn __or__(&self, other: &Self) -> Self {
         let combined = &self.selection | &other.selection;
         Self::from_native(self.parent.clone(), combined)
@@ -91,6 +135,12 @@ impl PySelection {
 
     pub(crate) const fn native(&self) -> &molframe::Selection {
         &self.selection
+    }
+
+    /// A selection over `atoms` of `structure`, a zero-copy view of its atoms.
+    fn of_atoms(structure: &PyStructure, atoms: AtomSelection) -> Self {
+        let view = structure.inner.engine().view_of(atoms);
+        Self::from_native(structure.clone(), molframe::Selection::from(view))
     }
 
     pub(crate) fn from_native(parent: PyStructure, selection: molframe::Selection) -> Self {

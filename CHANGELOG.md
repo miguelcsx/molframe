@@ -4,6 +4,24 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## 0.7.0 — unreleased
+
+- **Selections from data.** `Selection.from_indices(structure, indices)` and
+  `Selection.from_mask(structure, mask)` build an atom selection from a uint32 index
+  array or a boolean array with one entry per atom, with no query text. Indices are
+  sorted and de-duplicated; an out-of-range index or a mask of the wrong length is a
+  `ValueError`.
+- **Element queries without text.** `molframe.sel.element("S")` selects the atoms of
+  one element symbol, compared case-insensitively, as the `element` column of the
+  query language already does.
+- **`molframe.nearest(structure, points, *, among=None, max_distance=None)`** returns
+  the closest atom to each point as `Nearest(index, distance, found)`. The search runs
+  through `spatial.knn`; `among` restricts it to a selection while the indices still
+  refer to the whole structure, and `max_distance` leaves distant points unfound
+  instead of reporting the uint32 sentinel.
+- **`molframe.extract(structure, selection)`** returns a new structure holding only
+  the selected atoms, through the editor's deletion of the complement.
+
 ## 0.6.5 — 2026-10-19
 
 - **Covalent radii are a Python call, not an element attribute.**

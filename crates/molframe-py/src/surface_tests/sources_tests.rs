@@ -33,6 +33,7 @@ const HOLDS_THE_GIL: &[(&str, &str)] = &[
     ("selection_expr.rs", "(macro)"),
     ("selection_expr.rs", "chain"),
     ("selection_expr.rs", "residue"),
+    ("selection_expr.rs", "element"),
     ("selection_expr.rs", "atom"),
     ("selection_expr.rs", "within"),
     ("selection_expr.rs", "residues_within"),

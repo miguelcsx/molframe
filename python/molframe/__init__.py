@@ -62,6 +62,7 @@ from ._native import (
     read,
     read_with_diagnostics,
 )
+from .atoms import Nearest, extract, nearest
 from .errors import (
     Cancelled,
     ConsistencyError,
@@ -120,6 +121,7 @@ __all__ = [
     "MolframeTypeError",
     "MolframeValueError",
     "MolframeWarning",
+    "Nearest",
     "ParseError",
     "PolicyError",
     "Query",
@@ -151,11 +153,13 @@ __all__ = [
     "crystal",
     "data",
     "errors",
+    "extract",
     "formats",
     "geometry",
     "interop",
     "modelcif",
     "motif",
+    "nearest",
     "open_structure_batches",
     "query",
     "read",

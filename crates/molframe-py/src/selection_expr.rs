@@ -62,6 +62,13 @@ fn residue(value: &str) -> PyQuery {
 }
 
 #[pyfunction]
+fn element(symbol: &str) -> PyQuery {
+    PyQuery::from_native(molframe::Query::from_builder(
+        molframe::query::col::element().eq(symbol),
+    ))
+}
+
+#[pyfunction]
 fn atom(value: &str) -> PyQuery {
     PyQuery::from_native(molframe::Query::from_builder(
         molframe::query::col::name().eq(value),
@@ -121,6 +128,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(coil);
     add!(chain);
     add!(residue);
+    add!(element);
     add!(atom);
     add!(within);
     add!(residues_within);
