@@ -44,10 +44,12 @@ pub(crate) fn radii_under(
     Ok((selection, source))
 }
 
-/// The covalent radii the profile selects.
-pub(crate) fn covalent_radii() -> PyResult<Arc<Provided<CovalentRadii>>> {
-    TableRequest::<CovalentRadii>::profile()
-        .resolve(&TableStore::global(), "covalent radii")
+/// The covalent radii a call measures with: the `radii` argument's table, else the
+/// profile's `covalent-radii` line. Covalent radii have no policy, so the argument is
+/// the only choice besides the profile.
+pub(crate) fn covalent_radii(radii: Option<&str>) -> PyResult<Arc<Provided<CovalentRadii>>> {
+    TableRequest::<CovalentRadii>::choose(radii)
+        .resolve(&TableStore::global(), "--radii")
         .map_err(crate::error::kernel)
 }
 

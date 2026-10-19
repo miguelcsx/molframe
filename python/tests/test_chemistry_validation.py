@@ -29,6 +29,29 @@ def test_radius_sets_differ_and_unknown_sets_are_rejected():
         molframe.chemistry.vdw_radius("C", radii="made_up")
 
 
+def test_covalent_radii_come_from_their_own_table_and_reject_unknown_names():
+    # The test profile names the Pyykkö single-bond table for covalent radii.
+    assert molframe.chemistry.covalent_radius("C") == pytest.approx(0.75)
+    assert molframe.chemistry.covalent_radius("c") == pytest.approx(0.75)
+    assert molframe.chemistry.covalent_radius("C") != molframe.chemistry.vdw_radius("C")
+    with pytest.raises(ValueError, match='unknown element "Zz"'):
+        molframe.chemistry.covalent_radius("Zz")
+    with pytest.raises(molframe.MolframeError, match="E7102"):
+        molframe.chemistry.covalent_radius("C", radii="made_up")
+
+
+def test_per_atom_covalent_radii_are_nan_where_a_named_table_is_silent(tmp_path):
+    table = tmp_path / "carbon-only.covalent"
+    table.write_text("name: carbon-only\nversion: 1\nsource: test\nlicence: CC0-1.0\n\nC 0.8\n")
+    coordinates = np.array([[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]], dtype=np.float32)
+    structure = molframe.chemistry.Molecule(["C", "O"], coordinates).to_structure()
+    radii = molframe.chemistry.covalent_radii(structure, radii=str(table))
+    assert radii.dtype == np.float32
+    assert radii[0] == pytest.approx(0.8)
+    assert math.isnan(radii[1])
+    assert molframe.chemistry.covalent_radius("O", radii=str(table)) is None
+
+
 def test_per_atom_radii_feed_the_surface_kernels():
     structure = molframe.read(DATA / "basic.cif")
     radii = molframe.chemistry.vdw_radii(structure)

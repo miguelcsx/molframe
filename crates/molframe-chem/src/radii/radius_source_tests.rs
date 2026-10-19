@@ -1,5 +1,5 @@
 use super::*;
-use crate::TableKind;
+use crate::{TableKind, VdwRadii};
 
 fn given(name: &str, carbon: f32) -> Provided<VdwRadii> {
     let text = format!("name: {name}\nversion: 9\nsource: me\nlicence: MIT\nC {carbon}\n");

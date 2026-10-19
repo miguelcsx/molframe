@@ -110,6 +110,34 @@ fn vdw_radii<'py>(
     Ok(values.to_pyarray(py))
 }
 
+/// Covalent single-bond radius of one element in ångström, or `None` when the table has none.
+///
+/// `radii` is a cache entry name or a file path; unset, the profile's `covalent-radii` line.
+/// The radius is a property of the table, not of the element, so it is looked up here
+/// rather than stored on `ElementProperties`.
+#[pyfunction]
+#[pyo3(signature = (symbol, *, radii=None))]
+fn covalent_radius(symbol: &str, radii: Option<&str>) -> PyResult<Option<f32>> {
+    let table = crate::tables::covalent_radii(radii)?;
+    let element = Element::from_symbol(symbol)
+        .ok_or_else(|| crate::error::value(format!("unknown element {symbol:?}")))?;
+    Ok(table.table.radius(element))
+}
+
+/// Per-atom covalent radii; `nan` marks atoms whose element has none.
+#[pyfunction]
+#[pyo3(signature = (structure, *, radii=None))]
+fn covalent_radii<'py>(
+    py: Python<'py>,
+    structure: &PyStructure,
+    radii: Option<&str>,
+) -> PyResult<Bound<'py, PyArray1<f32>>> {
+    let table = chem::ElementRadiusSource::from(crate::tables::covalent_radii(radii)?);
+    let source = structure.inner.clone();
+    let values = py.detach(move || chem::atom_radii(source.engine(), &table));
+    Ok(values.to_pyarray(py))
+}
+
 /// Applies a Chemical Component Dictionary to a structure.
 ///
 /// Adds the dictionary's internal bonds and the per-atom roles (charge,
@@ -208,5 +236,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(element, module)?)?;
     module.add_function(wrap_pyfunction!(vdw_radius, module)?)?;
     module.add_function(wrap_pyfunction!(vdw_radii, module)?)?;
+    module.add_function(wrap_pyfunction!(covalent_radius, module)?)?;
+    module.add_function(wrap_pyfunction!(covalent_radii, module)?)?;
     module.add_function(wrap_pyfunction!(annotate, module)?)
 }

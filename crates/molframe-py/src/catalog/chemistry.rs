@@ -21,6 +21,8 @@ pub(super) const ROWS: &[Capability] = &[
     D.row("element", "symbol", "ElementProperties", "cpu"),
     D.row("vdw_radius", "symbol", "float", "cpu"),
     D.row("vdw_radii", "structure", "array", "cpu"),
+    D.row("covalent_radius", "symbol", "float", "cpu"),
+    D.row("covalent_radii", "structure", "array", "cpu"),
     D.row(
         "carbohydrates",
         "structure, component dictionary",

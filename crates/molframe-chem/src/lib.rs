@@ -103,7 +103,7 @@ pub use radius_policy::{
 pub use radius_policy_text::PolicyWordError;
 pub use radius_report::AppliedRadiusPolicy;
 pub use radius_selection::RadiusSelection;
-pub use radius_source::RadiusSource;
+pub use radius_source::{ElementRadiusSource, RadiusSource};
 pub use roles::{
     PolymerRoleProfile, PolymerRoleReport, PolymerRoleRule, apply_polymer_role_profile,
 };

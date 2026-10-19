@@ -4,6 +4,21 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
+## Unreleased
+
+- **Covalent radii are a Python call, not an element attribute.**
+  `molframe.chemistry.covalent_radius(symbol, *, radii=None)` and
+  `molframe.chemistry.covalent_radii(structure, *, radii=None)` mirror the van der
+  Waals pair: the `radii` argument names a cache entry or a file, and unset, the
+  profile's `covalent-radii` line decides. The `covalent_radius` attribute that
+  `element(symbol)` carried was removed in 0.6.1 without a changelog entry, which broke
+  callers that read it. It is not coming back on the element: a covalent radius depends
+  on the table in force, so it is a property of the table, not of the element. Replace
+  `element(symbol).covalent_radius` with `covalent_radius(symbol)`.
+- **One radius-source type serves both roles.** `ElementRadiusSource<R>` holds the
+  table of a radius role; `RadiusSource` is its van der Waals alias, so existing Rust
+  callers are unchanged. `atom_radii` accepts either role.
+
 ## 0.6.4 — 2026-10-15
 
 - **`pip install molframe` works on a clean machine.** The wheel now

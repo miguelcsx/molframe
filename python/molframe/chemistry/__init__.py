@@ -28,6 +28,8 @@ smarts = _native.smarts
 write_sdf = _native.write_sdf
 vdw_radii = _native.vdw_radii
 vdw_radius = _native.vdw_radius
+covalent_radii = _native.covalent_radii
+covalent_radius = _native.covalent_radius
 
 __all__ = [
     "CarbohydrateLink",
@@ -45,6 +47,8 @@ __all__ = [
     "annotate",
     "apply_polymer_role_profile",
     "carbohydrates",
+    "covalent_radii",
+    "covalent_radius",
     "element",
     "molecule",
     "partial_charges",

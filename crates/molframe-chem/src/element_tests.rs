@@ -1,5 +1,8 @@
 use super::*;
-use crate::{Provided, TableIdentity, TableKind, VdwRadii};
+use crate::{
+    Covalent, CovalentRadii, ElementRadiusSource, Provided, RadiusSource, TableIdentity, TableKind,
+    VdwRadii,
+};
 
 #[test]
 fn atomic_weight_period_group_and_valence_are_defined_for_every_element() {
@@ -18,17 +21,7 @@ fn atomic_weight_period_group_and_valence_are_defined_for_every_element() {
     }
 }
 
-fn radii(rows: &str) -> RadiusSource {
-    let text = format!("name: lab\nversion: 1\nsource: s\nlicence: CC0-1.0\n{rows}");
-    match VdwRadii::decode(text.as_bytes(), TableIdentity::supplied("x", "x", "x", "x")) {
-        Ok(Provided { identity, table }) => RadiusSource::from(Provided { identity, table }),
-        Err(error) => panic!("table refused: {error}"),
-    }
-}
-
-#[test]
-fn per_atom_radii_follow_the_table_and_mark_unknown_elements() {
-    const WATER_MOL: &str = "water
+const WATER_MOL: &str = "water
   test
 
   3  2  0  0  0  0  0  0  0  0999 V2000
@@ -39,15 +32,58 @@ fn per_atom_radii_follow_the_table_and_mark_unknown_elements() {
   1  3  1  0
 M  END
 ";
+
+fn water() -> molframe_core::structure::Structure {
     let Ok(record) = crate::parse_mol_record(WATER_MOL) else {
         panic!("the record parses");
     };
     let Ok(structure) = crate::mol_record_to_structure(&record) else {
         panic!("the record lowers");
     };
-    let radii = atom_radii(&structure, &radii("O 1.5\nH 1.1\n"));
+    structure
+}
+
+fn radii(rows: &str) -> RadiusSource {
+    let text = format!("name: lab\nversion: 1\nsource: s\nlicence: CC0-1.0\n{rows}");
+    match VdwRadii::decode(text.as_bytes(), TableIdentity::supplied("x", "x", "x", "x")) {
+        Ok(Provided { identity, table }) => RadiusSource::from(Provided { identity, table }),
+        Err(error) => panic!("table refused: {error}"),
+    }
+}
+
+fn covalent(rows: &str) -> ElementRadiusSource<Covalent> {
+    let text = format!("name: lab\nversion: 1\nsource: s\nlicence: CC0-1.0\n{rows}");
+    match CovalentRadii::decode(text.as_bytes(), TableIdentity::supplied("x", "x", "x", "x")) {
+        Ok(provided) => ElementRadiusSource::from(provided),
+        Err(error) => panic!("table refused: {error}"),
+    }
+}
+
+#[test]
+fn per_atom_radii_follow_the_table_and_mark_unknown_elements() {
+    let radii = atom_radii(&water(), &radii("O 1.5\nH 1.1\n"));
     assert_eq!(radii.len(), 3);
     assert!((radii[0] - 1.5).abs() < 1e-6);
     assert!((radii[1] - 1.1).abs() < 1e-6);
     assert!(radii[2].is_nan(), "an unknown element has no radius");
+}
+
+#[test]
+fn covalent_radii_come_from_their_own_table_not_the_van_der_waals_one() {
+    let structure = water();
+    let bonding = covalent("O 0.63\nH 0.32\n");
+    let contact = atom_radii(&structure, &bonding);
+    assert!((contact[0] - 0.63).abs() < 1e-6);
+    assert!((contact[1] - 0.32).abs() < 1e-6);
+    assert!(
+        contact[2].is_nan(),
+        "a covalent table that omits an element leaves it unset"
+    );
+    assert_eq!(bonding.radius(Element::OXYGEN), Some(0.63));
+    assert_eq!(bonding.radius(Element::NITROGEN), None);
+    let van_der_waals = atom_radii(&structure, &radii("O 1.5\n"));
+    assert!(
+        (van_der_waals[0] - contact[0]).abs() > 0.5,
+        "the two roles keep their own numbers"
+    );
 }

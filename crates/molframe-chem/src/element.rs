@@ -8,7 +8,7 @@
 //! sites) is a table selected by name. Lookup is constant time by atomic number
 //! and allocates nothing.
 
-use crate::RadiusSource;
+use crate::ElementRadiusSource;
 use crate::element_data::ELEMENTS;
 use molframe_core::Element;
 
@@ -73,10 +73,12 @@ pub fn element_properties(element: Element) -> Option<ElementProperties> {
 
 /// The radius of every atom of `structure`, indexed by atom, from `source`; `NaN`
 /// marks an atom whose element is unknown or has no value in the table.
+///
+/// Costs one table lookup per atom and one allocation for the result.
 #[must_use]
-pub fn atom_radii(
+pub fn atom_radii<R>(
     structure: &molframe_core::structure::Structure,
-    source: &RadiusSource,
+    source: &ElementRadiusSource<R>,
 ) -> Vec<f32> {
     let mut radii = vec![f32::NAN; structure.atom_count() as usize];
     for atom in structure.data().atoms() {

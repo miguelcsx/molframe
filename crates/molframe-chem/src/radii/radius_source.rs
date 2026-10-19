@@ -7,38 +7,48 @@
 //! algorithm. Either way the source states its [`TableIdentity`], which is what a
 //! result records.
 //!
+//! The radius role is a type parameter. [`RadiusSource`] is the van der Waals source
+//! the analyses measure atoms with; [`ElementRadiusSource<Covalent>`] selects the
+//! covalent table the same way. Both resolve and look up identically, so the role
+//! changes the table kind and nothing else.
+//!
 //! Cost: cloning is an `Arc` clone; a lookup is one array index.
 
-use crate::{Provided, TableError, TableIdentity, TableRequest, TableStore, VdwRadii};
+use crate::{
+    ElementRadii, Provided, RadiusRole, TableError, TableIdentity, TableRequest, TableStore, Vdw,
+};
 use molframe_core::Element;
 use std::sync::Arc;
 
-/// A source of van der Waals radii.
+/// A source of the radii of one role, held as the one table that was selected.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RadiusSource {
-    table: Arc<Provided<VdwRadii>>,
+pub struct ElementRadiusSource<R> {
+    table: Arc<Provided<ElementRadii<R>>>,
 }
 
-impl From<Arc<Provided<VdwRadii>>> for RadiusSource {
-    fn from(table: Arc<Provided<VdwRadii>>) -> Self {
+/// A source of van der Waals radii, the radii the analyses measure atoms with.
+pub type RadiusSource = ElementRadiusSource<Vdw>;
+
+impl<R> From<Arc<Provided<ElementRadii<R>>>> for ElementRadiusSource<R> {
+    fn from(table: Arc<Provided<ElementRadii<R>>>) -> Self {
         Self { table }
     }
 }
 
-impl From<Provided<VdwRadii>> for RadiusSource {
-    fn from(table: Provided<VdwRadii>) -> Self {
+impl<R> From<Provided<ElementRadii<R>>> for ElementRadiusSource<R> {
+    fn from(table: Provided<ElementRadii<R>>) -> Self {
         Self::from(Arc::new(table))
     }
 }
 
-impl RadiusSource {
+impl<R: RadiusRole + 'static> ElementRadiusSource<R> {
     /// Resolves `request` against `store`.
     ///
     /// # Errors
     ///
     /// [`TableError`] when nothing selects a table or the selected file is refused.
     pub fn resolve(
-        request: &TableRequest<VdwRadii>,
+        request: &TableRequest<ElementRadii<R>>,
         store: &TableStore,
     ) -> Result<Self, TableError> {
         request.resolve(store, "--radii").map(Self::from)
@@ -46,10 +56,12 @@ impl RadiusSource {
 
     /// The request that selects exactly this table again.
     #[must_use]
-    pub fn request(&self) -> TableRequest<VdwRadii> {
+    pub fn request(&self) -> TableRequest<ElementRadii<R>> {
         TableRequest::Given(Arc::clone(&self.table))
     }
+}
 
+impl<R> ElementRadiusSource<R> {
     /// The radius of `element` in ångström, or `None` when the table lists none.
     #[must_use]
     pub fn radius(&self, element: Element) -> Option<f32> {
