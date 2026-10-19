@@ -1,5 +1,8 @@
 """Curated Python contract for MolFrame."""
 
+from importlib import import_module
+from typing import TYPE_CHECKING
+
 from . import (
     analysis,
     audit,
@@ -62,7 +65,6 @@ from ._native import (
     read,
     read_with_diagnostics,
 )
-from .atoms import Nearest, extract, nearest
 from .errors import (
     Cancelled,
     ConsistencyError,
@@ -86,6 +88,25 @@ from .errors import (
     ResourceError,
     SchemaError,
 )
+
+# The atom helpers pull in numpy and dataclasses. They load on first use so that
+# `import molframe` stays under its import budget.
+if TYPE_CHECKING:
+    from .atoms import Nearest, extract, nearest
+
+_LAZY_ATTRIBUTES = {"Nearest": "atoms", "extract": "atoms", "nearest": "atoms"}
+
+
+def __getattr__(name: str) -> object:
+    """Load a lazily provided attribute on first access, then cache it on the module."""
+    module_name = _LAZY_ATTRIBUTES.get(name)
+    if module_name is None:
+        message = f"module {__name__!r} has no attribute {name!r}"
+        raise AttributeError(message)
+    value = getattr(import_module(f".{module_name}", __name__), name)
+    globals()[name] = value
+    return value
+
 
 __all__ = [
     "Analysis",
