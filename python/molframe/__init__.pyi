@@ -47,6 +47,7 @@ from ._structure import (
     Structure as Structure,
     StructureEditor as StructureEditor,
 )
+from .atoms import Nearest as Nearest, extract as extract, nearest as nearest
 from .errors import (
     Cancelled as Cancelled,
     ConsistencyError as ConsistencyError,
