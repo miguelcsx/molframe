@@ -4,7 +4,7 @@ All notable changes to MolFrame are recorded here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 a minor release may
 change the public API.
 
-## Unreleased
+## 0.6.5 — 2026-10-19
 
 - **Covalent radii are a Python call, not an element attribute.**
   `molframe.chemistry.covalent_radius(symbol, *, radii=None)` and
